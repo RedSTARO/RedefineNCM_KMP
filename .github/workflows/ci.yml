@@ -1,0 +1,223 @@
+name: KMP CI
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  # ─── Android ────────────────────────────────────────────────────────────────
+  build-android:
+    name: Android (APK)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Count commits since last tag
+        id: commitcount
+        run: |
+          git fetch --tags
+          latest_tag=$(git tag --sort=-creatordate | head -n1)
+          if [ -z "$latest_tag" ]; then
+            count=$(git rev-list --count HEAD)
+          else
+            count=$(git rev-list --count "${latest_tag}..HEAD")
+          fi
+          echo "count=$count" >> $GITHUB_OUTPUT
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Build release APK
+        run: |
+          chmod +x gradlew
+          ./gradlew :androidApp:assembleRelease
+
+      - name: Sign APK
+        id: sign_app
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: androidApp/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY_BASE64 }}
+          alias: ${{ secrets.ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "34.0.0"
+
+      - name: Rename signed APK
+        run: mv "${{ steps.sign_app.outputs.signedReleaseFile }}" androidApp/build/outputs/apk/release/RedefineNCM_KMP_signed.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: androidApp/build/outputs/apk/release/RedefineNCM_KMP_signed.apk
+
+      - name: Get commit info
+        id: gitinfo
+        run: |
+          echo "commit_msg=$(git log -1 --pretty=%s)" >> "$GITHUB_OUTPUT"
+          echo "commit_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Send APK to Telegram
+        if: github.event_name != 'pull_request'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          APK="androidApp/build/outputs/apk/release/RedefineNCM_KMP_signed.apk"
+          CAPTION="✅ RedefineNCM KMP · Android · ${{ github.ref_name }}
+
+          📝 ${{ steps.gitinfo.outputs.commit_msg }} [${{ steps.gitinfo.outputs.commit_sha }}]
+          📦 +${{ steps.commitcount.outputs.count }} commits since last tag"
+
+          curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+            -F chat_id="${TELEGRAM_CHAT_ID}" \
+            -F "caption=${CAPTION}" \
+            -F document=@"${APK}"
+
+  # ─── Desktop · Linux ────────────────────────────────────────────────────────
+  build-desktop-linux:
+    name: Desktop · Linux (.deb)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Build .deb package
+        run: |
+          chmod +x gradlew
+          ./gradlew :desktopApp:packageDeb
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-linux-deb
+          path: desktopApp/build/compose/binaries/main/deb/*.deb
+
+  # ─── Desktop · Windows ──────────────────────────────────────────────────────
+  build-desktop-windows:
+    name: Desktop · Windows (.msi)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Build .msi installer
+        run: ./gradlew :desktopApp:packageMsi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows-msi
+          path: desktopApp/build/compose/binaries/main/msi/*.msi
+
+  # ─── Desktop · macOS + iOS framework ────────────────────────────────────────
+  build-desktop-macos:
+    name: Desktop · macOS (.dmg) + iOS framework
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Build .dmg image
+        run: |
+          chmod +x gradlew
+          ./gradlew :desktopApp:packageDmg
+
+      - name: Compile iOS Simulator framework
+        # Verifies iOS Kotlin compilation; produces the Shared.framework used by Xcode.
+        # Full IPA signing requires Xcode provisioning and is not done in CI.
+        run: ./gradlew :shared:linkReleaseFrameworkIosSimulatorArm64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-macos-dmg
+          path: desktopApp/build/compose/binaries/main/dmg/*.dmg
+
+  # ─── GitHub Release (tag only) ──────────────────────────────────────────────
+  release:
+    name: GitHub Release
+    needs: [ build-android, build-desktop-linux, build-desktop-windows, build-desktop-macos ]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build changelog since last tag
+        id: changelog
+        run: |
+          git fetch --tags
+          mapfile -t tags < <(git tag --sort=-creatordate)
+          current="${tags[0]}"
+          previous="${tags[1]:-}"
+          if [ -z "$previous" ]; then
+            log=$(git log --oneline "$current")
+            count=$(git rev-list --count "$current")
+          else
+            log=$(git log --oneline "${previous}..${current}")
+            count=$(git rev-list --count "${previous}..${current}")
+          fi
+          echo "log<<EOF" >> $GITHUB_OUTPUT
+          echo "$log" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "count=$count" >> $GITHUB_OUTPUT
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Release ${{ github.ref_name }}"
+          files: dist/**/*
+          body: |
+            🎉 **RedefineNCM KMP ${{ github.ref_name }}**
+
+            📦 **${{ steps.changelog.outputs.count }} commits since last release**
+            ```
+            ${{ steps.changelog.outputs.log }}
+            ```
+
+            | Platform | File |
+            |----------|------|
+            | Android | `RedefineNCM_KMP_signed.apk` |
+            | Linux | `.deb` package |
+            | Windows | `.msi` installer |
+            | macOS | `.dmg` image |
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
