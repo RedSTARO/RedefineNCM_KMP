@@ -32,9 +32,10 @@ object LyricParser {
             }
         }
 
-        // Sort by time
+        // Sort by time (toSortedMap is JVM-only; sortedWith works on all KMP targets)
         val sorted = LinkedHashMap<Long?, String?>()
-        lyricPair.toSortedMap(compareBy { it ?: Long.MAX_VALUE })
+        lyricPair.entries
+            .sortedWith(compareBy { it.key ?: Long.MAX_VALUE })
             .forEach { (key, value) -> sorted[key] = value }
 
         return sorted
