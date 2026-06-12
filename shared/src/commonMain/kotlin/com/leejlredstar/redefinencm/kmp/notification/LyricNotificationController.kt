@@ -1,0 +1,33 @@
+package com.leejlredstar.redefinencm.kmp.notification
+
+/**
+ * Platform-specific lyric notification / live activity controller.
+ *
+ * - Android: Shows a live-update notification with current lyric
+ * - iOS: Updates Live Activities (灵动岛 + Lock Screen)
+ * - Desktop: Updates floating window / desktop lyrics
+ * - Web: No-op (stub)
+ */
+expect object LyricNotificationController {
+    /**
+     * Update the displayed lyric content.
+     * @param title Song title
+     * @param artist Song artist
+     * @param currentLyric Current lyric line
+     * @param nextLyric Next lyric line (for preview)
+     * @param artworkUri Album art URI
+     */
+    fun updateLyric(
+        title: String?,
+        artist: String?,
+        currentLyric: String?,
+        nextLyric: String?,
+        artworkUri: String? = null,
+    )
+
+    /** Remove the lyric display. */
+    fun clearFocus()
+
+    /** Reset internal state. */
+    fun reset()
+}
