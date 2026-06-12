@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -45,6 +46,7 @@ fun HomeScreen(
     onOpenSearch: () -> Unit,
     onOpenNowPlaying: () -> Unit,
     onOpenPlaylist: (Long) -> Unit,
+    onOpenSettings: () -> Unit,
     viewModel: MainViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
 ) {
@@ -63,6 +65,9 @@ fun HomeScreen(
                     }
                     IconButton(onClick = onOpenLogin) {
                         Icon(Icons.Default.AccountCircle, contentDescription = "登录")
+                    }
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Default.Settings, contentDescription = "设置")
                     }
                 },
             )
