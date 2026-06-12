@@ -174,19 +174,8 @@ jobs:
           COUNT="${{ steps.commitcount.outputs.count }}"
           REF="${{ github.ref_name }}"
 
-          CAPTION=$(cat <<HEREDOC
-<b>RedefineNCM KMP</b>  ·  <code>${REF}</code>
-
-📝 ${MSG}
-🔖 <code>${SHA}</code>  ·  +${COUNT} commits
-
-──────────────────
-🤖  Android   <code>RedefineNCM_KMP_signed.apk</code>
-🐧  Linux     <code>.deb</code>
-🪟  Windows   <code>.msi</code>
-🍎  macOS     <code>.dmg</code>
-HEREDOC
-          )
+          CAPTION=$(printf '<b>RedefineNCM KMP</b>  ·  <code>%s</code>\n\n📝 %s\n🔖 <code>%s</code>  ·  +%s commits\n\n──────────────────\n🤖  Android   <code>RedefineNCM_KMP_signed.apk</code>\n🐧  Linux     <code>.deb</code>\n🪟  Windows   <code>.msi</code>\n🍎  macOS     <code>.dmg</code>' \
+            "$REF" "$MSG" "$SHA" "$COUNT")
 
           JSON=$(jq -nc \
             --arg caption "$CAPTION" \
