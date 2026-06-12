@@ -45,6 +45,8 @@ kotlin {
             // Android Ktor engine + DataStore-backed PlatformSettings actual
             implementation(libs.ktor.client.okhttp)
             implementation(libs.androidx.datastore.preferences)
+            // rememberLauncherForActivityResult + LocalContext for file import/export
+            implementation(libs.androidx.activity.compose)
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)
