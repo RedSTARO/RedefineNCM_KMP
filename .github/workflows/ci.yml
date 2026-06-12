@@ -126,7 +126,7 @@ jobs:
   notify-telegram:
     name: Notify Telegram
     needs: [ build-android, build-desktop-linux, build-desktop-windows, build-desktop-macos ]
-    if: github.event_name != 'pull_request'
+    if: always() && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
 
     steps:
@@ -163,10 +163,10 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          APK=$(find dist/ -name "*.apk" | head -1)
-          DEB=$(find dist/ -name "*.deb" | head -1)
-          MSI=$(find dist/ -name "*.msi" | head -1)
-          DMG=$(find dist/ -name "*.dmg" | head -1)
+          APK=$(find dist/ -name "*.apk" 2>/dev/null | head -1)
+          DEB=$(find dist/ -name "*.deb" 2>/dev/null | head -1)
+          MSI=$(find dist/ -name "*.msi" 2>/dev/null | head -1)
+          DMG=$(find dist/ -name "*.dmg" 2>/dev/null | head -1)
 
           RAW_MSG="${{ steps.gitinfo.outputs.commit_msg }}"
           MSG=$(echo "$RAW_MSG" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
@@ -177,22 +177,39 @@ jobs:
           CAPTION=$(printf '<b>RedefineNCM KMP</b>  ·  <code>%s</code>\n\n📝 %s\n🔖 <code>%s</code>  ·  +%s commits\n\n──────────────────\n🤖  Android   <code>RedefineNCM_KMP_signed.apk</code>\n🐧  Linux     <code>.deb</code>\n🪟  Windows   <code>.msi</code>\n🍎  macOS     <code>.dmg</code>' \
             "$REF" "$MSG" "$SHA" "$COUNT")
 
-          JSON=$(jq -nc \
-            --arg caption "$CAPTION" \
-            '[
-              {"type":"document","media":"attach://apk","caption":$caption,"parse_mode":"HTML"},
-              {"type":"document","media":"attach://deb"},
-              {"type":"document","media":"attach://msi"},
-              {"type":"document","media":"attach://dmg"}
-            ]')
+          # Build media JSON and curl args from whichever artifacts actually exist
+          media='[]'
+          curl_files=()
+          first=true
+
+          add_doc() {
+            local key="$1" path="$2"
+            [ -z "$path" ] || [ ! -f "$path" ] && return
+            if $first; then
+              media=$(echo "$media" | jq --arg k "$key" --arg cap "$CAPTION" \
+                '. + [{"type":"document","media":("attach://"+$k),"caption":$cap,"parse_mode":"HTML"}]')
+              first=false
+            else
+              media=$(echo "$media" | jq --arg k "$key" \
+                '. + [{"type":"document","media":("attach://"+$k)}]')
+            fi
+            curl_files+=(-F "${key}=@${path}")
+          }
+
+          add_doc apk "$APK"
+          add_doc deb "$DEB"
+          add_doc msi "$MSI"
+          add_doc dmg "$DMG"
+
+          if [ "${#curl_files[@]}" -eq 0 ]; then
+            echo "No artifacts found, skipping Telegram notification"
+            exit 0
+          fi
 
           curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMediaGroup" \
             -F chat_id="${TELEGRAM_CHAT_ID}" \
-            -F media="$JSON" \
-            -F apk=@"${APK}" \
-            -F deb=@"${DEB}" \
-            -F msi=@"${MSI}" \
-            -F dmg=@"${DMG}"
+            -F "media=${media}" \
+            "${curl_files[@]}"
 
   # ─── GitHub Release (tag only) ──────────────────────────────────────────────
   release:
