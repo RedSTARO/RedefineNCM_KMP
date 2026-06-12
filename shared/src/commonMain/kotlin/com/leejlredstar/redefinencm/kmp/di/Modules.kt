@@ -8,7 +8,6 @@ import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.viewmodel.LoginViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
-import org.koin.core.context.GlobalContext
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
 import org.koin.dsl.KoinAppDeclaration
@@ -31,8 +30,11 @@ expect fun platformModule(): Module
  * - Android `Application.onCreate()` → `initKoin { androidContext(this@App) }` (the Android
  *   `platformModule()` builds `PlatformSettings(get())`, which resolves the Context provided here)
  */
+private var koinStarted = false
+
 fun initKoin(config: KoinAppDeclaration? = null) {
-    if (GlobalContext.getOrNull() != null) return
+    if (koinStarted) return
+    koinStarted = true
     startKoin {
         config?.invoke(this)
         modules(sharedModule, platformModule())
