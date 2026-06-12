@@ -158,7 +158,7 @@ jobs:
           path: dist/
           merge-multiple: true
 
-      - name: Send all artifacts to Telegram
+      - name: Send artifacts to Telegram
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -168,48 +168,39 @@ jobs:
           MSI=$(find dist/ -name "*.msi" 2>/dev/null | head -1)
           DMG=$(find dist/ -name "*.dmg" 2>/dev/null | head -1)
 
+          # Returns ✅ if the file exists, ❌ otherwise
+          status() { [ -n "$1" ] && [ -f "$1" ] && printf '✅' || printf '❌'; }
+
           RAW_MSG="${{ steps.gitinfo.outputs.commit_msg }}"
           MSG=$(echo "$RAW_MSG" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
           SHA="${{ steps.gitinfo.outputs.commit_sha }}"
           COUNT="${{ steps.commitcount.outputs.count }}"
           REF="${{ github.ref_name }}"
 
-          CAPTION=$(printf '<b>RedefineNCM KMP</b>  ·  <code>%s</code>\n\n📝 %s\n🔖 <code>%s</code>  ·  +%s commits\n\n──────────────────\n🤖  Android   <code>RedefineNCM_KMP_signed.apk</code>\n🐧  Linux     <code>.deb</code>\n🪟  Windows   <code>.msi</code>\n🍎  macOS     <code>.dmg</code>' \
-            "$REF" "$MSG" "$SHA" "$COUNT")
+          CAPTION=$(printf '<b>RedefineNCM KMP</b>  ·  <code>%s</code>\n\n📝 %s\n🔖 <code>%s</code>  ·  +%s commits\n\n──────────────────\n🤖 Android  %s  APK (attached)\n🐧 Linux    %s  .deb\n🪟 Windows  %s  .msi\n🍎 macOS    %s  .dmg\n\n<i>桌面端产物见 CI artifacts。</i>' \
+            "$REF" "$MSG" "$SHA" "$COUNT" \
+            "$(status "$APK")" "$(status "$DEB")" "$(status "$MSI")" "$(status "$DMG")")
 
-          # Build media JSON and curl args from whichever artifacts actually exist
-          media='[]'
-          curl_files=()
-          first=true
+          API="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}"
 
-          add_doc() {
-            local key="$1" path="$2"
-            [ -z "$path" ] || [ ! -f "$path" ] && return
-            if $first; then
-              media=$(echo "$media" | jq --arg k "$key" --arg cap "$CAPTION" \
-                '. + [{"type":"document","media":("attach://"+$k),"caption":$cap,"parse_mode":"HTML"}]')
-              first=false
-            else
-              media=$(echo "$media" | jq --arg k "$key" \
-                '. + [{"type":"document","media":("attach://"+$k)}]')
-            fi
-            curl_files+=(-F "${key}=@${path}")
-          }
-
-          add_doc apk "$APK"
-          add_doc deb "$DEB"
-          add_doc msi "$MSI"
-          add_doc dmg "$DMG"
-
-          if [ "${#curl_files[@]}" -eq 0 ]; then
-            echo "No artifacts found, skipping Telegram notification"
-            exit 0
+          if [ -n "$APK" ] && [ -f "$APK" ]; then
+            # Desktop packages bundle the JVM and exceed Telegram's 50 MB bot-API limit;
+            # only the APK is uploaded. Desktop build status is shown in the caption text.
+            CAPTION_FILE=$(mktemp)
+            printf '%s' "$CAPTION" > "$CAPTION_FILE"
+            curl -sS -X POST "${API}/sendDocument" \
+              -F chat_id="${TELEGRAM_CHAT_ID}" \
+              -F "document=@${APK}" \
+              -F "caption=<${CAPTION_FILE}" \
+              -F parse_mode=HTML
+            rm -f "$CAPTION_FILE"
+          else
+            # No APK — text-only status message
+            curl -sS -X POST "${API}/sendMessage" \
+              -H 'Content-Type: application/json' \
+              --data "$(jq -n --arg c "$TELEGRAM_CHAT_ID" --arg t "$CAPTION" \
+                '{"chat_id":$c,"text":$t,"parse_mode":"HTML"}')"
           fi
-
-          curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMediaGroup" \
-            -F chat_id="${TELEGRAM_CHAT_ID}" \
-            -F "media=${media}" \
-            "${curl_files[@]}"
 
   # ─── GitHub Release (tag only) ──────────────────────────────────────────────
   release:
