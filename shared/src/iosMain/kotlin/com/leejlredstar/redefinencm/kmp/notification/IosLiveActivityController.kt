@@ -4,7 +4,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import platform.Foundation.NSDate
+import platform.posix.time
 
 /**
  * iOS actual implementation of LyricNotificationController.
@@ -76,9 +76,7 @@ actual object LyricNotificationController {
         _liveActivityData.value = null
     }
 
-    private fun currentTimeMillis(): Long {
-        return (NSDate().timeIntervalSince1970 * 1000).toLong()
-    }
+    private fun currentTimeMillis(): Long = time(null) * 1000L
 }
 
 /**
