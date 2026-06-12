@@ -15,20 +15,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Count commits since last tag
-        id: commitcount
-        run: |
-          git fetch --tags
-          latest_tag=$(git tag --sort=-creatordate | head -n1)
-          if [ -z "$latest_tag" ]; then
-            count=$(git rev-list --count HEAD)
-          else
-            count=$(git rev-list --count "${latest_tag}..HEAD")
-          fi
-          echo "count=$count" >> $GITHUB_OUTPUT
 
       - uses: actions/setup-java@v4
         with:
@@ -56,34 +42,10 @@ jobs:
       - name: Rename signed APK
         run: mv "${{ steps.sign_app.outputs.signedReleaseFile }}" androidApp/build/outputs/apk/release/RedefineNCM_KMP_signed.apk
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: android-apk
           path: androidApp/build/outputs/apk/release/RedefineNCM_KMP_signed.apk
-
-      - name: Get commit info
-        id: gitinfo
-        run: |
-          echo "commit_msg=$(git log -1 --pretty=%s)" >> "$GITHUB_OUTPUT"
-          echo "commit_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-
-      - name: Send APK to Telegram
-        if: github.event_name != 'pull_request'
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          APK="androidApp/build/outputs/apk/release/RedefineNCM_KMP_signed.apk"
-          CAPTION="✅ RedefineNCM KMP · Android · ${{ github.ref_name }}
-
-          📝 ${{ steps.gitinfo.outputs.commit_msg }} [${{ steps.gitinfo.outputs.commit_sha }}]
-          📦 +${{ steps.commitcount.outputs.count }} commits since last tag"
-
-          curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
-            -F chat_id="${TELEGRAM_CHAT_ID}" \
-            -F "caption=${CAPTION}" \
-            -F document=@"${APK}"
 
   # ─── Desktop · Linux ────────────────────────────────────────────────────────
   build-desktop-linux:
@@ -159,6 +121,89 @@ jobs:
         with:
           name: desktop-macos-dmg
           path: desktopApp/build/compose/binaries/main/dmg/*.dmg
+
+  # ─── Telegram 通知（所有构建完成后汇总推送）────────────────────────────────────
+  notify-telegram:
+    name: Notify Telegram
+    needs: [ build-android, build-desktop-linux, build-desktop-windows, build-desktop-macos ]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Count commits since last tag
+        id: commitcount
+        run: |
+          git fetch --tags
+          latest_tag=$(git tag --sort=-creatordate | head -n1)
+          if [ -z "$latest_tag" ]; then
+            count=$(git rev-list --count HEAD)
+          else
+            count=$(git rev-list --count "${latest_tag}..HEAD")
+          fi
+          echo "count=$count" >> $GITHUB_OUTPUT
+
+      - name: Get commit info
+        id: gitinfo
+        run: |
+          echo "commit_msg=$(git log -1 --pretty=%s)" >> "$GITHUB_OUTPUT"
+          echo "commit_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+          merge-multiple: true
+
+      - name: Send all artifacts to Telegram
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          APK=$(find dist/ -name "*.apk" | head -1)
+          DEB=$(find dist/ -name "*.deb" | head -1)
+          MSI=$(find dist/ -name "*.msi" | head -1)
+          DMG=$(find dist/ -name "*.dmg" | head -1)
+
+          RAW_MSG="${{ steps.gitinfo.outputs.commit_msg }}"
+          MSG=$(echo "$RAW_MSG" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+          SHA="${{ steps.gitinfo.outputs.commit_sha }}"
+          COUNT="${{ steps.commitcount.outputs.count }}"
+          REF="${{ github.ref_name }}"
+
+          CAPTION=$(cat <<HEREDOC
+<b>RedefineNCM KMP</b>  ·  <code>${REF}</code>
+
+📝 ${MSG}
+🔖 <code>${SHA}</code>  ·  +${COUNT} commits
+
+──────────────────
+🤖  Android   <code>RedefineNCM_KMP_signed.apk</code>
+🐧  Linux     <code>.deb</code>
+🪟  Windows   <code>.msi</code>
+🍎  macOS     <code>.dmg</code>
+HEREDOC
+          )
+
+          JSON=$(jq -nc \
+            --arg caption "$CAPTION" \
+            '[
+              {"type":"document","media":"attach://apk","caption":$caption,"parse_mode":"HTML"},
+              {"type":"document","media":"attach://deb"},
+              {"type":"document","media":"attach://msi"},
+              {"type":"document","media":"attach://dmg"}
+            ]')
+
+          curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMediaGroup" \
+            -F chat_id="${TELEGRAM_CHAT_ID}" \
+            -F media="$JSON" \
+            -F apk=@"${APK}" \
+            -F deb=@"${DEB}" \
+            -F msi=@"${MSI}" \
+            -F dmg=@"${DMG}"
 
   # ─── GitHub Release (tag only) ──────────────────────────────────────────────
   release:
