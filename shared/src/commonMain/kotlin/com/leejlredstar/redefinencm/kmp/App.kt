@@ -12,6 +12,7 @@ import com.leejlredstar.redefinencm.kmp.ui.screen.LoginScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.NowPlayingScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.PlaylistDetailScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.SearchScreen
+import com.leejlredstar.redefinencm.kmp.ui.screen.SettingsScreen
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
 
 /**
@@ -23,6 +24,7 @@ private sealed interface Nav {
     data object Search : Nav
     data object Login : Nav
     data object NowPlaying : Nav
+    data object Settings : Nav
     data class Playlist(val id: Long) : Nav
 }
 
@@ -48,6 +50,7 @@ fun App() {
                     onOpenSearch = { navigate(Nav.Search) },
                     onOpenNowPlaying = { navigate(Nav.NowPlaying) },
                     onOpenPlaylist = { navigate(Nav.Playlist(it)) },
+                    onOpenSettings = { navigate(Nav.Settings) },
                 )
                 is Nav.Search -> SearchScreen(
                     onBack = ::back,
@@ -55,6 +58,7 @@ fun App() {
                 )
                 is Nav.Login -> LoginScreen(onBack = ::back)
                 is Nav.NowPlaying -> NowPlayingScreen(onBack = ::back)
+                is Nav.Settings -> SettingsScreen(onBack = ::back)
                 is Nav.Playlist -> PlaylistDetailScreen(
                     playlistId = screen.id,
                     onBack = ::back,
