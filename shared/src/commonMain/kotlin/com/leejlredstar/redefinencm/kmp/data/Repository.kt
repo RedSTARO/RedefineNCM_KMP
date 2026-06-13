@@ -17,19 +17,23 @@ class Repository(
     // ── User ──
 
     fun getUserDetail(uid: Long): Flow<UserDetail?> = flow {
-        db.cachedUserDetailQueries.selectByUid(uid).executeAsOneOrNull()
-            ?.let { emit(json.decodeFromString<UserDetail>(it)) }
+        runCatching {
+            db.cachedUserDetailQueries.selectByUid(uid).executeAsOneOrNull()
+                ?.let { json.decodeFromString<UserDetail>(it) }
+        }.getOrNull()?.let { emit(it) }
         safeApiCall { api.userDetail(uid) }?.let { network ->
-            db.cachedUserDetailQueries.upsert(uid, json.encodeToString(network))
+            runCatching { db.cachedUserDetailQueries.upsert(uid, json.encodeToString(network)) }
             emit(network)
         }
     }
 
     fun getUserPlaylist(uid: Long): Flow<UserPlaylist?> = flow {
-        db.cachedUserPlaylistQueries.selectByUid(uid).executeAsOneOrNull()
-            ?.let { emit(json.decodeFromString<UserPlaylist>(it)) }
+        runCatching {
+            db.cachedUserPlaylistQueries.selectByUid(uid).executeAsOneOrNull()
+                ?.let { json.decodeFromString<UserPlaylist>(it) }
+        }.getOrNull()?.let { emit(it) }
         safeApiCall { api.userPlaylist(uid) }?.let { network ->
-            db.cachedUserPlaylistQueries.upsert(uid, json.encodeToString(network))
+            runCatching { db.cachedUserPlaylistQueries.upsert(uid, json.encodeToString(network)) }
             emit(network)
         }
     }
@@ -37,19 +41,23 @@ class Repository(
     // ── Playlist ──
 
     fun getPlaylistDetail(id: Long): Flow<PlaylistDetail?> = flow {
-        db.cachedPlaylistDetailQueries.selectById(id).executeAsOneOrNull()
-            ?.let { emit(json.decodeFromString<PlaylistDetail>(it)) }
+        runCatching {
+            db.cachedPlaylistDetailQueries.selectById(id).executeAsOneOrNull()
+                ?.let { json.decodeFromString<PlaylistDetail>(it) }
+        }.getOrNull()?.let { emit(it) }
         safeApiCall { api.playlistDetail(id) }?.let { network ->
-            db.cachedPlaylistDetailQueries.upsert(id, json.encodeToString(network))
+            runCatching { db.cachedPlaylistDetailQueries.upsert(id, json.encodeToString(network)) }
             emit(network)
         }
     }
 
     fun getPlaylistTrackAll(id: Long): Flow<PlaylistTrackAll?> = flow {
-        db.cachedPlaylistTrackAllQueries.selectById(id).executeAsOneOrNull()
-            ?.let { emit(json.decodeFromString<PlaylistTrackAll>(it)) }
+        runCatching {
+            db.cachedPlaylistTrackAllQueries.selectById(id).executeAsOneOrNull()
+                ?.let { json.decodeFromString<PlaylistTrackAll>(it) }
+        }.getOrNull()?.let { emit(it) }
         safeApiCall { api.playlistTrackAll(id) }?.let { network ->
-            db.cachedPlaylistTrackAllQueries.upsert(id, json.encodeToString(network))
+            runCatching { db.cachedPlaylistTrackAllQueries.upsert(id, json.encodeToString(network)) }
             emit(network)
         }
     }
@@ -57,19 +65,23 @@ class Repository(
     // ── Recommend ──
 
     fun getRecommendSongs(): Flow<RecommendSongs?> = flow {
-        db.cachedRecommendSongsQueries.select().executeAsOneOrNull()
-            ?.let { emit(json.decodeFromString<RecommendSongs>(it)) }
+        runCatching {
+            db.cachedRecommendSongsQueries.select().executeAsOneOrNull()
+                ?.let { json.decodeFromString<RecommendSongs>(it) }
+        }.getOrNull()?.let { emit(it) }
         safeApiCall { api.recommendSongs() }?.let { network ->
-            db.cachedRecommendSongsQueries.upsert(json.encodeToString(network))
+            runCatching { db.cachedRecommendSongsQueries.upsert(json.encodeToString(network)) }
             emit(network)
         }
     }
 
     fun getRecommendResource(): Flow<RecommendResource?> = flow {
-        db.cachedRecommendResourceQueries.select().executeAsOneOrNull()
-            ?.let { emit(json.decodeFromString<RecommendResource>(it)) }
+        runCatching {
+            db.cachedRecommendResourceQueries.select().executeAsOneOrNull()
+                ?.let { json.decodeFromString<RecommendResource>(it) }
+        }.getOrNull()?.let { emit(it) }
         safeApiCall { api.recommendResource() }?.let { network ->
-            db.cachedRecommendResourceQueries.upsert(json.encodeToString(network))
+            runCatching { db.cachedRecommendResourceQueries.upsert(json.encodeToString(network)) }
             emit(network)
         }
     }
@@ -84,10 +96,12 @@ class Repository(
     // ── Lyric ──
 
     fun getLyric(id: Long): Flow<Lyric?> = flow {
-        db.cachedLyricQueries.selectBySongId(id).executeAsOneOrNull()
-            ?.let { emit(json.decodeFromString<Lyric>(it)) }
+        runCatching {
+            db.cachedLyricQueries.selectBySongId(id).executeAsOneOrNull()
+                ?.let { json.decodeFromString<Lyric>(it) }
+        }.getOrNull()?.let { emit(it) }
         safeApiCall { api.lyric(id) }?.let { network ->
-            db.cachedLyricQueries.upsert(id, json.encodeToString(network))
+            runCatching { db.cachedLyricQueries.upsert(id, json.encodeToString(network)) }
             emit(network)
         }
     }
