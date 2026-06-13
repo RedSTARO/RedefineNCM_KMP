@@ -3,18 +3,21 @@ package com.leejlredstar.redefinencm.kmp.ui.screen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -24,11 +27,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,7 +55,7 @@ import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit, settings: PlatformSettings = koinInject()) {
+fun SettingsScreen(scaffoldPadding: PaddingValues, settings: PlatformSettings = koinInject()) {
     var cookie by remember { mutableStateOf(settings.getString(SettingKeys.COOKIE, "")) }
     var server by remember { mutableStateOf(settings.getString(SettingKeys.SERVER, "")) }
     var onlineQuality by remember { mutableStateOf(settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name)) }
@@ -83,26 +84,14 @@ fun SettingsScreen(onBack: () -> Unit, settings: PlatformSettings = koinInject()
     }
     val launchExport = rememberExportFileLauncher()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Settings", fontWeight = FontWeight.ExtraBold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        @Suppress("DEPRECATION")
-                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(padding)
-                .background(MaterialTheme.colorScheme.surface),
-        ) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .padding(bottom = scaffoldPadding.calculateBottomPadding())
+            .background(MaterialTheme.colorScheme.surface),
+    ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -177,7 +166,6 @@ fun SettingsScreen(onBack: () -> Unit, settings: PlatformSettings = koinInject()
 
                 Spacer(Modifier.height(48.dp))
             }
-        }
     }
 }
 

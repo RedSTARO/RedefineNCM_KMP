@@ -1,69 +1,135 @@
 package com.leejlredstar.redefinencm.kmp
 
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.LoginScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.NowPlayingScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.PlaylistDetailScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.SearchScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.SettingsScreen
+import com.leejlredstar.redefinencm.kmp.ui.screen.UserPlaylistScreen
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
+import org.koin.compose.koinInject
 
-/**
- * Simple dependency-free navigation destinations + back stack. (Voyager / Navigation-Compose can
- * replace this later; a hand-rolled stack keeps the migration dependency-light for now.)
- */
-private sealed interface Nav {
-    data object Home : Nav
-    data object Search : Nav
-    data object Login : Nav
-    data object NowPlaying : Nav
-    data object Settings : Nav
-    data class Playlist(val id: Long) : Nav
+private sealed interface TabDest {
+    data object Home : TabDest
+    data object My : TabDest
+    data object Settings : TabDest
+}
+
+private sealed interface PushedDest {
+    data object Search : PushedDest
+    data object Login : PushedDest
+    data object NowPlaying : PushedDest
+    data class Playlist(val id: Long) : PushedDest
 }
 
 /**
- * Root composable, shared across Android / iOS / Desktop / Web. Wraps the app in the M3 Expressive
- * theme and hosts navigation. **Entry is [HomeScreen]** (主页); Login/Search/Playlist/NowPlaying are
- * pushed onto a back stack. Koin must already be started (see `di.initKoin`, called from each
- * platform entry point) — screens resolve their ViewModels via `koinInject()`.
+ * Root composable shared across Android / iOS / Desktop / Web. 3-tab bottom nav (Recommend / My /
+ * Settings) with a push stack for Search, Login, NowPlaying, PlaylistDetail. Koin must already be
+ * started before this is called.
  */
 @Composable
 fun App() {
     RedefineNCMTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-            val backStack = remember { mutableStateListOf<Nav>(Nav.Home) }
-            fun navigate(dest: Nav) = backStack.add(dest)
-            fun back() {
-                if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
-            }
+            var currentTab by remember { mutableStateOf<TabDest>(TabDest.Home) }
+            val pushedStack = remember { mutableStateListOf<PushedDest>() }
+            val player: PlatformPlayer = koinInject()
+            val currentMedia by player.currentMedia.collectAsState()
 
-            when (val screen = backStack.last()) {
-                is Nav.Home -> HomeScreen(
-                    onOpenLogin = { navigate(Nav.Login) },
-                    onOpenSearch = { navigate(Nav.Search) },
-                    onOpenNowPlaying = { navigate(Nav.NowPlaying) },
-                    onOpenPlaylist = { navigate(Nav.Playlist(it)) },
-                    onOpenSettings = { navigate(Nav.Settings) },
-                )
-                is Nav.Search -> SearchScreen(
-                    onBack = ::back,
-                    onOpenNowPlaying = { navigate(Nav.NowPlaying) },
-                )
-                is Nav.Login -> LoginScreen(onBack = ::back)
-                is Nav.NowPlaying -> NowPlayingScreen(onBack = ::back)
-                is Nav.Settings -> SettingsScreen(onBack = ::back)
-                is Nav.Playlist -> PlaylistDetailScreen(
-                    playlistId = screen.id,
-                    onBack = ::back,
-                    onOpenNowPlaying = { navigate(Nav.NowPlaying) },
-                )
+            fun push(dest: PushedDest) = pushedStack.add(dest)
+            fun back() { if (pushedStack.isNotEmpty()) pushedStack.removeAt(pushedStack.lastIndex) }
+
+            val showTabs = pushedStack.isEmpty()
+
+            Scaffold(
+                contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                bottomBar = {
+                    if (showTabs) {
+                        NavigationBar {
+                            NavigationBarItem(
+                                selected = currentTab is TabDest.Home,
+                                onClick = { currentTab = TabDest.Home },
+                                icon = { Icon(Icons.Default.Home, contentDescription = null) },
+                                label = { Text("推荐") },
+                            )
+                            NavigationBarItem(
+                                selected = currentTab is TabDest.My,
+                                onClick = { currentTab = TabDest.My },
+                                icon = { Icon(Icons.Default.Person, contentDescription = null) },
+                                label = { Text("我的") },
+                            )
+                            NavigationBarItem(
+                                selected = currentTab is TabDest.Settings,
+                                onClick = { currentTab = TabDest.Settings },
+                                icon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                                label = { Text("设置") },
+                            )
+                        }
+                    }
+                },
+                floatingActionButton = {
+                    if (showTabs) {
+                        currentMedia?.let { media ->
+                            ExtendedFloatingActionButton(
+                                onClick = { push(PushedDest.NowPlaying) },
+                                icon = { Icon(Icons.Default.PlayArrow, contentDescription = null) },
+                                text = { Text(media.title.ifBlank { "正在播放" }, maxLines = 1) },
+                            )
+                        }
+                    }
+                },
+            ) { innerPadding ->
+                if (pushedStack.isNotEmpty()) {
+                    when (val dest = pushedStack.last()) {
+                        is PushedDest.Search -> SearchScreen(onBack = ::back)
+                        is PushedDest.Login -> LoginScreen(onBack = ::back)
+                        is PushedDest.NowPlaying -> NowPlayingScreen(onBack = ::back)
+                        is PushedDest.Playlist -> PlaylistDetailScreen(
+                            playlistId = dest.id,
+                            onBack = ::back,
+                            onOpenNowPlaying = { push(PushedDest.NowPlaying) },
+                        )
+                    }
+                } else {
+                    when (currentTab) {
+                        is TabDest.Home -> HomeScreen(
+                            scaffoldPadding = innerPadding,
+                            onOpenSearch = { push(PushedDest.Search) },
+                            onOpenPlaylist = { push(PushedDest.Playlist(it)) },
+                        )
+                        is TabDest.My -> UserPlaylistScreen(
+                            scaffoldPadding = innerPadding,
+                            onOpenLogin = { push(PushedDest.Login) },
+                            onOpenPlaylist = { push(PushedDest.Playlist(it)) },
+                        )
+                        is TabDest.Settings -> SettingsScreen(scaffoldPadding = innerPadding)
+                    }
+                }
             }
         }
     }
