@@ -1,28 +1,34 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,93 +36,180 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
+import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
+import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
+import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
 
-/** Search / 搜索 (M3 Expressive): query field with suggestions and result rows. */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
     onBack: () -> Unit,
-    onOpenNowPlaying: () -> Unit,
     viewModel: MainViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
+    settings: PlatformSettings = koinInject(),
 ) {
     val results by viewModel.searchResults.collectAsState()
     val suggestions by viewModel.searchSuggestions.collectAsState()
     val loading by viewModel.searchLoading.collectAsState()
     var query by remember { mutableStateOf("") }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val searchPrediction = remember { settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("搜索", fontWeight = FontWeight.ExtraBold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+    LaunchedEffect(Unit) { viewModel.clearSearch() }
+
+    LaunchedEffect(query) {
+        if (query.isBlank()) {
+            viewModel.clearSearch()
+        } else if (searchPrediction) {
+            delay(300)
+            viewModel.fetchSearchSuggestions(query)
+        }
+    }
+
+    fun submit(text: String) {
+        query = text
+        keyboard?.hide()
+        viewModel.search(text)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+            }
             TextField(
                 value = query,
-                onValueChange = {
-                    query = it
-                    viewModel.fetchSearchSuggestions(it)
-                },
+                onValueChange = { query = it },
                 placeholder = { Text("搜索歌曲、歌手") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true,
-                shape = MaterialTheme.shapes.extraLarge,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { query = ""; viewModel.clearSearch() }) {
+                            Icon(Icons.Filled.Clear, contentDescription = "清除")
+                        }
+                    }
+                },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { submit(query) }),
+                shape = CircleShape,
+                modifier = Modifier.fillMaxWidth(),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                ),
             )
+        }
 
-            if (loading) {
-                Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+        Spacer(Modifier.height(8.dp))
+
+        when {
+            loading -> {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
             }
-
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                if (results.isEmpty() && suggestions.isNotEmpty()) {
-                    items(suggestions) { s ->
+            results.isEmpty() && searchPrediction && suggestions.isNotEmpty() -> {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    itemsIndexed(suggestions) { index, keyword ->
                         Surface(
-                            onClick = {
-                                query = s
-                                viewModel.search(s)
-                            },
-                            color = MaterialTheme.colorScheme.surface,
-                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { submit(keyword) },
+                            shape = connectedListItemShape(index, suggestions.size),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 1.5.dp),
                         ) {
-                            Text(
-                                text = s,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 14.dp),
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    Icons.Filled.Search,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Spacer(Modifier.size(12.dp))
+                                Text(text = keyword, style = MaterialTheme.typography.bodyLarge)
+                            }
                         }
                     }
                 }
-                itemsIndexed(results) { i, song ->
-                    SongRow(
-                        index = i,
-                        title = song.name,
-                        artist = song.ar.joinToString(", ") { it.name },
-                        artworkUri = song.al.picUrl,
-                        shape = connectedListItemShape(i, results.size),
-                        onClick = {
-                            player.setQueue(results.map { it.toMediaInfo() }, i)
-                            player.play()
-                            onOpenNowPlaying()
-                        },
-                    )
+            }
+            results.isNotEmpty() -> {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    itemsIndexed(results) { index, song ->
+                        Surface(
+                            onClick = {
+                                player.setQueue(listOf(song.toMediaInfo()), 0)
+                                player.play()
+                                onBack()
+                            },
+                            shape = connectedListItemShape(index, results.size),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 1.5.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                AsyncImage(
+                                    model = song.al.picUrl,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .clip(MaterialTheme.shapes.medium),
+                                )
+                                Spacer(Modifier.size(14.dp))
+                                Column(Modifier.fillMaxWidth()) {
+                                    Text(
+                                        text = song.name,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        text = song.ar.joinToString(" / ") { it.name }.ifEmpty { "未知歌手" },
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
-                item { Spacer(Modifier.padding(40.dp)) }
+            }
+            query.isNotBlank() -> {
+                Text(
+                    text = "按搜索键查找 \"$query\"",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
