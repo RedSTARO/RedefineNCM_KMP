@@ -1,5 +1,7 @@
 package com.leejlredstar.redefinencm.kmp
 
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -9,9 +11,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        setContent {
-            // Koin is started in RedefineNCMApp.onCreate(); App() resolves ViewModels via koinInject().
-            App()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(Intent(this, PlaybackService::class.java))
+        } else {
+            startService(Intent(this, PlaybackService::class.java))
         }
+
+        setContent { App() }
     }
 }
