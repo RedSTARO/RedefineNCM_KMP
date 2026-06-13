@@ -63,45 +63,47 @@ fun NowPlayingScreen(
     var showPlaylist by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
 
-    LazyColumn(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface),
-        contentPadding = PaddingValues(bottom = 24.dp),
     ) {
-        item { SongHeroSection(metadata, onBack) }
-        item {
-            LyricSection(
-                lyricMap = lyricMap,
-                lyricIndex = lyricIndex,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            )
-        }
-        item {
-            ProgressSection(
-                currentPosition = position,
-                songLength = songLength,
-                onSeekChanged = { viewModel.onPositionSeekClick(it) },
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
-            )
-        }
-        item {
-            PlaybackControlSection(
-                isPlaying = isPlaying,
-                onPervClick = { viewModel.onPervClick() },
-                onPauseClick = { viewModel.onPauseClick() },
-                onNextClick = { viewModel.onNextClick() },
-                onShowPlaylistClick = { showPlaylist = !showPlaylist },
-                shuffleEnabled = shuffleStatus,
-                onShuffleClick = { viewModel.onShuffleClick(!shuffleStatus) },
-                onFavClick = { viewModel.onFavClick() },
-                onCommentsClick = {
-                    if (!showComments) viewModel.getComments()
-                    showComments = !showComments
-                },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            )
-        }
+        SongHeroSection(
+            metadata = metadata,
+            onBack = onBack,
+            modifier = Modifier.weight(0.38f),
+        )
+
+        LyricSection(
+            lyricMap = lyricMap,
+            lyricIndex = lyricIndex,
+            modifier = Modifier
+                .weight(0.32f)
+                .padding(horizontal = 16.dp),
+        )
+
+        ProgressSection(
+            currentPosition = position,
+            songLength = songLength,
+            onSeekChanged = { viewModel.onPositionSeekClick(it) },
+            modifier = Modifier.padding(horizontal = 24.dp, top = 4.dp, bottom = 2.dp),
+        )
+
+        PlaybackControlSection(
+            isPlaying = isPlaying,
+            onPervClick = { viewModel.onPervClick() },
+            onPauseClick = { viewModel.onPauseClick() },
+            onNextClick = { viewModel.onNextClick() },
+            onShowPlaylistClick = { showPlaylist = !showPlaylist },
+            shuffleEnabled = shuffleStatus,
+            onShuffleClick = { viewModel.onShuffleClick(!shuffleStatus) },
+            onFavClick = { viewModel.onFavClick() },
+            onCommentsClick = {
+                if (!showComments) viewModel.getComments()
+                showComments = !showComments
+            },
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+        )
     }
 
     LaunchedEffect(showPlaylist) {
@@ -129,6 +131,7 @@ fun NowPlayingScreen(
 private fun SongHeroSection(
     metadata: com.leejlredstar.redefinencm.kmp.player.MediaInfo?,
     onBack: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val defaultHeroColor = MaterialTheme.colorScheme.primaryContainer
     var themeColor by remember { mutableStateOf(defaultHeroColor) }
@@ -138,11 +141,11 @@ private fun SongHeroSection(
         label = "heroColor",
     )
 
-    Column(Modifier.fillMaxWidth()) {
+    Column(modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(360.dp)
+                .weight(1f)
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
@@ -152,6 +155,7 @@ private fun SongHeroSection(
                         ),
                     ),
                 ),
+            contentAlignment = Alignment.Center,
         ) {
             IconButton(
                 onClick = onBack,
@@ -167,24 +171,22 @@ private fun SongHeroSection(
                 contentDescription = "Album Cover",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(top = 16.dp)
-                    .size(252.dp)
+                    .size(220.dp)
                     .clip(MaterialTheme.shapes.extraLarge),
             )
         }
 
-        Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 24.dp, top = 12.dp)) {
             Text(
                 text = metadata?.title?.ifBlank { "Unknown Title" } ?: "Unknown Title",
-                style = MaterialTheme.typography.headlineLarge,
+                style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.ExtraBold,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.basicMarquee(),
             )
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
             Text(
                 text = metadata?.artist?.ifBlank { "Unknown Artist" } ?: "Unknown Artist",
                 style = MaterialTheme.typography.titleMedium,
@@ -220,9 +222,8 @@ fun LyricSection(
         LazyColumn(
             state = listState,
             modifier = Modifier
-                .fillMaxWidth()
-                .height(248.dp)
-                .padding(horizontal = 12.dp, vertical = 16.dp),
+                .fillMaxSize()
+                .padding(horizontal = 12.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             itemsIndexed(lyrics) { index, line ->
