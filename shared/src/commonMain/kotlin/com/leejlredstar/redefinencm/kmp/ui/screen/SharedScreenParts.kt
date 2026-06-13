@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.remember
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -41,9 +42,9 @@ import com.leejlredstar.redefinencm.kmp.data.api.dto.UserPlaylistEach
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
+import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
-import com.leejlredstar.redefinencm.kmp.util.isSongDownloaded
 import org.koin.compose.koinInject
 
 /** Map an API song DTO to the player's [MediaInfo] (placeholder URI resolved at play time). */
@@ -110,7 +111,7 @@ fun SongRow(
                 )
             }
             if (songId != null && settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false)) {
-                val downloaded = isSongDownloaded(songId)
+                val downloaded = remember(songId) { DownloadedSongsCache.isDownloaded(songId) }
                 Spacer(Modifier.width(8.dp))
                 Surface(
                     shape = CircleShape,

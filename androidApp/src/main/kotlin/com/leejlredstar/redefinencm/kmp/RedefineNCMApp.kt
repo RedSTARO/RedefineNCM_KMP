@@ -7,6 +7,7 @@ import coil3.SingletonImageLoader
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import com.leejlredstar.redefinencm.kmp.di.initKoin
 import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
+import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
 import org.koin.android.ext.koin.androidContext
 
 class RedefineNCMApp : Application(), SingletonImageLoader.Factory {
@@ -15,6 +16,7 @@ class RedefineNCMApp : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         initKoin { androidContext(this@RedefineNCMApp) }
         LyricNotificationController.init(applicationContext)
+        DownloadedSongsCache.refresh()
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
