@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS CachedRecommendSongs (
+  singleton INTEGER NOT NULL PRIMARY KEY DEFAULT 0,
+  json TEXT NOT NULL
+);
+
+upsert:
+INSERT OR REPLACE INTO CachedRecommendSongs(singleton, json) VALUES (0, :json);
+
+select:
+SELECT json FROM CachedRecommendSongs WHERE singleton = 0;

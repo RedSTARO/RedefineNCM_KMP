@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS CachedRecommendResource (
+  singleton INTEGER NOT NULL PRIMARY KEY DEFAULT 0,
+  json TEXT NOT NULL
+);
+
+upsert:
+INSERT OR REPLACE INTO CachedRecommendResource(singleton, json) VALUES (0, :json);
+
+select:
+SELECT json FROM CachedRecommendResource WHERE singleton = 0;
