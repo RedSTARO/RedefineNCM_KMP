@@ -134,6 +134,7 @@ fun PlaylistDetailScreen(
                     artworkUri = song.al.picUrl,
                     shape = connectedListItemShape(i, songs.size),
                     onClick = { playFrom(i) },
+                    songId = song.id,
                 )
             }
             item { Spacer(Modifier.height(40.dp)) }
