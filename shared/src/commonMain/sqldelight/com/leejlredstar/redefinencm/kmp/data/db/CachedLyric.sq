@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS CachedLyric (
+  song_id INTEGER NOT NULL PRIMARY KEY,
+  json TEXT NOT NULL
+);
+
+upsert:
+INSERT OR REPLACE INTO CachedLyric(song_id, json) VALUES (:song_id, :json);
+
+selectBySongId:
+SELECT json FROM CachedLyric WHERE song_id = :song_id;

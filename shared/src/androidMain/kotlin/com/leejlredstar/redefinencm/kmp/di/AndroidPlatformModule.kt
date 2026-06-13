@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.di
 
 import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
+import com.leejlredstar.redefinencm.kmp.data.db.DatabaseDriverFactory
 import com.leejlredstar.redefinencm.kmp.player.ExoPlayerPlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
@@ -24,6 +25,9 @@ actual fun platformModule() = module {
 
     // PlatformSettings backed by DataStore (needs the app Context provided via androidContext()).
     single { PlatformSettings(get()) }
+
+    // SQLDelight driver (needs Context for the Android SQLite helper).
+    single { DatabaseDriverFactory(androidContext()) }
 
     // ExoPlayer-backed PlatformPlayer — overrides the InMemoryPlatformPlayer in sharedModule.
     // Must be resolved on the main thread (ExoPlayer requirement); Koin singleton lives for the

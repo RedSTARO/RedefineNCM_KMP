@@ -3,29 +3,35 @@ package com.leejlredstar.redefinencm.kmp.data
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.data.api.dto.*
 import com.leejlredstar.redefinencm.kmp.data.api.safeApiCall
+import com.leejlredstar.redefinencm.kmp.data.db.AppDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.serialization.json.Json
 
-/**
- * Single repository — wraps API + local cache.
- * Cache-then-network pattern: emit cached data first, then fetch fresh from network.
- *
- * Ported from the original Android Repository. Gson-encoded JSON columns
- * are replaced by kotlinx.serialization stored as text in SQLDelight.
- */
 class Repository(
     private val api: NCMApi,
+    private val db: AppDatabase,
 ) {
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
+
     // ── User ──
 
     fun getUserDetail(uid: Long): Flow<UserDetail?> = flow {
-        val network = safeApiCall { api.userDetail(uid) }
-        if (network != null) emit(network)
+        db.cachedUserDetailQueries.selectByUid(uid).executeAsOneOrNull()
+            ?.let { emit(json.decodeFromString<UserDetail>(it)) }
+        safeApiCall { api.userDetail(uid) }?.let { network ->
+            db.cachedUserDetailQueries.upsert(uid, json.encodeToString(network))
+            emit(network)
+        }
     }
 
     fun getUserPlaylist(uid: Long): Flow<UserPlaylist?> = flow {
-        val network = safeApiCall { api.userPlaylist(uid) }
-        if (network != null) emit(network)
+        db.cachedUserPlaylistQueries.selectByUid(uid).executeAsOneOrNull()
+            ?.let { emit(json.decodeFromString<UserPlaylist>(it)) }
+        safeApiCall { api.userPlaylist(uid) }?.let { network ->
+            db.cachedUserPlaylistQueries.upsert(uid, json.encodeToString(network))
+            emit(network)
+        }
     }
 
     // ── Playlist ──
@@ -43,13 +49,21 @@ class Repository(
     // ── Recommend ──
 
     fun getRecommendSongs(): Flow<RecommendSongs?> = flow {
-        val network = safeApiCall { api.recommendSongs() }
-        if (network != null) emit(network)
+        db.cachedRecommendSongsQueries.select().executeAsOneOrNull()
+            ?.let { emit(json.decodeFromString<RecommendSongs>(it)) }
+        safeApiCall { api.recommendSongs() }?.let { network ->
+            db.cachedRecommendSongsQueries.upsert(json.encodeToString(network))
+            emit(network)
+        }
     }
 
     fun getRecommendResource(): Flow<RecommendResource?> = flow {
-        val network = safeApiCall { api.recommendResource() }
-        if (network != null) emit(network)
+        db.cachedRecommendResourceQueries.select().executeAsOneOrNull()
+            ?.let { emit(json.decodeFromString<RecommendResource>(it)) }
+        safeApiCall { api.recommendResource() }?.let { network ->
+            db.cachedRecommendResourceQueries.upsert(json.encodeToString(network))
+            emit(network)
+        }
     }
 
     // ── Comment ──
@@ -62,8 +76,12 @@ class Repository(
     // ── Lyric ──
 
     fun getLyric(id: Long): Flow<Lyric?> = flow {
-        val network = safeApiCall { api.lyric(id) }
-        if (network != null) emit(network)
+        db.cachedLyricQueries.selectBySongId(id).executeAsOneOrNull()
+            ?.let { emit(json.decodeFromString<Lyric>(it)) }
+        safeApiCall { api.lyric(id) }?.let { network ->
+            db.cachedLyricQueries.upsert(id, json.encodeToString(network))
+            emit(network)
+        }
     }
 
     // ── Song URL ──

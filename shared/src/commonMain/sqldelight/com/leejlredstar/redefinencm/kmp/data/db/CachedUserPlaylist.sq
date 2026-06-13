@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS CachedUserPlaylist (
+  uid INTEGER NOT NULL PRIMARY KEY,
+  json TEXT NOT NULL
+);
+
+upsert:
+INSERT OR REPLACE INTO CachedUserPlaylist(uid, json) VALUES (:uid, :json);
+
+selectByUid:
+SELECT json FROM CachedUserPlaylist WHERE uid = :uid;

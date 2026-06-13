@@ -3,6 +3,8 @@ package com.leejlredstar.redefinencm.kmp.di
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
+import com.leejlredstar.redefinencm.kmp.data.db.AppDatabase
+import com.leejlredstar.redefinencm.kmp.data.db.DatabaseDriverFactory
 import com.leejlredstar.redefinencm.kmp.player.InMemoryPlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.viewmodel.LoginViewModel
@@ -45,8 +47,11 @@ val sharedModule = module {
     // API
     single { NCMApi(get()) }
 
+    // Database — DatabaseDriverFactory is provided by platformModule()
+    single { AppDatabase(get<DatabaseDriverFactory>().createDriver()) }
+
     // Repository
-    single { Repository(get()) }
+    single { Repository(get(), get()) }
 
     // Player — shared in-memory default (no real audio). A platform that implements a real
     // PlatformPlayer should bind it in platformModule() and remove this default (or load with

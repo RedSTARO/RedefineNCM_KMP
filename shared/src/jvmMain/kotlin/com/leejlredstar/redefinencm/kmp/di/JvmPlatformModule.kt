@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.di
 
 import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
+import com.leejlredstar.redefinencm.kmp.data.db.DatabaseDriverFactory
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import io.ktor.client.HttpClient
@@ -21,4 +22,7 @@ actual fun platformModule() = module {
 
     // PlatformSettings backed by java.util.prefs
     single { PlatformSettings() }
+
+    // SQLDelight driver (file-backed SQLite in ~/.redefinencm/).
+    single { DatabaseDriverFactory() }
 }
