@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>AMLL Lyric Player</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; }
+  #amll-root { width: 100%; height: 100%; }
+  #loading {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(255,255,255,0.5);
+    font-family: system-ui, sans-serif;
+    font-size: 14px;
+    z-index: 10;
+    pointer-events: none;
+  }
+  .amll-lyric-player { width: 100% !important; height: 100% !important; }
+</style>
+</head>
+<body>
+<div id="loading">Loading lyric engine...</div>
+<div id="amll-root"></div>
+
+<script>
+// ── CDN fallback: esm.sh handles PixiJS transitive deps ──
+const CDN = "https://esm.sh/@applemusic-like-lyrics";
+const VER = "latest";
+
+// Try local bundle first, fall back to CDN
+async function loadEngine() {
+  // Prefer the locally bundled engine (esbuild ESM output in assets/amll/bundle.js).
+  // ES module imports resolve over file:// in Android WebView, so no network is needed.
+  // The bundle only defines globalThis.AmllBridge — init() must be called explicitly here.
+  try {
+    await import("./bundle.js");
+    if (globalThis.AmllBridge && globalThis.AmllBridge.init()) {
+      document.getElementById("loading")?.remove();
+      // Signal the Android bridge that the engine is mounted and ready.
+      globalThis.AmllCallback?.onReady?.();
+      return;
+    }
+  } catch (e) {
+    console.warn("AMLL: local bundle unavailable, falling back to CDN", e);
+  }
+
+  // CDN fallback with importmap
+  const imp = document.createElement("script");
+  imp.type = "importmap-shim";
+  imp.textContent = JSON.stringify({
+    imports: {
+      "@applemusic-like-lyrics/core": `${CDN}/core@${VER}/+esm`,
+      "@applemusic-like-lyrics/lyric": `${CDN}/lyric@${VER}/+esm`,
+    },
+  });
+  document.head.appendChild(imp);
+
+  // Load es-module-shims for importmap support
+  const shim = document.createElement("script");
+  shim.src = "https://ga.jspm.io/npm:es-module-shims@2/dist/es-module-shims.js";
+  shim.async = true;
+  document.head.appendChild(shim);
+
+  await new Promise((resolve) => (shim.onload = resolve));
+
+  const main = document.createElement("script");
+  main.type = "esms-import";
+  main.textContent = `
+    import { LyricPlayer } from "@applemusic-like-lyrics/core";
+    import { parseLrc } from "@applemusic-like-lyrics/lyric";
+
+    globalThis.AmllBridge = {
+      LyricPlayer, parseLrc, player: null,
+      init() {
+        const root = document.getElementById("amll-root");
+        if (!root) return false;
+        this.player = new LyricPlayer();
+        root.appendChild(this.player.getElement());
+        document.getElementById("loading")?.remove();
+        return true;
+      },
+      loadLyrics(lrcText) {
+        if (!this.player) return;
+        this.player.setLyricLines(parseLrc(lrcText));
+      },
+      setTime(timeMs, delta) {
+        if (!this.player) return;
+        this.player.setCurrentTime(timeMs);
+        this.player.update(delta ?? 0);
+      },
+      setTheme(theme) {
+        document.documentElement.setAttribute("data-theme", theme);
+      },
+    };
+
+    // Auto-init
+    const ok = globalThis.AmllBridge.init();
+    if (!ok) console.error("AMLL: failed to init");
+    else globalThis.AmllCallback?.onReady?.();
+  `;
+  document.body.appendChild(main);
+}
+
+loadEngine();
+</script>
+</body>
+</html>
