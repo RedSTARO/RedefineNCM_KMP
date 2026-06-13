@@ -88,7 +88,7 @@ fun NowPlayingScreen(
             currentPosition = position,
             songLength = songLength,
             onSeekChanged = { viewModel.onPositionSeekClick(it) },
-            modifier = Modifier.padding(horizontal = 24.dp, top = 4.dp, bottom = 2.dp),
+            modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 2.dp),
         )
 
         PlaybackControlSection(
@@ -178,7 +178,7 @@ private fun SongHeroSection(
             )
         }
 
-        Column(modifier = Modifier.padding(horizontal = 24.dp, top = 12.dp)) {
+        Column(modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 12.dp)) {
             Text(
                 text = metadata?.title?.ifBlank { "Unknown Title" } ?: "Unknown Title",
                 style = MaterialTheme.typography.headlineMedium,

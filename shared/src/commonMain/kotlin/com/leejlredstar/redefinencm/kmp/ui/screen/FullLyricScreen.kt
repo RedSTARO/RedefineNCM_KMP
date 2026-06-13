@@ -26,9 +26,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -251,47 +251,40 @@ private fun LyricKaraokeLine(
 
     Box(
         modifier = Modifier
-            .weight(1f)
-            .fillMaxWidth(),
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
         contentAlignment = Alignment.Center,
     ) {
+        // Base layer: full-dim text
+        Text(
+            text = text,
+            color = dimColor,
+            fontSize = fontSize,
+            fontWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.Normal,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            softWrap = false,
+        )
+        // Karaoke overlay layer: the Box width is constrained to [progress] fraction,
+        // so the child Text naturally renders only within that span — no explicit clip needed.
         if (isCurrent && progress in 0f..1f) {
-            // Two-layer karaoke: dim underneath, bright overlay clipped by progress
-            Text(
-                text = text,
-                color = dimColor,
-                fontSize = fontSize,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                softWrap = false,
-            )
-            Text(
-                text = text,
-                color = brightColor,
-                fontSize = fontSize,
-                fontWeight = FontWeight.ExtraBold,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                softWrap = false,
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .drawWithContent {
-                        clipRect(right = size.width * progress) {
-                            this@drawWithContent.drawContent()
-                        }
-                    },
-            )
-        } else {
-            Text(
-                text = text,
-                color = dimColor,
-                fontSize = fontSize,
-                fontWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.Normal,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                softWrap = false,
-            )
+                    .fillMaxWidth(progress)
+                    .align(Alignment.CenterStart),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = text,
+                    color = brightColor,
+                    fontSize = fontSize,
+                    fontWeight = FontWeight.ExtraBold,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
     }
 }
