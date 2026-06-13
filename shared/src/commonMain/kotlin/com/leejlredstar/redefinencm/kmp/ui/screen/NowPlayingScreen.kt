@@ -69,14 +69,7 @@ fun NowPlayingScreen(
             .background(MaterialTheme.colorScheme.surface),
         contentPadding = PaddingValues(bottom = 24.dp),
     ) {
-        item {
-            Row(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                }
-            }
-        }
-        item { SongHeroSection(metadata) }
+        item { SongHeroSection(metadata, onBack) }
         item {
             LyricSection(
                 lyricMap = lyricMap,
@@ -133,7 +126,10 @@ fun NowPlayingScreen(
 }
 
 @Composable
-private fun SongHeroSection(metadata: com.leejlredstar.redefinencm.kmp.player.MediaInfo?) {
+private fun SongHeroSection(
+    metadata: com.leejlredstar.redefinencm.kmp.player.MediaInfo?,
+    onBack: () -> Unit,
+) {
     val defaultHeroColor = MaterialTheme.colorScheme.primaryContainer
     var themeColor by remember { mutableStateOf(defaultHeroColor) }
     val heroColor by animateColorAsState(
@@ -156,13 +152,22 @@ private fun SongHeroSection(metadata: com.leejlredstar.redefinencm.kmp.player.Me
                         ),
                     ),
                 ),
-            contentAlignment = Alignment.Center,
         ) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(8.dp),
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+            }
             AsyncImage(
                 model = metadata?.artworkUri,
                 contentDescription = "Album Cover",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
+                    .align(Alignment.Center)
                     .padding(top = 16.dp)
                     .size(252.dp)
                     .clip(MaterialTheme.shapes.extraLarge),
