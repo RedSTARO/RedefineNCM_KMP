@@ -22,6 +22,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
+import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
+import com.leejlredstar.redefinencm.kmp.util.SettingKeys
+import org.koin.compose.koinInject
 import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.FullLyricScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.LoginScreen
@@ -100,10 +103,14 @@ fun App() {
                     when (val dest = pushedStack.last()) {
                         is PushedDest.Search -> SearchScreen(onBack = ::back)
                         is PushedDest.Login -> LoginScreen(onBack = ::back)
-                        is PushedDest.NowPlaying -> NowPlayingScreen(
-                            onBack = ::back,
-                            onOpenFullLyric = { push(PushedDest.FullLyric) },
-                        )
+                        is PushedDest.NowPlaying -> {
+                            val settings: PlatformSettings = koinInject()
+                            if (settings.getBoolean(SettingKeys.USE_FULL_LYRIC, false)) {
+                                FullLyricScreen(onBack = ::back)
+                            } else {
+                                NowPlayingScreen(onBack = ::back)
+                            }
+                        }
                         is PushedDest.FullLyric -> FullLyricScreen(onBack = ::back)
                         is PushedDest.Playlist -> PlaylistDetailScreen(
                             playlistId = dest.id,

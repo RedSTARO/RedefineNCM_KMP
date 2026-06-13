@@ -13,6 +13,7 @@ data class SettingsBackupData(
     val downloadQuality: String = SoundQuality.STANDARD.name,
     val replacePlaylist: Boolean = false,
     val checkUpdate: Boolean = false,
+    val useFullLyric: Boolean = false,
 )
 
 private val backupJson = Json { ignoreUnknownKeys = true; coerceInputValues = true }
@@ -26,6 +27,7 @@ fun encodeSettingsBackup(settings: PlatformSettings): String = backupJson.encode
         downloadQuality = settings.getString(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name),
         replacePlaylist = settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false),
         checkUpdate = settings.getBoolean(SettingKeys.CHECK_UPDATE, false),
+        useFullLyric = settings.getBoolean(SettingKeys.USE_FULL_LYRIC, false),
     )
 )
 
@@ -38,6 +40,7 @@ fun applySettingsBackup(json: String, settings: PlatformSettings): Boolean = try
     settings.setString(SettingKeys.DOWNLOAD_QUALITY, data.downloadQuality)
     settings.setBoolean(SettingKeys.REPLACE_PLAYLIST, data.replacePlaylist)
     settings.setBoolean(SettingKeys.CHECK_UPDATE, data.checkUpdate)
+    settings.setBoolean(SettingKeys.USE_FULL_LYRIC, data.useFullLyric)
     true
 } catch (_: Exception) {
     false
