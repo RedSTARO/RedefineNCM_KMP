@@ -17,6 +17,10 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.koin.android)
 
+    // Media3 needed directly: PlaybackService extends MediaSessionService and uses MediaSession.
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.session)
+
     implementation(libs.compose.uiToolingPreview)
     debugImplementation(libs.compose.uiTooling)
 }
