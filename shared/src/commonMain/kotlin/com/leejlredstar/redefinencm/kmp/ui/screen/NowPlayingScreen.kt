@@ -4,7 +4,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -47,7 +46,6 @@ import org.koin.compose.koinInject
 @Composable
 fun NowPlayingScreen(
     onBack: () -> Unit = {},
-    onOpenFullLyric: () -> Unit = {},
     viewModel: NowPlayingViewModel = koinInject(),
 ) {
     val metadata by viewModel.currentMedia.collectAsState()
@@ -78,7 +76,6 @@ fun NowPlayingScreen(
         LyricSection(
             lyricMap = lyricMap,
             lyricIndex = lyricIndex,
-            onClick = onOpenFullLyric,
             modifier = Modifier
                 .weight(0.32f)
                 .padding(horizontal = 16.dp),
@@ -205,7 +202,6 @@ private fun SongHeroSection(
 fun LyricSection(
     lyricMap: LinkedHashMap<Long?, String?>,
     lyricIndex: Int,
-    onClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -218,7 +214,6 @@ fun LyricSection(
     }
 
     Surface(
-        onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.extraLarge,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
