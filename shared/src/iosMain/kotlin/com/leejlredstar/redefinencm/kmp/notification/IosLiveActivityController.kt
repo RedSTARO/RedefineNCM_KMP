@@ -55,6 +55,7 @@ actual object LyricNotificationController {
         currentLyric: String?,
         nextLyric: String?,
         artworkUri: String?,
+        isPlaying: Boolean,
     ) {
         val lyric = currentLyric?.trim().takeUnless { it.isNullOrEmpty() } ?: return
 

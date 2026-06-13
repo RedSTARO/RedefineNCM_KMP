@@ -23,6 +23,7 @@ expect object LyricNotificationController {
         currentLyric: String?,
         nextLyric: String?,
         artworkUri: String? = null,
+        isPlaying: Boolean = true,
     )
 
     /** Remove the lyric display. */

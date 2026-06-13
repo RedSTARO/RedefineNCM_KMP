@@ -27,6 +27,7 @@ actual object LyricNotificationController {
         currentLyric: String?,
         nextLyric: String?,
         artworkUri: String?,
+        isPlaying: Boolean,
     ) {
         _floatingLyricData.value = FloatingLyricData(
             title = title ?: "",

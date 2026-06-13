@@ -34,6 +34,16 @@
             </intent-filter>
         </service>
 
+        <receiver
+            android:name=".MediaActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.leejlredstar.redefinencm.kmp.TOGGLE_PLAY_PAUSE" />
+                <action android:name="com.leejlredstar.redefinencm.kmp.NEXT" />
+                <action android:name="com.leejlredstar.redefinencm.kmp.PREVIOUS" />
+            </intent-filter>
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
