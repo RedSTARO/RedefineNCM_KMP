@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS CachedPlaylistTrackAll (
+  playlist_id INTEGER NOT NULL PRIMARY KEY,
+  json TEXT NOT NULL
+);
+
+upsert:
+INSERT OR REPLACE INTO CachedPlaylistTrackAll(playlist_id, json) VALUES (:playlist_id, :json);
+
+selectById:
+SELECT json FROM CachedPlaylistTrackAll WHERE playlist_id = :playlist_id;
