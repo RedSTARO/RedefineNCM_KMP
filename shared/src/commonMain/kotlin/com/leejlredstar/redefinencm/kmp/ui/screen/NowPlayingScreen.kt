@@ -47,6 +47,7 @@ import org.koin.compose.koinInject
 @Composable
 fun NowPlayingScreen(
     onBack: () -> Unit = {},
+    onOpenFullLyric: () -> Unit = {},
     viewModel: NowPlayingViewModel = koinInject(),
 ) {
     val metadata by viewModel.currentMedia.collectAsState()
@@ -77,6 +78,7 @@ fun NowPlayingScreen(
         LyricSection(
             lyricMap = lyricMap,
             lyricIndex = lyricIndex,
+            onClick = onOpenFullLyric,
             modifier = Modifier
                 .weight(0.32f)
                 .padding(horizontal = 16.dp),
@@ -203,6 +205,7 @@ private fun SongHeroSection(
 fun LyricSection(
     lyricMap: LinkedHashMap<Long?, String?>,
     lyricIndex: Int,
+    onClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -215,6 +218,7 @@ fun LyricSection(
     }
 
     Surface(
+        onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.extraLarge,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
