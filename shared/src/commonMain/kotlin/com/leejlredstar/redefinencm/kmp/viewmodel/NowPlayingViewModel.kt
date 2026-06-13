@@ -125,6 +125,7 @@ class NowPlayingViewModel(
                     currentLyric = values.getOrNull(idx),
                     nextLyric = values.getOrNull(idx + 1),
                     artworkUri = media?.artworkUri,
+                    isPlaying = isPlaying.value,
                 )
             }
         }
