@@ -7,10 +7,11 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
-import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 
 /**
  * Action strings for notification media controls.
@@ -37,7 +38,6 @@ actual object LyricNotificationController {
         ensureChannel(context)
     }
 
-    @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     actual fun updateLyric(
         title: String?,
         artist: String?,
@@ -47,6 +47,7 @@ actual object LyricNotificationController {
         isPlaying: Boolean,
     ) {
         val context = appContext ?: return
+        if (!canPostNotifications(context)) return
         val lyric = currentLyric?.trim().takeUnless { it.isNullOrEmpty() } ?: return
         if (lyric == lastLyric) return
 
@@ -172,5 +173,12 @@ actual object LyricNotificationController {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.BAKLAVA) return false
         val manager = context.getSystemService(NotificationManager::class.java)
         return manager?.canPostPromotedNotifications() == true
+    }
+
+    private fun canPostNotifications(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
+        return ContextCompat.checkSelfPermission(
+            context, Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
     }
 }
