@@ -55,7 +55,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val viewModel: NowPlayingViewModel = koinInject()
     val rawLyric by viewModel.rawLyric.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
-    val isPlaying by viewModel.isPlaying.collectAsState()
 
     val context = LocalContext.current
     var engineReady by remember { mutableStateOf(false) }
@@ -103,11 +102,10 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         webView.evaluateJavascript("AmllBridge.loadLyrics('$escaped');", null)
     }
 
-    // Drive playback position (~60 fps while playing, one-shot when paused).
-    LaunchedEffect(engineReady, currentPosition, isPlaying) {
+    // Push the playback position as it changes; the page's rAF loop animates.
+    LaunchedEffect(engineReady, currentPosition) {
         if (!engineReady) return@LaunchedEffect
-        val delta = if (isPlaying) 16 else 0
-        webView.evaluateJavascript("AmllBridge.setTime($currentPosition, $delta);", null)
+        webView.evaluateJavascript("AmllBridge.setTime($currentPosition);", null)
     }
 
     Box(
