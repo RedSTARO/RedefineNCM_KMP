@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
 import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
+import com.leejlredstar.redefinencm.kmp.ui.screen.FullLyricScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.LoginScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.NowPlayingScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.PlaylistDetailScreen
@@ -41,6 +42,7 @@ private sealed interface PushedDest {
     data object Search : PushedDest
     data object Login : PushedDest
     data object NowPlaying : PushedDest
+    data object FullLyric : PushedDest
     data class Playlist(val id: Long) : PushedDest
 }
 
@@ -98,7 +100,11 @@ fun App() {
                     when (val dest = pushedStack.last()) {
                         is PushedDest.Search -> SearchScreen(onBack = ::back)
                         is PushedDest.Login -> LoginScreen(onBack = ::back)
-                        is PushedDest.NowPlaying -> NowPlayingScreen(onBack = ::back)
+                        is PushedDest.NowPlaying -> NowPlayingScreen(
+                            onBack = ::back,
+                            onOpenFullLyric = { push(PushedDest.FullLyric) },
+                        )
+                        is PushedDest.FullLyric -> FullLyricScreen(onBack = ::back)
                         is PushedDest.Playlist -> PlaylistDetailScreen(
                             playlistId = dest.id,
                             onBack = ::back,
