@@ -3,6 +3,7 @@ package com.leejlredstar.redefinencm.kmp.viewmodel
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusic
 import com.leejlredstar.redefinencm.kmp.data.api.dto.Lyric
+import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
 import com.leejlredstar.redefinencm.kmp.player.*
 import com.leejlredstar.redefinencm.kmp.smtc.MediaControlsIntegrator
 import com.leejlredstar.redefinencm.kmp.util.LyricParser
@@ -47,6 +48,7 @@ class NowPlayingViewModel(
 
     init {
         initPlayerSync()
+        initLyricSync()
         rebuildPlaylistFromTimeline()
     }
 
@@ -106,6 +108,40 @@ class NowPlayingViewModel(
 
         playList.value = queue
         currentMediaIndexInList.value = currentIdx.toString()
+    }
+
+    private fun initLyricSync() {
+        scope.launch {
+            combine(currentPosition, lyricMap) { pos, map ->
+                computeLyricIndex(pos, map)
+            }.distinctUntilChanged().collect { idx ->
+                lyricIndex.value = idx.coerceAtLeast(0)
+                val map = lyricMap.value
+                val media = currentMedia.value
+                val values = map.values.toList()
+                LyricNotificationController.updateLyric(
+                    title = media?.title,
+                    artist = media?.artist,
+                    currentLyric = values.getOrNull(idx),
+                    nextLyric = values.getOrNull(idx + 1),
+                    artworkUri = media?.artworkUri,
+                )
+            }
+        }
+    }
+
+    private fun computeLyricIndex(positionMs: Long, map: LinkedHashMap<Long?, String?>): Int {
+        var index = -1
+        var currentIndex = 0
+        for ((time, _) in map) {
+            if (time != null && positionMs >= time) {
+                index = currentIndex
+            } else {
+                break
+            }
+            currentIndex++
+        }
+        return index
     }
 
     private fun fetchLyrics(mediaId: String) {

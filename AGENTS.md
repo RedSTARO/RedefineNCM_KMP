@@ -167,9 +167,8 @@ RedefineNCM_KMP/
 │   ├── build.gradle.kts                 # KMP plugin config, source sets, dependencies
 │   └── src/
 │       ├── commonMain/kotlin/com/leejlredstar/redefinencm/kmp/
-│       │   ├── App.kt                   # Root composable (⚠ still template placeholder)
+│       │   ├── App.kt                   # Root composable + hand-rolled back-stack nav
 │       │   ├── Platform.kt              # expect fun getPlatform(): Platform
-│       │   ├── Greeting.kt / GreetingUtil.kt   # ⚠ template leftovers — delete
 │       │   ├── data/
 │       │   │   ├── Repository.kt        # Wraps NCMApi + safeApiCall, exposes Flows (network-only)
 │       │   │   └── api/
@@ -197,20 +196,21 @@ RedefineNCM_KMP/
 │       │       ├── component/Expressive.kt      # connected-list shapes
 │       │       └── theme/{Color,Type,Theme}.kt  # M3 Expressive shapes/type (approximation — see #3)
 │       ├── androidMain/  …/Platform.android.kt, notification/AndroidNotificationController.kt,
-│       │                  di/AndroidPlatformModule.kt, util/AndroidSettings.kt
+│       │                  di/AndroidPlatformModule.kt, util/AndroidSettings.kt,
+│       │                  player/ExoPlayerPlatformPlayer.kt (Media3/ExoPlayer PlatformPlayer impl),
+│       │                  player/RedirectingDataSource.kt (placeholder URI → CDN URL resolver)
 │       ├── iosMain/      …/Platform.ios.kt, MainViewController.kt,
 │       │                  notification/IosLiveActivityController.kt (Live Activity data bridge),
 │       │                  di/IosPlatformModule.kt, util/IosSettings.kt
 │       ├── jvmMain/      …/Platform.jvm.kt, notification/DesktopFloatingWindowController.kt,
 │       │                  smtc/WindowsSmtcIntegration.kt (⚠ data-model only; misnamed),
 │       │                  di/JvmPlatformModule.kt, util/JvmSettings.kt
-│       ├── desktopMain/  ⚠ DEAD byte-identical duplicate of jvmMain — DELETE (decision D1)
 │       ├── wasmJsMain/   …/Platform.wasm.kt, notification/WasmNotificationStub.kt,
 │       │                  di/WasmPlatformModule.kt, util/WasmSettings.kt  (⚠ target not declared — D2)
-│       ├── commonTest/   SharedCommonTest.kt (placeholder; PlayQueueTest TODO)
-│       ├── androidHostTest/ · iosTest/ · jvmTest/   (placeholder tests)
-│       └── desktopTest/  ⚠ DEAD duplicate of jvmTest — DELETE
-├── androidApp/    AGP application; MainActivity; depends on :shared
+│       ├── commonTest/   SharedCommonTest.kt (placeholder)
+│       └── jvmTest/      player/PlayQueueTest.kt (shuffle invariant regression suite — passes)
+├── androidApp/    AGP application; MainActivity; PlaybackService (MediaSessionService);
+│                  RedefineNCMApp; depends on :shared + media3 directly
 ├── desktopApp/    Compose Desktop app; main.kt; depends on :shared
 ├── iosApp/        Xcode project (SwiftUI shell + ComposeUIViewController). NOT a Gradle module.
 ├── gradle/libs.versions.toml   # single source of truth for ALL versions
@@ -284,6 +284,7 @@ in — see Goal #4).
 | DI | Koin `4.2.1`: koin-core, koin-compose | commonMain |
 | Images | Coil `3.5.0`: coil-compose (group `io.coil-kt.coil3`) | commonMain |
 | Android settings | `androidx.datastore:datastore-preferences 1.2.0` | androidMain |
+| Android audio | `media3-exoplayer 1.10.1` + `media3-session 1.10.1` | androidMain + :androidApp |
 
 **Deliberately NOT dependencies** (grep-confirmed the code does not import them; the *previous*
 AGENTS.md wrongly listed them):
@@ -292,9 +293,8 @@ AGENTS.md wrongly listed them):
 - **Voyager / any navigation lib** — no navigation is wired yet; `App.kt` is a placeholder.
   Navigation is an open choice (see roadmap), not an installed dependency.
 - **SQLDelight** — see decision D3 (planned cache layer, not present).
-- **media3 / palette** — the Android `PlatformPlayer` (ExoPlayer) and palette-based color
-  extraction are not implemented yet, so these aren't imported. Add them in `androidMain` when
-  that work lands.
+- **palette** — palette-based color extraction is not yet implemented (still using
+  `ImageColorExtractor.android.kt` which may be a placeholder).
 - **Coil network fetcher** — `coil-compose` is declared, but no network fetcher is. Remote
   album art will not load until `io.coil-kt.coil3:coil-network-ktor3` (reuses the Ktor stack)
   is added. It is currently a beta (`3.5.0-beta01`), which is why it's deferred — not a bug.
@@ -421,8 +421,7 @@ Everything above describes the target; everything here is a gap to close.
       9.0.1/9.1.0. Revisit when those AGP-9.2 issues clear (or disable config cache to retry).
 
 ### Dead / leftover code
-- [ ] **`Greeting.kt` / `GreetingUtil.kt`** and the `compose-multiplatform.xml` template
-      drawable are KMP-template leftovers — remove once `App.kt` is wired to real screens.
+- [x] **`Greeting.kt` / `GreetingUtil.kt` + `compose-multiplatform.xml` deleted** (2026-06-13) — template stubs removed; no references existed.
 - [ ] **`wasmJsMain/` is dormant** (D2: target intentionally not declared; web is P3). Its
       `Platform.wasm.kt` and `WasmNotificationStub` reference an interface shape that doesn't
       exist (`Platform.isDesktop/isMobile`) — they must be reconciled with the real
@@ -440,10 +439,7 @@ Everything above describes the target; everything here is a gap to close.
       original `RetrofitInstance` object); (b) cookie is attached whenever non-empty rather than
       skipped on `/login/*` (Ktor `defaultRequest` can't see the per-request path) — refine with a
       send-pipeline interceptor if strict per-path skipping is needed.
-- [ ] **`kotlinx-coroutines-swing` is only in `desktopApp`, not `shared/jvmMain`.**
-      `DesktopFloatingWindowController` uses `Dispatchers.Main`; running it via `:shared:jvmTest`
-      will throw "Module with the Main dispatcher is missing". Add `kotlinx-coroutinesSwing` to
-      `jvmMain` (or inject a dispatcher) before testing JVM player/notification logic.
+- [x] **`kotlinx-coroutines-swing` added to `shared/jvmMain`** (2026-06-13) — `Dispatchers.Main` now resolvable in `jvmTest` and `DesktopFloatingWindowController`; still present in `desktopApp` (harmless duplicate).
 - [ ] **No Coil network fetcher** → `AsyncImage` won't load remote album art until
       `coil-network-ktor3` is added (see dependency section).
 - [ ] **`Platform` interface has only `name`.** If form-factor branching is wanted, add
@@ -460,8 +456,8 @@ Everything above describes the target; everything here is a gap to close.
       `RedefineNCMTheme { Surface { NowPlayingScreen() } }` (no more "Click me!" template).
       DI graph is now both defined *and* initialised; **build-unverified** but reasoning-verified:
       - [x] **PlatformPlayer binding** — `sharedModule` binds `InMemoryPlatformPlayer` (pure-Kotlin
-        reference player over the tested `PlayQueue`; no real audio). Real media3/AVPlayer/JVM
-        players replace it in `platformModule()` later.
+        reference player over the tested `PlayQueue`; no real audio). Android `platformModule()` now
+        overrides this with `ExoPlayerPlatformPlayer` (see Android audio backend below).
       - [x] **Fixed latent DI bug** — `NowPlayingViewModel` was bound with 3 `get()`s but its 3rd
         param `lyricBus = LyricBus` is an object default → now 2 `get()`s.
       - [x] **`initKoin()` wired in all entry points** — idempotent `initKoin(config)` in
@@ -476,8 +472,29 @@ Everything above describes the target; everything here is a gap to close.
         **iOS path unverified** (no Mac). Now (2026-06-11): **Home is the entry** + a hand-rolled
         back-stack nav (`App.kt`) with Home / Search / PlaylistDetail / Login / NowPlaying screens,
         all M3 Expressive and build-verified. Remaining: (1) User + Settings screens + QR-login UI;
-        (2) RUN it (`:desktopApp:run`, GUI) to confirm runtime DI/render; real per-platform audio
-        backends (media3/AVPlayer/JVM) still replace `InMemoryPlatformPlayer`.
+        (2) RUN it (`:desktopApp:run`, GUI) to confirm runtime DI/render; JVM audio backend still
+        needed (Desktop still uses `InMemoryPlatformPlayer`); iOS AVPlayer backend deferred (needs Mac).
+- [x] **Android audio backend — ExoPlayer + MediaSession, BUILD-VERIFIED** (2026-06-13).
+      `media3-exoplayer 1.10.1` + `media3-session` added to `androidMain` (and to `:androidApp`
+      directly for `PlaybackService`).
+      - `shared/src/androidMain/player/RedirectingDataSourceFactory` intercepts
+        `redefinencm://playbackPlaceHolder?id=xxx` URIs and resolves to real CDN URLs via
+        `Repository.getSongUrl()` (runBlocking on ExoPlayer's IO thread — same as original).
+      - `shared/src/androidMain/player/ExoPlayerPlatformPlayer` is a Koin singleton (created on
+        the main thread in `androidContext()`); implements all `PlatformPlayer` StateFlows via
+        `Player.Listener`; position synced every 200 ms while playing.
+      - `AndroidPlatformModule.platformModule()` now overrides the shared `InMemoryPlatformPlayer`
+        binding with `ExoPlayerPlatformPlayer`.
+      - `androidApp/PlaybackService` is a `MediaSessionService`; wraps the same Koin-singleton
+        ExoPlayer in a `MediaSession` for OS media controls; registered in `AndroidManifest.xml`
+        with `foregroundServiceType="mediaPlayback"` + required foreground-service permissions.
+      - Lyric sync added to `NowPlayingViewModel.initLyricSync()` — combines `currentPosition` +
+        `lyricMap` → `lyricIndex` + calls `LyricNotificationController.updateLyric(...)`.
+      - **Build-verified:** `:shared:compileAndroidMain`, `:androidApp:compileDebugKotlin`,
+        `:androidApp:assembleDebug` (APK), `:shared:compileKotlinJvm`, `:shared:jvmTest` all green.
+      - **Remaining for JVM/Desktop:** JVM player backed by `mp3spi` / `javax.sound.sampled` (the
+        Desktop still uses `InMemoryPlatformPlayer`).
+      - **Remaining for iOS:** AVPlayer-backed `PlatformPlayer` in `iosMain` (needs Mac + Xcode).
 - [~] **Windows SMTC — pipeline wired (compile-verified), native OS binding TODO** (2026-06-11).
       `MediaControlMetadata` + `MediaControlsIntegrator` are in `commonMain/smtc/MediaControls.kt`;
       `NowPlayingViewModel` feeds it (title/artist/album/duration/isPlaying); `jvmMain/smtc/
@@ -513,8 +530,6 @@ Everything above describes the target; everything here is a gap to close.
       `PlatformPlayer` actuals + `NowPlayingViewModel` delegate to `PlayQueue`.
 - [ ] Domain model layer (DTO → domain mapping), if desired.
 - [ ] Voyager navigation wiring (confirm whether Voyager is the chosen nav or remove it).
-- [ ] Cookie injection in Ktor (`HttpClientFactory` receives `cookie` but does not yet inject
-      it per request — port the original's interceptor behavior).
 - [ ] Goal #4 verified dependency upgrade + cross-repo version convergence.
 - [ ] CI pipeline.
 

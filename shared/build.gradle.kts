@@ -47,6 +47,9 @@ kotlin {
             implementation(libs.androidx.datastore.preferences)
             // rememberLauncherForActivityResult + LocalContext for file import/export
             implementation(libs.androidx.activity.compose)
+            // ExoPlayer + MediaSession for Android audio playback
+            implementation(libs.androidx.media3.exoplayer)
+            implementation(libs.androidx.media3.session)
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)
@@ -83,6 +86,8 @@ kotlin {
             implementation(libs.ktor.client.cio)
             // Real desktop audio playback (MP3 via mp3spi + javax.sound.sampled)
             implementation(libs.mp3spi)
+            // Dispatchers.Main for JVM (needed by DesktopFloatingWindowController + jvmTest)
+            implementation(libs.kotlinx.coroutinesSwing)
         }
     }
 }

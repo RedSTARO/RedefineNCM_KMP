@@ -1,6 +1,6 @@
 # RedefineNCM → KMP 迁移进度
 
-> 最后更新：2026-06-11　｜　状态：**Android + Desktop 已构建验证通过**；iOS 代码就绪但需 macOS 构建。
+> 最后更新：2026-06-13　｜　状态：**Android + Desktop 已构建验证通过**；iOS 代码就绪但需 macOS 构建。
 > 权威细节与"目标规范 vs 现状差异清单"见 `AGENTS.md`（本仓库）与 `../RedefineNCM/AGENTS.md`（原始仓库）。
 > 本文件只做"全步骤 / 已完成 / 剩余"的进度总览。
 
@@ -23,7 +23,8 @@
 
 **当前工具链（已验证可用）**：Kotlin 2.4.0 ・ AGP 9.0.1 ・ Gradle 9.1.0 ・ Compose Multiplatform 1.11.1 ・
 JB material3 1.11.0-alpha07 ・ Ktor 3.5.0 ・ Koin 4.2.1 ・ Coil 3.5.0 ・ kotlinx-serialization 1.11.0 ・
-kotlinx-coroutines 1.11.0 ・ androidx.core 1.18.0 ・ datastore 1.2.0 ・ compileSdk/targetSdk 36 / minSdk 24。
+kotlinx-coroutines 1.11.0 ・ media3-exoplayer/session 1.10.1 ・ androidx.core 1.18.0 ・ datastore 1.2.0 ・
+compileSdk/targetSdk 36 / minSdk 24。
 
 > GUI 运行 `./gradlew :desktopApp:run`（或 `:desktopApp:hotRun --auto`）需在你的终端跑（有界面）。
 
@@ -37,7 +38,7 @@ kotlinx-coroutines 1.11.0 ・ androidx.core 1.18.0 ・ datastore 1.2.0 ・ compi
 | 4 | 升级所有依赖到最新 | 🟡 大体完成：原始仓库已升级；KMP 目录补全 + Kotlin 收敛 2.4.0（已验证）。**仅 AGP 9.2.0 暂缓**（上游问题） |
 | 3 | 两仓库 UI 适配 Material 3 Expressive | ✅ 主题层完成（KMP 用真 `MaterialExpressiveTheme`；原始用公开 shape/type 标度） |
 | 2 | 平台 now-playing：Android 通知→iOS 灵动岛 / 桌面悬浮窗 / Windows 媒体协议 | 🟡 桌面悬浮窗✅、Android 通知✅、iOS 灵动岛 Swift 源码✅(待 Xcode)、Windows SMTC 管线✅(待原生 helper) |
-| 1 | 迁移到 KMP（iOS / desktop / android；web 次要） | 🟡 Android+Desktop 构建通过；核心屏幕(主页/搜索/歌单/登录/播放)+导航已补并验证；iOS 代码就绪待 Mac；真实音频后端 + User/Settings 待补 |
+| 1 | 迁移到 KMP（iOS / desktop / android；web 次要） | 🟡 Android+Desktop 构建通过；核心屏幕(主页/搜索/歌单/登录/播放)+导航已补并验证；**Android 音频后端（ExoPlayer+MediaSession）已完成并验证**；iOS 代码就绪待 Mac；JVM 桌面播放器 + User/Settings 待补 |
 
 图例：✅ 完成　🟡 进行中/部分完成　⛔ 受外部环境阻塞　⏸ 暂缓
 
@@ -69,6 +70,7 @@ kotlinx-coroutines 1.11.0 ・ androidx.core 1.18.0 ・ datastore 1.2.0 ・ compi
 - 共享模块在 **common / Android / JVM(desktop)** 全部编译通过；Android APK 可打包。
 - DI：Koin 图自洽，幂等 `initKoin()` 接入全部入口（desktop `main`、iOS `MainViewController`、Android `RedefineNCMApp`+`androidContext`）。
 - `InMemoryPlatformPlayer`（基于已测 `PlayQueue` 的纯 Kotlin 参考播放器，无真实音频）已绑定 DI。
+- **Android 真实音频后端**（2026-06-13，已构建验证）：`ExoPlayerPlatformPlayer`（Koin 单例，Media3/ExoPlayer，位置每 200ms 同步）；`RedirectingDataSourceFactory`（拦截 `redefinencm://` 占位 URI → CDN URL，runBlocking）；`PlaybackService`（`MediaSessionService`，OS 媒体控件/锁屏/通知）；`NowPlayingViewModel.initLyricSync()` 联动歌词通知。
 - `PlayQueue` + `PlayQueueTest`：洗牌/队列顺序不变量的纯 Kotlin 模型 + 回归测试（**测试通过**）。
 - 网络层：`HttpClientFactory.create` 移植原始拦截器（baseUrl + realIP + timestamp + cookie），四个 platformModule 全部接入，base/cookie 取自 `PlatformSettings`。
 - **导航 + 屏幕**：`App()` 手写 back stack 导航，入口 = `HomeScreen`；已有 Home / Search / PlaylistDetail / Login / NowPlaying 五屏（M3 Expressive），点歌→`setQueue`+`play`→NowPlaying，各屏可返回。
@@ -82,13 +84,14 @@ kotlinx-coroutines 1.11.0 ・ androidx.core 1.18.0 ・ datastore 1.2.0 ・ compi
 - [x] **入口改为主页（Home）+ 导航**（2026-06-11，已构建验证）：`App.kt` 用手写 back stack 导航，入口落地 `HomeScreen`；可进 Login/Search/Playlist/NowPlaying，各屏有返回。
 - [x] **新增屏幕**：`HomeScreen`（每日推荐 + 我的歌单 + 迷你播放 FAB）、`SearchScreen`（搜索 + 联想 + 结果）、`PlaylistDetailScreen`（歌单详情 + 播放全部）、`LoginScreen`（服务器 + cookie）；点歌即 `setQueue`+`play`→NowPlaying。均 M3 Expressive、已构建验证。
 - [ ] **其余屏幕**：User（用户主页）、Settings（设置）、登录的 QR 扫码流程（`LoginViewModel` 已有 QR 字段，UI 未做）。
-- [ ] **真实音频后端**（替换 `InMemoryPlatformPlayer`）：Android media3/ExoPlayer、JVM 桌面播放器（需音频库）。iOS AVPlayer 需 Mac 验证。
+- [x] **Android 真实音频后端**（2026-06-13，已验证）：`ExoPlayerPlatformPlayer` + `PlaybackService`（见上）。
+- [ ] **JVM 桌面音频后端**（替换 `InMemoryPlatformPlayer`）：`mp3spi` + `javax.sound.sampled`（dep 已声明，实现待补）。iOS AVPlayer 需 Mac 验证。
 - [ ] **Coil 网络加载器** `coil-network-ktor3`：否则远程封面图不加载（当前仅 `coil-compose`）。
 - [ ] **SQLDelight 缓存**（决策 D3）：插件 + `.sq` schema + driver + Repository 的 cache-then-network（当前 Repository 仅网络）。
 - [ ] **`PlatformPlayer` 真实顺序逻辑委托给 `PlayQueue`**（现在各 actual 待实现时应复用 `PlayQueue`）。
-- [ ] `shared/jvmMain` 补 `kotlinx-coroutines-swing`（否则 `:shared:jvmTest` 跑 `DesktopFloatingWindowController` 的 `Dispatchers.Main` 会缺失）。
+- [x] `shared/jvmMain` 补 `kotlinx-coroutines-swing`（2026-06-13）：`Dispatchers.Main` 在 jvmTest / `DesktopFloatingWindowController` 可解析。
 - [ ] `Platform` 接口补 `isDesktop/isMobile`（带默认值），并修 wasm 占位代码的接口不一致。
-- [ ] 清理模板残留 `Greeting.kt`/`GreetingUtil.kt`、`compose-multiplatform.xml`。
+- [x] 清理模板残留 `Greeting.kt`/`GreetingUtil.kt`、`compose-multiplatform.xml`（2026-06-13）。
 
 ### B. 需要你的环境 / 上游修复（本机无法完成或验证）
 - [ ] **iOS 构建与验证**：需 macOS + Xcode 16+。iOS 代码（`MainViewController`、各 actual、Live Activity Swift）已就绪；在 Mac 上开 `iosApp/iosApp.xcodeproj`，按 `iosApp/LyricWidget/SETUP.md` 加 Widget Extension target。
@@ -102,7 +105,7 @@ kotlinx-coroutines 1.11.0 ・ androidx.core 1.18.0 ・ datastore 1.2.0 ・ compi
 - HttpClient 是 Koin 单例，启动时读 server/cookie：改设置后**下次启动生效**（与原 `RetrofitInstance` object 行为一致）。
 - cookie 目前对所有请求附加（非空时），未按 `/login/*` 路径跳过（Ktor `defaultRequest` 读不到逐请求路径；需 send-pipeline 拦截器才能严格跳过）。
 - `materialIconsExtended` 已弃用（固定 1.7.3，不再更新）——可用，后续宜迁移到 Material Symbols。
-- 两仓库非 git 仓库，无法 commit。
+- 两仓库非 git 仓库（本工作目录），无法 commit。
 
 ---
 
