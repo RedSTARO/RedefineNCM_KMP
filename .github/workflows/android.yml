@@ -70,14 +70,28 @@ jobs:
           echo "message_id=$MESSAGE_ID" >> $GITHUB_OUTPUT
 
       - name: Build APK
-        id: build_apk
-        run: ./gradlew :androidApp:assembleDebug
+        run: ./gradlew :androidApp:assembleRelease
+
+      - name: Sign APK
+        uses: r0adkll/sign-android-release@v1
+        id: sign_app
+        with:
+          releaseDirectory: androidApp/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY_BASE64 }}
+          alias: ${{ secrets.ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "34.0.0"
+
+      - name: Rename Signed APK
+        run: mv ${{ steps.sign_app.outputs.signedReleaseFile }} androidApp/build/outputs/apk/release/RedefineNCM-KMP_signed.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: RedefineNCM-KMP_${{ github.ref_name }}_${{ steps.gitinfo.outputs.commit_sha }}
-          path: androidApp/build/outputs/apk/debug/androidApp-debug.apk
+          path: androidApp/build/outputs/apk/release/RedefineNCM-KMP_signed.apk
 
       - name: Notify Telegram - Build Complete
         if: always()
@@ -95,9 +109,9 @@ jobs:
           COMMIT_SHA="${{ steps.gitinfo.outputs.commit_sha }}"
           COMMIT_COUNT="${{ steps.commitcount.outputs.count }}"
           VERSION_NAME="${{ github.ref_name }}"
-          APK_FILE="androidApp/build/outputs/apk/debug/androidApp-debug.apk"
+          APK_FILE="androidApp/build/outputs/apk/release/RedefineNCM-KMP_signed.apk"
 
-          if [ "${{ steps.build_apk.outcome }}" = "success" ] && [ -f "$APK_FILE" ]; then
+          if [ "${{ steps.sign_app.outcome }}" = "success" ] && [ -f "$APK_FILE" ]; then
             CAPTION=$(printf '✅ RedefineNCM KMP: %s\n\n📝 %s [%s]\n\n📦 Commits since last tag: %s' \
               "$VERSION_NAME" "$COMMIT_MSG" "$COMMIT_SHA" "$COMMIT_COUNT")
 
