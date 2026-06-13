@@ -75,8 +75,9 @@ kotlin {
             // DI
             implementation(libs.koin.core)
             implementation(libs.koin.compose)
-            // Image loading (network fetcher still TODO — see libs.versions.toml)
+            // Image loading — coil-compose + Ktor-backed network fetcher
             implementation(libs.coil.compose)
+            implementation(libs.coil.network.ktor3)
             // SQLDelight — runtime + coroutines Flow support
             implementation(libs.sqldelight.runtime)
             implementation(libs.sqldelight.coroutines)
