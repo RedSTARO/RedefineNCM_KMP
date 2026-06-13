@@ -22,6 +22,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
@@ -117,6 +118,7 @@ private fun UserPlaylistHero(
             contentDescription = null,
             modifier = Modifier
                 .fillMaxSize()
+                .blur(3.dp)
                 .drawWithContent {
                     drawContent()
                     drawRect(
