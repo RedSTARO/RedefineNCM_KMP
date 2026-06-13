@@ -42,6 +42,7 @@ class NowPlayingViewModel(
     val lyricMap = MutableStateFlow<LinkedHashMap<Long?, String?>>(
         linkedMapOf(0L to "Loading Lyric")
     )
+    val rawLyric = MutableStateFlow("") // raw LRC text for external lyric renderers
 
     // ── Comments ──
     val comments = MutableStateFlow<CommentMusic?>(null)
@@ -150,12 +151,14 @@ class NowPlayingViewModel(
             repo.getLyric(mediaId.toLong()).collect { lyric ->
                 if (lyric?.lrc?.lyric?.isNotEmpty() == true) {
                     try {
+                        rawLyric.value = lyric.lrc.lyric
                         val parsed = LyricParser.parse(lyric.lrc.lyric)
                         lyricMap.value = parsed
                     } catch (e: Exception) {
                         lyricMap.value = linkedMapOf(0L to "Lyric parse error")
                     }
                 } else {
+                    rawLyric.value = ""
                     lyricMap.value = linkedMapOf(0L to "No lyric available")
                 }
             }

@@ -25,8 +25,8 @@ import com.leejlredstar.redefinencm.kmp.util.BackHandler
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import org.koin.compose.koinInject
+import com.leejlredstar.redefinencm.kmp.lyric.WebViewLyricScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
-import com.leejlredstar.redefinencm.kmp.ui.screen.FullLyricScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.LoginScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.NowPlayingScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.PlaylistDetailScreen
@@ -45,7 +45,6 @@ private sealed interface PushedDest {
     data object Search : PushedDest
     data object Login : PushedDest
     data object NowPlaying : PushedDest
-    data object FullLyric : PushedDest
     data class Playlist(val id: Long) : PushedDest
 }
 
@@ -106,12 +105,11 @@ fun App() {
                         is PushedDest.NowPlaying -> {
                             val settings: PlatformSettings = koinInject()
                             if (settings.getBoolean(SettingKeys.USE_FULL_LYRIC, false)) {
-                                FullLyricScreen(onBack = ::back)
+                                WebViewLyricScreen(onBack = ::back)
                             } else {
                                 NowPlayingScreen(onBack = ::back)
                             }
                         }
-                        is PushedDest.FullLyric -> FullLyricScreen(onBack = ::back)
                         is PushedDest.Playlist -> PlaylistDetailScreen(
                             playlistId = dest.id,
                             onBack = ::back,
