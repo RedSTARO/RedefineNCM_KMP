@@ -19,6 +19,18 @@ globalThis.AmllBridge = {
 
     this.player = new LyricPlayer();
     root.appendChild(this.player.getElement());
+
+    // AMLL is driven by a requestAnimationFrame loop with real per-frame deltas;
+    // setCurrentTime() only moves the target. Native position updates arrive
+    // coarsely (~5/s), so the rAF loop owns the animation, not the native tick.
+    let last = -1;
+    const frame = (t) => {
+      if (last < 0) last = t;
+      this.player.update(t - last);
+      last = t;
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
     return true;
   },
 
@@ -33,14 +45,12 @@ globalThis.AmllBridge = {
   },
 
   /**
-   * Set current playback time (milliseconds).
+   * Set the current playback time (milliseconds). Only moves the target —
+   * the rAF loop started in init() advances the animation.
    * @param {number} timeMs Current position in ms
-   * @param {number} delta Frame delta for animation
    */
-  setTime(timeMs, delta = 0) {
-    if (!this.player) return;
-    this.player.setCurrentTime(timeMs);
-    this.player.update(delta);
+  setTime(timeMs) {
+    this.player?.setCurrentTime(timeMs);
   },
 
   /**
