@@ -4,9 +4,13 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
 <title>AMLL Lyric Player</title>
+<!-- AMLL core stylesheet — REQUIRED for the lyric player to render visibly. -->
+<link rel="stylesheet" href="style.css" />
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; }
+  /* Dark page background so AMLL's white lyric text (and its plus-lighter blend)
+     is visible. The Compose layer behind the WebView is also dark. */
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
   #amll-root { width: 100%; height: 100%; }
   #loading {
     position: absolute; inset: 0;
@@ -31,19 +35,25 @@ const VER = "latest";
 
 // Try local bundle first, fall back to CDN
 async function loadEngine() {
-  // Prefer the locally bundled engine (esbuild ESM output in assets/amll/bundle.js).
-  // ES module imports resolve over file:// in Android WebView, so no network is needed.
-  // The bundle only defines globalThis.AmllBridge — init() must be called explicitly here.
+  // Load the locally bundled engine as a CLASSIC script. Android WebView blocks
+  // dynamic import()/module scripts over file:// (opaque origin → CORS failure),
+  // but a classic <script src> loads fine. The bundle sets globalThis.AmllBridge.
+  const localOk = await new Promise((resolve) => {
+    const s = document.createElement("script");
+    s.src = "bundle.js";
+    s.onload = () => resolve(true);
+    s.onerror = () => resolve(false);
+    document.head.appendChild(s);
+  });
   try {
-    await import("./bundle.js");
-    if (globalThis.AmllBridge && globalThis.AmllBridge.init()) {
+    if (localOk && globalThis.AmllBridge && globalThis.AmllBridge.init()) {
       document.getElementById("loading")?.remove();
       // Signal the Android bridge that the engine is mounted and ready.
       globalThis.AmllCallback?.onReady?.();
       return;
     }
   } catch (e) {
-    console.warn("AMLL: local bundle unavailable, falling back to CDN", e);
+    console.warn("AMLL: local engine init failed, falling back to CDN", e);
   }
 
   // CDN fallback with importmap
