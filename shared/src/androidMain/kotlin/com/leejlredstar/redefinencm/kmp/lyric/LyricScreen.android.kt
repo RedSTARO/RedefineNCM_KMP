@@ -1,6 +1,8 @@
 package com.leejlredstar.redefinencm.kmp.lyric
 
 import android.annotation.SuppressLint
+import android.util.Log
+import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -65,7 +67,18 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
 
-            webChromeClient = WebChromeClient()
+            // Transparent so the black backdrop behind the WebView shows through —
+            // AMLL renders light lyric text with no background of its own, which
+            // would be invisible on the WebView's default opaque white.
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+
+            // Surface JS console output (incl. engine load/init errors) to logcat.
+            webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(cm: ConsoleMessage): Boolean {
+                    Log.d("AMLL", "${cm.message()} @ ${cm.sourceId()}:${cm.lineNumber()}")
+                    return true
+                }
+            }
             webViewClient = WebViewClient()
 
             // @JavascriptInterface methods run on a private bridge thread; hop to
