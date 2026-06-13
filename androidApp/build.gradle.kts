@@ -23,6 +23,10 @@ dependencies {
 
     implementation(libs.compose.uiToolingPreview)
     debugImplementation(libs.compose.uiTooling)
+
+    // Coil — needed in androidApp to implement SingletonImageLoader.Factory
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.ktor3)
 }
 
 android {
