@@ -5,9 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -16,14 +14,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
 import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.LoginScreen
@@ -33,7 +30,6 @@ import com.leejlredstar.redefinencm.kmp.ui.screen.SearchScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.SettingsScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.UserPlaylistScreen
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
-import org.koin.compose.koinInject
 
 private sealed interface TabDest {
     data object Home : TabDest
@@ -59,9 +55,6 @@ fun App() {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
             var currentTab by remember { mutableStateOf<TabDest>(TabDest.Home) }
             val pushedStack = remember { mutableStateListOf<PushedDest>() }
-            val player: PlatformPlayer = koinInject()
-            val currentMedia by player.currentMedia.collectAsState()
-
             fun push(dest: PushedDest) = pushedStack.add(dest)
             fun back() { if (pushedStack.isNotEmpty()) pushedStack.removeAt(pushedStack.lastIndex) }
 
@@ -97,13 +90,7 @@ fun App() {
                 },
                 floatingActionButton = {
                     if (showTabs) {
-                        currentMedia?.let { media ->
-                            ExtendedFloatingActionButton(
-                                onClick = { push(PushedDest.NowPlaying) },
-                                icon = { Icon(Icons.Default.PlayArrow, contentDescription = null) },
-                                text = { Text(media.title.ifBlank { "正在播放" }, maxLines = 1) },
-                            )
-                        }
+                        MiniNowPlayingBar(onExpand = { push(PushedDest.NowPlaying) })
                     }
                 },
             ) { innerPadding ->
