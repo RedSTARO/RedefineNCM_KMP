@@ -15,6 +15,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material3.Button
@@ -39,6 +41,10 @@ import com.leejlredstar.redefinencm.kmp.data.api.dto.UserPlaylistEach
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
+import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
+import com.leejlredstar.redefinencm.kmp.util.SettingKeys
+import com.leejlredstar.redefinencm.kmp.util.isSongDownloaded
+import org.koin.compose.koinInject
 
 /** Map an API song DTO to the player's [MediaInfo] (placeholder URI resolved at play time). */
 fun SongDetailSongs.toMediaInfo(): MediaInfo = MediaInfo(
@@ -60,7 +66,9 @@ fun SongRow(
     artworkUri: String,
     shape: RoundedCornerShape,
     onClick: () -> Unit,
+    songId: Long? = null,
 ) {
+    val settings = koinInject<PlatformSettings>()
     Surface(
         onClick = onClick,
         shape = shape,
@@ -100,6 +108,23 @@ fun SongRow(
                     overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+            if (songId != null && settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false)) {
+                val downloaded = isSongDownloaded(songId)
+                Spacer(Modifier.width(8.dp))
+                Surface(
+                    shape = CircleShape,
+                    color = if (downloaded) MaterialTheme.colorScheme.primaryContainer
+                    else MaterialTheme.colorScheme.surfaceContainerHighest,
+                ) {
+                    Icon(
+                        imageVector = if (downloaded) Icons.Filled.Check else Icons.Filled.AttachFile,
+                        contentDescription = if (downloaded) "Downloaded" else "Not downloaded",
+                        tint = if (downloaded) MaterialTheme.colorScheme.onPrimaryContainer
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(6.dp).size(18.dp),
+                    )
+                }
             }
         }
     }

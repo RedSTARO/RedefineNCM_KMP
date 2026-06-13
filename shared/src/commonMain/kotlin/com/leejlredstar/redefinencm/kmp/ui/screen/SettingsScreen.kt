@@ -63,6 +63,7 @@ fun SettingsScreen(scaffoldPadding: PaddingValues, settings: PlatformSettings = 
     var replacePlaylist by remember { mutableStateOf(settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false)) }
     var checkUpdate by remember { mutableStateOf(settings.getBoolean(SettingKeys.CHECK_UPDATE, false)) }
     var searchPrediction by remember { mutableStateOf(settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true)) }
+    var showDownloadStatus by remember { mutableStateOf(settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false)) }
     var importStatus by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -143,6 +144,10 @@ fun SettingsScreen(scaffoldPadding: PaddingValues, settings: PlatformSettings = 
                 SettingsSwitch(searchPrediction, "Search prediction") { v ->
                     searchPrediction = v
                     settings.setBoolean(SettingKeys.SEARCH_PREDICTION, v)
+                }
+                SettingsSwitch(showDownloadStatus, "Show download status") { v ->
+                    showDownloadStatus = v
+                    settings.setBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, v)
                 }
 
                 ExpressiveSectionTitle("General", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
