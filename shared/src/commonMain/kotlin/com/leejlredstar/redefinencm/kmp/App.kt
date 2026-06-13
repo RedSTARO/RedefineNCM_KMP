@@ -24,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.util.BackHandler
 import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.LoginScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.NowPlayingScreen
@@ -63,6 +64,8 @@ fun App() {
 
             fun push(dest: PushedDest) = pushedStack.add(dest)
             fun back() { if (pushedStack.isNotEmpty()) pushedStack.removeAt(pushedStack.lastIndex) }
+
+            BackHandler(enabled = pushedStack.isNotEmpty()) { back() }
 
             val showTabs = pushedStack.isEmpty()
 
