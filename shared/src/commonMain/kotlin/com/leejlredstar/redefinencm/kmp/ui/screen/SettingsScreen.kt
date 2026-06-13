@@ -96,7 +96,7 @@ fun SettingsScreen(scaffoldPadding: PaddingValues, settings: PlatformSettings = 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(120.dp)
+                    .height(168.dp)
                     .background(
                         Brush.verticalGradient(
                             listOf(
