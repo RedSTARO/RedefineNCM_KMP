@@ -37,13 +37,21 @@ class Repository(
     // ── Playlist ──
 
     fun getPlaylistDetail(id: Long): Flow<PlaylistDetail?> = flow {
-        val network = safeApiCall { api.playlistDetail(id) }
-        if (network != null) emit(network)
+        db.cachedPlaylistDetailQueries.selectById(id).executeAsOneOrNull()
+            ?.let { emit(json.decodeFromString<PlaylistDetail>(it)) }
+        safeApiCall { api.playlistDetail(id) }?.let { network ->
+            db.cachedPlaylistDetailQueries.upsert(id, json.encodeToString(network))
+            emit(network)
+        }
     }
 
     fun getPlaylistTrackAll(id: Long): Flow<PlaylistTrackAll?> = flow {
-        val network = safeApiCall { api.playlistTrackAll(id) }
-        if (network != null) emit(network)
+        db.cachedPlaylistTrackAllQueries.selectById(id).executeAsOneOrNull()
+            ?.let { emit(json.decodeFromString<PlaylistTrackAll>(it)) }
+        safeApiCall { api.playlistTrackAll(id) }?.let { network ->
+            db.cachedPlaylistTrackAllQueries.upsert(id, json.encodeToString(network))
+            emit(network)
+        }
     }
 
     // ── Recommend ──
