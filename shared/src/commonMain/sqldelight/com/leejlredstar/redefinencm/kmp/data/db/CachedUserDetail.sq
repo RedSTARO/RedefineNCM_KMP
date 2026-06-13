@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS CachedUserDetail (
+  uid INTEGER NOT NULL PRIMARY KEY,
+  json TEXT NOT NULL
+);
+
+upsert:
+INSERT OR REPLACE INTO CachedUserDetail(uid, json) VALUES (:uid, :json);
+
+selectByUid:
+SELECT json FROM CachedUserDetail WHERE uid = :uid;

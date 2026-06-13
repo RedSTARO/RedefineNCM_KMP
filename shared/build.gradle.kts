@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinxSerialization)
+    alias(libs.plugins.sqldelight)
 }
 
 kotlin {
@@ -39,6 +40,7 @@ kotlin {
     
     sourceSets {
         androidMain.dependencies {
+            implementation(libs.sqldelight.android.driver)
             implementation(libs.compose.uiToolingPreview)
             // androidx.core for NotificationCompat (incl. Android 16 setRequestPromotedOngoing)
             implementation(libs.androidx.core.ktx)
@@ -75,12 +77,16 @@ kotlin {
             implementation(libs.koin.compose)
             // Image loading (network fetcher still TODO — see libs.versions.toml)
             implementation(libs.coil.compose)
+            // SQLDelight — runtime + coroutines Flow support
+            implementation(libs.sqldelight.runtime)
+            implementation(libs.sqldelight.coroutines)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
+            implementation(libs.sqldelight.native.driver)
         }
         jvmMain.dependencies {
             implementation(libs.ktor.client.cio)
@@ -88,6 +94,15 @@ kotlin {
             implementation(libs.mp3spi)
             // Dispatchers.Main for JVM (needed by DesktopFloatingWindowController + jvmTest)
             implementation(libs.kotlinx.coroutinesSwing)
+            implementation(libs.sqldelight.sqlite.driver)
+        }
+    }
+}
+
+sqldelight {
+    databases {
+        create("AppDatabase") {
+            packageName.set("com.leejlredstar.redefinencm.kmp.data.db")
         }
     }
 }
