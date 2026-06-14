@@ -15,6 +15,9 @@ dependencies {
     // main.kt's floating-lyrics window uses material3 (MaterialTheme/Surface/Text) directly.
     implementation(libs.compose.material3)
     implementation(libs.compose.uiToolingPreview)
+
+    // SLF4J backend so KCEF/JCEF + Ktor logs print to the console (otherwise NOP — no logs).
+    implementation(libs.slf4j.simple)
 }
 
 compose.desktop {

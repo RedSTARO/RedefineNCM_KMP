@@ -36,32 +36,53 @@ object KcefManager {
     @Volatile
     private var lastUpdate = System.currentTimeMillis()
 
+    private var lastLoggedDecile = -1
+
     private fun update(s: State) {
         lastUpdate = System.currentTimeMillis()
         _state.value = s
     }
 
+    private fun log(msg: String) = println("AMLL[kcef] $msg")
+
     /** Kick off KCEF init once. Safe to call from every recomposition. */
     fun ensureInit() {
         if (started) return
         started = true
+        val installDir = File(System.getProperty("user.home"), ".redefinencm/kcef-bundle")
+        log("init starting; installDir=$installDir")
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope.launch {
             try {
                 update(State.Initializing)
                 KCEF.init(
                     builder = {
-                        installDir(File(System.getProperty("user.home"), ".redefinencm/kcef-bundle"))
+                        installDir(installDir)
                         progress {
-                            onDownloading { pct -> update(State.Downloading(pct.toInt())) }
-                            onInitialized { update(State.Ready) }
+                            onDownloading { pct ->
+                                val decile = (pct.toInt() / 10)
+                                if (decile != lastLoggedDecile) {
+                                    lastLoggedDecile = decile
+                                    log("downloading ${pct.toInt()}%")
+                                }
+                                update(State.Downloading(pct.toInt()))
+                            }
+                            onInitialized {
+                                log("initialized — ready")
+                                update(State.Ready)
+                            }
                         }
                     },
                     onError = { t ->
+                        log("init error: ${t?.message}")
+                        t?.printStackTrace()
                         update(State.Failed(t ?: RuntimeException("KCEF init failed")))
                     },
                 )
+                log("KCEF.init() returned")
             } catch (t: Throwable) {
+                log("init threw: ${t.message}")
+                t.printStackTrace()
                 update(State.Failed(t))
             }
         }
@@ -73,6 +94,7 @@ object KcefManager {
                 val s = _state.value
                 if (s is State.Ready || s is State.Failed) return@launch
                 if (System.currentTimeMillis() - lastUpdate > STALL_MS) {
+                    log("init stalled (no progress for ${STALL_MS / 1000}s) — falling back")
                     update(State.Failed(RuntimeException("KCEF init stalled (no progress)")))
                     return@launch
                 }
