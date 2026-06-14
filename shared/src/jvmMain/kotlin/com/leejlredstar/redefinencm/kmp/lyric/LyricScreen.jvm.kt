@@ -65,8 +65,12 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             engine.loadWorker.stateProperty().addListener { _, _, state ->
                 if (state == Worker.State.SUCCEEDED) {
                     // Expose window.amllHost so player.html's signalReady() can call back.
+                    println("AMLL[jfx] page loaded; injecting amllHost bridge")
                     val window = engine.executeScript("window") as JSObject
-                    window.setMember("amllHost", AmllJsHost { engineReadyFlow.value = true })
+                    window.setMember("amllHost", AmllJsHost {
+                        println("AMLL[jfx] onReady received -> engineReady=true")
+                        engineReadyFlow.value = true
+                    })
                 } else if (state == Worker.State.FAILED) {
                     println("AMLL[jfx] page load failed: ${engine.loadWorker.exception?.message}")
                 }
@@ -80,7 +84,12 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     // Feed raw LRC once the engine is ready and whenever the track changes.
     LaunchedEffect(engineReady, rawLyric) {
         val engine = engineState.value ?: return@LaunchedEffect
-        if (!engineReady || rawLyric.isEmpty()) return@LaunchedEffect
+        if (!engineReady) return@LaunchedEffect
+        if (rawLyric.isEmpty()) {
+            println("AMLL[jfx] engineReady but rawLyric is EMPTY (no lyrics fetched)")
+            return@LaunchedEffect
+        }
+        println("AMLL[jfx] feeding lyrics, len=${rawLyric.length}")
         val escaped = rawLyric
             .replace("\\", "\\\\")
             .replace("'", "\\'")
