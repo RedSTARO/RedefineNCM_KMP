@@ -6,15 +6,18 @@
  *   npm install
  *   npm run build
  *
- * Outputs (to ../src/main/assets/amll/):
- *   - bundle.js  : the AMLL engine (IIFE, exposes globalThis.AmllBridge)
- *   - style.css  : AMLL core stylesheet (REQUIRED — the DOM lyric player has no
- *                  styles of its own; without it lyric lines render invisibly)
+ * Outputs three files — bundle.js (AMLL engine, IIFE → globalThis.AmllBridge),
+ * style.css (AMLL core stylesheet, REQUIRED), player.html (host page) — into BOTH
+ * platform asset roots:
+ *   - androidApp/src/main/assets/amll/        (Android WebView, file:///android_asset)
+ *   - shared/src/jvmMain/resources/amll/      (Desktop KCEF, extracted to temp at runtime)
+ * player.html is hand-maintained in the Android dir and mirrored to the desktop dir here.
  */
 import * as esbuild from "esbuild";
-import { copyFileSync } from "node:fs";
+import { copyFileSync, mkdirSync } from "node:fs";
 
-const OUT_DIR = "../src/main/assets/amll";
+const ANDROID_DIR = "../src/main/assets/amll";
+const DESKTOP_DIR = "../../shared/src/jvmMain/resources/amll";
 
 await esbuild.build({
   entryPoints: ["./entry.js"],
@@ -24,14 +27,21 @@ await esbuild.build({
   // loads fine. The bundle exposes its API via globalThis.AmllBridge.
   format: "iife",
   target: ["chrome91"],
-  outfile: `${OUT_DIR}/bundle.js`,
+  outfile: `${ANDROID_DIR}/bundle.js`,
   sourcemap: false,
   minify: true,
 });
-console.log(`→ bundle written to ${OUT_DIR}/bundle.js`);
+console.log(`→ bundle written to ${ANDROID_DIR}/bundle.js`);
 
 copyFileSync(
   "node_modules/@applemusic-like-lyrics/core/dist/style.css",
-  `${OUT_DIR}/style.css`,
+  `${ANDROID_DIR}/style.css`,
 );
-console.log(`→ style.css copied to ${OUT_DIR}/style.css`);
+console.log(`→ style.css copied to ${ANDROID_DIR}/style.css`);
+
+// Mirror all three assets to the desktop (jvmMain) resources root.
+mkdirSync(DESKTOP_DIR, { recursive: true });
+for (const f of ["bundle.js", "style.css", "player.html"]) {
+  copyFileSync(`${ANDROID_DIR}/${f}`, `${DESKTOP_DIR}/${f}`);
+}
+console.log(`→ assets mirrored to ${DESKTOP_DIR}/`);
