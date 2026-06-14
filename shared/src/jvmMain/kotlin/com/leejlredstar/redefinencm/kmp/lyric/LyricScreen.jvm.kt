@@ -61,8 +61,33 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
 
     when (val s = kcefState) {
         is KcefManager.State.Failed -> FullLyricScreen(onBack = onBack)
+        KcefManager.State.RestartRequired -> KcefRestartNotice(onBack)
         KcefManager.State.Ready -> KcefLyricView(onBack)
         else -> KcefLoading(s, onBack)
+    }
+}
+
+@Composable
+private fun KcefRestartNotice(onBack: () -> Unit) {
+    Column(Modifier.fillMaxSize()) {
+        LyricToolbar(onBack)
+        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(24.dp),
+            ) {
+                Text(
+                    "歌词引擎已安装完成",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "首次安装需要重启应用以启用桌面 AMLL 歌词页。\n重启后再次打开即可。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 

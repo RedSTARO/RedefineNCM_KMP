@@ -24,6 +24,8 @@ object KcefManager {
         data class Downloading(val pct: Int) : State
         data object Initializing : State
         data object Ready : State
+        /** KCEF extracted its bundled Chromium and needs an app restart to load it. */
+        data object RestartRequired : State
         data class Failed(val error: Throwable) : State
     }
 
@@ -78,6 +80,10 @@ object KcefManager {
                         t?.printStackTrace()
                         update(State.Failed(t ?: RuntimeException("KCEF init failed")))
                     },
+                    onRestartRequired = {
+                        log("restart required — relaunch the app to finish KCEF init")
+                        update(State.RestartRequired)
+                    },
                 )
                 log("KCEF.init() returned")
             } catch (t: Throwable) {
@@ -92,7 +98,7 @@ object KcefManager {
             while (true) {
                 delay(5_000)
                 val s = _state.value
-                if (s is State.Ready || s is State.Failed) return@launch
+                if (s is State.Ready || s is State.Failed || s is State.RestartRequired) return@launch
                 if (System.currentTimeMillis() - lastUpdate > STALL_MS) {
                     log("init stalled (no progress for ${STALL_MS / 1000}s) — falling back")
                     update(State.Failed(RuntimeException("KCEF init stalled (no progress)")))
