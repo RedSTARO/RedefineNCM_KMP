@@ -8,35 +8,36 @@
 <link rel="stylesheet" href="style.css" />
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  /* Dark page background so AMLL's white lyric text (and its plus-lighter blend)
-     is visible. The Compose layer behind the WebView is also dark. */
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
-  #amll-root { width: 100%; height: 100%; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; }
+  /* Blurred album-art background. AMLL's lyric rendering (plus-lighter blend) is designed to
+     sit over a bright, blurred cover — not plain black — so the cover goes here. */
+  #bg {
+    position: absolute; inset: -8%;
+    background-size: cover; background-position: center;
+    filter: blur(48px) brightness(0.55) saturate(1.3);
+    transform: scale(1.1);
+    z-index: 0;
+    transition: background-image 0.4s ease;
+  }
+  #amll-root { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; }
+  .amll-lyric-player {
+    width: 100% !important; height: 100% !important;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei",
+                 "Noto Sans CJK SC", sans-serif;
+  }
   #loading {
     position: absolute; inset: 0;
     display: flex; align-items: center; justify-content: center;
-    color: rgba(255,255,255,0.5);
-    font-family: system-ui, sans-serif;
-    font-size: 14px;
-    z-index: 10;
-    pointer-events: none;
-  }
-  .amll-lyric-player { width: 100% !important; height: 100% !important; }
-  /* AMLL's plus-lighter blend is meant for a bright album-art backdrop; on plain black it
-     can render text invisibly. Force normal blending + a visible color while debugging. */
-  .amll-lyric-player { mix-blend-mode: normal !important; color: #fff !important; }
-  #hud {
-    position: absolute; top: 4px; right: 6px;
-    color: #29f129; font: 11px/1.4 monospace; text-align: right;
-    z-index: 99999; pointer-events: none; mix-blend-mode: normal;
-    text-shadow: 0 0 2px #000;
+    color: rgba(255,255,255,0.6);
+    font-family: system-ui, sans-serif; font-size: 14px;
+    z-index: 10; pointer-events: none;
   }
 </style>
 </head>
 <body>
+<div id="bg"></div>
 <div id="loading">Loading lyric engine...</div>
 <div id="amll-root"></div>
-<div id="hud">engine: not loaded</div>
 
 <script>
 // ── CDN fallback: esm.sh handles PixiJS transitive deps ──
@@ -178,18 +179,6 @@ async function loadEngine() {
 }
 
 loadEngine();
-
-// Debug HUD: always-visible engine state, so an invisible-lyrics case is distinguishable
-// from a no-data case. "ready" = engine mounted, "lines" = lyric lines fed, "t" = position.
-setInterval(function () {
-  const d = globalThis.__amllDebug;
-  const el = document.getElementById("hud");
-  if (el && !errored) {
-    el.textContent = d
-      ? ("ready:" + d.ready + " lines:" + d.lines + " t:" + Math.round(d.time))
-      : "engine: not loaded";
-  }
-}, 500);
 </script>
 </body>
 </html>
