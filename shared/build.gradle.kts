@@ -96,6 +96,8 @@ kotlin {
             // Dispatchers.Main for JVM (needed by DesktopFloatingWindowController + jvmTest)
             implementation(libs.kotlinx.coroutinesSwing)
             implementation(libs.sqldelight.sqlite.driver)
+            // KCEF (Chromium) for the desktop WebView AMLL lyric page, embedded via SwingPanel
+            implementation(libs.kcef)
         }
     }
 }
