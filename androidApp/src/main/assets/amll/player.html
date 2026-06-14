@@ -33,6 +33,35 @@
 const CDN = "https://esm.sh/@applemusic-like-lyrics";
 const VER = "latest";
 
+// Surface any failure on-screen (and to the host console) so a blank panel becomes a
+// readable error on both Android (WebView) and desktop (KCEF), not just black.
+let errored = false;
+function showError(msg) {
+  errored = true;
+  const el = document.getElementById("loading");
+  if (el) {
+    el.style.color = "#ff8a8a";
+    el.style.whiteSpace = "pre-wrap";
+    el.style.padding = "16px";
+    el.style.fontSize = "12px";
+    el.textContent = "Lyric engine error:\n" + msg;
+  }
+  console.error("AMLL error:", msg);
+}
+// Breadcrumb so the user can see how far load got (overwritten unless an error stuck).
+function setStatus(s) {
+  if (errored) return;
+  const el = document.getElementById("loading");
+  if (el) el.textContent = s;
+  console.log("AMLL status:", s);
+}
+window.addEventListener("error", function (e) {
+  showError((e.message || e.error || "unknown") + (e.filename ? "\n@ " + e.filename + ":" + e.lineno : ""));
+});
+window.addEventListener("unhandledrejection", function (e) {
+  showError("promise rejected: " + ((e.reason && e.reason.message) || e.reason));
+});
+
 // Signal "engine mounted" to the host. Android exposes a @JavascriptInterface named
 // AmllCallback; desktop KCEF exposes JCEF's window.cefQuery message router.
 function signalReady() {
@@ -48,6 +77,7 @@ async function loadEngine() {
   // Load the locally bundled engine as a CLASSIC script. Android WebView blocks
   // dynamic import()/module scripts over file:// (opaque origin → CORS failure),
   // but a classic <script src> loads fine. The bundle sets globalThis.AmllBridge.
+  setStatus("loading local bundle…");
   const localOk = await new Promise((resolve) => {
     const s = document.createElement("script");
     s.src = "bundle.js";
@@ -55,13 +85,16 @@ async function loadEngine() {
     s.onerror = () => resolve(false);
     document.head.appendChild(s);
   });
+  setStatus(localOk ? "bundle loaded, starting engine…" : "local bundle missing, trying CDN…");
   try {
     if (localOk && globalThis.AmllBridge && globalThis.AmllBridge.init()) {
       document.getElementById("loading")?.remove();
       signalReady();
       return;
     }
+    if (localOk) setStatus("engine init returned false, trying CDN…");
   } catch (e) {
+    showError("local engine init threw: " + (e && e.message ? e.message : e));
     console.warn("AMLL: local engine init failed, falling back to CDN", e);
   }
 
