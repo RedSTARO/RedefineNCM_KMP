@@ -81,6 +81,10 @@ function signalReady() {
     globalThis.amllHost.onReady();                // desktop JavaFX JSObject bridge
   } else if (typeof globalThis.cefQuery === "function") {
     globalThis.cefQuery({ request: "onReady", onSuccess: function () {}, onFailure: function () {} });
+  } else {
+    // The host bridge can be injected AFTER the page finishes loading (e.g. JavaFX sets
+    // window.amllHost on load SUCCEEDED), which may be after the engine mounts. Retry.
+    setTimeout(signalReady, 100);
   }
 }
 
