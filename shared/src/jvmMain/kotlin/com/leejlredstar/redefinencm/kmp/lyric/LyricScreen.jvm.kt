@@ -48,6 +48,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val viewModel: NowPlayingViewModel = koinInject()
     val rawLyric by viewModel.rawLyric.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
+    val metadata by viewModel.currentMedia.collectAsState()
 
     // engineReady is set from the JavaFX thread → use a thread-safe flow.
     val engineReadyFlow = remember { MutableStateFlow(false) }
@@ -103,6 +104,15 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         val engine = engineState.value ?: return@LaunchedEffect
         if (!engineReady) return@LaunchedEffect
         Platform.runLater { runCatching { engine.executeScript("AmllBridge.setTime($currentPosition);") } }
+    }
+
+    // Set the blurred album-art background for the current track.
+    LaunchedEffect(engineReady, metadata?.artworkUri) {
+        val engine = engineState.value ?: return@LaunchedEffect
+        if (!engineReady) return@LaunchedEffect
+        val art = metadata?.artworkUri?.takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
+        val safe = art.replace("\\", "\\\\").replace("'", "\\'")
+        Platform.runLater { runCatching { engine.executeScript("AmllBridge.setBackground('$safe');") } }
     }
 
     DisposableEffect(Unit) {

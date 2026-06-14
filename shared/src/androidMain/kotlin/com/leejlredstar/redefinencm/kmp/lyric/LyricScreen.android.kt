@@ -55,6 +55,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val viewModel: NowPlayingViewModel = koinInject()
     val rawLyric by viewModel.rawLyric.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
+    val metadata by viewModel.currentMedia.collectAsState()
 
     val context = LocalContext.current
     var engineReady by remember { mutableStateOf(false) }
@@ -116,6 +117,14 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     LaunchedEffect(engineReady, currentPosition) {
         if (!engineReady) return@LaunchedEffect
         webView.evaluateJavascript("AmllBridge.setTime($currentPosition);", null)
+    }
+
+    // Set the blurred album-art background for the current track.
+    LaunchedEffect(engineReady, metadata?.artworkUri) {
+        if (!engineReady) return@LaunchedEffect
+        val art = metadata?.artworkUri?.takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
+        val safe = art.replace("\\", "\\\\").replace("'", "\\'")
+        webView.evaluateJavascript("AmllBridge.setBackground('$safe');", null)
     }
 
     Box(

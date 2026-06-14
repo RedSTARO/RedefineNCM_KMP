@@ -58,6 +58,15 @@ globalThis.AmllBridge = {
   },
 
   /**
+   * Set the blurred album-art background image (a remote URL).
+   * @param {string} url Artwork URL
+   */
+  setBackground(url) {
+    const el = document.getElementById("bg");
+    if (el && url) el.style.backgroundImage = 'url("' + url + '")';
+  },
+
+  /**
    * Set the overall theme: dark or light.
    * @param {"dark" | "light"} theme
    */
