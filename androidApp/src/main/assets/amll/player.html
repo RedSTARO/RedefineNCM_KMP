@@ -66,7 +66,9 @@ window.addEventListener("unhandledrejection", function (e) {
 // AmllCallback; desktop KCEF exposes JCEF's window.cefQuery message router.
 function signalReady() {
   if (globalThis.AmllCallback && globalThis.AmllCallback.onReady) {
-    globalThis.AmllCallback.onReady();
+    globalThis.AmllCallback.onReady();            // Android @JavascriptInterface
+  } else if (globalThis.amllHost && globalThis.amllHost.onReady) {
+    globalThis.amllHost.onReady();                // desktop JavaFX JSObject bridge
   } else if (typeof globalThis.cefQuery === "function") {
     globalThis.cefQuery({ request: "onReady", onSuccess: function () {}, onFailure: function () {} });
   }

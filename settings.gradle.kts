@@ -25,8 +25,6 @@ dependencyResolutionManagement {
             }
         }
         mavenCentral()
-        // KCEF (desktop WebView) pulls JOGL natives from the JogAmp repository.
-        maven("https://jogamp.org/deployment/maven")
     }
 }
 

@@ -24,16 +24,6 @@ compose.desktop {
     application {
         mainClass = "com.leejlredstar.redefinencm.kmp.MainKt"
 
-        // KCEF (desktop WebView lyric page) needs deep reflection into AWT internals on
-        // macOS. Harmless to omit on Windows/Linux, where the user currently runs.
-        if (System.getProperty("os.name").orEmpty().startsWith("Mac", ignoreCase = true)) {
-            jvmArgs(
-                "--add-opens", "java.desktop/sun.awt=ALL-UNNAMED",
-                "--add-opens", "java.desktop/sun.lwawt=ALL-UNNAMED",
-                "--add-opens", "java.desktop/sun.lwawt.macosx=ALL-UNNAMED",
-            )
-        }
-
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "com.leejlredstar.redefinencm.kmp"

@@ -96,8 +96,20 @@ kotlin {
             // Dispatchers.Main for JVM (needed by DesktopFloatingWindowController + jvmTest)
             implementation(libs.kotlinx.coroutinesSwing)
             implementation(libs.sqldelight.sqlite.driver)
-            // KCEF (Chromium) for the desktop WebView AMLL lyric page, embedded via SwingPanel
-            implementation(libs.kcef)
+            // JavaFX WebView (WebKit) for the desktop AMLL lyric page, embedded via JFXPanel +
+            // SwingPanel. Native libs are per-OS, so the classifier is resolved here. (Chosen
+            // over Chromium/JCEF, whose native init crashes on this JDK/Windows.)
+            val javafx = libs.versions.javafx.get()
+            val osName = System.getProperty("os.name").lowercase()
+            val osArch = System.getProperty("os.arch").lowercase()
+            val fxClassifier = when {
+                osName.contains("win") -> "win"
+                osName.contains("mac") -> if (osArch.contains("aarch64")) "mac-aarch64" else "mac"
+                else -> "linux"
+            }
+            for (module in listOf("base", "graphics", "controls", "media", "web", "swing")) {
+                implementation("org.openjfx:javafx-$module:$javafx:$fxClassifier")
+            }
         }
     }
 }

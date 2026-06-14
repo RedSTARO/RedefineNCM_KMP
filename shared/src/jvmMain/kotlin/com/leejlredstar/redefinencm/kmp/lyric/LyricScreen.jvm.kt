@@ -1,15 +1,10 @@
 package com.leejlredstar.redefinencm.kmp.lyric
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -20,199 +15,105 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.unit.dp
-import com.leejlredstar.redefinencm.kmp.ui.screen.FullLyricScreen
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
-import dev.datlag.kcef.KCEF
-import dev.datlag.kcef.KCEFBrowser
+import javafx.application.Platform
+import javafx.concurrent.Worker
+import javafx.embed.swing.JFXPanel
+import javafx.scene.Scene
+import javafx.scene.web.WebEngine
+import javafx.scene.web.WebView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.withContext
-import org.cef.CefSettings
-import org.cef.browser.CefBrowser
-import org.cef.browser.CefFrame
-import org.cef.browser.CefMessageRouter
-import org.cef.callback.CefQueryCallback
-import org.cef.handler.CefDisplayHandlerAdapter
-import org.cef.handler.CefLoadHandler
-import org.cef.handler.CefLoadHandlerAdapter
-import org.cef.handler.CefMessageRouterHandlerAdapter
+import netscape.javascript.JSObject
 import org.koin.compose.koinInject
 import java.io.File
 
 /**
- * Desktop (JVM) actual: AMLL lyric engine in a KCEF (Chromium) browser, embedded via
- * [SwingPanel]. Falls back to the pure-Compose [FullLyricScreen] if KCEF fails to init.
+ * Desktop (JVM) actual: AMLL lyric engine in a JavaFX [WebView] (WebKit), hosted in a
+ * [JFXPanel] and embedded via Compose [SwingPanel].
  *
- * KCEF hosts a heavyweight AWT component, so the back affordance is a real toolbar ABOVE
- * the panel (a Compose overlay would render under the heavyweight surface), not floating.
- * The page is the same player.html the Android WebView uses; it signals readiness through
- * JCEF's `window.cefQuery` message router (vs. Android's @JavascriptInterface).
+ * JavaFX is used instead of a Chromium/JCEF embed (whose native CefApp init crashes on this
+ * JDK/Windows). All WebView/WebEngine access must happen on the JavaFX Application Thread
+ * ([Platform.runLater]); creating a JFXPanel boots that runtime. The same player.html the
+ * Android WebView uses is loaded over file://; readiness is signalled back through a
+ * `window.amllHost` Java bridge object (vs. Android's @JavascriptInterface).
  */
 @Composable
 actual fun WebViewLyricScreen(onBack: () -> Unit) {
-    val kcefState by KcefManager.state.collectAsState()
-
-    LaunchedEffect(Unit) { KcefManager.ensureInit() }
-
-    when (val s = kcefState) {
-        is KcefManager.State.Failed -> FullLyricScreen(onBack = onBack)
-        KcefManager.State.RestartRequired -> KcefRestartNotice(onBack)
-        KcefManager.State.Ready -> KcefLyricView(onBack)
-        else -> KcefLoading(s, onBack)
-    }
-}
-
-@Composable
-private fun KcefRestartNotice(onBack: () -> Unit) {
-    Column(Modifier.fillMaxSize()) {
-        LyricToolbar(onBack)
-        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(24.dp),
-            ) {
-                Text(
-                    "歌词引擎已安装完成",
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "首次安装需要重启应用以启用桌面 AMLL 歌词页。\n重启后再次打开即可。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun KcefLyricView(onBack: () -> Unit) {
     val viewModel: NowPlayingViewModel = koinInject()
     val rawLyric by viewModel.rawLyric.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
 
-    // Set from a CEF bridge thread → use a thread-safe flow, observed as Compose state.
+    // engineReady is set from the JavaFX thread → use a thread-safe flow.
     val engineReadyFlow = remember { MutableStateFlow(false) }
     val engineReady by engineReadyFlow.collectAsState()
-    var browser by remember { mutableStateOf<KCEFBrowser?>(null) }
+    val engineState = remember { mutableStateOf<WebEngine?>(null) }
+    val panel = remember { JFXPanel() }
 
     LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) {
-            val dir = extractAmllAssets()
-            val client = KCEF.newClient()
-            // Mirror the Android logcat lever: surface JS console + load errors to stdout
-            // (tag "AMLL"), since the desktop GUI can't be inspected here.
-            client.addDisplayHandler(object : CefDisplayHandlerAdapter() {
-                override fun onConsoleMessage(
-                    b: CefBrowser?,
-                    level: CefSettings.LogSeverity?,
-                    message: String?,
-                    source: String?,
-                    line: Int,
-                ): Boolean {
-                    println("AMLL[console] $message @ $source:$line")
-                    return false
+        // Keep the JavaFX runtime alive across screen open/close.
+        Platform.setImplicitExit(false)
+        val dir = withContext(Dispatchers.IO) { extractAmllAssets() }
+        Platform.runLater {
+            val webView = WebView()
+            val engine = webView.engine
+            engine.loadWorker.stateProperty().addListener { _, _, state ->
+                if (state == Worker.State.SUCCEEDED) {
+                    // Expose window.amllHost so player.html's signalReady() can call back.
+                    val window = engine.executeScript("window") as JSObject
+                    window.setMember("amllHost", AmllJsHost { engineReadyFlow.value = true })
+                } else if (state == Worker.State.FAILED) {
+                    println("AMLL[jfx] page load failed: ${engine.loadWorker.exception?.message}")
                 }
-            })
-            client.addLoadHandler(object : CefLoadHandlerAdapter() {
-                override fun onLoadError(
-                    b: CefBrowser?,
-                    frame: CefFrame?,
-                    errorCode: CefLoadHandler.ErrorCode?,
-                    errorText: String?,
-                    failedUrl: String?,
-                ) {
-                    println("AMLL[loadError] $errorText ($errorCode) @ $failedUrl")
-                }
-            })
-            // JS → Kotlin: player.html calls window.cefQuery({request:"onReady"}) once mounted.
-            val router = CefMessageRouter.create()
-            router.addHandler(
-                object : CefMessageRouterHandlerAdapter() {
-                    override fun onQuery(
-                        b: CefBrowser?,
-                        frame: CefFrame?,
-                        queryId: Long,
-                        request: String?,
-                        persistent: Boolean,
-                        callback: CefQueryCallback?,
-                    ): Boolean {
-                        if (request == "onReady") {
-                            engineReadyFlow.value = true
-                            callback?.success("")
-                            return true
-                        }
-                        return false
-                    }
-                },
-                true,
-            )
-            client.addMessageRouter(router)
-            browser = client.createBrowser(fileUrl(File(dir, "player.html")))
+            }
+            engine.load(fileUrl(File(dir, "player.html")))
+            panel.scene = Scene(webView)
+            engineState.value = engine
         }
     }
 
     // Feed raw LRC once the engine is ready and whenever the track changes.
     LaunchedEffect(engineReady, rawLyric) {
-        val b = browser ?: return@LaunchedEffect
+        val engine = engineState.value ?: return@LaunchedEffect
         if (!engineReady || rawLyric.isEmpty()) return@LaunchedEffect
         val escaped = rawLyric
             .replace("\\", "\\\\")
             .replace("'", "\\'")
             .replace("\n", "\\n")
             .replace("\r", "\\r")
-        b.executeJavaScript("AmllBridge.loadLyrics('$escaped');", "", 0)
+        Platform.runLater { runCatching { engine.executeScript("AmllBridge.loadLyrics('$escaped');") } }
     }
 
     // Push playback position; the page's rAF loop animates between updates.
     LaunchedEffect(engineReady, currentPosition) {
-        val b = browser ?: return@LaunchedEffect
+        val engine = engineState.value ?: return@LaunchedEffect
         if (!engineReady) return@LaunchedEffect
-        b.executeJavaScript("AmllBridge.setTime($currentPosition);", "", 0)
+        Platform.runLater { runCatching { engine.executeScript("AmllBridge.setTime($currentPosition);") } }
     }
 
     DisposableEffect(Unit) {
-        // Dispose only the browser — never KCEF.dispose() (process-global, no clean re-init).
-        onDispose { browser?.dispose() }
+        onDispose {
+            val engine = engineState.value
+            Platform.runLater { runCatching { engine?.load("about:blank") } }
+        }
     }
 
     Column(Modifier.fillMaxSize()) {
         LyricToolbar(onBack)
-        val b = browser
-        if (b != null) {
-            SwingPanel(
-                factory = { b.uiComponent },
-                modifier = Modifier.fillMaxWidth().weight(1f),
-            )
-        } else {
-            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        }
+        SwingPanel(factory = { panel }, modifier = Modifier.fillMaxWidth().weight(1f))
     }
 }
 
-@Composable
-private fun KcefLoading(state: KcefManager.State, onBack: () -> Unit) {
-    Column(Modifier.fillMaxSize()) {
-        LyricToolbar(onBack)
-        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator()
-                Spacer(Modifier.height(12.dp))
-                val msg = when (state) {
-                    is KcefManager.State.Downloading -> "正在下载歌词渲染引擎 ${state.pct}%"
-                    else -> "正在初始化歌词引擎…"
-                }
-                Text(msg, style = MaterialTheme.typography.bodyMedium)
-            }
-        }
+/** Bridge object exposed to JS as `window.amllHost`. Public method is callable from the page. */
+class AmllJsHost(private val onReadyCallback: () -> Unit) {
+    @Suppress("unused") // called from JavaScript
+    fun onReady() {
+        onReadyCallback()
     }
 }
 
@@ -228,18 +129,18 @@ private fun LyricToolbar(onBack: () -> Unit) {
     }
 }
 
-/** Extract the bundled AMLL assets to a temp dir so KCEF can load them over file://. */
+/** Extract the bundled AMLL assets to a temp dir so the WebView can load them over file://. */
 private fun extractAmllAssets(): File {
     val dir = File(System.getProperty("java.io.tmpdir"), "redefinencm-amll").apply { mkdirs() }
     for (name in listOf("player.html", "bundle.js", "style.css")) {
-        val res = KcefManager::class.java.getResourceAsStream("/amll/$name")
+        val res = object {}.javaClass.getResourceAsStream("/amll/$name")
             ?: error("Missing classpath resource: /amll/$name")
         res.use { input -> File(dir, name).outputStream().use { input.copyTo(it) } }
     }
     return dir
 }
 
-/** Normalize to the three-slash `file:///` form Chromium expects (Windows toURI() gives one). */
+/** Normalize to the three-slash `file:///` form (Windows toURI() gives one slash). */
 private fun fileUrl(file: File): String {
     val raw = file.toURI().toString()
     return if (raw.startsWith("file://")) raw else raw.replaceFirst("file:/", "file:///")
