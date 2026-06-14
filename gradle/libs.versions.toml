@@ -12,8 +12,8 @@ androidx-lifecycle = "2.11.0-beta01"
 androidx-testExt = "1.3.0"
 coil = "3.5.0"
 composeMultiplatform = "1.11.1"
+javafx = "21.0.4"
 junit = "4.13.2"
-kcef = "2025.03.23"
 koin = "4.2.1"
 kotlin = "2.4.0"
 kotlinx-coroutines = "1.11.0"
@@ -50,10 +50,7 @@ androidx-media3-exoplayer = { module = "androidx.media3:media3-exoplayer", versi
 androidx-media3-session = { module = "androidx.media3:media3-session", version.ref = "media3" }
 # MP3 decoding SPI for the desktop audio player (pure-JVM: pulls jlayer + tritonus-share)
 mp3spi = { module = "com.googlecode.soundlibs:mp3spi", version.ref = "mp3spi" }
-# KCEF — Chromium Embedded Framework for the desktop WebView lyric page (archived upstream
-# Oct 2025; last release functional). Embedded via Compose SwingPanel.
-kcef = { module = "dev.datlag:kcef", version.ref = "kcef" }
-# SLF4J binding for the desktop app so library logs (KCEF/JCEF, Ktor) surface instead of NOP.
+# SLF4J binding for the desktop app so library logs (JavaFX, Ktor) surface instead of NOP.
 slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
