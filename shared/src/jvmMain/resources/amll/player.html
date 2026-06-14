@@ -22,11 +22,21 @@
     pointer-events: none;
   }
   .amll-lyric-player { width: 100% !important; height: 100% !important; }
+  /* AMLL's plus-lighter blend is meant for a bright album-art backdrop; on plain black it
+     can render text invisibly. Force normal blending + a visible color while debugging. */
+  .amll-lyric-player { mix-blend-mode: normal !important; color: #fff !important; }
+  #hud {
+    position: absolute; top: 4px; right: 6px;
+    color: #29f129; font: 11px/1.4 monospace; text-align: right;
+    z-index: 99999; pointer-events: none; mix-blend-mode: normal;
+    text-shadow: 0 0 2px #000;
+  }
 </style>
 </head>
 <body>
 <div id="loading">Loading lyric engine...</div>
 <div id="amll-root"></div>
+<div id="hud">engine: not loaded</div>
 
 <script>
 // ── CDN fallback: esm.sh handles PixiJS transitive deps ──
@@ -164,6 +174,18 @@ async function loadEngine() {
 }
 
 loadEngine();
+
+// Debug HUD: always-visible engine state, so an invisible-lyrics case is distinguishable
+// from a no-data case. "ready" = engine mounted, "lines" = lyric lines fed, "t" = position.
+setInterval(function () {
+  const d = globalThis.__amllDebug;
+  const el = document.getElementById("hud");
+  if (el && !errored) {
+    el.textContent = d
+      ? ("ready:" + d.ready + " lines:" + d.lines + " t:" + Math.round(d.time))
+      : "engine: not loaded";
+  }
+}, 500);
 </script>
 </body>
 </html>
