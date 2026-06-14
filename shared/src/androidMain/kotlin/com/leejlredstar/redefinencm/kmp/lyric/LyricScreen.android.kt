@@ -83,7 +83,12 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             // @JavascriptInterface methods run on a private bridge thread; hop to
             // the WebView's (main) thread via post before touching Compose state.
             addJavascriptInterface(
-                AmllCallback(onReady = { post { engineReady = true } }),
+                AmllCallback(onReady = {
+                    post {
+                        Log.d("AMLL", "onReady received -> engineReady=true")
+                        engineReady = true
+                    }
+                }),
                 "AmllCallback",
             )
 
@@ -93,7 +98,12 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
 
     // Feed raw LRC to AMLL once the engine is ready and whenever the track changes.
     LaunchedEffect(engineReady, rawLyric) {
-        if (!engineReady || rawLyric.isEmpty()) return@LaunchedEffect
+        if (!engineReady) return@LaunchedEffect
+        if (rawLyric.isEmpty()) {
+            Log.d("AMLL", "engineReady but rawLyric is EMPTY (no lyrics fetched)")
+            return@LaunchedEffect
+        }
+        Log.d("AMLL", "feeding lyrics, len=${rawLyric.length}")
         val escaped = rawLyric
             .replace("\\", "\\\\")
             .replace("'", "\\'")
