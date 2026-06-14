@@ -60,6 +60,12 @@ object KcefManager {
                 KCEF.init(
                     builder = {
                         installDir(installDir)
+                        // CefApp init crashed natively (STATUS_BREAKPOINT) on Windows. The usual
+                        // culprits are the CEF sandbox and GPU init — disable both.
+                        settings {
+                            noSandbox = true
+                        }
+                        addArgs("--disable-gpu", "--disable-gpu-compositing", "--no-sandbox")
                         progress {
                             onDownloading { pct ->
                                 val decile = (pct.toInt() / 10)
