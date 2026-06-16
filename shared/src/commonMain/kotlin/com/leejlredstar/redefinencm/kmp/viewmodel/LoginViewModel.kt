@@ -34,8 +34,8 @@ class LoginViewModel(
     private val _qrDataUri = MutableStateFlow("")
     val qrDataUri: StateFlow<String> = _qrDataUri.asStateFlow()
 
-    private val _qrUrl = MutableStateFlow("")
-    val qrUrl: StateFlow<String> = _qrUrl.asStateFlow()
+    private val _qrBitmapBytes = MutableStateFlow<ByteArray?>(null)
+    val qrBitmapBytes: StateFlow<ByteArray?> = _qrBitmapBytes.asStateFlow()
 
     private val _qrUnikey = MutableStateFlow("")
     val qrUnikey: StateFlow<String> = _qrUnikey.asStateFlow()
@@ -94,7 +94,7 @@ class LoginViewModel(
                 _qrSuccess.value = false
                 _qrScanStatus.value = "正在生成二维码…"
                 _qrDataUri.value = ""
-        _qrUrl.value = ""
+        _qrBitmapBytes.value = null
 
                 // 1. Get QR key
                 val keyResult = safeApiCall { api.loginQrKey() }
@@ -111,17 +111,13 @@ class LoginViewModel(
                 // 2. Create QR code
                 val createResult = safeApiCall { api.loginQrCreate(key, qrimg = true) }
                 val imgBase64 = createResult?.data?.qrimg
-                val directUrl = createResult?.data?.qrurl
-                println("[QR] createResult code=${createResult?.code}, hasQrimg=${!imgBase64.isNullOrEmpty()}, hasQrurl=${!directUrl.isNullOrEmpty()}")
-                println("[QR] qrurl=$directUrl")
-                if (imgBase64.isNullOrEmpty() && directUrl.isNullOrEmpty()) {
+                if (imgBase64.isNullOrEmpty()) {
                     _qrScanStatus.value = "生成二维码失败"
                     _qrError.value = "服务器未返回二维码"
                     _qrLoading.value = false
                     return@launch
                 }
                 _qrDataUri.value = "data:image/png;base64,${imgBase64 ?: ""}"
-                _qrUrl.value = directUrl ?: ""
                 _qrScanStatus.value = "请用网易云音乐 App 扫码"
                 _qrLoading.value = false
 
@@ -172,10 +168,15 @@ class LoginViewModel(
         qrPollJob?.cancel()
         qrPollJob = null
         _qrDataUri.value = ""
-        _qrUrl.value = ""
+        _qrBitmapBytes.value = null
         _qrScanStatus.value = "点击生成二维码"
         _qrLoading.value = false
         _qrError.value = ""
+    }
+
+    @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
+    private fun decodeBase64(input: String): ByteArray {
+        return kotlin.io.encoding.Base64.decode(input)
     }
 
     fun onCleared() {
