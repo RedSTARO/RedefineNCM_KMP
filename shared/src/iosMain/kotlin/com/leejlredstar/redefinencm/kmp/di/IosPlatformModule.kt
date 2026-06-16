@@ -2,6 +2,8 @@ package com.leejlredstar.redefinencm.kmp.di
 
 import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
 import com.leejlredstar.redefinencm.kmp.data.db.DatabaseDriverFactory
+import com.leejlredstar.redefinencm.kmp.player.IosAVPlayer
+import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import io.ktor.client.HttpClient
@@ -25,4 +27,7 @@ actual fun platformModule() = module {
 
     // SQLDelight driver (Documents-directory SQLite via NativeSqliteDriver).
     single { DatabaseDriverFactory() }
+
+    // Real AVPlayer-backed audio playback, overriding the shared InMemoryPlatformPlayer.
+    single<PlatformPlayer> { IosAVPlayer(get(), get()) }
 }
