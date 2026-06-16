@@ -15,6 +15,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,6 +35,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.QrCode2
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
@@ -58,12 +64,8 @@ fun UserPlaylistScreen(
                 avatarUrl = userDetail?.profile?.avatarUrl,
                 nickname = userDetail?.profile?.nickname ?: "Unknown User",
                 userId = userDetail?.profile?.userId?.toString() ?: "N/A",
-            )
-        }
-        item {
-            ExpressiveSectionTitle(
-                text = "我的歌单",
-                modifier = Modifier.padding(start = 24.dp, top = 16.dp, bottom = 12.dp),
+                isLoggedIn = userDetail != null,
+                onOpenLogin = onOpenLogin,
             )
         }
         if (userDetail == null) {
@@ -75,6 +77,12 @@ fun UserPlaylistScreen(
                 )
             }
         } else {
+            item {
+                ExpressiveSectionTitle(
+                    text = "我的歌单",
+                    modifier = Modifier.padding(start = 24.dp, top = 16.dp, bottom = 12.dp),
+                )
+            }
             itemsIndexed(playlists) { index, pl ->
                 PlaylistCard(
                     userPlaylistEach = pl,
@@ -99,11 +107,13 @@ private fun UserPlaylistHero(
     avatarUrl: String?,
     nickname: String,
     userId: String,
+    isLoggedIn: Boolean,
+    onOpenLogin: () -> Unit,
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(300.dp)
+            .height(320.dp)
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
@@ -164,6 +174,23 @@ private fun UserPlaylistHero(
                 style = MaterialTheme.typography.labelLarge,
                 color = Color.White.copy(alpha = 0.78f),
             )
+
+            // Login button — always visible when not logged in
+            if (!isLoggedIn) {
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    onClick = onOpenLogin,
+                    shape = RoundedCornerShape(24.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White.copy(alpha = 0.95f),
+                        contentColor = Color.Black,
+                    ),
+                ) {
+                    Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.size(8.dp))
+                    Text("扫码 / 登录", fontWeight = FontWeight.SemiBold)
+                }
+            }
         }
     }
 }
