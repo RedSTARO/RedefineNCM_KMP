@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,11 +42,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
+import com.leejlredstar.redefinencm.kmp.util.decodePngToImageBitmap
 import com.leejlredstar.redefinencm.kmp.viewmodel.LoginViewModel
 import org.koin.compose.koinInject
 
@@ -57,7 +59,8 @@ fun LoginScreen(
     val server by viewModel.server.collectAsState()
     val cookie by viewModel.cookie.collectAsState()
     val qrDataUri by viewModel.qrDataUri.collectAsState()
-    val qrUrl by viewModel.qrUrl.collectAsState()
+    val qrBitmapBytes by viewModel.qrBitmapBytes.collectAsState()
+    
     val qrScanStatus by viewModel.qrScanStatus.collectAsState()
     val qrLoading by viewModel.qrLoading.collectAsState()
     val qrError by viewModel.qrError.collectAsState()
@@ -143,14 +146,16 @@ fun LoginScreen(
                 ) {
                     if (qrLoading) {
                         CircularProgressIndicator()
-                    } else if (qrUrl.isNotEmpty() || qrDataUri.isNotEmpty()) {
-                        val model = qrUrl.ifEmpty { qrDataUri }
-                        AsyncImage(
-                            model = model,
-                            contentDescription = "QR Code",
-                            modifier = Modifier.fillMaxSize().padding(12.dp),
-                            contentScale = ContentScale.Fit,
-                        )
+                    } else if (qrBitmapBytes != null && qrBitmapBytes!!.isNotEmpty()) {
+                        val bmp = remember(qrBitmapBytes) { decodePngToImageBitmap(qrBitmapBytes!!) }
+                        if (bmp != null) {
+                            Image(
+                                painter = BitmapPainter(bmp),
+                                contentDescription = "QR Code",
+                                modifier = Modifier.fillMaxSize().padding(12.dp),
+                                contentScale = ContentScale.Fit,
+                            )
+                        }
                     } else {
                         Text(
                             "二维码\n将在此显示",
