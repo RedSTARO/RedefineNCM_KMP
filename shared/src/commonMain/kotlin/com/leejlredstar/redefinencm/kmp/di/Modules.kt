@@ -59,7 +59,7 @@ val sharedModule = module {
     single<PlatformPlayer> { InMemoryPlatformPlayer() }
 
     // ViewModels
-    factory { LoginViewModel(get()) }
+    factory { LoginViewModel(get(), get()) }
     factory { MainViewModel(get(), get()) }
     // 2 args: repo + player; lyricBus uses its default (the LyricBus object, not a Koin dep).
     // Single — the now-playing state is inherently global (only one song plays at a time).
