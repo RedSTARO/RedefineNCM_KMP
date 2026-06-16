@@ -176,20 +176,18 @@ private fun UserPlaylistHero(
             )
 
             // Login button — always visible when not logged in
-            if (!isLoggedIn) {
-                Spacer(Modifier.height(16.dp))
-                Button(
-                    onClick = onOpenLogin,
-                    shape = RoundedCornerShape(24.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White.copy(alpha = 0.95f),
-                        contentColor = Color.Black,
-                    ),
-                ) {
-                    Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.size(8.dp))
-                    Text("扫码 / 登录", fontWeight = FontWeight.SemiBold)
-                }
+            Spacer(Modifier.height(16.dp))
+            Button(
+                onClick = onOpenLogin,
+                shape = RoundedCornerShape(24.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White.copy(alpha = 0.95f),
+                    contentColor = Color.Black,
+                ),
+            ) {
+                Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.size(8.dp))
+                Text("扫码 / 登录", fontWeight = FontWeight.SemiBold)
             }
         }
     }
