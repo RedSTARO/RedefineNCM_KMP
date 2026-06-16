@@ -11,7 +11,8 @@ import io.ktor.client.engine.darwin.Darwin
 import org.koin.dsl.module
 
 actual fun platformModule() = module {
-    // Ktor HttpClient (Darwin engine) configured with base URL + realIP + cookie from settings.
+    // Ktor HttpClient (Darwin engine).
+    // Cookie is read at startup; after QR login, kill and reopen the app.
     single<HttpClient> {
         val settings = get<PlatformSettings>()
         HttpClientFactory.create(
