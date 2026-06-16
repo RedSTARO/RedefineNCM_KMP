@@ -57,6 +57,7 @@ fun LoginScreen(
     val server by viewModel.server.collectAsState()
     val cookie by viewModel.cookie.collectAsState()
     val qrDataUri by viewModel.qrDataUri.collectAsState()
+    val qrUrl by viewModel.qrUrl.collectAsState()
     val qrScanStatus by viewModel.qrScanStatus.collectAsState()
     val qrLoading by viewModel.qrLoading.collectAsState()
     val qrError by viewModel.qrError.collectAsState()
@@ -142,9 +143,10 @@ fun LoginScreen(
                 ) {
                     if (qrLoading) {
                         CircularProgressIndicator()
-                    } else if (qrDataUri.isNotEmpty()) {
+                    } else if (qrUrl.isNotEmpty() || qrDataUri.isNotEmpty()) {
+                        val model = qrUrl.ifEmpty { qrDataUri }
                         AsyncImage(
-                            model = qrDataUri,
+                            model = model,
                             contentDescription = "QR Code",
                             modifier = Modifier.fillMaxSize().padding(12.dp),
                             contentScale = ContentScale.Fit,

@@ -72,6 +72,7 @@ data class LoginQrCreate(
 @Serializable
 data class LoginQrCreateData(
     val qrimg: String = "",
+    val qrurl: String = "",
 )
 
 @Serializable
