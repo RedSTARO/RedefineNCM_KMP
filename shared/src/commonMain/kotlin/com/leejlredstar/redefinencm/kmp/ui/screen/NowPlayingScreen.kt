@@ -271,9 +271,14 @@ fun LyricSection(
                     onClick = {
                         entry.key?.let { time ->
                             onSeekClick(time)
-                            // Snap auto-scroll back on after seeking
+                            // After seeking, wait briefly for position to propagate
+                            // through player -> computeLyricIndex -> lyricIndex,
+                            // then resume auto-centering.
                             resumeJob?.cancel()
-                            isUserScrolling = false
+                            resumeJob = scope.launch {
+                                kotlinx.coroutines.delay(200)
+                                isUserScrolling = false
+                            }
                         }
                     },
                     shape = MaterialTheme.shapes.large,
