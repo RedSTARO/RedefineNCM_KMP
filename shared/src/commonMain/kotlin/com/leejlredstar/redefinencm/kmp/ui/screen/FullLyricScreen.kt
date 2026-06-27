@@ -35,11 +35,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -125,30 +122,7 @@ fun FullLyricScreen(
                     colors = listOf(heroColor, heroColor.copy(alpha = 0.3f), Color(0xFF0A0A0A)),
                 ),
             )
-            .drawWithContent {
-                // Draw normal content first
-                drawContent()
-
-                // Draw fixed cursor line at centre of this Box
-                val cx = size.width / 2f
-                val cy = size.height / 2f
-                val cursorColor = Color.White.copy(alpha = 0.60f)
-                val dotRadius = 5f
-
-                // Accent dot at left edge of the cursor
-                drawCircle(
-                    color = cursorColor,
-                    radius = dotRadius,
-                    center = Offset(32f, cy),
-                )
-                // Horizontal line spanning most of the width
-                drawLine(
-                    color = cursorColor,
-                    start = Offset(48f, cy),
-                    end = Offset(size.width - 48f, cy),
-                    strokeWidth = 2f,
-                )
-            },
+            
     ) {
         // ── Album art background ──
         AsyncImage(
