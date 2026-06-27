@@ -47,9 +47,23 @@ class ExoPlayerPlatformPlayer(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private val resolver = StreamUrlResolver { mediaId ->
+        val id = mediaId.toLong()
+
+        // Check for a locally-downloaded offline file first.
+        if (com.leejlredstar.redefinencm.kmp.util.isSongDownloaded(id)) {
+            val downloadDir = android.os.Environment.getExternalStoragePublicDirectory(
+                android.os.Environment.DIRECTORY_DOWNLOADS + "/RedefineNCM"
+            )
+            val localFile = java.io.File(downloadDir, "$id.mp3")
+            if (localFile.exists()) {
+                return@StreamUrlResolver localFile.toURI().toString()
+            }
+        }
+
+        // Fall through to online CDN resolution.
         val qualityName = settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.EXHIGH.name)
         val quality = runCatching { SoundQuality.valueOf(qualityName) }.getOrDefault(SoundQuality.EXHIGH)
-        repo.getSongUrl(mediaId.toLong(), quality.name.lowercase())
+        repo.getSongUrl(id, quality.name.lowercase())
     }
 
     /** Exposed so PlaybackService can wrap it in a MediaSession. Do not release externally. */
