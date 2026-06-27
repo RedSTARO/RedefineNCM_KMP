@@ -35,6 +35,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import org.koin.compose.koinInject
@@ -76,6 +79,7 @@ fun NowPlayingScreen(
         LyricSection(
             lyricMap = lyricMap,
             lyricIndex = lyricIndex,
+            onSeekClick = { timeMs -> viewModel.onPositionSeekClick(timeMs) },
             modifier = Modifier
                 .weight(0.32f)
                 .padding(horizontal = 16.dp),
@@ -202,15 +206,42 @@ private fun SongHeroSection(
 fun LyricSection(
     lyricMap: LinkedHashMap<Long?, String?>,
     lyricIndex: Int,
+    onSeekClick: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
-    val lyrics = lyricMap.values.toList()
+    val lyricEntries = remember(lyricMap) { lyricMap.entries.toList() }
 
-    LaunchedEffect(lyricIndex) {
-        if (lyricIndex >= 0 && lyricIndex < lyrics.size) {
-            listState.animateScrollToItem(lyricIndex)
+    var isUserScrolling by remember { mutableStateOf(false) }
+    var resumeJob by remember { mutableStateOf<Job?>(null) }
+    var programmaticScroll by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    // Auto-center current line when not being manually scrolled
+    LaunchedEffect(lyricIndex, isUserScrolling) {
+        if (lyricIndex >= 0 && lyricIndex < lyricEntries.size && !isUserScrolling) {
+            programmaticScroll = true
+            listState.animateScrollToItem(
+                index = lyricIndex,
+                scrollOffset = (listState.layoutInfo.viewportSize.height / 2).coerceAtLeast(0),
+            )
+            programmaticScroll = false
         }
+    }
+
+    // Detect manual scroll by the user to pause auto-centering
+    val currentFirst = listState.firstVisibleItemIndex
+    var lastKnownFirst by remember { mutableStateOf(currentFirst) }
+    LaunchedEffect(currentFirst) {
+        if (currentFirst != lastKnownFirst && !programmaticScroll && lyricEntries.isNotEmpty()) {
+            isUserScrolling = true
+            resumeJob?.cancel()
+            resumeJob = scope.launch {
+                kotlinx.coroutines.delay(3_000)
+                isUserScrolling = false
+            }
+        }
+        lastKnownFirst = currentFirst
     }
 
     Surface(
@@ -219,16 +250,33 @@ fun LyricSection(
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {
         LazyColumn(
-            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 12.dp, vertical = 12.dp),
+            state = listState,
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            itemsIndexed(lyrics) { index, line ->
+            itemsIndexed(lyricEntries) { index, entry ->
                 val isCurrent = index == lyricIndex
+
+                val dist = kotlin.math.abs(index - lyricIndex)
+                val itemAlpha = when {
+                    dist == 0 -> 1f
+                    dist <= 2 -> 1f - dist * 0.18f
+                    else -> 0.45f
+                }
+
                 Surface(
-                    shape = CircleShape,
+                    onClick = {
+                        entry.key?.let { time ->
+                            onSeekClick(time)
+                            // Snap auto-scroll back on after seeking
+                            resumeJob?.cancel()
+                            isUserScrolling = false
+                        }
+                    },
+                    shape = MaterialTheme.shapes.large,
                     color = if (isCurrent) MaterialTheme.colorScheme.primaryContainer
                     else Color.Transparent,
                     modifier = Modifier
@@ -236,16 +284,18 @@ fun LyricSection(
                         .padding(vertical = 2.dp),
                 ) {
                     Text(
-                        text = line?.ifBlank { " " } ?: " ",
+                        text = entry.value?.ifBlank { " " } ?: " ",
                         style = if (isCurrent) MaterialTheme.typography.titleMedium
-                        else MaterialTheme.typography.bodyLarge,
+                        else MaterialTheme.typography.bodyMedium,
                         fontWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.Normal,
                         color = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer
                         else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
                             .padding(horizontal = 16.dp, vertical = 8.dp)
-                            .alpha(if (isCurrent) 1f else 0.68f),
+                            .alpha(itemAlpha),
                         textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
