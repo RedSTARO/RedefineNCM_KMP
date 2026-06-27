@@ -1,9 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -13,7 +11,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -21,7 +18,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
@@ -39,16 +35,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,15 +54,14 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-import kotlin.math.roundToInt
 
 /**
- * NetEase-Cloud-Music-style scrolling lyric display with a fixed cursor line.
+ * NetEase-Cloud-Music-style scrolling lyric display.
  *
- * • A horizontal cursor line is painted at the centre of the lyric area.
- * • Lyrics scroll *past* the cursor; the current line always lands on it.
- * • Tapping a line seeks to its timestamp and brings it to the cursor.
- * • Manual scroll pauses auto-cursor for 3 s, then snaps back.
+ * • A fixed cursor line is drawn on the main canvas via [drawWithContent].
+ * • Lyrics scroll past the cursor; the current line auto-lands on it.
+ * • Tapping a line seeks to that timestamp and snaps it to the cursor.
+ * • Manual scrolling pauses auto-cursor for 3 s, then snaps back.
  */
 @Composable
 fun FullLyricScreen(
@@ -87,21 +82,17 @@ fun FullLyricScreen(
     val timestamps = remember(lyricMap) { lyricEntries.map { it.key } }
     val karaokeProgress = computeKaraokeProgress(lyricIndex, timestamps, currentPosition, songLength)
 
-    // ── Scroll & manual-scroll state ──
+    // ── Scroll state ──
     val listState = rememberLazyListState()
     var isUserScrolling by remember { mutableStateOf(false) }
     var resumeJob by remember { mutableStateOf<Job?>(null) }
     var programmaticScroll by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    // Cursor position (screen centre of lyric area)
-    val cursorOffsetDp = 0.dp // centre by default; LazyColumn handles positioning
-
-    // Auto-scroll to cursor when not user-scrolling
+    // Auto-centre current line
     LaunchedEffect(lyricIndex, isUserScrolling) {
         if (!isUserScrolling && lyricIndex in lyricEntries.indices && lyricEntries.isNotEmpty()) {
             programmaticScroll = true
-            // Scroll so that the lyricIndex line sits at the cursor (centre of viewport)
             listState.animateScrollToItem(
                 index = lyricIndex,
                 scrollOffset = listState.layoutInfo.viewportSize.height / 2,
@@ -110,7 +101,7 @@ fun FullLyricScreen(
         }
     }
 
-    // Detect user scroll
+    // Detect manual scroll
     val currentFirst = listState.firstVisibleItemIndex
     var lastKnownFirst by remember { mutableStateOf(currentFirst) }
     LaunchedEffect(currentFirst) {
@@ -125,6 +116,7 @@ fun FullLyricScreen(
         lastKnownFirst = currentFirst
     }
 
+    // ── Main container with cursor drawn on top via drawWithContent ──
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -132,7 +124,31 @@ fun FullLyricScreen(
                 Brush.verticalGradient(
                     colors = listOf(heroColor, heroColor.copy(alpha = 0.3f), Color(0xFF0A0A0A)),
                 ),
-            ),
+            )
+            .drawWithContent {
+                // Draw normal content first
+                drawContent()
+
+                // Draw fixed cursor line at centre of this Box
+                val cx = size.width / 2f
+                val cy = size.height / 2f
+                val cursorColor = Color.White.copy(alpha = 0.60f)
+                val dotRadius = 5f
+
+                // Accent dot at left edge of the cursor
+                drawCircle(
+                    color = cursorColor,
+                    radius = dotRadius,
+                    center = Offset(32f, cy),
+                )
+                // Horizontal line spanning most of the width
+                drawLine(
+                    color = cursorColor,
+                    start = Offset(48f, cy),
+                    end = Offset(size.width - 48f, cy),
+                    strokeWidth = 2f,
+                )
+            },
     ) {
         // ── Album art background ──
         AsyncImage(
@@ -222,9 +238,6 @@ fun FullLyricScreen(
             item { Spacer(Modifier.height(250.dp)) }
         }
 
-        // ── Fixed cursor line ──
-        CursorLine()
-
         // ── Gradient feather edges ──
         Box(
             modifier = Modifier
@@ -277,39 +290,6 @@ fun FullLyricScreen(
     }
 }
 
-// ── Cursor ──
-
-/**
- * Fixed horizontal cursor line + accent dot, painted on top of the lyric list.
- * Mimics the NetEase Cloud Music "reading line" that lyrics scroll past.
- */
-@Composable
-private fun CursorLine() {
-    val cursorColor = Color.White.copy(alpha = 0.55f)
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            // Accent dot
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(cursorColor),
-            )
-            Spacer(Modifier.height(4.dp))
-            // Horizontal line spanning most of the width
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.85f)
-                    .height(1.5.dp)
-                    .background(cursorColor),
-            )
-        }
-    }
-}
-
 // ── Helpers ──
 
 private fun computeKaraokeProgress(
@@ -326,9 +306,6 @@ private fun computeKaraokeProgress(
     return ((positionMs - cur).toFloat() / (next - cur)).coerceIn(0f, 1f)
 }
 
-/**
- * A single lyric line with karaoke progress highlight.
- */
 @Composable
 private fun LyricKaraokeLine(
     text: String,
