@@ -34,6 +34,15 @@ class IosAVPlayer(
     private val avPlayer = AVPlayer()
 
     private val resolver = StreamUrlResolver { mediaId ->
+        val id = mediaId.toLong()
+
+        // Check for a locally-downloaded offline file first.
+        if (com.leejlredstar.redefinencm.kmp.util.isSongDownloaded(id)) {
+            // TODO: Construct iOS-specific file URL from the app Documents directory
+            // when download support is added to iosMain. Currently isSongDownloaded
+            // always returns false on iOS (scanDownloadedSongIds is a stub).
+        }
+
         val qualityName = settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.EXHIGH.name)
         val quality = runCatching { SoundQuality.valueOf(qualityName) }.getOrDefault(SoundQuality.EXHIGH)
         repo.getSongUrl(mediaId.toLong(), quality.name.lowercase())

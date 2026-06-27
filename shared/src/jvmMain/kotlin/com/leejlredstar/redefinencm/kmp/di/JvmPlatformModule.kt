@@ -2,6 +2,8 @@ package com.leejlredstar.redefinencm.kmp.di
 
 import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
 import com.leejlredstar.redefinencm.kmp.data.db.DatabaseDriverFactory
+import com.leejlredstar.redefinencm.kmp.player.JvmMediaPlayer
+import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import io.ktor.client.HttpClient
@@ -25,4 +27,9 @@ actual fun platformModule() = module {
 
     // SQLDelight driver (file-backed SQLite in ~/.redefinencm/).
     single { DatabaseDriverFactory() }
+
+    // Desktop audio player backed by javax.sound.sampled + mp3spi.
+    // Overrides the InMemoryPlatformPlayer default from sharedModule.
+    // Checks ~/Downloads/RedefineNCM/<id>.mp3 before hitting the CDN.
+    single<PlatformPlayer> { JvmMediaPlayer(get(), get()) }
 }
