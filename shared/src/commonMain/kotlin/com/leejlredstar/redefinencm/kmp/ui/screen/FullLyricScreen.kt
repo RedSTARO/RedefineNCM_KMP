@@ -4,7 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -32,11 +32,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -46,8 +46,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -90,35 +90,38 @@ fun FullLyricScreen(
     // ── Scroll state with manual-scroll detection ──
     val listState = rememberLazyListState()
     var isUserScrolling by remember { mutableStateOf(false) }
+    var resumeJob by remember { mutableStateOf<Job?>(null) }
+    // Track whether the last scroll was programmatic (auto-centre) or from user
+    var programmaticScroll by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    // Auto-centre the current lyric line
+    // Auto-centre the current lyric line (only when NOT user-scrolling)
     LaunchedEffect(lyricIndex, isUserScrolling) {
-        if (!isUserScrolling && lyricIndex in lyricEntries.indices) {
-            // Small extra delay so Compose has time to lay out after a recomposition
-            if (lyricEntries.isNotEmpty()) {
-                listState.animateScrollToItem(
-                    index = lyricIndex,
-                    scrollOffset = -listState.layoutInfo.viewportSize.height / 3,
-                )
-            }
+        if (!isUserScrolling && lyricIndex in lyricEntries.indices && lyricEntries.isNotEmpty()) {
+            programmaticScroll = true
+            listState.animateScrollToItem(
+                index = lyricIndex,
+                scrollOffset = -listState.layoutInfo.viewportSize.height / 3,
+            )
+            programmaticScroll = false
         }
     }
 
-    // Detect manual scrolling — pause auto-centre
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.isScrollInProgress }
-            .collectLatest { scrolling ->
-                if (scrolling) {
-                    isUserScrolling = true
-                } else if (isUserScrolling) {
-                    // Wait 3 s after the user stops dragging, then resume auto-centre
-                    scope.launch {
-                        delay(3_000)
-                        isUserScrolling = false
-                    }
-                }
+    // Detect manual scrolling: when firstVisibleItemIndex changes and it's NOT from our
+    // programmatic auto-centre, the user must have dragged the list.
+    val currentFirst = listState.firstVisibleItemIndex
+    var lastKnownFirst by remember { mutableStateOf(currentFirst) }
+    LaunchedEffect(currentFirst) {
+        if (currentFirst != lastKnownFirst && !programmaticScroll && lyricEntries.isNotEmpty()) {
+            // User scrolled — pause auto-centre
+            isUserScrolling = true
+            resumeJob?.cancel()
+            resumeJob = scope.launch {
+                delay(3_000)
+                isUserScrolling = false
             }
+        }
+        lastKnownFirst = currentFirst
     }
 
     Box(
@@ -212,7 +215,8 @@ fun FullLyricScreen(
                     onClick = {
                         entry.key?.let { timestamp ->
                             viewModel.onPositionSeekClick(timestamp)
-                            // Resume auto-centre immediately after user-initiated seek
+                            // Immediately resume auto-centre after user taps to seek
+                            resumeJob?.cancel()
                             isUserScrolling = false
                         }
                     },
@@ -293,7 +297,8 @@ private fun computeKaraokeProgress(
 
 /**
  * A single lyric line with karaoke progress highlight.
- * Tapping the line seeks to the associated timestamp.
+ * Uses [pointerInput] + [detectTapGestures] for reliable touch handling
+ * (avoids [androidx.compose.foundation.clickable] being swallowed by overlay children).
  */
 @Composable
 private fun LyricKaraokeLine(
@@ -310,7 +315,9 @@ private fun LyricKaraokeLine(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .pointerInput(onClick) {
+                detectTapGestures { onClick() }
+            }
             .padding(vertical = 3.dp),
         contentAlignment = Alignment.Center,
     ) {
