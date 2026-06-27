@@ -4,7 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -22,11 +25,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -40,18 +46,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 /**
- * Full-screen Apple Music-style karaoke lyric display.
+ * Full-screen NetEase-Cloud-Music-style scrolling karaoke lyric display.
  *
- * Opens when the user taps the lyric section on the NowPlayingScreen.
  * Features:
- * - Karaoke word-by-word highlight sweeping left-to-right on the current line
- * - Past / future lines fade in opacity the farther they are from the current line
- * - Current line is center-aligned vertically
- * - Gradient feather (scrim) at top and bottom edges
- * - Album art as background with dark overlay
+ * - Scrollable lyric list; auto-centres current line
+ * - Karaoke word-by-word highlight on the current line
+ * - Tap any lyric line to seek the player to that timestamp
+ * - Manual scrolling pauses auto-centre for 3 s, then resumes
+ * - Gradient feather edges at top and bottom
  */
 @Composable
 fun FullLyricScreen(
@@ -72,18 +80,46 @@ fun FullLyricScreen(
         label = "fullLyricHero",
     )
 
-    val lyrics = lyricMap.values.toList()
-    val timestamps = lyricMap.keys.toList()
-    val lineTimestamps = timestamps.mapNotNull { it }
+    // ── Lyric data as indexed list ──
+    val lyricEntries = remember(lyricMap) { lyricMap.entries.toList() }
+    val timestamps = remember(lyricMap) { lyricEntries.map { it.key } }
 
-    // Karaoke progress for the current line (0..1)
-    val karaokeProgress = if (lyricIndex in lineTimestamps.indices) {
-        val currentTime = lineTimestamps[lyricIndex]
-        val nextTime = lineTimestamps.getOrNull(lyricIndex + 1) ?: songLength.coerceAtLeast(currentTime)
-        if (nextTime > currentTime) {
-            ((currentPosition - currentTime).toFloat() / (nextTime - currentTime)).coerceIn(0f, 1f)
-        } else 1f
-    } else 0f
+    // ── Karaoke progress for the current line ──
+    val karaokeProgress = computeKaraokeProgress(lyricIndex, timestamps, currentPosition, songLength)
+
+    // ── Scroll state with manual-scroll detection ──
+    val listState = rememberLazyListState()
+    var isUserScrolling by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    // Auto-centre the current lyric line
+    LaunchedEffect(lyricIndex, isUserScrolling) {
+        if (!isUserScrolling && lyricIndex in lyricEntries.indices) {
+            // Small extra delay so Compose has time to lay out after a recomposition
+            if (lyricEntries.isNotEmpty()) {
+                listState.animateScrollToItem(
+                    index = lyricIndex,
+                    scrollOffset = -listState.layoutInfo.viewportSize.height / 3,
+                )
+            }
+        }
+    }
+
+    // Detect manual scrolling — pause auto-centre
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }
+            .collectLatest { scrolling ->
+                if (scrolling) {
+                    isUserScrolling = true
+                } else if (isUserScrolling) {
+                    // Wait 3 s after the user stops dragging, then resume auto-centre
+                    scope.launch {
+                        delay(3_000)
+                        isUserScrolling = false
+                    }
+                }
+            }
+    }
 
     Box(
         modifier = Modifier
@@ -94,7 +130,7 @@ fun FullLyricScreen(
                 ),
             ),
     ) {
-        // Album art background with dark scrim
+        // ── Album art background ──
         AsyncImage(
             model = metadata?.artworkUri,
             contentDescription = null,
@@ -115,7 +151,7 @@ fun FullLyricScreen(
                 ),
         )
 
-        // Back button
+        // ── Back button ──
         IconButton(
             onClick = onBack,
             modifier = Modifier
@@ -123,10 +159,7 @@ fun FullLyricScreen(
                 .statusBarsPadding()
                 .padding(8.dp),
         ) {
-            Surface(
-                shape = CircleShape,
-                color = Color.White.copy(alpha = 0.15f),
-            ) {
+            Surface(shape = CircleShape, color = Color.White.copy(alpha = 0.15f)) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "返回",
@@ -136,45 +169,61 @@ fun FullLyricScreen(
             }
         }
 
-        // Lyrics — fixed 11-slot window centered vertically
-        val windowSize = 5
-
-        Column(
+        // ── Scrollable lyric list ──
+        LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 80.dp, bottom = 100.dp),
-            verticalArrangement = Arrangement.Center,
+                .padding(top = 100.dp, bottom = 140.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            (lyricIndex - windowSize..lyricIndex + windowSize).forEach { idx ->
-                if (idx in lyrics.indices) {
-                    val dist = kotlin.math.abs(idx - lyricIndex)
-                    val alpha = when {
-                        dist == 0 -> 1f
-                        dist <= 2 -> 1f - dist * 0.18f
-                        else -> 0.35f
-                    }
-                    val fontSize = when {
-                        dist == 0 -> 20.sp
-                        dist == 1 -> 17.sp
-                        else -> 15.sp
-                    }
-                    val isCurrent = idx == lyricIndex
+            // Top spacer — lets the first lyric line scroll into the centre
+            item { Spacer(Modifier.height(250.dp)) }
 
-                    LyricKaraokeLine(
-                        text = lyrics[idx]?.ifBlank { "· · ·" } ?: "· · ·",
-                        isCurrent = isCurrent,
-                        progress = if (isCurrent) karaokeProgress else if (idx < lyricIndex) 1f else 0f,
-                        alpha = alpha,
-                        fontSize = fontSize,
-                    )
-                } else {
-                    // Empty slot to keep centering
-                    Spacer(Modifier.weight(1f))
+            itemsIndexed(
+                items = lyricEntries,
+                key = { idx, _ -> idx },
+            ) { idx, entry ->
+                val isCurrent = idx == lyricIndex
+                val dist = kotlin.math.abs(idx - lyricIndex)
+
+                val alpha = when {
+                    dist == 0 -> 1f
+                    dist <= 2 -> 1f - dist * 0.18f
+                    else -> 0.40f
                 }
+                val fontSize = when {
+                    dist == 0 -> 20.sp
+                    dist == 1 -> 17.sp
+                    else -> 15.sp
+                }
+                val progress = when {
+                    isCurrent -> karaokeProgress
+                    idx < lyricIndex -> 1f // already sung
+                    else -> 0f // not yet sung
+                }
+
+                LyricKaraokeLine(
+                    text = entry.value?.ifBlank { "· · ·" } ?: "· · ·",
+                    isCurrent = isCurrent,
+                    progress = progress,
+                    alpha = alpha,
+                    fontSize = fontSize,
+                    onClick = {
+                        entry.key?.let { timestamp ->
+                            viewModel.onPositionSeekClick(timestamp)
+                            // Resume auto-centre immediately after user-initiated seek
+                            isUserScrolling = false
+                        }
+                    },
+                )
             }
+
+            // Bottom spacer
+            item { Spacer(Modifier.height(250.dp)) }
         }
 
-        // Gradient feather edges
+        // ── Gradient feather edges ──
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -182,10 +231,7 @@ fun FullLyricScreen(
                 .align(Alignment.TopCenter)
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Black.copy(alpha = 0.6f),
-                            Color.Transparent,
-                        ),
+                        colors = listOf(Color.Black.copy(alpha = 0.6f), Color.Transparent),
                     ),
                 ),
         )
@@ -196,15 +242,12 @@ fun FullLyricScreen(
                 .align(Alignment.BottomCenter)
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.6f),
-                        ),
+                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f)),
                     ),
                 ),
         )
 
-        // Song info at bottom
+        // ── Song info at bottom ──
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -232,11 +275,25 @@ fun FullLyricScreen(
     }
 }
 
+// ── Helpers ──
+
+private fun computeKaraokeProgress(
+    idx: Int,
+    timestamps: List<Long?>,
+    positionMs: Long,
+    songLengthMs: Long,
+): Float {
+    val lineTimestamps = timestamps.mapNotNull { it }
+    if (idx !in lineTimestamps.indices) return 0f
+    val cur = lineTimestamps[idx]
+    val next = lineTimestamps.getOrNull(idx + 1) ?: songLengthMs.coerceAtLeast(cur)
+    if (next <= cur) return 1f
+    return ((positionMs - cur).toFloat() / (next - cur)).coerceIn(0f, 1f)
+}
+
 /**
- * A single line of lyric text with karaoke progress highlight.
- *
- * The current line renders twice — a dimmed full-width layer and a bright overlay
- * clipped to [progress] width, creating a left-to-right sweep effect.
+ * A single lyric line with karaoke progress highlight.
+ * Tapping the line seeks to the associated timestamp.
  */
 @Composable
 private fun LyricKaraokeLine(
@@ -245,6 +302,7 @@ private fun LyricKaraokeLine(
     progress: Float,
     alpha: Float,
     fontSize: TextUnit,
+    onClick: () -> Unit,
 ) {
     val dimColor = Color.White.copy(alpha = 0.45f * alpha)
     val brightColor = Color.White.copy(alpha = alpha)
@@ -252,7 +310,8 @@ private fun LyricKaraokeLine(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp),
+            .clickable(onClick = onClick)
+            .padding(vertical = 3.dp),
         contentAlignment = Alignment.Center,
     ) {
         // Base layer: full-dim text
@@ -265,8 +324,7 @@ private fun LyricKaraokeLine(
             maxLines = 1,
             softWrap = false,
         )
-        // Karaoke overlay layer: the Box width is constrained to [progress] fraction,
-        // so the child Text naturally renders only within that span — no explicit clip needed.
+        // Karaoke overlay
         if (isCurrent && progress in 0f..1f) {
             Box(
                 modifier = Modifier
