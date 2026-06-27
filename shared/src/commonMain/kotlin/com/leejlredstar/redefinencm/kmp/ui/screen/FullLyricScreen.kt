@@ -104,7 +104,7 @@ fun FullLyricScreen(
             // Scroll so that the lyricIndex line sits at the cursor (centre of viewport)
             listState.animateScrollToItem(
                 index = lyricIndex,
-                scrollOffset = listState.layoutInfo.viewportSize.height / 3,
+                scrollOffset = listState.layoutInfo.viewportSize.height / 2,
             )
             programmaticScroll = false
         }
