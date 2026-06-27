@@ -3,6 +3,11 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Android 16 (API 36) Live Updates: required for canPostPromotedNotifications()
+         to return true. Without this, setRequestPromotedOngoing(true) has no effect
+         and the notification never elevates to a Live Update capsule (Dynamic Island /
+         HyperOS capsule). -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
