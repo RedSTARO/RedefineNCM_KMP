@@ -104,7 +104,7 @@ fun FullLyricScreen(
             // Scroll so that the lyricIndex line sits at the cursor (centre of viewport)
             listState.animateScrollToItem(
                 index = lyricIndex,
-                scrollOffset = -listState.layoutInfo.viewportSize.height / 3,
+                scrollOffset = listState.layoutInfo.viewportSize.height / 3,
             )
             programmaticScroll = false
         }
@@ -285,7 +285,7 @@ fun FullLyricScreen(
  */
 @Composable
 private fun CursorLine() {
-    val cursorColor = Color.White.copy(alpha = 0.35f)
+    val cursorColor = Color.White.copy(alpha = 0.55f)
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
@@ -294,7 +294,7 @@ private fun CursorLine() {
             // Accent dot
             Box(
                 modifier = Modifier
-                    .size(6.dp)
+                    .size(8.dp)
                     .clip(CircleShape)
                     .background(cursorColor),
             )
@@ -302,8 +302,8 @@ private fun CursorLine() {
             // Horizontal line spanning most of the width
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.7f)
-                    .height(1.dp)
+                    .fillMaxWidth(0.85f)
+                    .height(1.5.dp)
                     .background(cursorColor),
             )
         }
