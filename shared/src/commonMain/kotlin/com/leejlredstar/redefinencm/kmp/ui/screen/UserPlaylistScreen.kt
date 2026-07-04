@@ -35,8 +35,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.QrCode2
+import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
@@ -185,7 +184,7 @@ private fun UserPlaylistHero(
                     contentColor = Color.Black,
                 ),
             ) {
-                Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(AppIcons.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.size(8.dp))
                 Text("扫码 / 登录", fontWeight = FontWeight.SemiBold)
             }

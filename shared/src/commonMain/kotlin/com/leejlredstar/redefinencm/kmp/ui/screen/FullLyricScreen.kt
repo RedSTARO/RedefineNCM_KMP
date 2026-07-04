@@ -18,8 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -159,7 +158,7 @@ fun FullLyricScreen(
         ) {
             Surface(shape = CircleShape, color = Color.White.copy(alpha = 0.15f)) {
                 Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
+                    AppIcons.ArrowBack,
                     contentDescription = "返回",
                     tint = Color.White,
                     modifier = Modifier.padding(10.dp),

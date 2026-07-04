@@ -14,8 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
+import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -273,7 +272,7 @@ private fun SettingsDropdown(
                 Text(text = current.toString(), style = MaterialTheme.typography.bodyLarge)
             }
             IconButton(onClick = { expanded = !expanded }) {
-                Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                Icon(AppIcons.ArrowDropDown, contentDescription = null)
             }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {

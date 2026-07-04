@@ -119,12 +119,36 @@ class JvmMediaPlayer(
 
     private fun openAndPlay(streamUrl: String) {
         stopPlayback()
+        // 本次播放的起始位置：seekTo 预置的偏移；自然换曲/新队列时为 0
+        val startMs = seekOffsetMs.coerceAtLeast(0L)
 
         playbackThread = Thread({
             try {
                 val url = URI(streamUrl).toURL()
-                val stream = AudioSystem.getAudioInputStream(url)
-                val fmt = stream.format
+                val rawStream = AudioSystem.getAudioInputStream(url)
+                val baseFormat = rawStream.format
+
+                // MP3(MPEG) 帧不能直接喂 SourceDataLine —— 必须经 mp3spi 转成 PCM_SIGNED
+                val stream: AudioInputStream
+                val fmt: AudioFormat
+                if (baseFormat.encoding == AudioFormat.Encoding.PCM_SIGNED ||
+                    baseFormat.encoding == AudioFormat.Encoding.PCM_UNSIGNED
+                ) {
+                    stream = rawStream
+                    fmt = baseFormat
+                } else {
+                    fmt = AudioFormat(
+                        AudioFormat.Encoding.PCM_SIGNED,
+                        baseFormat.sampleRate,
+                        16,
+                        baseFormat.channels,
+                        baseFormat.channels * 2,
+                        baseFormat.sampleRate,
+                        false,
+                    )
+                    stream = AudioSystem.getAudioInputStream(fmt, rawStream)
+                }
+
                 val info = DataLine.Info(SourceDataLine::class.java, fmt)
                 val audioLine = AudioSystem.getLine(info) as SourceDataLine
 
@@ -140,10 +164,22 @@ class JvmMediaPlayer(
                     _duration.value = durMs
                 }
 
+                // 跳到 seek 位置：按 PCM 字节率丢弃解码流前段（VBR 无帧索引，近似即可）
+                if (startMs > 0 && fmt.frameRate > 0 && fmt.frameSize > 0) {
+                    var toSkip = (startMs * fmt.frameRate.toLong() * fmt.frameSize / 1000L)
+                    // 对齐帧边界，避免声道错位产生噪音
+                    toSkip -= toSkip % fmt.frameSize
+                    while (toSkip > 0 && !Thread.interrupted()) {
+                        val skipped = stream.skip(toSkip)
+                        if (skipped <= 0) break
+                        toSkip -= skipped
+                    }
+                }
+
                 val buf = ByteArray(4096)
                 playStartNano = System.nanoTime()
-                seekOffsetMs = 0L
-                _position.value = 0L
+                seekOffsetMs = startMs
+                _position.value = startMs
                 _isPlaying.value = true
                 _state.value = PlayerState.PLAYING
 
@@ -160,6 +196,7 @@ class JvmMediaPlayer(
 
                 if (!Thread.interrupted()) {
                     _isPlaying.value = false
+                    seekOffsetMs = 0L
                     queueModel = queueModel.next()
                     publishQueue()
                     queueModel.currentItem?.let { resolveAndPlay(it) } ?: run {
@@ -201,6 +238,7 @@ class JvmMediaPlayer(
 
     private fun onTrackChanged() {
         _position.value = 0L
+        seekOffsetMs = 0L
         publishQueue()
         queueModel.currentItem?.let { resolveAndPlay(it) } ?: run {
             _state.value = PlayerState.IDLE

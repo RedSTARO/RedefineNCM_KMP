@@ -16,11 +16,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.GraphicEq
+import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -121,7 +117,7 @@ fun SongRow(
                     else MaterialTheme.colorScheme.surfaceContainerHighest,
                 ) {
                     Icon(
-                        imageVector = if (downloaded) Icons.Filled.Check else Icons.Filled.AttachFile,
+                        imageVector = if (downloaded) AppIcons.Check else AppIcons.AttachFile,
                         contentDescription = if (downloaded) "Downloaded" else "Not downloaded",
                         tint = if (downloaded) MaterialTheme.colorScheme.onPrimaryContainer
                         else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -352,8 +348,8 @@ fun PlaylistCard(
                     else MaterialTheme.colorScheme.onSecondaryContainer,
                 ) {
                     Icon(
-                        imageVector = if (specialCard == "fav") Icons.Filled.Favorite
-                        else Icons.Filled.GraphicEq,
+                        imageVector = if (specialCard == "fav") AppIcons.Favorite
+                        else AppIcons.GraphicEq,
                         contentDescription = null,
                         modifier = Modifier
                             .padding(8.dp)

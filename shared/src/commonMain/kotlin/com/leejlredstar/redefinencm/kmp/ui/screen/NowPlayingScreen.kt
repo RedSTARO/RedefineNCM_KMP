@@ -9,18 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Comment
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.filled.ShuffleOn
+import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -168,7 +157,7 @@ private fun SongHeroSection(
                     .statusBarsPadding()
                     .padding(8.dp),
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                Icon(AppIcons.ArrowBack, contentDescription = "返回")
             }
             AsyncImage(
                 model = metadata?.artworkUri,
@@ -387,8 +376,8 @@ fun PlaybackControlSection(
                     shape = MaterialTheme.shapes.large,
                 ) {
                     Icon(
-                        imageVector = if (shuffleEnabled) Icons.Default.ShuffleOn
-                        else Icons.Default.Shuffle,
+                        imageVector = if (shuffleEnabled) AppIcons.ShuffleOn
+                        else AppIcons.Shuffle,
                         contentDescription = "Shuffle",
                     )
                 }
@@ -398,7 +387,7 @@ fun PlaybackControlSection(
                     shape = MaterialTheme.shapes.large,
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                        imageVector = AppIcons.KeyboardArrowLeft,
                         contentDescription = "Previous",
                         modifier = Modifier.size(34.dp),
                     )
@@ -413,8 +402,8 @@ fun PlaybackControlSection(
                     ),
                 ) {
                     Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause
-                        else Icons.Default.PlayArrow,
+                        imageVector = if (isPlaying) AppIcons.Pause
+                        else AppIcons.PlayArrow,
                         contentDescription = "Play/Pause",
                         modifier = Modifier.size(42.dp),
                     )
@@ -425,7 +414,7 @@ fun PlaybackControlSection(
                     shape = MaterialTheme.shapes.large,
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        imageVector = AppIcons.KeyboardArrowRight,
                         contentDescription = "Next",
                         modifier = Modifier.size(34.dp),
                     )
@@ -436,7 +425,7 @@ fun PlaybackControlSection(
                     shape = MaterialTheme.shapes.large,
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                        imageVector = AppIcons.QueueMusic,
                         contentDescription = "Queue",
                     )
                 }
@@ -454,7 +443,7 @@ fun PlaybackControlSection(
                     shape = CircleShape,
                 ) {
                     Icon(
-                        imageVector = Icons.Default.FavoriteBorder,
+                        imageVector = AppIcons.FavoriteBorder,
                         contentDescription = "Favorite",
                     )
                 }
@@ -464,7 +453,7 @@ fun PlaybackControlSection(
                     shape = CircleShape,
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Comment,
+                        imageVector = AppIcons.Comment,
                         contentDescription = "Comments",
                     )
                 }

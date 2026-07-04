@@ -20,10 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.PlayArrow
+import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalIconButton
@@ -169,7 +166,7 @@ private fun PlaylistHeader(
                     .statusBarsPadding()
                     .padding(8.dp),
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                Icon(AppIcons.ArrowBack, contentDescription = "返回")
             }
 
             AsyncImage(
@@ -217,7 +214,7 @@ private fun PlaylistHeader(
                     shape = CircleShape,
                     contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
                 ) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp))
+                    Icon(AppIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("播放全部", style = MaterialTheme.typography.titleMedium)
                 }
@@ -230,7 +227,7 @@ private fun PlaylistHeader(
                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                     ),
                 ) {
-                    Icon(Icons.Filled.Download, contentDescription = "下载全部")
+                    Icon(AppIcons.Download, contentDescription = "下载全部")
                 }
             }
             Spacer(Modifier.height(16.dp))

@@ -4,10 +4,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Settings
+import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -101,9 +98,9 @@ fun App() {
             val showTabs = pushedStack.isEmpty()
             val tabs = remember {
                 listOf(
-                    NavigationItem("推荐", Icons.Filled.Home, TabDest.Home),
-                    NavigationItem("我的", Icons.Filled.Person, TabDest.My),
-                    NavigationItem("设置", Icons.Filled.Settings, TabDest.Settings),
+                    NavigationItem("推荐", AppIcons.Home, TabDest.Home),
+                    NavigationItem("我的", AppIcons.Person, TabDest.My),
+                    NavigationItem("设置", AppIcons.Settings, TabDest.Settings),
                 )
             }
 
