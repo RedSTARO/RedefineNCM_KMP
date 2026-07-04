@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS PlayerStatus (
+  id INTEGER NOT NULL PRIMARY KEY,
+  json TEXT NOT NULL
+);
+
+upsert:
+INSERT OR REPLACE INTO PlayerStatus(id, json) VALUES (1, :json);
+
+select:
+SELECT json FROM PlayerStatus WHERE id = 1;

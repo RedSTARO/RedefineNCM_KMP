@@ -118,6 +118,10 @@ class LoginViewModel(
                     return@launch
                 }
                 _qrDataUri.value = "data:image/png;base64,${imgBase64 ?: ""}"
+                // 本地解码 base64 PNG（qrimg 可能带 data URI 前缀，也可能是裸 base64）
+                _qrBitmapBytes.value = runCatching {
+                    decodeBase64(imgBase64.substringAfter("base64,").trim())
+                }.getOrNull()
                 _qrScanStatus.value = "请用网易云音乐 App 扫码"
                 _qrLoading.value = false
 

@@ -52,6 +52,8 @@ kotlin {
             // ExoPlayer + MediaSession for Android audio playback
             implementation(libs.androidx.media3.exoplayer)
             implementation(libs.androidx.media3.session)
+            // Palette-based album-art theme color (matches the original ImageParser)
+            implementation(libs.androidx.palette)
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)

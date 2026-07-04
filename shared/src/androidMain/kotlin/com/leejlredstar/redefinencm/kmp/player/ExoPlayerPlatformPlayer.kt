@@ -116,13 +116,15 @@ class ExoPlayerPlatformPlayer(
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                _currentIndex.value = exoPlayer.currentMediaItemIndex
-                _currentMedia.value = _queue.value.getOrNull(exoPlayer.currentMediaItemIndex)
-                    ?: mediaItem?.toMediaInfo()
+                // 每次切歌都完整重建列表与高亮：随机模式下 ExoPlayer 可能在不触发
+                // onTimelineChanged 的情况下重排内部顺序，缓存索引会失效（原版修过的回归 bug）
+                rebuildQueue()
             }
 
             override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+                // 切换随机模式改变播放顺序，必须整体重建列表与高亮
                 _shuffleEnabled.value = shuffleModeEnabled
+                rebuildQueue()
             }
 
             override fun onTimelineChanged(timeline: Timeline, reason: Int) {
@@ -141,13 +143,38 @@ class ExoPlayerPlatformPlayer(
         }
     }
 
+    /** 播放顺序 → ExoPlayer 窗口索引的映射，与 _queue/_currentIndex 同源重建。 */
+    private var playOrderWindowIndices: List<Int> = emptyList()
+
+    /**
+     * 依据当前 timeline（按播放顺序，含随机模式）重建可见队列、窗口顺序索引与当前高亮。
+     * 三者必须来自同一次重建 —— 这是从原版继承的随机模式不变量，不要拆开更新。
+     */
     private fun rebuildQueue() {
-        val items = (0 until exoPlayer.mediaItemCount).map { i ->
-            val item = exoPlayer.getMediaItemAt(i)
-            (item.localConfiguration?.tag as? MediaInfo) ?: item.toMediaInfo()
+        val timeline = exoPlayer.currentTimeline
+        if (timeline.isEmpty) {
+            playOrderWindowIndices = emptyList()
+            _queue.value = emptyList()
+            _currentIndex.value = -1
+            _currentMedia.value = null
+            return
         }
+
+        val shuffle = exoPlayer.shuffleModeEnabled
+        val items = mutableListOf<MediaInfo>()
+        val indices = mutableListOf<Int>()
+        var idx = timeline.getFirstWindowIndex(shuffle)
+        while (idx != C.INDEX_UNSET) {
+            val item = exoPlayer.getMediaItemAt(idx)
+            items += (item.localConfiguration?.tag as? MediaInfo) ?: item.toMediaInfo()
+            indices += idx
+            idx = timeline.getNextWindowIndex(idx, Player.REPEAT_MODE_OFF, shuffle)
+        }
+
+        playOrderWindowIndices = indices
         _queue.value = items
-        _currentIndex.value = exoPlayer.currentMediaItemIndex
+        // 高亮位置直接由本次重建出的 indices 计算，绝不读取旧缓存
+        _currentIndex.value = indices.indexOf(exoPlayer.currentMediaItemIndex)
         _currentMedia.value = items.getOrNull(_currentIndex.value)
     }
 
@@ -174,7 +201,11 @@ class ExoPlayerPlatformPlayer(
     override fun seekTo(positionMs: Long) = exoPlayer.seekTo(positionMs)
     override fun seekToPrevious() = exoPlayer.seekToPreviousMediaItem()
     override fun seekToNext() = exoPlayer.seekToNextMediaItem()
-    override fun skipToIndex(index: Int) = exoPlayer.seekToDefaultPosition(index)
+    override fun skipToIndex(index: Int) {
+        // index 是播放顺序位置，需映射回 ExoPlayer 窗口索引（随机模式下二者不同）
+        val windowIndex = playOrderWindowIndices.getOrNull(index) ?: index
+        exoPlayer.seekToDefaultPosition(windowIndex)
+    }
     override fun setShuffleEnabled(enabled: Boolean) { exoPlayer.shuffleModeEnabled = enabled }
 
     override fun setQueue(items: List<MediaInfo>, startIndex: Int) {
@@ -182,6 +213,12 @@ class ExoPlayerPlatformPlayer(
         exoPlayer.setMediaItems(items.map { it.toExoMediaItem() }, startIndex, 0L)
         exoPlayer.prepare()
         exoPlayer.play()
+    }
+
+    override fun restoreQueue(items: List<MediaInfo>, startIndex: Int, positionMs: Long) {
+        _queue.value = items
+        exoPlayer.setMediaItems(items.map { it.toExoMediaItem() }, startIndex, positionMs)
+        exoPlayer.prepare() // 只装载不播放（原版恢复时注释掉了 play()）
     }
 
     override fun addToQueue(item: MediaInfo) {

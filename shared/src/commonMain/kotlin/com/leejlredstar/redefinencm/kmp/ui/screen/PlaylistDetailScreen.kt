@@ -1,5 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +36,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +51,9 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
+import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
+import com.leejlredstar.redefinencm.kmp.util.SettingKeys
+import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import org.koin.compose.koinInject
 
@@ -53,24 +61,37 @@ import org.koin.compose.koinInject
 fun PlaylistDetailScreen(
     playlistId: Long,
     onBack: () -> Unit,
-    onOpenNowPlaying: () -> Unit,
     viewModel: MainViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
+    settings: PlatformSettings = koinInject(),
 ) {
     val detail by viewModel.playlistDetail.collectAsState()
     val tracks by viewModel.playlistSongs.collectAsState()
     val songs = tracks?.songs ?: emptyList()
     val playlist = detail?.playlist
+    // 原版 ShowPlaylistDetailPage：点单曲时按 replacePlaylist 设置决定替换整单还是单曲队列
+    val replacePlaylist = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false) }
 
     LaunchedEffect(playlistId) {
         viewModel.fetchPlaylistDetail(playlistId)
     }
 
-    fun playFrom(index: Int) {
+    // 播放后停留在歌单页（与原版一致，靠迷你播放条进入 NowPlaying）
+    fun playAll() {
         if (songs.isEmpty()) return
-        player.setQueue(songs.map { it.toMediaInfo() }, index)
-        player.play()
-        onOpenNowPlaying()
+        player.setQueue(songs.map { it.toMediaInfo() }, 0)
+        viewModel.updatePlaylistPlaycount(playlistId)
+    }
+
+    fun playSong(index: Int) {
+        val song = songs.getOrNull(index) ?: return
+        if (replacePlaylist) {
+            player.setQueue(songs.map { it.toMediaInfo() }, index)
+        } else {
+            // 原版 onPlaySingleSongClick：单曲独立队列
+            player.setQueue(listOf(song.toMediaInfo()), 0)
+        }
+        viewModel.updatePlaylistPlaycount(playlistId)
     }
 
     val trackCountText = when {
@@ -89,7 +110,8 @@ fun PlaylistDetailScreen(
                 title = playlist?.name ?: "加载中…",
                 trackCountText = trackCountText,
                 onBack = onBack,
-                onPlayAll = { playFrom(0) },
+                onPlayAll = { playAll() },
+                onDownloadAll = { viewModel.onDownloadPlaylistClick(playlistId) },
             )
         }
         itemsIndexed(songs) { i, song ->
@@ -99,7 +121,7 @@ fun PlaylistDetailScreen(
                 artist = song.ar.joinToString(" / ") { it.name },
                 artworkUri = song.al.picUrl,
                 shape = connectedListItemShape(i, songs.size),
-                onClick = { playFrom(i) },
+                onClick = { playSong(i) },
                 songId = song.id,
             )
         }
@@ -114,8 +136,16 @@ private fun PlaylistHeader(
     trackCountText: String,
     onBack: () -> Unit,
     onPlayAll: () -> Unit,
+    onDownloadAll: () -> Unit,
 ) {
-    val heroColor = MaterialTheme.colorScheme.primaryContainer
+    // 封面取色驱动 hero 渐变，spring 动画到位（原版 Expressive motion）
+    val defaultHeroColor = MaterialTheme.colorScheme.primaryContainer
+    var themeColor by remember { mutableStateOf(defaultHeroColor) }
+    val heroColor by animateColorAsState(
+        targetValue = themeColor,
+        animationSpec = spring(),
+        label = "heroColor",
+    )
 
     Column(Modifier.fillMaxWidth()) {
         Box(
@@ -151,6 +181,10 @@ private fun PlaylistHeader(
                     .padding(top = 8.dp)
                     .size(200.dp)
                     .clip(RoundedCornerShape(36.dp)),
+                onSuccess = { state ->
+                    themeColorFromCoilImage(state.result.image)?.let { themeColor = Color(it) }
+                },
+                onError = { themeColor = Color.Gray },
             )
         }
 
@@ -188,7 +222,7 @@ private fun PlaylistHeader(
                     Text("播放全部", style = MaterialTheme.typography.titleMedium)
                 }
                 FilledTonalIconButton(
-                    onClick = {},
+                    onClick = onDownloadAll,
                     modifier = Modifier.size(56.dp),
                     shape = MaterialTheme.shapes.large,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(

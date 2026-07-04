@@ -16,6 +16,9 @@ class Repository(
 
     // ── User ──
 
+    /** 网络获取当前登录账号（用于首次解析 UID，原版 fetchUID 的 userAccount 调用）。 */
+    suspend fun getUserAccount(): UserAccount? = safeApiCall { api.userAccount() }
+
     fun getUserDetail(uid: Long): Flow<UserDetail?> = flow {
         runCatching {
             db.cachedUserDetailQueries.selectByUid(uid).executeAsOneOrNull()
@@ -62,6 +65,15 @@ class Repository(
         }
     }
 
+    /** 一次性网络获取歌单全部曲目（批量下载用，不走缓存流）。 */
+    suspend fun getPlaylistTrackAllOnce(id: Long): PlaylistTrackAll? =
+        safeApiCall { api.playlistTrackAll(id) }
+
+    /** 上报歌单播放次数（原版播放歌单时调用）。 */
+    suspend fun updatePlaylistPlaycount(id: Long) {
+        safeApiCall { api.playlistUpdatePlaycount(id) }
+    }
+
     // ── Recommend ──
 
     fun getRecommendSongs(): Flow<RecommendSongs?> = flow {
@@ -89,8 +101,14 @@ class Repository(
     // ── Comment ──
 
     fun getCommentMusic(id: Long): Flow<CommentMusic?> = flow {
-        val network = safeApiCall { api.commentMusic(id) }
-        if (network != null) emit(network)
+        runCatching {
+            db.cachedCommentMusicQueries.selectBySongId(id).executeAsOneOrNull()
+                ?.let { json.decodeFromString<CommentMusic>(it) }
+        }.getOrNull()?.let { emit(it) }
+        safeApiCall { api.commentMusic(id) }?.let { network ->
+            runCatching { db.cachedCommentMusicQueries.upsert(id, json.encodeToString(network)) }
+            emit(network)
+        }
     }
 
     // ── Lyric ──
@@ -135,5 +153,16 @@ class Repository(
 
     suspend fun like(songId: Long?): Like? {
         return safeApiCall { api.like(songId) }
+    }
+
+    // ── Player status（播放状态持久化，对应原版 Room playerStatus 表）──
+
+    suspend fun getPlayerStatus(): PlayerStatus? = runCatching {
+        db.playerStatusQueries.select().executeAsOneOrNull()
+            ?.let { json.decodeFromString<PlayerStatus>(it) }
+    }.getOrNull()
+
+    suspend fun savePlayerStatus(status: PlayerStatus) {
+        runCatching { db.playerStatusQueries.upsert(json.encodeToString(status)) }
     }
 }

@@ -60,7 +60,9 @@ val sharedModule = module {
 
     // ViewModels
     factory { LoginViewModel(get(), get()) }
-    factory { MainViewModel(get(), get()) }
+    // Single —— 与原版单 Activity 共享一个 MainViewModel 一致：各屏共享搜索/歌单/推荐状态，
+    // init 中的 UID 解析与播放状态恢复只执行一次。
+    single { MainViewModel(get(), get(), get()) }
     // 2 args: repo + player; lyricBus uses its default (the LyricBus object, not a Koin dep).
     // Single — the now-playing state is inherently global (only one song plays at a time).
     // Both NowPlayingScreen and FullLyricScreen inject this same instance.

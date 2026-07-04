@@ -1,6 +1,10 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -54,9 +57,12 @@ import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun SearchScreen(
     onBack: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
     viewModel: MainViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
     settings: PlatformSettings = koinInject(),
@@ -89,7 +95,6 @@ fun SearchScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
-            .statusBarsPadding()
             .padding(horizontal = 16.dp),
     ) {
         Row(
@@ -99,30 +104,37 @@ fun SearchScreen(
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
             }
-            TextField(
-                value = query,
-                onValueChange = { query = it },
-                placeholder = { Text("搜索歌曲、歌手") },
-                singleLine = true,
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (query.isNotEmpty()) {
-                        IconButton(onClick = { query = ""; viewModel.clearSearch() }) {
-                            Icon(Icons.Filled.Clear, contentDescription = "清除")
+            with(sharedTransitionScope) {
+                TextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = { Text("搜索歌曲、歌手") },
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (query.isNotEmpty()) {
+                            IconButton(onClick = { query = ""; viewModel.clearSearch() }) {
+                                Icon(Icons.Filled.Clear, contentDescription = "清除")
+                            }
                         }
-                    }
-                },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { submit(query) }),
-                shape = CircleShape,
-                modifier = Modifier.fillMaxWidth(),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                ),
-            )
+                    },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { submit(query) }),
+                    shape = CircleShape,
+                    modifier = Modifier
+                        .sharedBounds(
+                            rememberSharedContentState(SharedKeys.search()),
+                            animatedVisibilityScope,
+                        )
+                        .fillMaxWidth(),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                    ),
+                )
+            }
         }
 
         Spacer(Modifier.height(8.dp))
@@ -195,6 +207,7 @@ fun SearchScreen(
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.basicMarquee(),
                                     )
                                     Text(
                                         text = song.ar.joinToString(" / ") { it.name }.ifEmpty { "未知歌手" },

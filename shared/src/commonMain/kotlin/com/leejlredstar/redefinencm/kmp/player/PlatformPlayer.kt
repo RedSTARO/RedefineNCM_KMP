@@ -48,6 +48,16 @@ interface PlatformPlayer {
     fun clearQueue()
     fun skipToIndex(index: Int)
 
+    /**
+     * 恢复上次的播放状态：装载队列并 seek 到上次位置，但**不**自动开始播放
+     * （与原版 restorePlayerStatus 行为一致）。平台实现可覆写以避免默认的先播再暂停。
+     */
+    fun restoreQueue(items: List<MediaInfo>, startIndex: Int, positionMs: Long) {
+        setQueue(items, startIndex)
+        pause()
+        seekTo(positionMs)
+    }
+
     // ── Shuffle ──
 
     fun setShuffleEnabled(enabled: Boolean)
