@@ -91,7 +91,9 @@ kotlin {
             implementation(libs.sqldelight.native.driver)
         }
         jvmMain.dependencies {
-            implementation(libs.ktor.client.cio)
+            // OkHttp 而非 CIO：目标服务器 DNS 有黑洞 A 记录，CIO 不做多地址回退会连环
+            // ConnectTimeout；OkHttp 的 RouteSelector 会自动换下一个 IP（与 Android 端一致）
+            implementation(libs.ktor.client.okhttp)
             // Real desktop audio playback (MP3 via mp3spi + javax.sound.sampled)
             implementation(libs.mp3spi)
             // Dispatchers.Main for JVM (needed by DesktopFloatingWindowController + jvmTest)

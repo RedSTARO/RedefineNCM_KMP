@@ -301,6 +301,20 @@ class JvmMediaPlayer(
         onTrackChanged()
     }
 
+    override fun restoreQueue(items: List<MediaInfo>, startIndex: Int, positionMs: Long) {
+        // 恢复队列但不自动播放（默认实现的 setQueue→pause 存在异步竞态：
+        // resolveAndPlay 解析完成晚于 pause，会照样出声）。play() 时会从
+        // seekOffsetMs 起播（openAndPlay 尊重该偏移）。
+        stopPlayback()
+        stopPolling()
+        queueModel = PlayQueue.of(items, startIndex)
+        seekOffsetMs = positionMs.coerceAtLeast(0L)
+        _position.value = seekOffsetMs
+        _isPlaying.value = false
+        _state.value = PlayerState.PAUSED
+        publishQueue()
+    }
+
     override fun addToQueue(item: MediaInfo) {
         queueModel = queueModel.addItem(item)
         publishQueue()

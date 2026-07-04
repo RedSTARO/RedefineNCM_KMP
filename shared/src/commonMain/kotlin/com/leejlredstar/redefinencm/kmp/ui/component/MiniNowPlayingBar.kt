@@ -73,7 +73,9 @@ fun MiniNowPlayingBar(
         onClick = onExpand,
         modifier = Modifier
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .width(300.dp),
+            // 固定尺寸（原版 300×112）：FAB slot 没有高度约束，内部 fillMaxHeight
+            // 会让条子撑满整个窗口（825c22c 修过的回归）
+            .size(width = 300.dp, height = 112.dp),
         shape = MaterialTheme.shapes.extraLarge,
         color = containerColor,
         contentColor = contentColor,

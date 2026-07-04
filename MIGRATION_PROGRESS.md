@@ -72,6 +72,20 @@ media3 1.10.1 ・ androidx.palette 1.0.0 ・ compileSdk/targetSdk 36 / minSdk 24
 - [ ] **AGP 9.2.0 收敛**：仍卡上游（aapt2 解析 + 配置缓存）
 - [ ] **Web / wasmJs**（P3）：声明 target + 补依赖 + stub actual（SongDownloader 等）
 
+## 2.5 桌面 AMLL 实机调试（2026-07-04，computer-use 实机验证通过）
+
+以真实 cookie 登录桌面端实机排查 AMLL 歌词页，修复了一条完整的故障链，最终
+歌词渲染/滚动/返回全部验证通过：
+
+| 症状 | 根因 | 修复 |
+|---|---|---|
+| AMLL 页纯白屏 | JavaFX D3D 管线下 WebKit `RTImage.getTexture` NPE——Prism 纹理池默认 512M 对大 WebView 表面不够 | `main()` 设 `prism.maxvram=2G`（不要用 `prism.order=sw`：软件渲染会打满 CPU 并饿死网络协程） |
+| 退出歌词页整个 JVM 崩溃 | `onDispose { engine.load("about:blank") }` 触发 WebKit native 崩溃（`twkOpen → fwkDisposeGraphics`） | dispose 只清空歌词行，不重载页面 |
+| 歌词永远加载不出（连环 ConnectTimeout） | 服务器 DNS 有黑洞 A 记录（43.174.246.32 不通），CIO 引擎无多地址回退 + JVM DNS 缓存 30s 覆盖全部重试窗口 | JVM 端 Ktor 引擎 CIO → **OkHttp**（RouteSelector 自动换 IP，与 Android 一致）；另配 `HttpTimeout`（connect 20s）+ 歌词获取失败重试 4 次 |
+| 网络请求跑在 Swing EDT | VM scope 是 `Dispatchers.Main`（桌面=EDT） | 两个 VM 的网络获取统一 `launch(Dispatchers.Default)`（播放器控制保留 Main） |
+| 迷你播放条撑满整窗 | FAB slot 无高度约束 + 内层 `fillMaxHeight()`（825c22c 修过的回归） | Surface 固定 `size(300×112dp)`（原版尺寸） |
+| 桌面恢复队列后自动出声 | `restoreQueue` 默认实现 setQueue→pause 与异步解析竞态 | `JvmMediaPlayer` 覆写 `restoreQueue`：装载不播放，play 时从记忆位置续播 |
+
 ## 3. 已知限制 / 合理偏差
 - HttpClient 为启动时构建的 Koin 单例：改 server/cookie 下次启动生效（与原版 RetrofitInstance 一致）。
 - 更新检查对比 GitHub `RedSTARO/RedefineNCM_KMP` releases/latest 与 PackageInfo.versionName（原版用 git tag/sha BuildConfig；KMP 无该管线，行为近似）。

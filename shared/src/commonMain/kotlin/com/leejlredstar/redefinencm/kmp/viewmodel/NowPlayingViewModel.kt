@@ -154,27 +154,44 @@ class NowPlayingViewModel(
         return index
     }
 
+    private var lyricFetchJob: Job? = null
+
     private fun fetchLyrics(mediaId: String) {
-        scope.launch {
-            repo.getLyric(mediaId.toLong()).collect { lyric ->
-                if (lyric?.lrc?.lyric?.isNotEmpty() == true) {
-                    try {
-                        rawLyric.value = lyric.lrc.lyric
-                        val parsed = LyricParser.parse(lyric.lrc.lyric)
-                        lyricMap.value = parsed
-                    } catch (e: Exception) {
-                        lyricMap.value = linkedMapOf(0L to "Lyric parse error")
+        lyricFetchJob?.cancel()
+        // 网络必须离开 Main：桌面端 Main=Swing EDT，AMLL 软件渲染期间 EDT 饱和会把
+        // 运行其上的 Ktor 连接协程饿到超时（实测 /lyric 连环 ConnectTimeout 的根因）
+        lyricFetchJob = scope.launch(Dispatchers.Default) {
+            val id = mediaId.toLongOrNull() ?: return@launch
+            var settled = false
+            // 网络瞬断（连接超时）时 safeApiCall 返回 null，缓存又没有 → flow 一个值都不发，
+            // rawLyric 会永远停在空串（AMLL/歌词页黑屏）。这里对"无任何响应"重试几次。
+            repeat(4) { attempt ->
+                repo.getLyric(id).collect { lyric ->
+                    if (lyric?.lrc?.lyric?.isNotEmpty() == true) {
+                        try {
+                            rawLyric.value = lyric.lrc.lyric
+                            lyricMap.value = LyricParser.parse(lyric.lrc.lyric)
+                        } catch (e: Exception) {
+                            lyricMap.value = linkedMapOf(0L to "Lyric parse error")
+                        }
+                        settled = true
+                    } else if (lyric != null) {
+                        // 服务器有响应但确实没有歌词 —— 不再重试
+                        rawLyric.value = ""
+                        lyricMap.value = linkedMapOf(0L to "No lyric available")
+                        settled = true
                     }
-                } else {
-                    rawLyric.value = ""
-                    lyricMap.value = linkedMapOf(0L to "No lyric available")
                 }
+                if (settled) return@launch
+                if (attempt < 3) delay(2_000)
             }
+            rawLyric.value = ""
+            lyricMap.value = linkedMapOf(0L to "歌词加载失败")
         }
     }
 
     fun getComments() {
-        scope.launch {
+        scope.launch(Dispatchers.Default) {
             currentMedia.value?.id?.toLongOrNull()?.let { id ->
                 repo.getCommentMusic(id).collect { detail ->
                     comments.value = detail
