@@ -39,6 +39,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
+import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import org.koin.compose.koinInject
 
@@ -176,6 +177,11 @@ private fun SongHeroSection(
                 modifier = Modifier
                     .size(220.dp)
                     .clip(MaterialTheme.shapes.extraLarge),
+                onSuccess = { state ->
+                    // 原版 SongDetails：封面 Palette 取色驱动 hero 渐变
+                    themeColorFromCoilImage(state.result.image)?.let { themeColor = Color(it) }
+                },
+                onError = { themeColor = Color.Gray },
             )
         }
 

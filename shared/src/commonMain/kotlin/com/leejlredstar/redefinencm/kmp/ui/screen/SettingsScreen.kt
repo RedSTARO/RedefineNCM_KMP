@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
@@ -52,7 +53,11 @@ import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(scaffoldPadding: PaddingValues, settings: PlatformSettings = koinInject()) {
+fun SettingsScreen(
+    scaffoldPadding: PaddingValues,
+    settings: PlatformSettings = koinInject(),
+    api: NCMApi = koinInject(),
+) {
     var cookie by remember { mutableStateOf(settings.getString(SettingKeys.COOKIE, "")) }
     var server by remember { mutableStateOf(settings.getString(SettingKeys.SERVER, "")) }
     var onlineQuality by remember { mutableStateOf(settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name)) }
@@ -62,7 +67,9 @@ fun SettingsScreen(scaffoldPadding: PaddingValues, settings: PlatformSettings = 
     var searchPrediction by remember { mutableStateOf(settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true)) }
     var showDownloadStatus by remember { mutableStateOf(settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false)) }
     var useFullLyric by remember { mutableStateOf(settings.getBoolean(SettingKeys.USE_FULL_LYRIC, false)) }
+    var adaptOriginalLyric by remember { mutableStateOf(settings.getBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, false)) }
     var importStatus by remember { mutableStateOf<String?>(null) }
+    var serverCheckStatus by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     val launchImport = rememberImportFileLauncher { json ->
@@ -118,6 +125,28 @@ fun SettingsScreen(scaffoldPadding: PaddingValues, settings: PlatformSettings = 
                     server = if (v.isNotEmpty() && !v.endsWith("/")) "$v/" else v
                     settings.setString(SettingKeys.SERVER, server)
                 }
+                // 原版 ServerItem：调 /inner/version/ 校验服务器可用性并显示版本
+                SettingsButton("检查服务器 ($server)") {
+                    serverCheckStatus = "检查中…"
+                    scope.launch {
+                        serverCheckStatus = try {
+                            val result = api.innerVersion("${server}inner/version/")
+                            if (result.code == 200) "服务器可用，版本：${result.data.version}"
+                            else "服务器不可用（code ${result.code}）"
+                        } catch (e: Exception) {
+                            "服务器不可用：${e.message}"
+                        }
+                    }
+                }
+                serverCheckStatus?.let { status ->
+                    Text(
+                        text = status,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (status.startsWith("服务器可用")) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
+                    )
+                }
 
                 ExpressiveSectionTitle("Account", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
                 SettingsTextField(cookie, "Cookie") { v ->
@@ -149,6 +178,10 @@ fun SettingsScreen(scaffoldPadding: PaddingValues, settings: PlatformSettings = 
                 SettingsSwitch(useFullLyric, "Full-screen lyrics") { v ->
                     useFullLyric = v
                     settings.setBoolean(SettingKeys.USE_FULL_LYRIC, v)
+                }
+                SettingsSwitch(adaptOriginalLyric, "Adapt original Android Live Update lyric") { v ->
+                    adaptOriginalLyric = v
+                    settings.setBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, v)
                 }
 
                 ExpressiveSectionTitle("General", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))

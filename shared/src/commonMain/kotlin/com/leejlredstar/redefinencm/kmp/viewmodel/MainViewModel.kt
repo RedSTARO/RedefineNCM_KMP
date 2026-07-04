@@ -1,15 +1,19 @@
 package com.leejlredstar.redefinencm.kmp.viewmodel
 
+import com.leejlredstar.redefinencm.kmp.data.PersistedMediaItem
+import com.leejlredstar.redefinencm.kmp.data.PlayerStatus
 import com.leejlredstar.redefinencm.kmp.data.Repository
-import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.data.api.dto.*
-import com.leejlredstar.redefinencm.kmp.data.api.safeApiCall
-import com.leejlredstar.redefinencm.kmp.player.LyricBus
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
-import com.leejlredstar.redefinencm.kmp.player.PlayerState
+import com.leejlredstar.redefinencm.kmp.util.DownloadRequestItem
+import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
+import com.leejlredstar.redefinencm.kmp.util.SongDownloader
+import com.leejlredstar.redefinencm.kmp.util.SoundQuality
+import com.leejlredstar.redefinencm.kmp.util.currentAppVersion
+import com.leejlredstar.redefinencm.kmp.util.fetchLatestReleaseTag
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
@@ -21,6 +25,7 @@ import kotlinx.coroutines.flow.*
 class MainViewModel(
     private val repo: Repository,
     private val settings: PlatformSettings,
+    private val player: PlatformPlayer,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -44,27 +49,106 @@ class MainViewModel(
     val searchSuggestions = MutableStateFlow<List<String>>(emptyList())
     val searchLoading = MutableStateFlow(false)
 
+    // ── Update check（原版 SplashActivity.checkAppUpdate）──
+    val updateMessage = MutableStateFlow<String?>(null)
+
     init {
-        fetchUID()
-        fetchUserData()
-        fetchUserPlaylists()
+        scope.launch {
+            // 先解析 UID（原版 fetchUID 为阻塞式，保证后续用户请求携带有效 uid）
+            fetchUID()
+            fetchUserData()
+            fetchUserPlaylists()
+        }
         fetchRecommend()
+        restorePlayerStatus()
+        checkAppUpdate()
     }
 
-    private fun fetchUID() {
+    /** checkUpdate 设置开启时，比较 GitHub 最新 release tag 与本地版本，不同则提示。 */
+    private fun checkAppUpdate() {
         scope.launch {
-            val value = settings.getLongAsync(SettingKeys.UID, 0L)
-            if (value != 0L) {
-                _uid.value = value
-            } else {
-                // Fetch from API
-                val account = safeApiCall {
-                    // Account fetch is handled via the API
-                    // In the original, this was done through RetrofitInstance
-                    // For KMP, we access via Repository
-                    null // Handled by the platform-specific init
-                }
+            if (!settings.getBooleanAsync(SettingKeys.CHECK_UPDATE, false)) return@launch
+            val current = currentAppVersion() ?: return@launch
+            val latest = fetchLatestReleaseTag() ?: return@launch
+            if (latest != current) {
+                updateMessage.value = "发现新版本：$latest"
             }
+        }
+    }
+
+    fun consumeUpdateMessage() {
+        updateMessage.value = null
+    }
+
+    // ── 播放状态持久化（原版 savePlayerStatus / restorePlayerStatus）──
+
+    fun savePlayerStatus() {
+        val queue = player.queue.value
+        if (queue.isEmpty()) return
+        val status = PlayerStatus(
+            playlist = queue.map {
+                PersistedMediaItem(
+                    id = it.id,
+                    title = it.title,
+                    artist = it.artist,
+                    albumTitle = it.albumTitle,
+                    artworkUri = it.artworkUri,
+                    duration = it.duration,
+                )
+            },
+            index = player.currentIndex.value.coerceAtLeast(0),
+            position = player.position.value,
+            isPlaying = player.isPlaying.value,
+            isShuffling = player.shuffleEnabled.value,
+        )
+        scope.launch { repo.savePlayerStatus(status) }
+    }
+
+    fun restorePlayerStatus() {
+        scope.launch {
+            val status = repo.getPlayerStatus() ?: return@launch
+            if (status.playlist.isEmpty()) return@launch
+            // 播放器里已有队列时不覆盖（例如服务先于 UI 恢复了状态）
+            if (player.queue.value.isNotEmpty()) return@launch
+            val items = status.playlist.map {
+                MediaInfo(
+                    id = it.id,
+                    title = it.title,
+                    artist = it.artist,
+                    albumTitle = it.albumTitle,
+                    artworkUri = it.artworkUri,
+                    placeholderUri = "redefinencm://playbackPlaceHolder?id=${it.id}",
+                    duration = it.duration,
+                )
+            }
+            player.restoreQueue(items, status.index.coerceIn(0, items.lastIndex), status.position)
+            player.setShuffleEnabled(status.isShuffling)
+            // 原版恢复时不自动播放（play() 被注释掉），此处保持一致
+        }
+    }
+
+    private suspend fun fetchUID() {
+        val cached = settings.getLongAsync(SettingKeys.UID, 0L)
+        if (cached != 0L) {
+            _uid.value = cached
+            return
+        }
+        // 无缓存时走 /user/account 解析（原版 retrofit.userAccount().account.id）
+        val accountId = repo.getUserAccount()?.account?.id ?: 0L
+        if (accountId != 0L) {
+            _uid.value = accountId
+            settings.setLong(SettingKeys.UID, accountId)
+        }
+    }
+
+    /** 登录/换号后调用：清掉缓存 UID 并重新拉取用户数据。 */
+    fun refreshAccount() {
+        settings.setLong(SettingKeys.UID, 0L)
+        _uid.value = 0L
+        scope.launch {
+            fetchUID()
+            fetchUserData()
+            fetchUserPlaylists()
         }
     }
 
@@ -112,6 +196,29 @@ class MainViewModel(
                 recommendSongs.value = detail
             }
         }
+    }
+
+    // ── Download（原版 onDownloadPlaylistClick + DownloadWorker）──
+
+    fun onDownloadPlaylistClick(songlistID: Long) {
+        scope.launch {
+            val ids = repo.getPlaylistTrackAllOnce(songlistID)?.songs?.map { it.id } ?: return@launch
+            val quality = settings.getString(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name)
+            val pending = ids.filterNot { DownloadedSongsCache.isDownloaded(it) }
+            // 原版 DownloadWorker 以 5 首为一批解析直链后入队系统下载
+            pending.chunked(5).forEach { batch ->
+                val urls = repo.getSongUrls(batch, quality)
+                SongDownloader.enqueue(
+                    urls.filter { it.url.isNotEmpty() }
+                        .map { DownloadRequestItem(it.id, it.url) },
+                )
+            }
+        }
+    }
+
+    /** 上报歌单播放次数（原版播放歌单时调用）。 */
+    fun updatePlaylistPlaycount(songlistID: Long) {
+        scope.launch { repo.updatePlaylistPlaycount(songlistID) }
     }
 
     // ── Search ──

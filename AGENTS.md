@@ -77,12 +77,14 @@ prioritized, declare `wasmJs { browser(); binaries.executable() }`, add those de
 reconcile `Platform.wasm.kt` with the real `Platform` interface. Stubs are acceptable; full
 parity is not required.
 
-### D3 — Local cache is SQLDelight, and it does **not exist yet**
+### D3 — Local cache is SQLDelight — **DONE (updated 2026-07-04)**
 
-The original caches via Room (cache-then-network). The KMP replacement is **SQLDelight**.
-As of this writing there is **no SQLDelight plugin, no `.sq` files, and no driver wiring** in
-this repo — it is a TODO, not a current capability. Do not describe it as present until the
-plugin + schema + drivers are actually added. Until then `Repository` is network-only.
+The original caches via Room (cache-then-network). The KMP replacement is **SQLDelight**, now
+fully wired: plugin + 9 `.sq` tables under `shared/src/commonMain/sqldelight/` (user detail /
+user playlist / playlist detail / playlist tracks / recommend ×2 / lyric / comment /
+**PlayerStatus**) + `DatabaseDriverFactory` expect/actuals (android/native/sqlite). `Repository`
+implements cache-then-network for all cached endpoints and persists/restores the play queue
+via the `PlayerStatus` table.
 
 ### D4 — Notification / now-playing surfaces are one common contract, four platform actuals
 
@@ -286,18 +288,16 @@ in — see Goal #4).
 | Android settings | `androidx.datastore:datastore-preferences 1.2.0` | androidMain |
 | Android audio | `media3-exoplayer 1.10.1` + `media3-session 1.10.1` | androidMain + :androidApp |
 
-**Deliberately NOT dependencies** (grep-confirmed the code does not import them; the *previous*
-AGENTS.md wrongly listed them):
-- **`multiplatform-settings`** — `PlatformSettings` is a hand-rolled `expect class`; actuals use
-  DataStore (Android), `NSUserDefaults` (iOS), JVM prefs, `kotlinx.browser.localStorage` (wasm).
-- **Voyager / any navigation lib** — no navigation is wired yet; `App.kt` is a placeholder.
-  Navigation is an open choice (see roadmap), not an installed dependency.
-- **SQLDelight** — see decision D3 (planned cache layer, not present).
-- **palette** — palette-based color extraction is not yet implemented (still using
-  `ImageColorExtractor.android.kt` which may be a placeholder).
-- **Coil network fetcher** — `coil-compose` is declared, but no network fetcher is. Remote
-  album art will not load until `io.coil-kt.coil3:coil-network-ktor3` (reuses the Ktor stack)
-  is added. It is currently a beta (`3.5.0-beta01`), which is why it's deferred — not a bug.
+**Status update (2026-07-04):**
+- **`multiplatform-settings`** — still deliberately NOT a dependency; `PlatformSettings` is a
+  hand-rolled `expect class` (DataStore / `NSUserDefaults` / JVM prefs / `localStorage`).
+- **Voyager / any navigation lib** — still not a dependency; `App.kt` uses a hand-rolled
+  tab + push-stack navigation (3 tabs, NavigationRail on ≥600dp) — this is the decided approach.
+- **SQLDelight `2.3.2`** — now present (see D3).
+- **`androidx.palette:palette-ktx 1.0.0`** — now present in `androidMain`; drives
+  `themeColorFromCoilImage()` (muted → vibrant → dominant, same as the original ImageParser).
+- **`coil-network-ktor3`** — now present; remote album art loads via the Ktor stack
+  (`RedefineNCMApp` registers `KtorNetworkFetcherFactory`).
 
 ### Goal #4 — "upgrade all dependencies to latest" (a *verified* pass)
 
@@ -394,6 +394,35 @@ macOS only), IntelliJ IDEA / Android Studio with the KMP plugin.
 This is the **only** section describing what's broken/missing. Treat it as the work queue.
 Everything above describes the target; everything here is a gap to close.
 
+### Feature-parity pass vs the original app — DONE + BUILD-VERIFIED (2026-07-04)
+Full file-by-file audit against `../RedefineNCM` (frozen 2026-06-12), then closed every gap
+(Android + common; other targets get stubs per current priority):
+- **fetchUID** now really calls `/user/account` and caches the UID (was a stub that never
+  fetched); `refreshAccount()` clears it on account switch.
+- **QR login fix**: the QR PNG bytes were never assigned → image never showed; now decoded
+  from base64 locally.
+- **Shuffle invariant restored**: `ExoPlayerPlatformPlayer.rebuildQueue()` walks the timeline
+  in *play order* (`getFirstWindowIndex`/`getNextWindowIndex`), `skipToIndex` maps play-order →
+  window index, and transitions/shuffle-toggles/timeline changes all trigger the single rebuild
+  path; `NowPlayingViewModel` now collects `queue`/`currentIndex` live.
+- **Player-status persistence**: `PlayerStatus.sq` + `Repository.get/savePlayerStatus` +
+  `PlatformPlayer.restoreQueue` (no autoplay) + save on `MainActivity.onPause`.
+- **Playlist batch download**: `SongDownloader` expect/actual (Android = system
+  DownloadManager into `Downloads/RedefineNCM/`, 5-song URL batches, skip existing).
+- **Playlist behaviors**: `replacePlaylist` setting honored on song click,
+  `playlistUpdatePlaycount` reported, no auto-jump to NowPlaying (original behavior).
+- **Album-art theme color**: `themeColorFromCoilImage()` expect/actual (Android Palette /
+  JVM Skia sampling / iOS stub) wired into MiniNowPlayingBar (with luminance-adaptive content
+  color + spring animation), NowPlaying hero, PlaylistDetail hero, FullLyric hero.
+- **Search shared-element transition** (pill → bar) via `SharedTransitionLayout` in HomeScreen.
+- **Responsive nav**: NavigationRail on ≥600dp; no-cookie startup routes to Login.
+- **Settings**: server availability check (`/inner/version/`), `adaptOriginalAndroidLyric`
+  toggle (unconsumed, same as original); comment cache table; live-update notification uses
+  the lyric as its title (original behavior).
+- **Update check on launch** (checkUpdate setting → GitHub releases/latest → Snackbar).
+- Skipped intentionally: `HiddenTestActivity`, `serverMocker` (dev tools), `dailysignin`
+  (declared but never called in the original either).
+
 ### Build catalog — DONE + BUILD-VERIFIED (Android + Desktop, 2026-06-11)
 - [x] `libs.versions.toml` + `shared/build.gradle.kts` declare every dependency the code imports
       (Ktor 3.5.0, kotlinx-serialization-json 1.11.0 + plugin, kotlinx-coroutines-core 1.11.0,
@@ -440,8 +469,8 @@ Everything above describes the target; everything here is a gap to close.
       skipped on `/login/*` (Ktor `defaultRequest` can't see the per-request path) — refine with a
       send-pipeline interceptor if strict per-path skipping is needed.
 - [x] **`kotlinx-coroutines-swing` added to `shared/jvmMain`** (2026-06-13) — `Dispatchers.Main` now resolvable in `jvmTest` and `DesktopFloatingWindowController`; still present in `desktopApp` (harmless duplicate).
-- [ ] **No Coil network fetcher** → `AsyncImage` won't load remote album art until
-      `coil-network-ktor3` is added (see dependency section).
+- [x] **Coil network fetcher added** (`coil-network-ktor3`) — remote album art loads;
+      `RedefineNCMApp` registers `KtorNetworkFetcherFactory`.
 - [ ] **`Platform` interface has only `name`.** If form-factor branching is wanted, add
       `isDesktop`/`isMobile` (with defaults) to the interface and update all actuals — the
       removed `desktopMain` and the dormant wasm code assumed these existed.
@@ -523,8 +552,8 @@ Everything above describes the target; everything here is a gap to close.
       Android-only).
 
 ### Not started
-- [ ] **SQLDelight cache** (D3): plugin, `.sq` schema, `DatabaseDriverFactory` expect/actual,
-      and cache-then-network in `Repository`.
+- [x] **SQLDelight cache** (D3) — DONE (plugin + 9 tables + drivers + cache-then-network +
+      PlayerStatus queue persistence; build-verified 2026-07-04).
 - [x] **`PlayQueue` + `PlayQueueTest`** (shuffle regression suite) — DONE (2026-06-11), pure
       Kotlin, fully reasoned (build-unverified like everything here). Next: have the real
       `PlatformPlayer` actuals + `NowPlayingViewModel` delegate to `PlayQueue`.

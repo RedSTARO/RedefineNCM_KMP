@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -130,6 +131,9 @@ fun FullLyricScreen(
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
+            onSuccess = { state ->
+                themeColorFromCoilImage(state.result.image)?.let { themeColor = Color(it) }
+            },
         )
         Box(
             modifier = Modifier

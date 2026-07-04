@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS CachedCommentMusic (
+  song_id INTEGER NOT NULL PRIMARY KEY,
+  json TEXT NOT NULL
+);
+
+upsert:
+INSERT OR REPLACE INTO CachedCommentMusic(song_id, json) VALUES (:song_id, :json);
+
+selectBySongId:
+SELECT json FROM CachedCommentMusic WHERE song_id = :song_id;

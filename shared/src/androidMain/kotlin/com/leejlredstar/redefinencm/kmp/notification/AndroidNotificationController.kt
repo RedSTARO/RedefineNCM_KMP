@@ -51,7 +51,8 @@ actual object LyricNotificationController {
         val lyric = currentLyric?.trim().takeUnless { it.isNullOrEmpty() } ?: return
         if (lyric == lastLyric) return
 
-        val displayTitle = title ?: "RedefineNCM"
+        // 原版 "Use lyric as title in LiveUpdate"：通知标题直接用当前歌词行
+        val displayTitle = lyric
         val trimmedArtist = artist?.trim().orEmpty()
         val trimmedNext = nextLyric?.trim().orEmpty()
 

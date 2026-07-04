@@ -78,7 +78,7 @@ fun SongRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 1.5.dp),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -86,15 +86,15 @@ fun SongRow(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.width(32.dp),
+                modifier = Modifier.width(36.dp),
             )
             AsyncImage(
                 model = artworkUri,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.size(48.dp).clip(MaterialTheme.shapes.medium),
+                modifier = Modifier.size(56.dp).clip(MaterialTheme.shapes.medium),
             )
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     text = title.ifBlank { "Unknown" },
@@ -102,6 +102,7 @@ fun SongRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.basicMarquee(),
                 )
                 Text(
                     text = artist.ifBlank { "Unknown" },
@@ -223,28 +224,32 @@ fun RecommendSquareCard(picUrl: String, text: String, onClick: () -> Unit) {
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.68f)),
-                            startY = 120f,
+            // 原版特例：私人雷达封面自带文字，不叠加遮罩与标题
+            if (text != "私人雷达") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.68f)),
+                                startY = 120f,
+                            ),
                         ),
-                    ),
-            )
-            Text(
-                text = text,
-                fontSize = 17.sp,
-                color = Color.White,
-                fontWeight = FontWeight.ExtraBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(12.dp)
-                    .fillMaxWidth(),
-            )
+                )
+                Text(
+                    text = text,
+                    fontSize = 17.sp,
+                    color = Color.White,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(12.dp)
+                        .fillMaxWidth()
+                        .basicMarquee(),
+                )
+            }
         }
     }
 }

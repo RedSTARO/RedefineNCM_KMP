@@ -70,6 +70,11 @@ fun LoginScreen(
     var cookieField by remember(cookie) { mutableStateOf(cookie) }
     var saved by remember { mutableStateOf(false) }
 
+    // 原版 QrLogin：进入登录页即自动生成二维码
+    LaunchedEffect(Unit) {
+        if (qrDataUri.isEmpty() && !qrLoading) viewModel.startQrLogin()
+    }
+
     // Auto-close after successful QR login
     LaunchedEffect(qrSuccess) {
         if (qrSuccess) {

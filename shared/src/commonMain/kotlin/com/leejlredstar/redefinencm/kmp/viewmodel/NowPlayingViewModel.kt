@@ -96,6 +96,14 @@ class NowPlayingViewModel(
                 shuffleStatus.value = shuffle
             }
         }
+        // 队列/当前索引变化（切歌、洗牌、换单）时实时重建可见列表与高亮，
+        // 与原版 onMediaItemTransition/onTimelineChanged → rebuildPlaylistFromTimeline 对齐
+        scope.launch {
+            player.queue.collect { rebuildPlaylistFromTimeline() }
+        }
+        scope.launch {
+            player.currentIndex.collect { rebuildPlaylistFromTimeline() }
+        }
     }
 
     /**

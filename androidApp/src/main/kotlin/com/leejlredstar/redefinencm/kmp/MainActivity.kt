@@ -10,6 +10,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
+import org.koin.android.ext.android.get
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -25,6 +27,12 @@ class MainActivity : ComponentActivity() {
         requestNotificationPermission()
 
         setContent { App() }
+    }
+
+    override fun onPause() {
+        // 与原版 MainActivity.onPause 一致：离开前台时保存播放状态（队列/索引/进度/随机）
+        runCatching { get<MainViewModel>().savePlayerStatus() }
+        super.onPause()
     }
 
     private fun requestNotificationPermission() {
