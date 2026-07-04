@@ -19,10 +19,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Search
+import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -102,7 +99,7 @@ fun SearchScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                Icon(AppIcons.ArrowBack, contentDescription = "返回")
             }
             with(sharedTransitionScope) {
                 TextField(
@@ -110,11 +107,11 @@ fun SearchScreen(
                     onValueChange = { query = it },
                     placeholder = { Text("搜索歌曲、歌手") },
                     singleLine = true,
-                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    leadingIcon = { Icon(AppIcons.Search, contentDescription = null) },
                     trailingIcon = {
                         if (query.isNotEmpty()) {
                             IconButton(onClick = { query = ""; viewModel.clearSearch() }) {
-                                Icon(Icons.Filled.Clear, contentDescription = "清除")
+                                Icon(AppIcons.Clear, contentDescription = "清除")
                             }
                         }
                     },
@@ -161,7 +158,7 @@ fun SearchScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Icon(
-                                    Icons.Filled.Search,
+                                    AppIcons.Search,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )

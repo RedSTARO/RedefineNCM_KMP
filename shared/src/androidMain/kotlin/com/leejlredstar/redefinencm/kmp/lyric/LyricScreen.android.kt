@@ -13,8 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -143,7 +142,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         ) {
             Surface(shape = CircleShape, color = Color.White.copy(alpha = 0.15f)) {
                 Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
+                    AppIcons.ArrowBack,
                     contentDescription = "返回",
                     tint = Color.White,
                     modifier = Modifier.padding(10.dp),

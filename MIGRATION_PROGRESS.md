@@ -56,7 +56,14 @@ media3 1.10.1 ・ androidx.palette 1.0.0 ・ compileSdk/targetSdk 36 / minSdk 24
 ## 2. 剩余步骤
 
 ### A. 本环境可做
-- [ ] **JVM 桌面真实音频后端完善**（JvmMediaPlayer 已有；下载、取色为近似/占位——按用户指示暂缓，专注 Android+common）
+- [x] **JVM 桌面后端完善**（2026-07-04）：JvmMediaPlayer 补 MP3→PCM_SIGNED 解码转换
+      （原实现直接把 MPEG 格式喂 SourceDataLine 会开线失败）+ 按 PCM 字节率 skip 实现
+      seek（VBR 近似）；SongDownloader.jvm 真实下载到 ~/Downloads/RedefineNCM/
+      （.part 原子改名）；CoilImageTheme.jvm 升级为 Palette 式量化取色
+      （RGB555 直方图 + vibrant/muted 目标参数，与 Android Palette 语义一致）。
+- [x] **materialIconsExtended → Material Symbols**（2026-07-04）：全部 22 个图标改为
+      `ui/icon/AppIcons.kt` 自绘 ImageVector（Material Symbols outlined 24px fill=1，
+      path 数据取自 google/material-design-icons），移除 compose.materialIconsExtended 依赖。
 - [ ] `Platform` 接口补 `isDesktop/isMobile` + wasm 占位代码接口一致化（D2 之后）
 
 ### B. 需要外部环境
@@ -69,4 +76,4 @@ media3 1.10.1 ・ androidx.palette 1.0.0 ・ compileSdk/targetSdk 36 / minSdk 24
 - HttpClient 为启动时构建的 Koin 单例：改 server/cookie 下次启动生效（与原版 RetrofitInstance 一致）。
 - 更新检查对比 GitHub `RedSTARO/RedefineNCM_KMP` releases/latest 与 PackageInfo.versionName（原版用 git tag/sha BuildConfig；KMP 无该管线，行为近似）。
 - 换号时 KMP 会清缓存 UID 重新解析（原版 UID 永久缓存导致换号数据不刷新，属原版缺陷，已修正）。
-- `materialIconsExtended` 已弃用（固定 1.7.3）——可用，后续宜迁移 Material Symbols。
+- ~~`materialIconsExtended` 已弃用~~——已于 2026-07-04 迁移到自绘 Material Symbols（`ui/icon/AppIcons.kt`），依赖已移除。

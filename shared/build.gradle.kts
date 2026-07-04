@@ -59,8 +59,7 @@ kotlin {
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.material3)
-            // Material icons — NowPlayingScreen uses extended icons (Shuffle, QueueMusic, Comment, …)
-            implementation(compose.materialIconsExtended)
+            // 图标改用自绘 Material Symbols（ui/icon/AppIcons.kt），不再依赖已弃用的 materialIconsExtended
             implementation(libs.compose.ui)
             implementation(libs.compose.components.resources)
             implementation(libs.compose.uiToolingPreview)

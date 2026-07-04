@@ -13,11 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
+import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -138,7 +134,7 @@ fun MiniNowPlayingBar(
                             modifier = Modifier.size(32.dp),
                         ) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                                imageVector = AppIcons.KeyboardArrowLeft,
                                 contentDescription = "Previous",
                             )
                         }
@@ -151,7 +147,7 @@ fun MiniNowPlayingBar(
                             ),
                         ) {
                             Icon(
-                                imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
                                 contentDescription = if (isPlaying) "Pause" else "Play",
                             )
                         }
@@ -160,7 +156,7 @@ fun MiniNowPlayingBar(
                             modifier = Modifier.size(32.dp),
                         ) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                imageVector = AppIcons.KeyboardArrowRight,
                                 contentDescription = "Next",
                             )
                         }
