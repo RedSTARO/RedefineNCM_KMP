@@ -117,8 +117,17 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
 
     DisposableEffect(Unit) {
         onDispose {
+            // 不要在这里 engine.load("about:blank")：软件渲染管线（prism.order=sw）下
+            // WebKit 重建页面会在 native 层崩掉整个 JVM（twkOpen → fwkDisposeGraphics NPE）。
+            // 只清空歌词行并停住时间推进，WebView 随 JFXPanel 一起被移除。
             val engine = engineState.value
-            Platform.runLater { runCatching { engine?.load("about:blank") } }
+            Platform.runLater {
+                runCatching {
+                    engine?.executeScript(
+                        "if (globalThis.AmllBridge && AmllBridge.player) { AmllBridge.loadLyrics(''); }"
+                    )
+                }
+            }
         }
     }
 

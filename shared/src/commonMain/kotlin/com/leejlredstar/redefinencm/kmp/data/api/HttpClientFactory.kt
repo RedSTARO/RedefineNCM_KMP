@@ -52,6 +52,13 @@ object HttpClientFactory {
                 logger = Logger.DEFAULT
                 level = LogLevel.HEADERS
             }
+            // 宽松超时：直连（不走系统代理）时 TCP 首次握手实测可达 3s+ 且有丢包重传，
+            // CIO 默认 connect 超时太紧会导致零星 ConnectTimeout（如 /lyric 反复失败）。
+            install(HttpTimeout) {
+                connectTimeoutMillis = 20_000
+                requestTimeoutMillis = 60_000
+                socketTimeoutMillis = 60_000
+            }
             defaultRequest {
                 url(baseUrl)
                 contentType(ContentType.Application.Json)

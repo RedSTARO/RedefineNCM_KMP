@@ -32,6 +32,12 @@ import com.leejlredstar.redefinencm.kmp.smtc.WindowsMediaControls
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
 
 fun main() {
+    // AMLL 歌词页用 JavaFX WebView（JFXPanel 离屏嵌入 Compose）。默认 D3D 管线下
+    // WebKit 的 RTImage 纹理创建失败（QuantumRenderer NPE："this.txt" is null）导致
+    // WebView 白屏 —— 根因是 Prism 纹理池默认上限(512M)对大尺寸 WebView 表面不够。
+    // 注意不要用 prism.order=sw 兜底：软件渲染 + AMLL 全屏模糊动画会打满 CPU，
+    // 连带饿死网络协程（实测歌词请求连环 ConnectTimeout）。
+    System.setProperty("prism.maxvram", "2G")
     initKoin()
     // Observe now-playing metadata and forward to OS media controls (Windows SMTC binding is a
     // documented native TODO; this is a no-op until the helper exists — see WindowsMediaControls).

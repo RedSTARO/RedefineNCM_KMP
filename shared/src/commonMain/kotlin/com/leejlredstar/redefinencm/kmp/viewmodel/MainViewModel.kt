@@ -53,7 +53,7 @@ class MainViewModel(
     val updateMessage = MutableStateFlow<String?>(null)
 
     init {
-        scope.launch {
+        scope.launch(Dispatchers.Default) {
             // 先解析 UID（原版 fetchUID 为阻塞式，保证后续用户请求携带有效 uid）
             fetchUID()
             fetchUserData()
@@ -66,7 +66,7 @@ class MainViewModel(
 
     /** checkUpdate 设置开启时，比较 GitHub 最新 release tag 与本地版本，不同则提示。 */
     private fun checkAppUpdate() {
-        scope.launch {
+        scope.launch(Dispatchers.Default) {
             if (!settings.getBooleanAsync(SettingKeys.CHECK_UPDATE, false)) return@launch
             val current = currentAppVersion() ?: return@launch
             val latest = fetchLatestReleaseTag() ?: return@launch
@@ -101,7 +101,7 @@ class MainViewModel(
             isPlaying = player.isPlaying.value,
             isShuffling = player.shuffleEnabled.value,
         )
-        scope.launch { repo.savePlayerStatus(status) }
+        scope.launch(Dispatchers.Default) { repo.savePlayerStatus(status) }
     }
 
     fun restorePlayerStatus() {
@@ -145,7 +145,7 @@ class MainViewModel(
     fun refreshAccount() {
         settings.setLong(SettingKeys.UID, 0L)
         _uid.value = 0L
-        scope.launch {
+        scope.launch(Dispatchers.Default) {
             fetchUID()
             fetchUserData()
             fetchUserPlaylists()
@@ -153,7 +153,7 @@ class MainViewModel(
     }
 
     fun fetchUserData() {
-        scope.launch {
+        scope.launch(Dispatchers.Default) {
             repo.getUserDetail(_uid.value).collect { detail ->
                 userDetail.value = detail
             }
@@ -161,7 +161,7 @@ class MainViewModel(
     }
 
     fun fetchUserPlaylists() {
-        scope.launch {
+        scope.launch(Dispatchers.Default) {
             repo.getUserPlaylist(_uid.value).collect { detail ->
                 userPlaylists.value = detail?.playlist ?: emptyList()
             }
@@ -169,7 +169,7 @@ class MainViewModel(
     }
 
     fun fetchPlaylistDetail(songlistID: Long) {
-        scope.launch {
+        scope.launch(Dispatchers.Default) {
             repo.getPlaylistDetail(songlistID).collect { detail ->
                 playlistDetail.value = detail
             }
@@ -178,7 +178,7 @@ class MainViewModel(
     }
 
     fun fetchPlaylistTrackAll(songlistID: Long) {
-        scope.launch {
+        scope.launch(Dispatchers.Default) {
             repo.getPlaylistTrackAll(songlistID).collect { detail ->
                 playlistSongs.value = detail
             }
@@ -186,12 +186,12 @@ class MainViewModel(
     }
 
     fun fetchRecommend() {
-        scope.launch {
+        scope.launch(Dispatchers.Default) {
             repo.getRecommendResource().collect { detail ->
                 recommendResource.value = detail
             }
         }
-        scope.launch {
+        scope.launch(Dispatchers.Default) {
             repo.getRecommendSongs().collect { detail ->
                 recommendSongs.value = detail
             }
@@ -201,7 +201,7 @@ class MainViewModel(
     // ── Download（原版 onDownloadPlaylistClick + DownloadWorker）──
 
     fun onDownloadPlaylistClick(songlistID: Long) {
-        scope.launch {
+        scope.launch(Dispatchers.Default) {
             val ids = repo.getPlaylistTrackAllOnce(songlistID)?.songs?.map { it.id } ?: return@launch
             val quality = settings.getString(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name)
             val pending = ids.filterNot { DownloadedSongsCache.isDownloaded(it) }
@@ -218,7 +218,7 @@ class MainViewModel(
 
     /** 上报歌单播放次数（原版播放歌单时调用）。 */
     fun updatePlaylistPlaycount(songlistID: Long) {
-        scope.launch { repo.updatePlaylistPlaycount(songlistID) }
+        scope.launch(Dispatchers.Default) { repo.updatePlaylistPlaycount(songlistID) }
     }
 
     // ── Search ──
@@ -230,7 +230,7 @@ class MainViewModel(
             return
         }
         searchSuggestions.value = emptyList()
-        scope.launch {
+        scope.launch(Dispatchers.Default) {
             searchLoading.value = true
             val response = repo.search(query)
             searchResults.value = response?.result?.songs ?: emptyList()
@@ -244,7 +244,7 @@ class MainViewModel(
             searchSuggestions.value = emptyList()
             return
         }
-        scope.launch {
+        scope.launch(Dispatchers.Default) {
             val response = repo.searchSuggest(query)
             searchSuggestions.value =
                 response?.result?.allMatch?.map { it.keyword } ?: emptyList()

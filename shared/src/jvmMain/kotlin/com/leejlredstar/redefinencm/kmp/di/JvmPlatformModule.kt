@@ -7,18 +7,19 @@ import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
+import io.ktor.client.engine.okhttp.OkHttp
 import org.koin.dsl.module
 
 actual fun platformModule() = module {
-    // Ktor HttpClient (CIO engine) configured with base URL + realIP + cookie from settings.
+    // Ktor HttpClient (OkHttp engine) configured with base URL + realIP + cookie from settings.
+    // OkHttp（而非 CIO）：服务器 DNS 含黑洞 A 记录时自动回退下一个 IP。
     single<HttpClient> {
         val settings = get<PlatformSettings>()
         HttpClientFactory.create(
             baseUrl = settings.getString(SettingKeys.SERVER, "http://ncm.tryagain.icu/"),
             realIP = "192.168.1.1",
             cookie = settings.getString(SettingKeys.COOKIE, ""),
-            engineFactory = CIO,
+            engineFactory = OkHttp,
         )
     }
 
