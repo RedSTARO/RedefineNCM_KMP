@@ -107,7 +107,7 @@ class JvmMediaPlayer(
                     val elapsed = (System.nanoTime() - playStartNano) / 1_000_000L
                     _position.value = seekOffsetMs + elapsed
                 }
-                delay(200)
+                delay(100)
             }
         }
     }
