@@ -18,11 +18,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(Intent(this, PlaybackService::class.java))
-        } else {
-            startService(Intent(this, PlaybackService::class.java))
-        }
+        // 普通 startService：MediaSessionService 由 Media3 在播放开始时自行升级为
+        // 前台（原生媒体通知）。startForegroundService 会强制 5 秒内 startForeground，
+        // 而那时还没有播放，只能塞自制通知 —— 正是此前"假媒体通知"的来源。
+        startService(Intent(this, PlaybackService::class.java))
 
         requestNotificationPermission()
 
