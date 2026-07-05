@@ -2,6 +2,16 @@ import ActivityKit
 import Foundation
 import Shared
 
+/// Live Activity attributes (mirrors LyricWidget/LyricActivityAttributes.swift).
+/// Belongs to the iosApp target so `LiveActivityManager` can reference the type.
+struct LyricActivityAttributes: ActivityAttributes {
+    public struct ContentState: Codable, Hashable {
+        var title: String; var artist: String; var currentLyric: String; var nextLyric: String
+    }
+    var appName: String = "RedefineNCM"
+}
+
+
 /// Bridges the shared Kotlin `LyricNotificationController` (iOS actual) to ActivityKit.
 ///
 /// Observes the lyric data stream from Kotlin and starts / updates / ends the Live Activity that

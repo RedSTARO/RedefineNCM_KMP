@@ -77,6 +77,7 @@ actual object LyricNotificationController {
         _liveActivityData.value = null
     }
 
+    @OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
     private fun currentTimeMillis(): Long = time(null) * 1000L
 }
 
