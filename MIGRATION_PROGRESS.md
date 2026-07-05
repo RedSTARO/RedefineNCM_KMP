@@ -86,6 +86,25 @@ media3 1.10.1 ・ androidx.palette 1.0.0 ・ compileSdk/targetSdk 36 / minSdk 24
 | 迷你播放条撑满整窗 | FAB slot 无高度约束 + 内层 `fillMaxHeight()`（825c22c 修过的回归） | Surface 固定 `size(300×112dp)`（原版尺寸） |
 | 桌面恢复队列后自动出声 | `restoreQueue` 默认实现 setQueue→pause 与异步解析竞态 | `JvmMediaPlayer` 覆写 `restoreQueue`：装载不播放，play 时从记忆位置续播 |
 
+### 第三轮（2026-07-05）：AMLL 迁移到系统 WebView2（实机验证通过）
+
+JavaFX WebKit 天花板确认（无 GPU 合成：字体/布局/动画残缺，关掉特效才有帧率）→
+迁移到 **系统 WebView（Windows = WebView2 / Edge Chromium）**，AMLL 完整效果
+（无衬线粗体、弹簧滚动、逐行模糊渐隐、blur 封面背景）实机验证通过：
+
+- 依赖 `webview_java`（JitPack commit 坐标 + Casterlabs 仓库补传递依赖），只用其
+  打包的 native dll 与 JNA；绑定层为自写精简 Kotlin `WebviewJna`。
+- **打包 dll 的嵌入分支已损坏**：window 参数无论直传 HWND 还是包 HWND* 在纯 AWT
+  下都以 JNA "Invalid memory access" 崩（C++ 异常穿 C ABI）；只有 window=null 的
+  自建窗口路径稳定 → 采用 **自建窗口 + Win32 SetParent 收编** 为 AWT Canvas 子窗口
+  （dll 自身 WndProc/DPI/WM_SIZE→resize 逻辑全保留）。
+- JAWT 句柄需 GetClassName 校验，失效时回退 EnumChildWindows 找 SunAwt* 子窗口。
+- AWT 报逻辑尺寸（DIP），MoveWindow 需物理像素 —— 乘 graphicsConfiguration
+  defaultTransform 缩放（150% DPI 下否则只铺 2/3）。
+- bind/dispatch 的 JNA 回调必须持强引用（native 侧存指针，GC 掉即崩）。
+- player.html 恢复完整特效（blur(48px) 背景等），signalReady 增加 amllReady 通道；
+  移除 JavaFX 六模块依赖与 prism 系 hack。
+
 ## 3. 已知限制 / 合理偏差
 - HttpClient 为启动时构建的 Koin 单例：改 server/cookie 下次启动生效（与原版 RetrofitInstance 一致）。
 - 更新检查对比 GitHub `RedSTARO/RedefineNCM_KMP` releases/latest 与 PackageInfo.versionName（原版用 git tag/sha BuildConfig；KMP 无该管线，行为近似）。

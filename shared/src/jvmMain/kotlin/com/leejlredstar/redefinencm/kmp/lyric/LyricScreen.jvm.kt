@@ -13,35 +13,34 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
-import javafx.application.Platform
-import javafx.concurrent.Worker
-import javafx.embed.swing.JFXPanel
-import javafx.scene.Scene
-import javafx.scene.web.WebEngine
-import javafx.scene.web.WebView
-import kotlinx.coroutines.Dispatchers
+import com.sun.jna.Native
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.withContext
-import netscape.javascript.JSObject
 import org.koin.compose.koinInject
+import java.awt.Canvas
+import java.awt.Color
 import java.io.File
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicLong
+import kotlin.concurrent.thread
 
 /**
- * Desktop (JVM) actual: AMLL lyric engine in a JavaFX [WebView] (WebKit), hosted in a
- * [JFXPanel] and embedded via Compose [SwingPanel].
+ * Desktop (JVM) actual: AMLL lyric engine in the **system WebView**
+ * (Windows = WebView2 / Edge Chromium)，通过 [WebviewJna]（直传 HWND 的精简绑定）
+ * 嵌入 Compose [SwingPanel] 里的 AWT [Canvas]。
  *
- * JavaFX is used instead of a Chromium/JCEF embed (whose native CefApp init crashes on this
- * JDK/Windows). All WebView/WebEngine access must happen on the JavaFX Application Thread
- * ([Platform.runLater]); creating a JFXPanel boots that runtime. The same player.html the
- * Android WebView uses is loaded over file://; readiness is signalled back through a
- * `window.amllHost` Java bridge object (vs. Android's @JavascriptInterface).
+ * 为什么是系统 WebView：AMLL 需要现代内核 + GPU 合成（弹簧动画、逐行模糊、全屏
+ * 背景 blur）。JavaFX WebKit 无 GPU 合成——字体/布局/动画均不完整且帧率个位数；
+ * KCEF 已归档且在本机 native init 崩溃。WebView2 是 Windows 系统内置常青内核。
+ *
+ * 就绪信号：player.html 的 signalReady() 调用 window.amllReady()（webview bind）。
+ * 所有 eval 经 webview_dispatch 派发到事件循环线程执行（jobs 队列）。
  */
 @Composable
 actual fun WebViewLyricScreen(onBack: () -> Unit) {
@@ -50,100 +49,223 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val currentPosition by viewModel.currentPosition.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
 
-    // engineReady is set from the JavaFX thread → use a thread-safe flow.
     val engineReadyFlow = remember { MutableStateFlow(false) }
     val engineReady by engineReadyFlow.collectAsState()
-    val engineState = remember { mutableStateOf<WebEngine?>(null) }
-    val panel = remember { JFXPanel() }
 
+    // 资产解包很快（3 个小文件拷贝），首帧前同步执行即可
+    val assetsDir = remember { extractAmllAssets() }
+    val canvas = remember { Canvas().apply { background = Color.BLACK } }
+    val session = remember { WebviewSession(engineReadyFlow) }
+
+    // Canvas 拿到原生句柄（displayable + 有尺寸）后，在专用线程启动 webview 事件循环
     LaunchedEffect(Unit) {
-        // Keep the JavaFX runtime alive across screen open/close.
-        Platform.setImplicitExit(false)
-        val dir = withContext(Dispatchers.IO) { extractAmllAssets() }
-        Platform.runLater {
-            val webView = WebView()
-            val engine = webView.engine
-            engine.loadWorker.stateProperty().addListener { _, _, state ->
-                if (state == Worker.State.SUCCEEDED) {
-                    // Expose window.amllHost so player.html's signalReady() can call back.
-                    println("AMLL[jfx] page loaded; injecting amllHost bridge")
-                    val window = engine.executeScript("window") as JSObject
-                    window.setMember("amllHost", AmllJsHost {
-                        println("AMLL[jfx] onReady received -> engineReady=true")
-                        engineReadyFlow.value = true
-                    })
-                } else if (state == Worker.State.FAILED) {
-                    println("AMLL[jfx] page load failed: ${engine.loadWorker.exception?.message}")
-                }
-            }
-            engine.load(fileUrl(File(dir, "player.html")))
-            panel.scene = Scene(webView)
-            engineState.value = engine
-        }
+        while (!canvas.isDisplayable || canvas.width <= 0 || canvas.height <= 0) delay(30)
+        session.start(canvas, fileUrl(File(assetsDir, "player.html")))
     }
 
     // Feed raw LRC once the engine is ready and whenever the track changes.
     LaunchedEffect(engineReady, rawLyric) {
-        val engine = engineState.value ?: return@LaunchedEffect
         if (!engineReady) return@LaunchedEffect
         if (rawLyric.isEmpty()) {
-            println("AMLL[jfx] engineReady but rawLyric is EMPTY (no lyrics fetched)")
+            println("AMLL[wv2] engineReady but rawLyric is EMPTY (no lyrics fetched)")
             return@LaunchedEffect
         }
-        println("AMLL[jfx] feeding lyrics, len=${rawLyric.length}")
+        println("AMLL[wv2] feeding lyrics, len=${rawLyric.length}")
         val escaped = rawLyric
             .replace("\\", "\\\\")
             .replace("'", "\\'")
             .replace("\n", "\\n")
             .replace("\r", "\\r")
-        Platform.runLater { runCatching { engine.executeScript("AmllBridge.loadLyrics('$escaped');") } }
+        session.eval("AmllBridge.loadLyrics('$escaped');")
     }
 
     // Push playback position; the page's rAF loop animates between updates.
     LaunchedEffect(engineReady, currentPosition) {
-        val engine = engineState.value ?: return@LaunchedEffect
         if (!engineReady) return@LaunchedEffect
-        Platform.runLater { runCatching { engine.executeScript("AmllBridge.setTime($currentPosition);") } }
+        session.eval("AmllBridge.setTime($currentPosition);")
     }
 
-    // Set the blurred album-art background for the current track.
+    // Set the blurred album-art background for the current track (full-res:
+    // WebView2 的 GPU 合成下全屏 CSS blur 是免费的).
     LaunchedEffect(engineReady, metadata?.artworkUri) {
-        val engine = engineState.value ?: return@LaunchedEffect
         if (!engineReady) return@LaunchedEffect
         val art = metadata?.artworkUri?.takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
         val safe = art.replace("\\", "\\\\").replace("'", "\\'")
-        Platform.runLater { runCatching { engine.executeScript("AmllBridge.setBackground('$safe');") } }
+        session.eval("AmllBridge.setBackground('$safe');")
     }
 
     DisposableEffect(Unit) {
-        onDispose {
-            // 不要在这里 engine.load("about:blank")：软件渲染管线（prism.order=sw）下
-            // WebKit 重建页面会在 native 层崩掉整个 JVM（twkOpen → fwkDisposeGraphics NPE）。
-            // 只清空歌词行并停住时间推进，WebView 随 JFXPanel 一起被移除。
-            val engine = engineState.value
-            Platform.runLater {
-                runCatching {
-                    engine?.executeScript(
-                        "if (globalThis.AmllBridge && AmllBridge.player) { AmllBridge.loadLyrics(''); }"
-                    )
-                }
-            }
-        }
+        onDispose { session.stop() }
     }
 
     Column(Modifier.fillMaxSize()) {
         LyricToolbar(onBack)
-        SwingPanel(factory = { panel }, modifier = Modifier.fillMaxWidth().weight(1f))
+        SwingPanel(factory = { canvas }, modifier = Modifier.fillMaxWidth().weight(1f))
     }
 }
 
-/** Bridge object exposed to JS as `window.amllHost`. Public method is callable from the page. */
-class AmllJsHost(private val onReadyCallback: () -> Unit) {
-    @Suppress("unused") // called from JavaScript
-    fun onReady() {
-        onReadyCallback()
+/**
+ * 一次歌词页会话：持有 webview 句柄、事件循环线程与 JNA 回调的强引用
+ * （native 侧存了回调指针，Java 侧必须防 GC）。
+ */
+private class WebviewSession(private val readyFlow: MutableStateFlow<Boolean>) {
+    private val handle = AtomicLong(0)
+    private val jobs = ConcurrentLinkedQueue<String>()
+
+    // 强引用回调，防止 JNA 回调桩被 GC（native 正持有其指针）
+    private val bindCallback = object : WebviewJna.BindCallback {
+        override fun callback(seq: Long, req: String?, arg: Long) {
+            println("AMLL[wv2] onReady received -> engineReady=true")
+            readyFlow.value = true
+            runCatching { WebviewJna.N.webview_return(handle.get(), seq, 0, "null") }
+        }
+    }
+    private val dispatchCallback = object : WebviewJna.DispatchCallback {
+        override fun callback(w: Long, arg: Long) {
+            while (true) {
+                val js = jobs.poll() ?: break
+                runCatching { WebviewJna.N.webview_eval(w, js) }
+            }
+        }
+    }
+
+    fun start(canvas: Canvas, url: String) {
+        if (handle.get() != 0L) return
+        val canvasHwnd = resolveCanvasHwnd(canvas)
+        if (canvasHwnd == null) {
+            println("AMLL[wv2] no valid HWND for canvas — cannot embed")
+            return
+        }
+        // AWT 报告逻辑尺寸（DIP），MoveWindow 要物理像素 —— 乘每屏 DPI 缩放
+        val width = canvas.physicalWidth()
+        val height = canvas.physicalHeight()
+        thread(name = "amll-webview2", isDaemon = true) {
+            val n = WebviewJna.N
+            // 这版 dll 的嵌入分支（window 参数非 null）必崩，只能走自建窗口路径，
+            // 然后用 SetParent 把它收编为 Canvas 的子窗口 —— dll 自己的 WndProc、
+            // DPI 与 WM_SIZE→resize_webview 逻辑全部保留，尺寸联动免费获得。
+            val w = n.webview_create(0, null)
+            if (w == 0L) {
+                println("AMLL[wv2] webview_create failed (WebView2 runtime missing?)")
+                return@thread
+            }
+            handle.set(w)
+            n.webview_bind(w, "amllReady", bindCallback, 0)
+
+            val childHwnd = n.webview_get_window(w)
+            if (childHwnd != null) {
+                reparentIntoCanvas(childHwnd, canvasHwnd, width, height)
+                println("AMLL[wv2] webview window $childHwnd reparented into canvas $canvasHwnd (${width}x$height)")
+                // Canvas 尺寸变化（窗口拉伸/最大化）时让子窗口跟随铺满；
+                // dll 的 WndProc 收到 WM_SIZE 后会自行调整 WebView2 controller bounds。
+                canvas.addComponentListener(object : java.awt.event.ComponentAdapter() {
+                    override fun componentResized(e: java.awt.event.ComponentEvent) {
+                        val u32 = com.sun.jna.platform.win32.User32.INSTANCE
+                        u32.MoveWindow(
+                            com.sun.jna.platform.win32.WinDef.HWND(childHwnd),
+                            0, 0, canvas.physicalWidth(), canvas.physicalHeight(), true,
+                        )
+                    }
+                })
+            } else {
+                println("AMLL[wv2] webview_get_window returned null — leaving standalone window")
+            }
+
+            n.webview_navigate(w, url)
+            n.webview_run(w) // 阻塞直到 terminate
+            n.webview_destroy(w)
+            handle.set(0)
+            println("AMLL[wv2] webview loop exited")
+        }
+    }
+
+    /** 把 webview 自建的顶层窗口改造成 Canvas 的无边框子窗口并铺满。 */
+    private fun reparentIntoCanvas(
+        child: com.sun.jna.Pointer,
+        parent: com.sun.jna.Pointer,
+        width: Int,
+        height: Int,
+    ) {
+        val u32 = com.sun.jna.platform.win32.User32.INSTANCE
+        val childH = com.sun.jna.platform.win32.WinDef.HWND(child)
+        val parentH = com.sun.jna.platform.win32.WinDef.HWND(parent)
+
+        val gwlStyle = com.sun.jna.platform.win32.WinUser.GWL_STYLE
+        val wsChild = 0x40000000
+        val wsVisible = 0x10000000
+        u32.SetWindowLongPtr(
+            childH,
+            gwlStyle,
+            com.sun.jna.Pointer.createConstant((wsChild or wsVisible).toLong()),
+        )
+        u32.SetParent(childH, parentH)
+        u32.MoveWindow(childH, 0, 0, width, height, true)
+        u32.ShowWindow(childH, com.sun.jna.platform.win32.WinUser.SW_SHOW)
+    }
+
+    fun eval(js: String) {
+        val w = handle.get()
+        if (w == 0L) return
+        jobs.add(js)
+        runCatching { WebviewJna.N.webview_dispatch(w, dispatchCallback, 0) }
+    }
+
+    fun stop() {
+        val w = handle.get()
+        if (w != 0L) runCatching { WebviewJna.N.webview_terminate(w) }
+    }
+
+    /**
+     * 取 Canvas 的原生 HWND。webview 的 win32 实现会先 IsWindow 校验，无效则按
+     * HWND* 解引用（老语义兼容）——所以绝不能把无效句柄传下去（会 access violation）。
+     * JAWT（getComponentPointer）在 Compose SwingPanel 的层次里可能返回非窗口句柄，
+     * 此时回退：从顶层窗口 EnumChildWindows 找 AWT Canvas 的原生子窗口（类名 SunAwt*）。
+     */
+    private fun resolveCanvasHwnd(canvas: Canvas): com.sun.jna.Pointer? {
+        val u32 = com.sun.jna.platform.win32.User32.INSTANCE
+
+        fun isRealWindow(p: com.sun.jna.Pointer?): Boolean {
+            if (p == null) return false
+            val buf = CharArray(64)
+            return u32.GetClassName(com.sun.jna.platform.win32.WinDef.HWND(p), buf, 64) > 0
+        }
+
+        val direct = runCatching { Native.getComponentPointer(canvas) }.getOrNull()
+        if (isRealWindow(direct)) {
+            println("AMLL[wv2] canvas hwnd via JAWT: $direct")
+            return direct
+        }
+        println("AMLL[wv2] JAWT gave invalid handle ($direct); enumerating child windows…")
+
+        val window = javax.swing.SwingUtilities.getWindowAncestor(canvas) ?: return null
+        val top = runCatching { Native.getComponentPointer(window) }.getOrNull() ?: return null
+        if (!isRealWindow(top)) return null
+
+        var found: com.sun.jna.Pointer? = null
+        u32.EnumChildWindows(
+            com.sun.jna.platform.win32.WinDef.HWND(top),
+            { child, _ ->
+                val buf = CharArray(64)
+                val n = u32.GetClassName(child, buf, 64)
+                val cls = String(buf, 0, n.coerceAtLeast(0))
+                if (cls.startsWith("SunAwt")) {
+                    found = child.pointer
+                    false
+                } else true
+            },
+            null,
+        )
+        println("AMLL[wv2] canvas hwnd via EnumChildWindows: $found")
+        return found
     }
 }
+
+/** AWT 逻辑尺寸 × 每屏 DPI 变换 = Win32 物理像素。 */
+private fun Canvas.physicalWidth(): Int =
+    (width * (graphicsConfiguration?.defaultTransform?.scaleX ?: 1.0)).toInt()
+
+private fun Canvas.physicalHeight(): Int =
+    (height * (graphicsConfiguration?.defaultTransform?.scaleY ?: 1.0)).toInt()
 
 @Composable
 private fun LyricToolbar(onBack: () -> Unit) {
