@@ -1,11 +1,6 @@
 package com.leejlredstar.redefinencm.kmp
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.os.Build
 import androidx.annotation.OptIn
-import androidx.core.app.NotificationCompat
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -17,11 +12,14 @@ import org.koin.android.ext.android.get
 /**
  * Foreground service for background media playback.
  *
- * Android requires [startForeground] to be called within seconds of receiving a
- * [android.content.Context.startForegroundService] intent — otherwise the service is killed.
- * Media3's DefaultMediaNotificationProvider then takes over: when the player transitions to a
- * ready/playing state it calls [startForeground] with a notification that includes play/pause,
- * prev/next transport buttons and a seekbar.
+ * 媒体通知完全交给 Media3 的 DefaultMediaNotificationProvider：原生 MediaStyle
+ * 通知（封面经 BitmapLoader 自动拉取 artworkUri、系统进度条、播放/上一首/下一首
+ * 控制），播放开始时它自行 startForeground、停止时降级 —— 与原版行为一致。
+ * 不要在这里手动 startForeground 自制通知：那会顶掉原生媒体通知的位置
+ * （用户只会看到一个没有封面/进度条的假通知）。
+ *
+ * 服务由 MainActivity 以普通 startService 拉起（不是 startForegroundService，
+ * 否则必须 5 秒内 startForeground，而彼时还没有播放会话）。
  */
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaSessionService() {
@@ -32,15 +30,6 @@ class PlaybackService : MediaSessionService() {
         super.onCreate()
         val exoPlayer = (get<PlatformPlayer>() as ExoPlayerPlatformPlayer).exoPlayer
         mediaSession = MediaSession.Builder(this, exoPlayer).build()
-
-        ensureChannel()
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("RedefineNCM")
-            .setOngoing(true)
-            .setSilent(true)
-            .build()
-        startForeground(NOTIFICATION_ID, notification)
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
@@ -50,26 +39,5 @@ class PlaybackService : MediaSessionService() {
         mediaSession = null
         LyricNotificationController.clearFocus()
         super.onDestroy()
-    }
-
-    private fun ensureChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val manager = getSystemService(NotificationManager::class.java)
-        if (manager.getNotificationChannel(CHANNEL_ID) != null) return
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Playback",
-            NotificationManager.IMPORTANCE_LOW,
-        ).apply {
-            description = "Music playback controls"
-            setShowBadge(false)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-        }
-        manager.createNotificationChannel(channel)
-    }
-
-    companion object {
-        private const val CHANNEL_ID = "media_playback"
-        private const val NOTIFICATION_ID = 1
     }
 }

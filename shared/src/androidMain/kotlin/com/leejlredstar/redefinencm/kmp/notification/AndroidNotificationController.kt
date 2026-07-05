@@ -6,7 +6,6 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
@@ -14,15 +13,13 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 
 /**
- * Action strings for notification media controls.
- * These match the intent-filter actions in AndroidManifest.xml.
+ * 实况歌词通知（Android 平台的 now-playing 歌词面）。
+ *
+ * 只负责展示歌词文字（原版 LiveUpdateLyricController 形态）——**不带**播放控制按钮：
+ * 进度条/封面/上一首/播放/下一首由 Media3 的原生 MediaStyle 媒体通知提供
+ * （PlaybackService 的 MediaSession + DefaultMediaNotificationProvider），
+ * 两个通知各司其职，与原版行为一致。
  */
-object MediaActions {
-    const val TOGGLE = "com.leejlredstar.redefinencm.kmp.TOGGLE_PLAY_PAUSE"
-    const val NEXT = "com.leejlredstar.redefinencm.kmp.NEXT"
-    const val PREV = "com.leejlredstar.redefinencm.kmp.PREVIOUS"
-}
-
 actual object LyricNotificationController {
     private const val CHANNEL_ID = "live_update_lyric"
     private const val NOTIFICATION_ID = 0x4C595243 // "LYRC"
@@ -72,29 +69,6 @@ actual object LyricNotificationController {
             }
         }
 
-        fun mediaIntent(action: String) =
-            Intent(action).setPackage(context.packageName)
-
-        val prevIntent = PendingIntent.getBroadcast(
-            context, 0,
-            mediaIntent(MediaActions.PREV),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        val toggleIntent = PendingIntent.getBroadcast(
-            context, 1,
-            mediaIntent(MediaActions.TOGGLE),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        val nextIntent = PendingIntent.getBroadcast(
-            context, 2,
-            mediaIntent(MediaActions.NEXT),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-
-        val playPauseIcon = if (isPlaying)
-            android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
-        val playPauseLabel = if (isPlaying) "Pause" else "Play"
-
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle(displayTitle)
@@ -111,19 +85,6 @@ actual object LyricNotificationController {
                 NotificationCompat.BigTextStyle()
                     .bigText(detailText)
                     .setSummaryText(trimmedArtist.ifEmpty { null }),
-            )
-            .addAction(
-                NotificationCompat.Action(
-                    android.R.drawable.ic_media_previous, "Previous", prevIntent,
-                ),
-            )
-            .addAction(
-                NotificationCompat.Action(playPauseIcon, playPauseLabel, toggleIntent),
-            )
-            .addAction(
-                NotificationCompat.Action(
-                    android.R.drawable.ic_media_next, "Next", nextIntent,
-                ),
             )
             .setContentIntent(
                 PendingIntent.getActivity(
