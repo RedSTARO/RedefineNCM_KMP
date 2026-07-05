@@ -206,6 +206,7 @@ fun LoginScreen(
                         Text("生成二维码")
                     }
                 } else {
+
                     OutlinedButton(
                         onClick = { viewModel.cancelQrLogin() },
                         modifier = Modifier.fillMaxWidth().height(48.dp),
