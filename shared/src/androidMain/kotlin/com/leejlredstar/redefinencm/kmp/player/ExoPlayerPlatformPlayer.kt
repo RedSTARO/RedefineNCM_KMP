@@ -183,7 +183,7 @@ class ExoPlayerPlatformPlayer(
         positionJob = scope.launch {
             while (true) {
                 _position.value = exoPlayer.currentPosition
-                delay(200)
+                delay(100)
             }
         }
     }

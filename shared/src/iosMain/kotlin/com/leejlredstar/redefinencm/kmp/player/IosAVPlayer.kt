@@ -110,7 +110,7 @@ class IosAVPlayer(
                         _position.value = seekOffsetMs + elapsed
                     }
                 }
-                delay(200)
+                delay(100)
             }
         }
     }
