@@ -2,6 +2,7 @@ package com.leejlredstar.redefinencm.kmp
 
 import android.Manifest
 import android.content.ComponentName
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -32,6 +33,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+
+        // started 状态兜底：即使 controller 断开（Activity 销毁）且未在播放，
+        // 服务也不随 unbind 立即销毁，避免会话反复重建。
+        // 播放中的保活与此无关 —— Media3 在播放开始时会自行把服务升为
+        // started + foreground（原生媒体通知），Activity 死活不影响。
+        startService(Intent(this, PlaybackService::class.java))
 
         controllerFuture = MediaController.Builder(
             this,
