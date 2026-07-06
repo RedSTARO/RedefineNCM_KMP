@@ -94,7 +94,9 @@ class LoginViewModel(
      * Full QR login flow: key → create → poll → save cookie.
      */
     fun startQrLogin() {
-        scope.launch {
+        // 网络必须离开 Main：桌面端 Main=Swing EDT，在 EDT 上跑 Ktor 连接协程会被 UI 渲染
+        // 饿死导致零星 ConnectTimeout（与歌词拉取同源问题）。状态写回用 StateFlow，线程安全。
+        scope.launch(Dispatchers.Default) {
             try {
                 _qrLoading.value = true
                 _qrError.value = ""
@@ -133,9 +135,9 @@ class LoginViewModel(
                 _qrScanStatus.value = "请用网易云音乐 App 扫码"
                 _qrLoading.value = false
 
-                // 3. Poll login status every 2s
+                // 3. Poll login status every 2s（同样离开 Main）
                 qrPollJob?.cancel()
-                qrPollJob = scope.launch {
+                qrPollJob = scope.launch(Dispatchers.Default) {
                     while (isActive) {
                         delay(2000)
                         val checkResult = safeApiCall { api.loginQrCheck(key) }
