@@ -8,11 +8,14 @@ package com.leejlredstar.redefinencm.kmp.util
  * scans the download directory once into a [Set] for O(1) lookups.
  */
 object DownloadedSongsCache {
+    // @Volatile：后台预热线程、播放器解析线程、Compose 组合线程都会读它，
+    // 保证一个线程写入的扫描结果对其他线程立即可见（否则会重复扫描）。
+    @Volatile
     private var cached: Set<Long>? = null
 
     fun isDownloaded(songId: Long): Boolean {
-        if (cached == null) refresh()
-        return songId in cached!!
+        val snapshot = cached ?: scanDownloadedSongIds().also { cached = it }
+        return songId in snapshot
     }
 
     fun refresh() {

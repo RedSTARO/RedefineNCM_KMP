@@ -109,11 +109,11 @@ class MainViewModel(
     }
 
     fun restorePlayerStatus() {
-        scope.launch {
+        // DB 读取 + 整条播放列表 JSON 反序列化放后台，避免启动时阻塞主线程（Android 主线程/桌面 EDT）；
+        // 但 player 操作（ExoPlayer 要求主线程）切回 Main 执行。
+        scope.launch(Dispatchers.Default) {
             val status = repo.getPlayerStatus() ?: return@launch
             if (status.playlist.isEmpty()) return@launch
-            // 播放器里已有队列时不覆盖（例如服务先于 UI 恢复了状态）
-            if (player.queue.value.isNotEmpty()) return@launch
             val items = status.playlist.map {
                 MediaInfo(
                     id = it.id,
@@ -125,9 +125,13 @@ class MainViewModel(
                     duration = it.duration,
                 )
             }
-            player.restoreQueue(items, status.index.coerceIn(0, items.lastIndex), status.position)
-            player.setShuffleEnabled(status.isShuffling)
-            // 原版恢复时不自动播放（play() 被注释掉），此处保持一致
+            withContext(Dispatchers.Main) {
+                // 播放器里已有队列时不覆盖（例如服务先于 UI 恢复了状态）
+                if (player.queue.value.isNotEmpty()) return@withContext
+                player.restoreQueue(items, status.index.coerceIn(0, items.lastIndex), status.position)
+                player.setShuffleEnabled(status.isShuffling)
+                // 原版恢复时不自动播放（play() 被注释掉），此处保持一致
+            }
         }
     }
 
