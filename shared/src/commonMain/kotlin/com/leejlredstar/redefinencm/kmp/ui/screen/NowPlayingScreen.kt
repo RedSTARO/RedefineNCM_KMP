@@ -314,11 +314,23 @@ fun ProgressSection(
         currentPosition.toFloat() / songLength.toFloat()
     } else 0f
 
+    // 拖动期间只跟踪本地值，松手时才真正 seek 一次：
+    // 部分平台（桌面 JvmMediaPlayer）的 seek 会重开流+重取直链，逐帧 seek 会造成请求/卡音风暴。
+    var isDragging by remember { mutableStateOf(false) }
+    var dragValue by remember { mutableStateOf(0f) }
+    val sliderValue = if (isDragging) dragValue else progress.coerceIn(0f, 1f)
+    val displayPosition = if (isDragging) (dragValue * songLength).toLong() else currentPosition
+
     Column(modifier = modifier.fillMaxWidth()) {
         Slider(
-            value = progress.coerceIn(0f, 1f),
+            value = sliderValue,
             onValueChange = { percent ->
-                onSeekChanged((percent * songLength).toLong())
+                isDragging = true
+                dragValue = percent
+            },
+            onValueChangeFinished = {
+                onSeekChanged((dragValue * songLength).toLong())
+                isDragging = false
             },
             colors = SliderDefaults.colors(
                 thumbColor = MaterialTheme.colorScheme.primary,
@@ -332,7 +344,7 @@ fun ProgressSection(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = formatDuration(currentPosition),
+                text = formatDuration(displayPosition),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

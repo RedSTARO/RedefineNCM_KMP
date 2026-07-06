@@ -52,7 +52,17 @@ class JvmMediaPlayer(
 
     // ── Queue state ──
 
+    // 队列模型被音频播放线程（自然换曲）与调用线程（切歌/洗牌/换单）并发访问，
+    // 必须串行化其读-改-写，否则会丢更新 / 读到过期队列（本项目高度敏感的队列错位问题）。
+    private val queueLock = Any()
+
+    @Volatile
     private var queueModel: PlayQueue<MediaInfo> = PlayQueue.empty()
+
+    /** 原子地读-改-写队列模型。 */
+    private inline fun mutateQueue(block: (PlayQueue<MediaInfo>) -> PlayQueue<MediaInfo>) {
+        synchronized(queueLock) { queueModel = block(queueModel) }
+    }
 
     private val _state = MutableStateFlow(PlayerState.IDLE)
     override val state: StateFlow<PlayerState> = _state.asStateFlow()
@@ -197,7 +207,7 @@ class JvmMediaPlayer(
                 if (!Thread.interrupted()) {
                     _isPlaying.value = false
                     seekOffsetMs = 0L
-                    queueModel = queueModel.next()
+                    mutateQueue { it.next() }
                     publishQueue()
                     queueModel.currentItem?.let { resolveAndPlay(it) } ?: run {
                         _state.value = PlayerState.ENDED
@@ -287,17 +297,17 @@ class JvmMediaPlayer(
     }
 
     override fun seekToPrevious() {
-        queueModel = queueModel.previous()
+        mutateQueue { it.previous() }
         onTrackChanged()
     }
 
     override fun seekToNext() {
-        queueModel = queueModel.next()
+        mutateQueue { it.next() }
         onTrackChanged()
     }
 
     override fun setQueue(items: List<MediaInfo>, startIndex: Int) {
-        queueModel = PlayQueue.of(items, startIndex)
+        mutateQueue { PlayQueue.of(items, startIndex) }
         onTrackChanged()
     }
 
@@ -307,7 +317,7 @@ class JvmMediaPlayer(
         // seekOffsetMs 起播（openAndPlay 尊重该偏移）。
         stopPlayback()
         stopPolling()
-        queueModel = PlayQueue.of(items, startIndex)
+        mutateQueue { PlayQueue.of(items, startIndex) }
         seekOffsetMs = positionMs.coerceAtLeast(0L)
         _position.value = seekOffsetMs
         _isPlaying.value = false
@@ -316,14 +326,14 @@ class JvmMediaPlayer(
     }
 
     override fun addToQueue(item: MediaInfo) {
-        queueModel = queueModel.addItem(item)
+        mutateQueue { it.addItem(item) }
         publishQueue()
     }
 
     override fun clearQueue() {
         stopPlayback()
         stopPolling()
-        queueModel = PlayQueue.empty()
+        mutateQueue { PlayQueue.empty() }
         _isPlaying.value = false
         _state.value = PlayerState.IDLE
         _position.value = 0L
@@ -331,12 +341,12 @@ class JvmMediaPlayer(
     }
 
     override fun skipToIndex(index: Int) {
-        queueModel = queueModel.skipTo(index)
+        mutateQueue { it.skipTo(index) }
         onTrackChanged()
     }
 
     override fun setShuffleEnabled(enabled: Boolean) {
-        queueModel = queueModel.setShuffle(enabled)
+        mutateQueue { it.setShuffle(enabled) }
         publishQueue()
     }
 

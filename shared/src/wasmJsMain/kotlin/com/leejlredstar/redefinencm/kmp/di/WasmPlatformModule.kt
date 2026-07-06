@@ -15,7 +15,7 @@ actual fun platformModule() = module {
         HttpClientFactory.create(
             baseUrl = settings.getString(SettingKeys.SERVER, "http://ncm.tryagain.icu/"),
             realIP = "192.168.1.1",
-            cookie = settings.getString(SettingKeys.COOKIE, ""),
+            cookieProvider = { settings.getString(SettingKeys.COOKIE, "") },
             engineFactory = Js,
         )
     }

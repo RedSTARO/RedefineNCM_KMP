@@ -27,7 +27,8 @@ object LyricParser {
             val matchTime = regexTime.findAll(line)
             for (item in matchTime) {
                 val timeString = item.groups[1]?.value ?: continue
-                val time = parseTimeString(timeString)
+                // 畸形时间戳（空括号 []、缺秒 [00:] 等）只跳过该标签，不让整首歌词失效
+                val time = runCatching { parseTimeString(timeString) }.getOrNull() ?: continue
                 lyricPair[time] = word
             }
         }
