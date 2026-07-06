@@ -14,6 +14,9 @@ data class SettingsBackupData(
     val replacePlaylist: Boolean = false,
     val checkUpdate: Boolean = false,
     val useFullLyric: Boolean = false,
+    val searchPrediction: Boolean = true,
+    val showDownloadStatus: Boolean = false,
+    val adaptOriginalAndroidLyric: Boolean = false,
 )
 
 private val backupJson = Json { ignoreUnknownKeys = true; coerceInputValues = true }
@@ -28,6 +31,9 @@ fun encodeSettingsBackup(settings: PlatformSettings): String = backupJson.encode
         replacePlaylist = settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false),
         checkUpdate = settings.getBoolean(SettingKeys.CHECK_UPDATE, false),
         useFullLyric = settings.getBoolean(SettingKeys.USE_FULL_LYRIC, false),
+        searchPrediction = settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true),
+        showDownloadStatus = settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false),
+        adaptOriginalAndroidLyric = settings.getBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, false),
     )
 )
 
@@ -41,6 +47,9 @@ fun applySettingsBackup(json: String, settings: PlatformSettings): Boolean = try
     settings.setBoolean(SettingKeys.REPLACE_PLAYLIST, data.replacePlaylist)
     settings.setBoolean(SettingKeys.CHECK_UPDATE, data.checkUpdate)
     settings.setBoolean(SettingKeys.USE_FULL_LYRIC, data.useFullLyric)
+    settings.setBoolean(SettingKeys.SEARCH_PREDICTION, data.searchPrediction)
+    settings.setBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, data.showDownloadStatus)
+    settings.setBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, data.adaptOriginalAndroidLyric)
     true
 } catch (_: Exception) {
     false

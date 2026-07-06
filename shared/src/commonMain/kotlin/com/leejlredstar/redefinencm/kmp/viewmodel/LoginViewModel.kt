@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 class LoginViewModel(
     private val api: NCMApi,
     private val settings: PlatformSettings,
+    private val mainViewModel: MainViewModel,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -71,6 +72,9 @@ class LoginViewModel(
     fun updateCookie(newCookie: String) {
         _cookie.value = newCookie
         settings.setString(SettingKeys.COOKIE, newCookie)
+        // Cookie 现取现用（HttpClientFactory 每请求读 settings），登录后立刻重拉账号数据，
+        // 无需重启即可从"未登录"切到"已登录"。
+        mainViewModel.refreshAccount()
     }
 
     fun updateServer(newServer: String) {
@@ -97,8 +101,8 @@ class LoginViewModel(
                 _qrSuccess.value = false
                 _qrScanStatus.value = "正在生成二维码…"
                 _qrDataUri.value = ""
-        _qrUrl.value = ""
-        _qrBitmapBytes.value = null
+                _qrUrl.value = ""
+                _qrBitmapBytes.value = null
 
                 // 1. Get QR key
                 val keyResult = safeApiCall { api.loginQrKey() }
@@ -123,7 +127,7 @@ class LoginViewModel(
                     return@launch
                 }
                 // Strip any data URI prefix and decode PNG bytes for Compose rendering
-                val strippedBase64 = imgBase64!!.substringAfter("base64,")
+                val strippedBase64 = imgBase64.substringAfter("base64,")
                 _qrDataUri.value = "data:image/png;base64,$strippedBase64"
                 _qrBitmapBytes.value = decodeBase64(strippedBase64)
                 _qrScanStatus.value = "请用网易云音乐 App 扫码"

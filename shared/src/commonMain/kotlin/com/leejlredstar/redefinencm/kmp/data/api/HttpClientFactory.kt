@@ -27,19 +27,19 @@ import kotlinx.serialization.json.Json
  * in it is empty, so login flows are unaffected in practice). Refine with a send-pipeline
  * interceptor if strict per-path skipping is needed.
  *
- * The client is built once (a Koin singleton) with the base URL / cookie read from settings at
- * creation time, matching the original `RetrofitInstance` object. Changing the server or cookie
- * therefore takes effect on next launch (or rebuild the client).
+ * The base URL is fixed at creation time (changing the server still needs a client rebuild /
+ * relaunch), but the cookie is read **fresh per request** via [cookieProvider], so logging in
+ * (which writes the cookie into settings) takes effect immediately on the next request without a
+ * relaunch.
  */
 object HttpClientFactory {
 
     fun create(
         baseUrl: String,
         realIP: String,
-        cookie: String,
+        cookieProvider: () -> String,
         engineFactory: HttpClientEngineFactory<*>,
     ): HttpClient {
-        val cleanedCookie = cleanCookie(cookie)
         return HttpClient(engineFactory) {
             install(ContentNegotiation) {
                 json(Json {
@@ -51,6 +51,8 @@ object HttpClientFactory {
             install(Logging) {
                 logger = Logger.DEFAULT
                 level = LogLevel.HEADERS
+                // 绝不把会话 Cookie（账号凭证）打进日志——只留占位，避免凭证泄漏到 logcat/控制台
+                sanitizeHeader { header -> header == HttpHeaders.Cookie }
             }
             // 宽松超时：直连（不走系统代理）时 TCP 首次握手实测可达 3s+ 且有丢包重传，
             // CIO 默认 connect 超时太紧会导致零星 ConnectTimeout（如 /lyric 反复失败）。
@@ -66,6 +68,8 @@ object HttpClientFactory {
                 // so default query params are appended via url.parameters (merged into every request).
                 url.parameters.append("realIP", realIP)
                 url.parameters.append("timestamp", getTimeMillis().toString())
+                // 每请求现取 cookie：登录写入 settings 后无需重启即刻生效
+                val cleanedCookie = cleanCookie(cookieProvider())
                 if (cleanedCookie.isNotEmpty()) {
                     header(HttpHeaders.Cookie, cleanedCookie)
                 }

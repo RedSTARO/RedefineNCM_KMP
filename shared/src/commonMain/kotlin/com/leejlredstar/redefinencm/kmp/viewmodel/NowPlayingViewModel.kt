@@ -21,7 +21,6 @@ import kotlinx.coroutines.flow.*
 class NowPlayingViewModel(
     private val repo: Repository,
     private val player: PlatformPlayer,
-    private val lyricBus: LyricBus = LyricBus, // using singleton
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -68,6 +67,7 @@ class NowPlayingViewModel(
         scope.launch {
             player.position.collect { pos ->
                 currentPosition.value = pos
+                MediaControlsIntegrator.updateMetadata(position = pos)
             }
         }
         scope.launch {

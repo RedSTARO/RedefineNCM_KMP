@@ -11,14 +11,14 @@ import io.ktor.client.engine.darwin.Darwin
 import org.koin.dsl.module
 
 actual fun platformModule() = module {
-    // Ktor HttpClient (Darwin engine).
-    // Cookie is read at startup; after QR login, kill and reopen the app.
+    // Ktor HttpClient (Darwin engine). Cookie is read fresh per request, so QR login takes
+    // effect without relaunch; only a server (base URL) change still needs a relaunch.
     single<HttpClient> {
         val settings = get<PlatformSettings>()
         HttpClientFactory.create(
             baseUrl = settings.getString(SettingKeys.SERVER, "http://ncm.tryagain.icu/"),
             realIP = "192.168.1.1",
-            cookie = settings.getString(SettingKeys.COOKIE, ""),
+            cookieProvider = { settings.getString(SettingKeys.COOKIE, "") },
             engineFactory = Darwin,
         )
     }

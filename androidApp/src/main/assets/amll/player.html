@@ -172,6 +172,10 @@ async function loadEngine() {
       setTime(timeMs) {
         this.player?.setCurrentTime(timeMs);
       },
+      setBackground(url) {
+        const el = document.getElementById("bg");
+        if (el && url) el.style.backgroundImage = 'url("' + url + '")';
+      },
       setTheme(theme) {
         document.documentElement.setAttribute("data-theme", theme);
       },

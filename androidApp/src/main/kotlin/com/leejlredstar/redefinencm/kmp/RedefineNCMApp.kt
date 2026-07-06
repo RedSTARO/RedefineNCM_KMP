@@ -16,7 +16,11 @@ class RedefineNCMApp : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         initKoin { androidContext(this@RedefineNCMApp) }
         LyricNotificationController.init(applicationContext)
-        DownloadedSongsCache.refresh()
+        // 下载目录扫描是磁盘 IO，放后台线程预热，避免阻塞主线程启动路径
+        Thread({ DownloadedSongsCache.refresh() }, "download-cache-warmup").apply {
+            isDaemon = true
+            start()
+        }
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =

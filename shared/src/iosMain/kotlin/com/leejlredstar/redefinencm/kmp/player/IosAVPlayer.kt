@@ -108,6 +108,13 @@ class IosAVPlayer(
                     if (_isPlaying.value && playStartTimeMs > 0) {
                         val elapsed = (CFAbsoluteTimeGetCurrent() * 1000.0).toLong() - playStartTimeMs
                         _position.value = seekOffsetMs + elapsed
+                        // 自然播完自动切下一首（时钟近似；duration 来自曲目元数据 dt）。
+                        // break 让新曲目的 startPolling 接管，避免旧循环重复推进。
+                        val dur = _duration.value
+                        if (dur > 0 && _position.value >= dur) {
+                            seekToNext()
+                            break
+                        }
                     }
                 }
                 delay(100)

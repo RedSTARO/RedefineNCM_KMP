@@ -32,7 +32,11 @@ actual object SongDownloader {
                     if (target.exists()) return@launch
 
                     val partFile = File(dir, "${item.id}.$ext.part")
-                    URI(item.url).toURL().openStream().use { input ->
+                    val conn = URI(item.url).toURL().openConnection().apply {
+                        connectTimeout = 15_000
+                        readTimeout = 30_000
+                    }
+                    conn.getInputStream().use { input ->
                         partFile.outputStream().use { output -> input.copyTo(output) }
                     }
                     if (!partFile.renameTo(target)) partFile.delete()
