@@ -1,28 +1,10 @@
 package com.leejlredstar.redefinencm.kmp.lyric
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -31,17 +13,14 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.awt.ComposePanel
 import androidx.compose.ui.awt.SwingPanel
-import androidx.compose.ui.graphics.Color as ComposeColor
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
-import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
+import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
+import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
@@ -49,10 +28,17 @@ import com.sun.jna.Native
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.koin.compose.koinInject
+import java.awt.BorderLayout
 import java.awt.Canvas
+import java.awt.Window
+import java.awt.event.ComponentAdapter
+import java.awt.event.ComponentEvent
 import java.io.File
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicLong
+import javax.swing.JPanel
+import javax.swing.JWindow
+import javax.swing.SwingUtilities
 import kotlin.concurrent.thread
 import java.awt.Color as AwtColor
 
@@ -92,6 +78,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     // 资产解包很快（3 个小文件拷贝），首帧前同步执行即可
     val assetsDir = remember { extractAmllAssets() }
     val canvas = remember { Canvas().apply { background = AwtColor.BLACK } }
+    val miniOverlay = remember(canvas, onBack) { DesktopMiniPlayerOverlay(canvas, onBack) }
     val session = remember(viewModel) {
         WebviewSession(engineReadyFlow) { timeMs, mediaId ->
             viewModel.onLyricLineClick(mediaId, timeMs)
@@ -99,9 +86,10 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     }
 
     // Canvas 拿到原生句柄（displayable + 有尺寸）后，在专用线程启动 webview 事件循环
-    LaunchedEffect(Unit) {
+    LaunchedEffect(miniOverlay) {
         while (!canvas.isDisplayable || canvas.width <= 0 || canvas.height <= 0) delay(30)
         session.start(canvas, fileUrl(File(assetsDir, "player.html")))
+        miniOverlay.show()
     }
 
     LaunchedEffect(engineReady, lyricMediaId) {
@@ -159,8 +147,11 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         session.eval("AmllBridge.setBackground('$safe');")
     }
 
-    DisposableEffect(Unit) {
-        onDispose { session.stop() }
+    DisposableEffect(session, miniOverlay) {
+        onDispose {
+            miniOverlay.dispose()
+            session.stop()
+        }
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -171,104 +162,106 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
                 .fillMaxWidth()
                 .weight(1f),
         )
-        DesktopInlineMiniPlayerController(onExpand = onBack)
     }
 }
 
-@Composable
-private fun DesktopInlineMiniPlayerController(
-    onExpand: () -> Unit,
-    modifier: Modifier = Modifier,
+private class DesktopMiniPlayerOverlay(
+    private val canvas: Canvas,
+    private val onExpand: () -> Unit,
 ) {
-    var visible by remember { mutableStateOf(true) }
-    var revealRequest by remember { mutableIntStateOf(0) }
-    val controllerHeight by animateDpAsState(
-        targetValue = if (visible) 136.dp else 48.dp,
-        animationSpec = tween(240, easing = FastOutSlowInEasing),
-        label = "desktopAmllMiniHeight",
-    )
+    private var overlayWindow: JWindow? = null
+    private var ownerWindow: Window? = null
+    private var canvasListener: ComponentAdapter? = null
+    private var ownerListener: ComponentAdapter? = null
 
-    fun reveal() {
-        revealRequest += 1
-    }
-
-    LaunchedEffect(revealRequest) {
-        visible = true
-        delay(3_600)
-        visible = false
-    }
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(controllerHeight)
-            .navigationBarsPadding()
-            .pointerInput(Unit) {
-                detectTapGestures { reveal() }
+    fun show() {
+        SwingUtilities.invokeLater {
+            val owner = SwingUtilities.getWindowAncestor(canvas) ?: return@invokeLater
+            if (overlayWindow == null || ownerWindow !== owner) {
+                disposeOnEdt()
+                ownerWindow = owner
+                overlayWindow = createOverlay(owner)
+                installBoundsListeners(owner)
             }
-            .pointerInput(Unit) {
-                detectVerticalDragGestures { change, dragAmount ->
-                    if (dragAmount < -10f) {
-                        change.consume()
-                        reveal()
-                    }
+            updateBounds()
+        }
+    }
+
+    fun dispose() {
+        SwingUtilities.invokeLater { disposeOnEdt() }
+    }
+
+    private fun createOverlay(owner: Window): JWindow {
+        val transparent = AwtColor(0, 0, 0, 0)
+        val composePanel = ComposePanel().apply {
+            isOpaque = false
+            background = transparent
+            setContent {
+                RedefineNCMTheme {
+                    AutoHideMiniPlayerController(
+                        onExpand = onExpand,
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 }
-            },
-    ) {
-        AnimatedVisibility(
-            visible = visible,
-            modifier = Modifier.align(Alignment.BottomCenter),
-            enter = slideInVertically(
-                animationSpec = tween(260, easing = FastOutSlowInEasing),
-                initialOffsetY = { it / 2 },
-            ) + fadeIn(animationSpec = tween(160, easing = LinearOutSlowInEasing)) +
-                scaleIn(
-                    initialScale = 0.92f,
-                    animationSpec = tween(260, easing = FastOutSlowInEasing),
-                ),
-            exit = slideOutVertically(
-                animationSpec = tween(220, easing = FastOutSlowInEasing),
-                targetOffsetY = { it / 2 },
-            ) + fadeOut(animationSpec = tween(140, easing = LinearOutSlowInEasing)) +
-                scaleOut(
-                    targetScale = 0.92f,
-                    animationSpec = tween(220, easing = FastOutSlowInEasing),
-                ),
-        ) {
-            MiniNowPlayingBar(
-                onExpand = {
-                    reveal()
-                    onExpand()
-                },
-            )
-        }
-
-        AnimatedVisibility(
-            visible = !visible,
-            modifier = Modifier.align(Alignment.Center),
-            enter = fadeIn(animationSpec = tween(180, easing = LinearOutSlowInEasing)) +
-                scaleIn(
-                    initialScale = 0.94f,
-                    animationSpec = tween(220, easing = FastOutSlowInEasing),
-                ),
-            exit = fadeOut(animationSpec = tween(120, easing = LinearOutSlowInEasing)) +
-                scaleOut(
-                    targetScale = 0.94f,
-                    animationSpec = tween(140, easing = FastOutSlowInEasing),
-                ),
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = ComposeColor.White.copy(alpha = 0.14f),
-                contentColor = ComposeColor.White.copy(alpha = 0.84f),
-            ) {
-                Text(
-                    text = "轻点底部或上滑呼出播放器",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
-                )
             }
         }
+        val content = JPanel(BorderLayout()).apply {
+            isOpaque = false
+            background = transparent
+            add(composePanel, BorderLayout.CENTER)
+        }
+        return JWindow(owner).apply {
+            background = transparent
+            contentPane = content
+            setFocusableWindowState(false)
+            type = Window.Type.POPUP
+        }
+    }
+
+    private fun installBoundsListeners(owner: Window) {
+        val listener = object : ComponentAdapter() {
+            override fun componentMoved(e: ComponentEvent) = updateBounds()
+            override fun componentResized(e: ComponentEvent) = updateBounds()
+            override fun componentShown(e: ComponentEvent) = updateBounds()
+            override fun componentHidden(e: ComponentEvent) {
+                overlayWindow?.isVisible = false
+            }
+        }
+        canvasListener = listener
+        ownerListener = listener
+        canvas.addComponentListener(listener)
+        owner.addComponentListener(listener)
+    }
+
+    private fun updateBounds() {
+        val overlay = overlayWindow ?: return
+        val owner = ownerWindow ?: return
+        if (!canvas.isShowing || !owner.isShowing || canvas.width <= 0 || canvas.height <= 0) {
+            overlay.isVisible = false
+            return
+        }
+        val location = runCatching { canvas.locationOnScreen }.getOrNull() ?: return
+        val overlayWidth = canvas.width.coerceAtMost(680).coerceAtLeast(320)
+        val overlayHeight = 168
+        val x = location.x + (canvas.width - overlayWidth) / 2
+        val y = location.y + canvas.height - overlayHeight - 24
+        overlay.setBounds(x, y, overlayWidth, overlayHeight)
+        overlay.isVisible = true
+        overlay.toFront()
+    }
+
+    private fun disposeOnEdt() {
+        val installedCanvasListener = canvasListener
+        val installedOwnerListener = ownerListener
+        if (installedCanvasListener != null) canvas.removeComponentListener(installedCanvasListener)
+        ownerWindow?.let { owner ->
+            if (installedOwnerListener != null) owner.removeComponentListener(installedOwnerListener)
+        }
+        canvasListener = null
+        ownerListener = null
+        ownerWindow = null
+        overlayWindow?.dispose()
+        overlayWindow = null
     }
 }
 
