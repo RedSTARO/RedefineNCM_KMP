@@ -75,7 +75,6 @@ fun FullLyricScreen(
     val lyricIndex by viewModel.lyricIndex.collectAsState()
     val wordLyricLines by viewModel.wordLyricLines.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
-    val songLength by viewModel.songLength.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
 
     val defaultHeroColor = MaterialTheme.colorScheme.primaryContainer
@@ -83,8 +82,6 @@ fun FullLyricScreen(
     val heroColor by animateColorAsState(themeColor, spring(), label = "hero")
 
     val lyricEntries = remember(lyricMap) { lyricMap.entries.toList() }
-    val timestamps = remember(lyricMap) { lyricEntries.map { it.key } }
-    val karaokeProgress = computeKaraokeProgress(lyricIndex, timestamps, currentPosition, songLength)
 
     // ── Scroll state ──
     val listState = rememberLazyListState()
@@ -197,12 +194,6 @@ fun FullLyricScreen(
                     dist == 1 -> 17.sp
                     else -> 15.sp
                 }
-                val progress = when {
-                    isCurrent -> karaokeProgress
-                    idx < lyricIndex -> 1f
-                    else -> 0f
-                }
-
                 val wordLine = if (isCurrent) findWordLine(entry.key, wordLyricLines) else null
                 val seekToLine: () -> Unit = {
                     entry.key?.let { timestamp ->
@@ -222,9 +213,6 @@ fun FullLyricScreen(
                 } else {
                     LyricKaraokeLine(
                         text = entry.value?.ifBlank { "· · ·" } ?: "· · ·",
-                        isCurrent = isCurrent,
-                        progress = progress,
-                        alpha = alpha,
                         fontSize = fontSize,
                         onClick = seekToLine,
                     )
@@ -288,20 +276,6 @@ fun FullLyricScreen(
 
 // ── Helpers ──
 
-private fun computeKaraokeProgress(
-    idx: Int,
-    timestamps: List<Long?>,
-    positionMs: Long,
-    songLengthMs: Long,
-): Float {
-    val lineTimestamps = timestamps.mapNotNull { it }
-    if (idx !in lineTimestamps.indices) return 0f
-    val cur = lineTimestamps[idx]
-    val next = lineTimestamps.getOrNull(idx + 1) ?: songLengthMs.coerceAtLeast(cur)
-    if (next <= cur) return 1f
-    return ((positionMs - cur).toFloat() / (next - cur)).coerceIn(0f, 1f)
-}
-
 private fun findWordLine(
     timestamp: Long?,
     lines: List<LyricParser.WordLine>,
@@ -321,28 +295,23 @@ private fun WordLyricKaraokeLine(
     fontSize: TextUnit,
     onClick: () -> Unit,
 ) {
-    val dimColor = Color.White.copy(alpha = 0.45f * alpha)
+    val dimColor = Color.White.copy(alpha = 0.45f)
     val brightColor = Color.White.copy(alpha = alpha)
     val annotatedText = buildAnnotatedString {
         line.words.forEach { word ->
-            val active = positionMs >= word.startTimeMs
             val current = positionMs in word.startTimeMs until word.endTimeMs.coerceAtLeast(word.startTimeMs + 1L)
             withStyle(
                 SpanStyle(
-                    color = if (active) brightColor else dimColor,
-                    fontWeight = if (active) FontWeight.ExtraBold else FontWeight.Normal,
-                    shadow = when {
-                        current -> Shadow(
+                    color = if (current) brightColor else dimColor,
+                    fontWeight = if (current) FontWeight.ExtraBold else FontWeight.Normal,
+                    shadow = if (current) {
+                        Shadow(
                             color = Color(0xFFE9DDFF).copy(alpha = 0.92f * alpha),
                             offset = Offset.Zero,
                             blurRadius = 18f,
                         )
-                        active -> Shadow(
-                            color = Color(0xFFBFA7FF).copy(alpha = 0.58f * alpha),
-                            offset = Offset.Zero,
-                            blurRadius = 10f,
-                        )
-                        else -> null
+                    } else {
+                        null
                     },
                 ),
             ) {
@@ -372,14 +341,10 @@ private fun WordLyricKaraokeLine(
 @Composable
 private fun LyricKaraokeLine(
     text: String,
-    isCurrent: Boolean,
-    progress: Float,
-    alpha: Float,
     fontSize: TextUnit,
     onClick: () -> Unit,
 ) {
-    val dimColor = Color.White.copy(alpha = 0.45f * alpha)
-    val brightColor = Color.White.copy(alpha = alpha)
+    val dimColor = Color.White.copy(alpha = 0.45f)
 
     Box(
         modifier = Modifier
@@ -392,29 +357,10 @@ private fun LyricKaraokeLine(
             text = text,
             color = dimColor,
             fontSize = fontSize,
-            fontWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.Normal,
+            fontWeight = FontWeight.Normal,
             textAlign = TextAlign.Center,
             maxLines = 1,
             softWrap = false,
         )
-        if (isCurrent && progress in 0f..1f) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(progress)
-                    .align(Alignment.CenterStart),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = text,
-                    color = brightColor,
-                    fontSize = fontSize,
-                    fontWeight = FontWeight.ExtraBold,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    softWrap = false,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
     }
 }
