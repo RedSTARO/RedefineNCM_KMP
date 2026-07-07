@@ -18,20 +18,26 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -152,9 +158,31 @@ fun AutoHideMiniPlayerController(
                 ),
         ) {
             FullLyricControlConsole(
+                media = media,
+                hasMedia = hasMedia,
+                isPlaying = isPlaying,
+                position = position,
+                totalDuration = totalDuration,
+                progress = progress,
                 shuffleEnabled = shuffleEnabled,
                 accentPalette = accentPalette,
                 onReveal = ::reveal,
+                onSeek = { targetPosition ->
+                    reveal()
+                    player.seekTo(targetPosition)
+                },
+                onPrevious = {
+                    reveal()
+                    player.seekToPrevious()
+                },
+                onPlayPause = {
+                    reveal()
+                    player.togglePlayPause()
+                },
+                onNext = {
+                    reveal()
+                    player.seekToNext()
+                },
                 onFavorite = {
                     reveal()
                     viewModel.onFavClick()
@@ -232,9 +260,19 @@ fun AutoHideMiniPlayerController(
 
 @Composable
 private fun FullLyricControlConsole(
+    media: MediaInfo?,
+    hasMedia: Boolean,
+    isPlaying: Boolean,
+    position: Long,
+    totalDuration: Long,
+    progress: Float,
     shuffleEnabled: Boolean,
     accentPalette: ContentAccentPalette,
     onReveal: () -> Unit,
+    onSeek: (Long) -> Unit,
+    onPrevious: () -> Unit,
+    onPlayPause: () -> Unit,
+    onNext: () -> Unit,
     onFavorite: () -> Unit,
     onQueue: () -> Unit,
     onComments: () -> Unit,
@@ -244,7 +282,20 @@ private fun FullLyricControlConsole(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        MiniNowPlayingBar(onExpand = onReveal)
+        ExpandedPlaybackCard(
+            media = media,
+            hasMedia = hasMedia,
+            isPlaying = isPlaying,
+            position = position,
+            totalDuration = totalDuration,
+            progress = progress,
+            accentPalette = accentPalette,
+            onReveal = onReveal,
+            onSeek = onSeek,
+            onPrevious = onPrevious,
+            onPlayPause = onPlayPause,
+            onNext = onNext,
+        )
         Surface(
             modifier = Modifier
                 .padding(horizontal = 16.dp)
@@ -310,6 +361,172 @@ private fun FullLyricControlConsole(
                         imageVector = if (shuffleEnabled) AppIcons.ShuffleOn else AppIcons.Shuffle,
                         contentDescription = "随机播放",
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExpandedPlaybackCard(
+    media: MediaInfo?,
+    hasMedia: Boolean,
+    isPlaying: Boolean,
+    position: Long,
+    totalDuration: Long,
+    progress: Float,
+    accentPalette: ContentAccentPalette,
+    onReveal: () -> Unit,
+    onSeek: (Long) -> Unit,
+    onPrevious: () -> Unit,
+    onPlayPause: () -> Unit,
+    onNext: () -> Unit,
+) {
+    var isDragging by remember(media?.id) { mutableStateOf(false) }
+    var dragValue by remember(media?.id) { mutableStateOf(progress) }
+    val sliderValue = if (isDragging) dragValue else progress
+    val displayPosition = if (isDragging) {
+        (dragValue * totalDuration).toLong()
+    } else {
+        position
+    }
+
+    Surface(
+        onClick = onReveal,
+        modifier = Modifier
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .widthIn(max = 620.dp)
+            .fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+        color = accentPalette.container.copy(alpha = 0.88f),
+        contentColor = accentPalette.onContainer,
+        tonalElevation = 0.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (hasMedia) {
+                AsyncImage(
+                    model = media?.artworkUri,
+                    contentDescription = "Album art",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(MaterialTheme.shapes.large),
+                )
+            } else {
+                Surface(
+                    modifier = Modifier.size(72.dp),
+                    shape = MaterialTheme.shapes.large,
+                    color = accentPalette.onContainer.copy(alpha = 0.16f),
+                    contentColor = accentPalette.onContainer,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = AppIcons.GraphicEq,
+                            contentDescription = null,
+                            modifier = Modifier.size(32.dp),
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    text = media?.title?.takeIf { it.isNotBlank() } ?: "Not playing",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = media?.artist?.takeIf { it.isNotBlank() } ?: "No playback yet",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = accentPalette.onContainer.copy(alpha = 0.72f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Slider(
+                    value = sliderValue.coerceIn(0f, 1f),
+                    onValueChange = { percent ->
+                        isDragging = true
+                        dragValue = percent.coerceIn(0f, 1f)
+                    },
+                    onValueChangeFinished = {
+                        if (totalDuration > 0L) {
+                            onSeek((dragValue * totalDuration).toLong().coerceIn(0L, totalDuration))
+                        }
+                        isDragging = false
+                    },
+                    enabled = hasMedia && totalDuration > 0L,
+                    colors = SliderDefaults.colors(
+                        thumbColor = accentPalette.onContainer,
+                        activeTrackColor = accentPalette.onContainer,
+                        inactiveTrackColor = accentPalette.onContainer.copy(alpha = 0.22f),
+                        disabledThumbColor = accentPalette.onContainer.copy(alpha = 0.38f),
+                        disabledActiveTrackColor = accentPalette.onContainer.copy(alpha = 0.22f),
+                        disabledInactiveTrackColor = accentPalette.onContainer.copy(alpha = 0.12f),
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(32.dp),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = if (hasMedia) {
+                            "${formatControllerDuration(displayPosition)} / ${formatControllerDuration(totalDuration)}"
+                        } else {
+                            "0:00 / 0:00"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = accentPalette.onContainer.copy(alpha = 0.72f),
+                        maxLines = 1,
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(
+                            onClick = onPrevious,
+                            enabled = hasMedia,
+                            modifier = Modifier.size(30.dp),
+                        ) {
+                            Icon(AppIcons.KeyboardArrowLeft, contentDescription = "上一首")
+                        }
+                        FilledIconButton(
+                            onClick = onPlayPause,
+                            enabled = hasMedia,
+                            modifier = Modifier.size(34.dp),
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = accentPalette.onContainer.copy(alpha = 0.18f),
+                                contentColor = accentPalette.onContainer,
+                                disabledContainerColor = accentPalette.onContainer.copy(alpha = 0.08f),
+                                disabledContentColor = accentPalette.onContainer.copy(alpha = 0.42f),
+                            ),
+                        ) {
+                            Icon(
+                                imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
+                                contentDescription = if (isPlaying) "暂停" else "播放",
+                            )
+                        }
+                        IconButton(
+                            onClick = onNext,
+                            enabled = hasMedia,
+                            modifier = Modifier.size(30.dp),
+                        ) {
+                            Icon(AppIcons.KeyboardArrowRight, contentDescription = "下一首")
+                        }
+                    }
                 }
             }
         }
