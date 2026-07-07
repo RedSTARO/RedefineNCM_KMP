@@ -1,11 +1,28 @@
 package com.leejlredstar.redefinencm.kmp.lyric
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -14,12 +31,17 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
+import androidx.compose.ui.graphics.Color as ComposeColor
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
-import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
+import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
@@ -28,11 +50,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.koin.compose.koinInject
 import java.awt.Canvas
-import java.awt.Color
 import java.io.File
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
+import java.awt.Color as AwtColor
 
 /**
  * Desktop (JVM) actual: AMLL lyric engine in the **system WebView**
@@ -69,7 +91,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
 
     // 资产解包很快（3 个小文件拷贝），首帧前同步执行即可
     val assetsDir = remember { extractAmllAssets() }
-    val canvas = remember { Canvas().apply { background = Color.BLACK } }
+    val canvas = remember { Canvas().apply { background = AwtColor.BLACK } }
     val session = remember(viewModel) {
         WebviewSession(engineReadyFlow) { timeMs, mediaId ->
             viewModel.onLyricLineClick(mediaId, timeMs)
@@ -143,12 +165,109 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
 
     Column(Modifier.fillMaxSize()) {
         LyricToolbar(onBack)
-        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            SwingPanel(factory = { canvas }, modifier = Modifier.fillMaxSize())
-            AutoHideMiniPlayerController(
-                onExpand = onBack,
-                modifier = Modifier.fillMaxSize(),
+        SwingPanel(
+            factory = { canvas },
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+        )
+        DesktopInlineMiniPlayerController(onExpand = onBack)
+    }
+}
+
+@Composable
+private fun DesktopInlineMiniPlayerController(
+    onExpand: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var visible by remember { mutableStateOf(true) }
+    var revealRequest by remember { mutableIntStateOf(0) }
+    val controllerHeight by animateDpAsState(
+        targetValue = if (visible) 136.dp else 48.dp,
+        animationSpec = tween(240, easing = FastOutSlowInEasing),
+        label = "desktopAmllMiniHeight",
+    )
+
+    fun reveal() {
+        revealRequest += 1
+    }
+
+    LaunchedEffect(revealRequest) {
+        visible = true
+        delay(3_600)
+        visible = false
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(controllerHeight)
+            .navigationBarsPadding()
+            .pointerInput(Unit) {
+                detectTapGestures { reveal() }
+            }
+            .pointerInput(Unit) {
+                detectVerticalDragGestures { change, dragAmount ->
+                    if (dragAmount < -10f) {
+                        change.consume()
+                        reveal()
+                    }
+                }
+            },
+    ) {
+        AnimatedVisibility(
+            visible = visible,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = slideInVertically(
+                animationSpec = tween(260, easing = FastOutSlowInEasing),
+                initialOffsetY = { it / 2 },
+            ) + fadeIn(animationSpec = tween(160, easing = LinearOutSlowInEasing)) +
+                scaleIn(
+                    initialScale = 0.92f,
+                    animationSpec = tween(260, easing = FastOutSlowInEasing),
+                ),
+            exit = slideOutVertically(
+                animationSpec = tween(220, easing = FastOutSlowInEasing),
+                targetOffsetY = { it / 2 },
+            ) + fadeOut(animationSpec = tween(140, easing = LinearOutSlowInEasing)) +
+                scaleOut(
+                    targetScale = 0.92f,
+                    animationSpec = tween(220, easing = FastOutSlowInEasing),
+                ),
+        ) {
+            MiniNowPlayingBar(
+                onExpand = {
+                    reveal()
+                    onExpand()
+                },
             )
+        }
+
+        AnimatedVisibility(
+            visible = !visible,
+            modifier = Modifier.align(Alignment.Center),
+            enter = fadeIn(animationSpec = tween(180, easing = LinearOutSlowInEasing)) +
+                scaleIn(
+                    initialScale = 0.94f,
+                    animationSpec = tween(220, easing = FastOutSlowInEasing),
+                ),
+            exit = fadeOut(animationSpec = tween(120, easing = LinearOutSlowInEasing)) +
+                scaleOut(
+                    targetScale = 0.94f,
+                    animationSpec = tween(140, easing = FastOutSlowInEasing),
+                ),
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = ComposeColor.White.copy(alpha = 0.14f),
+                contentColor = ComposeColor.White.copy(alpha = 0.84f),
+            ) {
+                Text(
+                    text = "轻点底部或上滑呼出播放器",
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                )
+            }
         }
     }
 }
