@@ -65,7 +65,8 @@
     padding: .42em var(--amll-lp-line-padding-x, 1em);
   }
   .FmKaba_lyricLine,
-  .FmKaba_lyricLineWrapper {
+  .FmKaba_lyricLineWrapper,
+  [data-amll-line-index] {
     cursor: pointer;
   }
   html[data-platform="android"] .FmKaba_lyricLine .FmKaba_lyricMainLine {
@@ -258,32 +259,88 @@ function notifyHostLyricLineClicked(timeMs, mediaId) {
   }
 }
 
+function collectLyricLineElements() {
+  const root = document.getElementById("amll-root");
+  if (!root) return [];
+  const selectorGroups = [
+    "[data-amll-line-index]",
+    ".FmKaba_lyricLineWrapper",
+    ".FmKaba_lyricLine",
+    "[class*='lyricLineWrapper']",
+    "[class*='lyricLine']",
+  ];
+  for (const selector of selectorGroups) {
+    const elements = Array.from(root.querySelectorAll(selector))
+      .filter((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && element.textContent.trim().length > 0;
+      });
+    if (elements.length > 0) return elements;
+  }
+  return [];
+}
+
+function tagRenderedLyricLines() {
+  const elements = collectLyricLineElements();
+  elements.forEach((element, index) => {
+    element.dataset.amllLineIndex = String(index);
+  });
+}
+
+function scheduleLyricLineTagging() {
+  requestAnimationFrame(() => {
+    tagRenderedLyricLines();
+    requestAnimationFrame(tagRenderedLyricLines);
+  });
+}
+
+function findClickedLyricLineIndex(event, root) {
+  const eventTarget = event.target && event.target.nodeType === 1
+    ? event.target
+    : event.target && event.target.parentElement;
+  const indexed = eventTarget && eventTarget.closest
+    ? eventTarget.closest("[data-amll-line-index]")
+    : null;
+  if (indexed && root.contains(indexed)) {
+    const index = Number(indexed.dataset.amllLineIndex);
+    if (Number.isInteger(index)) return index;
+  }
+
+  const target = eventTarget && eventTarget.closest
+    ? eventTarget.closest(".FmKaba_lyricLineWrapper, .FmKaba_lyricLine, [class*='lyricLineWrapper'], [class*='lyricLine']")
+    : null;
+  if (target && root.contains(target)) {
+    const elements = collectLyricLineElements();
+    const index = elements.indexOf(target);
+    if (index >= 0) return index;
+  }
+
+  const elements = collectLyricLineElements();
+  let closestIndex = -1;
+  let closestDistance = Number.POSITIVE_INFINITY;
+  elements.forEach((element, index) => {
+    const rect = element.getBoundingClientRect();
+    const distance = event.clientY < rect.top
+      ? rect.top - event.clientY
+      : event.clientY > rect.bottom
+        ? event.clientY - rect.bottom
+        : 0;
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestIndex = index;
+    }
+  });
+  return closestDistance <= 48 ? closestIndex : -1;
+}
+
 function installLyricClickSeeking() {
   if (lyricClickSeekingInstalled) return;
   const root = document.getElementById("amll-root");
   if (!root) return;
   lyricClickSeekingInstalled = true;
   root.addEventListener("click", function (event) {
-    const eventTarget = event.target && event.target.nodeType === 1
-      ? event.target
-      : event.target && event.target.parentElement;
-    const target = eventTarget && eventTarget.closest
-      ? eventTarget.closest(".FmKaba_lyricLineWrapper, .FmKaba_lyricLine")
-      : null;
-    if (!target || !root.contains(target)) return;
-
-    const wrapper = target.classList.contains("FmKaba_lyricLineWrapper")
-      ? target
-      : target.closest(".FmKaba_lyricLineWrapper");
-    const wrappers = Array.from(root.querySelectorAll(".FmKaba_lyricLineWrapper"));
-    let index = wrappers.indexOf(wrapper);
-    if (index < 0) {
-      const line = target.classList.contains("FmKaba_lyricLine")
-        ? target
-        : target.closest(".FmKaba_lyricLine");
-      index = Array.from(root.querySelectorAll(".FmKaba_lyricLine")).indexOf(line);
-    }
-
+    const index = findClickedLyricLineIndex(event, root);
+    if (index < 0) return;
     const lineData = currentLyricLines[index];
     const time = Number(lineData && lineData.startTime);
     if (!Number.isFinite(time)) return;
@@ -402,6 +459,7 @@ function installWordLyricSupport() {
       const lines = applyLyricOptions(parsed, options);
       setCurrentLyricLines(lines, mediaId);
       this.player.setLyricLines(lines);
+      scheduleLyricLineTagging();
       globalThis.AmllPage && globalThis.AmllPage.hideLoading();
     };
   }
@@ -422,6 +480,7 @@ function installWordLyricSupport() {
     const lines = applyLyricOptions(primaryLines, options);
     setCurrentLyricLines(lines, mediaId);
     this.player.setLyricLines(lines);
+    scheduleLyricLineTagging();
     globalThis.AmllPage && globalThis.AmllPage.hideLoading();
   };
 }

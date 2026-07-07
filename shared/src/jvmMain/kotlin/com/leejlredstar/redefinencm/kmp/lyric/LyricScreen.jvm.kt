@@ -27,6 +27,12 @@ import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import com.sun.jna.Native
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.longOrNull
 import org.koin.compose.koinInject
 import java.awt.BorderLayout
 import java.awt.Canvas
@@ -153,12 +159,12 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         if (rawWordLyric.isNotEmpty()) {
             println("AMLL[wv2] feeding word lyrics media=$mediaId, len=${rawWordLyric.length}")
             session.eval(
-                "AmllBridge.loadWordLyrics('${rawWordLyric.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}', $lyricOptions);",
+                "AmllBridge.loadWordLyrics('${rawWordLyric.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}', $lyricOptions); AmllBridge.setTime($currentPosition);",
             )
         } else {
             println("AMLL[wv2] feeding lyrics media=$mediaId, len=${rawLyric.length}")
             session.eval(
-                "AmllBridge.loadLyrics('${rawLyric.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}', $lyricOptions);",
+                "AmllBridge.loadLyrics('${rawLyric.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}', $lyricOptions); AmllBridge.setTime($currentPosition);",
             )
         }
     }
@@ -330,7 +336,7 @@ private class WebviewSession(
     }
     private val seekCallback = object : WebviewJna.BindCallback {
         override fun callback(seq: Long, req: String?, arg: Long) {
-            val (timeMs, mediaId) = parseSeekRequest(req)
+            val (timeMs, mediaId) = parseAmllSeekRequest(req)
             println("AMLL[wv2] line click seek media=$mediaId to $timeMs")
             onLineClicked(timeMs, mediaId)
             runCatching { WebviewJna.N.webview_return(handle.get(), seq, 0, "null") }
@@ -475,23 +481,66 @@ private class WebviewSession(
         println("AMLL[wv2] canvas hwnd via EnumChildWindows: $found")
         return found
     }
-
-    private fun parseSeekRequest(req: String?): Pair<Long, String?> {
-        val text = req.orEmpty()
-        val time = Regex("""-?\d+""")
-            .find(text)
-            ?.value
-            ?.toLongOrNull()
-            ?.coerceAtLeast(0L)
-            ?: 0L
-        val mediaId = Regex(""""([^"\\]*(?:\\.[^"\\]*)*)"""")
-            .findAll(text)
-            .map { it.groupValues[1].replace("\\\"", "\"").replace("\\\\", "\\") }
-            .firstOrNull()
-            ?.takeIf { it.isNotBlank() }
-        return time to mediaId
-    }
 }
+
+private val amllSeekJson = Json {
+    ignoreUnknownKeys = true
+    isLenient = true
+}
+
+internal fun parseAmllSeekRequest(req: String?): Pair<Long, String?> {
+    val text = req.orEmpty().trim()
+    if (text.isEmpty()) return 0L to null
+
+    runCatching { amllSeekJson.parseToJsonElement(text) }
+        .getOrNull()
+        ?.let { element ->
+            when (element) {
+                is JsonArray -> {
+                    val time = element.getOrNull(0)?.asLongOrNull()?.coerceAtLeast(0L) ?: 0L
+                    val mediaId = element.getOrNull(1)?.asStringOrNull()
+                    return time to mediaId
+                }
+                is JsonObject -> {
+                    val time = listOf("timeMs", "positionMs", "time", "position")
+                        .firstNotNullOfOrNull { key -> element[key]?.asLongOrNull() }
+                        ?.coerceAtLeast(0L)
+                        ?: 0L
+                    val mediaId = listOf("mediaId", "songId", "id")
+                        .firstNotNullOfOrNull { key -> element[key]?.asStringOrNull() }
+                    return time to mediaId
+                }
+                else -> Unit
+            }
+        }
+
+    Regex("""seekTo:(-?\d+):([^,\]\s]+)""")
+        .find(text)
+        ?.let { match ->
+            val time = match.groupValues[1].toLongOrNull()?.coerceAtLeast(0L) ?: 0L
+            val mediaId = match.groupValues[2].takeIf { it.isNotBlank() }
+            return time to mediaId
+        }
+
+    val timeText = Regex("""-?\d+""").find(text)?.value
+    val time = timeText?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L
+    val mediaId = Regex(""""([^"\\]*(?:\\.[^"\\]*)*)"""")
+        .findAll(text)
+        .map { it.groupValues[1].replace("\\\"", "\"").replace("\\\\", "\\") }
+        .firstOrNull { it.isNotBlank() && it != timeText }
+    return time to mediaId
+}
+
+private fun kotlinx.serialization.json.JsonElement.asStringOrNull(): String? =
+    (this as? JsonPrimitive)
+        ?.contentOrNull
+        ?.takeIf { it.isNotBlank() }
+
+private fun kotlinx.serialization.json.JsonElement.asLongOrNull(): Long? =
+    (this as? JsonPrimitive)
+        ?.let { primitive ->
+            primitive.longOrNull ?: primitive.contentOrNull?.toLongOrNull()
+        }
 
 /** AWT 逻辑尺寸 × 每屏 DPI 变换 = Win32 物理像素。 */
 private fun Canvas.physicalWidth(): Int =
