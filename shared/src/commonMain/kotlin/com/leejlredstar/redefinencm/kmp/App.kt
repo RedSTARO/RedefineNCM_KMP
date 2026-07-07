@@ -51,6 +51,7 @@ private sealed interface TabDest {
 private sealed interface PushedDest {
     data object Login : PushedDest
     data object NowPlaying : PushedDest
+    data object FullLyric : PushedDest
     data class Playlist(val id: Long) : PushedDest
 }
 
@@ -133,13 +134,11 @@ fun App() {
                     if (pushedStack.isNotEmpty()) {
                         when (val dest = pushedStack.last()) {
                             is PushedDest.Login -> LoginScreen(onBack = ::back)
-                            is PushedDest.NowPlaying -> {
-                                if (settings.getBoolean(SettingKeys.USE_FULL_LYRIC, false)) {
-                                    WebViewLyricScreen(onBack = ::back)
-                                } else {
-                                    NowPlayingScreen(onBack = ::back)
-                                }
-                            }
+                            is PushedDest.NowPlaying -> NowPlayingScreen(
+                                onBack = ::back,
+                                onOpenFullLyric = { push(PushedDest.FullLyric) },
+                            )
+                            is PushedDest.FullLyric -> WebViewLyricScreen(onBack = ::back)
                             is PushedDest.Playlist -> PlaylistDetailScreen(
                                 playlistId = dest.id,
                                 onBack = ::back,

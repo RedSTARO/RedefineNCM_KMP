@@ -65,7 +65,6 @@ fun SettingsScreen(
     var checkUpdate by remember { mutableStateOf(settings.getBoolean(SettingKeys.CHECK_UPDATE, false)) }
     var searchPrediction by remember { mutableStateOf(settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true)) }
     var showDownloadStatus by remember { mutableStateOf(settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false)) }
-    var useFullLyric by remember { mutableStateOf(settings.getBoolean(SettingKeys.USE_FULL_LYRIC, false)) }
     var adaptOriginalLyric by remember { mutableStateOf(settings.getBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, false)) }
     var importStatus by remember { mutableStateOf<String?>(null) }
     var serverCheckStatus by remember { mutableStateOf<String?>(null) }
@@ -173,10 +172,6 @@ fun SettingsScreen(
                 SettingsSwitch(showDownloadStatus, "Show download status") { v ->
                     showDownloadStatus = v
                     settings.setBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, v)
-                }
-                SettingsSwitch(useFullLyric, "Full-screen lyrics") { v ->
-                    useFullLyric = v
-                    settings.setBoolean(SettingKeys.USE_FULL_LYRIC, v)
                 }
                 SettingsSwitch(adaptOriginalLyric, "Adapt original Android Live Update lyric") { v ->
                     adaptOriginalLyric = v
