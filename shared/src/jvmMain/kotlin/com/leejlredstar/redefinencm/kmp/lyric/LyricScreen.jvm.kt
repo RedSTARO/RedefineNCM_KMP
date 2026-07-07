@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.lyric
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.unit.dp
+import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
@@ -148,7 +150,13 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
 
     Column(Modifier.fillMaxSize()) {
         LyricToolbar(onBack)
-        SwingPanel(factory = { canvas }, modifier = Modifier.fillMaxWidth().weight(1f))
+        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            SwingPanel(factory = { canvas }, modifier = Modifier.fillMaxSize())
+            AutoHideMiniPlayerController(
+                onExpand = onBack,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 

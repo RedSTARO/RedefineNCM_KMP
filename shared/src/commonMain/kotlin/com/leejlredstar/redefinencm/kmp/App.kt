@@ -177,7 +177,9 @@ fun App() {
                 )
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val isWide = maxWidth >= 600.dp
-                    val showMiniPlayer = pushedStack.lastOrNull() !is PushedDest.NowPlaying
+                    val showMiniPlayer = pushedStack.lastOrNull().let {
+                        it !is PushedDest.NowPlaying && it !is PushedDest.FullLyric
+                    }
                     val rootDest = pushedStack.lastOrNull()
                         ?.let { RootDest.Pushed(it, pushedStack.size) }
                         ?: RootDest.Tab(currentTab)
