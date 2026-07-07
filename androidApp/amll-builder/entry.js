@@ -44,6 +44,7 @@ globalThis.AmllBridge = {
     if (!this.player) return;
     const parsed = parseLrc(lrcText);
     this.player.setLyricLines(parsed);
+    globalThis.AmllPage?.hideLoading?.();
     if (globalThis.__amllDebug) globalThis.__amllDebug.lines = parsed.length;
   },
 
