@@ -260,6 +260,22 @@ class NowPlayingViewModel(
     fun onNextClick() = player.seekToNext()
     fun onSeekClick(index: Int) = player.skipToIndex(index)
     fun onPositionSeekClick(newPosition: Long) = player.seekTo(newPosition)
+
+    fun onLyricLineClick(mediaId: String?, newPosition: Long) {
+        val currentId = currentMedia.value?.id ?: return
+        if (mediaId != null && mediaId != currentId) return
+        if (mediaId != null && lyricMediaId.value != mediaId) return
+
+        val duration = songLength.value
+        val safePosition = if (duration > 0) {
+            // 旧歌的点击事件可能在切歌动画/WebView 重绘期间迟到；超出当前歌时长的 seek 丢弃。
+            if (newPosition > duration + 2_000L) return
+            newPosition.coerceIn(0L, duration)
+        } else {
+            newPosition.coerceAtLeast(0L)
+        }
+        player.seekTo(safePosition)
+    }
     fun onPlaylistClick() = rebuildPlaylistFromTimeline()
     fun onShuffleClick(status: Boolean) = player.setShuffleEnabled(status)
 
