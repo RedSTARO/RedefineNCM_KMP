@@ -98,6 +98,9 @@ class NCMApi(private val client: HttpClient) {
     suspend fun lyric(id: Long): Lyric =
         client.get("/lyric") { parameter("id", id) }.body()
 
+    suspend fun lyricNew(id: Long): Lyric =
+        client.get("/lyric/new") { parameter("id", id) }.body()
+
     // ── Like ──
 
     suspend fun like(id: Long?): Like =

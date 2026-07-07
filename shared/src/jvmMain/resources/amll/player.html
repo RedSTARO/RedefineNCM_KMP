@@ -61,10 +61,20 @@
     padding: .45em .75em;
   }
   .FmKaba_lyricLine .FmKaba_lyricMainLine {
-    color: rgba(255,255,255,0.45);
+    color: rgba(255,255,255,0.30);
+  }
+  .FmKaba_lyricLine.FmKaba_active {
+    --bright-mask-alpha: 1 !important;
+    --dark-mask-alpha: 0.14 !important;
+  }
+  .FmKaba_lyricLine.FmKaba_active .FmKaba_lyricMainLine {
+    color: rgba(255,255,255,0.98);
+    text-shadow:
+      0 0 10px rgba(255,255,255,0.35),
+      0 4px 24px rgba(0,0,0,0.35);
   }
   .FmKaba_lyricLine.FmKaba_active .FmKaba_wordBody {
-    color: rgba(255,255,255,0.45);
+    color: inherit;
     -webkit-text-stroke: 0;
     text-shadow: inherit;
     filter: none;
@@ -80,13 +90,23 @@
     filter: drop-shadow(0 0 10px rgba(190,160,255,0.52));
   }
   html[data-platform="android"] .FmKaba_lyricLine.FmKaba_active .FmKaba_wordBody {
-    color: rgba(255,255,255,0.46);
+    color: inherit;
     -webkit-text-stroke: 0;
     text-shadow: inherit;
     filter: none;
   }
   html[data-platform="android"] .FmKaba_lyricLine .FmKaba_lyricMainLine {
-    color: rgba(255,255,255,0.46);
+    color: rgba(255,255,255,0.28);
+  }
+  html[data-platform="android"] .FmKaba_lyricLine.FmKaba_active {
+    --bright-mask-alpha: 1 !important;
+    --dark-mask-alpha: 0.12 !important;
+  }
+  html[data-platform="android"] .FmKaba_lyricLine.FmKaba_active .FmKaba_lyricMainLine {
+    color: rgba(255,255,255,0.98);
+    text-shadow:
+      0 0 10px rgba(255,255,255,0.38),
+      0 4px 24px rgba(0,0,0,0.35);
   }
   html[data-platform="android"] .FmKaba_lyricLine .FmKaba_emphasize .FmKaba_wordBody,
   html[data-platform="android"] .FmKaba_lyricLine .FmKaba_wordBody.FmKaba_emphasize {
