@@ -379,15 +379,10 @@ function applyLyricOptions(lines, options) {
   const opts = options || {};
   const translations = opts.showTranslation ? parseLrcSupplement(opts.translatedLyric) : [];
   const romans = opts.showRoman ? parseLrcSupplement(opts.romanLyric) : [];
-  const extras = opts.showExtra ? parseLrcSupplement(opts.extraLyric) : [];
   return (Array.isArray(lines) ? lines : []).map(function (line) {
     const next = Object.assign({}, line);
-    const translated = [];
     const translation = nearestSupplement(translations, next.startTime);
-    const extra = nearestSupplement(extras, next.startTime);
-    if (translation) translated.push(translation);
-    if (extra && extra !== translation) translated.push(extra);
-    if (translated.length) next.translatedLyric = translated.join(" / ");
+    if (translation) next.translatedLyric = translation;
     const roman = nearestSupplement(romans, next.startTime);
     if (roman) next.romanLyric = roman;
     return next;

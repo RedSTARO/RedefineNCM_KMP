@@ -54,7 +54,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val rawWordLyric by viewModel.rawWordLyric.collectAsState()
     val rawTranslatedLyric by viewModel.rawTranslatedLyric.collectAsState()
     val rawRomanLyric by viewModel.rawRomanLyric.collectAsState()
-    val rawExtraLyric by viewModel.rawExtraLyric.collectAsState()
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
@@ -66,9 +65,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     }
     val showRomanLyric = remember {
         settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)
-    }
-    val showExtraLyric = remember {
-        settings.getBoolean(SettingKeys.SHOW_EXTRA_LYRIC, false)
     }
 
     // 资产解包很快（3 个小文件拷贝），首帧前同步执行即可
@@ -100,7 +96,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         rawLyric,
         rawTranslatedLyric,
         rawRomanLyric,
-        rawExtraLyric,
     ) {
         if (!engineReady) return@LaunchedEffect
         val mediaId = lyricMediaId ?: return@LaunchedEffect
@@ -111,10 +106,8 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         val lyricOptions = buildLyricOptionsJs(
             translatedLyric = rawTranslatedLyric,
             romanLyric = rawRomanLyric,
-            extraLyric = rawExtraLyric,
             showTranslatedLyric = showTranslatedLyric,
             showRomanLyric = showRomanLyric,
-            showExtraLyric = showExtraLyric,
         )
         if (rawWordLyric.isNotEmpty()) {
             println("AMLL[wv2] feeding word lyrics media=$mediaId, len=${rawWordLyric.length}")
@@ -389,14 +382,10 @@ private fun String.escapeJsSingleQuoted(): String =
 private fun buildLyricOptionsJs(
     translatedLyric: String,
     romanLyric: String,
-    extraLyric: String,
     showTranslatedLyric: Boolean,
     showRomanLyric: Boolean,
-    showExtraLyric: Boolean,
 ): String =
     "{translatedLyric:'${translatedLyric.escapeJsSingleQuoted()}'," +
         "romanLyric:'${romanLyric.escapeJsSingleQuoted()}'," +
-        "extraLyric:'${extraLyric.escapeJsSingleQuoted()}'," +
         "showTranslation:$showTranslatedLyric," +
-        "showRoman:$showRomanLyric," +
-        "showExtra:$showExtraLyric}"
+        "showRoman:$showRomanLyric}"
