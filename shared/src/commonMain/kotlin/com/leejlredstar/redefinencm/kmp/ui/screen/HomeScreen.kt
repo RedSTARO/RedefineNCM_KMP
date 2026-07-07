@@ -95,13 +95,22 @@ fun HomeScreen(
         animationSpec = spring(),
         label = "homePageAccent",
     )
+    val pagePalette = contentAccentPalette(pageAccent)
 
     BackHandler(enabled = showSearch) { showSearch = false }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface)
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        pagePalette.pageStart,
+                        pagePalette.pageMiddle,
+                        pagePalette.pageEnd,
+                    ),
+                ),
+            )
             .windowInsetsPadding(WindowInsets.statusBars)
             .padding(bottom = scaffoldPadding.calculateBottomPadding()),
     ) {
@@ -260,6 +269,7 @@ private fun HomeHero(
                 HomeAccountAvatar(
                     avatarUrl = avatarUrl,
                     nickname = nickname,
+                    accentColor = accentColor,
                     onOpenMy = onOpenMy,
                     onAccentColor = onAccentColor,
                 )
@@ -279,14 +289,16 @@ private fun HomeHero(
 private fun HomeAccountAvatar(
     avatarUrl: String?,
     nickname: String,
+    accentColor: Color,
     onOpenMy: () -> Unit,
     onAccentColor: (Color) -> Unit,
 ) {
+    val avatarPalette = contentAccentPalette(accentColor)
     Surface(
         onClick = onOpenMy,
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = avatarPalette.container,
+        contentColor = avatarPalette.onContainer,
         modifier = Modifier.size(64.dp),
     ) {
         if (avatarUrl.isNullOrBlank()) {
