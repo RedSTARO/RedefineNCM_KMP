@@ -228,21 +228,33 @@ window.addEventListener("unhandledrejection", function (e) {
 });
 
 let currentLyricLines = [];
+let currentLyricMediaId = "";
 let lyricClickSeekingInstalled = false;
 
-function setCurrentLyricLines(lines) {
+function normalizeMediaId(mediaId) {
+  return mediaId == null ? "" : String(mediaId);
+}
+
+function setCurrentLyricLines(lines, mediaId) {
+  if (mediaId !== undefined) currentLyricMediaId = normalizeMediaId(mediaId);
   currentLyricLines = Array.isArray(lines) ? lines : [];
+  currentLyricLines.forEach(function (line) {
+    if (line && currentLyricMediaId) line.mediaId = currentLyricMediaId;
+  });
   if (globalThis.__amllDebug) globalThis.__amllDebug.lines = currentLyricLines.length;
 }
 
-function notifyHostLyricLineClicked(timeMs) {
+function notifyHostLyricLineClicked(timeMs, mediaId) {
   const safeTime = Math.max(0, Math.round(Number(timeMs) || 0));
+  const safeMediaId = normalizeMediaId(mediaId || currentLyricMediaId);
   if (globalThis.AmllCallback && globalThis.AmllCallback.onLyricLineClicked) {
-    globalThis.AmllCallback.onLyricLineClicked(safeTime);
+    globalThis.AmllCallback.onLyricLineClicked(safeTime, safeMediaId);
+  } else if (typeof globalThis.amllSeek === "function") {
+    globalThis.amllSeek(safeTime, safeMediaId);
   } else if (globalThis.amllHost && globalThis.amllHost.onLyricLineClicked) {
-    globalThis.amllHost.onLyricLineClicked(safeTime);
+    globalThis.amllHost.onLyricLineClicked(safeTime, safeMediaId);
   } else if (typeof globalThis.cefQuery === "function") {
-    globalThis.cefQuery({ request: "seekTo:" + safeTime, onSuccess: function () {}, onFailure: function () {} });
+    globalThis.cefQuery({ request: "seekTo:" + safeTime + ":" + safeMediaId, onSuccess: function () {}, onFailure: function () {} });
   }
 }
 
@@ -275,7 +287,7 @@ function installLyricClickSeeking() {
     const lineData = currentLyricLines[index];
     const time = Number(lineData && lineData.startTime);
     if (!Number.isFinite(time)) return;
-    notifyHostLyricLineClicked(time);
+    notifyHostLyricLineClicked(time, lineData && lineData.mediaId);
   }, true);
 }
 
@@ -338,23 +350,29 @@ function installWordLyricSupport() {
 
   if (!bridge.__redefineLoadLyricsWrapped && bridge.loadLyrics) {
     bridge.__redefineLoadLyricsWrapped = true;
-    bridge.loadLyrics = function (lrcText) {
+    bridge.loadLyrics = function (lrcText, mediaId) {
       if (!this.player) return;
       const parsed = this.parseLrc ? this.parseLrc(lrcText) : [];
-      setCurrentLyricLines(parsed);
+      setCurrentLyricLines(parsed, mediaId);
       this.player.setLyricLines(parsed);
       globalThis.AmllPage && globalThis.AmllPage.hideLoading();
     };
   }
 
+  bridge.resetTrack = function (mediaId) {
+    currentLyricMediaId = normalizeMediaId(mediaId);
+    setCurrentLyricLines([], currentLyricMediaId);
+    this.player?.setLyricLines([]);
+  };
+
   bridge.parseYrc = parseYrcText;
   if (bridge.__redefineWordLyricWrapped) return;
   bridge.__redefineWordLyricWrapped = true;
-  bridge.loadWordLyrics = function (yrcText) {
+  bridge.loadWordLyrics = function (yrcText, mediaId) {
     if (!this.player) return;
     const parsed = parseYrcText(yrcText);
     const lines = parsed.length ? parsed : (this.parseLrc ? this.parseLrc(yrcText) : []);
-    setCurrentLyricLines(lines);
+    setCurrentLyricLines(lines, mediaId);
     this.player.setLyricLines(lines);
     globalThis.AmllPage && globalThis.AmllPage.hideLoading();
   };

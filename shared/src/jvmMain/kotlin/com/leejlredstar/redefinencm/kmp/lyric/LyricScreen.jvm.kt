@@ -47,6 +47,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val viewModel: NowPlayingViewModel = koinInject()
     val rawLyric by viewModel.rawLyric.collectAsState()
     val rawWordLyric by viewModel.rawWordLyric.collectAsState()
+    val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
 
@@ -56,7 +57,11 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     // 资产解包很快（3 个小文件拷贝），首帧前同步执行即可
     val assetsDir = remember { extractAmllAssets() }
     val canvas = remember { Canvas().apply { background = Color.BLACK } }
-    val session = remember { WebviewSession(engineReadyFlow) }
+    val session = remember(viewModel) {
+        WebviewSession(engineReadyFlow) { timeMs, mediaId ->
+            viewModel.onLyricLineClick(mediaId, timeMs)
+        }
+    }
 
     // Canvas 拿到原生句柄（displayable + 有尺寸）后，在专用线程启动 webview 事件循环
     LaunchedEffect(Unit) {
@@ -64,19 +69,30 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         session.start(canvas, fileUrl(File(assetsDir, "player.html")))
     }
 
-    // Feed raw LRC once the engine is ready and whenever the track changes.
-    LaunchedEffect(engineReady, rawWordLyric, rawLyric) {
+    LaunchedEffect(engineReady, lyricMediaId) {
         if (!engineReady) return@LaunchedEffect
+        val mediaId = lyricMediaId ?: return@LaunchedEffect
+        session.eval("AmllBridge.resetTrack('${mediaId.escapeJsSingleQuoted()}'); AmllBridge.setTime(0);")
+    }
+
+    // Feed raw LRC once the engine is ready and whenever the track changes.
+    LaunchedEffect(engineReady, lyricMediaId, rawWordLyric, rawLyric) {
+        if (!engineReady) return@LaunchedEffect
+        val mediaId = lyricMediaId ?: return@LaunchedEffect
         if (rawWordLyric.isEmpty() && rawLyric.isEmpty()) {
             println("AMLL[wv2] engineReady but rawLyric is EMPTY (no lyrics fetched)")
             return@LaunchedEffect
         }
         if (rawWordLyric.isNotEmpty()) {
-            println("AMLL[wv2] feeding word lyrics, len=${rawWordLyric.length}")
-            session.eval("AmllBridge.loadWordLyrics('${rawWordLyric.escapeJsSingleQuoted()}');")
+            println("AMLL[wv2] feeding word lyrics media=$mediaId, len=${rawWordLyric.length}")
+            session.eval(
+                "AmllBridge.loadWordLyrics('${rawWordLyric.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}');",
+            )
         } else {
-            println("AMLL[wv2] feeding lyrics, len=${rawLyric.length}")
-            session.eval("AmllBridge.loadLyrics('${rawLyric.escapeJsSingleQuoted()}');")
+            println("AMLL[wv2] feeding lyrics media=$mediaId, len=${rawLyric.length}")
+            session.eval(
+                "AmllBridge.loadLyrics('${rawLyric.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}');",
+            )
         }
     }
 
@@ -109,7 +125,10 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
  * 一次歌词页会话：持有 webview 句柄、事件循环线程与 JNA 回调的强引用
  * （native 侧存了回调指针，Java 侧必须防 GC）。
  */
-private class WebviewSession(private val readyFlow: MutableStateFlow<Boolean>) {
+private class WebviewSession(
+    private val readyFlow: MutableStateFlow<Boolean>,
+    private val onLineClicked: (Long, String?) -> Unit,
+) {
     private val handle = AtomicLong(0)
     private val jobs = ConcurrentLinkedQueue<String>()
 
@@ -118,6 +137,14 @@ private class WebviewSession(private val readyFlow: MutableStateFlow<Boolean>) {
         override fun callback(seq: Long, req: String?, arg: Long) {
             println("AMLL[wv2] onReady received -> engineReady=true")
             readyFlow.value = true
+            runCatching { WebviewJna.N.webview_return(handle.get(), seq, 0, "null") }
+        }
+    }
+    private val seekCallback = object : WebviewJna.BindCallback {
+        override fun callback(seq: Long, req: String?, arg: Long) {
+            val (timeMs, mediaId) = parseSeekRequest(req)
+            println("AMLL[wv2] line click seek media=$mediaId to $timeMs")
+            onLineClicked(timeMs, mediaId)
             runCatching { WebviewJna.N.webview_return(handle.get(), seq, 0, "null") }
         }
     }
@@ -152,6 +179,7 @@ private class WebviewSession(private val readyFlow: MutableStateFlow<Boolean>) {
             }
             handle.set(w)
             n.webview_bind(w, "amllReady", bindCallback, 0)
+            n.webview_bind(w, "amllSeek", seekCallback, 0)
 
             val childHwnd = n.webview_get_window(w)
             if (childHwnd != null) {
@@ -258,6 +286,22 @@ private class WebviewSession(private val readyFlow: MutableStateFlow<Boolean>) {
         )
         println("AMLL[wv2] canvas hwnd via EnumChildWindows: $found")
         return found
+    }
+
+    private fun parseSeekRequest(req: String?): Pair<Long, String?> {
+        val text = req.orEmpty()
+        val time = Regex("""-?\d+""")
+            .find(text)
+            ?.value
+            ?.toLongOrNull()
+            ?.coerceAtLeast(0L)
+            ?: 0L
+        val mediaId = Regex(""""([^"\\]*(?:\\.[^"\\]*)*)"""")
+            .findAll(text)
+            .map { it.groupValues[1].replace("\\\"", "\"").replace("\\\\", "\\") }
+            .firstOrNull()
+            ?.takeIf { it.isNotBlank() }
+        return time to mediaId
     }
 }
 

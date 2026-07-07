@@ -152,10 +152,10 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
                             engineReady = true
                         }
                     },
-                    onLineClicked = { timeMs ->
+                    onLineClicked = { timeMs, mediaId ->
                         post {
-                            Log.d("AMLL", "line click seek to $timeMs")
-                            viewModel.onPositionSeekClick(timeMs)
+                            Log.d("AMLL", "line click seek media=$mediaId to $timeMs")
+                            viewModel.onLyricLineClick(mediaId, timeMs)
                         }
                     },
                 ),
@@ -179,9 +179,12 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
 
     LaunchedEffect(engineReady, lyricMediaId) {
         if (!engineReady) return@LaunchedEffect
-        if (lyricMediaId == null) return@LaunchedEffect
-        Log.d("AMLL", "reset lyric surface for media=$lyricMediaId")
-        webView.evaluateJavascript("AmllBridge.loadLyrics(''); AmllBridge.setTime(0);", null)
+        val mediaId = lyricMediaId ?: return@LaunchedEffect
+        Log.d("AMLL", "reset lyric surface for media=$mediaId")
+        webView.evaluateJavascript(
+            "AmllBridge.resetTrack(${JSONObject.quote(mediaId)}); AmllBridge.setTime(0);",
+            null,
+        )
         webView.showAmllStatus("Waiting for lyrics...")
     }
 
@@ -193,16 +196,17 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             webView.showAmllStatus("Waiting for lyrics...")
             return@LaunchedEffect
         }
+        val mediaId = lyricMediaId ?: return@LaunchedEffect
         if (rawWordLyric.isNotBlank()) {
-            Log.d("AMLL", "feeding word lyrics media=$lyricMediaId, len=${rawWordLyric.length}")
+            Log.d("AMLL", "feeding word lyrics media=$mediaId, len=${rawWordLyric.length}")
             webView.evaluateJavascript(
-                "AmllBridge.loadWordLyrics(${JSONObject.quote(rawWordLyric)}); AmllBridge.setTime($currentPosition);",
+                "AmllBridge.loadWordLyrics(${JSONObject.quote(rawWordLyric)}, ${JSONObject.quote(mediaId)}); AmllBridge.setTime($currentPosition);",
                 null,
             )
         } else {
-            Log.d("AMLL", "feeding lyrics media=$lyricMediaId, len=${lyricForWeb.length}")
+            Log.d("AMLL", "feeding lyrics media=$mediaId, len=${lyricForWeb.length}")
             webView.evaluateJavascript(
-                "AmllBridge.loadLyrics(${JSONObject.quote(lyricForWeb)}); AmllBridge.setTime($currentPosition);",
+                "AmllBridge.loadLyrics(${JSONObject.quote(lyricForWeb)}, ${JSONObject.quote(mediaId)}); AmllBridge.setTime($currentPosition);",
                 null,
             )
         }
@@ -247,14 +251,14 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
 
 private class AmllCallback(
     private val onReady: () -> Unit,
-    private val onLineClicked: (Long) -> Unit,
+    private val onLineClicked: (Long, String?) -> Unit,
 ) {
     @JavascriptInterface
     fun onReady() = onReady.invoke()
 
     @JavascriptInterface
-    fun onLyricLineClicked(timeMs: Long) {
-        onLineClicked(timeMs)
+    fun onLyricLineClicked(timeMs: Long, mediaId: String?) {
+        onLineClicked(timeMs, mediaId)
     }
 }
 
