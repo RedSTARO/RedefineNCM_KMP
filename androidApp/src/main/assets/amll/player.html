@@ -60,6 +60,40 @@
   html[data-platform="android"] .FmKaba_lyricLine {
     padding: .45em .75em;
   }
+  .FmKaba_lyricLine.FmKaba_active .FmKaba_wordBody {
+    -webkit-text-stroke: 0.45px rgba(255,255,255,0.42);
+    text-shadow:
+      0 0 2px rgba(255,255,255,0.95),
+      0 0 10px rgba(205,190,255,0.82),
+      0 0 22px rgba(150,110,255,0.48);
+    filter: drop-shadow(0 0 7px rgba(178,150,255,0.40));
+  }
+  .FmKaba_lyricLine.FmKaba_active .FmKaba_emphasize .FmKaba_wordBody,
+  .FmKaba_lyricLine.FmKaba_active .FmKaba_wordBody.FmKaba_emphasize {
+    -webkit-text-stroke: 0.55px rgba(255,255,255,0.58);
+    text-shadow:
+      0 0 3px rgba(255,255,255,1),
+      0 0 14px rgba(226,214,255,0.95),
+      0 0 30px rgba(165,126,255,0.62);
+    filter: drop-shadow(0 0 10px rgba(190,160,255,0.52));
+  }
+  html[data-platform="android"] .FmKaba_lyricLine.FmKaba_active .FmKaba_wordBody {
+    -webkit-text-stroke: 0.35px rgba(255,255,255,0.38);
+    text-shadow:
+      0 0 2px rgba(255,255,255,0.90),
+      0 0 8px rgba(205,190,255,0.72),
+      0 0 16px rgba(150,110,255,0.38);
+    filter: drop-shadow(0 0 5px rgba(178,150,255,0.34));
+  }
+  html[data-platform="android"] .FmKaba_lyricLine.FmKaba_active .FmKaba_emphasize .FmKaba_wordBody,
+  html[data-platform="android"] .FmKaba_lyricLine.FmKaba_active .FmKaba_wordBody.FmKaba_emphasize {
+    -webkit-text-stroke: 0.45px rgba(255,255,255,0.52);
+    text-shadow:
+      0 0 3px rgba(255,255,255,0.98),
+      0 0 10px rgba(226,214,255,0.82),
+      0 0 22px rgba(165,126,255,0.50);
+    filter: drop-shadow(0 0 7px rgba(190,160,255,0.42));
+  }
   #loading {
     position: absolute; inset: 0;
     display: flex; align-items: center; justify-content: center;
@@ -154,6 +188,72 @@ window.addEventListener("unhandledrejection", function (e) {
   showError("promise rejected: " + ((e.reason && e.reason.message) || e.reason));
 });
 
+function normalizeYrcWordStart(lineStart, lineDuration, wordStart) {
+  if (wordStart < lineStart && wordStart <= lineDuration) return lineStart + wordStart;
+  return wordStart;
+}
+
+function parseYrcText(yrcText) {
+  const lines = [];
+  const lineRegex = /^\[(\d+),(\d+)\](.*)$/;
+  const wordRegex = /\((\d+),(\d+)(?:,\d+)?\)([^()]*)/g;
+
+  for (const rawLine of String(yrcText || "").split(/\r?\n/)) {
+    const match = rawLine.trim().match(lineRegex);
+    if (!match) continue;
+
+    const lineStart = Number(match[1]) || 0;
+    const lineDuration = Number(match[2]) || 0;
+    const body = match[3] || "";
+    const words = [];
+    let wordMatch;
+    wordRegex.lastIndex = 0;
+    while ((wordMatch = wordRegex.exec(body)) !== null) {
+      const rawStart = Number(wordMatch[1]) || 0;
+      const duration = Math.max(0, Number(wordMatch[2]) || 0);
+      const word = wordMatch[3] || "";
+      if (!word) continue;
+      const startTime = normalizeYrcWordStart(lineStart, lineDuration, rawStart);
+      words.push({ startTime, endTime: startTime + duration, word });
+    }
+    if (!words.length) continue;
+
+    const fallbackEnd = lineStart + Math.max(0, lineDuration);
+    const endTime = Math.max(fallbackEnd, ...words.map((word) => word.endTime));
+    lines.push({
+      startTime: lineStart,
+      endTime,
+      words,
+      translatedLyric: "",
+      romanLyric: "",
+      isBG: false,
+      isDuet: false,
+    });
+  }
+
+  lines.sort((a, b) => a.startTime - b.startTime);
+  for (let i = 0; i < lines.length - 1; i++) {
+    if (lines[i].endTime <= lines[i].startTime || lines[i].endTime > lines[i + 1].startTime) {
+      lines[i].endTime = lines[i + 1].startTime;
+    }
+  }
+  return lines;
+}
+
+function installWordLyricSupport() {
+  const bridge = globalThis.AmllBridge;
+  if (!bridge || bridge.loadWordLyrics) return;
+  bridge.parseYrc = parseYrcText;
+  bridge.loadWordLyrics = function (yrcText) {
+    if (!this.player) return;
+    const parsed = parseYrcText(yrcText);
+    this.player.setLyricLines(parsed.length ? parsed : (this.parseLrc ? this.parseLrc(yrcText) : []));
+    globalThis.AmllPage && globalThis.AmllPage.hideLoading();
+    if (globalThis.__amllDebug) globalThis.__amllDebug.lines = parsed.length;
+  };
+}
+globalThis.installWordLyricSupport = installWordLyricSupport;
+
 // Signal "engine mounted" to the host. Android exposes a @JavascriptInterface named
 // AmllCallback; desktop WebView2 exposes a bound amllReady function.
 function signalReady() {
@@ -190,6 +290,7 @@ async function loadEngine() {
     applyViewportSize();
     if (localOk && globalThis.AmllBridge && globalThis.AmllBridge.init()) {
       applyViewportSize();
+      installWordLyricSupport();
       setStatus("waiting for lyrics...");
       signalReady();
       return;
@@ -259,6 +360,8 @@ async function loadEngine() {
         document.documentElement.setAttribute("data-theme", theme);
       },
     };
+
+    globalThis.installWordLyricSupport && globalThis.installWordLyricSupport();
 
     // Auto-init
     const ok = globalThis.AmllBridge.init();

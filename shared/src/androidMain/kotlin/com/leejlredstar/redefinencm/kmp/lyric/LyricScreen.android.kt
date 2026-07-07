@@ -57,6 +57,7 @@ import kotlin.math.absoluteValue
 actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val viewModel: NowPlayingViewModel = koinInject()
     val rawLyric by viewModel.rawLyric.collectAsState()
+    val rawWordLyric by viewModel.rawWordLyric.collectAsState()
     val lyricMap by viewModel.lyricMap.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
@@ -163,15 +164,20 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         }
     }
 
-    LaunchedEffect(engineReady, lyricForWeb) {
+    LaunchedEffect(engineReady, rawWordLyric, lyricForWeb) {
         if (!engineReady) return@LaunchedEffect
-        if (lyricForWeb.isBlank()) {
+        if (rawWordLyric.isBlank() && lyricForWeb.isBlank()) {
             Log.d("AMLL", "engineReady but lyric text is EMPTY")
             webView.showAmllStatus("Waiting for lyrics...")
             return@LaunchedEffect
         }
-        Log.d("AMLL", "feeding lyrics, len=${lyricForWeb.length}")
-        webView.evaluateJavascript("AmllBridge.loadLyrics(${JSONObject.quote(lyricForWeb)});", null)
+        if (rawWordLyric.isNotBlank()) {
+            Log.d("AMLL", "feeding word lyrics, len=${rawWordLyric.length}")
+            webView.evaluateJavascript("AmllBridge.loadWordLyrics(${JSONObject.quote(rawWordLyric)});", null)
+        } else {
+            Log.d("AMLL", "feeding lyrics, len=${lyricForWeb.length}")
+            webView.evaluateJavascript("AmllBridge.loadLyrics(${JSONObject.quote(lyricForWeb)});", null)
+        }
     }
 
     LaunchedEffect(engineReady, currentPosition) {

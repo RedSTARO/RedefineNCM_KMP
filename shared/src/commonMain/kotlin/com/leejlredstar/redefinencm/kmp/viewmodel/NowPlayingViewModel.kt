@@ -42,6 +42,8 @@ class NowPlayingViewModel(
         linkedMapOf(0L to "Loading Lyric")
     )
     val rawLyric = MutableStateFlow("") // raw LRC text for external lyric renderers
+    val rawWordLyric = MutableStateFlow("") // raw YRC text for word-level external lyric renderers
+    val wordLyricLines = MutableStateFlow<List<LyricParser.WordLine>>(emptyList())
 
     // ── Comments ──
     val comments = MutableStateFlow<CommentMusic?>(null)
@@ -167,17 +169,22 @@ class NowPlayingViewModel(
             // rawLyric 会永远停在空串（AMLL/歌词页黑屏）。这里对"无任何响应"重试几次。
             repeat(4) { attempt ->
                 repo.getLyric(id).collect { lyric ->
-                    if (lyric?.lrc?.lyric?.isNotEmpty() == true) {
-                        try {
-                            rawLyric.value = lyric.lrc.lyric
-                            lyricMap.value = LyricParser.parse(lyric.lrc.lyric)
-                        } catch (e: Exception) {
-                            lyricMap.value = linkedMapOf(0L to "Lyric parse error")
-                        }
+                    val lrcText = lyric?.lrc?.lyric?.takeIf { it.isNotBlank() }
+                    val yrcText = lyric?.yrc?.lyric?.takeIf { it.isNotBlank() }
+                    if (lrcText != null || yrcText != null) {
+                        val wordLines = yrcText
+                            ?.let { runCatching { LyricParser.parseYrc(it) }.getOrDefault(emptyList()) }
+                            .orEmpty()
+                        rawWordLyric.value = if (wordLines.isNotEmpty()) yrcText.orEmpty() else ""
+                        wordLyricLines.value = wordLines
+                        rawLyric.value = lrcText ?: LyricParser.toLrcText(wordLines)
+                        lyricMap.value = parseLineLyrics(lrcText, wordLines)
                         settled = true
                     } else if (lyric != null) {
                         // 服务器有响应但确实没有歌词 —— 不再重试
                         rawLyric.value = ""
+                        rawWordLyric.value = ""
+                        wordLyricLines.value = emptyList()
                         lyricMap.value = linkedMapOf(0L to "No lyric available")
                         settled = true
                     }
@@ -186,8 +193,24 @@ class NowPlayingViewModel(
                 if (attempt < 3) delay(2_000)
             }
             rawLyric.value = ""
+            rawWordLyric.value = ""
+            wordLyricLines.value = emptyList()
             lyricMap.value = linkedMapOf(0L to "歌词加载失败")
         }
+    }
+
+    private fun parseLineLyrics(
+        lrcText: String?,
+        wordLines: List<LyricParser.WordLine>,
+    ): LinkedHashMap<Long?, String?> {
+        if (lrcText == null) return LyricParser.toLineLyricMap(wordLines)
+        return runCatching { LyricParser.parse(lrcText) }
+            .getOrElse {
+                wordLines
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { LyricParser.toLineLyricMap(it) }
+                    ?: linkedMapOf(0L to "Lyric parse error")
+            }
     }
 
     fun getComments() {

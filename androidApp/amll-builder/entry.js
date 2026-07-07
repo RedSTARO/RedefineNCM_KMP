@@ -5,9 +5,62 @@
 import { LyricPlayer } from "@applemusic-like-lyrics/core";
 import { parseLrc } from "@applemusic-like-lyrics/lyric";
 
+function normalizeYrcWordStart(lineStart, lineDuration, wordStart) {
+  if (wordStart < lineStart && wordStart <= lineDuration) return lineStart + wordStart;
+  return wordStart;
+}
+
+function parseYrc(yrcText) {
+  const lines = [];
+  const lineRegex = /^\[(\d+),(\d+)\](.*)$/;
+  const wordRegex = /\((\d+),(\d+)(?:,\d+)?\)([^()]*)/g;
+
+  for (const rawLine of String(yrcText || "").split(/\r?\n/)) {
+    const match = rawLine.trim().match(lineRegex);
+    if (!match) continue;
+
+    const lineStart = Number(match[1]) || 0;
+    const lineDuration = Number(match[2]) || 0;
+    const body = match[3] || "";
+    const words = [];
+    let wordMatch;
+    wordRegex.lastIndex = 0;
+    while ((wordMatch = wordRegex.exec(body)) !== null) {
+      const rawStart = Number(wordMatch[1]) || 0;
+      const duration = Math.max(0, Number(wordMatch[2]) || 0);
+      const word = wordMatch[3] || "";
+      if (!word) continue;
+      const startTime = normalizeYrcWordStart(lineStart, lineDuration, rawStart);
+      words.push({ startTime, endTime: startTime + duration, word });
+    }
+    if (!words.length) continue;
+
+    const fallbackEnd = lineStart + Math.max(0, lineDuration);
+    const endTime = Math.max(fallbackEnd, ...words.map((word) => word.endTime));
+    lines.push({
+      startTime: lineStart,
+      endTime,
+      words,
+      translatedLyric: "",
+      romanLyric: "",
+      isBG: false,
+      isDuet: false,
+    });
+  }
+
+  lines.sort((a, b) => a.startTime - b.startTime);
+  for (let i = 0; i < lines.length - 1; i++) {
+    if (lines[i].endTime <= lines[i].startTime || lines[i].endTime > lines[i + 1].startTime) {
+      lines[i].endTime = lines[i + 1].startTime;
+    }
+  }
+  return lines;
+}
+
 globalThis.AmllBridge = {
   LyricPlayer,
   parseLrc,
+  parseYrc,
   player: null,
 
   /**
@@ -44,6 +97,18 @@ globalThis.AmllBridge = {
     if (!this.player) return;
     const parsed = parseLrc(lrcText);
     this.player.setLyricLines(parsed);
+    globalThis.AmllPage?.hideLoading?.();
+    if (globalThis.__amllDebug) globalThis.__amllDebug.lines = parsed.length;
+  },
+
+  /**
+   * Load NetEase YRC word-level lyrics text into the player.
+   * @param {string} yrcText Raw YRC lyric text
+   */
+  loadWordLyrics(yrcText) {
+    if (!this.player) return;
+    const parsed = parseYrc(yrcText);
+    this.player.setLyricLines(parsed.length ? parsed : parseLrc(yrcText));
     globalThis.AmllPage?.hideLoading?.();
     if (globalThis.__amllDebug) globalThis.__amllDebug.lines = parsed.length;
   },
