@@ -128,6 +128,19 @@ function applyViewportSize() {
     el.style.height = heightPx;
     el.style.minHeight = heightPx;
   });
+  const bg = document.getElementById("bg");
+  if (bg) {
+    const overscanX = Math.ceil(width * 0.1);
+    const overscanY = Math.ceil(height * 0.1);
+    bg.style.position = "fixed";
+    bg.style.left = -overscanX + "px";
+    bg.style.top = -overscanY + "px";
+    bg.style.right = "auto";
+    bg.style.bottom = "auto";
+    bg.style.width = width + overscanX * 2 + "px";
+    bg.style.height = height + overscanY * 2 + "px";
+    bg.style.minHeight = height + overscanY * 2 + "px";
+  }
 }
 globalThis.AmllPage = { setStatus, showError, hideLoading, applyViewportSize };
 applyViewportSize();
