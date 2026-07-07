@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
+import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
@@ -278,6 +279,11 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
                 )
             }
         }
+
+        AutoHideMiniPlayerController(
+            onExpand = onBack,
+            modifier = Modifier.fillMaxSize(),
+        )
     }
 }
 
