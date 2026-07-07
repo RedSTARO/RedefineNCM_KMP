@@ -1,36 +1,23 @@
 package com.leejlredstar.redefinencm.kmp.lyric
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.awt.ComposePanel
 import androidx.compose.ui.awt.SwingPanel
-import androidx.compose.ui.unit.dp
-import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
-import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
-import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import com.sun.jna.Native
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -38,22 +25,10 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.longOrNull
 import org.koin.compose.koinInject
-import java.awt.BorderLayout
 import java.awt.Canvas
-import java.awt.Rectangle
-import java.awt.Shape
-import java.awt.Window
-import java.awt.event.ComponentAdapter
-import java.awt.event.ComponentEvent
-import java.awt.geom.Ellipse2D
-import java.awt.geom.RoundRectangle2D
 import java.io.File
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicLong
-import javax.swing.JPanel
-import javax.swing.JWindow
-import javax.swing.SwingUtilities
-import javax.swing.Timer
 import kotlin.concurrent.thread
 import java.awt.Color as AwtColor
 
@@ -79,6 +54,8 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val rawRomanLyric by viewModel.rawRomanLyric.collectAsState()
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
+    val duration by viewModel.songLength.collectAsState()
+    val isPlaying by viewModel.isPlaying.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
 
     val engineReadyFlow = remember { MutableStateFlow(false) }
@@ -93,33 +70,21 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     // 资产解包很快（3 个小文件拷贝），首帧前同步执行即可
     val assetsDir = remember { extractAmllAssets() }
     val canvas = remember { Canvas().apply { background = AwtColor.BLACK } }
-    val miniOverlay = remember(canvas, onBack) {
-        DesktopMiniPlayerOverlay(canvas, onBack)
-    }
-    val backOverlay = remember(canvas, onBack) {
-        DesktopComposeOverlay(
-            canvas = canvas,
-            content = { FloatingBackButton(onBack) },
-            boundsProvider = { location, _, _ ->
-                Rectangle(location.x + 18, location.y + 18, 48, 48)
-            },
-            shapeProvider = { width, height ->
-                Ellipse2D.Float(0f, 0f, width.toFloat(), height.toFloat())
-            },
-        )
-    }
     val session = remember(viewModel) {
-        WebviewSession(engineReadyFlow) { timeMs, mediaId ->
-            viewModel.onLyricLineClick(mediaId, timeMs)
-        }
+        WebviewSession(
+            readyFlow = engineReadyFlow,
+            onLineClicked = { timeMs, mediaId -> viewModel.onLyricLineClick(mediaId, timeMs) },
+            onBack = onBack,
+            onPlayPause = { viewModel.onPauseClick() },
+            onPrevious = { viewModel.onPervClick() },
+            onNext = { viewModel.onNextClick() },
+        )
     }
 
     // Canvas 拿到原生句柄（displayable + 有尺寸）后，在专用线程启动 webview 事件循环
-    LaunchedEffect(miniOverlay, backOverlay) {
+    LaunchedEffect(session) {
         while (!canvas.isDisplayable || canvas.width <= 0 || canvas.height <= 0) delay(30)
-        session.start(canvas, fileUrl(File(assetsDir, "player.html")))
-        miniOverlay.show()
-        backOverlay.show()
+        session.start(canvas, "${fileUrl(File(assetsDir, "player.html"))}?platform=desktop")
     }
 
     LaunchedEffect(engineReady, lyricMediaId) {
@@ -168,6 +133,20 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         session.eval("AmllBridge.setTime($currentPosition);")
     }
 
+    LaunchedEffect(engineReady, metadata, currentPosition, duration, isPlaying) {
+        if (!engineReady) return@LaunchedEffect
+        session.eval(
+            "AmllBridge.setControls({" +
+                "title:'${metadata?.title.orEmpty().escapeJsSingleQuoted()}'," +
+                "artist:'${metadata?.artist.orEmpty().escapeJsSingleQuoted()}'," +
+                "artworkUri:'${metadata?.artworkUri.orEmpty().escapeJsSingleQuoted()}'," +
+                "position:$currentPosition," +
+                "duration:$duration," +
+                "isPlaying:$isPlaying" +
+                "});",
+        )
+    }
+
     // Set the blurred album-art background for the current track (full-res:
     // WebView2 的 GPU 合成下全屏 CSS blur 是免费的).
     LaunchedEffect(engineReady, metadata?.artworkUri) {
@@ -177,10 +156,8 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         session.eval("AmllBridge.setBackground('$safe');")
     }
 
-    DisposableEffect(session, miniOverlay, backOverlay) {
+    DisposableEffect(session) {
         onDispose {
-            backOverlay.dispose()
-            miniOverlay.dispose()
             session.stop()
         }
     }
@@ -191,291 +168,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     )
 }
 
-private class DesktopComposeOverlay(
-    private val canvas: Canvas,
-    private val content: @Composable () -> Unit,
-    private val boundsProvider: (java.awt.Point, Int, Int) -> Rectangle,
-    private val shapeProvider: ((Int, Int) -> Shape)? = null,
-) {
-    private var overlayWindow: JWindow? = null
-    private var ownerWindow: Window? = null
-    private var canvasListener: ComponentAdapter? = null
-    private var ownerListener: ComponentAdapter? = null
-
-    fun show() {
-        SwingUtilities.invokeLater {
-            val owner = SwingUtilities.getWindowAncestor(canvas) ?: return@invokeLater
-            if (overlayWindow == null || ownerWindow !== owner) {
-                disposeOnEdt()
-                ownerWindow = owner
-                overlayWindow = createOverlay(owner)
-                installBoundsListeners(owner)
-            }
-            updateBounds()
-        }
-    }
-
-    fun dispose() {
-        SwingUtilities.invokeLater { disposeOnEdt() }
-    }
-
-    private fun createOverlay(owner: Window): JWindow {
-        val transparent = AwtColor(0, 0, 0, 0)
-        val composePanel = ComposePanel().apply {
-            isOpaque = false
-            background = transparent
-            setContent {
-                RedefineNCMTheme {
-                    content()
-                }
-            }
-        }
-        val content = JPanel(BorderLayout()).apply {
-            isOpaque = false
-            background = transparent
-            add(composePanel, BorderLayout.CENTER)
-        }
-        return JWindow(owner).apply {
-            background = transparent
-            contentPane = content
-            setFocusableWindowState(false)
-            type = Window.Type.POPUP
-        }
-    }
-
-    private fun installBoundsListeners(owner: Window) {
-        val listener = object : ComponentAdapter() {
-            override fun componentMoved(e: ComponentEvent) = updateBounds()
-            override fun componentResized(e: ComponentEvent) = updateBounds()
-            override fun componentShown(e: ComponentEvent) = updateBounds()
-            override fun componentHidden(e: ComponentEvent) {
-                overlayWindow?.isVisible = false
-            }
-        }
-        canvasListener = listener
-        ownerListener = listener
-        canvas.addComponentListener(listener)
-        owner.addComponentListener(listener)
-    }
-
-    private fun updateBounds() {
-        val overlay = overlayWindow ?: return
-        val owner = ownerWindow ?: return
-        if (!canvas.isShowing || !owner.isShowing || canvas.width <= 0 || canvas.height <= 0) {
-            overlay.isVisible = false
-            return
-        }
-        val location = runCatching { canvas.locationOnScreen }.getOrNull() ?: return
-        val bounds = boundsProvider(location, canvas.width, canvas.height)
-        overlay.setBounds(bounds)
-        shapeProvider?.let { provider ->
-            runCatching { overlay.setShape(provider(bounds.width, bounds.height)) }
-        }
-        overlay.isVisible = true
-        overlay.toFront()
-    }
-
-    private fun disposeOnEdt() {
-        val installedCanvasListener = canvasListener
-        val installedOwnerListener = ownerListener
-        if (installedCanvasListener != null) canvas.removeComponentListener(installedCanvasListener)
-        ownerWindow?.let { owner ->
-            if (installedOwnerListener != null) owner.removeComponentListener(installedOwnerListener)
-        }
-        canvasListener = null
-        ownerListener = null
-        ownerWindow = null
-        overlayWindow?.dispose()
-        overlayWindow = null
-    }
-}
-
-private class DesktopMiniPlayerOverlay(
-    private val canvas: Canvas,
-    private val onExpand: () -> Unit,
-) {
-    private val expandedFlow = MutableStateFlow(true)
-    private var overlayWindow: JWindow? = null
-    private var ownerWindow: Window? = null
-    private var canvasListener: ComponentAdapter? = null
-    private var ownerListener: ComponentAdapter? = null
-    private var hideTimer: Timer? = null
-
-    fun show() {
-        SwingUtilities.invokeLater {
-            val owner = SwingUtilities.getWindowAncestor(canvas) ?: return@invokeLater
-            if (overlayWindow == null || ownerWindow !== owner) {
-                disposeOnEdt()
-                ownerWindow = owner
-                overlayWindow = createOverlay(owner)
-                installBoundsListeners(owner)
-            }
-            reveal()
-        }
-    }
-
-    fun dispose() {
-        SwingUtilities.invokeLater { disposeOnEdt() }
-    }
-
-    private fun createOverlay(owner: Window): JWindow {
-        val transparent = AwtColor(0, 0, 0, 0)
-        val composePanel = ComposePanel().apply {
-            isOpaque = false
-            background = transparent
-            setContent {
-                val expanded by expandedFlow.collectAsState()
-                RedefineNCMTheme {
-                    if (expanded) {
-                        MiniNowPlayingBar(
-                            onExpand = onExpand,
-                            modifier = Modifier.fillMaxSize(),
-                            outerPadding = PaddingValues(0.dp),
-                        )
-                    } else {
-                        MiniPlayerRevealHint { reveal() }
-                    }
-                }
-            }
-        }
-        val content = JPanel(BorderLayout()).apply {
-            isOpaque = false
-            background = transparent
-            add(composePanel, BorderLayout.CENTER)
-        }
-        return JWindow(owner).apply {
-            background = transparent
-            contentPane = content
-            setFocusableWindowState(false)
-            type = Window.Type.POPUP
-        }
-    }
-
-    private fun reveal() {
-        expandedFlow.value = true
-        updateBounds()
-        restartHideTimer()
-    }
-
-    private fun collapse() {
-        expandedFlow.value = false
-        updateBounds()
-    }
-
-    private fun restartHideTimer() {
-        hideTimer?.stop()
-        hideTimer = Timer(3_600) { collapse() }.apply {
-            isRepeats = false
-            start()
-        }
-    }
-
-    private fun installBoundsListeners(owner: Window) {
-        val listener = object : ComponentAdapter() {
-            override fun componentMoved(e: ComponentEvent) = updateBounds()
-            override fun componentResized(e: ComponentEvent) = updateBounds()
-            override fun componentShown(e: ComponentEvent) = updateBounds()
-            override fun componentHidden(e: ComponentEvent) {
-                overlayWindow?.isVisible = false
-            }
-        }
-        canvasListener = listener
-        ownerListener = listener
-        canvas.addComponentListener(listener)
-        owner.addComponentListener(listener)
-    }
-
-    private fun updateBounds() {
-        val overlay = overlayWindow ?: return
-        val owner = ownerWindow ?: return
-        if (!canvas.isShowing || !owner.isShowing || canvas.width <= 0 || canvas.height <= 0) {
-            overlay.isVisible = false
-            return
-        }
-        val location = runCatching { canvas.locationOnScreen }.getOrNull() ?: return
-        val expanded = expandedFlow.value
-        val overlayWidth = if (expanded) {
-            canvas.width.coerceAtMost(620).coerceAtLeast(320)
-        } else {
-            188
-        }
-        val overlayHeight = if (expanded) 112 else 32
-        val x = location.x + (canvas.width - overlayWidth) / 2
-        val y = location.y + canvas.height - overlayHeight - if (expanded) 24 else 18
-        overlay.setBounds(x, y, overlayWidth, overlayHeight)
-        runCatching {
-            overlay.setShape(
-                RoundRectangle2D.Float(
-                    0f,
-                    0f,
-                    overlayWidth.toFloat(),
-                    overlayHeight.toFloat(),
-                    overlayHeight.toFloat(),
-                    overlayHeight.toFloat(),
-                ),
-            )
-        }
-        overlay.isVisible = true
-        overlay.toFront()
-    }
-
-    private fun disposeOnEdt() {
-        hideTimer?.stop()
-        hideTimer = null
-        val installedCanvasListener = canvasListener
-        val installedOwnerListener = ownerListener
-        if (installedCanvasListener != null) canvas.removeComponentListener(installedCanvasListener)
-        ownerWindow?.let { owner ->
-            if (installedOwnerListener != null) owner.removeComponentListener(installedOwnerListener)
-        }
-        canvasListener = null
-        ownerListener = null
-        ownerWindow = null
-        overlayWindow?.dispose()
-        overlayWindow = null
-    }
-}
-
-@Composable
-private fun MiniPlayerRevealHint(onReveal: () -> Unit) {
-    Surface(
-        onClick = onReveal,
-        modifier = Modifier.fillMaxSize(),
-        shape = RoundedCornerShape(percent = 50),
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = "轻点底部呼出播放器",
-                style = MaterialTheme.typography.labelSmall,
-            )
-        }
-    }
-}
-
-@Composable
-private fun FloatingBackButton(onBack: () -> Unit) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        FilledTonalIconButton(
-            onClick = onBack,
-            modifier = Modifier.size(48.dp),
-            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.78f),
-                contentColor = MaterialTheme.colorScheme.onSurface,
-            ),
-        ) {
-            Icon(
-                imageVector = AppIcons.ArrowBack,
-                contentDescription = "返回",
-            )
-        }
-    }
-}
-
 /**
  * 一次歌词页会话：持有 webview 句柄、事件循环线程与 JNA 回调的强引用
  * （native 侧存了回调指针，Java 侧必须防 GC）。
@@ -483,9 +175,14 @@ private fun FloatingBackButton(onBack: () -> Unit) {
 private class WebviewSession(
     private val readyFlow: MutableStateFlow<Boolean>,
     private val onLineClicked: (Long, String?) -> Unit,
+    private val onBack: () -> Unit,
+    private val onPlayPause: () -> Unit,
+    private val onPrevious: () -> Unit,
+    private val onNext: () -> Unit,
 ) {
     private val handle = AtomicLong(0)
     private val jobs = ConcurrentLinkedQueue<String>()
+    private val callbackScope = MainScope()
 
     // 强引用回调，防止 JNA 回调桩被 GC（native 正持有其指针）
     private val bindCallback = object : WebviewJna.BindCallback {
@@ -503,6 +200,10 @@ private class WebviewSession(
             runCatching { WebviewJna.N.webview_return(handle.get(), seq, 0, "null") }
         }
     }
+    private val backCallback = hostCallback("back") { onBack() }
+    private val playPauseCallback = hostCallback("playPause") { onPlayPause() }
+    private val previousCallback = hostCallback("previous") { onPrevious() }
+    private val nextCallback = hostCallback("next") { onNext() }
     private val dispatchCallback = object : WebviewJna.DispatchCallback {
         override fun callback(w: Long, arg: Long) {
             while (true) {
@@ -533,12 +234,16 @@ private class WebviewSession(
                 return@thread
             }
             handle.set(w)
-            n.webview_bind(w, "amllReady", bindCallback, 0)
-            n.webview_bind(w, "amllSeek", seekCallback, 0)
-
             val childHwnd = n.webview_get_window(w)
             if (childHwnd != null) {
-                reparentIntoCanvas(childHwnd, canvasHwnd, width, height)
+                runCatching {
+                    reparentIntoCanvas(childHwnd, canvasHwnd, width, height)
+                }.onFailure { error ->
+                    println("AMLL[wv2] failed to reparent webview window: ${error.message}")
+                    n.webview_destroy(w)
+                    handle.set(0)
+                    return@thread
+                }
                 println("AMLL[wv2] webview window $childHwnd reparented into canvas $canvasHwnd (${width}x$height)")
                 // Canvas 尺寸变化（窗口拉伸/最大化）时让子窗口跟随铺满；
                 // dll 的 WndProc 收到 WM_SIZE 后会自行调整 WebView2 controller bounds。
@@ -558,6 +263,12 @@ private class WebviewSession(
                 return@thread
             }
 
+            n.webview_bind(w, "amllReady", bindCallback, 0)
+            n.webview_bind(w, "amllSeek", seekCallback, 0)
+            n.webview_bind(w, "amllBack", backCallback, 0)
+            n.webview_bind(w, "amllTogglePlayPause", playPauseCallback, 0)
+            n.webview_bind(w, "amllPrevious", previousCallback, 0)
+            n.webview_bind(w, "amllNext", nextCallback, 0)
             n.webview_navigate(w, url)
             n.webview_run(w) // 阻塞直到 terminate
             n.webview_destroy(w)
@@ -594,6 +305,11 @@ private class WebviewSession(
 
         u32.ShowWindow(childH, swHide)
         u32.SetParent(childH, parentH)
+        if (u32.GetParent(childH)?.pointer != parentH.pointer) {
+            u32.ShowWindow(childH, swHide)
+            u32.DestroyWindow(childH)
+            error("WebView2 host window failed to reparent into AMLL canvas")
+        }
         u32.SetWindowLongPtr(
             childH,
             gwlStyle,
@@ -627,6 +343,7 @@ private class WebviewSession(
     fun stop() {
         val w = handle.get()
         if (w != 0L) runCatching { WebviewJna.N.webview_terminate(w) }
+        callbackScope.cancel()
     }
 
     /**
@@ -671,6 +388,16 @@ private class WebviewSession(
         )
         println("AMLL[wv2] canvas hwnd via EnumChildWindows: $found")
         return found
+    }
+
+    private fun hostCallback(name: String, action: () -> Unit) = object : WebviewJna.BindCallback {
+        override fun callback(seq: Long, req: String?, arg: Long) {
+            callbackScope.launch {
+                println("AMLL[wv2] host action $name")
+                action()
+            }
+            runCatching { WebviewJna.N.webview_return(handle.get(), seq, 0, "null") }
+        }
     }
 }
 
