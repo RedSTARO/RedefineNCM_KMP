@@ -5,6 +5,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -57,6 +58,8 @@ import org.koin.compose.koinInject
 fun MiniNowPlayingBar(
     onExpand: () -> Unit,
     player: PlatformPlayer = koinInject(),
+    modifier: Modifier = Modifier,
+    outerPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
 ) {
     val media by player.currentMedia.collectAsState()
     val isPlaying by player.isPlaying.collectAsState()
@@ -85,8 +88,8 @@ fun MiniNowPlayingBar(
 
     Surface(
         onClick = onExpand,
-        modifier = Modifier
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+        modifier = modifier
+            .padding(outerPadding)
             // 固定尺寸（原版 300×112）：FAB slot 没有高度约束，内部 fillMaxHeight
             // 会让条子撑满整个窗口（825c22c 修过的回归）
             .fillMaxWidth()

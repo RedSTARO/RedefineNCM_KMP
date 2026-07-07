@@ -1,12 +1,16 @@
 package com.leejlredstar.redefinencm.kmp.lyric
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -18,7 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.ComposePanel
 import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.unit.dp
-import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
+import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
@@ -37,15 +41,19 @@ import org.koin.compose.koinInject
 import java.awt.BorderLayout
 import java.awt.Canvas
 import java.awt.Rectangle
+import java.awt.Shape
 import java.awt.Window
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
+import java.awt.geom.Ellipse2D
+import java.awt.geom.RoundRectangle2D
 import java.io.File
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicLong
 import javax.swing.JPanel
 import javax.swing.JWindow
 import javax.swing.SwingUtilities
+import javax.swing.Timer
 import kotlin.concurrent.thread
 import java.awt.Color as AwtColor
 
@@ -86,32 +94,17 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val assetsDir = remember { extractAmllAssets() }
     val canvas = remember { Canvas().apply { background = AwtColor.BLACK } }
     val miniOverlay = remember(canvas, onBack) {
-        DesktopComposeOverlay(
-            canvas = canvas,
-            content = {
-                AutoHideMiniPlayerController(
-                    onExpand = onBack,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            },
-            boundsProvider = { location, canvasWidth, canvasHeight ->
-                val overlayWidth = canvasWidth.coerceAtMost(680).coerceAtLeast(320)
-                val overlayHeight = 168
-                Rectangle(
-                    location.x + (canvasWidth - overlayWidth) / 2,
-                    location.y + canvasHeight - overlayHeight - 24,
-                    overlayWidth,
-                    overlayHeight,
-                )
-            },
-        )
+        DesktopMiniPlayerOverlay(canvas, onBack)
     }
     val backOverlay = remember(canvas, onBack) {
         DesktopComposeOverlay(
             canvas = canvas,
             content = { FloatingBackButton(onBack) },
             boundsProvider = { location, _, _ ->
-                Rectangle(location.x + 18, location.y + 18, 56, 56)
+                Rectangle(location.x + 18, location.y + 18, 48, 48)
+            },
+            shapeProvider = { width, height ->
+                Ellipse2D.Float(0f, 0f, width.toFloat(), height.toFloat())
             },
         )
     }
@@ -202,6 +195,7 @@ private class DesktopComposeOverlay(
     private val canvas: Canvas,
     private val content: @Composable () -> Unit,
     private val boundsProvider: (java.awt.Point, Int, Int) -> Rectangle,
+    private val shapeProvider: ((Int, Int) -> Shape)? = null,
 ) {
     private var overlayWindow: JWindow? = null
     private var ownerWindow: Window? = null
@@ -274,6 +268,9 @@ private class DesktopComposeOverlay(
         val location = runCatching { canvas.locationOnScreen }.getOrNull() ?: return
         val bounds = boundsProvider(location, canvas.width, canvas.height)
         overlay.setBounds(bounds)
+        shapeProvider?.let { provider ->
+            runCatching { overlay.setShape(provider(bounds.width, bounds.height)) }
+        }
         overlay.isVisible = true
         overlay.toFront()
     }
@@ -290,6 +287,170 @@ private class DesktopComposeOverlay(
         ownerWindow = null
         overlayWindow?.dispose()
         overlayWindow = null
+    }
+}
+
+private class DesktopMiniPlayerOverlay(
+    private val canvas: Canvas,
+    private val onExpand: () -> Unit,
+) {
+    private val expandedFlow = MutableStateFlow(true)
+    private var overlayWindow: JWindow? = null
+    private var ownerWindow: Window? = null
+    private var canvasListener: ComponentAdapter? = null
+    private var ownerListener: ComponentAdapter? = null
+    private var hideTimer: Timer? = null
+
+    fun show() {
+        SwingUtilities.invokeLater {
+            val owner = SwingUtilities.getWindowAncestor(canvas) ?: return@invokeLater
+            if (overlayWindow == null || ownerWindow !== owner) {
+                disposeOnEdt()
+                ownerWindow = owner
+                overlayWindow = createOverlay(owner)
+                installBoundsListeners(owner)
+            }
+            reveal()
+        }
+    }
+
+    fun dispose() {
+        SwingUtilities.invokeLater { disposeOnEdt() }
+    }
+
+    private fun createOverlay(owner: Window): JWindow {
+        val transparent = AwtColor(0, 0, 0, 0)
+        val composePanel = ComposePanel().apply {
+            isOpaque = false
+            background = transparent
+            setContent {
+                val expanded by expandedFlow.collectAsState()
+                RedefineNCMTheme {
+                    if (expanded) {
+                        MiniNowPlayingBar(
+                            onExpand = onExpand,
+                            modifier = Modifier.fillMaxSize(),
+                            outerPadding = PaddingValues(0.dp),
+                        )
+                    } else {
+                        MiniPlayerRevealHint { reveal() }
+                    }
+                }
+            }
+        }
+        val content = JPanel(BorderLayout()).apply {
+            isOpaque = false
+            background = transparent
+            add(composePanel, BorderLayout.CENTER)
+        }
+        return JWindow(owner).apply {
+            background = transparent
+            contentPane = content
+            setFocusableWindowState(false)
+            type = Window.Type.POPUP
+        }
+    }
+
+    private fun reveal() {
+        expandedFlow.value = true
+        updateBounds()
+        restartHideTimer()
+    }
+
+    private fun collapse() {
+        expandedFlow.value = false
+        updateBounds()
+    }
+
+    private fun restartHideTimer() {
+        hideTimer?.stop()
+        hideTimer = Timer(3_600) { collapse() }.apply {
+            isRepeats = false
+            start()
+        }
+    }
+
+    private fun installBoundsListeners(owner: Window) {
+        val listener = object : ComponentAdapter() {
+            override fun componentMoved(e: ComponentEvent) = updateBounds()
+            override fun componentResized(e: ComponentEvent) = updateBounds()
+            override fun componentShown(e: ComponentEvent) = updateBounds()
+            override fun componentHidden(e: ComponentEvent) {
+                overlayWindow?.isVisible = false
+            }
+        }
+        canvasListener = listener
+        ownerListener = listener
+        canvas.addComponentListener(listener)
+        owner.addComponentListener(listener)
+    }
+
+    private fun updateBounds() {
+        val overlay = overlayWindow ?: return
+        val owner = ownerWindow ?: return
+        if (!canvas.isShowing || !owner.isShowing || canvas.width <= 0 || canvas.height <= 0) {
+            overlay.isVisible = false
+            return
+        }
+        val location = runCatching { canvas.locationOnScreen }.getOrNull() ?: return
+        val expanded = expandedFlow.value
+        val overlayWidth = if (expanded) {
+            canvas.width.coerceAtMost(620).coerceAtLeast(320)
+        } else {
+            188
+        }
+        val overlayHeight = if (expanded) 112 else 32
+        val x = location.x + (canvas.width - overlayWidth) / 2
+        val y = location.y + canvas.height - overlayHeight - if (expanded) 24 else 18
+        overlay.setBounds(x, y, overlayWidth, overlayHeight)
+        runCatching {
+            overlay.setShape(
+                RoundRectangle2D.Float(
+                    0f,
+                    0f,
+                    overlayWidth.toFloat(),
+                    overlayHeight.toFloat(),
+                    overlayHeight.toFloat(),
+                    overlayHeight.toFloat(),
+                ),
+            )
+        }
+        overlay.isVisible = true
+        overlay.toFront()
+    }
+
+    private fun disposeOnEdt() {
+        hideTimer?.stop()
+        hideTimer = null
+        val installedCanvasListener = canvasListener
+        val installedOwnerListener = ownerListener
+        if (installedCanvasListener != null) canvas.removeComponentListener(installedCanvasListener)
+        ownerWindow?.let { owner ->
+            if (installedOwnerListener != null) owner.removeComponentListener(installedOwnerListener)
+        }
+        canvasListener = null
+        ownerListener = null
+        ownerWindow = null
+        overlayWindow?.dispose()
+        overlayWindow = null
+    }
+}
+
+@Composable
+private fun MiniPlayerRevealHint(onReveal: () -> Unit) {
+    Surface(
+        onClick = onReveal,
+        modifier = Modifier.fillMaxSize(),
+        shape = RoundedCornerShape(percent = 50),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = "轻点底部呼出播放器",
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
     }
 }
 
