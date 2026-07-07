@@ -16,6 +16,7 @@ import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
+import com.leejlredstar.redefinencm.kmp.util.findDownloadedSongUri
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -50,15 +51,7 @@ class ExoPlayerPlatformPlayer(
         val id = mediaId.toLong()
 
         // Check for a locally-downloaded offline file first.
-        if (com.leejlredstar.redefinencm.kmp.util.isSongDownloaded(id)) {
-            val downloadDir = android.os.Environment.getExternalStoragePublicDirectory(
-                android.os.Environment.DIRECTORY_DOWNLOADS + "/RedefineNCM"
-            )
-            val localFile = java.io.File(downloadDir, "$id.mp3")
-            if (localFile.exists()) {
-                return@StreamUrlResolver localFile.toURI().toString()
-            }
-        }
+        findDownloadedSongUri(id)?.let { return@StreamUrlResolver it }
 
         // Fall through to online CDN resolution.
         val qualityName = settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.EXHIGH.name)

@@ -20,13 +20,11 @@ actual object SongDownloader {
         for (item in items) {
             if (item.url.isEmpty()) continue
             val uri = Uri.parse(item.url)
-            val ext = uri.lastPathSegment?.substringAfterLast('.', "mp3") ?: "mp3"
+            val ext = uri.lastPathSegment
+                ?.substringAfterLast('.', "mp3")
+                ?.takeIf { it.isNotBlank() } ?: "mp3"
             val fileName = "${item.id}.$ext"
-
-            val dir = Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_DOWNLOADS + "/RedefineNCM"
-            )
-            if (java.io.File(dir, fileName).exists()) continue
+            if (findDownloadedSongUri(item.id) != null) continue
 
             val request = DownloadManager.Request(uri).apply {
                 setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)

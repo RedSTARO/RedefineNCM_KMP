@@ -1,5 +1,8 @@
 package com.leejlredstar.redefinencm.kmp.util
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+
 /**
  * In-memory cache of downloaded song IDs to avoid repeated file-system scans.
  *
@@ -13,6 +16,9 @@ object DownloadedSongsCache {
     @Volatile
     private var cached: Set<Long>? = null
 
+    private val _version = MutableStateFlow(0)
+    val version: StateFlow<Int> = _version
+
     fun isDownloaded(songId: Long): Boolean {
         val snapshot = cached ?: scanDownloadedSongIds().also { cached = it }
         return songId in snapshot
@@ -20,6 +26,7 @@ object DownloadedSongsCache {
 
     fun refresh() {
         cached = scanDownloadedSongIds()
+        _version.value = _version.value + 1
     }
 }
 
