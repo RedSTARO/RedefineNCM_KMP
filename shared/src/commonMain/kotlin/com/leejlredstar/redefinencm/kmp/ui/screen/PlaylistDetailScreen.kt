@@ -217,7 +217,7 @@ private fun PlaylistHeader(
                 text = title,
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = accentPalette.onQuietContainer,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -225,7 +225,7 @@ private fun PlaylistHeader(
             Text(
                 text = "$trackCountText 首歌曲",
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = accentPalette.onQuietContainer.copy(alpha = 0.72f),
             )
             Spacer(Modifier.height(20.dp))
             Row(

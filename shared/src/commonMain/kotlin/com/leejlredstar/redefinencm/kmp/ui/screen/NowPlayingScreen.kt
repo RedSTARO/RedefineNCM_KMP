@@ -585,8 +585,8 @@ fun QueueBottomSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        containerColor = accentPalette.pageEnd,
+        contentColor = accentPalette.onQuietContainer,
     ) {
         Text(
             text = "Play Queue",
@@ -598,7 +598,7 @@ fun QueueBottomSheet(
         Text(
             text = "${playlist.size} songs",
             style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = accentPalette.onQuietContainer.copy(alpha = 0.72f),
             modifier = Modifier.padding(horizontal = 24.dp),
         )
         Spacer(Modifier.height(12.dp))
@@ -613,7 +613,9 @@ fun QueueBottomSheet(
                     onClick = { onSeekClick(index); onDismiss() },
                     shape = connectedListItemShape(index, playlist.size),
                     color = if (isCurrent) accentPalette.container
-                    else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    else accentPalette.quietContainer,
+                    contentColor = if (isCurrent) accentPalette.onContainer
+                    else accentPalette.onQuietContainer,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 1.5.dp),
@@ -644,7 +646,7 @@ fun QueueBottomSheet(
                                 text = item.title.ifBlank { "Unknown" },
                                 style = MaterialTheme.typography.titleMedium,
                                 color = if (isCurrent) accentPalette.onContainer
-                                else MaterialTheme.colorScheme.onSurface,
+                                else accentPalette.onQuietContainer,
                                 fontWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.Normal,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -653,7 +655,7 @@ fun QueueBottomSheet(
                                 text = item.artist.ifBlank { "Unknown" },
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = if (isCurrent) accentPalette.onContainer.copy(alpha = 0.72f)
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                else accentPalette.onQuietContainer.copy(alpha = 0.72f),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -674,8 +676,8 @@ fun CommentBottomSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        containerColor = accentPalette.pageEnd,
+        contentColor = accentPalette.onQuietContainer,
     ) {
         Text(
             text = "Comments",
@@ -707,7 +709,8 @@ fun CommentBottomSheet(
             itemsIndexed(comments) { index, comment ->
                 Surface(
                     shape = connectedListItemShape(index, comments.size),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    color = accentPalette.quietContainer,
+                    contentColor = accentPalette.onQuietContainer,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 1.5.dp),
@@ -723,7 +726,7 @@ fun CommentBottomSheet(
                             modifier = Modifier
                                 .size(44.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                                .background(accentPalette.container),
                         )
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
@@ -752,7 +755,7 @@ fun CommentBottomSheet(
                             Text(
                                 text = comment.timeStr,
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = accentPalette.onQuietContainer.copy(alpha = 0.62f),
                                 modifier = Modifier.padding(top = 8.dp),
                             )
                         }
