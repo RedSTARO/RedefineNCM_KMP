@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -109,7 +110,10 @@ fun SongRow(
                 )
             }
             if (songId != null && settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false)) {
-                val downloaded = remember(songId) { DownloadedSongsCache.isDownloaded(songId) }
+                val downloadedCacheVersion = DownloadedSongsCache.version.collectAsState().value
+                val downloaded = remember(songId, downloadedCacheVersion) {
+                    DownloadedSongsCache.isDownloaded(songId)
+                }
                 Spacer(Modifier.width(8.dp))
                 Surface(
                     shape = CircleShape,

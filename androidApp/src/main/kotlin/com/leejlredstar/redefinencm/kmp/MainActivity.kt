@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
+import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import org.koin.android.ext.android.get
 
@@ -45,7 +46,7 @@ class MainActivity : ComponentActivity() {
             SessionToken(this, ComponentName(this, PlaybackService::class.java)),
         ).buildAsync()
 
-        requestNotificationPermission()
+        requestRuntimePermissions()
 
         setContent { App() }
     }
@@ -62,15 +63,32 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    private fun requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        if (ContextCompat.checkSelfPermission(
-                this, Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
-        ) return
+    private fun requestRuntimePermissions() {
+        val permissions = buildList {
+            if (
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                !hasPermission(Manifest.permission.POST_NOTIFICATIONS)
+            ) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (!hasPermission(Manifest.permission.READ_MEDIA_AUDIO)) {
+                    add(Manifest.permission.READ_MEDIA_AUDIO)
+                }
+            } else if (!hasPermission(Manifest.permission.READ_EXTERNAL_STORAGE)) {
+                add(Manifest.permission.READ_EXTERNAL_STORAGE)
+            }
+        }
+        if (permissions.isEmpty()) return
 
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }.launch(
-            Manifest.permission.POST_NOTIFICATIONS
-        )
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+            Thread({ DownloadedSongsCache.refresh() }, "download-cache-permission-refresh").apply {
+                isDaemon = true
+                start()
+            }
+        }.launch(permissions.toTypedArray())
     }
+
+    private fun hasPermission(permission: String): Boolean =
+        ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
 }
