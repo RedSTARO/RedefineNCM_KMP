@@ -2,28 +2,22 @@ package com.leejlredstar.redefinencm.kmp.ui.component
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
@@ -36,8 +30,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
@@ -50,8 +42,7 @@ import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
 import org.koin.compose.koinInject
 
 /**
- * 迷你播放条 FAB（原版 MiniNowPlaying）：封面取色作容器色（spring 动画），
- * 内容色按亮度自适应黑/白。全局浮层保持紧凑，避免遮挡列表内容。
+ * 迷你播放条 FAB：右下角紧凑入口，只保留封面、播放状态和细进度，避免遮挡页面内容。
  */
 @Composable
 fun MiniNowPlayingBar(
@@ -86,102 +77,55 @@ fun MiniNowPlayingBar(
     Surface(
         onClick = onExpand,
         modifier = Modifier
-            .padding(horizontal = 18.dp, vertical = 6.dp)
-            // FAB slot 没有高度约束，使用固定紧凑高度，避免在列表页遮挡视野。
-            .fillMaxWidth(0.88f)
-            .widthIn(min = 220.dp, max = 520.dp)
-            .height(72.dp),
+            .padding(end = 2.dp, bottom = 2.dp)
+            // FAB slot 没有高度约束，使用固定小尺寸贴右下角，避免覆盖列表主体。
+            .width(98.dp)
+            .height(56.dp),
         shape = CircleShape,
         color = containerColor,
         contentColor = contentColor,
         tonalElevation = 4.dp,
     ) {
         CompositionLocalProvider(LocalContentColor provides contentColor) {
-            Row(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (hasMedia) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalPlatformContext.current)
-                            .data(media?.artworkUri)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = "Album art",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(50.dp)
-                            .clip(MaterialTheme.shapes.medium),
-                        onSuccess = { state ->
-                            themeColorFromCoilImage(state.result.image)?.let { themeColor = Color(it) }
-                        },
-                    )
-                } else {
-                    Surface(
-                        modifier = Modifier.size(50.dp),
-                        shape = MaterialTheme.shapes.medium,
-                        color = contentColor.copy(alpha = 0.16f),
-                        contentColor = contentColor,
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = AppIcons.GraphicEq,
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp),
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.width(10.dp))
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    Text(
-                        text = media?.title?.takeIf { it.isNotBlank() } ?: "Not playing",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.ExtraBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Text(
-                        text = media?.artist?.takeIf { it.isNotBlank() } ?: "No playback yet",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = contentColor.copy(alpha = 0.72f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(3.dp)
-                            .clip(MaterialTheme.shapes.small),
-                        color = contentColor,
-                        trackColor = contentColor.copy(alpha = 0.22f),
-                    )
-                }
-
-                Spacer(Modifier.width(6.dp))
-
+            Box {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(0.dp),
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(
-                        onClick = { player.seekToPrevious() },
-                        enabled = hasMedia,
-                        modifier = Modifier.size(28.dp),
-                    ) {
-                        Icon(
-                            imageVector = AppIcons.KeyboardArrowLeft,
-                            contentDescription = "上一首",
+                    if (hasMedia) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalPlatformContext.current)
+                                .data(media?.artworkUri)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = "Album art",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape),
+                            onSuccess = { state ->
+                                themeColorFromCoilImage(state.result.image)?.let { themeColor = Color(it) }
+                            },
                         )
+                    } else {
+                        Surface(
+                            modifier = Modifier.size(42.dp),
+                            shape = CircleShape,
+                            color = contentColor.copy(alpha = 0.16f),
+                            contentColor = contentColor,
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = AppIcons.GraphicEq,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(22.dp),
+                                )
+                            }
+                        }
                     }
+
+                    Spacer(Modifier.width(6.dp))
+
                     FilledIconButton(
                         onClick = { player.togglePlayPause() },
                         enabled = hasMedia,
@@ -198,17 +142,18 @@ fun MiniNowPlayingBar(
                             contentDescription = if (isPlaying) "暂停" else "播放",
                         )
                     }
-                    IconButton(
-                        onClick = { player.seekToNext() },
-                        enabled = hasMedia,
-                        modifier = Modifier.size(28.dp),
-                    ) {
-                        Icon(
-                            imageVector = AppIcons.KeyboardArrowRight,
-                            contentDescription = "下一首",
-                        )
-                    }
                 }
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 14.dp)
+                        .width(70.dp)
+                        .height(2.dp)
+                        .clip(CircleShape),
+                    color = contentColor,
+                    trackColor = contentColor.copy(alpha = 0.20f),
+                )
             }
         }
     }
