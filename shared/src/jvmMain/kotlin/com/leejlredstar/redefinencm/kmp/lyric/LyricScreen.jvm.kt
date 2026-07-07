@@ -391,7 +391,10 @@ private class WebviewSession(
                     }
                 })
             } else {
-                println("AMLL[wv2] webview_get_window returned null — leaving standalone window")
+                println("AMLL[wv2] webview_get_window returned null — closing standalone window")
+                n.webview_destroy(w)
+                handle.set(0)
+                return@thread
             }
 
             n.webview_navigate(w, url)
@@ -413,17 +416,44 @@ private class WebviewSession(
         val childH = com.sun.jna.platform.win32.WinDef.HWND(child)
         val parentH = com.sun.jna.platform.win32.WinDef.HWND(parent)
 
+        val gwlExStyle = -20
         val gwlStyle = com.sun.jna.platform.win32.WinUser.GWL_STYLE
-        val wsChild = 0x40000000
-        val wsVisible = 0x10000000
+        val swHide = 0
+        val swShowna = 8
+        val swpNoZOrder = 0x0004
+        val swpNoActivate = 0x0010
+        val swpFrameChanged = 0x0020
+        val swpShowWindow = 0x0040
+        val wsChild = 0x40000000L
+        val wsVisible = 0x10000000L
+        val wsClipChildren = 0x02000000L
+        val wsClipSiblings = 0x04000000L
+        val wsExToolWindow = 0x00000080L
+        val childStyle = wsChild or wsVisible or wsClipChildren or wsClipSiblings
+
+        u32.ShowWindow(childH, swHide)
+        u32.SetParent(childH, parentH)
         u32.SetWindowLongPtr(
             childH,
             gwlStyle,
-            com.sun.jna.Pointer.createConstant((wsChild or wsVisible).toLong()),
+            com.sun.jna.Pointer.createConstant(childStyle),
         )
-        u32.SetParent(childH, parentH)
+        u32.SetWindowLongPtr(
+            childH,
+            gwlExStyle,
+            com.sun.jna.Pointer.createConstant(wsExToolWindow),
+        )
+        u32.SetWindowPos(
+            childH,
+            null,
+            0,
+            0,
+            width,
+            height,
+            swpNoZOrder or swpNoActivate or swpFrameChanged or swpShowWindow,
+        )
         u32.MoveWindow(childH, 0, 0, width, height, true)
-        u32.ShowWindow(childH, com.sun.jna.platform.win32.WinUser.SW_SHOW)
+        u32.ShowWindow(childH, swShowna)
     }
 
     fun eval(js: String) {
