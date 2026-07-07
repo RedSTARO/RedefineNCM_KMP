@@ -118,9 +118,18 @@ class Repository(
             db.cachedLyricQueries.selectBySongId(id).executeAsOneOrNull()
                 ?.let { json.decodeFromString<Lyric>(it) }
         }.getOrNull()?.let { emit(it) }
-        safeApiCall { api.lyric(id) }?.let { network ->
-            runCatching { db.cachedLyricQueries.upsert(id, json.encodeToString(network)) }
-            emit(network)
+        // /lyric/new 返回 yrc (逐字歌词); /lyric 不返回 yrc。优先使用 /lyric/new
+        val networkNew = safeApiCall { api.lyricNew(id) }
+        val hasYrc = networkNew?.yrc?.lyric?.isNotBlank() == true
+        val hasLrc = networkNew?.lrc?.lyric?.isNotBlank() == true
+        if (networkNew != null && (hasYrc || hasLrc)) {
+            runCatching { db.cachedLyricQueries.upsert(id, json.encodeToString(networkNew)) }
+            emit(networkNew)
+        } else {
+            safeApiCall { api.lyric(id) }?.let { network ->
+                runCatching { db.cachedLyricQueries.upsert(id, json.encodeToString(network)) }
+                emit(network)
+            }
         }
     }
 
