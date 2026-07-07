@@ -227,10 +227,12 @@ fun App() {
                                     )
                                     is TabDest.My -> UserPlaylistScreen(
                                         scaffoldPadding = innerPadding,
-                                        onOpenLogin = { push(PushedDest.Login) },
                                         onOpenPlaylist = { push(PushedDest.Playlist(it)) },
                                     )
-                                    is TabDest.Settings -> SettingsScreen(scaffoldPadding = innerPadding)
+                                    is TabDest.Settings -> SettingsScreen(
+                                        scaffoldPadding = innerPadding,
+                                        onOpenLogin = { push(PushedDest.Login) },
+                                    )
                                 }
                             }
                         }
