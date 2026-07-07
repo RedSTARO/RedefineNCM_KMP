@@ -370,8 +370,9 @@ private fun LyricKaraokeLine(
             fontSize = fontSize,
             fontWeight = FontWeight.Normal,
             textAlign = TextAlign.Center,
-            maxLines = 1,
-            softWrap = false,
+            maxLines = 2,
+            softWrap = true,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

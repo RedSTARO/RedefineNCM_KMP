@@ -145,6 +145,7 @@ fun NowPlayingScreen(
     if (showComments) {
         CommentBottomSheet(
             comments = comments?.hotComments?.ifEmpty { comments?.comments } ?: emptyList(),
+            accentPalette = accentPalette,
             onDismiss = { showComments = false },
         )
     }
@@ -160,7 +161,7 @@ private fun SongHeroSection(
 ) {
     val fallbackAccentColor = MaterialTheme.colorScheme.primaryContainer
     Column(modifier.fillMaxWidth()) {
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
@@ -175,6 +176,7 @@ private fun SongHeroSection(
                 ),
             contentAlignment = Alignment.Center,
         ) {
+            val coverSize = maxWidth.coerceAtMost(maxHeight).coerceAtMost(252.dp)
             IconButton(
                 onClick = onBack,
                 modifier = Modifier
@@ -194,19 +196,28 @@ private fun SongHeroSection(
                     )
                 }
             }
-            AsyncImage(
-                model = metadata?.artworkUri,
-                contentDescription = "Album Cover",
-                contentScale = ContentScale.Crop,
+            Surface(
+                shape = MaterialTheme.shapes.extraLarge,
+                color = accentPalette.container.copy(alpha = 0.30f),
                 modifier = Modifier
-                    .size(220.dp)
-                    .clip(MaterialTheme.shapes.extraLarge),
-                onSuccess = { state ->
-                    // 原版 SongDetails：封面 Palette 取色驱动 hero 渐变
-                    themeColorFromCoilImage(state.result.image)?.let { onAccentColor(Color(it)) }
-                },
-                onError = { onAccentColor(fallbackAccentColor) },
-            )
+                    .size(coverSize)
+                    .padding(4.dp),
+            ) {
+                AsyncImage(
+                    model = metadata?.artworkUri,
+                    contentDescription = "Album Cover",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(10.dp)
+                        .clip(MaterialTheme.shapes.extraLarge),
+                    onSuccess = { state ->
+                        // 原版 SongDetails：封面 Palette 取色驱动 hero 渐变
+                        themeColorFromCoilImage(state.result.image)?.let { onAccentColor(Color(it)) }
+                    },
+                    onError = { onAccentColor(fallbackAccentColor) },
+                )
+            }
         }
 
         Column(modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 12.dp)) {
@@ -214,7 +225,7 @@ private fun SongHeroSection(
                 text = metadata?.title?.ifBlank { "Unknown Title" } ?: "Unknown Title",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = accentPalette.onQuietContainer,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.basicMarquee(),
@@ -223,7 +234,7 @@ private fun SongHeroSection(
             Text(
                 text = metadata?.artist?.ifBlank { "Unknown Artist" } ?: "Unknown Artist",
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = accentPalette.onQuietContainer.copy(alpha = 0.72f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.basicMarquee(),
@@ -331,7 +342,7 @@ fun LyricSection(
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                             .alpha(itemAlpha),
                         textAlign = TextAlign.Center,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
@@ -427,6 +438,12 @@ fun PlaybackControlSection(
                     onCheckedChange = { onShuffleClick() },
                     modifier = Modifier.size(56.dp),
                     shape = MaterialTheme.shapes.large,
+                    colors = IconButtonDefaults.filledIconToggleButtonColors(
+                        containerColor = accentPalette.quietContainer,
+                        contentColor = accentPalette.onQuietContainer,
+                        checkedContainerColor = accentPalette.container,
+                        checkedContentColor = accentPalette.onContainer,
+                    ),
                 ) {
                     Icon(
                         imageVector = if (shuffleEnabled) AppIcons.ShuffleOn
@@ -438,6 +455,10 @@ fun PlaybackControlSection(
                     onClick = onPervClick,
                     modifier = Modifier.size(56.dp),
                     shape = MaterialTheme.shapes.large,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = accentPalette.container.copy(alpha = 0.78f),
+                        contentColor = accentPalette.onContainer,
+                    ),
                 ) {
                     Icon(
                         imageVector = AppIcons.KeyboardArrowLeft,
@@ -465,6 +486,10 @@ fun PlaybackControlSection(
                     onClick = onNextClick,
                     modifier = Modifier.size(56.dp),
                     shape = MaterialTheme.shapes.large,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = accentPalette.container.copy(alpha = 0.78f),
+                        contentColor = accentPalette.onContainer,
+                    ),
                 ) {
                     Icon(
                         imageVector = AppIcons.KeyboardArrowRight,
@@ -476,6 +501,10 @@ fun PlaybackControlSection(
                     onClick = onShowPlaylistClick,
                     modifier = Modifier.size(56.dp),
                     shape = MaterialTheme.shapes.large,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = accentPalette.container.copy(alpha = 0.78f),
+                        contentColor = accentPalette.onContainer,
+                    ),
                 ) {
                     Icon(
                         imageVector = AppIcons.QueueMusic,
@@ -494,6 +523,10 @@ fun PlaybackControlSection(
                     onClick = onFavClick,
                     modifier = Modifier.weight(1f),
                     shape = CircleShape,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = accentPalette.container.copy(alpha = 0.58f),
+                        contentColor = accentPalette.onContainer,
+                    ),
                 ) {
                     Icon(
                         imageVector = AppIcons.FavoriteBorder,
@@ -504,6 +537,10 @@ fun PlaybackControlSection(
                     onClick = onOpenFullLyric,
                     modifier = Modifier.weight(1f),
                     shape = CircleShape,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = accentPalette.container.copy(alpha = 0.58f),
+                        contentColor = accentPalette.onContainer,
+                    ),
                 ) {
                     Icon(
                         imageVector = AppIcons.GraphicEq,
@@ -514,6 +551,10 @@ fun PlaybackControlSection(
                     onClick = onCommentsClick,
                     modifier = Modifier.weight(1f),
                     shape = CircleShape,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = accentPalette.container.copy(alpha = 0.58f),
+                        contentColor = accentPalette.onContainer,
+                    ),
                 ) {
                     Icon(
                         imageVector = AppIcons.Comment,
@@ -542,11 +583,16 @@ fun QueueBottomSheet(
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+    ) {
         Text(
             text = "Play Queue",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.ExtraBold,
+            color = accentPalette.accent,
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
         )
         Text(
@@ -623,13 +669,19 @@ fun QueueBottomSheet(
 @Composable
 fun CommentBottomSheet(
     comments: List<com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusicComments>,
+    accentPalette: ContentAccentPalette,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+    ) {
         Text(
             text = "Comments",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.ExtraBold,
+            color = accentPalette.accent,
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
         )
         LazyColumn(
@@ -640,13 +692,13 @@ fun CommentBottomSheet(
                 item {
                     Surface(
                         shape = MaterialTheme.shapes.extraLarge,
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        color = accentPalette.quietContainer,
+                        contentColor = accentPalette.onQuietContainer,
                         modifier = Modifier.fillMaxWidth().padding(16.dp),
                     ) {
                         Text(
                             text = "No comments",
                             style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(24.dp),
                         )
                     }
@@ -688,7 +740,7 @@ fun CommentBottomSheet(
                                     Text(
                                         text = comment.likedCount.toString(),
                                         style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.primary,
+                                        color = accentPalette.accent,
                                     )
                                 }
                             }
