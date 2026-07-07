@@ -38,6 +38,10 @@
     width: 100% !important; height: 100% !important;
     font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
   }
+  html[data-platform="android"] .amll-lyric-player.dom {
+    --amll-lp-line-width-aspect: .72;
+    --amll-lp-line-padding-x: clamp(26px, 7.2vw, 54px);
+  }
   html[data-platform="android"] #bg {
     inset: -5%;
     filter: blur(24px) brightness(0.46) saturate(1.15);
@@ -58,11 +62,18 @@
     transform: translateZ(0);
   }
   html[data-platform="android"] .FmKaba_lyricLine {
-    padding: .45em .75em;
+    padding: .42em var(--amll-lp-line-padding-x, 1em);
   }
   .FmKaba_lyricLine,
   .FmKaba_lyricLineWrapper {
     cursor: pointer;
+  }
+  html[data-platform="android"] .FmKaba_lyricLine .FmKaba_lyricMainLine {
+    line-height: 1.08;
+    text-wrap: balance;
+    overflow-wrap: normal;
+    word-break: normal;
+    line-break: loose;
   }
   .FmKaba_lyricLine .FmKaba_lyricMainLine {
     color: rgba(255,255,255,0.30);
