@@ -36,15 +36,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.leejlredstar.redefinencm.kmp.util.LyricParser
 import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import kotlinx.coroutines.Job
@@ -67,6 +73,7 @@ fun FullLyricScreen(
 ) {
     val lyricMap by viewModel.lyricMap.collectAsState()
     val lyricIndex by viewModel.lyricIndex.collectAsState()
+    val wordLyricLines by viewModel.wordLyricLines.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val songLength by viewModel.songLength.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
@@ -196,20 +203,32 @@ fun FullLyricScreen(
                     else -> 0f
                 }
 
-                LyricKaraokeLine(
-                    text = entry.value?.ifBlank { "· · ·" } ?: "· · ·",
-                    isCurrent = isCurrent,
-                    progress = progress,
-                    alpha = alpha,
-                    fontSize = fontSize,
-                    onClick = {
-                        entry.key?.let { timestamp ->
-                            viewModel.onPositionSeekClick(timestamp)
-                            resumeJob?.cancel()
-                            isUserScrolling = false
-                        }
-                    },
-                )
+                val wordLine = if (isCurrent) findWordLine(entry.key, wordLyricLines) else null
+                val seekToLine: () -> Unit = {
+                    entry.key?.let { timestamp ->
+                        viewModel.onPositionSeekClick(timestamp)
+                        resumeJob?.cancel()
+                        isUserScrolling = false
+                    }
+                }
+                if (wordLine != null) {
+                    WordLyricKaraokeLine(
+                        line = wordLine,
+                        positionMs = currentPosition,
+                        alpha = alpha,
+                        fontSize = fontSize,
+                        onClick = seekToLine,
+                    )
+                } else {
+                    LyricKaraokeLine(
+                        text = entry.value?.ifBlank { "· · ·" } ?: "· · ·",
+                        isCurrent = isCurrent,
+                        progress = progress,
+                        alpha = alpha,
+                        fontSize = fontSize,
+                        onClick = seekToLine,
+                    )
+                }
             }
 
             item { Spacer(Modifier.height(250.dp)) }
@@ -281,6 +300,73 @@ private fun computeKaraokeProgress(
     val next = lineTimestamps.getOrNull(idx + 1) ?: songLengthMs.coerceAtLeast(cur)
     if (next <= cur) return 1f
     return ((positionMs - cur).toFloat() / (next - cur)).coerceIn(0f, 1f)
+}
+
+private fun findWordLine(
+    timestamp: Long?,
+    lines: List<LyricParser.WordLine>,
+): LyricParser.WordLine? {
+    if (timestamp == null || lines.isEmpty()) return null
+    return lines.firstOrNull { it.startTimeMs == timestamp }
+        ?: lines
+            .minByOrNull { kotlin.math.abs(it.startTimeMs - timestamp) }
+            ?.takeIf { kotlin.math.abs(it.startTimeMs - timestamp) <= 150L }
+}
+
+@Composable
+private fun WordLyricKaraokeLine(
+    line: LyricParser.WordLine,
+    positionMs: Long,
+    alpha: Float,
+    fontSize: TextUnit,
+    onClick: () -> Unit,
+) {
+    val dimColor = Color.White.copy(alpha = 0.45f * alpha)
+    val brightColor = Color.White.copy(alpha = alpha)
+    val annotatedText = buildAnnotatedString {
+        line.words.forEach { word ->
+            val active = positionMs >= word.startTimeMs
+            val current = positionMs in word.startTimeMs until word.endTimeMs.coerceAtLeast(word.startTimeMs + 1L)
+            withStyle(
+                SpanStyle(
+                    color = if (active) brightColor else dimColor,
+                    fontWeight = if (active) FontWeight.ExtraBold else FontWeight.Normal,
+                    shadow = when {
+                        current -> Shadow(
+                            color = Color(0xFFE9DDFF).copy(alpha = 0.92f * alpha),
+                            offset = Offset.Zero,
+                            blurRadius = 18f,
+                        )
+                        active -> Shadow(
+                            color = Color(0xFFBFA7FF).copy(alpha = 0.58f * alpha),
+                            offset = Offset.Zero,
+                            blurRadius = 10f,
+                        )
+                        else -> null
+                    },
+                ),
+            ) {
+                append(word.text)
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(onClick) { detectTapGestures { onClick() } }
+            .padding(vertical = 3.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = annotatedText,
+            fontSize = fontSize,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            softWrap = true,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+        )
+    }
 }
 
 @Composable

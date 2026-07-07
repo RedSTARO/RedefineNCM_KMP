@@ -46,6 +46,7 @@ import kotlin.concurrent.thread
 actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val viewModel: NowPlayingViewModel = koinInject()
     val rawLyric by viewModel.rawLyric.collectAsState()
+    val rawWordLyric by viewModel.rawWordLyric.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
 
@@ -64,19 +65,19 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     }
 
     // Feed raw LRC once the engine is ready and whenever the track changes.
-    LaunchedEffect(engineReady, rawLyric) {
+    LaunchedEffect(engineReady, rawWordLyric, rawLyric) {
         if (!engineReady) return@LaunchedEffect
-        if (rawLyric.isEmpty()) {
+        if (rawWordLyric.isEmpty() && rawLyric.isEmpty()) {
             println("AMLL[wv2] engineReady but rawLyric is EMPTY (no lyrics fetched)")
             return@LaunchedEffect
         }
-        println("AMLL[wv2] feeding lyrics, len=${rawLyric.length}")
-        val escaped = rawLyric
-            .replace("\\", "\\\\")
-            .replace("'", "\\'")
-            .replace("\n", "\\n")
-            .replace("\r", "\\r")
-        session.eval("AmllBridge.loadLyrics('$escaped');")
+        if (rawWordLyric.isNotEmpty()) {
+            println("AMLL[wv2] feeding word lyrics, len=${rawWordLyric.length}")
+            session.eval("AmllBridge.loadWordLyrics('${rawWordLyric.escapeJsSingleQuoted()}');")
+        } else {
+            println("AMLL[wv2] feeding lyrics, len=${rawLyric.length}")
+            session.eval("AmllBridge.loadLyrics('${rawLyric.escapeJsSingleQuoted()}');")
+        }
     }
 
     // Push playback position; the page's rAF loop animates between updates.
@@ -295,3 +296,9 @@ private fun fileUrl(file: File): String {
     val raw = file.toURI().toString()
     return if (raw.startsWith("file://")) raw else raw.replaceFirst("file:/", "file:///")
 }
+
+private fun String.escapeJsSingleQuoted(): String =
+    replace("\\", "\\\\")
+        .replace("'", "\\'")
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
