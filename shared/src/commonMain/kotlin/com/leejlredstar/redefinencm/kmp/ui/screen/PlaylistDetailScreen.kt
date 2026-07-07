@@ -48,6 +48,8 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
+import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
@@ -95,17 +97,37 @@ fun PlaylistDetailScreen(
         (playlist?.trackCount ?: 0L) == 0L -> songs.size.toString()
         else -> playlist?.trackCount?.toString() ?: "…"
     }
+    val defaultAccentColor = MaterialTheme.colorScheme.primaryContainer
+    var rawAccentColor by remember(playlist?.coverImgUrl, defaultAccentColor) {
+        mutableStateOf(defaultAccentColor)
+    }
+    val animatedAccentColor by animateColorAsState(
+        targetValue = rawAccentColor,
+        animationSpec = spring(),
+        label = "playlistAccent",
+    )
+    val accentPalette = contentAccentPalette(animatedAccentColor)
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface),
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        accentPalette.pageStart,
+                        accentPalette.pageMiddle,
+                        accentPalette.pageEnd,
+                    ),
+                ),
+            ),
     ) {
         item {
             PlaylistHeader(
                 coverUrl = playlist?.coverImgUrl,
                 title = playlist?.name ?: "加载中…",
                 trackCountText = trackCountText,
+                accentPalette = accentPalette,
+                onAccentColor = { rawAccentColor = it },
                 onBack = onBack,
                 onPlayAll = { playAll() },
                 onDownloadAll = { viewModel.onDownloadPlaylistClick(playlistId) },
@@ -120,6 +142,7 @@ fun PlaylistDetailScreen(
                 shape = connectedListItemShape(i, songs.size),
                 onClick = { playSong(i) },
                 songId = song.id,
+                accentColor = animatedAccentColor,
             )
         }
         item { Spacer(Modifier.height(96.dp)) }
@@ -131,19 +154,13 @@ private fun PlaylistHeader(
     coverUrl: String?,
     title: String,
     trackCountText: String,
+    accentPalette: ContentAccentPalette,
+    onAccentColor: (Color) -> Unit,
     onBack: () -> Unit,
     onPlayAll: () -> Unit,
     onDownloadAll: () -> Unit,
 ) {
-    // 封面取色驱动 hero 渐变，spring 动画到位（原版 Expressive motion）
-    val defaultHeroColor = MaterialTheme.colorScheme.primaryContainer
-    var themeColor by remember { mutableStateOf(defaultHeroColor) }
-    val heroColor by animateColorAsState(
-        targetValue = themeColor,
-        animationSpec = spring(),
-        label = "heroColor",
-    )
-
+    val fallbackAccentColor = MaterialTheme.colorScheme.primaryContainer
     Column(Modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
@@ -152,9 +169,9 @@ private fun PlaylistHeader(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            heroColor,
-                            heroColor.copy(alpha = 0.30f),
-                            MaterialTheme.colorScheme.surface,
+                            accentPalette.pageStart,
+                            accentPalette.pageMiddle,
+                            Color.Transparent,
                         ),
                     ),
                 ),
@@ -168,8 +185,8 @@ private fun PlaylistHeader(
             ) {
                 Surface(
                     shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.18f),
-                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    color = accentPalette.quietContainer.copy(alpha = 0.72f),
+                    contentColor = accentPalette.onQuietContainer,
                 ) {
                     Icon(
                         AppIcons.ArrowBack,
@@ -189,9 +206,9 @@ private fun PlaylistHeader(
                     .size(200.dp)
                     .clip(RoundedCornerShape(36.dp)),
                 onSuccess = { state ->
-                    themeColorFromCoilImage(state.result.image)?.let { themeColor = Color(it) }
+                    themeColorFromCoilImage(state.result.image)?.let { onAccentColor(Color(it)) }
                 },
-                onError = { themeColor = Color.Gray },
+                onError = { onAccentColor(fallbackAccentColor) },
             )
         }
 
@@ -222,6 +239,10 @@ private fun PlaylistHeader(
                         .height(56.dp),
                     shape = CircleShape,
                     contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = accentPalette.accent,
+                        contentColor = accentPalette.onAccent,
+                    ),
                 ) {
                     Icon(AppIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp))
                     Spacer(Modifier.width(8.dp))
@@ -232,8 +253,8 @@ private fun PlaylistHeader(
                     modifier = Modifier.size(56.dp),
                     shape = MaterialTheme.shapes.large,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        containerColor = accentPalette.container,
+                        contentColor = accentPalette.onContainer,
                     ),
                 ) {
                     Icon(AppIcons.Download, contentDescription = "下载全部")

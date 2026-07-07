@@ -28,6 +28,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
+import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import org.koin.compose.koinInject
@@ -55,50 +57,75 @@ fun NowPlayingScreen(
 
     var showPlaylist by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
+    val defaultAccentColor = MaterialTheme.colorScheme.primaryContainer
+    var rawAccentColor by remember(metadata?.artworkUri, defaultAccentColor) {
+        mutableStateOf(defaultAccentColor)
+    }
+    val animatedAccentColor by animateColorAsState(
+        targetValue = rawAccentColor,
+        animationSpec = spring(),
+        label = "nowPlayingAccent",
+    )
+    val accentPalette = contentAccentPalette(animatedAccentColor)
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface),
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        accentPalette.pageStart,
+                        accentPalette.pageMiddle,
+                        accentPalette.pageEnd,
+                    ),
+                ),
+            ),
     ) {
-        SongHeroSection(
-            metadata = metadata,
-            onBack = onBack,
-            modifier = Modifier.weight(0.38f),
-        )
+        Column(Modifier.fillMaxSize()) {
+            SongHeroSection(
+                metadata = metadata,
+                accentPalette = accentPalette,
+                onAccentColor = { rawAccentColor = it },
+                onBack = onBack,
+                modifier = Modifier.weight(0.38f),
+            )
 
-        LyricSection(
-            lyricMap = lyricMap,
-            lyricIndex = lyricIndex,
-            onSeekClick = { timeMs -> viewModel.onPositionSeekClick(timeMs) },
-            modifier = Modifier
-                .weight(0.32f)
-                .padding(horizontal = 16.dp),
-        )
+            LyricSection(
+                lyricMap = lyricMap,
+                lyricIndex = lyricIndex,
+                accentPalette = accentPalette,
+                onSeekClick = { timeMs -> viewModel.onPositionSeekClick(timeMs) },
+                modifier = Modifier
+                    .weight(0.32f)
+                    .padding(horizontal = 16.dp),
+            )
 
-        ProgressSection(
-            currentPosition = position,
-            songLength = songLength,
-            onSeekChanged = { viewModel.onPositionSeekClick(it) },
-            modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 2.dp),
-        )
+            ProgressSection(
+                currentPosition = position,
+                songLength = songLength,
+                accentPalette = accentPalette,
+                onSeekChanged = { viewModel.onPositionSeekClick(it) },
+                modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 2.dp),
+            )
 
-        PlaybackControlSection(
-            isPlaying = isPlaying,
-            onPervClick = { viewModel.onPervClick() },
-            onPauseClick = { viewModel.onPauseClick() },
-            onNextClick = { viewModel.onNextClick() },
-            onShowPlaylistClick = { showPlaylist = !showPlaylist },
-            shuffleEnabled = shuffleStatus,
-            onShuffleClick = { viewModel.onShuffleClick(!shuffleStatus) },
-            onFavClick = { viewModel.onFavClick() },
-            onCommentsClick = {
-                if (!showComments) viewModel.getComments()
-                showComments = !showComments
-            },
-            onOpenFullLyric = onOpenFullLyric,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-        )
+            PlaybackControlSection(
+                isPlaying = isPlaying,
+                accentPalette = accentPalette,
+                onPervClick = { viewModel.onPervClick() },
+                onPauseClick = { viewModel.onPauseClick() },
+                onNextClick = { viewModel.onNextClick() },
+                onShowPlaylistClick = { showPlaylist = !showPlaylist },
+                shuffleEnabled = shuffleStatus,
+                onShuffleClick = { viewModel.onShuffleClick(!shuffleStatus) },
+                onFavClick = { viewModel.onFavClick() },
+                onCommentsClick = {
+                    if (!showComments) viewModel.getComments()
+                    showComments = !showComments
+                },
+                onOpenFullLyric = onOpenFullLyric,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+            )
+        }
     }
 
     LaunchedEffect(showPlaylist) {
@@ -109,6 +136,7 @@ fun NowPlayingScreen(
         QueueBottomSheet(
             playlist = playList,
             currentIndex = currentIndex?.toIntOrNull() ?: 0,
+            accentPalette = accentPalette,
             onDismiss = { showPlaylist = false },
             onSeekClick = { viewModel.onSeekClick(it) },
         )
@@ -125,17 +153,12 @@ fun NowPlayingScreen(
 @Composable
 private fun SongHeroSection(
     metadata: com.leejlredstar.redefinencm.kmp.player.MediaInfo?,
+    accentPalette: ContentAccentPalette,
+    onAccentColor: (Color) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val defaultHeroColor = MaterialTheme.colorScheme.primaryContainer
-    var themeColor by remember { mutableStateOf(defaultHeroColor) }
-    val heroColor by animateColorAsState(
-        targetValue = themeColor,
-        animationSpec = spring(),
-        label = "heroColor",
-    )
-
+    val fallbackAccentColor = MaterialTheme.colorScheme.primaryContainer
     Column(modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
@@ -144,9 +167,9 @@ private fun SongHeroSection(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            heroColor,
-                            heroColor.copy(alpha = 0.28f),
-                            MaterialTheme.colorScheme.surface,
+                            accentPalette.pageStart,
+                            accentPalette.pageMiddle,
+                            Color.Transparent,
                         ),
                     ),
                 ),
@@ -161,8 +184,8 @@ private fun SongHeroSection(
             ) {
                 Surface(
                     shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.18f),
-                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    color = accentPalette.quietContainer.copy(alpha = 0.72f),
+                    contentColor = accentPalette.onQuietContainer,
                 ) {
                     Icon(
                         AppIcons.ArrowBack,
@@ -180,9 +203,9 @@ private fun SongHeroSection(
                     .clip(MaterialTheme.shapes.extraLarge),
                 onSuccess = { state ->
                     // 原版 SongDetails：封面 Palette 取色驱动 hero 渐变
-                    themeColorFromCoilImage(state.result.image)?.let { themeColor = Color(it) }
+                    themeColorFromCoilImage(state.result.image)?.let { onAccentColor(Color(it)) }
                 },
-                onError = { themeColor = Color.Gray },
+                onError = { onAccentColor(fallbackAccentColor) },
             )
         }
 
@@ -213,6 +236,7 @@ private fun SongHeroSection(
 fun LyricSection(
     lyricMap: LinkedHashMap<Long?, String?>,
     lyricIndex: Int,
+    accentPalette: ContentAccentPalette,
     onSeekClick: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -254,7 +278,8 @@ fun LyricSection(
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = accentPalette.quietContainer,
+        contentColor = accentPalette.onQuietContainer,
     ) {
         LazyColumn(
             modifier = Modifier
@@ -289,7 +314,7 @@ fun LyricSection(
                         }
                     },
                     shape = MaterialTheme.shapes.large,
-                    color = if (isCurrent) MaterialTheme.colorScheme.primaryContainer
+                    color = if (isCurrent) accentPalette.container
                     else Color.Transparent,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -300,8 +325,8 @@ fun LyricSection(
                         style = if (isCurrent) MaterialTheme.typography.titleMedium
                         else MaterialTheme.typography.bodyMedium,
                         fontWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.Normal,
-                        color = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (isCurrent) accentPalette.onContainer
+                        else accentPalette.onQuietContainer.copy(alpha = 0.72f),
                         modifier = Modifier
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                             .alpha(itemAlpha),
@@ -319,6 +344,7 @@ fun LyricSection(
 fun ProgressSection(
     currentPosition: Long,
     songLength: Long,
+    accentPalette: ContentAccentPalette,
     onSeekChanged: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -345,9 +371,9 @@ fun ProgressSection(
                 isDragging = false
             },
             colors = SliderDefaults.colors(
-                thumbColor = MaterialTheme.colorScheme.primary,
-                activeTrackColor = MaterialTheme.colorScheme.primary,
-                inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                thumbColor = accentPalette.accent,
+                activeTrackColor = accentPalette.accent,
+                inactiveTrackColor = accentPalette.quietContainer,
             ),
             modifier = Modifier.fillMaxWidth(),
         )
@@ -358,12 +384,12 @@ fun ProgressSection(
             Text(
                 text = formatDuration(displayPosition),
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = accentPalette.onQuietContainer.copy(alpha = 0.74f),
             )
             Text(
                 text = formatDuration(songLength),
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = accentPalette.onQuietContainer.copy(alpha = 0.74f),
             )
         }
     }
@@ -372,6 +398,7 @@ fun ProgressSection(
 @Composable
 fun PlaybackControlSection(
     isPlaying: Boolean,
+    accentPalette: ContentAccentPalette,
     onPervClick: () -> Unit,
     onPauseClick: () -> Unit,
     onNextClick: () -> Unit,
@@ -386,7 +413,8 @@ fun PlaybackControlSection(
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = accentPalette.quietContainer,
+        contentColor = accentPalette.onQuietContainer,
     ) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp)) {
             Row(
@@ -422,8 +450,8 @@ fun PlaybackControlSection(
                     modifier = Modifier.size(80.dp),
                     shape = MaterialTheme.shapes.extraLarge,
                     colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        containerColor = accentPalette.accent,
+                        contentColor = accentPalette.onAccent,
                     ),
                 ) {
                     Icon(
@@ -502,6 +530,7 @@ fun PlaybackControlSection(
 fun QueueBottomSheet(
     playlist: List<com.leejlredstar.redefinencm.kmp.player.MediaInfo>,
     currentIndex: Int,
+    accentPalette: ContentAccentPalette,
     onDismiss: () -> Unit,
     onSeekClick: (Int) -> Unit,
 ) {
@@ -537,7 +566,7 @@ fun QueueBottomSheet(
                 Surface(
                     onClick = { onSeekClick(index); onDismiss() },
                     shape = connectedListItemShape(index, playlist.size),
-                    color = if (isCurrent) MaterialTheme.colorScheme.primaryContainer
+                    color = if (isCurrent) accentPalette.container
                     else MaterialTheme.colorScheme.surfaceContainerHigh,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -551,8 +580,8 @@ fun QueueBottomSheet(
                             text = "${index + 1}",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer
-                            else MaterialTheme.colorScheme.primary,
+                            color = if (isCurrent) accentPalette.onContainer
+                            else accentPalette.accent,
                             modifier = Modifier.width(36.dp),
                         )
                         AsyncImage(
@@ -568,7 +597,7 @@ fun QueueBottomSheet(
                             Text(
                                 text = item.title.ifBlank { "Unknown" },
                                 style = MaterialTheme.typography.titleMedium,
-                                color = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer
+                                color = if (isCurrent) accentPalette.onContainer
                                 else MaterialTheme.colorScheme.onSurface,
                                 fontWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.Normal,
                                 maxLines = 1,
@@ -577,7 +606,7 @@ fun QueueBottomSheet(
                             Text(
                                 text = item.artist.ifBlank { "Unknown" },
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
+                                color = if (isCurrent) accentPalette.onContainer.copy(alpha = 0.72f)
                                 else MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,

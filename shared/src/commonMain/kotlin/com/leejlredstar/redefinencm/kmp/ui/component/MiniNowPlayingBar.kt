@@ -35,7 +35,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -45,6 +44,8 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.theme.contentColorFor
 import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
 import org.koin.compose.koinInject
 
@@ -74,12 +75,13 @@ fun MiniNowPlayingBar(
 
     val defaultContainerColor = MaterialTheme.colorScheme.primaryContainer
     var themeColor by remember { mutableStateOf(defaultContainerColor) }
+    val accentPalette = contentAccentPalette(themeColor)
     val containerColor by animateColorAsState(
-        targetValue = themeColor,
+        targetValue = accentPalette.container,
         animationSpec = spring(),
         label = "miniPlayerColor",
     )
-    val contentColor = if (containerColor.luminance() > 0.5f) Color.Black else Color.White
+    val contentColor = contentColorFor(containerColor)
 
     Surface(
         onClick = onExpand,
