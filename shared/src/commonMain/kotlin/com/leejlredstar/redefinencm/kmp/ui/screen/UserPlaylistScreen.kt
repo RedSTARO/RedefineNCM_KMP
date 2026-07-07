@@ -156,8 +156,8 @@ private fun UserPlaylistHero(
                     drawRect(
                         brush = Brush.verticalGradient(
                             colors = listOf(
-                                Color.Black.copy(alpha = 0.45f),
-                                Color.Black.copy(alpha = 0.15f),
+                                accentPalette.pageStart.copy(alpha = 0.78f),
+                                accentPalette.pageMiddle.copy(alpha = 0.38f),
                                 Color.Transparent,
                             ),
                         ),
@@ -190,19 +190,29 @@ private fun UserPlaylistHero(
                 },
             )
             Spacer(Modifier.height(12.dp))
-            Text(
-                text = nickname,
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = "ID: $userId",
-                style = MaterialTheme.typography.labelLarge,
-                color = Color.White.copy(alpha = 0.78f),
-            )
+            Surface(
+                shape = MaterialTheme.shapes.extraLarge,
+                color = accentPalette.quietContainer.copy(alpha = 0.86f),
+                contentColor = accentPalette.onQuietContainer,
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                ) {
+                    Text(
+                        text = nickname,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = "ID: $userId",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = accentPalette.onQuietContainer.copy(alpha = 0.72f),
+                    )
+                }
+            }
         }
     }
 }
