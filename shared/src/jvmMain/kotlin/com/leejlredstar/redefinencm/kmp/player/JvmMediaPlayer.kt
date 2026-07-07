@@ -90,6 +90,10 @@ class JvmMediaPlayer(
 
     // ── Audio playback state ──
 
+    private val playbackLock = Any()
+
+    @Volatile private var playbackGeneration = 0L
+    @Volatile private var resolveJob: Job? = null
     @Volatile private var playbackThread: Thread? = null
     @Volatile private var line: SourceDataLine? = null
     @Volatile private var audioStream: AudioInputStream? = null
@@ -127,132 +131,236 @@ class JvmMediaPlayer(
         pollJob = null
     }
 
-    private fun openAndPlay(streamUrl: String) {
-        stopPlayback()
-        // 本次播放的起始位置：seekTo 预置的偏移；自然换曲/新队列时为 0
-        val startMs = seekOffsetMs.coerceAtLeast(0L)
+    private fun isPlaybackCurrent(generation: Long): Boolean =
+        synchronized(playbackLock) { generation == playbackGeneration }
 
-        playbackThread = Thread({
-            try {
-                val url = URI(streamUrl).toURL()
-                val rawStream = AudioSystem.getAudioInputStream(url)
-                val baseFormat = rawStream.format
+    private fun beginPlaybackSession(): Long {
+        val generation = synchronized(playbackLock) {
+            playbackGeneration += 1
+            resolveJob?.cancel()
+            resolveJob = null
+            stopPlaybackLocked()
+            playbackGeneration
+        }
+        stopPolling()
+        return generation
+    }
 
-                // MP3(MPEG) 帧不能直接喂 SourceDataLine —— 必须经 mp3spi 转成 PCM_SIGNED
-                val stream: AudioInputStream
-                val fmt: AudioFormat
-                if (baseFormat.encoding == AudioFormat.Encoding.PCM_SIGNED ||
-                    baseFormat.encoding == AudioFormat.Encoding.PCM_UNSIGNED
-                ) {
-                    stream = rawStream
-                    fmt = baseFormat
-                } else {
-                    fmt = AudioFormat(
-                        AudioFormat.Encoding.PCM_SIGNED,
-                        baseFormat.sampleRate,
-                        16,
-                        baseFormat.channels,
-                        baseFormat.channels * 2,
-                        baseFormat.sampleRate,
-                        false,
-                    )
-                    stream = AudioSystem.getAudioInputStream(fmt, rawStream)
-                }
+    private fun cancelPlaybackSession() {
+        synchronized(playbackLock) {
+            playbackGeneration += 1
+            resolveJob?.cancel()
+            resolveJob = null
+            stopPlaybackLocked()
+        }
+        stopPolling()
+    }
 
-                val info = DataLine.Info(SourceDataLine::class.java, fmt)
-                val audioLine = AudioSystem.getLine(info) as SourceDataLine
+    private fun stopPlaybackLocked() {
+        val threadToStop = playbackThread
+        val streamToClose = audioStream
+        val lineToClose = line
 
-                audioLine.open(fmt)
-                audioLine.start()
+        playbackThread = null
+        audioStream = null
+        line = null
 
-                this.line = audioLine
-                this.audioStream = stream
+        if (threadToStop !== Thread.currentThread()) {
+            threadToStop?.interrupt()
+        }
+        try {
+            lineToClose?.flush()
+            lineToClose?.stop()
+            lineToClose?.close()
+        } catch (_: Exception) {
+        }
+        try {
+            streamToClose?.close()
+        } catch (_: Exception) {
+        }
+        playStartNano = 0L
+    }
 
-                val totalFrames = stream.frameLength
-                if (totalFrames > 0) {
-                    val durMs = (totalFrames * 1_000L / fmt.frameRate.toLong()).coerceAtLeast(0)
-                    _duration.value = durMs
-                }
+    private fun openAndPlay(generation: Long, streamUrl: String, startMs: Long) {
+        val thread = Thread(
+            { runPlayback(generation, streamUrl, startMs) },
+            "JvmMediaPlayer-audio-$generation",
+        ).apply { isDaemon = true }
 
-                // 跳到 seek 位置：按 PCM 字节率丢弃解码流前段（VBR 无帧索引，近似即可）
-                if (startMs > 0 && fmt.frameRate > 0 && fmt.frameSize > 0) {
-                    var toSkip = (startMs * fmt.frameRate.toLong() * fmt.frameSize / 1000L)
-                    // 对齐帧边界，避免声道错位产生噪音
-                    toSkip -= toSkip % fmt.frameSize
-                    while (toSkip > 0 && !Thread.interrupted()) {
-                        val skipped = stream.skip(toSkip)
-                        if (skipped <= 0) break
-                        toSkip -= skipped
-                    }
-                }
-
-                val buf = ByteArray(4096)
-                playStartNano = System.nanoTime()
-                seekOffsetMs = startMs
-                _position.value = startMs
-                _isPlaying.value = true
-                _state.value = PlayerState.PLAYING
-
-                while (!Thread.interrupted()) {
-                    val read = stream.read(buf)
-                    if (read < 0) break
-                    audioLine.write(buf, 0, read)
-                }
-
-                audioLine.drain()
-                audioLine.stop()
-                audioLine.close()
-                stream.close()
-
-                if (!Thread.interrupted()) {
-                    _isPlaying.value = false
-                    seekOffsetMs = 0L
-                    mutateQueue { it.next() }
-                    publishQueue()
-                    queueModel.currentItem?.let { resolveAndPlay(it) } ?: run {
-                        _state.value = PlayerState.ENDED
-                    }
-                }
-            } catch (e: Exception) {
-                _state.value = PlayerState.ERROR
-                _isPlaying.value = false
-            }
-        }, "JvmMediaPlayer-audio").apply {
-            isDaemon = true
-            start()
+        synchronized(playbackLock) {
+            if (generation != playbackGeneration) return
+            stopPlaybackLocked()
+            playbackThread = thread
         }
 
+        thread.start()
         startPolling()
     }
 
-    private fun stopPlayback() {
-        playbackThread?.interrupt()
-        playbackThread = null
-        try { audioStream?.close() } catch (_: Exception) {}
-        try { line?.stop(); line?.close() } catch (_: Exception) {}
-        audioStream = null
-        line = null
+    private fun runPlayback(generation: Long, streamUrl: String, startMs: Long) {
+        var rawStream: AudioInputStream? = null
+        var stream: AudioInputStream? = null
+        var audioLine: SourceDataLine? = null
+        var completedNaturally = false
+
+        try {
+            val url = URI(streamUrl).toURL()
+            rawStream = AudioSystem.getAudioInputStream(url)
+            val baseFormat = rawStream.format
+
+            // MP3(MPEG) 帧不能直接喂 SourceDataLine —— 必须经 mp3spi 转成 PCM_SIGNED
+            val fmt: AudioFormat
+            stream = if (baseFormat.encoding == AudioFormat.Encoding.PCM_SIGNED ||
+                baseFormat.encoding == AudioFormat.Encoding.PCM_UNSIGNED
+            ) {
+                fmt = baseFormat
+                rawStream
+            } else {
+                fmt = AudioFormat(
+                    AudioFormat.Encoding.PCM_SIGNED,
+                    baseFormat.sampleRate,
+                    16,
+                    baseFormat.channels,
+                    baseFormat.channels * 2,
+                    baseFormat.sampleRate,
+                    false,
+                )
+                AudioSystem.getAudioInputStream(fmt, rawStream)
+            }
+
+            val info = DataLine.Info(SourceDataLine::class.java, fmt)
+            audioLine = AudioSystem.getLine(info) as SourceDataLine
+            audioLine.open(fmt)
+
+            synchronized(playbackLock) {
+                if (generation != playbackGeneration) return
+                line = audioLine
+                audioStream = stream
+            }
+
+            val totalFrames = stream.frameLength
+            if (totalFrames > 0 && fmt.frameRate > 0) {
+                val durMs = (totalFrames * 1_000L / fmt.frameRate.toLong()).coerceAtLeast(0)
+                _duration.value = durMs
+            }
+
+            // 跳到 seek 位置：按 PCM 字节率丢弃解码流前段（VBR 无帧索引，近似即可）
+            if (startMs > 0 && fmt.frameRate > 0 && fmt.frameSize > 0) {
+                var toSkip = (startMs * fmt.frameRate.toLong() * fmt.frameSize / 1000L)
+                // 对齐帧边界，避免声道错位产生噪音
+                toSkip -= toSkip % fmt.frameSize
+                while (toSkip > 0 && !Thread.currentThread().isInterrupted && isPlaybackCurrent(generation)) {
+                    val skipped = stream.skip(toSkip)
+                    if (skipped <= 0) break
+                    toSkip -= skipped
+                }
+            }
+
+            if (!isPlaybackCurrent(generation)) return
+
+            val buf = ByteArray(4096)
+            audioLine.start()
+            playStartNano = System.nanoTime()
+            seekOffsetMs = startMs
+            _position.value = startMs
+            _isPlaying.value = true
+            _state.value = PlayerState.PLAYING
+
+            while (!Thread.currentThread().isInterrupted && isPlaybackCurrent(generation)) {
+                val read = stream.read(buf)
+                if (read < 0) {
+                    completedNaturally = true
+                    break
+                }
+                if (!isPlaybackCurrent(generation)) break
+                audioLine.write(buf, 0, read)
+            }
+
+            if (completedNaturally && isPlaybackCurrent(generation)) {
+                audioLine.drain()
+            }
+        } catch (e: Exception) {
+            if (isPlaybackCurrent(generation)) {
+                _state.value = PlayerState.ERROR
+                _isPlaying.value = false
+            }
+        } finally {
+            try {
+                audioLine?.stop()
+                audioLine?.close()
+            } catch (_: Exception) {
+            }
+            try {
+                stream?.close()
+            } catch (_: Exception) {
+            }
+            if (stream !== rawStream) {
+                try {
+                    rawStream?.close()
+                } catch (_: Exception) {
+                }
+            }
+            synchronized(playbackLock) {
+                if (generation == playbackGeneration) {
+                    if (line === audioLine) line = null
+                    if (audioStream === stream) audioStream = null
+                    if (playbackThread === Thread.currentThread()) playbackThread = null
+                }
+            }
+        }
+
+        if (completedNaturally && isPlaybackCurrent(generation)) {
+            _isPlaying.value = false
+            seekOffsetMs = 0L
+            mutateQueue { it.next() }
+            publishQueue()
+            queueModel.currentItem?.let { resolveAndPlay(it, 0L) } ?: run {
+                _state.value = PlayerState.ENDED
+            }
+        }
     }
 
-    private fun resolveAndPlay(media: MediaInfo) {
-        scope.launch {
-            _state.value = PlayerState.BUFFERING
+    private fun resolveAndPlay(media: MediaInfo, startMs: Long = seekOffsetMs.coerceAtLeast(0L)) {
+        val generation = beginPlaybackSession()
+        _isPlaying.value = false
+        _state.value = PlayerState.BUFFERING
+
+        val job = scope.launch {
             val streamUrl = resolver.resolve(media.id)
+            if (!isPlaybackCurrent(generation)) return@launch
             if (streamUrl == null) {
                 _state.value = PlayerState.ERROR
                 return@launch
             }
-            openAndPlay(streamUrl)
+            openAndPlay(generation, streamUrl, startMs.coerceAtLeast(0L))
+        }
+
+        synchronized(playbackLock) {
+            if (generation == playbackGeneration) {
+                resolveJob = job
+            } else {
+                job.cancel()
+            }
         }
     }
 
-    private fun onTrackChanged() {
+    private fun onTrackChanged(autoplay: Boolean) {
         _position.value = 0L
         seekOffsetMs = 0L
         publishQueue()
-        queueModel.currentItem?.let { resolveAndPlay(it) } ?: run {
-            _state.value = PlayerState.IDLE
-            _isPlaying.value = false
+        val current = queueModel.currentItem
+        when {
+            current == null -> {
+                cancelPlaybackSession()
+                _state.value = PlayerState.IDLE
+                _isPlaying.value = false
+            }
+            autoplay -> resolveAndPlay(current, 0L)
+            else -> {
+                cancelPlaybackSession()
+                _isPlaying.value = false
+                _state.value = PlayerState.PAUSED
+            }
         }
     }
 
@@ -260,63 +368,55 @@ class JvmMediaPlayer(
 
     override fun play() {
         if (_isPlaying.value) return
-        if (line == null) {
-            queueModel.currentItem?.let { resolveAndPlay(it) }
-            return
-        }
-        if (playStartNano == 0L) seekOffsetMs = _position.value
-        playStartNano = System.nanoTime()
-        line?.start()
-        _isPlaying.value = true
-        _state.value = PlayerState.PLAYING
-        startPolling()
+        if (_state.value == PlayerState.BUFFERING) return
+        queueModel.currentItem?.let { resolveAndPlay(it, _position.value.coerceAtLeast(0L)) }
     }
 
     override fun pause() {
-        if (!_isPlaying.value) return
+        if (!_isPlaying.value && _state.value != PlayerState.BUFFERING) return
         if (playStartNano > 0) seekOffsetMs += (System.nanoTime() - playStartNano) / 1_000_000L
         playStartNano = 0L
-        line?.stop()
+        _position.value = seekOffsetMs
+        cancelPlaybackSession()
         _isPlaying.value = false
         _state.value = PlayerState.PAUSED
-        stopPolling()
     }
 
     override fun togglePlayPause() {
-        if (_isPlaying.value) pause() else play()
+        if (_isPlaying.value || _state.value == PlayerState.BUFFERING) pause() else play()
     }
 
     override fun seekTo(positionMs: Long) {
         seekOffsetMs = positionMs.coerceAtLeast(0)
         _position.value = seekOffsetMs
         val current = _currentMedia.value
-        if (current != null) {
-            stopPlayback()
-            resolveAndPlay(current)
+        if (current != null && (_isPlaying.value || _state.value == PlayerState.BUFFERING)) {
+            resolveAndPlay(current, seekOffsetMs)
         }
     }
 
     override fun seekToPrevious() {
+        val autoplay = _isPlaying.value || _state.value == PlayerState.BUFFERING
         mutateQueue { it.previous() }
-        onTrackChanged()
+        onTrackChanged(autoplay)
     }
 
     override fun seekToNext() {
+        val autoplay = _isPlaying.value || _state.value == PlayerState.BUFFERING
         mutateQueue { it.next() }
-        onTrackChanged()
+        onTrackChanged(autoplay)
     }
 
     override fun setQueue(items: List<MediaInfo>, startIndex: Int) {
         mutateQueue { PlayQueue.of(items, startIndex) }
-        onTrackChanged()
+        onTrackChanged(autoplay = true)
     }
 
     override fun restoreQueue(items: List<MediaInfo>, startIndex: Int, positionMs: Long) {
         // 恢复队列但不自动播放（默认实现的 setQueue→pause 存在异步竞态：
         // resolveAndPlay 解析完成晚于 pause，会照样出声）。play() 时会从
         // seekOffsetMs 起播（openAndPlay 尊重该偏移）。
-        stopPlayback()
-        stopPolling()
+        cancelPlaybackSession()
         mutateQueue { PlayQueue.of(items, startIndex) }
         seekOffsetMs = positionMs.coerceAtLeast(0L)
         _position.value = seekOffsetMs
@@ -331,8 +431,7 @@ class JvmMediaPlayer(
     }
 
     override fun clearQueue() {
-        stopPlayback()
-        stopPolling()
+        cancelPlaybackSession()
         mutateQueue { PlayQueue.empty() }
         _isPlaying.value = false
         _state.value = PlayerState.IDLE
@@ -341,8 +440,9 @@ class JvmMediaPlayer(
     }
 
     override fun skipToIndex(index: Int) {
+        val autoplay = _isPlaying.value || _state.value == PlayerState.BUFFERING
         mutateQueue { it.skipTo(index) }
-        onTrackChanged()
+        onTrackChanged(autoplay)
     }
 
     override fun setShuffleEnabled(enabled: Boolean) {
@@ -351,8 +451,7 @@ class JvmMediaPlayer(
     }
 
     override fun release() {
-        stopPlayback()
-        stopPolling()
+        cancelPlaybackSession()
         scope.cancel()
     }
 }
