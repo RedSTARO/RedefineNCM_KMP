@@ -5,6 +5,15 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -74,7 +83,19 @@ fun HomeScreen(
         SharedTransitionLayout {
             val sharedTransitionScope = this
 
-            AnimatedVisibility(visible = !showSearch) {
+            AnimatedVisibility(
+                visible = !showSearch,
+                enter = fadeIn(animationSpec = tween(180, easing = LinearOutSlowInEasing)) +
+                    scaleIn(
+                        initialScale = 0.985f,
+                        animationSpec = tween(260, easing = FastOutSlowInEasing),
+                    ),
+                exit = fadeOut(animationSpec = tween(120, easing = LinearOutSlowInEasing)) +
+                    scaleOut(
+                        targetScale = 0.985f,
+                        animationSpec = tween(180, easing = FastOutSlowInEasing),
+                    ),
+            ) {
                 val animatedVisibilityScope = this
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -123,7 +144,20 @@ fun HomeScreen(
                 }
             }
 
-            AnimatedVisibility(visible = showSearch) {
+            AnimatedVisibility(
+                visible = showSearch,
+                enter = fadeIn(
+                    animationSpec = tween(180, delayMillis = 80, easing = LinearOutSlowInEasing),
+                ) + slideInVertically(
+                    animationSpec = tween(280, easing = FastOutSlowInEasing),
+                    initialOffsetY = { it / 10 },
+                ),
+                exit = fadeOut(animationSpec = tween(120, easing = LinearOutSlowInEasing)) +
+                    slideOutVertically(
+                        animationSpec = tween(180, easing = FastOutSlowInEasing),
+                        targetOffsetY = { it / 12 },
+                    ),
+            ) {
                 SearchScreen(
                     onBack = { showSearch = false },
                     sharedTransitionScope = sharedTransitionScope,
