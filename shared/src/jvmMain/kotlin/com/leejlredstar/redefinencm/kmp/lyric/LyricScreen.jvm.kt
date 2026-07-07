@@ -1,13 +1,12 @@
 package com.leejlredstar.redefinencm.kmp.lyric
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -20,6 +19,7 @@ import androidx.compose.ui.awt.ComposePanel
 import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
+import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import org.koin.compose.koinInject
 import java.awt.BorderLayout
 import java.awt.Canvas
+import java.awt.Rectangle
 import java.awt.Window
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
@@ -78,7 +79,36 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     // 资产解包很快（3 个小文件拷贝），首帧前同步执行即可
     val assetsDir = remember { extractAmllAssets() }
     val canvas = remember { Canvas().apply { background = AwtColor.BLACK } }
-    val miniOverlay = remember(canvas, onBack) { DesktopMiniPlayerOverlay(canvas, onBack) }
+    val miniOverlay = remember(canvas, onBack) {
+        DesktopComposeOverlay(
+            canvas = canvas,
+            content = {
+                AutoHideMiniPlayerController(
+                    onExpand = onBack,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            },
+            boundsProvider = { location, canvasWidth, canvasHeight ->
+                val overlayWidth = canvasWidth.coerceAtMost(680).coerceAtLeast(320)
+                val overlayHeight = 168
+                Rectangle(
+                    location.x + (canvasWidth - overlayWidth) / 2,
+                    location.y + canvasHeight - overlayHeight - 24,
+                    overlayWidth,
+                    overlayHeight,
+                )
+            },
+        )
+    }
+    val backOverlay = remember(canvas, onBack) {
+        DesktopComposeOverlay(
+            canvas = canvas,
+            content = { FloatingBackButton(onBack) },
+            boundsProvider = { location, _, _ ->
+                Rectangle(location.x + 18, location.y + 18, 56, 56)
+            },
+        )
+    }
     val session = remember(viewModel) {
         WebviewSession(engineReadyFlow) { timeMs, mediaId ->
             viewModel.onLyricLineClick(mediaId, timeMs)
@@ -86,10 +116,11 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     }
 
     // Canvas 拿到原生句柄（displayable + 有尺寸）后，在专用线程启动 webview 事件循环
-    LaunchedEffect(miniOverlay) {
+    LaunchedEffect(miniOverlay, backOverlay) {
         while (!canvas.isDisplayable || canvas.width <= 0 || canvas.height <= 0) delay(30)
         session.start(canvas, fileUrl(File(assetsDir, "player.html")))
         miniOverlay.show()
+        backOverlay.show()
     }
 
     LaunchedEffect(engineReady, lyricMediaId) {
@@ -147,27 +178,24 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         session.eval("AmllBridge.setBackground('$safe');")
     }
 
-    DisposableEffect(session, miniOverlay) {
+    DisposableEffect(session, miniOverlay, backOverlay) {
         onDispose {
+            backOverlay.dispose()
             miniOverlay.dispose()
             session.stop()
         }
     }
 
-    Column(Modifier.fillMaxSize()) {
-        LyricToolbar(onBack)
-        SwingPanel(
-            factory = { canvas },
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-        )
-    }
+    SwingPanel(
+        factory = { canvas },
+        modifier = Modifier.fillMaxSize(),
+    )
 }
 
-private class DesktopMiniPlayerOverlay(
+private class DesktopComposeOverlay(
     private val canvas: Canvas,
-    private val onExpand: () -> Unit,
+    private val content: @Composable () -> Unit,
+    private val boundsProvider: (java.awt.Point, Int, Int) -> Rectangle,
 ) {
     private var overlayWindow: JWindow? = null
     private var ownerWindow: Window? = null
@@ -198,10 +226,7 @@ private class DesktopMiniPlayerOverlay(
             background = transparent
             setContent {
                 RedefineNCMTheme {
-                    AutoHideMiniPlayerController(
-                        onExpand = onExpand,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    content()
                 }
             }
         }
@@ -241,11 +266,8 @@ private class DesktopMiniPlayerOverlay(
             return
         }
         val location = runCatching { canvas.locationOnScreen }.getOrNull() ?: return
-        val overlayWidth = canvas.width.coerceAtMost(680).coerceAtLeast(320)
-        val overlayHeight = 168
-        val x = location.x + (canvas.width - overlayWidth) / 2
-        val y = location.y + canvas.height - overlayHeight - 24
-        overlay.setBounds(x, y, overlayWidth, overlayHeight)
+        val bounds = boundsProvider(location, canvas.width, canvas.height)
+        overlay.setBounds(bounds)
         overlay.isVisible = true
         overlay.toFront()
     }
@@ -262,6 +284,28 @@ private class DesktopMiniPlayerOverlay(
         ownerWindow = null
         overlayWindow?.dispose()
         overlayWindow = null
+    }
+}
+
+@Composable
+private fun FloatingBackButton(onBack: () -> Unit) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        FilledTonalIconButton(
+            onClick = onBack,
+            modifier = Modifier.size(48.dp),
+            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.78f),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+            ),
+        ) {
+            Icon(
+                imageVector = AppIcons.ArrowBack,
+                contentDescription = "返回",
+            )
+        }
     }
 }
 
@@ -455,18 +499,6 @@ private fun Canvas.physicalWidth(): Int =
 
 private fun Canvas.physicalHeight(): Int =
     (height * (graphicsConfiguration?.defaultTransform?.scaleY ?: 1.0)).toInt()
-
-@Composable
-private fun LyricToolbar(onBack: () -> Unit) {
-    Surface(tonalElevation = 2.dp, modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(onClick = onBack) { Text("← 返回") }
-        }
-    }
-}
 
 /** Extract the bundled AMLL assets to a temp dir so the WebView can load them over file://. */
 private fun extractAmllAssets(): File {
