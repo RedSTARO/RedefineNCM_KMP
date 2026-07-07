@@ -27,6 +27,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -168,11 +169,11 @@ fun LoginScreen(
                     modifier = Modifier
                         .size(220.dp)
                         .clip(MaterialTheme.shapes.large)
-                        .background(MaterialTheme.colorScheme.surfaceContainerLowest),
+                        .background(loginPalette.onQuietContainer.copy(alpha = 0.08f)),
                     contentAlignment = Alignment.Center,
                 ) {
                     if (qrLoading) {
-                        CircularProgressIndicator()
+                        CircularProgressIndicator(color = loginPalette.accent)
                     } else if (qrBitmapBytes != null && qrBitmapBytes!!.isNotEmpty()) {
                         val bmp = remember(qrBitmapBytes) { decodePngToImageBitmap(qrBitmapBytes!!) }
                         if (bmp != null) {
@@ -187,7 +188,7 @@ fun LoginScreen(
                         Text(
                             "二维码\n将在此显示",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = loginPalette.onQuietContainer.copy(alpha = 0.72f),
                             textAlign = TextAlign.Center,
                         )
                     }
@@ -200,9 +201,9 @@ fun LoginScreen(
                     qrScanStatus,
                     style = MaterialTheme.typography.bodyMedium,
                     color = when {
-                        qrSuccess -> MaterialTheme.colorScheme.primary
+                        qrSuccess -> loginPalette.accent
                         qrError.isNotEmpty() -> MaterialTheme.colorScheme.error
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        else -> loginPalette.onQuietContainer.copy(alpha = 0.72f)
                     },
                     textAlign = TextAlign.Center,
                 )
@@ -251,13 +252,14 @@ fun LoginScreen(
         // Divider
         HorizontalDivider(
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-            color = MaterialTheme.colorScheme.outlineVariant,
+            color = loginPalette.onQuietContainer.copy(alpha = 0.16f),
         )
 
         // Manual cookie/server input
         Surface(
             shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            color = loginPalette.quietContainer,
+            contentColor = loginPalette.onQuietContainer,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -276,6 +278,7 @@ fun LoginScreen(
                     singleLine = true,
                     shape = MaterialTheme.shapes.large,
                     modifier = Modifier.fillMaxWidth(),
+                    colors = loginTextFieldColors(loginPalette),
                 )
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
@@ -285,6 +288,7 @@ fun LoginScreen(
                     minLines = 3,
                     shape = MaterialTheme.shapes.large,
                     modifier = Modifier.fillMaxWidth(),
+                    colors = loginTextFieldColors(loginPalette),
                 )
                 Spacer(Modifier.height(20.dp))
                 FilledTonalButton(
@@ -307,7 +311,7 @@ fun LoginScreen(
                     Text(
                         "已保存，重启应用后生效。",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = loginPalette.accent,
                     )
                 }
             }
@@ -316,3 +320,18 @@ fun LoginScreen(
         Spacer(Modifier.height(32.dp))
     }
 }
+
+@Composable
+private fun loginTextFieldColors(
+    loginPalette: com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette,
+) = OutlinedTextFieldDefaults.colors(
+    focusedContainerColor = loginPalette.quietContainer,
+    unfocusedContainerColor = loginPalette.quietContainer,
+    focusedTextColor = loginPalette.onQuietContainer,
+    unfocusedTextColor = loginPalette.onQuietContainer,
+    focusedLabelColor = loginPalette.accent,
+    unfocusedLabelColor = loginPalette.onQuietContainer.copy(alpha = 0.72f),
+    focusedBorderColor = loginPalette.accent,
+    unfocusedBorderColor = loginPalette.onQuietContainer.copy(alpha = 0.18f),
+    cursorColor = loginPalette.accent,
+)

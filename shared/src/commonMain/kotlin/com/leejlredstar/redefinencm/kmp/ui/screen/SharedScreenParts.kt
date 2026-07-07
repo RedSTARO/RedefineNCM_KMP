@@ -88,7 +88,8 @@ fun SongRow(
     Surface(
         onClick = onClick,
         shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = accentPalette.quietContainer,
+        contentColor = accentPalette.onQuietContainer,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 1.5.dp),
     ) {
         Row(
@@ -128,14 +129,14 @@ fun SongRow(
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = accentPalette.onQuietContainer,
                 )
                 Text(
                     text = artist.ifBlank { "Unknown" },
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = accentPalette.onQuietContainer.copy(alpha = 0.72f),
                 )
             }
             if (songId != null && settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false)) {
@@ -147,13 +148,13 @@ fun SongRow(
                 Surface(
                     shape = CircleShape,
                     color = if (downloaded) accentPalette.container
-                    else MaterialTheme.colorScheme.surfaceContainerHighest,
+                    else accentPalette.onQuietContainer.copy(alpha = 0.10f),
                 ) {
                     Icon(
                         imageVector = if (downloaded) AppIcons.Check else AppIcons.AttachFile,
                         contentDescription = if (downloaded) "Downloaded" else "Not downloaded",
                         tint = if (downloaded) accentPalette.onContainer
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        else accentPalette.onQuietContainer.copy(alpha = 0.72f),
                         modifier = Modifier.padding(6.dp).size(18.dp),
                     )
                 }
@@ -171,10 +172,19 @@ fun PlaylistRow(
     shape: RoundedCornerShape,
     onClick: () -> Unit,
 ) {
+    val fallbackAccent = MaterialTheme.colorScheme.tertiaryContainer
+    var imageAccent by remember(coverUrl, fallbackAccent) { mutableStateOf(fallbackAccent) }
+    val animatedAccent by animateColorAsState(
+        targetValue = imageAccent,
+        animationSpec = spring(),
+        label = "playlistRowAccent",
+    )
+    val accentPalette = contentAccentPalette(animatedAccent)
     Surface(
         onClick = onClick,
         shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = accentPalette.quietContainer,
+        contentColor = accentPalette.onQuietContainer,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 1.5.dp),
     ) {
         Row(
@@ -186,6 +196,9 @@ fun PlaylistRow(
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.size(56.dp).clip(MaterialTheme.shapes.large),
+                onSuccess = { state ->
+                    themeColorFromCoilImage(state.result.image)?.let { imageAccent = Color(it) }
+                },
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -195,12 +208,12 @@ fun PlaylistRow(
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = accentPalette.onQuietContainer,
                 )
                 Text(
                     text = "$trackCount 首",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = accentPalette.onQuietContainer.copy(alpha = 0.72f),
                 )
             }
         }
@@ -210,9 +223,11 @@ fun PlaylistRow(
 /** Empty-state hint with an action button (e.g. prompt to log in). */
 @Composable
 fun EmptyHint(text: String, actionLabel: String, onAction: () -> Unit) {
+    val accentPalette = contentAccentPalette(MaterialTheme.colorScheme.secondaryContainer)
     Surface(
         shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = accentPalette.quietContainer,
+        contentColor = accentPalette.onQuietContainer,
         modifier = Modifier.fillMaxWidth().padding(16.dp),
     ) {
         Column(
@@ -222,7 +237,7 @@ fun EmptyHint(text: String, actionLabel: String, onAction: () -> Unit) {
             Text(
                 text = text,
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = accentPalette.onQuietContainer.copy(alpha = 0.72f),
             )
             Spacer(Modifier.size(12.dp))
             Button(onClick = onAction) { Text(actionLabel) }
@@ -318,15 +333,16 @@ fun <T> SectionWithLazyRow(
             modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
         )
         if (items.isEmpty()) {
+            val emptyPalette = contentAccentPalette(MaterialTheme.colorScheme.secondaryContainer)
             Surface(
                 shape = MaterialTheme.shapes.extraLarge,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                color = emptyPalette.quietContainer,
+                contentColor = emptyPalette.onQuietContainer,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
                     text = "No data available.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(20.dp),
                 )
             }
@@ -363,8 +379,8 @@ fun PlaylistCard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 1.5.dp),
         shape = connectedListItemShape(index, count),
-        color = if (specialCard != "no") accentPalette.quietContainer
-        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = accentPalette.quietContainer,
+        contentColor = accentPalette.onQuietContainer,
     ) {
         Row(
             modifier = Modifier
@@ -391,21 +407,21 @@ fun PlaylistCard(
                     text = userPlaylistEach.name,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = accentPalette.onQuietContainer,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = userPlaylistEach.creator.nickname,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = accentPalette.onQuietContainer.copy(alpha = 0.72f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = "${userPlaylistEach.trackCount} 首 · ${compactCount(userPlaylistEach.playCount)} 次播放",
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = accentPalette.onQuietContainer.copy(alpha = 0.62f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -414,10 +430,8 @@ fun PlaylistCard(
                 Spacer(modifier = Modifier.width(12.dp))
                 Surface(
                     shape = CircleShape,
-                    color = if (specialCard == "fav") accentPalette.container
-                    else MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = if (specialCard == "fav") accentPalette.onContainer
-                    else MaterialTheme.colorScheme.onSecondaryContainer,
+                    color = accentPalette.container,
+                    contentColor = accentPalette.onContainer,
                 ) {
                     Icon(
                         imageVector = if (specialCard == "fav") AppIcons.Favorite
