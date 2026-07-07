@@ -64,7 +64,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val rawWordLyric by viewModel.rawWordLyric.collectAsState()
     val rawTranslatedLyric by viewModel.rawTranslatedLyric.collectAsState()
     val rawRomanLyric by viewModel.rawRomanLyric.collectAsState()
-    val rawExtraLyric by viewModel.rawExtraLyric.collectAsState()
     val lyricMap by viewModel.lyricMap.collectAsState()
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
@@ -84,9 +83,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     }
     val showRomanLyric = remember {
         platformSettings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)
-    }
-    val showExtraLyric = remember {
-        platformSettings.getBoolean(SettingKeys.SHOW_EXTRA_LYRIC, false)
     }
 
     val webView = remember {
@@ -211,7 +207,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         lyricForWeb,
         rawTranslatedLyric,
         rawRomanLyric,
-        rawExtraLyric,
         isWaitingForLyrics,
     ) {
         if (!engineReady) return@LaunchedEffect
@@ -225,10 +220,8 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         val lyricOptions = buildLyricOptionsJson(
             translatedLyric = rawTranslatedLyric,
             romanLyric = rawRomanLyric,
-            extraLyric = rawExtraLyric,
             showTranslatedLyric = showTranslatedLyric,
             showRomanLyric = showRomanLyric,
-            showExtraLyric = showExtraLyric,
         )
         if (rawWordLyric.isNotBlank()) {
             Log.d("AMLL", "feeding word lyrics media=$mediaId, len=${rawWordLyric.length}")
@@ -317,17 +310,13 @@ private fun WebView.showAmllError(message: String) {
 private fun buildLyricOptionsJson(
     translatedLyric: String,
     romanLyric: String,
-    extraLyric: String,
     showTranslatedLyric: Boolean,
     showRomanLyric: Boolean,
-    showExtraLyric: Boolean,
 ): String = JSONObject()
     .put("translatedLyric", translatedLyric)
     .put("romanLyric", romanLyric)
-    .put("extraLyric", extraLyric)
     .put("showTranslation", showTranslatedLyric)
     .put("showRoman", showRomanLyric)
-    .put("showExtra", showExtraLyric)
     .toString()
 
 private fun LinkedHashMap<Long?, String?>.toLrcFallback(): String =

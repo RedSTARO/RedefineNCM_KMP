@@ -258,7 +258,6 @@ data class Lyric(
     val code: Int = 0,
     val lrc: LyricLrc? = null,
     val yrc: LyricLrc? = null,
-    val klyric: LyricLrc? = null,
     val tlyric: LyricLrc? = null,
     val romalrc: LyricLrc? = null,
 )

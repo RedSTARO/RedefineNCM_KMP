@@ -78,7 +78,6 @@ fun SettingsScreen(
     var adaptOriginalLyric by remember { mutableStateOf(settings.getBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, false)) }
     var showTranslatedLyric by remember { mutableStateOf(settings.getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false)) }
     var showRomanLyric by remember { mutableStateOf(settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)) }
-    var showExtraLyric by remember { mutableStateOf(settings.getBoolean(SettingKeys.SHOW_EXTRA_LYRIC, false)) }
     var importStatus by remember { mutableStateOf<String?>(null) }
     var serverCheckStatus by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -97,7 +96,6 @@ fun SettingsScreen(
                 adaptOriginalLyric = settings.getBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, false)
                 showTranslatedLyric = settings.getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
                 showRomanLyric = settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)
-                showExtraLyric = settings.getBoolean(SettingKeys.SHOW_EXTRA_LYRIC, false)
                 importStatus = "✓ 导入成功"
             } else {
                 importStatus = "✗ 导入失败，请检查文件格式"
@@ -190,21 +188,17 @@ fun SettingsScreen(
                 }
 
                 ExpressiveSectionTitle("Lyrics", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
-                SettingsSwitch(adaptOriginalLyric, "Adapt original Android Live Update lyric", settingsPalette, index = 0, count = 4) { v ->
+                SettingsSwitch(adaptOriginalLyric, "Adapt original Android Live Update lyric", settingsPalette, index = 0, count = 3) { v ->
                     adaptOriginalLyric = v
                     settings.setBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, v)
                 }
-                SettingsSwitch(showTranslatedLyric, "显示翻译歌词", settingsPalette, index = 1, count = 4) { v ->
+                SettingsSwitch(showTranslatedLyric, "显示翻译歌词", settingsPalette, index = 1, count = 3) { v ->
                     showTranslatedLyric = v
                     settings.setBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, v)
                 }
-                SettingsSwitch(showRomanLyric, "显示五十音 / 罗马音歌词", settingsPalette, index = 2, count = 4) { v ->
+                SettingsSwitch(showRomanLyric, "显示五十音 / 罗马音歌词", settingsPalette, index = 2, count = 3) { v ->
                     showRomanLyric = v
                     settings.setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, v)
-                }
-                SettingsSwitch(showExtraLyric, "显示附加歌词", settingsPalette, index = 3, count = 4) { v ->
-                    showExtraLyric = v
-                    settings.setBoolean(SettingKeys.SHOW_EXTRA_LYRIC, v)
                 }
 
                 ExpressiveSectionTitle("General", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
