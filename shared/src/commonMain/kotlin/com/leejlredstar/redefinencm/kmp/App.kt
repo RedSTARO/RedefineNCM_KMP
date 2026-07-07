@@ -138,14 +138,14 @@ fun App() {
             }
             fun push(dest: PushedDest) = pushedStack.add(dest)
             fun back() { if (pushedStack.isNotEmpty()) pushedStack.removeAt(pushedStack.lastIndex) }
-            fun openNowPlaying() {
-                val existingIndex = pushedStack.indexOfLast { it is PushedDest.NowPlaying }
+            fun openFullLyric() {
+                val existingIndex = pushedStack.indexOfLast { it is PushedDest.FullLyric }
                 if (existingIndex >= 0) {
                     while (pushedStack.lastIndex > existingIndex) {
                         pushedStack.removeAt(pushedStack.lastIndex)
                     }
                 } else {
-                    push(PushedDest.NowPlaying)
+                    push(PushedDest.FullLyric)
                 }
             }
 
@@ -222,7 +222,7 @@ fun App() {
                                 enter = miniPlayerEnterTransition(),
                                 exit = miniPlayerExitTransition(),
                             ) {
-                                MiniNowPlayingBar(onExpand = ::openNowPlaying)
+                                MiniNowPlayingBar(onExpand = ::openFullLyric)
                             }
                         },
                     ) { innerPadding ->
@@ -265,7 +265,7 @@ fun App() {
                                         is PushedDest.Login -> LoginScreen(onBack = ::back)
                                         is PushedDest.NowPlaying -> NowPlayingScreen(
                                             onBack = ::back,
-                                            onOpenFullLyric = { push(PushedDest.FullLyric) },
+                                            onOpenFullLyric = ::openFullLyric,
                                         )
                                         is PushedDest.FullLyric -> WebViewLyricScreen(onBack = ::back)
                                         is PushedDest.Playlist -> PlaylistDetailScreen(
