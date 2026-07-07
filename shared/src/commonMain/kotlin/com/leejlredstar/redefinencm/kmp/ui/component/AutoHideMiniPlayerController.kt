@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -16,6 +17,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -36,8 +39,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -52,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -71,6 +73,7 @@ import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
+import kotlin.math.abs
 
 @Composable
 fun AutoHideMiniPlayerController(
@@ -392,7 +395,6 @@ private fun ExpandedPlaybackCard(
     }
 
     Surface(
-        onClick = onReveal,
         modifier = Modifier
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .widthIn(max = 620.dp)
@@ -452,30 +454,33 @@ private fun ExpandedPlaybackCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Slider(
+                SeekableProgressBar(
                     value = sliderValue.coerceIn(0f, 1f),
-                    onValueChange = { percent ->
+                    enabled = hasMedia && totalDuration > 0L,
+                    accentPalette = accentPalette,
+                    onInteractionStart = onReveal,
+                    onPreview = { percent ->
                         isDragging = true
                         dragValue = percent.coerceIn(0f, 1f)
                     },
-                    onValueChangeFinished = {
+                    onCommit = { percent ->
+                        dragValue = percent.coerceIn(0f, 1f)
                         if (totalDuration > 0L) {
                             onSeek((dragValue * totalDuration).toLong().coerceIn(0L, totalDuration))
                         }
                         isDragging = false
                     },
-                    enabled = hasMedia && totalDuration > 0L,
-                    colors = SliderDefaults.colors(
-                        thumbColor = accentPalette.onContainer,
-                        activeTrackColor = accentPalette.onContainer,
-                        inactiveTrackColor = accentPalette.onContainer.copy(alpha = 0.22f),
-                        disabledThumbColor = accentPalette.onContainer.copy(alpha = 0.38f),
-                        disabledActiveTrackColor = accentPalette.onContainer.copy(alpha = 0.22f),
-                        disabledInactiveTrackColor = accentPalette.onContainer.copy(alpha = 0.12f),
-                    ),
+                    onCancel = {
+                        dragValue = if (totalDuration > 0L) {
+                            (position.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
+                        } else {
+                            0f
+                        }
+                        isDragging = false
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(32.dp),
+                        .height(34.dp),
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -534,6 +539,88 @@ private fun ExpandedPlaybackCard(
 }
 
 @Composable
+private fun SeekableProgressBar(
+    value: Float,
+    enabled: Boolean,
+    accentPalette: ContentAccentPalette,
+    onInteractionStart: () -> Unit,
+    onPreview: (Float) -> Unit,
+    onCommit: (Float) -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var pendingValue by remember { mutableStateOf(value.coerceIn(0f, 1f)) }
+    LaunchedEffect(value) {
+        pendingValue = value.coerceIn(0f, 1f)
+    }
+
+    fun fractionFromX(x: Float, width: Int): Float =
+        if (width <= 0) 0f else (x / width.toFloat()).coerceIn(0f, 1f)
+
+    BoxWithConstraints(
+        modifier = modifier
+            .pointerInput(enabled) {
+                detectTapGestures { offset ->
+                    if (!enabled) return@detectTapGestures
+                    onInteractionStart()
+                    val fraction = fractionFromX(offset.x, size.width)
+                    pendingValue = fraction
+                    onPreview(fraction)
+                    onCommit(fraction)
+                }
+            }
+            .pointerInput(enabled) {
+                detectHorizontalDragGestures(
+                    onDragStart = { offset ->
+                        if (!enabled) return@detectHorizontalDragGestures
+                        onInteractionStart()
+                        val fraction = fractionFromX(offset.x, size.width)
+                        pendingValue = fraction
+                        onPreview(fraction)
+                    },
+                    onHorizontalDrag = { change, _ ->
+                        if (!enabled) return@detectHorizontalDragGestures
+                        val fraction = fractionFromX(change.position.x, size.width)
+                        pendingValue = fraction
+                        onPreview(fraction)
+                        change.consume()
+                    },
+                    onDragEnd = {
+                        if (enabled) onCommit(pendingValue)
+                    },
+                    onDragCancel = {
+                        pendingValue = value.coerceIn(0f, 1f)
+                        onCancel()
+                    },
+                )
+            },
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        val safeValue = pendingValue.coerceIn(0f, 1f)
+        LinearProgressIndicator(
+            progress = { safeValue },
+            modifier = Modifier
+                .align(Alignment.Center)
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(CircleShape),
+            color = if (enabled) accentPalette.onContainer else accentPalette.onContainer.copy(alpha = 0.28f),
+            trackColor = accentPalette.onContainer.copy(alpha = if (enabled) 0.22f else 0.12f),
+        )
+        Surface(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .offset(x = (maxWidth - 12.dp) * safeValue)
+                .size(12.dp),
+            shape = CircleShape,
+            color = if (enabled) accentPalette.onContainer else accentPalette.onContainer.copy(alpha = 0.38f),
+            contentColor = accentPalette.container,
+            tonalElevation = 0.dp,
+        ) {}
+    }
+}
+
+@Composable
 private fun CollapsedProgressController(
     media: MediaInfo?,
     hasMedia: Boolean,
@@ -548,18 +635,54 @@ private fun CollapsedProgressController(
     onNext: () -> Unit,
 ) {
     val dragThresholdPx = with(LocalDensity.current) { 56.dp.toPx() }
+    var dragOffsetPx by remember { mutableStateOf(0f) }
+    var pressed by remember { mutableStateOf(false) }
+    val dragFraction = (dragOffsetPx / dragThresholdPx).coerceIn(-1f, 1f)
+    val animatedOffset by animateFloatAsState(
+        targetValue = dragOffsetPx.coerceIn(-dragThresholdPx, dragThresholdPx) * 0.30f,
+        animationSpec = spring(),
+        label = "collapsedControllerDragOffset",
+    )
+    val animatedScale by animateFloatAsState(
+        targetValue = when {
+            pressed -> 0.965f
+            dragOffsetPx != 0f -> 1f + abs(dragFraction) * 0.045f
+            else -> 1f
+        },
+        animationSpec = spring(),
+        label = "collapsedControllerScale",
+    )
+    val swipeLabel = when {
+        dragOffsetPx <= -dragThresholdPx * 0.38f -> "释放下一首"
+        dragOffsetPx >= dragThresholdPx * 0.38f -> "释放上一首"
+        else -> null
+    }
+    val swipeAlpha by animateFloatAsState(
+        targetValue = abs(dragFraction).coerceIn(0f, 1f),
+        animationSpec = tween(120, easing = LinearOutSlowInEasing),
+        label = "collapsedControllerSwipeAlpha",
+    )
 
     Surface(
         modifier = Modifier
             .padding(horizontal = 24.dp)
             .widthIn(min = 220.dp, max = 420.dp)
             .fillMaxWidth(0.72f)
+            .graphicsLayer {
+                translationX = animatedOffset
+                scaleX = animatedScale
+                scaleY = animatedScale
+            }
             .pointerInput(hasMedia, dragThresholdPx) {
                 var totalDrag = 0f
                 detectHorizontalDragGestures(
-                    onDragStart = { totalDrag = 0f },
+                    onDragStart = {
+                        totalDrag = 0f
+                        dragOffsetPx = 0f
+                    },
                     onHorizontalDrag = { change, dragAmount ->
                         totalDrag += dragAmount
+                        dragOffsetPx = totalDrag.coerceIn(-dragThresholdPx * 1.25f, dragThresholdPx * 1.25f)
                         change.consume()
                     },
                     onDragEnd = {
@@ -567,18 +690,27 @@ private fun CollapsedProgressController(
                             totalDrag <= -dragThresholdPx -> onNext()
                             totalDrag >= dragThresholdPx -> onPrevious()
                         }
+                        dragOffsetPx = 0f
                     },
-                    onDragCancel = { totalDrag = 0f },
+                    onDragCancel = {
+                        totalDrag = 0f
+                        dragOffsetPx = 0f
+                    },
                 )
             }
             .pointerInput(hasMedia) {
                 detectTapGestures(
+                    onPress = {
+                        pressed = true
+                        tryAwaitRelease()
+                        pressed = false
+                    },
                     onTap = { onReveal() },
                     onDoubleTap = { onTogglePlayPause() },
                 )
             },
         shape = CircleShape,
-        color = accentPalette.quietContainer.copy(alpha = 0.78f),
+        color = accentPalette.quietContainer.copy(alpha = 0.78f + swipeAlpha * 0.12f),
         contentColor = accentPalette.onQuietContainer,
         tonalElevation = 0.dp,
     ) {
@@ -597,13 +729,13 @@ private fun CollapsedProgressController(
                     modifier = Modifier.weight(1f),
                 )
                 Text(
-                    text = if (hasMedia) {
+                    text = swipeLabel ?: if (hasMedia) {
                         "${formatControllerDuration(position)} / ${formatControllerDuration(totalDuration)}"
-                    } else {
-                        "0:00 / 0:00"
-                    },
+                    } else "0:00 / 0:00",
                     style = MaterialTheme.typography.labelSmall,
-                    color = accentPalette.onQuietContainer.copy(alpha = if (isPlaying) 0.82f else 0.58f),
+                    color = accentPalette.onQuietContainer.copy(
+                        alpha = if (swipeLabel != null) 0.96f else if (isPlaying) 0.82f else 0.58f,
+                    ),
                     modifier = Modifier.padding(start = 10.dp),
                     maxLines = 1,
                 )
