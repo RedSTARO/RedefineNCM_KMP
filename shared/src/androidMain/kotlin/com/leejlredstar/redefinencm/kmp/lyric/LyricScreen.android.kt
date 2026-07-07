@@ -145,12 +145,20 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             }
 
             addJavascriptInterface(
-                AmllCallback(onReady = {
-                    post {
-                        Log.d("AMLL", "onReady received -> engineReady=true")
-                        engineReady = true
-                    }
-                }),
+                AmllCallback(
+                    onReady = {
+                        post {
+                            Log.d("AMLL", "onReady received -> engineReady=true")
+                            engineReady = true
+                        }
+                    },
+                    onLineClicked = { timeMs ->
+                        post {
+                            Log.d("AMLL", "line click seek to $timeMs")
+                            viewModel.onPositionSeekClick(timeMs)
+                        }
+                    },
+                ),
                 "AmllCallback",
             )
 
@@ -237,13 +245,16 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     }
 }
 
-private class AmllCallback(private val onReady: () -> Unit) {
+private class AmllCallback(
+    private val onReady: () -> Unit,
+    private val onLineClicked: (Long) -> Unit,
+) {
     @JavascriptInterface
     fun onReady() = onReady.invoke()
 
     @JavascriptInterface
     fun onLyricLineClicked(timeMs: Long) {
-        // Future: wire to player.seekTo(timeMs)
+        onLineClicked(timeMs)
     }
 }
 

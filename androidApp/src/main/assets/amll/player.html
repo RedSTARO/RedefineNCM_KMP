@@ -60,6 +60,10 @@
   html[data-platform="android"] .FmKaba_lyricLine {
     padding: .45em .75em;
   }
+  .FmKaba_lyricLine,
+  .FmKaba_lyricLineWrapper {
+    cursor: pointer;
+  }
   .FmKaba_lyricLine.FmKaba_active .FmKaba_wordBody {
     -webkit-text-stroke: 0.45px rgba(255,255,255,0.42);
     text-shadow:
@@ -188,6 +192,58 @@ window.addEventListener("unhandledrejection", function (e) {
   showError("promise rejected: " + ((e.reason && e.reason.message) || e.reason));
 });
 
+let currentLyricLines = [];
+let lyricClickSeekingInstalled = false;
+
+function setCurrentLyricLines(lines) {
+  currentLyricLines = Array.isArray(lines) ? lines : [];
+  if (globalThis.__amllDebug) globalThis.__amllDebug.lines = currentLyricLines.length;
+}
+
+function notifyHostLyricLineClicked(timeMs) {
+  const safeTime = Math.max(0, Math.round(Number(timeMs) || 0));
+  if (globalThis.AmllCallback && globalThis.AmllCallback.onLyricLineClicked) {
+    globalThis.AmllCallback.onLyricLineClicked(safeTime);
+  } else if (globalThis.amllHost && globalThis.amllHost.onLyricLineClicked) {
+    globalThis.amllHost.onLyricLineClicked(safeTime);
+  } else if (typeof globalThis.cefQuery === "function") {
+    globalThis.cefQuery({ request: "seekTo:" + safeTime, onSuccess: function () {}, onFailure: function () {} });
+  }
+}
+
+function installLyricClickSeeking() {
+  if (lyricClickSeekingInstalled) return;
+  const root = document.getElementById("amll-root");
+  if (!root) return;
+  lyricClickSeekingInstalled = true;
+  root.addEventListener("click", function (event) {
+    const eventTarget = event.target && event.target.nodeType === 1
+      ? event.target
+      : event.target && event.target.parentElement;
+    const target = eventTarget && eventTarget.closest
+      ? eventTarget.closest(".FmKaba_lyricLineWrapper, .FmKaba_lyricLine")
+      : null;
+    if (!target || !root.contains(target)) return;
+
+    const wrapper = target.classList.contains("FmKaba_lyricLineWrapper")
+      ? target
+      : target.closest(".FmKaba_lyricLineWrapper");
+    const wrappers = Array.from(root.querySelectorAll(".FmKaba_lyricLineWrapper"));
+    let index = wrappers.indexOf(wrapper);
+    if (index < 0) {
+      const line = target.classList.contains("FmKaba_lyricLine")
+        ? target
+        : target.closest(".FmKaba_lyricLine");
+      index = Array.from(root.querySelectorAll(".FmKaba_lyricLine")).indexOf(line);
+    }
+
+    const lineData = currentLyricLines[index];
+    const time = Number(lineData && lineData.startTime);
+    if (!Number.isFinite(time)) return;
+    notifyHostLyricLineClicked(time);
+  }, true);
+}
+
 function normalizeYrcWordStart(lineStart, lineDuration, wordStart) {
   if (wordStart < lineStart && wordStart <= lineDuration) return lineStart + wordStart;
   return wordStart;
@@ -242,14 +298,30 @@ function parseYrcText(yrcText) {
 
 function installWordLyricSupport() {
   const bridge = globalThis.AmllBridge;
-  if (!bridge || bridge.loadWordLyrics) return;
+  if (!bridge) return;
+  installLyricClickSeeking();
+
+  if (!bridge.__redefineLoadLyricsWrapped && bridge.loadLyrics) {
+    bridge.__redefineLoadLyricsWrapped = true;
+    bridge.loadLyrics = function (lrcText) {
+      if (!this.player) return;
+      const parsed = this.parseLrc ? this.parseLrc(lrcText) : [];
+      setCurrentLyricLines(parsed);
+      this.player.setLyricLines(parsed);
+      globalThis.AmllPage && globalThis.AmllPage.hideLoading();
+    };
+  }
+
   bridge.parseYrc = parseYrcText;
+  if (bridge.__redefineWordLyricWrapped) return;
+  bridge.__redefineWordLyricWrapped = true;
   bridge.loadWordLyrics = function (yrcText) {
     if (!this.player) return;
     const parsed = parseYrcText(yrcText);
-    this.player.setLyricLines(parsed.length ? parsed : (this.parseLrc ? this.parseLrc(yrcText) : []));
+    const lines = parsed.length ? parsed : (this.parseLrc ? this.parseLrc(yrcText) : []);
+    setCurrentLyricLines(lines);
+    this.player.setLyricLines(lines);
     globalThis.AmllPage && globalThis.AmllPage.hideLoading();
-    if (globalThis.__amllDebug) globalThis.__amllDebug.lines = parsed.length;
   };
 }
 globalThis.installWordLyricSupport = installWordLyricSupport;
