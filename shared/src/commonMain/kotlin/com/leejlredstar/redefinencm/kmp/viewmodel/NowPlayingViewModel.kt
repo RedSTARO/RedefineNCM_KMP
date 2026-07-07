@@ -177,11 +177,17 @@ class NowPlayingViewModel(
                         val wordLines = yrcText
                             ?.let { runCatching { LyricParser.parseYrc(it) }.getOrDefault(emptyList()) }
                             .orEmpty()
+                        val plainLyricText = lrcText ?: LyricParser.toLrcText(wordLines)
+                        val displayLyricMap = if (wordLines.isNotEmpty()) {
+                            LyricParser.toLineLyricMap(wordLines)
+                        } else {
+                            parseLineLyrics(lrcText, wordLines)
+                        }
                         applyLyricsForMedia(mediaId) {
                             rawWordLyric.value = if (wordLines.isNotEmpty()) yrcText.orEmpty() else ""
                             wordLyricLines.value = wordLines
-                            rawLyric.value = lrcText ?: LyricParser.toLrcText(wordLines)
-                            lyricMap.value = parseLineLyrics(lrcText, wordLines)
+                            rawLyric.value = plainLyricText
+                            lyricMap.value = displayLyricMap
                         }
                         settled = true
                     } else if (lyric != null) {
