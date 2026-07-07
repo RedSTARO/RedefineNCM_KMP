@@ -274,7 +274,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         }
 
         AutoHideMiniPlayerController(
-            onExpand = onBack,
             modifier = Modifier.fillMaxSize(),
         )
     }
