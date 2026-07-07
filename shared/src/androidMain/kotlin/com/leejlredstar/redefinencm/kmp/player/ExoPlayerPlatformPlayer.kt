@@ -150,6 +150,8 @@ class ExoPlayerPlatformPlayer(
             _queue.value = emptyList()
             _currentIndex.value = -1
             _currentMedia.value = null
+            _position.value = 0L
+            _duration.value = -1L
             return
         }
 
@@ -169,6 +171,16 @@ class ExoPlayerPlatformPlayer(
         // 高亮位置直接由本次重建出的 indices 计算，绝不读取旧缓存
         _currentIndex.value = indices.indexOf(exoPlayer.currentMediaItemIndex)
         _currentMedia.value = items.getOrNull(_currentIndex.value)
+        publishCurrentPositionAndDuration()
+    }
+
+    private fun publishCurrentPositionAndDuration() {
+        _position.value = exoPlayer.currentPosition.coerceAtLeast(0L)
+        val duration = exoPlayer.duration
+        _duration.value = when {
+            duration != C.TIME_UNSET -> duration
+            else -> _queue.value.getOrNull(_currentIndex.value)?.duration?.takeIf { it > 0 } ?: -1L
+        }
     }
 
     private fun startPositionSync() {
@@ -191,7 +203,10 @@ class ExoPlayerPlatformPlayer(
     override fun play() = exoPlayer.play()
     override fun pause() = exoPlayer.pause()
     override fun togglePlayPause() = if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
-    override fun seekTo(positionMs: Long) = exoPlayer.seekTo(positionMs)
+    override fun seekTo(positionMs: Long) {
+        exoPlayer.seekTo(positionMs)
+        _position.value = positionMs.coerceAtLeast(0L)
+    }
     override fun seekToPrevious() = exoPlayer.seekToPreviousMediaItem()
     override fun seekToNext() = exoPlayer.seekToNextMediaItem()
     override fun skipToIndex(index: Int) {
