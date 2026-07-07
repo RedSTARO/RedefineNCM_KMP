@@ -39,6 +39,7 @@ import org.koin.compose.koinInject
 @Composable
 fun NowPlayingScreen(
     onBack: () -> Unit = {},
+    onOpenFullLyric: () -> Unit = {},
     viewModel: NowPlayingViewModel = koinInject(),
 ) {
     val metadata by viewModel.currentMedia.collectAsState()
@@ -95,6 +96,7 @@ fun NowPlayingScreen(
                 if (!showComments) viewModel.getComments()
                 showComments = !showComments
             },
+            onOpenFullLyric = onOpenFullLyric,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
         )
     }
@@ -368,6 +370,7 @@ fun PlaybackControlSection(
     onShuffleClick: () -> Unit,
     onFavClick: () -> Unit,
     onCommentsClick: () -> Unit,
+    onOpenFullLyric: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -457,6 +460,16 @@ fun PlaybackControlSection(
                     Icon(
                         imageVector = AppIcons.FavoriteBorder,
                         contentDescription = "Favorite",
+                    )
+                }
+                FilledTonalIconButton(
+                    onClick = onOpenFullLyric,
+                    modifier = Modifier.weight(1f),
+                    shape = CircleShape,
+                ) {
+                    Icon(
+                        imageVector = AppIcons.GraphicEq,
+                        contentDescription = "Full-screen lyrics",
                     )
                 }
                 FilledTonalIconButton(
