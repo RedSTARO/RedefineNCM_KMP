@@ -18,6 +18,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.unit.dp
+import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
+import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import com.sun.jna.Native
 import kotlinx.coroutines.delay
@@ -45,14 +47,27 @@ import kotlin.concurrent.thread
 @Composable
 actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val viewModel: NowPlayingViewModel = koinInject()
+    val settings: PlatformSettings = koinInject()
     val rawLyric by viewModel.rawLyric.collectAsState()
     val rawWordLyric by viewModel.rawWordLyric.collectAsState()
+    val rawTranslatedLyric by viewModel.rawTranslatedLyric.collectAsState()
+    val rawRomanLyric by viewModel.rawRomanLyric.collectAsState()
+    val rawExtraLyric by viewModel.rawExtraLyric.collectAsState()
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
 
     val engineReadyFlow = remember { MutableStateFlow(false) }
     val engineReady by engineReadyFlow.collectAsState()
+    val showTranslatedLyric = remember {
+        settings.getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
+    }
+    val showRomanLyric = remember {
+        settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)
+    }
+    val showExtraLyric = remember {
+        settings.getBoolean(SettingKeys.SHOW_EXTRA_LYRIC, false)
+    }
 
     // 资产解包很快（3 个小文件拷贝），首帧前同步执行即可
     val assetsDir = remember { extractAmllAssets() }
@@ -76,22 +91,38 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     }
 
     // Feed raw LRC once the engine is ready and whenever the track changes.
-    LaunchedEffect(engineReady, lyricMediaId, rawWordLyric, rawLyric) {
+    LaunchedEffect(
+        engineReady,
+        lyricMediaId,
+        rawWordLyric,
+        rawLyric,
+        rawTranslatedLyric,
+        rawRomanLyric,
+        rawExtraLyric,
+    ) {
         if (!engineReady) return@LaunchedEffect
         val mediaId = lyricMediaId ?: return@LaunchedEffect
         if (rawWordLyric.isEmpty() && rawLyric.isEmpty()) {
             println("AMLL[wv2] engineReady but rawLyric is EMPTY (no lyrics fetched)")
             return@LaunchedEffect
         }
+        val lyricOptions = buildLyricOptionsJs(
+            translatedLyric = rawTranslatedLyric,
+            romanLyric = rawRomanLyric,
+            extraLyric = rawExtraLyric,
+            showTranslatedLyric = showTranslatedLyric,
+            showRomanLyric = showRomanLyric,
+            showExtraLyric = showExtraLyric,
+        )
         if (rawWordLyric.isNotEmpty()) {
             println("AMLL[wv2] feeding word lyrics media=$mediaId, len=${rawWordLyric.length}")
             session.eval(
-                "AmllBridge.loadWordLyrics('${rawWordLyric.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}');",
+                "AmllBridge.loadWordLyrics('${rawWordLyric.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}', $lyricOptions);",
             )
         } else {
             println("AMLL[wv2] feeding lyrics media=$mediaId, len=${rawLyric.length}")
             session.eval(
-                "AmllBridge.loadLyrics('${rawLyric.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}');",
+                "AmllBridge.loadLyrics('${rawLyric.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}', $lyricOptions);",
             )
         }
     }
@@ -346,3 +377,18 @@ private fun String.escapeJsSingleQuoted(): String =
         .replace("'", "\\'")
         .replace("\n", "\\n")
         .replace("\r", "\\r")
+
+private fun buildLyricOptionsJs(
+    translatedLyric: String,
+    romanLyric: String,
+    extraLyric: String,
+    showTranslatedLyric: Boolean,
+    showRomanLyric: Boolean,
+    showExtraLyric: Boolean,
+): String =
+    "{translatedLyric:'${translatedLyric.escapeJsSingleQuoted()}'," +
+        "romanLyric:'${romanLyric.escapeJsSingleQuoted()}'," +
+        "extraLyric:'${extraLyric.escapeJsSingleQuoted()}'," +
+        "showTranslation:$showTranslatedLyric," +
+        "showRoman:$showRomanLyric," +
+        "showExtra:$showExtraLyric}"

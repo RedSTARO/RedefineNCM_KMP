@@ -260,6 +260,7 @@ data class Lyric(
     val yrc: LyricLrc? = null,
     val klyric: LyricLrc? = null,
     val tlyric: LyricLrc? = null,
+    val romalrc: LyricLrc? = null,
 )
 
 @Serializable

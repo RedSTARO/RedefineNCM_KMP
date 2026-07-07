@@ -76,6 +76,9 @@ fun SettingsScreen(
     var searchPrediction by remember { mutableStateOf(settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true)) }
     var showDownloadStatus by remember { mutableStateOf(settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false)) }
     var adaptOriginalLyric by remember { mutableStateOf(settings.getBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, false)) }
+    var showTranslatedLyric by remember { mutableStateOf(settings.getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false)) }
+    var showRomanLyric by remember { mutableStateOf(settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)) }
+    var showExtraLyric by remember { mutableStateOf(settings.getBoolean(SettingKeys.SHOW_EXTRA_LYRIC, false)) }
     var importStatus by remember { mutableStateOf<String?>(null) }
     var serverCheckStatus by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -90,6 +93,11 @@ fun SettingsScreen(
                 replacePlaylist = settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false)
                 checkUpdate = settings.getBoolean(SettingKeys.CHECK_UPDATE, false)
                 searchPrediction = settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true)
+                showDownloadStatus = settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false)
+                adaptOriginalLyric = settings.getBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, false)
+                showTranslatedLyric = settings.getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
+                showRomanLyric = settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)
+                showExtraLyric = settings.getBoolean(SettingKeys.SHOW_EXTRA_LYRIC, false)
                 importStatus = "✓ 导入成功"
             } else {
                 importStatus = "✗ 导入失败，请检查文件格式"
@@ -160,29 +168,43 @@ fun SettingsScreen(
                 }
 
                 ExpressiveSectionTitle("Playback", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
-                SettingsDropdown(onlineQuality, "Music Quality (Online)", SoundQuality.entries, settingsPalette, index = 0, count = 6) { v ->
+                SettingsDropdown(onlineQuality, "Music Quality (Online)", SoundQuality.entries, settingsPalette, index = 0, count = 5) { v ->
                     onlineQuality = v.name
                     settings.setString(SettingKeys.ONLINE_PLAY_QUALITY, v.name)
                 }
-                SettingsDropdown(dlQuality, "Music Quality (Download)", SoundQuality.entries, settingsPalette, index = 1, count = 6) { v ->
+                SettingsDropdown(dlQuality, "Music Quality (Download)", SoundQuality.entries, settingsPalette, index = 1, count = 5) { v ->
                     dlQuality = v.name
                     settings.setString(SettingKeys.DOWNLOAD_QUALITY, v.name)
                 }
-                SettingsSwitch(replacePlaylist, "Replace playlist on single song click", settingsPalette, index = 2, count = 6) { v ->
+                SettingsSwitch(replacePlaylist, "Replace playlist on single song click", settingsPalette, index = 2, count = 5) { v ->
                     replacePlaylist = v
                     settings.setBoolean(SettingKeys.REPLACE_PLAYLIST, v)
                 }
-                SettingsSwitch(searchPrediction, "Search prediction", settingsPalette, index = 3, count = 6) { v ->
+                SettingsSwitch(searchPrediction, "Search prediction", settingsPalette, index = 3, count = 5) { v ->
                     searchPrediction = v
                     settings.setBoolean(SettingKeys.SEARCH_PREDICTION, v)
                 }
-                SettingsSwitch(showDownloadStatus, "Show download status", settingsPalette, index = 4, count = 6) { v ->
+                SettingsSwitch(showDownloadStatus, "Show download status", settingsPalette, index = 4, count = 5) { v ->
                     showDownloadStatus = v
                     settings.setBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, v)
                 }
-                SettingsSwitch(adaptOriginalLyric, "Adapt original Android Live Update lyric", settingsPalette, index = 5, count = 6) { v ->
+
+                ExpressiveSectionTitle("Lyrics", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
+                SettingsSwitch(adaptOriginalLyric, "Adapt original Android Live Update lyric", settingsPalette, index = 0, count = 4) { v ->
                     adaptOriginalLyric = v
                     settings.setBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, v)
+                }
+                SettingsSwitch(showTranslatedLyric, "显示翻译歌词", settingsPalette, index = 1, count = 4) { v ->
+                    showTranslatedLyric = v
+                    settings.setBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, v)
+                }
+                SettingsSwitch(showRomanLyric, "显示五十音 / 罗马音歌词", settingsPalette, index = 2, count = 4) { v ->
+                    showRomanLyric = v
+                    settings.setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, v)
+                }
+                SettingsSwitch(showExtraLyric, "显示附加 / 用户搭配歌词", settingsPalette, index = 3, count = 4) { v ->
+                    showExtraLyric = v
+                    settings.setBoolean(SettingKeys.SHOW_EXTRA_LYRIC, v)
                 }
 
                 ExpressiveSectionTitle("General", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))

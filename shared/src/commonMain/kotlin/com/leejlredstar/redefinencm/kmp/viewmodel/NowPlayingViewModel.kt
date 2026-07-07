@@ -43,6 +43,9 @@ class NowPlayingViewModel(
     )
     val rawLyric = MutableStateFlow("") // raw LRC text for external lyric renderers
     val rawWordLyric = MutableStateFlow("") // raw YRC text for word-level external lyric renderers
+    val rawTranslatedLyric = MutableStateFlow("")
+    val rawRomanLyric = MutableStateFlow("")
+    val rawExtraLyric = MutableStateFlow("")
     val wordLyricLines = MutableStateFlow<List<LyricParser.WordLine>>(emptyList())
     val lyricMediaId = MutableStateFlow<String?>(null)
 
@@ -173,6 +176,9 @@ class NowPlayingViewModel(
                 repo.getLyric(id).collect { lyric ->
                     val lrcText = lyric?.lrc?.lyric?.takeIf { it.isNotBlank() }
                     val yrcText = lyric?.yrc?.lyric?.takeIf { it.isNotBlank() }
+                    val translatedText = lyric?.tlyric?.lyric?.takeIf { it.isNotBlank() }
+                    val romanText = lyric?.romalrc?.lyric?.takeIf { it.isNotBlank() }
+                    val extraText = lyric?.klyric?.lyric?.takeIf { it.isNotBlank() }
                     if (lrcText != null || yrcText != null) {
                         val wordLines = yrcText
                             ?.let { runCatching { LyricParser.parseYrc(it) }.getOrDefault(emptyList()) }
@@ -186,6 +192,9 @@ class NowPlayingViewModel(
                         applyLyricsForMedia(mediaId) {
                             rawWordLyric.value = if (wordLines.isNotEmpty()) yrcText.orEmpty() else ""
                             wordLyricLines.value = wordLines
+                            rawTranslatedLyric.value = translatedText.orEmpty()
+                            rawRomanLyric.value = romanText.orEmpty()
+                            rawExtraLyric.value = extraText.orEmpty()
                             rawLyric.value = plainLyricText
                             lyricMap.value = displayLyricMap
                         }
@@ -195,6 +204,9 @@ class NowPlayingViewModel(
                         applyLyricsForMedia(mediaId) {
                             rawLyric.value = ""
                             rawWordLyric.value = ""
+                            rawTranslatedLyric.value = ""
+                            rawRomanLyric.value = ""
+                            rawExtraLyric.value = ""
                             wordLyricLines.value = emptyList()
                             lyricMap.value = linkedMapOf(0L to "No lyric available")
                         }
@@ -207,6 +219,9 @@ class NowPlayingViewModel(
             applyLyricsForMedia(mediaId) {
                 rawLyric.value = ""
                 rawWordLyric.value = ""
+                rawTranslatedLyric.value = ""
+                rawRomanLyric.value = ""
+                rawExtraLyric.value = ""
                 wordLyricLines.value = emptyList()
                 lyricMap.value = linkedMapOf(0L to "歌词加载失败")
             }
@@ -218,6 +233,9 @@ class NowPlayingViewModel(
         lyricIndex.value = 0
         rawLyric.value = ""
         rawWordLyric.value = ""
+        rawTranslatedLyric.value = ""
+        rawRomanLyric.value = ""
+        rawExtraLyric.value = ""
         wordLyricLines.value = emptyList()
         lyricMap.value = linkedMapOf(0L to "Loading Lyric")
     }
