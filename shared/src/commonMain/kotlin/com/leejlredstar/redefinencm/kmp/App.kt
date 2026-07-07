@@ -187,7 +187,7 @@ fun App() {
                     Scaffold(
                         contentWindowInsets = WindowInsets(0, 0, 0, 0),
                         snackbarHost = { SnackbarHost(snackbarHostState) },
-                        floatingActionButtonPosition = FabPosition.Center,
+                        floatingActionButtonPosition = FabPosition.End,
                         bottomBar = {
                             AnimatedVisibility(
                                 visible = showTabs && !isWide,
