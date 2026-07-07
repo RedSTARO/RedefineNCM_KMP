@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,6 +19,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -57,8 +59,18 @@ fun MiniNowPlayingBar(
 ) {
     val media by player.currentMedia.collectAsState()
     val isPlaying by player.isPlaying.collectAsState()
-
-    if (media == null) return
+    val position by player.position.collectAsState()
+    val duration by player.duration.collectAsState()
+    val hasMedia = media != null
+    val totalDuration = duration
+        .takeIf { it > 0 }
+        ?: media?.duration?.takeIf { it > 0 }
+        ?: 0L
+    val progress = if (totalDuration > 0L) {
+        (position.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
 
     val defaultContainerColor = MaterialTheme.colorScheme.primaryContainer
     var themeColor by remember { mutableStateOf(defaultContainerColor) }
@@ -86,20 +98,37 @@ fun MiniNowPlayingBar(
                 modifier = Modifier.padding(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalPlatformContext.current)
-                        .data(media?.artworkUri)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = "Album art",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(72.dp)
-                        .clip(MaterialTheme.shapes.large),
-                    onSuccess = { state ->
-                        themeColorFromCoilImage(state.result.image)?.let { themeColor = Color(it) }
-                    },
-                )
+                if (hasMedia) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalPlatformContext.current)
+                            .data(media?.artworkUri)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "Album art",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(MaterialTheme.shapes.large),
+                        onSuccess = { state ->
+                            themeColorFromCoilImage(state.result.image)?.let { themeColor = Color(it) }
+                        },
+                    )
+                } else {
+                    Surface(
+                        modifier = Modifier.size(72.dp),
+                        shape = MaterialTheme.shapes.large,
+                        color = contentColor.copy(alpha = 0.16f),
+                        contentColor = contentColor,
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = AppIcons.GraphicEq,
+                                contentDescription = null,
+                                modifier = Modifier.size(32.dp),
+                            )
+                        }
+                    }
+                }
 
                 Spacer(Modifier.width(12.dp))
 
@@ -110,7 +139,7 @@ fun MiniNowPlayingBar(
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Text(
-                        text = media?.title ?: "Not Playing",
+                        text = media?.title?.takeIf { it.isNotBlank() } ?: "Not playing",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.ExtraBold,
                         maxLines = 1,
@@ -120,51 +149,89 @@ fun MiniNowPlayingBar(
                             .basicMarquee(),
                     )
                     Text(
-                        text = media?.artist ?: "",
+                        text = media?.artist?.takeIf { it.isNotBlank() } ?: "No playback yet",
                         style = MaterialTheme.typography.labelMedium,
                         color = contentColor.copy(alpha = 0.72f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Spacer(Modifier.height(4.dp))
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(MaterialTheme.shapes.small),
+                        color = contentColor,
+                        trackColor = contentColor.copy(alpha = 0.22f),
+                    )
+                    Spacer(Modifier.height(4.dp))
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        IconButton(
-                            onClick = { player.seekToPrevious() },
-                            modifier = Modifier.size(32.dp),
+                        Text(
+                            text = if (hasMedia) {
+                                "${formatMiniDuration(position)} / ${formatMiniDuration(totalDuration)}"
+                            } else {
+                                "0:00 / 0:00"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = contentColor.copy(alpha = 0.72f),
+                            maxLines = 1,
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Icon(
-                                imageVector = AppIcons.KeyboardArrowLeft,
-                                contentDescription = "Previous",
-                            )
-                        }
-                        FilledIconButton(
-                            onClick = { player.togglePlayPause() },
-                            modifier = Modifier.size(36.dp),
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = contentColor.copy(alpha = 0.18f),
-                                contentColor = contentColor,
-                            ),
-                        ) {
-                            Icon(
-                                imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
-                                contentDescription = if (isPlaying) "Pause" else "Play",
-                            )
-                        }
-                        IconButton(
-                            onClick = { player.seekToNext() },
-                            modifier = Modifier.size(32.dp),
-                        ) {
-                            Icon(
-                                imageVector = AppIcons.KeyboardArrowRight,
-                                contentDescription = "Next",
-                            )
+                            IconButton(
+                                onClick = { player.seekToPrevious() },
+                                enabled = hasMedia,
+                                modifier = Modifier.size(30.dp),
+                            ) {
+                                Icon(
+                                    imageVector = AppIcons.KeyboardArrowLeft,
+                                    contentDescription = "Previous",
+                                )
+                            }
+                            FilledIconButton(
+                                onClick = { player.togglePlayPause() },
+                                enabled = hasMedia,
+                                modifier = Modifier.size(34.dp),
+                                colors = IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = contentColor.copy(alpha = 0.18f),
+                                    contentColor = contentColor,
+                                    disabledContainerColor = contentColor.copy(alpha = 0.08f),
+                                    disabledContentColor = contentColor.copy(alpha = 0.42f),
+                                ),
+                            ) {
+                                Icon(
+                                    imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
+                                    contentDescription = if (isPlaying) "Pause" else "Play",
+                                )
+                            }
+                            IconButton(
+                                onClick = { player.seekToNext() },
+                                enabled = hasMedia,
+                                modifier = Modifier.size(30.dp),
+                            ) {
+                                Icon(
+                                    imageVector = AppIcons.KeyboardArrowRight,
+                                    contentDescription = "Next",
+                                )
+                            }
                         }
                     }
                 }
             }
         }
     }
+}
+
+private fun formatMiniDuration(millis: Long): String {
+    val totalSeconds = millis.coerceAtLeast(0L) / 1000L
+    val minutes = totalSeconds / 60L
+    val seconds = totalSeconds % 60L
+    return "$minutes:${seconds.toString().padStart(2, '0')}"
 }

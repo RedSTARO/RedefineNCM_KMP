@@ -209,16 +209,38 @@ class ExoPlayerPlatformPlayer(
     override fun setShuffleEnabled(enabled: Boolean) { exoPlayer.shuffleModeEnabled = enabled }
 
     override fun setQueue(items: List<MediaInfo>, startIndex: Int) {
-        _queue.value = items
+        if (items.isEmpty()) {
+            clearQueue()
+            return
+        }
+        publishImmediateQueue(items, startIndex, 0L)
         exoPlayer.setMediaItems(items.map { it.toExoMediaItem() }, startIndex, 0L)
         exoPlayer.prepare()
         exoPlayer.play()
     }
 
     override fun restoreQueue(items: List<MediaInfo>, startIndex: Int, positionMs: Long) {
-        _queue.value = items
-        exoPlayer.setMediaItems(items.map { it.toExoMediaItem() }, startIndex, positionMs)
+        if (items.isEmpty()) {
+            clearQueue()
+            return
+        }
+        val safeIndex = startIndex.coerceIn(0, items.lastIndex)
+        val safePosition = positionMs.coerceAtLeast(0L)
+        stopPositionSync()
+        _isPlaying.value = false
+        _state.value = PlayerState.PAUSED
+        publishImmediateQueue(items, safeIndex, safePosition)
+        exoPlayer.setMediaItems(items.map { it.toExoMediaItem() }, safeIndex, safePosition)
         exoPlayer.prepare() // 只装载不播放（原版恢复时注释掉了 play()）
+    }
+
+    private fun publishImmediateQueue(items: List<MediaInfo>, startIndex: Int, positionMs: Long) {
+        val safeIndex = if (items.isEmpty()) -1 else startIndex.coerceIn(0, items.lastIndex)
+        _queue.value = items
+        _currentIndex.value = safeIndex
+        _currentMedia.value = items.getOrNull(safeIndex)
+        _position.value = positionMs.coerceAtLeast(0L)
+        _duration.value = items.getOrNull(safeIndex)?.duration?.takeIf { it > 0 } ?: -1L
     }
 
     override fun addToQueue(item: MediaInfo) {

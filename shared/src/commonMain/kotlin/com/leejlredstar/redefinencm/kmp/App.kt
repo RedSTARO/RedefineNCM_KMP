@@ -83,6 +83,16 @@ fun App() {
             }
             fun push(dest: PushedDest) = pushedStack.add(dest)
             fun back() { if (pushedStack.isNotEmpty()) pushedStack.removeAt(pushedStack.lastIndex) }
+            fun openNowPlaying() {
+                val existingIndex = pushedStack.indexOfLast { it is PushedDest.NowPlaying }
+                if (existingIndex >= 0) {
+                    while (pushedStack.lastIndex > existingIndex) {
+                        pushedStack.removeAt(pushedStack.lastIndex)
+                    }
+                } else {
+                    push(PushedDest.NowPlaying)
+                }
+            }
 
             BackHandler(enabled = pushedStack.isNotEmpty()) { back() }
 
@@ -107,6 +117,7 @@ fun App() {
 
             BoxWithConstraints {
                 val isWide = maxWidth >= 600.dp
+                val showMiniPlayer = pushedStack.lastOrNull() !is PushedDest.NowPlaying
 
                 Scaffold(
                     contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -126,8 +137,8 @@ fun App() {
                         }
                     },
                     floatingActionButton = {
-                        if (showTabs) {
-                            MiniNowPlayingBar(onExpand = { push(PushedDest.NowPlaying) })
+                        if (showMiniPlayer) {
+                            MiniNowPlayingBar(onExpand = ::openNowPlaying)
                         }
                     },
                 ) { innerPadding ->

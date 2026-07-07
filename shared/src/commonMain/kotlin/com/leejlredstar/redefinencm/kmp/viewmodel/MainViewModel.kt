@@ -28,6 +28,7 @@ class MainViewModel(
     private val player: PlatformPlayer,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var lastSavedPlayerStatus: PlayerStatus? = null
 
     // ── User ──
     private val _uid = MutableStateFlow(0L)
@@ -61,6 +62,7 @@ class MainViewModel(
         }
         fetchRecommend()
         restorePlayerStatus()
+        initPlayerStatusAutosave()
         checkAppUpdate()
     }
 
@@ -87,9 +89,14 @@ class MainViewModel(
     // ── 播放状态持久化（原版 savePlayerStatus / restorePlayerStatus）──
 
     fun savePlayerStatus() {
+        val status = buildPlayerStatus() ?: return
+        scope.launch(Dispatchers.Default) { savePlayerStatus(status) }
+    }
+
+    private fun buildPlayerStatus(): PlayerStatus? {
         val queue = player.queue.value
-        if (queue.isEmpty()) return
-        val status = PlayerStatus(
+        if (queue.isEmpty()) return null
+        return PlayerStatus(
             playlist = queue.map {
                 PersistedMediaItem(
                     id = it.id,
@@ -105,7 +112,30 @@ class MainViewModel(
             isPlaying = player.isPlaying.value,
             isShuffling = player.shuffleEnabled.value,
         )
-        scope.launch(Dispatchers.Default) { repo.savePlayerStatus(status) }
+    }
+
+    private suspend fun savePlayerStatus(status: PlayerStatus) {
+        if (status == lastSavedPlayerStatus) return
+        repo.savePlayerStatus(status)
+        lastSavedPlayerStatus = status
+    }
+
+    private suspend fun saveCurrentPlayerStatus() {
+        savePlayerStatus(buildPlayerStatus() ?: return)
+    }
+
+    private fun initPlayerStatusAutosave() {
+        scope.launch(Dispatchers.Default) {
+            combine(player.queue, player.currentIndex, player.shuffleEnabled) { _, _, _ -> Unit }
+                .drop(1)
+                .collect { saveCurrentPlayerStatus() }
+        }
+        scope.launch(Dispatchers.Default) {
+            while (isActive) {
+                delay(2_000)
+                saveCurrentPlayerStatus()
+            }
+        }
     }
 
     fun restorePlayerStatus() {
@@ -114,6 +144,7 @@ class MainViewModel(
         scope.launch(Dispatchers.Default) {
             val status = repo.getPlayerStatus() ?: return@launch
             if (status.playlist.isEmpty()) return@launch
+            lastSavedPlayerStatus = status
             val items = status.playlist.map {
                 MediaInfo(
                     id = it.id,
