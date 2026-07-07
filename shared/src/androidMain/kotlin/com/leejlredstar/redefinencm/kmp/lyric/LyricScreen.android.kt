@@ -39,6 +39,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
+import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
+import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import org.json.JSONObject
 import org.koin.compose.koinInject
@@ -56,8 +58,12 @@ import kotlin.math.absoluteValue
 @Composable
 actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val viewModel: NowPlayingViewModel = koinInject()
+    val platformSettings: PlatformSettings = koinInject()
     val rawLyric by viewModel.rawLyric.collectAsState()
     val rawWordLyric by viewModel.rawWordLyric.collectAsState()
+    val rawTranslatedLyric by viewModel.rawTranslatedLyric.collectAsState()
+    val rawRomanLyric by viewModel.rawRomanLyric.collectAsState()
+    val rawExtraLyric by viewModel.rawExtraLyric.collectAsState()
     val lyricMap by viewModel.lyricMap.collectAsState()
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
@@ -72,6 +78,15 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         rawWordLyric.isBlank() &&
         lyricMap.size == 1 &&
         lyricMap[0L] == "Loading Lyric"
+    val showTranslatedLyric = remember {
+        platformSettings.getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
+    }
+    val showRomanLyric = remember {
+        platformSettings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)
+    }
+    val showExtraLyric = remember {
+        platformSettings.getBoolean(SettingKeys.SHOW_EXTRA_LYRIC, false)
+    }
 
     val webView = remember {
         if ((context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
@@ -188,7 +203,16 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         webView.showAmllStatus("Waiting for lyrics...")
     }
 
-    LaunchedEffect(engineReady, lyricMediaId, rawWordLyric, lyricForWeb, isWaitingForLyrics) {
+    LaunchedEffect(
+        engineReady,
+        lyricMediaId,
+        rawWordLyric,
+        lyricForWeb,
+        rawTranslatedLyric,
+        rawRomanLyric,
+        rawExtraLyric,
+        isWaitingForLyrics,
+    ) {
         if (!engineReady) return@LaunchedEffect
         if (isWaitingForLyrics || (rawWordLyric.isBlank() && lyricForWeb.isBlank())) {
             Log.d("AMLL", "waiting for lyric media=$lyricMediaId")
@@ -197,16 +221,24 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             return@LaunchedEffect
         }
         val mediaId = lyricMediaId ?: return@LaunchedEffect
+        val lyricOptions = buildLyricOptionsJson(
+            translatedLyric = rawTranslatedLyric,
+            romanLyric = rawRomanLyric,
+            extraLyric = rawExtraLyric,
+            showTranslatedLyric = showTranslatedLyric,
+            showRomanLyric = showRomanLyric,
+            showExtraLyric = showExtraLyric,
+        )
         if (rawWordLyric.isNotBlank()) {
             Log.d("AMLL", "feeding word lyrics media=$mediaId, len=${rawWordLyric.length}")
             webView.evaluateJavascript(
-                "AmllBridge.loadWordLyrics(${JSONObject.quote(rawWordLyric)}, ${JSONObject.quote(mediaId)}); AmllBridge.setTime($currentPosition);",
+                "AmllBridge.loadWordLyrics(${JSONObject.quote(rawWordLyric)}, ${JSONObject.quote(mediaId)}, $lyricOptions); AmllBridge.setTime($currentPosition);",
                 null,
             )
         } else {
             Log.d("AMLL", "feeding lyrics media=$mediaId, len=${lyricForWeb.length}")
             webView.evaluateJavascript(
-                "AmllBridge.loadLyrics(${JSONObject.quote(lyricForWeb)}, ${JSONObject.quote(mediaId)}); AmllBridge.setTime($currentPosition);",
+                "AmllBridge.loadLyrics(${JSONObject.quote(lyricForWeb)}, ${JSONObject.quote(mediaId)}, $lyricOptions); AmllBridge.setTime($currentPosition);",
                 null,
             )
         }
@@ -275,6 +307,22 @@ private fun WebView.showAmllError(message: String) {
         null,
     )
 }
+
+private fun buildLyricOptionsJson(
+    translatedLyric: String,
+    romanLyric: String,
+    extraLyric: String,
+    showTranslatedLyric: Boolean,
+    showRomanLyric: Boolean,
+    showExtraLyric: Boolean,
+): String = JSONObject()
+    .put("translatedLyric", translatedLyric)
+    .put("romanLyric", romanLyric)
+    .put("extraLyric", extraLyric)
+    .put("showTranslation", showTranslatedLyric)
+    .put("showRoman", showRomanLyric)
+    .put("showExtra", showExtraLyric)
+    .toString()
 
 private fun LinkedHashMap<Long?, String?>.toLrcFallback(): String =
     entries

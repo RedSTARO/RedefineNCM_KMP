@@ -343,6 +343,57 @@ function parseYrcText(yrcText) {
   return lines;
 }
 
+function parseLrcSupplement(lrcText) {
+  const entries = [];
+  const timeRegex = /\[(\d+):(\d+(?:\.\d+)?)\]/g;
+  for (const rawLine of String(lrcText || "").split(/\r?\n/)) {
+    if (!rawLine || rawLine.trim().startsWith("{")) continue;
+    const matches = Array.from(rawLine.matchAll(timeRegex));
+    if (!matches.length) continue;
+    const text = rawLine.replace(timeRegex, "").trim();
+    if (!text) continue;
+    matches.forEach(function (match) {
+      const minutes = Number(match[1]) || 0;
+      const seconds = Number(match[2]) || 0;
+      entries.push({ time: Math.round((minutes * 60 + seconds) * 1000), text });
+    });
+  }
+  return entries.sort(function (a, b) { return a.time - b.time; });
+}
+
+function nearestSupplement(entries, timeMs) {
+  if (!entries || !entries.length) return "";
+  let best = null;
+  let bestDistance = Number.MAX_VALUE;
+  entries.forEach(function (entry) {
+    const distance = Math.abs(entry.time - timeMs);
+    if (distance <= 850 && distance < bestDistance) {
+      best = entry;
+      bestDistance = distance;
+    }
+  });
+  return best ? best.text : "";
+}
+
+function applyLyricOptions(lines, options) {
+  const opts = options || {};
+  const translations = opts.showTranslation ? parseLrcSupplement(opts.translatedLyric) : [];
+  const romans = opts.showRoman ? parseLrcSupplement(opts.romanLyric) : [];
+  const extras = opts.showExtra ? parseLrcSupplement(opts.extraLyric) : [];
+  return (Array.isArray(lines) ? lines : []).map(function (line) {
+    const next = Object.assign({}, line);
+    const translated = [];
+    const translation = nearestSupplement(translations, next.startTime);
+    const extra = nearestSupplement(extras, next.startTime);
+    if (translation) translated.push(translation);
+    if (extra && extra !== translation) translated.push(extra);
+    if (translated.length) next.translatedLyric = translated.join(" / ");
+    const roman = nearestSupplement(romans, next.startTime);
+    if (roman) next.romanLyric = roman;
+    return next;
+  });
+}
+
 function installWordLyricSupport() {
   const bridge = globalThis.AmllBridge;
   if (!bridge) return;
@@ -350,11 +401,12 @@ function installWordLyricSupport() {
 
   if (!bridge.__redefineLoadLyricsWrapped && bridge.loadLyrics) {
     bridge.__redefineLoadLyricsWrapped = true;
-    bridge.loadLyrics = function (lrcText, mediaId) {
+    bridge.loadLyrics = function (lrcText, mediaId, options) {
       if (!this.player) return;
       const parsed = this.parseLrc ? this.parseLrc(lrcText) : [];
-      setCurrentLyricLines(parsed, mediaId);
-      this.player.setLyricLines(parsed);
+      const lines = applyLyricOptions(parsed, options);
+      setCurrentLyricLines(lines, mediaId);
+      this.player.setLyricLines(lines);
       globalThis.AmllPage && globalThis.AmllPage.hideLoading();
     };
   }
@@ -368,10 +420,11 @@ function installWordLyricSupport() {
   bridge.parseYrc = parseYrcText;
   if (bridge.__redefineWordLyricWrapped) return;
   bridge.__redefineWordLyricWrapped = true;
-  bridge.loadWordLyrics = function (yrcText, mediaId) {
+  bridge.loadWordLyrics = function (yrcText, mediaId, options) {
     if (!this.player) return;
     const parsed = parseYrcText(yrcText);
-    const lines = parsed.length ? parsed : (this.parseLrc ? this.parseLrc(yrcText) : []);
+    const primaryLines = parsed.length ? parsed : (this.parseLrc ? this.parseLrc(yrcText) : []);
+    const lines = applyLyricOptions(primaryLines, options);
     setCurrentLyricLines(lines, mediaId);
     this.player.setLyricLines(lines);
     globalThis.AmllPage && globalThis.AmllPage.hideLoading();

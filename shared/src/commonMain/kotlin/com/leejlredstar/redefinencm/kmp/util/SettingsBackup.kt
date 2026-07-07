@@ -16,6 +16,9 @@ data class SettingsBackupData(
     val searchPrediction: Boolean = true,
     val showDownloadStatus: Boolean = false,
     val adaptOriginalAndroidLyric: Boolean = false,
+    val showTranslatedLyric: Boolean = false,
+    val showRomanLyric: Boolean = false,
+    val showExtraLyric: Boolean = false,
 )
 
 private val backupJson = Json { ignoreUnknownKeys = true; coerceInputValues = true }
@@ -32,6 +35,9 @@ fun encodeSettingsBackup(settings: PlatformSettings): String = backupJson.encode
         searchPrediction = settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true),
         showDownloadStatus = settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false),
         adaptOriginalAndroidLyric = settings.getBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, false),
+        showTranslatedLyric = settings.getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false),
+        showRomanLyric = settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false),
+        showExtraLyric = settings.getBoolean(SettingKeys.SHOW_EXTRA_LYRIC, false),
     )
 )
 
@@ -47,6 +53,9 @@ fun applySettingsBackup(json: String, settings: PlatformSettings): Boolean = try
     settings.setBoolean(SettingKeys.SEARCH_PREDICTION, data.searchPrediction)
     settings.setBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, data.showDownloadStatus)
     settings.setBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, data.adaptOriginalAndroidLyric)
+    settings.setBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, data.showTranslatedLyric)
+    settings.setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, data.showRomanLyric)
+    settings.setBoolean(SettingKeys.SHOW_EXTRA_LYRIC, data.showExtraLyric)
     true
 } catch (_: Exception) {
     false
