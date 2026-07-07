@@ -141,12 +141,157 @@
     font-family: system-ui, sans-serif; font-size: 14px;
     z-index: 10; pointer-events: none;
   }
+  html:not([data-platform="desktop"]) .desktop-control {
+    display: none !important;
+  }
+  .desktop-control {
+    position: fixed;
+    z-index: 30;
+    font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+  }
+  #desktop-back {
+    left: 18px;
+    top: 18px;
+    width: 48px;
+    height: 48px;
+    border: 0;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    color: rgba(255,255,255,0.94);
+    background: rgba(24,25,25,0.72);
+    box-shadow: 0 10px 28px rgba(0,0,0,0.24);
+    cursor: pointer;
+    font-size: 32px;
+    line-height: 1;
+  }
+  #desktop-mini {
+    left: 50%;
+    bottom: 24px;
+    width: min(620px, calc(100vw - 48px));
+    height: 112px;
+    transform: translateX(-50%);
+    border-radius: 34px;
+    color: rgba(255,255,255,0.94);
+    background: rgba(56,55,45,0.82);
+    box-shadow: 0 18px 50px rgba(0,0,0,0.34);
+    overflow: hidden;
+    transition: width 220ms ease, height 220ms ease, bottom 220ms ease, border-radius 220ms ease, background 220ms ease;
+  }
+  #desktop-mini.collapsed {
+    width: 188px;
+    height: 32px;
+    bottom: 18px;
+    border-radius: 999px;
+    background: rgba(28,28,28,0.82);
+    cursor: pointer;
+  }
+  #desktop-mini .mini-expanded {
+    height: 100%;
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+  }
+  #desktop-mini.collapsed .mini-expanded {
+    display: none;
+  }
+  #desktop-mini .mini-collapsed {
+    display: none;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+  }
+  #desktop-mini.collapsed .mini-collapsed {
+    display: block;
+  }
+  #desktop-mini-art {
+    width: 72px;
+    height: 72px;
+    border-radius: 18px;
+    background: rgba(255,255,255,0.14);
+    background-size: cover;
+    background-position: center;
+  }
+  .mini-title {
+    font-weight: 800;
+    font-size: 15px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .mini-artist,
+  .mini-time {
+    font-size: 12px;
+    color: rgba(255,255,255,0.72);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .mini-progress {
+    height: 4px;
+    margin: 7px 0 5px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.22);
+  }
+  #desktop-mini-progress {
+    height: 100%;
+    width: 0%;
+    border-radius: inherit;
+    background: rgba(255,255,255,0.86);
+  }
+  .mini-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .mini-actions button {
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.14);
+    color: inherit;
+    cursor: pointer;
+    font-size: 18px;
+  }
+  .mini-actions #desktop-mini-play {
+    width: 40px;
+    height: 40px;
+    font-size: 19px;
+    background: rgba(255,255,255,0.22);
+  }
 </style>
 </head>
 <body>
 <div id="bg"></div>
 <div id="loading">Loading lyric engine...</div>
 <div id="amll-root"></div>
+<button id="desktop-back" class="desktop-control" type="button" aria-label="返回">‹</button>
+<div id="desktop-mini" class="desktop-control">
+  <div class="mini-expanded">
+    <div id="desktop-mini-art"></div>
+    <div class="mini-info">
+      <div id="desktop-mini-title" class="mini-title">Not playing</div>
+      <div id="desktop-mini-artist" class="mini-artist">No playback yet</div>
+      <div class="mini-progress"><div id="desktop-mini-progress"></div></div>
+      <div id="desktop-mini-time" class="mini-time">0:00 / 0:00</div>
+    </div>
+    <div class="mini-actions">
+      <button id="desktop-mini-prev" type="button" aria-label="上一首">‹</button>
+      <button id="desktop-mini-play" type="button" aria-label="播放暂停">▶</button>
+      <button id="desktop-mini-next" type="button" aria-label="下一首">›</button>
+    </div>
+  </div>
+  <button id="desktop-mini-hint" class="mini-collapsed" type="button">轻点底部呼出播放器</button>
+</div>
 
 <script>
 // ── CDN fallback: esm.sh handles PixiJS transitive deps ──
@@ -227,13 +372,98 @@ window.addEventListener("error", function (e) {
 window.addEventListener("unhandledrejection", function (e) {
   showError("promise rejected: " + ((e.reason && e.reason.message) || e.reason));
 });
+window.addEventListener("DOMContentLoaded", initDesktopControls);
 
 let currentLyricLines = [];
 let currentLyricMediaId = "";
 let lyricClickSeekingInstalled = false;
+let desktopMiniCollapseTimer = 0;
 
 function normalizeMediaId(mediaId) {
   return mediaId == null ? "" : String(mediaId);
+}
+
+function callDesktopHost(name) {
+  const fn = globalThis[name];
+  if (typeof fn === "function") {
+    fn();
+  }
+}
+
+function formatDuration(millis) {
+  const totalSeconds = Math.max(0, Math.floor((Number(millis) || 0) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  return minutes + ":" + seconds;
+}
+
+function revealDesktopMiniPlayer() {
+  const mini = document.getElementById("desktop-mini");
+  if (!mini) return;
+  mini.classList.remove("collapsed");
+  window.clearTimeout(desktopMiniCollapseTimer);
+  desktopMiniCollapseTimer = window.setTimeout(() => {
+    mini.classList.add("collapsed");
+  }, 3600);
+}
+
+function initDesktopControls() {
+  if (document.documentElement.getAttribute("data-platform") !== "desktop") return;
+  const back = document.getElementById("desktop-back");
+  const mini = document.getElementById("desktop-mini");
+  const hint = document.getElementById("desktop-mini-hint");
+  const prev = document.getElementById("desktop-mini-prev");
+  const play = document.getElementById("desktop-mini-play");
+  const next = document.getElementById("desktop-mini-next");
+  back && back.addEventListener("click", (event) => {
+    event.stopPropagation();
+    callDesktopHost("amllBack");
+  });
+  mini && mini.addEventListener("click", () => {
+    if (mini.classList.contains("collapsed")) revealDesktopMiniPlayer();
+  });
+  hint && hint.addEventListener("click", (event) => {
+    event.stopPropagation();
+    revealDesktopMiniPlayer();
+  });
+  prev && prev.addEventListener("click", (event) => {
+    event.stopPropagation();
+    revealDesktopMiniPlayer();
+    callDesktopHost("amllPrevious");
+  });
+  play && play.addEventListener("click", (event) => {
+    event.stopPropagation();
+    revealDesktopMiniPlayer();
+    callDesktopHost("amllTogglePlayPause");
+  });
+  next && next.addEventListener("click", (event) => {
+    event.stopPropagation();
+    revealDesktopMiniPlayer();
+    callDesktopHost("amllNext");
+  });
+  revealDesktopMiniPlayer();
+}
+
+function updateDesktopControls(data) {
+  if (document.documentElement.getAttribute("data-platform") !== "desktop") return;
+  const state = data || {};
+  const duration = Math.max(0, Number(state.duration) || 0);
+  const position = Math.max(0, Number(state.position) || 0);
+  const progress = duration > 0 ? Math.min(1, position / duration) : 0;
+  const title = document.getElementById("desktop-mini-title");
+  const artist = document.getElementById("desktop-mini-artist");
+  const time = document.getElementById("desktop-mini-time");
+  const progressEl = document.getElementById("desktop-mini-progress");
+  const play = document.getElementById("desktop-mini-play");
+  const art = document.getElementById("desktop-mini-art");
+  if (title) title.textContent = state.title || "Not playing";
+  if (artist) artist.textContent = state.artist || "No playback yet";
+  if (time) time.textContent = formatDuration(position) + " / " + formatDuration(duration);
+  if (progressEl) progressEl.style.width = (progress * 100).toFixed(2) + "%";
+  if (play) play.textContent = state.isPlaying ? "Ⅱ" : "▶";
+  if (art) {
+    art.style.backgroundImage = state.artworkUri ? 'url("' + String(state.artworkUri).replace(/"/g, '\\"') + '")' : "";
+  }
 }
 
 function setCurrentLyricLines(lines, mediaId) {
@@ -471,6 +701,7 @@ function installWordLyricSupport() {
   };
 
   bridge.parseYrc = parseYrcText;
+  bridge.setControls = updateDesktopControls;
   if (bridge.__redefineWordLyricWrapped) return;
   bridge.__redefineWordLyricWrapped = true;
   bridge.loadWordLyrics = function (yrcText, mediaId, options) {
