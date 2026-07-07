@@ -1,5 +1,22 @@
 package com.leejlredstar.redefinencm.kmp
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -61,6 +78,16 @@ private data class NavigationItem(
     val dest: TabDest,
 )
 
+private sealed interface RootDest {
+    val stackDepth: Int
+
+    data class Tab(val tab: TabDest) : RootDest {
+        override val stackDepth: Int = 0
+    }
+
+    data class Pushed(val dest: PushedDest, override val stackDepth: Int) : RootDest
+}
+
 /**
  * Root composable shared across Android / iOS / Desktop / Web. 3-tab nav (Recommend / My /
  * Settings) with a push stack for Login, NowPlaying, PlaylistDetail. 窄屏用底部 NavigationBar，
@@ -118,12 +145,19 @@ fun App() {
             BoxWithConstraints {
                 val isWide = maxWidth >= 600.dp
                 val showMiniPlayer = pushedStack.lastOrNull() !is PushedDest.NowPlaying
+                val rootDest = pushedStack.lastOrNull()
+                    ?.let { RootDest.Pushed(it, pushedStack.size) }
+                    ?: RootDest.Tab(currentTab)
 
                 Scaffold(
                     contentWindowInsets = WindowInsets(0, 0, 0, 0),
                     snackbarHost = { SnackbarHost(snackbarHostState) },
                     bottomBar = {
-                        if (showTabs && !isWide) {
+                        AnimatedVisibility(
+                            visible = showTabs && !isWide,
+                            enter = bottomNavEnterTransition(),
+                            exit = bottomNavExitTransition(),
+                        ) {
                             NavigationBar {
                                 tabs.forEach { item ->
                                     NavigationBarItem(
@@ -137,27 +171,22 @@ fun App() {
                         }
                     },
                     floatingActionButton = {
-                        if (showMiniPlayer) {
+                        AnimatedVisibility(
+                            visible = showMiniPlayer,
+                            enter = miniPlayerEnterTransition(),
+                            exit = miniPlayerExitTransition(),
+                        ) {
                             MiniNowPlayingBar(onExpand = ::openNowPlaying)
                         }
                     },
                 ) { innerPadding ->
-                    if (pushedStack.isNotEmpty()) {
-                        when (val dest = pushedStack.last()) {
-                            is PushedDest.Login -> LoginScreen(onBack = ::back)
-                            is PushedDest.NowPlaying -> NowPlayingScreen(
-                                onBack = ::back,
-                                onOpenFullLyric = { push(PushedDest.FullLyric) },
-                            )
-                            is PushedDest.FullLyric -> WebViewLyricScreen(onBack = ::back)
-                            is PushedDest.Playlist -> PlaylistDetailScreen(
-                                playlistId = dest.id,
-                                onBack = ::back,
-                            )
-                        }
-                    } else {
-                        Row {
-                            if (isWide) {
+                    Row(Modifier.fillMaxSize()) {
+                        if (isWide) {
+                            AnimatedVisibility(
+                                visible = showTabs,
+                                enter = railEnterTransition(),
+                                exit = railExitTransition(),
+                            ) {
                                 NavigationRail(
                                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                                 ) {
@@ -171,17 +200,38 @@ fun App() {
                                     }
                                 }
                             }
-                            when (currentTab) {
-                                is TabDest.Home -> HomeScreen(
-                                    scaffoldPadding = innerPadding,
-                                    onOpenPlaylist = { push(PushedDest.Playlist(it)) },
-                                )
-                                is TabDest.My -> UserPlaylistScreen(
-                                    scaffoldPadding = innerPadding,
-                                    onOpenLogin = { push(PushedDest.Login) },
-                                    onOpenPlaylist = { push(PushedDest.Playlist(it)) },
-                                )
-                                is TabDest.Settings -> SettingsScreen(scaffoldPadding = innerPadding)
+                        }
+                        AnimatedContent(
+                            targetState = rootDest,
+                            transitionSpec = { pageTransition(initialState, targetState) },
+                            modifier = Modifier.weight(1f).fillMaxSize(),
+                            label = "AppPageTransition",
+                        ) { target ->
+                            when (target) {
+                                is RootDest.Pushed -> when (val dest = target.dest) {
+                                    is PushedDest.Login -> LoginScreen(onBack = ::back)
+                                    is PushedDest.NowPlaying -> NowPlayingScreen(
+                                        onBack = ::back,
+                                        onOpenFullLyric = { push(PushedDest.FullLyric) },
+                                    )
+                                    is PushedDest.FullLyric -> WebViewLyricScreen(onBack = ::back)
+                                    is PushedDest.Playlist -> PlaylistDetailScreen(
+                                        playlistId = dest.id,
+                                        onBack = ::back,
+                                    )
+                                }
+                                is RootDest.Tab -> when (target.tab) {
+                                    is TabDest.Home -> HomeScreen(
+                                        scaffoldPadding = innerPadding,
+                                        onOpenPlaylist = { push(PushedDest.Playlist(it)) },
+                                    )
+                                    is TabDest.My -> UserPlaylistScreen(
+                                        scaffoldPadding = innerPadding,
+                                        onOpenLogin = { push(PushedDest.Login) },
+                                        onOpenPlaylist = { push(PushedDest.Playlist(it)) },
+                                    )
+                                    is TabDest.Settings -> SettingsScreen(scaffoldPadding = innerPadding)
+                                }
                             }
                         }
                     }
@@ -190,3 +240,142 @@ fun App() {
         }
     }
 }
+
+private fun pageTransition(initial: RootDest, target: RootDest): ContentTransform =
+    when {
+        isNowPlayingSheetTransition(initial, target) -> sheetTransition(showingSheet = isNowPlaying(target))
+        isFullLyricSheetTransition(initial, target) -> sheetTransition(showingSheet = isFullLyric(target))
+        initial is RootDest.Tab && target is RootDest.Tab -> {
+            val forward = tabIndex(target.tab) > tabIndex(initial.tab)
+            horizontalTransition(forward = forward, fullDistance = false)
+        }
+        target.stackDepth > initial.stackDepth -> horizontalTransition(forward = true, fullDistance = true)
+        target.stackDepth < initial.stackDepth -> horizontalTransition(forward = false, fullDistance = true)
+        else -> fadeThroughTransition()
+    }
+
+private fun horizontalTransition(forward: Boolean, fullDistance: Boolean): ContentTransform {
+    val direction = if (forward) 1 else -1
+    val enterDivisor = if (fullDistance) 2 else 5
+    val exitDivisor = if (fullDistance) 5 else 8
+    return (
+        slideInHorizontally(
+            animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
+            initialOffsetX = { direction * it / enterDivisor },
+        ) + pageFadeIn() + pageScaleIn()
+        ) togetherWith (
+        slideOutHorizontally(
+            animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
+            targetOffsetX = { -direction * it / exitDivisor },
+        ) + pageFadeOut() + pageScaleOut()
+        )
+}
+
+private fun sheetTransition(showingSheet: Boolean): ContentTransform =
+    if (showingSheet) {
+        (
+            slideInVertically(
+                animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
+                initialOffsetY = { it / 2 },
+            ) + pageFadeIn()
+            ) togetherWith (
+            fadeOut(animationSpec = tween(180, easing = LinearOutSlowInEasing)) +
+                scaleOut(
+                    targetScale = 0.98f,
+                    animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
+                )
+            )
+    } else {
+        (
+            fadeIn(
+                animationSpec = tween(180, delayMillis = 60, easing = LinearOutSlowInEasing),
+            ) + scaleIn(
+                initialScale = 0.98f,
+                animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
+            )
+            ) togetherWith (
+            slideOutVertically(
+                animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
+                targetOffsetY = { it / 2 },
+            ) + fadeOut(animationSpec = tween(160, easing = LinearOutSlowInEasing))
+            )
+    }
+
+private fun fadeThroughTransition(): ContentTransform =
+    (pageFadeIn(delayMillis = 90) + pageScaleIn()) togetherWith
+        (pageFadeOut() + pageScaleOut())
+
+private fun pageFadeIn(delayMillis: Int = 60): EnterTransition =
+    fadeIn(animationSpec = tween(180, delayMillis = delayMillis, easing = LinearOutSlowInEasing))
+
+private fun pageFadeOut(): ExitTransition =
+    fadeOut(animationSpec = tween(120, easing = LinearOutSlowInEasing))
+
+private fun pageScaleIn(): EnterTransition =
+    scaleIn(
+        initialScale = 0.985f,
+        animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
+    )
+
+private fun pageScaleOut(): ExitTransition =
+    scaleOut(
+        targetScale = 0.985f,
+        animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
+    )
+
+private fun bottomNavEnterTransition(): EnterTransition =
+    slideInVertically(
+        animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
+        initialOffsetY = { it },
+    ) + fadeIn(animationSpec = tween(180, easing = LinearOutSlowInEasing))
+
+private fun bottomNavExitTransition(): ExitTransition =
+    slideOutVertically(
+        animationSpec = tween(220, easing = FastOutSlowInEasing),
+        targetOffsetY = { it },
+    ) + fadeOut(animationSpec = tween(120, easing = LinearOutSlowInEasing))
+
+private fun railEnterTransition(): EnterTransition =
+    slideInHorizontally(
+        animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
+        initialOffsetX = { -it },
+    ) + fadeIn(animationSpec = tween(180, easing = LinearOutSlowInEasing))
+
+private fun railExitTransition(): ExitTransition =
+    slideOutHorizontally(
+        animationSpec = tween(220, easing = FastOutSlowInEasing),
+        targetOffsetX = { -it },
+    ) + fadeOut(animationSpec = tween(120, easing = LinearOutSlowInEasing))
+
+private fun miniPlayerEnterTransition(): EnterTransition =
+    scaleIn(
+        initialScale = 0.88f,
+        animationSpec = tween(260, easing = FastOutSlowInEasing),
+    ) + fadeIn(animationSpec = tween(160, easing = LinearOutSlowInEasing))
+
+private fun miniPlayerExitTransition(): ExitTransition =
+    scaleOut(
+        targetScale = 0.88f,
+        animationSpec = tween(180, easing = FastOutSlowInEasing),
+    ) + fadeOut(animationSpec = tween(120, easing = LinearOutSlowInEasing))
+
+private fun isNowPlayingSheetTransition(initial: RootDest, target: RootDest): Boolean =
+    isNowPlaying(initial) || isNowPlaying(target)
+
+private fun isFullLyricSheetTransition(initial: RootDest, target: RootDest): Boolean =
+    isFullLyric(initial) || isFullLyric(target)
+
+private fun isNowPlaying(dest: RootDest): Boolean =
+    (dest as? RootDest.Pushed)?.dest is PushedDest.NowPlaying
+
+private fun isFullLyric(dest: RootDest): Boolean =
+    (dest as? RootDest.Pushed)?.dest is PushedDest.FullLyric
+
+private fun tabIndex(tab: TabDest): Int =
+    when (tab) {
+        is TabDest.Home -> 0
+        is TabDest.My -> 1
+        is TabDest.Settings -> 2
+    }
+
+private const val PageTransitionMillis = 320
