@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.ui.component
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -11,8 +12,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -55,6 +55,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
@@ -137,105 +138,77 @@ fun AutoHideMiniPlayerController(
             onAccentColor = { rawAccentColor = it },
         )
 
-        AnimatedVisibility(
-            visible = visible,
+        AnimatedContent(
+            targetState = visible,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
                 .padding(bottom = 8.dp),
-            enter = slideInVertically(
-                animationSpec = tween(260, easing = FastOutSlowInEasing),
-                initialOffsetY = { it / 2 },
-            ) + fadeIn(animationSpec = tween(160, easing = LinearOutSlowInEasing)) +
-                scaleIn(
-                    initialScale = 0.92f,
-                    animationSpec = tween(260, easing = FastOutSlowInEasing),
-                ),
-            exit = slideOutVertically(
-                animationSpec = tween(220, easing = FastOutSlowInEasing),
-                targetOffsetY = { it / 2 },
-            ) + fadeOut(animationSpec = tween(140, easing = LinearOutSlowInEasing)) +
-                scaleOut(
-                    targetScale = 0.92f,
-                    animationSpec = tween(220, easing = FastOutSlowInEasing),
-                ),
-        ) {
-            FullLyricControlConsole(
-                media = media,
-                hasMedia = hasMedia,
-                isPlaying = isPlaying,
-                position = position,
-                totalDuration = totalDuration,
-                progress = progress,
-                shuffleEnabled = shuffleEnabled,
-                accentPalette = accentPalette,
-                onReveal = ::reveal,
-                onSeek = { targetPosition ->
-                    reveal()
-                    player.seekTo(targetPosition)
-                },
-                onPrevious = {
-                    reveal()
-                    player.seekToPrevious()
-                },
-                onPlayPause = {
-                    reveal()
-                    player.togglePlayPause()
-                },
-                onNext = {
-                    reveal()
-                    player.seekToNext()
-                },
-                onFavorite = {
-                    reveal()
-                    viewModel.onFavClick()
-                },
-                onQueue = {
-                    reveal()
-                    viewModel.onPlaylistClick()
-                    showQueue = true
-                },
-                onComments = {
-                    reveal()
-                    showComments = true
-                },
-                onShuffle = {
-                    reveal()
-                    viewModel.onShuffleClick(!shuffleEnabled)
-                },
-            )
-        }
-
-        AnimatedVisibility(
-            visible = !visible,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(bottom = 18.dp),
-            enter = fadeIn(animationSpec = tween(180, easing = LinearOutSlowInEasing)) +
-                scaleIn(
-                    initialScale = 0.94f,
-                    animationSpec = tween(220, easing = FastOutSlowInEasing),
-                ),
-            exit = fadeOut(animationSpec = tween(120, easing = LinearOutSlowInEasing)) +
-                scaleOut(
-                    targetScale = 0.94f,
-                    animationSpec = tween(140, easing = FastOutSlowInEasing),
-                ),
-        ) {
-            CollapsedProgressController(
-                media = media,
-                hasMedia = hasMedia,
-                isPlaying = isPlaying,
-                position = position,
-                totalDuration = totalDuration,
-                progress = progress,
-                accentPalette = accentPalette,
-                onReveal = ::reveal,
-                onTogglePlayPause = { if (hasMedia) player.togglePlayPause() },
-                onPrevious = { if (hasMedia) player.seekToPrevious() },
-                onNext = { if (hasMedia) player.seekToNext() },
-            )
+            contentAlignment = Alignment.BottomCenter,
+            transitionSpec = { fullLyricControllerTransform(expanding = targetState) },
+            label = "FullLyricControllerTransform",
+        ) { expanded ->
+            if (expanded) {
+                FullLyricControlConsole(
+                    media = media,
+                    hasMedia = hasMedia,
+                    isPlaying = isPlaying,
+                    position = position,
+                    totalDuration = totalDuration,
+                    progress = progress,
+                    shuffleEnabled = shuffleEnabled,
+                    accentPalette = accentPalette,
+                    onReveal = ::reveal,
+                    onCollapse = { visible = false },
+                    onSeek = { targetPosition ->
+                        reveal()
+                        player.seekTo(targetPosition)
+                    },
+                    onPrevious = {
+                        reveal()
+                        player.seekToPrevious()
+                    },
+                    onPlayPause = {
+                        reveal()
+                        player.togglePlayPause()
+                    },
+                    onNext = {
+                        reveal()
+                        player.seekToNext()
+                    },
+                    onFavorite = {
+                        reveal()
+                        viewModel.onFavClick()
+                    },
+                    onQueue = {
+                        reveal()
+                        viewModel.onPlaylistClick()
+                        showQueue = true
+                    },
+                    onComments = {
+                        reveal()
+                        showComments = true
+                    },
+                    onShuffle = {
+                        reveal()
+                        viewModel.onShuffleClick(!shuffleEnabled)
+                    },
+                )
+            } else {
+                CollapsedProgressController(
+                    media = media,
+                    hasMedia = hasMedia,
+                    isPlaying = isPlaying,
+                    position = position,
+                    totalDuration = totalDuration,
+                    progress = progress,
+                    accentPalette = accentPalette,
+                    onReveal = ::reveal,
+                    onTogglePlayPause = { if (hasMedia) player.togglePlayPause() },
+                    onPrevious = { if (hasMedia) player.seekToPrevious() },
+                    onNext = { if (hasMedia) player.seekToNext() },
+                )
+            }
         }
 
         if (showQueue) {
@@ -261,6 +234,37 @@ fun AutoHideMiniPlayerController(
     }
 }
 
+private fun fullLyricControllerTransform(expanding: Boolean): ContentTransform {
+    val bottomCenter = TransformOrigin(pivotFractionX = 0.5f, pivotFractionY = 1f)
+    val enterScale = if (expanding) 0.58f else 1.04f
+    val exitScale = if (expanding) 1.04f else 0.58f
+
+    return (
+        fadeIn(
+            animationSpec = tween(
+                durationMillis = 140,
+                delayMillis = if (expanding) 36 else 72,
+                easing = LinearOutSlowInEasing,
+            ),
+        ) + scaleIn(
+            initialScale = enterScale,
+            transformOrigin = bottomCenter,
+            animationSpec = tween(320, easing = FastOutSlowInEasing),
+        )
+        ) togetherWith (
+        fadeOut(
+            animationSpec = tween(
+                durationMillis = if (expanding) 110 else 150,
+                easing = LinearOutSlowInEasing,
+            ),
+        ) + scaleOut(
+            targetScale = exitScale,
+            transformOrigin = bottomCenter,
+            animationSpec = tween(280, easing = FastOutSlowInEasing),
+        )
+        )
+}
+
 @Composable
 private fun FullLyricControlConsole(
     media: MediaInfo?,
@@ -272,6 +276,7 @@ private fun FullLyricControlConsole(
     shuffleEnabled: Boolean,
     accentPalette: ContentAccentPalette,
     onReveal: () -> Unit,
+    onCollapse: () -> Unit,
     onSeek: (Long) -> Unit,
     onPrevious: () -> Unit,
     onPlayPause: () -> Unit,
@@ -294,6 +299,7 @@ private fun FullLyricControlConsole(
             progress = progress,
             accentPalette = accentPalette,
             onReveal = onReveal,
+            onCollapse = onCollapse,
             onSeek = onSeek,
             onPrevious = onPrevious,
             onPlayPause = onPlayPause,
@@ -380,6 +386,7 @@ private fun ExpandedPlaybackCard(
     progress: Float,
     accentPalette: ContentAccentPalette,
     onReveal: () -> Unit,
+    onCollapse: () -> Unit,
     onSeek: (Long) -> Unit,
     onPrevious: () -> Unit,
     onPlayPause: () -> Unit,
@@ -415,11 +422,18 @@ private fun ExpandedPlaybackCard(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .size(72.dp)
-                        .clip(MaterialTheme.shapes.large),
+                        .clip(MaterialTheme.shapes.large)
+                        .pointerInput(onCollapse) {
+                            detectTapGestures { onCollapse() }
+                        },
                 )
             } else {
                 Surface(
-                    modifier = Modifier.size(72.dp),
+                    modifier = Modifier
+                        .size(72.dp)
+                        .pointerInput(onCollapse) {
+                            detectTapGestures { onCollapse() }
+                        },
                     shape = MaterialTheme.shapes.large,
                     color = accentPalette.onContainer.copy(alpha = 0.16f),
                     contentColor = accentPalette.onContainer,
@@ -440,20 +454,28 @@ private fun ExpandedPlaybackCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.Center,
             ) {
-                Text(
-                    text = media?.title?.takeIf { it.isNotBlank() } ?: "Not playing",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = media?.artist?.takeIf { it.isNotBlank() } ?: "No playback yet",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = accentPalette.onContainer.copy(alpha = 0.72f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .pointerInput(onCollapse) {
+                            detectTapGestures { onCollapse() }
+                        },
+                ) {
+                    Text(
+                        text = media?.title?.takeIf { it.isNotBlank() } ?: "Not playing",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = media?.artist?.takeIf { it.isNotBlank() } ?: "No playback yet",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = accentPalette.onContainer.copy(alpha = 0.72f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 SeekableProgressBar(
                     value = sliderValue.coerceIn(0f, 1f),
                     enabled = hasMedia && totalDuration > 0L,
