@@ -20,12 +20,15 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -115,12 +118,12 @@ fun SettingsScreen(
 
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
                 ExpressiveSectionTitle("Server", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
-                SettingsTextField(server, "Server URL", index = 0, count = 2) { v ->
+                SettingsTextField(server, "Server URL", settingsPalette, index = 0, count = 2) { v ->
                     server = if (v.isNotEmpty() && !v.endsWith("/")) "$v/" else v
                     settings.setString(SettingKeys.SERVER, server)
                 }
                 // 原版 ServerItem：调 /inner/version/ 校验服务器可用性并显示版本
-                SettingsButton("检查服务器 ($server)", index = 1, count = 2) {
+                SettingsButton("检查服务器 ($server)", settingsPalette, index = 1, count = 2) {
                     serverCheckStatus = "检查中…"
                     scope.launch {
                         serverCheckStatus = try {
@@ -136,7 +139,7 @@ fun SettingsScreen(
                     Text(
                         text = status,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (status.startsWith("服务器可用")) MaterialTheme.colorScheme.primary
+                        color = if (status.startsWith("服务器可用")) settingsPalette.accent
                                 else MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
                     )
@@ -146,55 +149,56 @@ fun SettingsScreen(
                 SettingsButton(
                     label = if (cookie.isBlank()) "扫码 / 登录" else "重新登录 / 换号",
                     leadingIcon = AppIcons.QrCode2,
+                    accentPalette = settingsPalette,
                     index = 0,
                     count = 2,
                     onClick = onOpenLogin,
                 )
-                SettingsTextField(cookie, "Cookie", index = 1, count = 2) { v ->
+                SettingsTextField(cookie, "Cookie", settingsPalette, index = 1, count = 2) { v ->
                     cookie = v
                     settings.setString(SettingKeys.COOKIE, v)
                 }
 
                 ExpressiveSectionTitle("Playback", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
-                SettingsDropdown(onlineQuality, "Music Quality (Online)", SoundQuality.entries, index = 0, count = 6) { v ->
+                SettingsDropdown(onlineQuality, "Music Quality (Online)", SoundQuality.entries, settingsPalette, index = 0, count = 6) { v ->
                     onlineQuality = v.name
                     settings.setString(SettingKeys.ONLINE_PLAY_QUALITY, v.name)
                 }
-                SettingsDropdown(dlQuality, "Music Quality (Download)", SoundQuality.entries, index = 1, count = 6) { v ->
+                SettingsDropdown(dlQuality, "Music Quality (Download)", SoundQuality.entries, settingsPalette, index = 1, count = 6) { v ->
                     dlQuality = v.name
                     settings.setString(SettingKeys.DOWNLOAD_QUALITY, v.name)
                 }
-                SettingsSwitch(replacePlaylist, "Replace playlist on single song click", index = 2, count = 6) { v ->
+                SettingsSwitch(replacePlaylist, "Replace playlist on single song click", settingsPalette, index = 2, count = 6) { v ->
                     replacePlaylist = v
                     settings.setBoolean(SettingKeys.REPLACE_PLAYLIST, v)
                 }
-                SettingsSwitch(searchPrediction, "Search prediction", index = 3, count = 6) { v ->
+                SettingsSwitch(searchPrediction, "Search prediction", settingsPalette, index = 3, count = 6) { v ->
                     searchPrediction = v
                     settings.setBoolean(SettingKeys.SEARCH_PREDICTION, v)
                 }
-                SettingsSwitch(showDownloadStatus, "Show download status", index = 4, count = 6) { v ->
+                SettingsSwitch(showDownloadStatus, "Show download status", settingsPalette, index = 4, count = 6) { v ->
                     showDownloadStatus = v
                     settings.setBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, v)
                 }
-                SettingsSwitch(adaptOriginalLyric, "Adapt original Android Live Update lyric", index = 5, count = 6) { v ->
+                SettingsSwitch(adaptOriginalLyric, "Adapt original Android Live Update lyric", settingsPalette, index = 5, count = 6) { v ->
                     adaptOriginalLyric = v
                     settings.setBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, v)
                 }
 
                 ExpressiveSectionTitle("General", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
-                SettingsSwitch(checkUpdate, "Check update on startup", index = 0, count = 1) { v ->
+                SettingsSwitch(checkUpdate, "Check update on startup", settingsPalette, index = 0, count = 1) { v ->
                     checkUpdate = v
                     settings.setBoolean(SettingKeys.CHECK_UPDATE, v)
                 }
 
                 ExpressiveSectionTitle("Backup", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
-                SettingsButton("Export settings", index = 0, count = 2) { launchExport(encodeSettingsBackup(settings)) }
-                SettingsButton("Import settings", index = 1, count = 2) { launchImport() }
+                SettingsButton("Export settings", settingsPalette, index = 0, count = 2) { launchExport(encodeSettingsBackup(settings)) }
+                SettingsButton("Import settings", settingsPalette, index = 1, count = 2) { launchImport() }
                 importStatus?.let { status ->
                     Text(
                         text = status,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (status.startsWith("✓")) MaterialTheme.colorScheme.primary
+                        color = if (status.startsWith("✓")) settingsPalette.accent
                                 else MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
                     )
@@ -243,6 +247,7 @@ private fun SettingsHero(accentPalette: ContentAccentPalette) {
 private fun SettingsTextField(
     value: String,
     label: String,
+    accentPalette: ContentAccentPalette,
     index: Int,
     count: Int,
     onUpdate: (String) -> Unit,
@@ -258,6 +263,17 @@ private fun SettingsTextField(
             .fillMaxWidth()
             .padding(vertical = 1.5.dp)
             .height(64.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = accentPalette.quietContainer,
+            unfocusedContainerColor = accentPalette.quietContainer,
+            focusedTextColor = accentPalette.onQuietContainer,
+            unfocusedTextColor = accentPalette.onQuietContainer,
+            focusedLabelColor = accentPalette.accent,
+            unfocusedLabelColor = accentPalette.onQuietContainer.copy(alpha = 0.72f),
+            focusedBorderColor = accentPalette.accent,
+            unfocusedBorderColor = accentPalette.onQuietContainer.copy(alpha = 0.18f),
+            cursorColor = accentPalette.accent,
+        ),
     )
 }
 
@@ -265,6 +281,7 @@ private fun SettingsTextField(
 private fun SettingsSwitch(
     checked: Boolean,
     label: String,
+    accentPalette: ContentAccentPalette,
     index: Int,
     count: Int,
     onUpdate: (Boolean) -> Unit,
@@ -272,7 +289,8 @@ private fun SettingsSwitch(
     var state by remember(checked) { mutableStateOf(checked) }
     Surface(
         shape = connectedListItemShape(index, count),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = accentPalette.quietContainer,
+        contentColor = accentPalette.onQuietContainer,
         modifier = Modifier.fillMaxWidth().padding(vertical = 1.5.dp),
     ) {
         Row(
@@ -281,7 +299,18 @@ private fun SettingsSwitch(
         ) {
             Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             Spacer(Modifier.width(16.dp))
-            Switch(checked = state, onCheckedChange = { state = it; onUpdate(it) })
+            Switch(
+                checked = state,
+                onCheckedChange = { state = it; onUpdate(it) },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = accentPalette.onAccent,
+                    checkedTrackColor = accentPalette.accent,
+                    checkedBorderColor = accentPalette.accent,
+                    uncheckedThumbColor = accentPalette.onQuietContainer.copy(alpha = 0.70f),
+                    uncheckedTrackColor = accentPalette.onQuietContainer.copy(alpha = 0.12f),
+                    uncheckedBorderColor = accentPalette.onQuietContainer.copy(alpha = 0.24f),
+                ),
+            )
         }
     }
 }
@@ -291,6 +320,7 @@ private fun SettingsDropdown(
     selectedName: String,
     label: String,
     options: List<SoundQuality>,
+    accentPalette: ContentAccentPalette,
     index: Int,
     count: Int,
     onUpdate: (SoundQuality) -> Unit,
@@ -300,7 +330,8 @@ private fun SettingsDropdown(
     Surface(
         onClick = { expanded = true },
         shape = connectedListItemShape(index, count),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = accentPalette.quietContainer,
+        contentColor = accentPalette.onQuietContainer,
         modifier = Modifier.fillMaxWidth().padding(vertical = 1.5.dp),
     ) {
         Row(
@@ -313,12 +344,12 @@ private fun SettingsDropdown(
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = accentPalette.onQuietContainer.copy(alpha = 0.72f),
                 )
                 Text(text = current.toString(), style = MaterialTheme.typography.bodyLarge)
             }
             IconButton(onClick = { expanded = !expanded }) {
-                Icon(AppIcons.ArrowDropDown, contentDescription = null)
+                Icon(AppIcons.ArrowDropDown, contentDescription = null, tint = accentPalette.accent)
             }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -335,6 +366,7 @@ private fun SettingsDropdown(
 @Composable
 private fun SettingsButton(
     label: String,
+    accentPalette: ContentAccentPalette,
     leadingIcon: ImageVector? = null,
     index: Int,
     count: Int,
@@ -347,6 +379,10 @@ private fun SettingsButton(
             .height(56.dp)
             .padding(vertical = 1.5.dp),
         shape = connectedListItemShape(index, count),
+        colors = ButtonDefaults.filledTonalButtonColors(
+            containerColor = accentPalette.container,
+            contentColor = accentPalette.onContainer,
+        ),
     ) {
         leadingIcon?.let {
             Icon(it, contentDescription = null, modifier = Modifier.size(18.dp))

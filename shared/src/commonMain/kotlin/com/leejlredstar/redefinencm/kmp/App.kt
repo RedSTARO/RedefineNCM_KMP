@@ -5,8 +5,10 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -17,10 +19,12 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.Icon
@@ -45,9 +49,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.lyric.WebViewLyricScreen
+import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
 import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.LoginScreen
@@ -56,9 +65,11 @@ import com.leejlredstar.redefinencm.kmp.ui.screen.PlaylistDetailScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.SettingsScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.UserPlaylistScreen
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
+import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
+import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import org.koin.compose.koinInject
 
@@ -103,6 +114,20 @@ fun App() {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
             val settings: PlatformSettings = koinInject()
             val mainViewModel: MainViewModel = koinInject()
+            val player: PlatformPlayer = koinInject()
+            val currentMedia by player.currentMedia.collectAsState()
+            val userDetail by mainViewModel.userDetail.collectAsState()
+            val chromeAccentSource = currentMedia?.artworkUri ?: userDetail?.profile?.avatarUrl
+            val defaultChromeAccent = MaterialTheme.colorScheme.primaryContainer
+            var rawChromeAccent by remember(chromeAccentSource, defaultChromeAccent) {
+                mutableStateOf(defaultChromeAccent)
+            }
+            val chromeAccent by animateColorAsState(
+                targetValue = rawChromeAccent,
+                animationSpec = spring(),
+                label = "appChromeAccent",
+            )
+            val chromePalette = contentAccentPalette(chromeAccent)
 
             var currentTab by remember { mutableStateOf<TabDest>(TabDest.Home) }
             val pushedStack = remember {
@@ -145,116 +170,122 @@ fun App() {
                 )
             }
 
-            BoxWithConstraints {
-                val isWide = maxWidth >= 600.dp
-                val showMiniPlayer = pushedStack.lastOrNull() !is PushedDest.NowPlaying
-                val rootDest = pushedStack.lastOrNull()
-                    ?.let { RootDest.Pushed(it, pushedStack.size) }
-                    ?: RootDest.Tab(currentTab)
+            Box(Modifier.fillMaxSize()) {
+                ChromeAccentSourceImage(
+                    sourceUrl = chromeAccentSource,
+                    onAccentColor = { rawChromeAccent = it },
+                )
+                BoxWithConstraints(Modifier.fillMaxSize()) {
+                    val isWide = maxWidth >= 600.dp
+                    val showMiniPlayer = pushedStack.lastOrNull() !is PushedDest.NowPlaying
+                    val rootDest = pushedStack.lastOrNull()
+                        ?.let { RootDest.Pushed(it, pushedStack.size) }
+                        ?: RootDest.Tab(currentTab)
 
-                Scaffold(
-                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
-                    snackbarHost = { SnackbarHost(snackbarHostState) },
-                    floatingActionButtonPosition = FabPosition.Center,
-                    bottomBar = {
-                        AnimatedVisibility(
-                            visible = showTabs && !isWide,
-                            enter = bottomNavEnterTransition(),
-                            exit = bottomNavExitTransition(),
-                        ) {
-                            NavigationBar(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                tonalElevation = 0.dp,
-                            ) {
-                                tabs.forEach { item ->
-                                    NavigationBarItem(
-                                        selected = currentTab == item.dest,
-                                        onClick = { currentTab = item.dest },
-                                        icon = { Icon(item.icon, contentDescription = item.label) },
-                                        label = { Text(item.label) },
-                                        colors = NavigationBarItemDefaults.colors(
-                                            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                                            selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        ),
-                                    )
-                                }
-                            }
-                        }
-                    },
-                    floatingActionButton = {
-                        AnimatedVisibility(
-                            visible = showMiniPlayer,
-                            enter = miniPlayerEnterTransition(),
-                            exit = miniPlayerExitTransition(),
-                        ) {
-                            MiniNowPlayingBar(onExpand = ::openNowPlaying)
-                        }
-                    },
-                ) { innerPadding ->
-                    Row(Modifier.fillMaxSize()) {
-                        if (isWide) {
+                    Scaffold(
+                        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                        snackbarHost = { SnackbarHost(snackbarHostState) },
+                        floatingActionButtonPosition = FabPosition.Center,
+                        bottomBar = {
                             AnimatedVisibility(
-                                visible = showTabs,
-                                enter = railEnterTransition(),
-                                exit = railExitTransition(),
+                                visible = showTabs && !isWide,
+                                enter = bottomNavEnterTransition(),
+                                exit = bottomNavExitTransition(),
                             ) {
-                                NavigationRail(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                NavigationBar(
+                                    containerColor = chromePalette.quietContainer,
+                                    tonalElevation = 0.dp,
                                 ) {
                                     tabs.forEach { item ->
-                                        NavigationRailItem(
+                                        NavigationBarItem(
                                             selected = currentTab == item.dest,
                                             onClick = { currentTab = item.dest },
                                             icon = { Icon(item.icon, contentDescription = item.label) },
                                             label = { Text(item.label) },
-                                            colors = NavigationRailItemDefaults.colors(
-                                                indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                                                selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            colors = NavigationBarItemDefaults.colors(
+                                                indicatorColor = chromePalette.container,
+                                                selectedIconColor = chromePalette.onContainer,
+                                                selectedTextColor = chromePalette.onQuietContainer,
+                                                unselectedIconColor = chromePalette.onQuietContainer.copy(alpha = 0.64f),
+                                                unselectedTextColor = chromePalette.onQuietContainer.copy(alpha = 0.64f),
                                             ),
                                         )
                                     }
                                 }
                             }
-                        }
-                        AnimatedContent(
-                            targetState = rootDest,
-                            transitionSpec = { pageTransition(initialState, targetState) },
-                            modifier = Modifier.weight(1f).fillMaxSize(),
-                            label = "AppPageTransition",
-                        ) { target ->
-                            when (target) {
-                                is RootDest.Pushed -> when (val dest = target.dest) {
-                                    is PushedDest.Login -> LoginScreen(onBack = ::back)
-                                    is PushedDest.NowPlaying -> NowPlayingScreen(
-                                        onBack = ::back,
-                                        onOpenFullLyric = { push(PushedDest.FullLyric) },
-                                    )
-                                    is PushedDest.FullLyric -> WebViewLyricScreen(onBack = ::back)
-                                    is PushedDest.Playlist -> PlaylistDetailScreen(
-                                        playlistId = dest.id,
-                                        onBack = ::back,
-                                    )
+                        },
+                        floatingActionButton = {
+                            AnimatedVisibility(
+                                visible = showMiniPlayer,
+                                enter = miniPlayerEnterTransition(),
+                                exit = miniPlayerExitTransition(),
+                            ) {
+                                MiniNowPlayingBar(onExpand = ::openNowPlaying)
+                            }
+                        },
+                    ) { innerPadding ->
+                        Row(Modifier.fillMaxSize()) {
+                            if (isWide) {
+                                AnimatedVisibility(
+                                    visible = showTabs,
+                                    enter = railEnterTransition(),
+                                    exit = railExitTransition(),
+                                ) {
+                                    NavigationRail(
+                                        containerColor = chromePalette.quietContainer,
+                                    ) {
+                                        tabs.forEach { item ->
+                                            NavigationRailItem(
+                                                selected = currentTab == item.dest,
+                                                onClick = { currentTab = item.dest },
+                                                icon = { Icon(item.icon, contentDescription = item.label) },
+                                                label = { Text(item.label) },
+                                                colors = NavigationRailItemDefaults.colors(
+                                                    indicatorColor = chromePalette.container,
+                                                    selectedIconColor = chromePalette.onContainer,
+                                                    selectedTextColor = chromePalette.onQuietContainer,
+                                                    unselectedIconColor = chromePalette.onQuietContainer.copy(alpha = 0.64f),
+                                                    unselectedTextColor = chromePalette.onQuietContainer.copy(alpha = 0.64f),
+                                                ),
+                                            )
+                                        }
+                                    }
                                 }
-                                is RootDest.Tab -> when (target.tab) {
-                                    is TabDest.Home -> HomeScreen(
-                                        scaffoldPadding = innerPadding,
-                                        onOpenPlaylist = { push(PushedDest.Playlist(it)) },
-                                        onOpenMy = { currentTab = TabDest.My },
-                                    )
-                                    is TabDest.My -> UserPlaylistScreen(
-                                        scaffoldPadding = innerPadding,
-                                        onOpenPlaylist = { push(PushedDest.Playlist(it)) },
-                                    )
-                                    is TabDest.Settings -> SettingsScreen(
-                                        scaffoldPadding = innerPadding,
-                                        onOpenLogin = { push(PushedDest.Login) },
-                                    )
+                            }
+                            AnimatedContent(
+                                targetState = rootDest,
+                                transitionSpec = { pageTransition(initialState, targetState) },
+                                modifier = Modifier.weight(1f).fillMaxSize(),
+                                label = "AppPageTransition",
+                            ) { target ->
+                                when (target) {
+                                    is RootDest.Pushed -> when (val dest = target.dest) {
+                                        is PushedDest.Login -> LoginScreen(onBack = ::back)
+                                        is PushedDest.NowPlaying -> NowPlayingScreen(
+                                            onBack = ::back,
+                                            onOpenFullLyric = { push(PushedDest.FullLyric) },
+                                        )
+                                        is PushedDest.FullLyric -> WebViewLyricScreen(onBack = ::back)
+                                        is PushedDest.Playlist -> PlaylistDetailScreen(
+                                            playlistId = dest.id,
+                                            onBack = ::back,
+                                        )
+                                    }
+                                    is RootDest.Tab -> when (target.tab) {
+                                        is TabDest.Home -> HomeScreen(
+                                            scaffoldPadding = innerPadding,
+                                            onOpenPlaylist = { push(PushedDest.Playlist(it)) },
+                                            onOpenMy = { currentTab = TabDest.My },
+                                        )
+                                        is TabDest.My -> UserPlaylistScreen(
+                                            scaffoldPadding = innerPadding,
+                                            onOpenPlaylist = { push(PushedDest.Playlist(it)) },
+                                        )
+                                        is TabDest.Settings -> SettingsScreen(
+                                            scaffoldPadding = innerPadding,
+                                            onOpenLogin = { push(PushedDest.Login) },
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -263,6 +294,23 @@ fun App() {
             }
         }
     }
+}
+
+@Composable
+private fun ChromeAccentSourceImage(
+    sourceUrl: String?,
+    onAccentColor: (Color) -> Unit,
+) {
+    if (sourceUrl.isNullOrBlank()) return
+    AsyncImage(
+        model = sourceUrl,
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier.size(1.dp).alpha(0f),
+        onSuccess = { state ->
+            themeColorFromCoilImage(state.result.image)?.let { onAccentColor(Color(it)) }
+        },
+    )
 }
 
 private fun pageTransition(initial: RootDest, target: RootDest): ContentTransform =
