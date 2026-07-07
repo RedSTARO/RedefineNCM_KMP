@@ -4,6 +4,12 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
 <title>AMLL Lyric Player</title>
+<script>
+(function () {
+  var match = location.search.match(/[?&]platform=([^&]+)/);
+  if (match) document.documentElement.setAttribute("data-platform", decodeURIComponent(match[1]));
+})();
+</script>
 <!-- AMLL core stylesheet — REQUIRED for the lyric player to render visibly. -->
 <link rel="stylesheet" href="style.css" />
 <style>
@@ -30,6 +36,28 @@
     width: 100% !important; height: 100% !important;
     font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
   }
+  html[data-platform="android"] #bg {
+    inset: -5%;
+    filter: blur(24px) brightness(0.46) saturate(1.15);
+    transform: scale(1.06);
+  }
+  html[data-platform="android"] .amll-lyric-player {
+    mix-blend-mode: normal !important;
+    color: rgba(255,255,255,0.94);
+    text-shadow: 0 2px 18px rgba(0,0,0,0.55);
+  }
+  html[data-platform="android"] .FmKaba_lyricLineWrapper {
+    will-change: transform, opacity;
+  }
+  html[data-platform="android"] .FmKaba_lyricLineWrapper,
+  html[data-platform="android"] .FmKaba_lyricLine,
+  html[data-platform="android"] .FmKaba_lyricMainLine > span {
+    backface-visibility: hidden;
+    transform: translateZ(0);
+  }
+  html[data-platform="android"] .FmKaba_lyricLine {
+    padding: .45em .75em;
+  }
   #loading {
     position: absolute; inset: 0;
     display: flex; align-items: center; justify-content: center;
@@ -50,7 +78,7 @@ const CDN = "https://esm.sh/@applemusic-like-lyrics";
 const VER = "latest";
 
 // Surface any failure on-screen (and to the host console) so a blank panel becomes a
-// readable error on both Android (WebView) and desktop (KCEF), not just black.
+// readable error on both Android WebView and desktop WebView2, not just black.
 let errored = false;
 function showError(msg) {
   errored = true;
@@ -71,6 +99,11 @@ function setStatus(s) {
   if (el) el.textContent = s;
   console.log("AMLL status:", s);
 }
+function hideLoading() {
+  const el = document.getElementById("loading");
+  if (el) el.remove();
+}
+globalThis.AmllPage = { setStatus, showError, hideLoading };
 window.addEventListener("error", function (e) {
   showError((e.message || e.error || "unknown") + (e.filename ? "\n@ " + e.filename + ":" + e.lineno : ""));
 });
@@ -79,7 +112,7 @@ window.addEventListener("unhandledrejection", function (e) {
 });
 
 // Signal "engine mounted" to the host. Android exposes a @JavascriptInterface named
-// AmllCallback; desktop KCEF exposes JCEF's window.cefQuery message router.
+// AmllCallback; desktop WebView2 exposes a bound amllReady function.
 function signalReady() {
   if (globalThis.AmllCallback && globalThis.AmllCallback.onReady) {
     globalThis.AmllCallback.onReady();            // Android @JavascriptInterface
@@ -112,7 +145,7 @@ async function loadEngine() {
   setStatus(localOk ? "bundle loaded, starting engine…" : "local bundle missing, trying CDN…");
   try {
     if (localOk && globalThis.AmllBridge && globalThis.AmllBridge.init()) {
-      document.getElementById("loading")?.remove();
+      setStatus("waiting for lyrics...");
       signalReady();
       return;
     }
@@ -154,7 +187,6 @@ async function loadEngine() {
         if (!root) return false;
         this.player = new LyricPlayer();
         root.appendChild(this.player.getElement());
-        document.getElementById("loading")?.remove();
         let last = -1;
         const frame = (t) => {
           if (last < 0) last = t;
@@ -168,6 +200,7 @@ async function loadEngine() {
       loadLyrics(lrcText) {
         if (!this.player) return;
         this.player.setLyricLines(parseLrc(lrcText));
+        globalThis.AmllPage && globalThis.AmllPage.hideLoading();
       },
       setTime(timeMs) {
         this.player?.setCurrentTime(timeMs);

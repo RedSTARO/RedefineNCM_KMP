@@ -10,11 +10,11 @@
  * style.css (AMLL core stylesheet, REQUIRED), player.html (host page) — into BOTH
  * platform asset roots:
  *   - androidApp/src/main/assets/amll/        (Android WebView, file:///android_asset)
- *   - shared/src/jvmMain/resources/amll/      (Desktop KCEF, extracted to temp at runtime)
+ *   - shared/src/jvmMain/resources/amll/      (Desktop system WebView, extracted to temp at runtime)
  * player.html is hand-maintained in the Android dir and mirrored to the desktop dir here.
  */
 import * as esbuild from "esbuild";
-import { copyFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
 const ANDROID_DIR = "../src/main/assets/amll";
 const DESKTOP_DIR = "../../shared/src/jvmMain/resources/amll";
@@ -33,11 +33,17 @@ await esbuild.build({
 });
 console.log(`→ bundle written to ${ANDROID_DIR}/bundle.js`);
 
-copyFileSync(
+const rawCss = readFileSync(
   "node_modules/@applemusic-like-lyrics/core/dist/style.css",
-  `${ANDROID_DIR}/style.css`,
+  "utf8",
 );
-console.log(`→ style.css copied to ${ANDROID_DIR}/style.css`);
+const css = await esbuild.transform(rawCss, {
+  loader: "css",
+  target: ["chrome91"],
+  minify: false,
+});
+writeFileSync(`${ANDROID_DIR}/style.css`, css.code);
+console.log(`→ style.css compiled to ${ANDROID_DIR}/style.css`);
 
 // Mirror all three assets to the desktop (jvmMain) resources root.
 mkdirSync(DESKTOP_DIR, { recursive: true });
