@@ -83,17 +83,23 @@ class NowPlayingViewModel(
         scope.launch {
             player.currentMedia.collect { media ->
                 currentMedia.value = media
-                media?.let {
+                commentsFetchJob?.cancel()
+                comments.value = null
+                if (media != null) {
                     MediaControlsIntegrator.updateMetadata(
-                        title = it.title,
-                        artist = it.artist,
-                        album = it.albumTitle,
-                        artworkUri = it.artworkUri,
-                        duration = it.duration,
+                        title = media.title,
+                        artist = media.artist,
+                        album = media.albumTitle,
+                        artworkUri = media.artworkUri,
+                        duration = media.duration,
                     )
+                    fetchLyrics(media.id)
+                } else {
+                    lyricFetchJob?.cancel()
+                    clearLyrics()
+                    MediaControlsIntegrator.clear()
+                    LyricNotificationController.clearFocus()
                 }
-                // Fetch lyrics when track changes
-                media?.id?.let { fetchLyrics(it) }
             }
         }
         scope.launch {
@@ -160,6 +166,7 @@ class NowPlayingViewModel(
     }
 
     private var lyricFetchJob: Job? = null
+    private var commentsFetchJob: Job? = null
 
     private fun fetchLyrics(mediaId: String) {
         lyricFetchJob?.cancel()
@@ -234,6 +241,17 @@ class NowPlayingViewModel(
         lyricMap.value = linkedMapOf(0L to "Loading Lyric")
     }
 
+    private fun clearLyrics() {
+        lyricMediaId.value = null
+        lyricIndex.value = 0
+        rawLyric.value = ""
+        rawWordLyric.value = ""
+        rawTranslatedLyric.value = ""
+        rawRomanLyric.value = ""
+        wordLyricLines.value = emptyList()
+        lyricMap.value = linkedMapOf(0L to "No media")
+    }
+
     private inline fun applyLyricsForMedia(mediaId: String, block: () -> Unit) {
         if (lyricMediaId.value == mediaId && currentMedia.value?.id == mediaId) {
             block()
@@ -255,9 +273,12 @@ class NowPlayingViewModel(
     }
 
     fun getComments() {
-        scope.launch(Dispatchers.Default) {
-            currentMedia.value?.id?.toLongOrNull()?.let { id ->
-                repo.getCommentMusic(id).collect { detail ->
+        commentsFetchJob?.cancel()
+        val mediaId = currentMedia.value?.id ?: return
+        val id = mediaId.toLongOrNull() ?: return
+        commentsFetchJob = scope.launch(Dispatchers.Default) {
+            repo.getCommentMusic(id).collect { detail ->
+                if (currentMedia.value?.id == mediaId) {
                     comments.value = detail
                 }
             }
@@ -298,6 +319,7 @@ class NowPlayingViewModel(
     fun onShuffleClick(status: Boolean) = player.setShuffleEnabled(status)
 
     fun onCleared() {
+        commentsFetchJob?.cancel()
         scope.cancel()
     }
 }

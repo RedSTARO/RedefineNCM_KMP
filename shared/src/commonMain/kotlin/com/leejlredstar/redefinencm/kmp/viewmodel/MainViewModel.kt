@@ -49,6 +49,8 @@ class MainViewModel(
     val searchResults = MutableStateFlow<List<SongDetailSongs>>(emptyList())
     val searchSuggestions = MutableStateFlow<List<String>>(emptyList())
     val searchLoading = MutableStateFlow(false)
+    private var searchJob: Job? = null
+    private var suggestionJob: Job? = null
 
     // ── Update check（原版 SplashActivity.checkAppUpdate）──
     val updateMessage = MutableStateFlow<String?>(null)
@@ -193,7 +195,12 @@ class MainViewModel(
 
     fun fetchUserData() {
         scope.launch(Dispatchers.Default) {
-            repo.getUserDetail(_uid.value).collect { detail ->
+            val uid = _uid.value
+            if (uid == 0L) {
+                userDetail.value = null
+                return@launch
+            }
+            repo.getUserDetail(uid).collect { detail ->
                 userDetail.value = detail
             }
         }
@@ -201,7 +208,12 @@ class MainViewModel(
 
     fun fetchUserPlaylists() {
         scope.launch(Dispatchers.Default) {
-            repo.getUserPlaylist(_uid.value).collect { detail ->
+            val uid = _uid.value
+            if (uid == 0L) {
+                userPlaylists.value = emptyList()
+                return@launch
+            }
+            repo.getUserPlaylist(uid).collect { detail ->
                 userPlaylists.value = detail?.playlist ?: emptyList()
             }
         }
@@ -264,26 +276,34 @@ class MainViewModel(
 
     fun search(keyword: String) {
         val query = keyword.trim()
+        searchJob?.cancel()
         if (query.isEmpty()) {
             searchResults.value = emptyList()
+            searchLoading.value = false
             return
         }
         searchSuggestions.value = emptyList()
-        scope.launch(Dispatchers.Default) {
+        searchJob = scope.launch(Dispatchers.Default) {
             searchLoading.value = true
-            val response = repo.search(query)
-            searchResults.value = response?.result?.songs ?: emptyList()
-            searchLoading.value = false
+            try {
+                val response = repo.search(query)
+                searchResults.value = response?.result?.songs ?: emptyList()
+            } finally {
+                if (currentCoroutineContext()[Job] == searchJob) {
+                    searchLoading.value = false
+                }
+            }
         }
     }
 
     fun fetchSearchSuggestions(keyword: String) {
         val query = keyword.trim()
+        suggestionJob?.cancel()
         if (query.isEmpty()) {
             searchSuggestions.value = emptyList()
             return
         }
-        scope.launch(Dispatchers.Default) {
+        suggestionJob = scope.launch(Dispatchers.Default) {
             val response = repo.searchSuggest(query)
             searchSuggestions.value =
                 response?.result?.allMatch?.map { it.keyword } ?: emptyList()
@@ -291,6 +311,8 @@ class MainViewModel(
     }
 
     fun clearSearch() {
+        searchJob?.cancel()
+        suggestionJob?.cancel()
         searchResults.value = emptyList()
         searchSuggestions.value = emptyList()
         searchLoading.value = false

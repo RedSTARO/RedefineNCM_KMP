@@ -257,9 +257,16 @@ class ExoPlayerPlatformPlayer(
     }
 
     override fun clearQueue() {
+        stopPositionSync()
         exoPlayer.clearMediaItems()
+        playOrderWindowIndices = emptyList()
         _queue.value = emptyList()
+        _currentIndex.value = -1
         _currentMedia.value = null
+        _position.value = 0L
+        _duration.value = -1L
+        _isPlaying.value = false
+        _state.value = PlayerState.IDLE
     }
 
     override fun release() {

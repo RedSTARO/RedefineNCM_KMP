@@ -9,6 +9,7 @@ import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.util.date.getTimeMillis
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 
 /**
@@ -79,14 +80,38 @@ object HttpClientFactory {
     }
 
     /**
-     * Normalise a raw cookie to `name=value; name=value` (drop attributes / empty parts).
-     * Ported from the original `RetrofitInstance.getCookie()`.
+     * Normalise a raw cookie to `name=value; name=value`.
+     * Persisted login strings can contain Set-Cookie attributes; those are not cookies and must
+     * not be replayed as Cookie header pairs.
      */
     private fun cleanCookie(raw: String): String =
         raw.split(";")
+            .asSequence()
             .map { it.trim() }
-            .filter { it.contains("=") }
+            .mapNotNull { part ->
+                val separator = part.indexOf('=')
+                if (separator <= 0) return@mapNotNull null
+                val name = part.substring(0, separator).trim()
+                val value = part.substring(separator + 1).trim()
+                if (name.isEmpty() || name.lowercase() in setCookieAttributeNames) {
+                    null
+                } else {
+                    "$name=$value"
+                }
+            }
             .joinToString("; ")
+
+    private val setCookieAttributeNames = setOf(
+        "path",
+        "domain",
+        "expires",
+        "max-age",
+        "secure",
+        "httponly",
+        "samesite",
+        "priority",
+        "partitioned",
+    )
 }
 
 /**
@@ -96,6 +121,8 @@ object HttpClientFactory {
 suspend fun <T> safeApiCall(apiCall: suspend () -> T): T? {
     return try {
         apiCall()
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         println("safeApiCall failed: ${e.message}")
         null

@@ -57,6 +57,7 @@ class LoginViewModel(
     val qrSuccess: StateFlow<Boolean> = _qrSuccess.asStateFlow()
 
     private var qrPollJob: Job? = null
+    private var qrLoginJob: Job? = null
 
     init {
         loadServer()
@@ -94,9 +95,12 @@ class LoginViewModel(
      * Full QR login flow: key → create → poll → save cookie.
      */
     fun startQrLogin() {
+        qrLoginJob?.cancel()
+        qrPollJob?.cancel()
+        qrPollJob = null
         // 网络必须离开 Main：桌面端 Main=Swing EDT，在 EDT 上跑 Ktor 连接协程会被 UI 渲染
         // 饿死导致零星 ConnectTimeout（与歌词拉取同源问题）。状态写回用 StateFlow，线程安全。
-        scope.launch(Dispatchers.Default) {
+        qrLoginJob = scope.launch(Dispatchers.Default) {
             try {
                 _qrLoading.value = true
                 _qrError.value = ""
@@ -170,6 +174,8 @@ class LoginViewModel(
                         }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _qrScanStatus.value = "网络错误"
                 _qrError.value = e.message ?: "未知错误"
@@ -179,6 +185,8 @@ class LoginViewModel(
     }
 
     fun cancelQrLogin() {
+        qrLoginJob?.cancel()
+        qrLoginJob = null
         qrPollJob?.cancel()
         qrPollJob = null
         _qrDataUri.value = ""
@@ -202,6 +210,7 @@ class LoginViewModel(
     }
 
     fun onCleared() {
+        qrLoginJob?.cancel()
         qrPollJob?.cancel()
         scope.cancel()
     }
