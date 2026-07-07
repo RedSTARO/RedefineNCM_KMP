@@ -15,11 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -33,9 +30,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
@@ -44,7 +41,6 @@ import org.koin.compose.koinInject
 @Composable
 fun UserPlaylistScreen(
     scaffoldPadding: PaddingValues,
-    onOpenLogin: () -> Unit,
     onOpenPlaylist: (Long) -> Unit,
     viewModel: MainViewModel = koinInject(),
 ) {
@@ -63,17 +59,11 @@ fun UserPlaylistScreen(
                 avatarUrl = userDetail?.profile?.avatarUrl,
                 nickname = userDetail?.profile?.nickname ?: "Unknown User",
                 userId = userDetail?.profile?.userId?.toString() ?: "N/A",
-                isLoggedIn = userDetail != null,
-                onOpenLogin = onOpenLogin,
             )
         }
         if (userDetail == null) {
             item {
-                EmptyHint(
-                    text = "登录后查看歌单",
-                    actionLabel = "去登录",
-                    onAction = onOpenLogin,
-                )
+                LoginMovedHint()
             }
         } else {
             item {
@@ -106,8 +96,6 @@ private fun UserPlaylistHero(
     avatarUrl: String?,
     nickname: String,
     userId: String,
-    isLoggedIn: Boolean,
-    onOpenLogin: () -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -173,21 +161,23 @@ private fun UserPlaylistHero(
                 style = MaterialTheme.typography.labelLarge,
                 color = Color.White.copy(alpha = 0.78f),
             )
-
-            // Login button — always visible when not logged in
-            Spacer(Modifier.height(16.dp))
-            Button(
-                onClick = onOpenLogin,
-                shape = RoundedCornerShape(24.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White.copy(alpha = 0.95f),
-                    contentColor = Color.Black,
-                ),
-            ) {
-                Icon(AppIcons.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.size(8.dp))
-                Text("扫码 / 登录", fontWeight = FontWeight.SemiBold)
-            }
         }
+    }
+}
+
+@Composable
+private fun LoginMovedHint() {
+    Surface(
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+    ) {
+        Text(
+            text = "请在设置页登录后查看歌单",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+        )
     }
 }
