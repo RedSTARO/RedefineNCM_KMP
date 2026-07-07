@@ -15,7 +15,7 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
-    width: 100%; height: 100%; overflow: hidden; background: #0a0a0a;
+    width: 100%; height: 100%; min-height: 100%; overflow: hidden; background: #0a0a0a;
     /* 注意：不能写 system-ui / -apple-system —— JavaFX WebKit 不认识这些关键字，
        会把整条 font-family 声明判为无效，回退到衬线默认字体（中文=宋体）。 */
     font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
@@ -31,7 +31,9 @@
     z-index: 0;
     transition: background-image 0.4s ease;
   }
-  #amll-root { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; }
+  #amll-root {
+    position: fixed; inset: 0; width: 100%; height: 100%; min-height: 100%; z-index: 1;
+  }
   .amll-lyric-player {
     width: 100% !important; height: 100% !important;
     font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
@@ -103,7 +105,35 @@ function hideLoading() {
   const el = document.getElementById("loading");
   if (el) el.remove();
 }
-globalThis.AmllPage = { setStatus, showError, hideLoading };
+function applyViewportSize() {
+  const viewport = window.visualViewport;
+  const width = Math.max(
+    1,
+    Math.round((viewport && viewport.width) || window.innerWidth || document.documentElement.clientWidth || screen.width || 0),
+  );
+  const height = Math.max(
+    1,
+    Math.round((viewport && viewport.height) || window.innerHeight || document.documentElement.clientHeight || screen.height || 0),
+  );
+  const widthPx = width + "px";
+  const heightPx = height + "px";
+  [
+    document.documentElement,
+    document.body,
+    document.getElementById("amll-root"),
+    document.querySelector(".amll-lyric-player"),
+  ].forEach(function (el) {
+    if (!el) return;
+    el.style.width = widthPx;
+    el.style.height = heightPx;
+    el.style.minHeight = heightPx;
+  });
+}
+globalThis.AmllPage = { setStatus, showError, hideLoading, applyViewportSize };
+applyViewportSize();
+requestAnimationFrame(applyViewportSize);
+window.addEventListener("resize", applyViewportSize);
+if (window.visualViewport) window.visualViewport.addEventListener("resize", applyViewportSize);
 window.addEventListener("error", function (e) {
   showError((e.message || e.error || "unknown") + (e.filename ? "\n@ " + e.filename + ":" + e.lineno : ""));
 });
@@ -144,7 +174,9 @@ async function loadEngine() {
   });
   setStatus(localOk ? "bundle loaded, starting engine…" : "local bundle missing, trying CDN…");
   try {
+    applyViewportSize();
     if (localOk && globalThis.AmllBridge && globalThis.AmllBridge.init()) {
+      applyViewportSize();
       setStatus("waiting for lyrics...");
       signalReady();
       return;
@@ -187,6 +219,7 @@ async function loadEngine() {
         if (!root) return false;
         this.player = new LyricPlayer();
         root.appendChild(this.player.getElement());
+        globalThis.AmllPage && globalThis.AmllPage.applyViewportSize();
         let last = -1;
         const frame = (t) => {
           if (last < 0) last = t;
