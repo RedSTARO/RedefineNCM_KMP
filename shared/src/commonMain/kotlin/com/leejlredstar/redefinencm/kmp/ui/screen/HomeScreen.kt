@@ -2,11 +2,13 @@ package com.leejlredstar.redefinencm.kmp.ui.screen
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -39,16 +41,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
+import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import org.koin.compose.koinInject
 
@@ -66,14 +74,27 @@ object SharedKeys {
 fun HomeScreen(
     scaffoldPadding: PaddingValues,
     onOpenPlaylist: (Long) -> Unit,
+    onOpenMy: () -> Unit,
     viewModel: MainViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
 ) {
     val recommend by viewModel.recommendSongs.collectAsState()
     val recommendResource by viewModel.recommendResource.collectAsState()
+    val userDetail by viewModel.userDetail.collectAsState()
     val dailySongs = recommend?.data?.dailySongs ?: emptyList()
     val resources = recommendResource?.recommend ?: emptyList()
     var showSearch by rememberSaveable { mutableStateOf(false) }
+    val defaultPageAccent = MaterialTheme.colorScheme.primaryContainer
+    val avatarUrl = userDetail?.profile?.avatarUrl
+    val nickname = userDetail?.profile?.nickname ?: "我的"
+    var rawPageAccent by remember(avatarUrl, defaultPageAccent) {
+        mutableStateOf(defaultPageAccent)
+    }
+    val pageAccent by animateColorAsState(
+        targetValue = rawPageAccent,
+        animationSpec = spring(),
+        label = "homePageAccent",
+    )
 
     BackHandler(enabled = showSearch) { showSearch = false }
 
@@ -109,6 +130,11 @@ fun HomeScreen(
                         HomeHero(
                             dailySongCount = dailySongs.size,
                             playlistCount = resources.size,
+                            accentColor = pageAccent,
+                            avatarUrl = avatarUrl,
+                            nickname = nickname,
+                            onOpenMy = onOpenMy,
+                            onAccentColor = { rawPageAccent = it },
                             onClick = { showSearch = true },
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
@@ -179,13 +205,20 @@ fun HomeScreen(
 private fun HomeHero(
     dailySongCount: Int,
     playlistCount: Int,
+    accentColor: Color,
+    avatarUrl: String?,
+    nickname: String,
+    onOpenMy: () -> Unit,
+    onAccentColor: (Color) -> Unit,
     onClick: () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
 ) {
+    val heroPalette = contentAccentPalette(accentColor)
     Surface(
         shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = heroPalette.quietContainer,
+        contentColor = heroPalette.onQuietContainer,
         tonalElevation = 0.dp,
         modifier = Modifier
             .fillMaxWidth()
@@ -196,35 +229,83 @@ private fun HomeHero(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            MaterialTheme.colorScheme.primaryContainer,
-                            MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.78f),
-                            MaterialTheme.colorScheme.surfaceContainerHigh,
+                            heroPalette.pageStart,
+                            heroPalette.container,
+                            heroPalette.quietContainer,
                         ),
                     ),
                 )
                 .padding(20.dp),
         ) {
-            Text(
-                text = "RedefineNCM",
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = "推荐 · $dailySongCount 首每日歌曲 · $playlistCount 张歌单",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = "RedefineNCM",
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = heroPalette.onContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "推荐 · $dailySongCount 首每日歌曲 · $playlistCount 张歌单",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = heroPalette.onQuietContainer.copy(alpha = 0.78f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Spacer(Modifier.size(16.dp))
+                HomeAccountAvatar(
+                    avatarUrl = avatarUrl,
+                    nickname = nickname,
+                    onOpenMy = onOpenMy,
+                    onAccentColor = onAccentColor,
+                )
+            }
             Spacer(Modifier.height(18.dp))
             SearchBox(
                 onClick = onClick,
+                accentColor = accentColor,
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeAccountAvatar(
+    avatarUrl: String?,
+    nickname: String,
+    onOpenMy: () -> Unit,
+    onAccentColor: (Color) -> Unit,
+) {
+    Surface(
+        onClick = onOpenMy,
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.size(64.dp),
+    ) {
+        if (avatarUrl.isNullOrBlank()) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                Icon(
+                    imageVector = AppIcons.Person,
+                    contentDescription = nickname,
+                    modifier = Modifier.size(28.dp),
+                )
+            }
+        } else {
+            AsyncImage(
+                model = avatarUrl,
+                contentDescription = nickname,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+                onSuccess = { state ->
+                    themeColorFromCoilImage(state.result.image)?.let { onAccentColor(Color(it)) }
+                },
             )
         }
     }
@@ -235,14 +316,17 @@ private fun HomeHero(
 @Composable
 private fun SearchBox(
     onClick: () -> Unit,
+    accentColor: Color,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
 ) {
+    val searchPalette = contentAccentPalette(accentColor)
     with(sharedTransitionScope) {
         Surface(
             onClick = onClick,
             shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            color = searchPalette.quietContainer,
+            contentColor = searchPalette.onQuietContainer,
             modifier = Modifier
                 .sharedBounds(
                     rememberSharedContentState(SharedKeys.search()),
@@ -258,13 +342,13 @@ private fun SearchBox(
                 Icon(
                     imageVector = AppIcons.Search,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = searchPalette.accent,
                 )
                 Spacer(Modifier.size(12.dp))
                 Text(
                     text = "搜索歌曲、歌单...",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = searchPalette.onQuietContainer.copy(alpha = 0.78f),
                 )
             }
         }

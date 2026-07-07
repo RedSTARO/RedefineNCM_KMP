@@ -36,17 +36,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
+import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
@@ -69,6 +66,7 @@ fun SearchScreen(
     var query by remember { mutableStateOf("") }
     val keyboard = LocalSoftwareKeyboardController.current
     val searchPrediction = remember { settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true) }
+    val searchPalette = contentAccentPalette(MaterialTheme.colorScheme.tertiaryContainer)
 
     LaunchedEffect(Unit) { viewModel.clearSearch() }
 
@@ -90,7 +88,15 @@ fun SearchScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface)
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        searchPalette.pageStart,
+                        searchPalette.pageMiddle,
+                        searchPalette.pageEnd,
+                    ),
+                ),
+            )
             .padding(horizontal = 16.dp),
     ) {
         Row(
@@ -98,7 +104,17 @@ fun SearchScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
-                Icon(AppIcons.ArrowBack, contentDescription = "返回")
+                Surface(
+                    shape = CircleShape,
+                    color = searchPalette.quietContainer,
+                    contentColor = searchPalette.onQuietContainer,
+                ) {
+                    Icon(
+                        AppIcons.ArrowBack,
+                        contentDescription = "返回",
+                        modifier = Modifier.padding(10.dp),
+                    )
+                }
             }
             with(sharedTransitionScope) {
                 TextField(
@@ -124,8 +140,14 @@ fun SearchScreen(
                         )
                         .fillMaxWidth(),
                     colors = TextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        focusedContainerColor = searchPalette.quietContainer,
+                        unfocusedContainerColor = searchPalette.quietContainer,
+                        focusedTextColor = searchPalette.onQuietContainer,
+                        unfocusedTextColor = searchPalette.onQuietContainer,
+                        focusedLeadingIconColor = searchPalette.accent,
+                        unfocusedLeadingIconColor = searchPalette.onQuietContainer.copy(alpha = 0.72f),
+                        focusedTrailingIconColor = searchPalette.onQuietContainer,
+                        unfocusedTrailingIconColor = searchPalette.onQuietContainer,
                         focusedIndicatorColor = Color.Transparent,
                         unfocusedIndicatorColor = Color.Transparent,
                     ),
@@ -138,7 +160,13 @@ fun SearchScreen(
         when {
             loading -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+                    Surface(
+                        shape = MaterialTheme.shapes.extraLarge,
+                        color = searchPalette.quietContainer,
+                        contentColor = searchPalette.accent,
+                    ) {
+                        CircularProgressIndicator(Modifier.padding(28.dp))
+                    }
                 }
             }
             results.isEmpty() && searchPrediction && suggestions.isNotEmpty() -> {
@@ -147,7 +175,8 @@ fun SearchScreen(
                         Surface(
                             onClick = { submit(keyword) },
                             shape = connectedListItemShape(index, suggestions.size),
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            color = searchPalette.quietContainer,
+                            contentColor = searchPalette.onQuietContainer,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 1.5.dp),
@@ -159,7 +188,7 @@ fun SearchScreen(
                                 Icon(
                                     AppIcons.Search,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = searchPalette.accent,
                                 )
                                 Spacer(Modifier.size(12.dp))
                                 Text(text = keyword, style = MaterialTheme.typography.bodyLarge)
@@ -171,58 +200,35 @@ fun SearchScreen(
             results.isNotEmpty() -> {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     itemsIndexed(results) { index, song ->
-                        Surface(
+                        SongRow(
+                            index = index,
+                            title = song.name,
+                            artist = song.ar.joinToString(" / ") { it.name }.ifEmpty { "未知歌手" },
+                            artworkUri = song.al.picUrl,
+                            shape = connectedListItemShape(index, results.size),
                             onClick = {
                                 player.setQueue(listOf(song.toMediaInfo()), 0)
                                 player.play()
                                 onBack()
                             },
-                            shape = connectedListItemShape(index, results.size),
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 1.5.dp),
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                AsyncImage(
-                                    model = song.al.picUrl,
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .size(56.dp)
-                                        .clip(MaterialTheme.shapes.medium),
-                                )
-                                Spacer(Modifier.size(14.dp))
-                                Column(Modifier.fillMaxWidth()) {
-                                    Text(
-                                        text = song.name,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    Text(
-                                        text = song.ar.joinToString(" / ") { it.name }.ifEmpty { "未知歌手" },
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                            }
-                        }
+                            songId = song.id,
+                        )
                     }
                 }
             }
             query.isNotBlank() -> {
-                Text(
-                    text = "按搜索键查找 \"$query\"",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Surface(
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = searchPalette.quietContainer,
+                    contentColor = searchPalette.onQuietContainer,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = "按搜索键查找 \"$query\"",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(20.dp),
+                    )
+                }
             }
         }
     }

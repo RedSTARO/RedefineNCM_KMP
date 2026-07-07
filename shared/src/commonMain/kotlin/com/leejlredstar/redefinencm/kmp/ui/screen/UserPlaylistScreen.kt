@@ -1,5 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -20,6 +22,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -34,6 +39,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
+import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
+import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import org.koin.compose.koinInject
 
@@ -45,11 +53,33 @@ fun UserPlaylistScreen(
 ) {
     val userDetail by viewModel.userDetail.collectAsState()
     val playlists by viewModel.userPlaylists.collectAsState()
+    val defaultAccentColor = MaterialTheme.colorScheme.primaryContainer
+    var rawAccentColor by remember(
+        userDetail?.profile?.backgroundUrl,
+        userDetail?.profile?.avatarUrl,
+        defaultAccentColor,
+    ) {
+        mutableStateOf(defaultAccentColor)
+    }
+    val animatedAccentColor by animateColorAsState(
+        targetValue = rawAccentColor,
+        animationSpec = spring(),
+        label = "userAccent",
+    )
+    val accentPalette = contentAccentPalette(animatedAccentColor)
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface)
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        accentPalette.pageStart,
+                        accentPalette.pageMiddle,
+                        accentPalette.pageEnd,
+                    ),
+                ),
+            )
             .padding(bottom = scaffoldPadding.calculateBottomPadding()),
     ) {
         item {
@@ -58,11 +88,13 @@ fun UserPlaylistScreen(
                 avatarUrl = userDetail?.profile?.avatarUrl,
                 nickname = userDetail?.profile?.nickname ?: "Unknown User",
                 userId = userDetail?.profile?.userId?.toString() ?: "N/A",
+                accentPalette = accentPalette,
+                onAccentColor = { rawAccentColor = it },
             )
         }
         if (userDetail == null) {
             item {
-                LoginMovedHint()
+                LoginMovedHint(accentPalette)
             }
         } else {
             item {
@@ -81,6 +113,7 @@ fun UserPlaylistScreen(
                     },
                     index = index,
                     count = playlists.size,
+                    accentColor = animatedAccentColor,
                     onClick = { onOpenPlaylist(pl.id) },
                 )
             }
@@ -95,6 +128,8 @@ private fun UserPlaylistHero(
     avatarUrl: String?,
     nickname: String,
     userId: String,
+    accentPalette: ContentAccentPalette,
+    onAccentColor: (Color) -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -103,8 +138,9 @@ private fun UserPlaylistHero(
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        MaterialTheme.colorScheme.primaryContainer,
-                        MaterialTheme.colorScheme.surface,
+                        accentPalette.pageStart,
+                        accentPalette.pageMiddle,
+                        Color.Transparent,
                     ),
                 ),
             ),
@@ -128,6 +164,9 @@ private fun UserPlaylistHero(
                     )
                 },
             contentScale = ContentScale.Crop,
+            onSuccess = { state ->
+                themeColorFromCoilImage(state.result.image)?.let { onAccentColor(Color(it)) }
+            },
         )
 
         Column(
@@ -143,7 +182,12 @@ private fun UserPlaylistHero(
                 modifier = Modifier
                     .size(112.dp)
                     .clip(CircleShape)
-                    .border(4.dp, MaterialTheme.colorScheme.surface, CircleShape),
+                    .border(4.dp, accentPalette.container, CircleShape),
+                onSuccess = { state ->
+                    if (backgroundUrl.isNullOrBlank()) {
+                        themeColorFromCoilImage(state.result.image)?.let { onAccentColor(Color(it)) }
+                    }
+                },
             )
             Spacer(Modifier.height(12.dp))
             Text(
@@ -164,16 +208,16 @@ private fun UserPlaylistHero(
 }
 
 @Composable
-private fun LoginMovedHint() {
+private fun LoginMovedHint(accentPalette: ContentAccentPalette) {
     Surface(
         shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = accentPalette.quietContainer,
+        contentColor = accentPalette.onQuietContainer,
         modifier = Modifier.fillMaxWidth().padding(16.dp),
     ) {
         Text(
             text = "请在设置页登录后查看歌单",
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(24.dp),
         )

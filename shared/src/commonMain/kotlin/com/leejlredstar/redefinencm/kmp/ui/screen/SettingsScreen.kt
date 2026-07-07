@@ -36,12 +36,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
+import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
@@ -91,15 +94,24 @@ fun SettingsScreen(
         }
     }
     val launchExport = rememberExportFileLauncher()
+    val settingsPalette = contentAccentPalette(MaterialTheme.colorScheme.secondaryContainer)
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(bottom = scaffoldPadding.calculateBottomPadding())
-            .background(MaterialTheme.colorScheme.surface),
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        settingsPalette.pageStart,
+                        settingsPalette.pageMiddle,
+                        settingsPalette.pageEnd,
+                    ),
+                ),
+            ),
     ) {
-        SettingsHero()
+        SettingsHero(settingsPalette)
 
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
                 ExpressiveSectionTitle("Server", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
@@ -194,7 +206,7 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun SettingsHero() {
+private fun SettingsHero(accentPalette: ContentAccentPalette) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -202,9 +214,9 @@ private fun SettingsHero() {
             .background(
                 Brush.verticalGradient(
                     listOf(
-                        MaterialTheme.colorScheme.secondaryContainer,
-                        MaterialTheme.colorScheme.primaryContainer,
-                        MaterialTheme.colorScheme.surface,
+                        accentPalette.pageStart,
+                        accentPalette.container,
+                        Color.Transparent,
                     ),
                 ),
             )
@@ -216,11 +228,12 @@ private fun SettingsHero() {
                 text = "Settings",
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.ExtraBold,
+                color = accentPalette.onContainer,
             )
             Text(
                 text = "Account, playback, cache and backup",
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = accentPalette.onQuietContainer.copy(alpha = 0.78f),
             )
         }
     }

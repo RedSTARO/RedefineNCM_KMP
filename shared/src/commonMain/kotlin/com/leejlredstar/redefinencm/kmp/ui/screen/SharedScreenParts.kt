@@ -1,5 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +25,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,6 +48,7 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
+import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
 import org.koin.compose.koinInject
 
 /** Map an API song DTO to the player's [MediaInfo] (placeholder URI resolved at play time). */
@@ -69,7 +75,16 @@ fun SongRow(
     accentColor: Color? = null,
 ) {
     val settings = koinInject<PlatformSettings>()
-    val accentPalette = contentAccentPalette(accentColor ?: MaterialTheme.colorScheme.primaryContainer)
+    val fallbackAccent = MaterialTheme.colorScheme.primaryContainer
+    var imageAccent by remember(artworkUri, accentColor, fallbackAccent) {
+        mutableStateOf(accentColor ?: fallbackAccent)
+    }
+    val animatedAccent by animateColorAsState(
+        targetValue = accentColor ?: imageAccent,
+        animationSpec = spring(),
+        label = "songRowAccent",
+    )
+    val accentPalette = contentAccentPalette(animatedAccent)
     Surface(
         onClick = onClick,
         shape = shape,
@@ -100,6 +115,11 @@ fun SongRow(
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.size(56.dp).clip(MaterialTheme.shapes.medium),
+                onSuccess = { state ->
+                    if (accentColor == null) {
+                        themeColorFromCoilImage(state.result.image)?.let { imageAccent = Color(it) }
+                    }
+                },
             )
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
@@ -217,14 +237,27 @@ fun compactCount(value: Long): String = when {
 }
 
 @Composable
-fun RecommendSquareCard(picUrl: String, text: String, onClick: () -> Unit) {
+fun RecommendSquareCard(
+    picUrl: String,
+    text: String,
+    onAccentColor: ((Color) -> Unit)? = null,
+    onClick: () -> Unit,
+) {
+    val fallbackAccent = MaterialTheme.colorScheme.tertiaryContainer
+    var imageAccent by remember(picUrl, fallbackAccent) { mutableStateOf(fallbackAccent) }
+    val animatedAccent by animateColorAsState(
+        targetValue = imageAccent,
+        animationSpec = spring(),
+        label = "recommendCardAccent",
+    )
+    val accentPalette = contentAccentPalette(animatedAccent)
     Surface(
         onClick = onClick,
         modifier = Modifier
             .padding(end = 12.dp, top = 8.dp, bottom = 8.dp)
             .size(168.dp),
         shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = accentPalette.quietContainer,
     ) {
         Box(Modifier.fillMaxSize()) {
             AsyncImage(
@@ -232,6 +265,13 @@ fun RecommendSquareCard(picUrl: String, text: String, onClick: () -> Unit) {
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
+                onSuccess = { state ->
+                    themeColorFromCoilImage(state.result.image)?.let {
+                        val extracted = Color(it)
+                        imageAccent = extracted
+                        onAccentColor?.invoke(extracted)
+                    }
+                },
             )
             // 原版特例：私人雷达封面自带文字，不叠加遮罩与标题
             if (text != "私人雷达") {
@@ -240,7 +280,11 @@ fun RecommendSquareCard(picUrl: String, text: String, onClick: () -> Unit) {
                         .fillMaxSize()
                         .background(
                             brush = Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.68f)),
+                                colors = listOf(
+                                    Color.Transparent,
+                                    accentPalette.accent.copy(alpha = 0.40f),
+                                    Color.Black.copy(alpha = 0.72f),
+                                ),
                                 startY = 120f,
                             ),
                         ),
@@ -300,15 +344,27 @@ fun PlaylistCard(
     specialCard: String,
     index: Int,
     count: Int,
+    accentColor: Color? = null,
     onClick: () -> Unit,
 ) {
+    val fallbackAccent = MaterialTheme.colorScheme.tertiaryContainer
+    var imageAccent by remember(userPlaylistEach.coverImgUrl, specialCard, accentColor, fallbackAccent) {
+        mutableStateOf(accentColor ?: fallbackAccent)
+    }
+    val animatedAccent by animateColorAsState(
+        targetValue = accentColor ?: imageAccent,
+        animationSpec = spring(),
+        label = "playlistCardAccent",
+    )
+    val accentPalette = contentAccentPalette(animatedAccent)
     Surface(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 1.5.dp),
         shape = connectedListItemShape(index, count),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = if (specialCard != "no") accentPalette.quietContainer
+        else MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {
         Row(
             modifier = Modifier
@@ -323,6 +379,11 @@ fun PlaylistCard(
                 modifier = Modifier
                     .size(60.dp)
                     .clip(MaterialTheme.shapes.large),
+                onSuccess = { state ->
+                    if (accentColor == null) {
+                        themeColorFromCoilImage(state.result.image)?.let { imageAccent = Color(it) }
+                    }
+                },
             )
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -353,9 +414,9 @@ fun PlaylistCard(
                 Spacer(modifier = Modifier.width(12.dp))
                 Surface(
                     shape = CircleShape,
-                    color = if (specialCard == "fav") MaterialTheme.colorScheme.tertiaryContainer
+                    color = if (specialCard == "fav") accentPalette.container
                     else MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = if (specialCard == "fav") MaterialTheme.colorScheme.onTertiaryContainer
+                    contentColor = if (specialCard == "fav") accentPalette.onContainer
                     else MaterialTheme.colorScheme.onSecondaryContainer,
                 ) {
                     Icon(
