@@ -11,9 +11,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.DropdownMenu
@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
+import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
@@ -98,36 +99,16 @@ fun SettingsScreen(
             .padding(bottom = scaffoldPadding.calculateBottomPadding())
             .background(MaterialTheme.colorScheme.surface),
     ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(168.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.primaryContainer,
-                                MaterialTheme.colorScheme.surface,
-                            ),
-                        ),
-                    ),
-                contentAlignment = Alignment.BottomStart,
-            ) {
-                Text(
-                    text = "Settings",
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.ExtraBold,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
-                )
-            }
+        SettingsHero()
 
-            Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
                 ExpressiveSectionTitle("Server", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
-                SettingsTextField(server, "Server URL") { v ->
+                SettingsTextField(server, "Server URL", index = 0, count = 2) { v ->
                     server = if (v.isNotEmpty() && !v.endsWith("/")) "$v/" else v
                     settings.setString(SettingKeys.SERVER, server)
                 }
                 // 原版 ServerItem：调 /inner/version/ 校验服务器可用性并显示版本
-                SettingsButton("检查服务器 ($server)") {
+                SettingsButton("检查服务器 ($server)", index = 1, count = 2) {
                     serverCheckStatus = "检查中…"
                     scope.launch {
                         serverCheckStatus = try {
@@ -153,48 +134,50 @@ fun SettingsScreen(
                 SettingsButton(
                     label = if (cookie.isBlank()) "扫码 / 登录" else "重新登录 / 换号",
                     leadingIcon = AppIcons.QrCode2,
+                    index = 0,
+                    count = 2,
                     onClick = onOpenLogin,
                 )
-                SettingsTextField(cookie, "Cookie") { v ->
+                SettingsTextField(cookie, "Cookie", index = 1, count = 2) { v ->
                     cookie = v
                     settings.setString(SettingKeys.COOKIE, v)
                 }
 
                 ExpressiveSectionTitle("Playback", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
-                SettingsDropdown(onlineQuality, "Music Quality (Online)", SoundQuality.entries) { v ->
+                SettingsDropdown(onlineQuality, "Music Quality (Online)", SoundQuality.entries, index = 0, count = 6) { v ->
                     onlineQuality = v.name
                     settings.setString(SettingKeys.ONLINE_PLAY_QUALITY, v.name)
                 }
-                SettingsDropdown(dlQuality, "Music Quality (Download)", SoundQuality.entries) { v ->
+                SettingsDropdown(dlQuality, "Music Quality (Download)", SoundQuality.entries, index = 1, count = 6) { v ->
                     dlQuality = v.name
                     settings.setString(SettingKeys.DOWNLOAD_QUALITY, v.name)
                 }
-                SettingsSwitch(replacePlaylist, "Replace playlist on single song click") { v ->
+                SettingsSwitch(replacePlaylist, "Replace playlist on single song click", index = 2, count = 6) { v ->
                     replacePlaylist = v
                     settings.setBoolean(SettingKeys.REPLACE_PLAYLIST, v)
                 }
-                SettingsSwitch(searchPrediction, "Search prediction") { v ->
+                SettingsSwitch(searchPrediction, "Search prediction", index = 3, count = 6) { v ->
                     searchPrediction = v
                     settings.setBoolean(SettingKeys.SEARCH_PREDICTION, v)
                 }
-                SettingsSwitch(showDownloadStatus, "Show download status") { v ->
+                SettingsSwitch(showDownloadStatus, "Show download status", index = 4, count = 6) { v ->
                     showDownloadStatus = v
                     settings.setBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, v)
                 }
-                SettingsSwitch(adaptOriginalLyric, "Adapt original Android Live Update lyric") { v ->
+                SettingsSwitch(adaptOriginalLyric, "Adapt original Android Live Update lyric", index = 5, count = 6) { v ->
                     adaptOriginalLyric = v
                     settings.setBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, v)
                 }
 
                 ExpressiveSectionTitle("General", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
-                SettingsSwitch(checkUpdate, "Check update on startup") { v ->
+                SettingsSwitch(checkUpdate, "Check update on startup", index = 0, count = 1) { v ->
                     checkUpdate = v
                     settings.setBoolean(SettingKeys.CHECK_UPDATE, v)
                 }
 
                 ExpressiveSectionTitle("Backup", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
-                SettingsButton("Export settings") { launchExport(encodeSettingsBackup(settings)) }
-                SettingsButton("Import settings") { launchImport() }
+                SettingsButton("Export settings", index = 0, count = 2) { launchExport(encodeSettingsBackup(settings)) }
+                SettingsButton("Import settings", index = 1, count = 2) { launchImport() }
                 importStatus?.let { status ->
                     Text(
                         text = status,
@@ -205,34 +188,79 @@ fun SettingsScreen(
                     )
                 }
 
-                Spacer(Modifier.height(48.dp))
-            }
+            Spacer(Modifier.height(48.dp))
+        }
     }
 }
 
 @Composable
-private fun SettingsTextField(value: String, label: String, onUpdate: (String) -> Unit) {
+private fun SettingsHero() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(188.dp)
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.secondaryContainer,
+                        MaterialTheme.colorScheme.primaryContainer,
+                        MaterialTheme.colorScheme.surface,
+                    ),
+                ),
+            )
+            .statusBarsPadding(),
+        contentAlignment = Alignment.BottomStart,
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 18.dp)) {
+            Text(
+                text = "Settings",
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.ExtraBold,
+            )
+            Text(
+                text = "Account, playback, cache and backup",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsTextField(
+    value: String,
+    label: String,
+    index: Int,
+    count: Int,
+    onUpdate: (String) -> Unit,
+) {
     var text by remember(value) { mutableStateOf(value) }
     OutlinedTextField(
         value = text,
         onValueChange = { text = it; onUpdate(it) },
         label = { Text(label) },
         singleLine = true,
-        shape = MaterialTheme.shapes.extraLarge,
+        shape = connectedListItemShape(index, count),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 12.dp)
+            .padding(vertical = 1.5.dp)
             .height(64.dp),
     )
 }
 
 @Composable
-private fun SettingsSwitch(checked: Boolean, label: String, onUpdate: (Boolean) -> Unit) {
+private fun SettingsSwitch(
+    checked: Boolean,
+    label: String,
+    index: Int,
+    count: Int,
+    onUpdate: (Boolean) -> Unit,
+) {
     var state by remember(checked) { mutableStateOf(checked) }
     Surface(
-        shape = MaterialTheme.shapes.extraLarge,
+        shape = connectedListItemShape(index, count),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 1.5.dp),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
@@ -250,15 +278,17 @@ private fun SettingsDropdown(
     selectedName: String,
     label: String,
     options: List<SoundQuality>,
+    index: Int,
+    count: Int,
     onUpdate: (SoundQuality) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val current = options.find { it.name == selectedName } ?: options.first()
     Surface(
         onClick = { expanded = true },
-        shape = MaterialTheme.shapes.extraLarge,
+        shape = connectedListItemShape(index, count),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 1.5.dp),
     ) {
         Row(
             modifier = Modifier
@@ -290,14 +320,20 @@ private fun SettingsDropdown(
 }
 
 @Composable
-private fun SettingsButton(label: String, leadingIcon: ImageVector? = null, onClick: () -> Unit) {
+private fun SettingsButton(
+    label: String,
+    leadingIcon: ImageVector? = null,
+    index: Int,
+    count: Int,
+    onClick: () -> Unit,
+) {
     FilledTonalButton(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp)
-            .padding(vertical = 4.dp),
-        shape = CircleShape,
+            .height(56.dp)
+            .padding(vertical = 1.5.dp),
+        shape = connectedListItemShape(index, count),
     ) {
         leadingIcon?.let {
             Icon(it, contentDescription = null, modifier = Modifier.size(18.dp))

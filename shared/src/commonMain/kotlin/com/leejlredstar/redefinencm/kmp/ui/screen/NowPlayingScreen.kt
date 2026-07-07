@@ -159,7 +159,17 @@ private fun SongHeroSection(
                     .statusBarsPadding()
                     .padding(8.dp),
             ) {
-                Icon(AppIcons.ArrowBack, contentDescription = "返回")
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.18f),
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                ) {
+                    Icon(
+                        AppIcons.ArrowBack,
+                        contentDescription = "返回",
+                        modifier = Modifier.padding(10.dp),
+                    )
+                }
             }
             AsyncImage(
                 model = metadata?.artworkUri,
@@ -563,7 +573,6 @@ fun QueueBottomSheet(
                                 fontWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.Normal,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.basicMarquee(),
                             )
                             Text(
                                 text = item.artist.ifBlank { "Unknown" },

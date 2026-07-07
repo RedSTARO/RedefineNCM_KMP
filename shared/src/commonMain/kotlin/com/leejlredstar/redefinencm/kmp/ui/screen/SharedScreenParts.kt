@@ -1,7 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -78,13 +77,21 @@ fun SongRow(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = "${index + 1}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.width(36.dp),
-            )
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "${index + 1}",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                    )
+                }
+            }
+            Spacer(Modifier.width(12.dp))
             AsyncImage(
                 model = artworkUri,
                 contentDescription = null,
@@ -99,7 +106,6 @@ fun SongRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.basicMarquee(),
                 )
                 Text(
                     text = artist.ifBlank { "Unknown" },
@@ -246,8 +252,7 @@ fun RecommendSquareCard(picUrl: String, text: String, onClick: () -> Unit) {
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .padding(12.dp)
-                        .fillMaxWidth()
-                        .basicMarquee(),
+                        .fillMaxWidth(),
                 )
             }
         }
@@ -309,7 +314,7 @@ fun PlaylistCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             AsyncImage(
-                model = userPlaylistEach.creator.avatarUrl,
+                model = userPlaylistEach.coverImgUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
@@ -325,7 +330,6 @@ fun PlaylistCard(
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.basicMarquee(),
                 )
                 Text(
                     text = userPlaylistEach.creator.nickname,

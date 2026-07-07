@@ -22,12 +22,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
+import androidx.compose.material3.FabPosition
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -152,19 +155,30 @@ fun App() {
                 Scaffold(
                     contentWindowInsets = WindowInsets(0, 0, 0, 0),
                     snackbarHost = { SnackbarHost(snackbarHostState) },
+                    floatingActionButtonPosition = FabPosition.Center,
                     bottomBar = {
                         AnimatedVisibility(
                             visible = showTabs && !isWide,
                             enter = bottomNavEnterTransition(),
                             exit = bottomNavExitTransition(),
                         ) {
-                            NavigationBar {
+                            NavigationBar(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                tonalElevation = 0.dp,
+                            ) {
                                 tabs.forEach { item ->
                                     NavigationBarItem(
                                         selected = currentTab == item.dest,
                                         onClick = { currentTab = item.dest },
                                         icon = { Icon(item.icon, contentDescription = item.label) },
                                         label = { Text(item.label) },
+                                        colors = NavigationBarItemDefaults.colors(
+                                            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                                            selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        ),
                                     )
                                 }
                             }
@@ -196,6 +210,13 @@ fun App() {
                                             onClick = { currentTab = item.dest },
                                             icon = { Icon(item.icon, contentDescription = item.label) },
                                             label = { Text(item.label) },
+                                            colors = NavigationRailItemDefaults.colors(
+                                                indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                                                selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            ),
                                         )
                                     }
                                 }
