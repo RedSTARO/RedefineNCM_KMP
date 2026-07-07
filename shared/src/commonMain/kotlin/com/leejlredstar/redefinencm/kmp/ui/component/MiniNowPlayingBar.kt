@@ -7,13 +7,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -51,7 +51,7 @@ import org.koin.compose.koinInject
 
 /**
  * 迷你播放条 FAB（原版 MiniNowPlaying）：封面取色作容器色（spring 动画），
- * 内容色按亮度自适应黑/白，封面居左，标题跑马灯。
+ * 内容色按亮度自适应黑/白。全局浮层保持紧凑，避免遮挡列表内容。
  */
 @Composable
 fun MiniNowPlayingBar(
@@ -86,20 +86,19 @@ fun MiniNowPlayingBar(
     Surface(
         onClick = onExpand,
         modifier = Modifier
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            // 固定尺寸（原版 300×112）：FAB slot 没有高度约束，内部 fillMaxHeight
-            // 会让条子撑满整个窗口（825c22c 修过的回归）
-            .fillMaxWidth()
-            .widthIn(max = 620.dp)
-            .height(112.dp),
-        shape = MaterialTheme.shapes.extraLarge,
+            .padding(horizontal = 18.dp, vertical = 6.dp)
+            // FAB slot 没有高度约束，使用固定紧凑高度，避免在列表页遮挡视野。
+            .fillMaxWidth(0.88f)
+            .widthIn(min = 220.dp, max = 520.dp)
+            .height(72.dp),
+        shape = CircleShape,
         color = containerColor,
         contentColor = contentColor,
         tonalElevation = 4.dp,
     ) {
         CompositionLocalProvider(LocalContentColor provides contentColor) {
             Row(
-                modifier = Modifier.padding(10.dp),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (hasMedia) {
@@ -111,16 +110,16 @@ fun MiniNowPlayingBar(
                         contentDescription = "Album art",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
-                            .size(72.dp)
-                            .clip(MaterialTheme.shapes.large),
+                            .size(50.dp)
+                            .clip(MaterialTheme.shapes.medium),
                         onSuccess = { state ->
                             themeColorFromCoilImage(state.result.image)?.let { themeColor = Color(it) }
                         },
                     )
                 } else {
                     Surface(
-                        modifier = Modifier.size(72.dp),
-                        shape = MaterialTheme.shapes.large,
+                        modifier = Modifier.size(50.dp),
+                        shape = MaterialTheme.shapes.medium,
                         color = contentColor.copy(alpha = 0.16f),
                         contentColor = contentColor,
                     ) {
@@ -128,23 +127,21 @@ fun MiniNowPlayingBar(
                             Icon(
                                 imageVector = AppIcons.GraphicEq,
                                 contentDescription = null,
-                                modifier = Modifier.size(32.dp),
+                                modifier = Modifier.size(24.dp),
                             )
                         }
                     }
                 }
 
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(10.dp))
 
                 Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight(),
+                    modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Text(
                         text = media?.title?.takeIf { it.isNotBlank() } ?: "Not playing",
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.ExtraBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -152,7 +149,7 @@ fun MiniNowPlayingBar(
                     )
                     Text(
                         text = media?.artist?.takeIf { it.isNotBlank() } ?: "No playback yet",
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelSmall,
                         color = contentColor.copy(alpha = 0.72f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -162,78 +159,57 @@ fun MiniNowPlayingBar(
                         progress = { progress },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(4.dp)
+                            .height(3.dp)
                             .clip(MaterialTheme.shapes.small),
                         color = contentColor,
                         trackColor = contentColor.copy(alpha = 0.22f),
                     )
-                    Spacer(Modifier.height(4.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
+                }
+
+                Spacer(Modifier.width(6.dp))
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(0.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(
+                        onClick = { player.seekToPrevious() },
+                        enabled = hasMedia,
+                        modifier = Modifier.size(28.dp),
                     ) {
-                        Text(
-                            text = if (hasMedia) {
-                                "${formatMiniDuration(position)} / ${formatMiniDuration(totalDuration)}"
-                            } else {
-                                "0:00 / 0:00"
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = contentColor.copy(alpha = 0.72f),
-                            maxLines = 1,
+                        Icon(
+                            imageVector = AppIcons.KeyboardArrowLeft,
+                            contentDescription = "上一首",
                         )
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            IconButton(
-                                onClick = { player.seekToPrevious() },
-                                enabled = hasMedia,
-                                modifier = Modifier.size(30.dp),
-                            ) {
-                                Icon(
-                                    imageVector = AppIcons.KeyboardArrowLeft,
-                                    contentDescription = "Previous",
-                                )
-                            }
-                            FilledIconButton(
-                                onClick = { player.togglePlayPause() },
-                                enabled = hasMedia,
-                                modifier = Modifier.size(34.dp),
-                                colors = IconButtonDefaults.filledIconButtonColors(
-                                    containerColor = contentColor.copy(alpha = 0.18f),
-                                    contentColor = contentColor,
-                                    disabledContainerColor = contentColor.copy(alpha = 0.08f),
-                                    disabledContentColor = contentColor.copy(alpha = 0.42f),
-                                ),
-                            ) {
-                                Icon(
-                                    imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
-                                    contentDescription = if (isPlaying) "Pause" else "Play",
-                                )
-                            }
-                            IconButton(
-                                onClick = { player.seekToNext() },
-                                enabled = hasMedia,
-                                modifier = Modifier.size(30.dp),
-                            ) {
-                                Icon(
-                                    imageVector = AppIcons.KeyboardArrowRight,
-                                    contentDescription = "Next",
-                                )
-                            }
-                        }
+                    }
+                    FilledIconButton(
+                        onClick = { player.togglePlayPause() },
+                        enabled = hasMedia,
+                        modifier = Modifier.size(34.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = contentColor.copy(alpha = 0.18f),
+                            contentColor = contentColor,
+                            disabledContainerColor = contentColor.copy(alpha = 0.08f),
+                            disabledContentColor = contentColor.copy(alpha = 0.42f),
+                        ),
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
+                            contentDescription = if (isPlaying) "暂停" else "播放",
+                        )
+                    }
+                    IconButton(
+                        onClick = { player.seekToNext() },
+                        enabled = hasMedia,
+                        modifier = Modifier.size(28.dp),
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.KeyboardArrowRight,
+                            contentDescription = "下一首",
+                        )
                     }
                 }
             }
         }
     }
-}
-
-private fun formatMiniDuration(millis: Long): String {
-    val totalSeconds = millis.coerceAtLeast(0L) / 1000L
-    val minutes = totalSeconds / 60L
-    val seconds = totalSeconds % 60L
-    return "$minutes:${seconds.toString().padStart(2, '0')}"
 }
