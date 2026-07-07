@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.LyricParser
 import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
@@ -80,6 +81,7 @@ fun FullLyricScreen(
     val defaultHeroColor = MaterialTheme.colorScheme.primaryContainer
     var themeColor by remember { mutableStateOf(defaultHeroColor) }
     val heroColor by animateColorAsState(themeColor, spring(), label = "hero")
+    val accentPalette = contentAccentPalette(heroColor)
 
     val lyricEntries = remember(lyricMap) { lyricMap.entries.toList() }
 
@@ -123,7 +125,11 @@ fun FullLyricScreen(
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(heroColor, heroColor.copy(alpha = 0.3f), Color(0xFF0A0A0A)),
+                    colors = listOf(
+                        accentPalette.pageStart,
+                        accentPalette.pageMiddle,
+                        accentPalette.pageEnd,
+                    ),
                 ),
             )
             
@@ -160,11 +166,14 @@ fun FullLyricScreen(
                 .statusBarsPadding()
                 .padding(8.dp),
         ) {
-            Surface(shape = CircleShape, color = Color.White.copy(alpha = 0.15f)) {
+            Surface(
+                shape = CircleShape,
+                color = accentPalette.quietContainer.copy(alpha = 0.70f),
+                contentColor = accentPalette.onQuietContainer,
+            ) {
                 Icon(
                     AppIcons.ArrowBack,
                     contentDescription = "返回",
-                    tint = Color.White,
                     modifier = Modifier.padding(10.dp),
                 )
             }
@@ -208,6 +217,7 @@ fun FullLyricScreen(
                         positionMs = currentPosition,
                         alpha = alpha,
                         fontSize = fontSize,
+                        highlightColor = accentPalette.accent,
                         onClick = seekToLine,
                     )
                 } else {
@@ -293,6 +303,7 @@ private fun WordLyricKaraokeLine(
     positionMs: Long,
     alpha: Float,
     fontSize: TextUnit,
+    highlightColor: Color,
     onClick: () -> Unit,
 ) {
     val dimColor = Color.White.copy(alpha = 0.45f)
@@ -306,7 +317,7 @@ private fun WordLyricKaraokeLine(
                     fontWeight = if (current) FontWeight.ExtraBold else FontWeight.Normal,
                     shadow = if (current) {
                         Shadow(
-                            color = Color(0xFFE9DDFF).copy(alpha = 0.92f * alpha),
+                            color = highlightColor.copy(alpha = 0.92f * alpha),
                             offset = Offset.Zero,
                             blurRadius = 18f,
                         )

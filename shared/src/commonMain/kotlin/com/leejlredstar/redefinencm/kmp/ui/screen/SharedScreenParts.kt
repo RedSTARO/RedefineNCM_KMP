@@ -39,6 +39,7 @@ import com.leejlredstar.redefinencm.kmp.data.api.dto.UserPlaylistEach
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
+import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
@@ -65,8 +66,10 @@ fun SongRow(
     shape: RoundedCornerShape,
     onClick: () -> Unit,
     songId: Long? = null,
+    accentColor: Color? = null,
 ) {
     val settings = koinInject<PlatformSettings>()
+    val accentPalette = contentAccentPalette(accentColor ?: MaterialTheme.colorScheme.primaryContainer)
     Surface(
         onClick = onClick,
         shape = shape,
@@ -80,8 +83,8 @@ fun SongRow(
             Surface(
                 modifier = Modifier.size(40.dp),
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                color = accentPalette.container,
+                contentColor = accentPalette.onContainer,
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
@@ -123,13 +126,13 @@ fun SongRow(
                 Spacer(Modifier.width(8.dp))
                 Surface(
                     shape = CircleShape,
-                    color = if (downloaded) MaterialTheme.colorScheme.primaryContainer
+                    color = if (downloaded) accentPalette.container
                     else MaterialTheme.colorScheme.surfaceContainerHighest,
                 ) {
                     Icon(
                         imageVector = if (downloaded) AppIcons.Check else AppIcons.AttachFile,
                         contentDescription = if (downloaded) "Downloaded" else "Not downloaded",
-                        tint = if (downloaded) MaterialTheme.colorScheme.onPrimaryContainer
+                        tint = if (downloaded) accentPalette.onContainer
                         else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(6.dp).size(18.dp),
                     )
