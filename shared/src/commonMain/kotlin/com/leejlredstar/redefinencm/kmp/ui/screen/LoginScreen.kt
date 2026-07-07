@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.Button
@@ -92,10 +91,11 @@ fun LoginScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(180.dp)
+                .height(204.dp)
                 .background(
                     Brush.verticalGradient(
                         listOf(
+                            MaterialTheme.colorScheme.secondaryContainer,
                             MaterialTheme.colorScheme.primaryContainer,
                             MaterialTheme.colorScheme.surface,
                         ),
@@ -123,7 +123,7 @@ fun LoginScreen(
 
         // QR Login section
         Surface(
-            shape = RoundedCornerShape(24.dp),
+            shape = MaterialTheme.shapes.extraLarge,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             modifier = Modifier
                 .fillMaxWidth()
@@ -144,7 +144,7 @@ fun LoginScreen(
                 Box(
                     modifier = Modifier
                         .size(220.dp)
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(MaterialTheme.shapes.large)
                         .background(MaterialTheme.colorScheme.surfaceContainerLowest),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -226,7 +226,7 @@ fun LoginScreen(
 
         // Manual cookie/server input
         Surface(
-            shape = RoundedCornerShape(24.dp),
+            shape = MaterialTheme.shapes.extraLarge,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             modifier = Modifier
                 .fillMaxWidth()
@@ -244,7 +244,7 @@ fun LoginScreen(
                     onValueChange = { serverField = it; saved = false },
                     label = { Text("服务器地址") },
                     singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = MaterialTheme.shapes.large,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(12.dp))
@@ -253,7 +253,7 @@ fun LoginScreen(
                     onValueChange = { cookieField = it; saved = false },
                     label = { Text("Cookie") },
                     minLines = 3,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = MaterialTheme.shapes.large,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(20.dp))

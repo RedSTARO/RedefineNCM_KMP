@@ -2,7 +2,6 @@ package com.leejlredstar.redefinencm.kmp.ui.component
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -87,7 +87,9 @@ fun MiniNowPlayingBar(
             .padding(horizontal = 16.dp, vertical = 8.dp)
             // 固定尺寸（原版 300×112）：FAB slot 没有高度约束，内部 fillMaxHeight
             // 会让条子撑满整个窗口（825c22c 修过的回归）
-            .size(width = 300.dp, height = 112.dp),
+            .fillMaxWidth()
+            .widthIn(max = 620.dp)
+            .height(112.dp),
         shape = MaterialTheme.shapes.extraLarge,
         color = containerColor,
         contentColor = contentColor,
@@ -144,9 +146,7 @@ fun MiniNowPlayingBar(
                         fontWeight = FontWeight.ExtraBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .basicMarquee(),
+                        modifier = Modifier.fillMaxWidth(),
                     )
                     Text(
                         text = media?.artist?.takeIf { it.isNotBlank() } ?: "No playback yet",
