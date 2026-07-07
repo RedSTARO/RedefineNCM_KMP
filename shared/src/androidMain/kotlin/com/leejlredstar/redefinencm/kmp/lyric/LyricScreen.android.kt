@@ -59,6 +59,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val rawLyric by viewModel.rawLyric.collectAsState()
     val rawWordLyric by viewModel.rawWordLyric.collectAsState()
     val lyricMap by viewModel.lyricMap.collectAsState()
+    val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
 
@@ -67,6 +68,10 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val lyricForWeb = remember(rawLyric, lyricMap) {
         rawLyric.takeIf { it.isNotBlank() } ?: lyricMap.toLrcFallback()
     }
+    val isWaitingForLyrics = rawLyric.isBlank() &&
+        rawWordLyric.isBlank() &&
+        lyricMap.size == 1 &&
+        lyricMap[0L] == "Loading Lyric"
 
     val webView = remember {
         if ((context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
@@ -164,19 +169,34 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         }
     }
 
-    LaunchedEffect(engineReady, rawWordLyric, lyricForWeb) {
+    LaunchedEffect(engineReady, lyricMediaId) {
         if (!engineReady) return@LaunchedEffect
-        if (rawWordLyric.isBlank() && lyricForWeb.isBlank()) {
-            Log.d("AMLL", "engineReady but lyric text is EMPTY")
+        if (lyricMediaId == null) return@LaunchedEffect
+        Log.d("AMLL", "reset lyric surface for media=$lyricMediaId")
+        webView.evaluateJavascript("AmllBridge.loadLyrics(''); AmllBridge.setTime(0);", null)
+        webView.showAmllStatus("Waiting for lyrics...")
+    }
+
+    LaunchedEffect(engineReady, lyricMediaId, rawWordLyric, lyricForWeb, isWaitingForLyrics) {
+        if (!engineReady) return@LaunchedEffect
+        if (isWaitingForLyrics || (rawWordLyric.isBlank() && lyricForWeb.isBlank())) {
+            Log.d("AMLL", "waiting for lyric media=$lyricMediaId")
+            webView.evaluateJavascript("AmllBridge.loadLyrics('');", null)
             webView.showAmllStatus("Waiting for lyrics...")
             return@LaunchedEffect
         }
         if (rawWordLyric.isNotBlank()) {
-            Log.d("AMLL", "feeding word lyrics, len=${rawWordLyric.length}")
-            webView.evaluateJavascript("AmllBridge.loadWordLyrics(${JSONObject.quote(rawWordLyric)});", null)
+            Log.d("AMLL", "feeding word lyrics media=$lyricMediaId, len=${rawWordLyric.length}")
+            webView.evaluateJavascript(
+                "AmllBridge.loadWordLyrics(${JSONObject.quote(rawWordLyric)}); AmllBridge.setTime($currentPosition);",
+                null,
+            )
         } else {
-            Log.d("AMLL", "feeding lyrics, len=${lyricForWeb.length}")
-            webView.evaluateJavascript("AmllBridge.loadLyrics(${JSONObject.quote(lyricForWeb)});", null)
+            Log.d("AMLL", "feeding lyrics media=$lyricMediaId, len=${lyricForWeb.length}")
+            webView.evaluateJavascript(
+                "AmllBridge.loadLyrics(${JSONObject.quote(lyricForWeb)}); AmllBridge.setTime($currentPosition);",
+                null,
+            )
         }
     }
 

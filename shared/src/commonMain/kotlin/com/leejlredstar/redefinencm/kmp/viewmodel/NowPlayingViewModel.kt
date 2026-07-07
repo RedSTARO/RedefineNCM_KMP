@@ -44,6 +44,7 @@ class NowPlayingViewModel(
     val rawLyric = MutableStateFlow("") // raw LRC text for external lyric renderers
     val rawWordLyric = MutableStateFlow("") // raw YRC text for word-level external lyric renderers
     val wordLyricLines = MutableStateFlow<List<LyricParser.WordLine>>(emptyList())
+    val lyricMediaId = MutableStateFlow<String?>(null)
 
     // ── Comments ──
     val comments = MutableStateFlow<CommentMusic?>(null)
@@ -160,6 +161,7 @@ class NowPlayingViewModel(
 
     private fun fetchLyrics(mediaId: String) {
         lyricFetchJob?.cancel()
+        resetLyricsForMedia(mediaId)
         // 网络必须离开 Main：桌面端 Main=Swing EDT，AMLL 软件渲染期间 EDT 饱和会把
         // 运行其上的 Ktor 连接协程饿到超时（实测 /lyric 连环 ConnectTimeout 的根因）
         lyricFetchJob = scope.launch(Dispatchers.Default) {
@@ -175,27 +177,48 @@ class NowPlayingViewModel(
                         val wordLines = yrcText
                             ?.let { runCatching { LyricParser.parseYrc(it) }.getOrDefault(emptyList()) }
                             .orEmpty()
-                        rawWordLyric.value = if (wordLines.isNotEmpty()) yrcText.orEmpty() else ""
-                        wordLyricLines.value = wordLines
-                        rawLyric.value = lrcText ?: LyricParser.toLrcText(wordLines)
-                        lyricMap.value = parseLineLyrics(lrcText, wordLines)
+                        applyLyricsForMedia(mediaId) {
+                            rawWordLyric.value = if (wordLines.isNotEmpty()) yrcText.orEmpty() else ""
+                            wordLyricLines.value = wordLines
+                            rawLyric.value = lrcText ?: LyricParser.toLrcText(wordLines)
+                            lyricMap.value = parseLineLyrics(lrcText, wordLines)
+                        }
                         settled = true
                     } else if (lyric != null) {
                         // 服务器有响应但确实没有歌词 —— 不再重试
-                        rawLyric.value = ""
-                        rawWordLyric.value = ""
-                        wordLyricLines.value = emptyList()
-                        lyricMap.value = linkedMapOf(0L to "No lyric available")
+                        applyLyricsForMedia(mediaId) {
+                            rawLyric.value = ""
+                            rawWordLyric.value = ""
+                            wordLyricLines.value = emptyList()
+                            lyricMap.value = linkedMapOf(0L to "No lyric available")
+                        }
                         settled = true
                     }
                 }
                 if (settled) return@launch
                 if (attempt < 3) delay(2_000)
             }
-            rawLyric.value = ""
-            rawWordLyric.value = ""
-            wordLyricLines.value = emptyList()
-            lyricMap.value = linkedMapOf(0L to "歌词加载失败")
+            applyLyricsForMedia(mediaId) {
+                rawLyric.value = ""
+                rawWordLyric.value = ""
+                wordLyricLines.value = emptyList()
+                lyricMap.value = linkedMapOf(0L to "歌词加载失败")
+            }
+        }
+    }
+
+    private fun resetLyricsForMedia(mediaId: String) {
+        lyricMediaId.value = mediaId
+        lyricIndex.value = 0
+        rawLyric.value = ""
+        rawWordLyric.value = ""
+        wordLyricLines.value = emptyList()
+        lyricMap.value = linkedMapOf(0L to "Loading Lyric")
+    }
+
+    private inline fun applyLyricsForMedia(mediaId: String, block: () -> Unit) {
+        if (lyricMediaId.value == mediaId && currentMedia.value?.id == mediaId) {
+            block()
         }
     }
 
