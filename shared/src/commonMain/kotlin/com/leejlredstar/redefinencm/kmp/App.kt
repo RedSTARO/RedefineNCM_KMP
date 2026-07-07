@@ -245,6 +245,7 @@ fun App() {
                                     is TabDest.Home -> HomeScreen(
                                         scaffoldPadding = innerPadding,
                                         onOpenPlaylist = { push(PushedDest.Playlist(it)) },
+                                        onOpenMy = { currentTab = TabDest.My },
                                     )
                                     is TabDest.My -> UserPlaylistScreen(
                                         scaffoldPadding = innerPadding,

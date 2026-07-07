@@ -40,11 +40,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.decodePngToImageBitmap
 import com.leejlredstar.redefinencm.kmp.viewmodel.LoginViewModel
 import org.koin.compose.koinInject
@@ -67,6 +69,7 @@ fun LoginScreen(
     var serverField by remember(server) { mutableStateOf(server) }
     var cookieField by remember(cookie) { mutableStateOf(cookie) }
     var saved by remember { mutableStateOf(false) }
+    val loginPalette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
 
     // 原版 QrLogin：进入登录页即自动生成二维码
     LaunchedEffect(Unit) {
@@ -84,7 +87,15 @@ fun LoginScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface)
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        loginPalette.pageStart,
+                        loginPalette.pageMiddle,
+                        loginPalette.pageEnd,
+                    ),
+                ),
+            )
             .verticalScroll(rememberScrollState()),
     ) {
         // Header
@@ -95,9 +106,9 @@ fun LoginScreen(
                 .background(
                     Brush.verticalGradient(
                         listOf(
-                            MaterialTheme.colorScheme.secondaryContainer,
-                            MaterialTheme.colorScheme.primaryContainer,
-                            MaterialTheme.colorScheme.surface,
+                            loginPalette.pageStart,
+                            loginPalette.container,
+                            Color.Transparent,
                         ),
                     ),
                 ),
@@ -109,12 +120,23 @@ fun LoginScreen(
                     .statusBarsPadding()
                     .padding(8.dp),
             ) {
-                Icon(AppIcons.ArrowBack, contentDescription = "返回")
+                Surface(
+                    shape = CircleShape,
+                    color = loginPalette.quietContainer.copy(alpha = 0.78f),
+                    contentColor = loginPalette.onQuietContainer,
+                ) {
+                    Icon(
+                        AppIcons.ArrowBack,
+                        contentDescription = "返回",
+                        modifier = Modifier.padding(10.dp),
+                    )
+                }
             }
             Text(
                 text = "RedefineNCM",
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.ExtraBold,
+                color = loginPalette.onContainer,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(horizontal = 24.dp, vertical = 16.dp),
@@ -124,7 +146,8 @@ fun LoginScreen(
         // QR Login section
         Surface(
             shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            color = loginPalette.quietContainer,
+            contentColor = loginPalette.onQuietContainer,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -202,6 +225,10 @@ fun LoginScreen(
                         onClick = { viewModel.startQrLogin() },
                         modifier = Modifier.fillMaxWidth().height(48.dp),
                         shape = CircleShape,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = loginPalette.accent,
+                            contentColor = loginPalette.onAccent,
+                        ),
                     ) {
                         Text("生成二维码")
                     }
@@ -211,6 +238,9 @@ fun LoginScreen(
                         onClick = { viewModel.cancelQrLogin() },
                         modifier = Modifier.fillMaxWidth().height(48.dp),
                         shape = CircleShape,
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = loginPalette.accent,
+                        ),
                     ) {
                         Text("取消")
                     }
@@ -265,6 +295,10 @@ fun LoginScreen(
                     },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     shape = CircleShape,
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = loginPalette.container,
+                        contentColor = loginPalette.onContainer,
+                    ),
                 ) {
                     Text("保存", style = MaterialTheme.typography.titleMedium)
                 }
