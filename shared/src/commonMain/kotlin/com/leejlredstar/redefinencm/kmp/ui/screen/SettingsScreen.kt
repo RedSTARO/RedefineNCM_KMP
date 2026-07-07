@@ -202,7 +202,7 @@ fun SettingsScreen(
                     showRomanLyric = v
                     settings.setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, v)
                 }
-                SettingsSwitch(showExtraLyric, "显示附加 / 用户搭配歌词", settingsPalette, index = 3, count = 4) { v ->
+                SettingsSwitch(showExtraLyric, "显示附加歌词", settingsPalette, index = 3, count = 4) { v ->
                     showExtraLyric = v
                     settings.setBoolean(SettingKeys.SHOW_EXTRA_LYRIC, v)
                 }
