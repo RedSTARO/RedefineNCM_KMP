@@ -58,6 +58,7 @@ import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.lyric.WebViewLyricScreen
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
+import com.leejlredstar.redefinencm.kmp.ui.screen.DownloadManagementScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.LoginScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.NowPlayingScreen
@@ -76,6 +77,7 @@ import org.koin.compose.koinInject
 private sealed interface TabDest {
     data object Home : TabDest
     data object My : TabDest
+    data object Downloads : TabDest
     data object Settings : TabDest
 }
 
@@ -138,6 +140,10 @@ fun App() {
             }
             fun push(dest: PushedDest) = pushedStack.add(dest)
             fun back() { if (pushedStack.isNotEmpty()) pushedStack.removeAt(pushedStack.lastIndex) }
+            fun openDownloads() {
+                pushedStack.clear()
+                currentTab = TabDest.Downloads
+            }
             fun openFullLyric() {
                 val existingIndex = pushedStack.indexOfLast { it is PushedDest.FullLyric }
                 if (existingIndex >= 0) {
@@ -166,6 +172,7 @@ fun App() {
                 listOf(
                     NavigationItem("推荐", AppIcons.Home, TabDest.Home),
                     NavigationItem("我的", AppIcons.Person, TabDest.My),
+                    NavigationItem("下载", AppIcons.Download, TabDest.Downloads),
                     NavigationItem("设置", AppIcons.Settings, TabDest.Settings),
                 )
             }
@@ -271,6 +278,7 @@ fun App() {
                                         is PushedDest.Playlist -> PlaylistDetailScreen(
                                             playlistId = dest.id,
                                             onBack = ::back,
+                                            onOpenDownloads = ::openDownloads,
                                         )
                                     }
                                     is RootDest.Tab -> when (target.tab) {
@@ -282,6 +290,9 @@ fun App() {
                                         is TabDest.My -> UserPlaylistScreen(
                                             scaffoldPadding = innerPadding,
                                             onOpenPlaylist = { push(PushedDest.Playlist(it)) },
+                                        )
+                                        is TabDest.Downloads -> DownloadManagementScreen(
+                                            scaffoldPadding = innerPadding,
                                         )
                                         is TabDest.Settings -> SettingsScreen(
                                             scaffoldPadding = innerPadding,
@@ -449,7 +460,8 @@ private fun tabIndex(tab: TabDest): Int =
     when (tab) {
         is TabDest.Home -> 0
         is TabDest.My -> 1
-        is TabDest.Settings -> 2
+        is TabDest.Downloads -> 2
+        is TabDest.Settings -> 3
     }
 
 private const val PageTransitionMillis = 320

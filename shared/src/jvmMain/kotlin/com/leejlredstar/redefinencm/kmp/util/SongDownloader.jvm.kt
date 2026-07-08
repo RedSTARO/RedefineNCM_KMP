@@ -1,50 +1,74 @@
 package com.leejlredstar.redefinencm.kmp.util
 
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
 import java.net.URI
+import kotlin.coroutines.coroutineContext
 
 /**
- * JVM/Desktop actual：后台协程直接流式下载到 `~/Downloads/RedefineNCM/<id>.<ext>`
- * （与 Android DownloadManager 的目标目录语义一致），跳过已存在文件，
- * 先写 `.part` 再原子改名避免半成品被离线扫描误认。
+ * JVM/Desktop actual：由 common 下载队列调度，这里只负责流式写入文件。
  */
 actual object SongDownloader {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    actual suspend fun download(
+        item: DownloadRequestItem,
+        onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
+    ): DownloadedSongFile = withContext(Dispatchers.IO) {
+        require(item.url.isNotBlank()) { "下载地址为空" }
 
-    actual fun enqueue(items: List<DownloadRequestItem>) {
-        if (items.isEmpty()) return
         val dir = File(System.getProperty("user.home"), "Downloads/RedefineNCM")
+        if (!dir.exists() && !dir.mkdirs()) error("无法创建下载目录")
 
-        for (item in items) {
-            if (item.url.isEmpty()) continue
-            scope.launch {
-                try {
-                    if (!dir.exists()) dir.mkdirs()
-                    val ext = item.url.substringBefore('?')
-                        .substringAfterLast('/')
-                        .substringAfterLast('.', "mp3")
-                        .ifEmpty { "mp3" }
-                    val target = File(dir, "${item.id}.$ext")
-                    if (target.exists()) return@launch
+        val extension = item.url.substringBefore('?')
+            .substringAfterLast('/')
+            .substringAfterLast('.', "mp3")
+            .ifBlank { "mp3" }
+            .take(12)
+        val target = File(dir, "${item.id}.$extension")
+        if (target.exists()) {
+            return@withContext DownloadedSongFile(fileName = target.name, uri = target.toURI().toString())
+        }
 
-                    val partFile = File(dir, "${item.id}.$ext.part")
-                    val conn = URI(item.url).toURL().openConnection().apply {
-                        connectTimeout = 15_000
-                        readTimeout = 30_000
-                    }
-                    conn.getInputStream().use { input ->
-                        partFile.outputStream().use { output -> input.copyTo(output) }
-                    }
-                    if (!partFile.renameTo(target)) partFile.delete()
-                    DownloadedSongsCache.refresh()
-                } catch (e: Exception) {
-                    // 单曲失败不影响批次其余下载
+        val partFile = File(dir, "${target.name}.part")
+        try {
+            val connection = URI(item.url).toURL().openConnection().apply {
+                connectTimeout = 15_000
+                readTimeout = 30_000
+            }
+            val totalBytes = connection.contentLengthLong.takeIf { it > 0L } ?: item.expectedBytes
+            connection.getInputStream().use { input ->
+                partFile.outputStream().use { output ->
+                    copyWithProgress(input, output, totalBytes, onProgress)
                 }
             }
+            if (!partFile.renameTo(target)) error("无法保存下载文件")
+            DownloadedSongFile(fileName = target.name, uri = target.toURI().toString())
+        } catch (t: Throwable) {
+            partFile.delete()
+            throw t
         }
     }
+}
+
+private suspend fun copyWithProgress(
+    input: InputStream,
+    output: OutputStream,
+    totalBytes: Long?,
+    onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
+) {
+    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+    var downloadedBytes = 0L
+    onProgress(downloadedBytes, totalBytes)
+    while (true) {
+        coroutineContext.ensureActive()
+        val read = input.read(buffer)
+        if (read < 0) break
+        output.write(buffer, 0, read)
+        downloadedBytes += read
+        onProgress(downloadedBytes, totalBytes)
+    }
+    output.flush()
 }
