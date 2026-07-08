@@ -19,14 +19,23 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.FabPosition
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -48,11 +57,14 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.lyric.WebViewLyricScreen
@@ -65,6 +77,7 @@ import com.leejlredstar.redefinencm.kmp.ui.screen.NowPlayingScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.PlaylistDetailScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.SettingsScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.UserPlaylistScreen
+import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
@@ -130,6 +143,7 @@ fun App() {
                 label = "appChromeAccent",
             )
             val chromePalette = contentAccentPalette(chromeAccent)
+            val platform = remember { getPlatform() }
 
             var currentTab by remember { mutableStateOf<TabDest>(TabDest.Home) }
             val pushedStack = remember {
@@ -183,6 +197,7 @@ fun App() {
                     onAccentColor = { rawChromeAccent = it },
                 )
                 BoxWithConstraints(Modifier.fillMaxSize()) {
+                    val useDesktopLayout = platform.isDesktop
                     val isWide = maxWidth >= 600.dp
                     val showMiniPlayer = pushedStack.lastOrNull().let {
                         it !is PushedDest.NowPlaying && it !is PushedDest.FullLyric
@@ -197,7 +212,7 @@ fun App() {
                         floatingActionButtonPosition = FabPosition.End,
                         bottomBar = {
                             AnimatedVisibility(
-                                visible = showTabs && !isWide,
+                                visible = showTabs && !isWide && !useDesktopLayout,
                                 enter = bottomNavEnterTransition(),
                                 exit = bottomNavExitTransition(),
                             ) {
@@ -225,7 +240,7 @@ fun App() {
                         },
                         floatingActionButton = {
                             AnimatedVisibility(
-                                visible = showMiniPlayer,
+                                visible = showMiniPlayer && !useDesktopLayout,
                                 enter = miniPlayerEnterTransition(),
                                 exit = miniPlayerExitTransition(),
                             ) {
@@ -234,7 +249,19 @@ fun App() {
                         },
                     ) { innerPadding ->
                         Row(Modifier.fillMaxSize()) {
-                            if (isWide) {
+                            if (useDesktopLayout) {
+                                DesktopSidebar(
+                                    tabs = tabs,
+                                    currentTab = currentTab,
+                                    accentPalette = chromePalette,
+                                    player = player,
+                                    onSelectTab = {
+                                        pushedStack.clear()
+                                        currentTab = it
+                                    },
+                                    onOpenNowPlaying = ::openFullLyric,
+                                )
+                            } else if (isWide) {
                                 AnimatedVisibility(
                                     visible = showTabs,
                                     enter = railEnterTransition(),
@@ -261,43 +288,50 @@ fun App() {
                                     }
                                 }
                             }
-                            AnimatedContent(
-                                targetState = rootDest,
-                                transitionSpec = { pageTransition(initialState, targetState) },
-                                modifier = Modifier.weight(1f).fillMaxSize(),
-                                label = "AppPageTransition",
-                            ) { target ->
-                                when (target) {
-                                    is RootDest.Pushed -> when (val dest = target.dest) {
-                                        is PushedDest.Login -> LoginScreen(onBack = ::back)
-                                        is PushedDest.NowPlaying -> NowPlayingScreen(
-                                            onBack = ::back,
-                                            onOpenFullLyric = ::openFullLyric,
-                                        )
-                                        is PushedDest.FullLyric -> WebViewLyricScreen(onBack = ::back)
-                                        is PushedDest.Playlist -> PlaylistDetailScreen(
-                                            playlistId = dest.id,
-                                            onBack = ::back,
-                                            onOpenDownloads = ::openDownloads,
-                                        )
-                                    }
-                                    is RootDest.Tab -> when (target.tab) {
-                                        is TabDest.Home -> HomeScreen(
-                                            scaffoldPadding = innerPadding,
-                                            onOpenPlaylist = { push(PushedDest.Playlist(it)) },
-                                            onOpenMy = { currentTab = TabDest.My },
-                                        )
-                                        is TabDest.My -> UserPlaylistScreen(
-                                            scaffoldPadding = innerPadding,
-                                            onOpenPlaylist = { push(PushedDest.Playlist(it)) },
-                                        )
-                                        is TabDest.Downloads -> DownloadManagementScreen(
-                                            scaffoldPadding = innerPadding,
-                                        )
-                                        is TabDest.Settings -> SettingsScreen(
-                                            scaffoldPadding = innerPadding,
-                                            onOpenLogin = { push(PushedDest.Login) },
-                                        )
+                            Column(Modifier.weight(1f).fillMaxSize()) {
+                                if (useDesktopLayout) {
+                                    DesktopTopBar(
+                                        title = desktopPageTitle(rootDest),
+                                    )
+                                }
+                                AnimatedContent(
+                                    targetState = rootDest,
+                                    transitionSpec = { pageTransition(initialState, targetState) },
+                                    modifier = Modifier.weight(1f).fillMaxSize(),
+                                    label = "AppPageTransition",
+                                ) { target ->
+                                    when (target) {
+                                        is RootDest.Pushed -> when (val dest = target.dest) {
+                                            is PushedDest.Login -> LoginScreen(onBack = ::back)
+                                            is PushedDest.NowPlaying -> NowPlayingScreen(
+                                                onBack = ::back,
+                                                onOpenFullLyric = ::openFullLyric,
+                                            )
+                                            is PushedDest.FullLyric -> WebViewLyricScreen(onBack = ::back)
+                                            is PushedDest.Playlist -> PlaylistDetailScreen(
+                                                playlistId = dest.id,
+                                                onBack = ::back,
+                                                onOpenDownloads = ::openDownloads,
+                                            )
+                                        }
+                                        is RootDest.Tab -> when (target.tab) {
+                                            is TabDest.Home -> HomeScreen(
+                                                scaffoldPadding = innerPadding,
+                                                onOpenPlaylist = { push(PushedDest.Playlist(it)) },
+                                                onOpenMy = { currentTab = TabDest.My },
+                                            )
+                                            is TabDest.My -> UserPlaylistScreen(
+                                                scaffoldPadding = innerPadding,
+                                                onOpenPlaylist = { push(PushedDest.Playlist(it)) },
+                                            )
+                                            is TabDest.Downloads -> DownloadManagementScreen(
+                                                scaffoldPadding = innerPadding,
+                                            )
+                                            is TabDest.Settings -> SettingsScreen(
+                                                scaffoldPadding = innerPadding,
+                                                onOpenLogin = { push(PushedDest.Login) },
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -308,6 +342,209 @@ fun App() {
         }
     }
 }
+
+@Composable
+private fun DesktopSidebar(
+    tabs: List<NavigationItem>,
+    currentTab: TabDest,
+    accentPalette: ContentAccentPalette,
+    player: PlatformPlayer,
+    onSelectTab: (TabDest) -> Unit,
+    onOpenNowPlaying: () -> Unit,
+) {
+    Surface(
+        color = accentPalette.quietContainer,
+        modifier = Modifier.width(276.dp).fillMaxSize(),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Column(Modifier.padding(horizontal = 8.dp, vertical = 10.dp)) {
+                Text(
+                    text = "RedefineNCM",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = accentPalette.onQuietContainer,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = "Desktop",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = accentPalette.onQuietContainer.copy(alpha = 0.64f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            tabs.forEach { item ->
+                DesktopNavItem(
+                    item = item,
+                    selected = currentTab == item.dest,
+                    accentPalette = accentPalette,
+                    onClick = { onSelectTab(item.dest) },
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            DesktopNowPlayingStrip(
+                player = player,
+                accentPalette = accentPalette,
+                onOpenNowPlaying = onOpenNowPlaying,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DesktopNavItem(
+    item: NavigationItem,
+    selected: Boolean,
+    accentPalette: ContentAccentPalette,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        shape = MaterialTheme.shapes.large,
+        color = if (selected) accentPalette.container else Color.Transparent,
+        contentColor = if (selected) accentPalette.onContainer else accentPalette.onQuietContainer,
+        modifier = Modifier.fillMaxWidth().height(52.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Icon(item.icon, contentDescription = item.label, modifier = Modifier.size(24.dp))
+            Text(
+                text = item.label,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DesktopNowPlayingStrip(
+    player: PlatformPlayer,
+    accentPalette: ContentAccentPalette,
+    onOpenNowPlaying: () -> Unit,
+) {
+    val media by player.currentMedia.collectAsState()
+    val isPlaying by player.isPlaying.collectAsState()
+    val artwork = media?.artworkUri.orEmpty()
+
+    Surface(
+        onClick = { if (media != null) onOpenNowPlaying() },
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Surface(
+                shape = MaterialTheme.shapes.medium,
+                color = accentPalette.container,
+                contentColor = accentPalette.onContainer,
+                modifier = Modifier.size(52.dp),
+            ) {
+                if (artwork.isNotBlank()) {
+                    AsyncImage(
+                        model = artwork,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Icon(AppIcons.GraphicEq, contentDescription = null, modifier = Modifier.size(24.dp))
+                    }
+                }
+            }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = media?.title ?: "未播放",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = media?.artist ?: "RedefineNCM",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            FilledTonalIconButton(
+                onClick = { player.togglePlayPause() },
+                enabled = media != null,
+                modifier = Modifier.size(42.dp),
+            ) {
+                Icon(
+                    imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
+                    contentDescription = null,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DesktopTopBar(
+    title: String,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        tonalElevation = 0.dp,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(68.dp).padding(horizontal = 28.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.38f))
+        }
+    }
+}
+
+private fun desktopPageTitle(rootDest: RootDest): String =
+    when (rootDest) {
+        is RootDest.Tab -> tabTitle(rootDest.tab)
+        is RootDest.Pushed -> when (rootDest.dest) {
+            is PushedDest.Login -> "登录"
+            is PushedDest.NowPlaying -> "正在播放"
+            is PushedDest.FullLyric -> "歌词"
+            is PushedDest.Playlist -> "歌单"
+        }
+    }
+
+private fun tabTitle(tab: TabDest): String =
+    when (tab) {
+        is TabDest.Home -> "推荐"
+        is TabDest.My -> "我的音乐"
+        is TabDest.Downloads -> "下载管理"
+        is TabDest.Settings -> "设置"
+    }
 
 @Composable
 private fun ChromeAccentSourceImage(

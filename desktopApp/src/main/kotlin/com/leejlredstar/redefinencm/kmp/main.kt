@@ -40,9 +40,14 @@ fun main() {
     // documented native TODO; this is a no-op until the helper exists — see WindowsMediaControls).
     WindowsMediaControls().start()
     application {
+        val mainWindowState = rememberWindowState(
+            size = DpSize(1280.dp, 820.dp),
+            position = WindowPosition(Alignment.Center),
+        )
         Window(
             onCloseRequest = ::exitApplication,
-            title = "RedefineNCM_KMP",
+            state = mainWindowState,
+            title = "RedefineNCM",
         ) {
             App()
         }
