@@ -26,8 +26,17 @@ compose.desktop {
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "com.leejlredstar.redefinencm.kmp"
+            packageName = "RedefineNCM"
             packageVersion = "1.0.0"
+            description = "A third-party NetEase Cloud Music client"
+            vendor = "RedSTAR"
+
+            windows {
+                menu = true
+                menuGroup = "RedSTAR"
+                shortcut = true
+                upgradeUuid = "44a6cc76-8441-4e27-9ce0-c6d582a78513"
+            }
         }
     }
 }
