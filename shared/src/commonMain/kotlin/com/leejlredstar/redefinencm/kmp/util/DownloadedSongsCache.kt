@@ -3,6 +3,7 @@ package com.leejlredstar.redefinencm.kmp.util
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlin.concurrent.Volatile
 
 /**
  * In-memory cache of downloaded songs to avoid repeated file-system scans.
@@ -45,7 +46,9 @@ object DownloadedSongsCache {
     private fun scanSnapshot(): Map<Long, DownloadedSongSnapshot> {
         val result = linkedMapOf<Long, DownloadedSongSnapshot>()
         scanDownloadedSongs().forEach { snapshot ->
-            result.putIfAbsent(snapshot.id, snapshot)
+            if (snapshot.id !in result) {
+                result[snapshot.id] = snapshot
+            }
         }
         return result
     }

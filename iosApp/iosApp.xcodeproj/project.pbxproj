@@ -6,11 +6,47 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A1B2C3D4E5F60718293A4B50 /* LyricWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B51 /* LyricWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A1B2C3D4E5F60718293A4B52 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 65589CE3E25A7A7EC0BD3DEB /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1B2C3D4E5F60718293A4B56;
+			remoteInfo = LyricWidget;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A1B2C3D4E5F60718293A4B54 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A1B2C3D4E5F60718293A4B50 /* LyricWidget.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		A1B2C3D4E5F60718293A4B51 /* LyricWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LyricWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		9451963F840FF4198F011262 /* RedefineNCM_KMP.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RedefineNCM_KMP.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A1B2C3D4E5F60718293A4B5D /* Exceptions for "LyricWidget" folder in "LyricWidget" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A1B2C3D4E5F60718293A4B56 /* LyricWidget */;
+		};
 		FE9A88B17F2865DB66799904 /* Exceptions for "iosApp" folder in "iosApp" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -24,6 +60,14 @@
 		1FE32CD77B15EC595D029593 /* Configuration */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Configuration;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F60718293A4B55 /* LyricWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A1B2C3D4E5F60718293A4B5D /* Exceptions for "LyricWidget" folder in "LyricWidget" target */,
+			);
+			path = LyricWidget;
 			sourceTree = "<group>";
 		};
 		E88BE7FD370ED99EC0288AE4 /* iosApp */ = {
@@ -44,6 +88,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1B2C3D4E5F60718293A4B57 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -51,6 +102,7 @@
 			isa = PBXGroup;
 			children = (
 				9451963F840FF4198F011262 /* RedefineNCM_KMP.app */,
+				A1B2C3D4E5F60718293A4B51 /* LyricWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -60,6 +112,7 @@
 			children = (
 				1FE32CD77B15EC595D029593 /* Configuration */,
 				E88BE7FD370ED99EC0288AE4 /* iosApp */,
+				A1B2C3D4E5F60718293A4B55 /* LyricWidget */,
 				447CE9667CDE620E13B8E383 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -75,10 +128,12 @@
 				79F8D7963B70179790EE7A6E /* Sources */,
 				3D5B3ECA7A2DCF4345389440 /* Frameworks */,
 				5FAB998374DAEA3260CB2957 /* Resources */,
+				A1B2C3D4E5F60718293A4B54 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A1B2C3D4E5F60718293A4B53 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				E88BE7FD370ED99EC0288AE4 /* iosApp */,
@@ -89,6 +144,28 @@
 			productName = iosApp;
 			productReference = 9451963F840FF4198F011262 /* RedefineNCM_KMP.app */;
 			productType = "com.apple.product-type.application";
+		};
+		A1B2C3D4E5F60718293A4B56 /* LyricWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1B2C3D4E5F60718293A4B5A /* Build configuration list for PBXNativeTarget "LyricWidget" */;
+			buildPhases = (
+				A1B2C3D4E5F60718293A4B59 /* Sources */,
+				A1B2C3D4E5F60718293A4B57 /* Frameworks */,
+				A1B2C3D4E5F60718293A4B58 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A1B2C3D4E5F60718293A4B55 /* LyricWidget */,
+			);
+			name = LyricWidget;
+			packageProductDependencies = (
+			);
+			productName = LyricWidget;
+			productReference = A1B2C3D4E5F60718293A4B51 /* LyricWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -101,6 +178,9 @@
 				LastUpgradeCheck = 1620;
 				TargetAttributes = {
 					8DFA025105A891CEE94389FC = {
+						CreatedOnToolsVersion = 16.2;
+					};
+					A1B2C3D4E5F60718293A4B56 = {
 						CreatedOnToolsVersion = 16.2;
 					};
 				};
@@ -120,12 +200,20 @@
 			projectRoot = "";
 			targets = (
 				8DFA025105A891CEE94389FC /* iosApp */,
+				A1B2C3D4E5F60718293A4B56 /* LyricWidget */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		5FAB998374DAEA3260CB2957 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1B2C3D4E5F60718293A4B58 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -164,7 +252,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1B2C3D4E5F60718293A4B59 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A1B2C3D4E5F60718293A4B53 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1B2C3D4E5F60718293A4B56 /* LyricWidget */;
+			targetProxy = A1B2C3D4E5F60718293A4B52 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		0E06A6571342561998C04CC2 /* Debug */ = {
@@ -226,6 +329,61 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 					OTHER_LDFLAGS = "$(inherited) -lsqlite3";
+			};
+			name = Release;
+		};
+		A1B2C3D4E5F60718293A4B5B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				ARCHS = arm64;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7242UD5WMT;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = LyricWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.leejlredstar.redefinencm.kmp.RedefineNCM-KMP-test.LyricWidget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A1B2C3D4E5F60718293A4B5C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				ARCHS = arm64;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7242UD5WMT;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = LyricWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.leejlredstar.redefinencm.kmp.RedefineNCM-KMP-test.LyricWidget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
@@ -369,6 +527,15 @@
 			buildConfigurations = (
 				0E06A6571342561998C04CC2 /* Debug */,
 				202C809352277322CDBB8BEC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1B2C3D4E5F60718293A4B5A /* Build configuration list for PBXNativeTarget "LyricWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3D4E5F60718293A4B5B /* Debug */,
+				A1B2C3D4E5F60718293A4B5C /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

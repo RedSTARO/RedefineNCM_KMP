@@ -1,42 +1,34 @@
 # LyricWidget — iOS Live Activity (灵动岛 / Dynamic Island) setup
 
-The **source** for the iOS Live Activity is complete and lives here + in the app target. What
-remains is the **Xcode project wiring**, which must be done in Xcode (it edits
-`iosApp.xcodeproj/project.pbxproj` — not reliably editable by hand, and unverifiable without a
-build on macOS).
+The iOS Live Activity source and Xcode project wiring live in this repo. The `LyricWidget`
+extension target is registered in `iosApp.xcodeproj/project.pbxproj`, embedded by the `iosApp`
+target, and renders the ActivityKit `ContentState` pushed by `LiveActivityManager`.
 
-## What's already written (source-complete)
+## Wired files
 
 | File | Target it belongs to | Purpose |
 |---|---|---|
-| `LyricWidget/LyricActivityAttributes.swift` | **both** app + widget | Shared `ActivityAttributes` + `ContentState` (mirrors Kotlin `LiveActivityData`) |
+| `LyricWidget/LyricActivityAttributes.swift` | widget | Widget-side `ActivityAttributes` + `ContentState` (mirrors Kotlin `LiveActivityData`) |
 | `LyricWidget/LyricLiveActivity.swift` | widget | Lock Screen + Dynamic Island UI (`ActivityConfiguration`) |
 | `LyricWidget/LyricWidgetBundle.swift` | widget | `@main WidgetBundle` entry point |
 | `LyricWidget/Info.plist` | widget | `NSExtensionPointIdentifier = com.apple.widgetkit-extension` |
-| `iosApp/LiveActivityManager.swift` | app | Observes Kotlin `LyricNotificationController` → `Activity.request/update/end` |
+| `iosApp/LiveActivityManager.swift` | app | App-side `ActivityAttributes`; observes Kotlin `LyricNotificationController` → `Activity.request/update/end` |
 | `iosApp/iOSApp.swift` (edited) | app | Calls `LiveActivityManager.shared.startObserving()` at launch |
 | `iosApp/Info.plist` (edited) | app | `NSSupportsLiveActivities = true` |
 
 Kotlin side: `LyricNotificationController` (iosMain) now exposes `startObserving(onChange:)` /
-`stopObserving()`. The playback/lyric pipeline still needs to call `updateLyric(...)` to feed it
-(same gap as every other platform's now-playing surface).
+`stopObserving()` and the playback/lyric pipeline feeds it through `updateLyric(...)`.
 
-## Xcode steps (build-gated — do these on macOS with Xcode 16+)
+## macOS validation
 
-1. **File ▸ New ▸ Target… ▸ Widget Extension.** Name it `LyricWidget`. Uncheck "Include
-   Configuration App Intent" and "Include Live Activity" only if you intend to replace the
-   generated files — otherwise let it generate, then delete its template `.swift` and add the
-   files in this folder.
-2. **Add files to the right targets:**
-   - `LyricActivityAttributes.swift` → **both** `iosApp` and `LyricWidget` (Target Membership).
-   - `LyricLiveActivity.swift`, `LyricWidgetBundle.swift`, `Info.plist` → `LyricWidget` only.
-   - `LiveActivityManager.swift` → `iosApp` only (it already links the `Shared` KMP framework).
-3. **Set the widget's Info.plist** to `LyricWidget/Info.plist` (Build Settings ▸ Info.plist File).
-4. Confirm the app target's Info.plist has `NSSupportsLiveActivities = true` (already added).
-5. **Deployment target:** the Live Activity code is gated to iOS 16.2+; the app target may keep a
-   lower minimum — the `@available(iOS 16.2, *)` guards handle older devices (no Live Activity).
-6. The widget extension does **not** need the `Shared` framework (it only uses the Codable
-   `ContentState`). Only the app target links `Shared`.
+Windows can compile the Kotlin iOS framework but cannot run Xcode or ActivityKit validation.
+On macOS with Xcode 16+, build the `iosApp` scheme and confirm:
+
+1. `LyricWidget.appex` is embedded under the app's PlugIns directory.
+2. Starting playback creates or updates one `Activity<LyricActivityAttributes>`.
+3. Clearing playback ends the activity.
+4. Lock Screen rendering appears on any supported device/simulator; Dynamic Island rendering only
+   appears on Dynamic-Island-capable devices.
 
 ## Notes / TODO
 

@@ -4,9 +4,15 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "redefinencm_settings")
@@ -24,6 +30,8 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 actual class PlatformSettings(private val context: Context) {
 
     private val cache = ConcurrentHashMap<String, Any>()
+    private val writeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val writeMutex = Mutex()
 
     actual fun getString(key: String, default: String): String {
         (cache[key] as? String)?.let { return it }
@@ -41,10 +49,8 @@ actual class PlatformSettings(private val context: Context) {
 
     actual fun setString(key: String, value: String) {
         cache[key] = value
-        runBlocking {
-            context.dataStore.edit { prefs ->
-                prefs[stringPreferencesKey(key)] = value
-            }
+        persist {
+            it[stringPreferencesKey(key)] = value
         }
     }
 
@@ -64,10 +70,8 @@ actual class PlatformSettings(private val context: Context) {
 
     actual fun setBoolean(key: String, value: Boolean) {
         cache[key] = value
-        runBlocking {
-            context.dataStore.edit { prefs ->
-                prefs[booleanPreferencesKey(key)] = value
-            }
+        persist {
+            it[booleanPreferencesKey(key)] = value
         }
     }
 
@@ -87,9 +91,15 @@ actual class PlatformSettings(private val context: Context) {
 
     actual fun setLong(key: String, value: Long) {
         cache[key] = value
-        runBlocking {
-            context.dataStore.edit { prefs ->
-                prefs[longPreferencesKey(key)] = value
+        persist {
+            it[longPreferencesKey(key)] = value
+        }
+    }
+
+    private fun persist(block: (MutablePreferences) -> Unit) {
+        writeScope.launch {
+            writeMutex.withLock {
+                context.dataStore.edit { prefs -> block(prefs) }
             }
         }
     }

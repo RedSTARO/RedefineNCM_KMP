@@ -1,6 +1,9 @@
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 package com.leejlredstar.redefinencm.kmp.player
 
 import com.leejlredstar.redefinencm.kmp.data.Repository
+import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
@@ -14,7 +17,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.cinterop.ExperimentalForeignApi
 import platform.AVFoundation.*
 import platform.CoreFoundation.CFAbsoluteTimeGetCurrent
 import platform.Foundation.NSURL
@@ -37,16 +39,16 @@ class IosAVPlayer(
         val id = mediaId.toLong()
 
         // Check for a locally-downloaded offline file first.
-        if (com.leejlredstar.redefinencm.kmp.util.isSongDownloaded(id)) {
-            // TODO: Construct iOS-specific file URL from the app Documents directory
-            // when download support is added to iosMain. Currently isSongDownloaded
-            // always returns false on iOS (scanDownloadedSongIds is a stub).
+        DownloadedSongsCache.snapshot()[id]?.uri?.let { uri ->
+            return@StreamUrlResolver uri
         }
 
         val qualityName = settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.EXHIGH.name)
         val quality = runCatching { SoundQuality.valueOf(qualityName) }.getOrDefault(SoundQuality.EXHIGH)
         repo.getSongUrl(mediaId.toLong(), quality.name.lowercase())
     }
+
+    private var queueModel: PlayQueue<MediaInfo> = PlayQueue.empty()
 
     private val _state = MutableStateFlow(PlayerState.IDLE)
     override val state: StateFlow<PlayerState> = _state
@@ -78,6 +80,27 @@ class IosAVPlayer(
     private var pollJob: Job? = null
     private var resolveJob: Job? = null
     private var playbackGeneration = 0L
+
+    private fun publishQueue() {
+        _queue.value = queueModel.itemsInPlayOrder
+        _currentIndex.value = queueModel.positionInPlayOrder
+        _currentMedia.value = queueModel.currentItem
+        _shuffleEnabled.value = queueModel.shuffleEnabled
+        _duration.value = queueModel.currentItem?.duration?.takeIf { it > 0 } ?: -1L
+    }
+
+    private fun playCurrentFromQueue(autoplay: Boolean = true) {
+        val media = queueModel.currentItem ?: run {
+            _state.value = PlayerState.IDLE
+            _isPlaying.value = false
+            return
+        }
+        _position.value = 0L
+        seekOffsetMs = 0L
+        playStartTimeMs = 0L
+        publishQueue()
+        resolveAndPlay(media, startMs = 0L, autoplay = autoplay)
+    }
 
     private fun resetPositionTrack(startMs: Long = 0L, durationHint: Long = -1L, playing: Boolean) {
         playStartTimeMs = if (playing) (CFAbsoluteTimeGetCurrent() * 1000.0).toLong() else 0L
@@ -248,17 +271,18 @@ class IosAVPlayer(
     }
 
     override fun seekToPrevious() {
-        if (_currentIndex.value > 0) {
-            skipToIndex(_currentIndex.value - 1)
-            play()
+        val nextQueue = queueModel.previous(repeat = false)
+        if (nextQueue.currentIndex != queueModel.currentIndex) {
+            queueModel = nextQueue
+            playCurrentFromQueue(autoplay = true)
         }
     }
 
     override fun seekToNext() {
-        val next = _currentIndex.value + 1
-        if (next < _queue.value.size) {
-            skipToIndex(next)
-            play()
+        val nextQueue = queueModel.next(repeat = false)
+        if (nextQueue.currentIndex != queueModel.currentIndex) {
+            queueModel = nextQueue
+            playCurrentFromQueue(autoplay = true)
         } else {
             pause()
             _state.value = PlayerState.ENDED
@@ -270,11 +294,8 @@ class IosAVPlayer(
             clearQueue()
             return
         }
-        _queue.value = items
-        _currentIndex.value = startIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0))
-        val media = items.getOrNull(_currentIndex.value) ?: return
-        _currentMedia.value = media
-        resolveAndPlay(media)
+        queueModel = PlayQueue.of(items, startIndex)
+        playCurrentFromQueue(autoplay = true)
     }
 
     override fun restoreQueue(items: List<MediaInfo>, startIndex: Int, positionMs: Long) {
@@ -285,11 +306,10 @@ class IosAVPlayer(
         cancelPlaybackSession(clearItem = true)
         val safeIndex = startIndex.coerceIn(0, items.lastIndex)
         val safePosition = positionMs.coerceAtLeast(0L)
-        _queue.value = items
-        _currentIndex.value = safeIndex
-        _currentMedia.value = items[safeIndex]
+        queueModel = PlayQueue.of(items, safeIndex, shuffle = queueModel.shuffleEnabled)
+        publishQueue()
         _position.value = safePosition
-        _duration.value = items[safeIndex].duration.takeIf { it > 0 } ?: -1L
+        _duration.value = queueModel.currentItem?.duration?.takeIf { it > 0 } ?: -1L
         seekOffsetMs = safePosition
         playStartTimeMs = 0L
         _isPlaying.value = false
@@ -297,14 +317,14 @@ class IosAVPlayer(
     }
 
     override fun addToQueue(item: MediaInfo) {
-        _queue.value = _queue.value + item
+        queueModel = queueModel.addItem(item)
+        publishQueue()
     }
 
     override fun clearQueue() {
         cancelPlaybackSession(clearItem = true)
-        _queue.value = emptyList()
-        _currentIndex.value = -1
-        _currentMedia.value = null
+        queueModel = PlayQueue.empty()
+        publishQueue()
         _state.value = PlayerState.IDLE
         _isPlaying.value = false
         _position.value = 0L
@@ -314,11 +334,12 @@ class IosAVPlayer(
     }
 
     override fun skipToIndex(index: Int) {
-        if (index in _queue.value.indices) {
+        val itemIndex = queueModel.playOrder.getOrNull(index) ?: index
+        if (itemIndex in queueModel.items.indices) {
             val autoplay = _isPlaying.value || _state.value == PlayerState.BUFFERING
-            _currentIndex.value = index
-            val media = _queue.value[index]
-            _currentMedia.value = media
+            queueModel = queueModel.skipTo(itemIndex)
+            val media = queueModel.currentItem ?: return
+            publishQueue()
             _position.value = 0L
             _duration.value = media.duration.takeIf { it > 0 } ?: -1L
             seekOffsetMs = 0L
@@ -334,7 +355,8 @@ class IosAVPlayer(
     }
 
     override fun setShuffleEnabled(enabled: Boolean) {
-        _shuffleEnabled.value = enabled
+        queueModel = queueModel.setShuffle(enabled)
+        publishQueue()
     }
 
     override fun release() {
