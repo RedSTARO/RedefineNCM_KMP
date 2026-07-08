@@ -57,4 +57,45 @@ class SongDownloadManagerTest {
         assertEquals(4096L, task.progressBytes)
         assertEquals(4096L, task.totalBytes)
     }
+
+    @Test
+    fun enqueueRequeuesCompletedTaskWhenLocalFileIsMissing() {
+        val result = mergeDownloadTasksForEnqueue(
+            current = listOf(
+                SongDownloadTask(
+                    id = 1003,
+                    title = "Old Song",
+                    artist = "Old Artist",
+                    artworkUri = "old.jpg",
+                    status = DownloadTaskStatus.Completed,
+                    actualQuality = "lossless",
+                    lyricStatus = DownloadLyricStatus.Saved,
+                    progressBytes = 2048,
+                    totalBytes = 2048,
+                    fileName = "1003.flac",
+                )
+            ),
+            incoming = listOf(
+                SongDownloadTask(
+                    id = 1003,
+                    title = "New Song",
+                    artist = "New Artist",
+                    artworkUri = "new.jpg",
+                    status = DownloadTaskStatus.Queued,
+                )
+            ),
+            localFiles = emptyMap(),
+        )
+
+        val task = result.single()
+        assertEquals(DownloadTaskStatus.Queued, task.status)
+        assertEquals("New Song", task.title)
+        assertEquals("New Artist", task.artist)
+        assertEquals("new.jpg", task.artworkUri)
+        assertEquals(0L, task.progressBytes)
+        assertNull(task.totalBytes)
+        assertNull(task.fileName)
+        assertNull(task.actualQuality)
+        assertNull(task.errorMessage)
+    }
 }

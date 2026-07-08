@@ -132,35 +132,16 @@ class SongDownloadManager(
     }
 
     private suspend fun enqueueResolvedSongs(songs: List<SongDetailSongs>, playlistId: Long? = null) {
-        val localFiles = DownloadedSongsCache.snapshot()
+        val localFiles = DownloadedSongsCache.refreshSnapshots()
         val newTasks = songs.map { it.toDownloadTask(playlistId, localFiles) }
         _tasks.update { current ->
             val songDetails = songs.associateBy { it.id }
-            val syncedCurrent = current.map { it.syncWithLocalLibrary(localFiles[it.id], songDetails[it.id]) }
-            val merged = syncedCurrent.associateBy { it.id }.toMutableMap()
-            val order = current.map { it.id }.toMutableList()
-            newTasks.forEach { incoming ->
-                val existing = merged[incoming.id]
-                if (existing == null) {
-                    merged[incoming.id] = incoming
-                    order.add(incoming.id)
-                } else if (incoming.status == DownloadTaskStatus.Completed) {
-                    merged[incoming.id] = existing.copy(
-                        title = incoming.title,
-                        artist = incoming.artist,
-                        artworkUri = incoming.artworkUri,
-                        playlistId = incoming.playlistId ?: existing.playlistId,
-                        status = DownloadTaskStatus.Completed,
-                        progressBytes = incoming.progressBytes,
-                        totalBytes = incoming.totalBytes,
-                        fileName = incoming.fileName,
-                        errorMessage = null,
-                    )
-                } else if (existing.canRequeue()) {
-                    merged[incoming.id] = existing.requeueFrom(incoming)
-                }
-            }
-            order.mapNotNull { merged[it] }
+            mergeDownloadTasksForEnqueue(
+                current = current,
+                incoming = newTasks,
+                localFiles = localFiles,
+                songDetails = songDetails,
+            )
         }
         ensureWorker()
     }
@@ -491,29 +472,6 @@ class SongDownloadManager(
         )
     }
 
-    private fun SongDownloadTask.canRequeue(): Boolean =
-        status == DownloadTaskStatus.Failed ||
-            status == DownloadTaskStatus.Cancelled ||
-            status == DownloadTaskStatus.Paused ||
-            status == DownloadTaskStatus.Completed ||
-            status == DownloadTaskStatus.Deleted
-
-    private fun SongDownloadTask.requeueFrom(incoming: SongDownloadTask): SongDownloadTask =
-        copy(
-            title = incoming.title,
-            artist = incoming.artist,
-            artworkUri = incoming.artworkUri,
-            playlistId = incoming.playlistId ?: playlistId,
-            status = DownloadTaskStatus.Queued,
-            requestedQuality = null,
-            actualQuality = null,
-            lyricStatus = DownloadLyricStatus.NotStarted,
-            progressBytes = 0,
-            totalBytes = null,
-            fileName = null,
-            errorMessage = null,
-        )
-
     private fun List<SongDownloadTask>.reconcileWithLocalLibrary(
         localFiles: Map<Long, DownloadedSongSnapshot>,
         songDetails: Map<Long, SongDetailSongs>,
@@ -626,6 +584,49 @@ internal fun reconcileDownloadTasksWithLocalLibrary(
     return merged.values.toList()
 }
 
+internal fun mergeDownloadTasksForEnqueue(
+    current: List<SongDownloadTask>,
+    incoming: List<SongDownloadTask>,
+    localFiles: Map<Long, DownloadedSongSnapshot>,
+    songDetails: Map<Long, SongDetailSongs> = emptyMap(),
+): List<SongDownloadTask> {
+    val syncedCurrent = current.map { task ->
+        syncDownloadTaskWithLocalLibrary(
+            task = task,
+            snapshot = localFiles[task.id],
+            songDetail = songDetails[task.id],
+        )
+    }
+    val merged = syncedCurrent.associateBy { it.id }.toMutableMap()
+    val order = current.map { it.id }.toMutableList()
+    incoming.forEach { task ->
+        val existing = merged[task.id]
+        when {
+            existing == null -> {
+                merged[task.id] = task
+                order.add(task.id)
+            }
+            task.status == DownloadTaskStatus.Completed -> {
+                merged[task.id] = existing.copy(
+                    title = task.title,
+                    artist = task.artist,
+                    artworkUri = task.artworkUri,
+                    playlistId = task.playlistId ?: existing.playlistId,
+                    status = DownloadTaskStatus.Completed,
+                    progressBytes = task.progressBytes,
+                    totalBytes = task.totalBytes,
+                    fileName = task.fileName,
+                    errorMessage = null,
+                )
+            }
+            existing.canRequeueForDownload() -> {
+                merged[task.id] = existing.requeueFromDownload(task)
+            }
+        }
+    }
+    return order.mapNotNull { merged[it] }
+}
+
 private fun syncDownloadTaskWithLocalLibrary(
     task: SongDownloadTask,
     snapshot: DownloadedSongSnapshot?,
@@ -659,6 +660,29 @@ private fun syncDownloadTaskWithLocalLibrary(
         else -> task
     }
 }
+
+private fun SongDownloadTask.canRequeueForDownload(): Boolean =
+    status == DownloadTaskStatus.Failed ||
+        status == DownloadTaskStatus.Cancelled ||
+        status == DownloadTaskStatus.Paused ||
+        status == DownloadTaskStatus.Completed ||
+        status == DownloadTaskStatus.Deleted
+
+private fun SongDownloadTask.requeueFromDownload(incoming: SongDownloadTask): SongDownloadTask =
+    copy(
+        title = incoming.title,
+        artist = incoming.artist,
+        artworkUri = incoming.artworkUri,
+        playlistId = incoming.playlistId ?: playlistId,
+        status = DownloadTaskStatus.Queued,
+        requestedQuality = null,
+        actualQuality = null,
+        lyricStatus = DownloadLyricStatus.NotStarted,
+        progressBytes = 0,
+        totalBytes = null,
+        fileName = null,
+        errorMessage = null,
+    )
 
 private fun importedDownloadTask(
     snapshot: DownloadedSongSnapshot,
