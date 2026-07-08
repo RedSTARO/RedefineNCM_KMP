@@ -304,12 +304,6 @@ private class WebviewSession(
         val childStyle = wsChild or wsVisible or wsClipChildren or wsClipSiblings
 
         u32.ShowWindow(childH, swHide)
-        u32.SetParent(childH, parentH)
-        if (u32.GetParent(childH)?.pointer != parentH.pointer) {
-            u32.ShowWindow(childH, swHide)
-            u32.DestroyWindow(childH)
-            error("WebView2 host window failed to reparent into AMLL canvas")
-        }
         u32.SetWindowLongPtr(
             childH,
             gwlStyle,
@@ -320,6 +314,12 @@ private class WebviewSession(
             gwlExStyle,
             com.sun.jna.Pointer.createConstant(wsExToolWindow),
         )
+        u32.SetParent(childH, parentH)
+        if (u32.GetParent(childH)?.pointer != parentH.pointer) {
+            u32.ShowWindow(childH, swHide)
+            u32.DestroyWindow(childH)
+            error("WebView2 host window failed to reparent into AMLL canvas")
+        }
         u32.SetWindowPos(
             childH,
             null,
