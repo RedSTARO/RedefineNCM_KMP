@@ -26,6 +26,7 @@ compose.desktop {
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
+            modules("java.sql")
             packageName = "RedefineNCM"
             packageVersion = "1.0.0"
             description = "A third-party NetEase Cloud Music client"
