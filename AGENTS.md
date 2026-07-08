@@ -408,9 +408,11 @@ Full file-by-file audit against `../RedefineNCM` (frozen 2026-06-12), then close
   path; `NowPlayingViewModel` now collects `queue`/`currentIndex` live.
 - **Player-status persistence**: `PlayerStatus.sq` + `Repository.get/savePlayerStatus` +
   `PlatformPlayer.restoreQueue` (no autoplay) + save on `MainActivity.onPause`.
-- **In-app download manager**: `SongDownloadManager` owns the common queue/state model and the
-  Downloads page (pause/resume/cancel/retry/clear/delete local files); it stores the actual
-  downloaded quality from
+- **Download manager**: `SongDownloadManager` owns the common queue/state model. The Downloads
+  page remains as an internal route (pause/resume/cancel/retry/clear/delete local files), but
+  the common tab/sidebar entry is removed; on Android, `AndroidDownloadService` runs downloads as
+  a foreground data-sync service and its notification is the entry point into that page. It stores
+  the actual downloaded quality from
   `/song/url/v1`'s returned `level` and prefetches/caches lyrics in SQLDelight after the audio file
   is written. Local-library sync is snapshot-based, not ID-only: platform scans return
   `DownloadedSongSnapshot` (song ID, file name, URI, size, modified time), `DownloadedSongsCache`
