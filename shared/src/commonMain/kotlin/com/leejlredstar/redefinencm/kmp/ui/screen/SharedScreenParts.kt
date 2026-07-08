@@ -148,9 +148,10 @@ fun SongRow(
                 val taskStatus = remember(songId, downloadTasks) {
                     downloadTasks.firstOrNull { it.id == songId }?.status
                 }
-                val downloaded = remember(songId, downloadedCacheVersion) {
+                val downloadedOnDisk = remember(songId, downloadedCacheVersion) {
                     DownloadedSongsCache.isDownloaded(songId)
-                } || taskStatus == DownloadTaskStatus.Completed
+                }
+                val downloaded = downloadedOnDisk
                 val isActive = taskStatus == DownloadTaskStatus.Queued ||
                     taskStatus == DownloadTaskStatus.Resolving ||
                     taskStatus == DownloadTaskStatus.Downloading ||
