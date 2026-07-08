@@ -16,14 +16,14 @@ private const val DOWNLOAD_SUBDIR = "RedefineNCM"
  * Called once by [DownloadedSongsCache] and cached for O(1) lookups.
  */
 actual fun scanDownloadedSongs(): List<DownloadedSongSnapshot> =
-    scanDownloadedSongFiles().values
+    scanDownloadedSongFiles(validateMediaRows = true).values
         .sortedWith(
             compareByDescending<DownloadedSongSnapshot> { it.lastModifiedEpochMillis ?: 0L }
                 .thenBy { it.id }
         )
 
 actual fun scanDownloadedSongIds(): Set<Long> =
-    scanDownloadedSongFiles().keys
+    scanDownloadedSongFiles(validateMediaRows = true).keys
 
 fun findDownloadedSongUri(songId: Long): String? =
     scanDownloadedSongFiles(targetSongId = songId, validateMediaRows = true)[songId]?.uri
