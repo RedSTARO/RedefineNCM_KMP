@@ -116,6 +116,7 @@ class SongDownloadManager(
         .stateIn(scope, SharingStarted.Eagerly, DownloadQueueSummary())
 
     private var workerJob: Job? = null
+    private var syncJob: Job? = null
     private var activeTaskId: Long? = null
 
     fun enqueuePlaylist(playlistId: Long) {
@@ -131,7 +132,7 @@ class SongDownloadManager(
     }
 
     private suspend fun enqueueResolvedSongs(songs: List<SongDetailSongs>, playlistId: Long? = null) {
-        val localFiles = DownloadedSongsCache.refreshSnapshots()
+        val localFiles = DownloadedSongsCache.snapshot()
         val newTasks = songs.map { it.toDownloadTask(playlistId, localFiles) }
         _tasks.update { current ->
             val songDetails = songs.associateBy { it.id }
@@ -230,7 +231,14 @@ class SongDownloadManager(
         }
         scope.launch {
             val deleted = deleteDownloadedSongFile(taskId)
-            val localFiles = DownloadedSongsCache.refreshSnapshots()
+            if (deleted) {
+                DownloadedSongsCache.remove(taskId)
+            }
+            val localFiles = if (deleted) {
+                DownloadedSongsCache.snapshot()
+            } else {
+                DownloadedSongsCache.refreshSnapshots()
+            }
             _tasks.update { tasks ->
                 tasks.map { task ->
                     when {
@@ -288,7 +296,8 @@ class SongDownloadManager(
     }
 
     fun syncWithLocalLibrary() {
-        scope.launch {
+        if (syncJob?.isActive == true) return
+        syncJob = scope.launch {
             reconcileWithLocalLibrary()
         }
     }
@@ -424,7 +433,18 @@ class SongDownloadManager(
                     errorMessage = null,
                 )
             }
-            DownloadedSongsCache.refresh()
+            DownloadedSongsCache.upsert(
+                DownloadedSongSnapshot(
+                    id = taskId,
+                    fileName = downloadedFile.fileName,
+                    uri = downloadedFile.uri,
+                    sizeBytes = _tasks.value
+                        .firstOrNull { it.id == taskId }
+                        ?.progressBytes
+                        ?.takeIf { it > 0L },
+                    lastModifiedEpochMillis = null,
+                )
+            )
         } catch (e: CancellationException) {
             val status = _tasks.value.firstOrNull { it.id == taskId }?.status
             if (status != DownloadTaskStatus.Paused && status != DownloadTaskStatus.Cancelled) {

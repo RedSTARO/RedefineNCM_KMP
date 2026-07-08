@@ -10,20 +10,20 @@ import kotlin.concurrent.Volatile
  *
  * The Android [isSongDownloaded] actual used to call [File.listFiles] per song,
  * causing UI jank when many rows called it at composition time. This singleton
- * scans the download directory once into a snapshot map for O(1) lookups.
+ * keeps a process-local snapshot map for O(1) lookups. Full directory scans must be
+ * triggered by explicit sync points; UI reads never perform disk I/O.
  */
 object DownloadedSongsCache {
     // @Volatile：后台预热线程、播放器解析线程、Compose 组合线程都会读它，
     // 保证一个线程写入的扫描结果对其他线程立即可见（否则会重复扫描）。
     @Volatile
-    private var cached: Map<Long, DownloadedSongSnapshot>? = null
+    private var cached: Map<Long, DownloadedSongSnapshot> = emptyMap()
 
     private val _version = MutableStateFlow(0)
     val version: StateFlow<Int> = _version
 
     fun isDownloaded(songId: Long): Boolean {
-        val snapshot = cached ?: scanSnapshot().also { cached = it }
-        return songId in snapshot
+        return songId in cached
     }
 
     fun refresh(): Set<Long> = refreshAndGet()
@@ -33,23 +33,37 @@ object DownloadedSongsCache {
         return snapshot.keys
     }
 
-    fun snapshot(): Map<Long, DownloadedSongSnapshot> =
-        cached ?: scanSnapshot().also { cached = it }
+    fun snapshot(): Map<Long, DownloadedSongSnapshot> = cached
 
     fun refreshSnapshots(): Map<Long, DownloadedSongSnapshot> {
-        val snapshot = scanSnapshot()
-        cached = snapshot
-        _version.update { it + 1 }
+        val snapshot = replaceWith(scanDownloadedSongs())
+        bumpVersion()
         return snapshot
     }
 
-    private fun scanSnapshot(): Map<Long, DownloadedSongSnapshot> {
+    fun upsert(snapshot: DownloadedSongSnapshot) {
+        cached = cached.toMutableMap().apply { put(snapshot.id, snapshot) }
+        bumpVersion()
+    }
+
+    fun remove(songId: Long) {
+        if (songId !in cached) return
+        cached = cached.toMutableMap().apply { remove(songId) }
+        bumpVersion()
+    }
+
+    private fun replaceWith(snapshots: List<DownloadedSongSnapshot>): Map<Long, DownloadedSongSnapshot> {
         val result = linkedMapOf<Long, DownloadedSongSnapshot>()
-        scanDownloadedSongs().forEach { snapshot ->
+        snapshots.forEach { snapshot ->
             if (snapshot.id !in result) {
                 result[snapshot.id] = snapshot
             }
         }
+        cached = result
         return result
+    }
+
+    private fun bumpVersion() {
+        _version.update { it + 1 }
     }
 }
