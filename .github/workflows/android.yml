@@ -20,7 +20,7 @@ jobs:
       - name: Count commits since last tag
         id: commitcount
         run: |
-          git fetch --tags
+          git fetch --force --tags
           latest_tag=$(git tag --sort=-creatordate | head -n1)
           if [ -z "$latest_tag" ]; then
             count=$(git rev-list --count HEAD)

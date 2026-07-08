@@ -137,7 +137,7 @@ jobs:
       - name: Count commits since last tag
         id: commitcount
         run: |
-          git fetch --tags
+          git fetch --force --tags
           latest_tag=$(git tag --sort=-creatordate | head -n1)
           if [ -z "$latest_tag" ]; then
             count=$(git rev-list --count HEAD)
@@ -217,7 +217,7 @@ jobs:
       - name: Build changelog since last tag
         id: changelog
         run: |
-          git fetch --tags
+          git fetch --force --tags
           mapfile -t tags < <(git tag --sort=-creatordate)
           current="${tags[0]}"
           previous="${tags[1]:-}"
