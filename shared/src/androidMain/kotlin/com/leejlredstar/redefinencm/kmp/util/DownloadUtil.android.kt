@@ -26,13 +26,16 @@ actual fun scanDownloadedSongIds(): Set<Long> =
     scanDownloadedSongFiles().keys
 
 fun findDownloadedSongUri(songId: Long): String? =
-    scanDownloadedSongFiles(songId)[songId]?.uri
+    scanDownloadedSongFiles(targetSongId = songId, validateMediaRows = true)[songId]?.uri
 
-private fun scanDownloadedSongFiles(targetSongId: Long? = null): Map<Long, DownloadedSongSnapshot> {
+private fun scanDownloadedSongFiles(
+    targetSongId: Long? = null,
+    validateMediaRows: Boolean = false,
+): Map<Long, DownloadedSongSnapshot> {
     val result = linkedMapOf<Long, DownloadedSongSnapshot>()
     val context = runCatching { KoinPlatform.getKoin().get<Context>() }.getOrNull()
     if (context != null) {
-        result.putAll(queryMediaStore(context, targetSongId))
+        result.putAll(queryMediaStore(context, targetSongId, validateMediaRows))
     }
     scanLegacyDownloadDir(targetSongId).forEach { (id, snapshot) ->
         result.putIfAbsent(id, snapshot)
@@ -40,7 +43,11 @@ private fun scanDownloadedSongFiles(targetSongId: Long? = null): Map<Long, Downl
     return result
 }
 
-private fun queryMediaStore(context: Context, targetSongId: Long?): Map<Long, DownloadedSongSnapshot> {
+private fun queryMediaStore(
+    context: Context,
+    targetSongId: Long?,
+    validateMediaRows: Boolean,
+): Map<Long, DownloadedSongSnapshot> {
     val result = linkedMapOf<Long, DownloadedSongSnapshot>()
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         result.putAll(
@@ -49,6 +56,7 @@ private fun queryMediaStore(context: Context, targetSongId: Long?): Map<Long, Do
                 collectionUri = MediaStore.Downloads.EXTERNAL_CONTENT_URI,
                 targetSongId = targetSongId,
                 canFilterRelativePath = true,
+                validateRows = validateMediaRows,
             )
         )
     }
@@ -57,6 +65,7 @@ private fun queryMediaStore(context: Context, targetSongId: Long?): Map<Long, Do
         collectionUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
         targetSongId = targetSongId,
         canFilterRelativePath = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q,
+        validateRows = validateMediaRows,
     ).forEach { (id, snapshot) ->
         result.putIfAbsent(id, snapshot)
     }
@@ -68,6 +77,7 @@ private fun queryMediaCollection(
     collectionUri: Uri,
     targetSongId: Long?,
     canFilterRelativePath: Boolean,
+    validateRows: Boolean,
 ): Map<Long, DownloadedSongSnapshot> = runCatching {
     val result = linkedMapOf<Long, DownloadedSongSnapshot>()
     val projection = buildList {
@@ -119,7 +129,7 @@ private fun queryMediaCollection(
                 }
                 val mediaId = cursor.getLong(idIndex)
                 val uri = ContentUris.withAppendedId(collectionUri, mediaId).toString()
-                if (!isReadableMediaUri(context, uri)) {
+                if (validateRows && !isReadableMediaUri(context, uri)) {
                     deleteStaleMediaRow(context, uri)
                     continue
                 }
@@ -212,7 +222,7 @@ private fun deleteFromMediaCollection(
     canFilterRelativePath: Boolean,
 ): Boolean = runCatching {
     var deleted = false
-    queryMediaCollection(context, collectionUri, songId, canFilterRelativePath)
+    queryMediaCollection(context, collectionUri, songId, canFilterRelativePath, validateRows = false)
         .values
         .mapNotNull { it.uri }
         .forEach { uri ->

@@ -1,9 +1,12 @@
 package com.leejlredstar.redefinencm.kmp
 
-import android.app.Activity
 import android.app.Application
-import android.os.Bundle
-import android.os.SystemClock
+import android.database.ContentObserver
+import android.net.Uri
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.provider.MediaStore
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
@@ -11,46 +14,54 @@ import coil3.network.ktor3.KtorNetworkFetcherFactory
 import com.leejlredstar.redefinencm.kmp.di.initKoin
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
-import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
 import org.koin.android.ext.koin.androidContext
 import org.koin.mp.KoinPlatform
 
 class RedefineNCMApp : Application(), SingletonImageLoader.Factory {
-    private var lastDownloadStateSyncAt = 0L
+    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
+    private val syncDownloadedSongState = Runnable {
+        runCatching {
+            KoinPlatform.getKoin().get<SongDownloadManager>().syncWithLocalLibrary()
+        }
+    }
+    private var downloadedSongsObserver: ContentObserver? = null
 
     override fun onCreate() {
         super.onCreate()
         initKoin { androidContext(this@RedefineNCMApp) }
         LyricNotificationController.init(applicationContext)
-        // 下载目录扫描是磁盘 IO，放后台线程预热，避免阻塞主线程启动路径
-        syncDownloadedSongState("download-cache-warmup")
-        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
-            override fun onActivityResumed(activity: Activity) {
-                syncDownloadedSongState("download-cache-resume")
-            }
-
-            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
-            override fun onActivityStarted(activity: Activity) = Unit
-            override fun onActivityPaused(activity: Activity) = Unit
-            override fun onActivityStopped(activity: Activity) = Unit
-            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
-            override fun onActivityDestroyed(activity: Activity) = Unit
-        })
+        registerDownloadedSongsObserver()
     }
 
-    private fun syncDownloadedSongState(threadName: String) {
-        val now = SystemClock.elapsedRealtime()
-        if (now - lastDownloadStateSyncAt < 1_500L) return
-        lastDownloadStateSyncAt = now
-        Thread({
-            DownloadedSongsCache.refresh()
-            runCatching {
-                KoinPlatform.getKoin().get<SongDownloadManager>().syncWithLocalLibrary()
+    private fun registerDownloadedSongsObserver() {
+        if (downloadedSongsObserver != null) return
+        val observer = object : ContentObserver(mainHandler) {
+            override fun onChange(selfChange: Boolean) {
+                scheduleDownloadedSongStateSync()
             }
-        }, threadName).apply {
-            isDaemon = true
-            start()
+
+            override fun onChange(selfChange: Boolean, uri: Uri?) {
+                scheduleDownloadedSongStateSync()
+            }
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            contentResolver.registerContentObserver(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                true,
+                observer,
+            )
+        }
+        contentResolver.registerContentObserver(
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+            true,
+            observer,
+        )
+        downloadedSongsObserver = observer
+    }
+
+    private fun scheduleDownloadedSongStateSync() {
+        mainHandler.removeCallbacks(syncDownloadedSongState)
+        mainHandler.postDelayed(syncDownloadedSongState, 750L)
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
