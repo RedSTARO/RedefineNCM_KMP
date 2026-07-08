@@ -14,7 +14,7 @@ import androidx.core.content.ContextCompat
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
-import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
+import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import org.koin.android.ext.android.get
 
@@ -51,6 +51,11 @@ class MainActivity : ComponentActivity() {
         setContent { App() }
     }
 
+    override fun onResume() {
+        super.onResume()
+        runCatching { get<SongDownloadManager>().syncWithLocalLibrary() }
+    }
+
     override fun onPause() {
         // 与原版 MainActivity.onPause 一致：离开前台时保存播放状态（队列/索引/进度/随机）
         runCatching { get<MainViewModel>().savePlayerStatus() }
@@ -82,10 +87,7 @@ class MainActivity : ComponentActivity() {
         if (permissions.isEmpty()) return
 
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-            Thread({ DownloadedSongsCache.refresh() }, "download-cache-permission-refresh").apply {
-                isDaemon = true
-                start()
-            }
+            runCatching { get<SongDownloadManager>().syncWithLocalLibrary() }
         }.launch(permissions.toTypedArray())
     }
 

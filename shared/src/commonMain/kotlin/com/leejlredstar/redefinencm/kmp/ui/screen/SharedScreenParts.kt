@@ -41,6 +41,8 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
 import com.leejlredstar.redefinencm.kmp.data.api.dto.UserPlaylistEach
+import com.leejlredstar.redefinencm.kmp.download.DownloadTaskStatus
+import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
@@ -75,6 +77,7 @@ fun SongRow(
     accentColor: Color? = null,
 ) {
     val settings = koinInject<PlatformSettings>()
+    val downloadManager = koinInject<SongDownloadManager>()
     val fallbackAccent = MaterialTheme.colorScheme.primaryContainer
     var imageAccent by remember(artworkUri, accentColor, fallbackAccent) {
         mutableStateOf(accentColor ?: fallbackAccent)
@@ -141,20 +144,47 @@ fun SongRow(
             }
             if (songId != null && settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false)) {
                 val downloadedCacheVersion = DownloadedSongsCache.version.collectAsState().value
+                val downloadTasks = downloadManager.tasks.collectAsState().value
+                val taskStatus = remember(songId, downloadTasks) {
+                    downloadTasks.firstOrNull { it.id == songId }?.status
+                }
                 val downloaded = remember(songId, downloadedCacheVersion) {
                     DownloadedSongsCache.isDownloaded(songId)
-                }
+                } || taskStatus == DownloadTaskStatus.Completed
+                val isActive = taskStatus == DownloadTaskStatus.Queued ||
+                    taskStatus == DownloadTaskStatus.Resolving ||
+                    taskStatus == DownloadTaskStatus.Downloading ||
+                    taskStatus == DownloadTaskStatus.SavingLyrics
+                val isFailed = taskStatus == DownloadTaskStatus.Failed ||
+                    taskStatus == DownloadTaskStatus.Cancelled
                 Spacer(Modifier.width(8.dp))
                 Surface(
                     shape = CircleShape,
-                    color = if (downloaded) accentPalette.container
-                    else accentPalette.onQuietContainer.copy(alpha = 0.10f),
+                    color = when {
+                        downloaded -> accentPalette.container
+                        isFailed -> MaterialTheme.colorScheme.errorContainer
+                        isActive -> accentPalette.container.copy(alpha = 0.72f)
+                        else -> accentPalette.onQuietContainer.copy(alpha = 0.10f)
+                    },
                 ) {
                     Icon(
-                        imageVector = if (downloaded) AppIcons.Check else AppIcons.AttachFile,
-                        contentDescription = if (downloaded) "Downloaded" else "Not downloaded",
-                        tint = if (downloaded) accentPalette.onContainer
-                        else accentPalette.onQuietContainer.copy(alpha = 0.72f),
+                        imageVector = when {
+                            downloaded -> AppIcons.Check
+                            isFailed -> AppIcons.Clear
+                            isActive -> AppIcons.Download
+                            else -> AppIcons.AttachFile
+                        },
+                        contentDescription = when {
+                            downloaded -> "Downloaded"
+                            isFailed -> "Download failed"
+                            isActive -> "Downloading"
+                            else -> "Not downloaded"
+                        },
+                        tint = when {
+                            downloaded || isActive -> accentPalette.onContainer
+                            isFailed -> MaterialTheme.colorScheme.onErrorContainer
+                            else -> accentPalette.onQuietContainer.copy(alpha = 0.72f)
+                        },
                         modifier = Modifier.padding(6.dp).size(18.dp),
                     )
                 }

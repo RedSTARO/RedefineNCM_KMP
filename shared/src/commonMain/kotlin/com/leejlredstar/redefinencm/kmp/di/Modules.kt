@@ -5,6 +5,7 @@ import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.data.db.AppDatabase
 import com.leejlredstar.redefinencm.kmp.data.db.DatabaseDriverFactory
+import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.player.InMemoryPlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.viewmodel.LoginViewModel
@@ -53,6 +54,9 @@ val sharedModule = module {
     // Repository
     single { Repository(get(), get()) }
 
+    // Download queue — one process-wide queue drives the manager page and row status chips.
+    single { SongDownloadManager(get(), get()) }
+
     // Player — shared in-memory default (no real audio). A platform that implements a real
     // PlatformPlayer should bind it in platformModule() and remove this default (or load with
     // Koin override). NowPlayingViewModel resolves PlatformPlayer from here.
@@ -62,7 +66,7 @@ val sharedModule = module {
     factory { LoginViewModel(get(), get(), get()) }
     // Single —— 与原版单 Activity 共享一个 MainViewModel 一致：各屏共享搜索/歌单/推荐状态，
     // init 中的 UID 解析与播放状态恢复只执行一次。
-    single { MainViewModel(get(), get(), get()) }
+    single { MainViewModel(get(), get(), get(), get()) }
     // Single — the now-playing state is inherently global (only one song plays at a time).
     // Both NowPlayingScreen and FullLyricScreen inject this same instance.
     single { NowPlayingViewModel(get(), get()) }

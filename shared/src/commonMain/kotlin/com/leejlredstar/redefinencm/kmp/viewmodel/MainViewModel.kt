@@ -4,14 +4,11 @@ import com.leejlredstar.redefinencm.kmp.data.PersistedMediaItem
 import com.leejlredstar.redefinencm.kmp.data.PlayerStatus
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.dto.*
+import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
-import com.leejlredstar.redefinencm.kmp.util.DownloadRequestItem
-import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
-import com.leejlredstar.redefinencm.kmp.util.SongDownloader
-import com.leejlredstar.redefinencm.kmp.util.SoundQuality
 import com.leejlredstar.redefinencm.kmp.util.currentAppVersion
 import com.leejlredstar.redefinencm.kmp.util.fetchLatestReleaseTag
 import kotlinx.coroutines.*
@@ -26,6 +23,7 @@ class MainViewModel(
     private val repo: Repository,
     private val settings: PlatformSettings,
     private val player: PlatformPlayer,
+    private val downloadManager: SongDownloadManager,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var lastSavedPlayerStatus: PlayerStatus? = null
@@ -249,21 +247,14 @@ class MainViewModel(
         }
     }
 
-    // ── Download（原版 onDownloadPlaylistClick + DownloadWorker）──
+    // ── Download（应用内下载队列；不再使用系统 DownloadManager）──
 
     fun onDownloadPlaylistClick(songlistID: Long) {
-        scope.launch(Dispatchers.Default) {
-            val ids = repo.getPlaylistTrackAllOnce(songlistID)?.songs?.map { it.id } ?: return@launch
-            val quality = settings.getString(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name)
-            val pending = ids.filterNot { DownloadedSongsCache.isDownloaded(it) }
-            // 原版 DownloadWorker 以 5 首为一批解析直链后入队系统下载
-            pending.chunked(5).forEach { batch ->
-                val urls = repo.getSongUrls(batch, quality)
-                SongDownloader.enqueue(
-                    urls.filter { it.url.isNotEmpty() }
-                        .map { DownloadRequestItem(it.id, it.url) },
-                )
-            }
+        val currentSongs = playlistSongs.value?.songs.orEmpty()
+        if (currentSongs.isNotEmpty()) {
+            downloadManager.enqueueSongs(currentSongs, songlistID)
+        } else {
+            downloadManager.enqueuePlaylist(songlistID)
         }
     }
 

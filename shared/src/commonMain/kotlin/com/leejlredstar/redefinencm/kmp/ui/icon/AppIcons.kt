@@ -30,6 +30,12 @@ object AppIcons {
     val Clear: ImageVector by lazy {
         symbol("Clear", "m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z")
     }
+    val Refresh: ImageVector by lazy {
+        symbol("Refresh", "M480-160q-134 0-227-93t-93-227q0-134 93-227t227-93q69 0 132 28.5T720-690v-110h80v280H520v-80h168q-32-56-87.5-88T480-720q-100 0-170 70t-70 170q0 100 70 170t170 70q77 0 139-44t87-116h84q-28 106-114 173t-196 67Z")
+    }
+    val Delete: ImageVector by lazy {
+        symbol("Delete", "M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm80-160h80v-360h-80v360Zm160 0h80v-360h-80v360Z")
+    }
     val Check: ImageVector by lazy {
         symbol("Check", "M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z")
     }

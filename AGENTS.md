@@ -356,8 +356,9 @@ Applies to all platforms, and the original Android repo is kept aligned (goal #3
 - **Per-screen:** NowPlaying (album-art hero gradient, oversized rounded cover ~252dp, bold
   marquee title); Playlist detail (album-color gradient header, pill "Play All", connected
   rows with download indicators); User page (blurred hero + avatar, badged playlists);
-  Search (pill→bar shared-element transition, suggestion list); Settings (gradient hero, tonal
-  rows, pill actions); Mini-player FAB (image-derived color w/ adaptive content luminance via
+  Search (pill→bar shared-element transition, suggestion list); Downloads (queue summary hero,
+  progress rows, pause/resume/cancel/retry controls); Settings (gradient hero, tonal rows, pill
+  actions); Mini-player FAB (image-derived color w/ adaptive content luminance via
   `contrastingTextColor()`, oversized rounded shape).
 - **Desktop floating window:** frameless/translucent, blur-behind, current lyric + mini art +
   compact controls, always-on-top toggle (part of the JVM `LyricNotificationController`).
@@ -407,8 +408,18 @@ Full file-by-file audit against `../RedefineNCM` (frozen 2026-06-12), then close
   path; `NowPlayingViewModel` now collects `queue`/`currentIndex` live.
 - **Player-status persistence**: `PlayerStatus.sq` + `Repository.get/savePlayerStatus` +
   `PlatformPlayer.restoreQueue` (no autoplay) + save on `MainActivity.onPause`.
-- **Playlist batch download**: `SongDownloader` expect/actual (Android = system
-  DownloadManager into `Downloads/RedefineNCM/`, 5-song URL batches, skip existing).
+- **In-app download manager**: `SongDownloadManager` owns the common queue/state model and the
+  Downloads page (pause/resume/cancel/retry/clear/delete local files); it stores the actual
+  downloaded quality from
+  `/song/url/v1`'s returned `level` and prefetches/caches lyrics in SQLDelight after the audio file
+  is written. Local-library sync is snapshot-based, not ID-only: platform scans return
+  `DownloadedSongSnapshot` (song ID, file name, URI, size, modified time), `DownloadedSongsCache`
+  caches that snapshot for O(1) row indicators, and `SongDownloadManager.syncWithLocalLibrary()`
+  reconciles queued tasks with real files while importing disk-only downloads as Completed rows
+  with best-effort `/song/detail` metadata. `SongDownloader` actuals only stream files to the
+  platform download folder. Android writes `Downloads/RedefineNCM/` through `MediaStore` instead of
+  the system `DownloadManager`; JVM writes `~/Downloads/RedefineNCM/`; iOS remains an explicit
+  unsupported actual until an NSURLSession-backed writer is implemented.
 - **Playlist behaviors**: `replacePlaylist` setting honored on song click,
   `playlistUpdatePlaycount` reported, no auto-jump to NowPlaying (original behavior).
 - **Album-art theme color**: `themeColorFromCoilImage()` expect/actual (Android Palette /

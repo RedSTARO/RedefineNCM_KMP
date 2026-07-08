@@ -8,6 +8,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.json.Json
 
+enum class LyricCacheStatus {
+    Saved,
+    NoLyric,
+    Failed,
+}
+
 class Repository(
     private val api: NCMApi,
     private val db: AppDatabase,
@@ -114,24 +120,38 @@ class Repository(
     // ── Lyric ──
 
     fun getLyric(id: Long): Flow<Lyric?> = flow {
-        runCatching {
-            db.cachedLyricQueries.selectBySongId(id).executeAsOneOrNull()
-                ?.let { json.decodeFromString<Lyric>(it) }
-        }.getOrNull()?.let { emit(it) }
+        cachedLyric(id)?.let { emit(it) }
+        fetchAndCacheLyric(id)?.let { emit(it) }
+    }
+
+    suspend fun cacheLyric(id: Long): LyricCacheStatus {
+        cachedLyric(id)?.takeIf { it.hasAnyLyricText() }?.let { return LyricCacheStatus.Saved }
+        val network = fetchAndCacheLyric(id) ?: return LyricCacheStatus.Failed
+        return if (network.hasAnyLyricText()) LyricCacheStatus.Saved else LyricCacheStatus.NoLyric
+    }
+
+    private fun cachedLyric(id: Long): Lyric? = runCatching {
+        db.cachedLyricQueries.selectBySongId(id).executeAsOneOrNull()
+            ?.let { json.decodeFromString<Lyric>(it) }
+    }.getOrNull()
+
+    private suspend fun fetchAndCacheLyric(id: Long): Lyric? {
         // /lyric/new 返回 yrc (逐字歌词); /lyric 不返回 yrc。优先使用 /lyric/new
         val networkNew = safeApiCall { api.lyricNew(id) }
-        val hasYrc = networkNew?.yrc?.lyric?.isNotBlank() == true
-        val hasLrc = networkNew?.lrc?.lyric?.isNotBlank() == true
-        if (networkNew != null && (hasYrc || hasLrc)) {
+        if (networkNew != null && networkNew.hasAnyLyricText()) {
             runCatching { db.cachedLyricQueries.upsert(id, json.encodeToString(networkNew)) }
-            emit(networkNew)
-        } else {
-            safeApiCall { api.lyric(id) }?.let { network ->
-                runCatching { db.cachedLyricQueries.upsert(id, json.encodeToString(network)) }
-                emit(network)
-            }
+            return networkNew
         }
+        val fallback = safeApiCall { api.lyric(id) } ?: return null
+        runCatching { db.cachedLyricQueries.upsert(id, json.encodeToString(fallback)) }
+        return fallback
     }
+
+    private fun Lyric.hasAnyLyricText(): Boolean =
+        lrc?.lyric?.isNotBlank() == true ||
+            yrc?.lyric?.isNotBlank() == true ||
+            tlyric?.lyric?.isNotBlank() == true ||
+            romalrc?.lyric?.isNotBlank() == true
 
     // ── Song URL ──
 
@@ -146,6 +166,14 @@ class Repository(
         return safeApiCall {
             api.songUrlV1(songIds, quality.lowercase()).data
         } ?: emptyList()
+    }
+
+    suspend fun getSongDetails(songIds: List<Long>): List<SongDetailSongs> {
+        if (songIds.isEmpty()) return emptyList()
+        return songIds.chunked(200)
+            .flatMap { chunk ->
+                safeApiCall { api.songDetail(chunk).songs } ?: emptyList()
+            }
     }
 
     // ── Search ──
