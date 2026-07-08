@@ -87,6 +87,7 @@ private fun queryMediaCollection(
         add("${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?")
         if (canFilterRelativePath) {
             add("${MediaStore.MediaColumns.RELATIVE_PATH} = ?")
+            add("${MediaStore.MediaColumns.IS_PENDING} = 0")
         }
     }.joinToString(" AND ")
     val selectionArgs = buildList {
@@ -118,6 +119,10 @@ private fun queryMediaCollection(
                 }
                 val mediaId = cursor.getLong(idIndex)
                 val uri = ContentUris.withAppendedId(collectionUri, mediaId).toString()
+                if (!isReadableMediaUri(context, uri)) {
+                    deleteStaleMediaRow(context, uri)
+                    continue
+                }
                 val sizeBytes = if (sizeIndex >= 0) cursor.getLong(sizeIndex).takeIf { it > 0L } else null
                 val modifiedSeconds = if (modifiedIndex >= 0) {
                     cursor.getLong(modifiedIndex).takeIf { it > 0L }
@@ -135,6 +140,17 @@ private fun queryMediaCollection(
         }
     result
 }.getOrDefault(emptyMap())
+
+private fun isReadableMediaUri(context: Context, uri: String): Boolean =
+    runCatching {
+        context.contentResolver.openFileDescriptor(Uri.parse(uri), "r")?.use { true } == true
+    }.getOrDefault(false)
+
+private fun deleteStaleMediaRow(context: Context, uri: String) {
+    runCatching {
+        context.contentResolver.delete(Uri.parse(uri), null, null)
+    }
+}
 
 private fun scanLegacyDownloadDir(targetSongId: Long?): Map<Long, DownloadedSongSnapshot> = runCatching {
     val dir = Environment.getExternalStoragePublicDirectory(

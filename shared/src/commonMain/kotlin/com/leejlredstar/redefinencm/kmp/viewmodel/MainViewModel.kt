@@ -62,6 +62,7 @@ class MainViewModel(
         }
         fetchRecommend()
         restorePlayerStatus()
+        downloadManager.syncWithLocalLibrary()
         initPlayerStatusAutosave()
         checkAppUpdate()
     }
