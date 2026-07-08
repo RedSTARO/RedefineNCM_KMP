@@ -4,13 +4,12 @@ import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
-import com.leejlredstar.redefinencm.kmp.util.isSongDownloaded
+import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
-import java.io.File
 import java.net.URI
 import javax.sound.sampled.*
 
@@ -19,7 +18,7 @@ import javax.sound.sampled.*
  * via the mp3spi (JavaZOOM) service-provider interface.
  *
  * Placeholder URIs are resolved by [StreamUrlResolver]: if the song has been downloaded
- * to `~/Downloads/RedefineNCM/<id>.mp3` it uses the local file directly; otherwise it
+ * to `~/Downloads/RedefineNCM/` it uses the scanned local file URI directly; otherwise it
  * fetches a CDN stream URL via [Repository.getSongUrl].
  *
  * Position is tracked via system-clock elapsed time to handle variable-bit-rate MP3
@@ -36,12 +35,10 @@ class JvmMediaPlayer(
     private val resolver = StreamUrlResolver { mediaId ->
         val id = mediaId.toLong()
 
-        // Check for a locally-downloaded offline file first.
-        if (isSongDownloaded(id)) {
-            val file = File(System.getProperty("user.home"), "Downloads/RedefineNCM/$id.mp3")
-            if (file.isFile) {
-                return@StreamUrlResolver file.toURI().toString()
-            }
+        // Check for a locally-downloaded offline file first. The downloader preserves the
+        // server-provided extension, so this must use the snapshot URI instead of `$id.mp3`.
+        DownloadedSongsCache.snapshot()[id]?.uri?.let { uri ->
+            return@StreamUrlResolver uri
         }
 
         // Fall through to online CDN resolution.

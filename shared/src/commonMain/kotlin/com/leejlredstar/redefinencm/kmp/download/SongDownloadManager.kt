@@ -309,7 +309,8 @@ class SongDownloadManager(
             repo.getSongDetails(localOnlyIds).associateBy { it.id }
         }
         _tasks.update { tasks ->
-            tasks.reconcileWithLocalLibrary(
+            reconcileDownloadTasksWithLocalLibrary(
+                tasks = tasks,
                 localFiles = localFiles,
                 songDetails = localOnlyDetails,
             )
@@ -579,3 +580,87 @@ class SongDownloadManager(
         compareByDescending<DownloadedSongSnapshot> { it.lastModifiedEpochMillis ?: 0L }
             .thenBy { it.id }
 }
+
+internal fun reconcileDownloadTasksWithLocalLibrary(
+    tasks: List<SongDownloadTask>,
+    localFiles: Map<Long, DownloadedSongSnapshot>,
+    songDetails: Map<Long, SongDetailSongs> = emptyMap(),
+): List<SongDownloadTask> {
+    val merged = linkedMapOf<Long, SongDownloadTask>()
+    tasks.forEach { task ->
+        merged[task.id] = syncDownloadTaskWithLocalLibrary(
+            task = task,
+            snapshot = localFiles[task.id],
+            songDetail = songDetails[task.id],
+        )
+    }
+    localFiles.values
+        .filter { snapshot -> snapshot.id !in merged }
+        .sortedWith(
+            compareByDescending<DownloadedSongSnapshot> { it.lastModifiedEpochMillis ?: 0L }
+                .thenBy { it.id }
+        )
+        .forEach { snapshot ->
+            merged[snapshot.id] = importedDownloadTask(snapshot, songDetails[snapshot.id])
+        }
+    return merged.values.toList()
+}
+
+private fun syncDownloadTaskWithLocalLibrary(
+    task: SongDownloadTask,
+    snapshot: DownloadedSongSnapshot?,
+    songDetail: SongDetailSongs?,
+): SongDownloadTask {
+    val existsOnDisk = snapshot != null
+    return when {
+        task.status == DownloadTaskStatus.Completed && !existsOnDisk -> task.copy(
+            status = DownloadTaskStatus.Deleted,
+            requestedQuality = null,
+            actualQuality = null,
+            lyricStatus = DownloadLyricStatus.NotStarted,
+            progressBytes = 0,
+            totalBytes = null,
+            fileName = null,
+            errorMessage = "本地文件已删除",
+        )
+        !task.isActive && existsOnDisk -> {
+            val localSize = snapshot.sizeBytes
+            task.copy(
+                title = songDetail?.downloadDisplayTitle() ?: task.title,
+                artist = songDetail?.downloadDisplayArtist() ?: task.artist,
+                artworkUri = songDetail?.al?.picUrl?.takeIf(String::isNotBlank) ?: task.artworkUri,
+                status = DownloadTaskStatus.Completed,
+                progressBytes = localSize ?: task.progressBytes.takeIf { it > 0L } ?: 1,
+                totalBytes = localSize ?: task.totalBytes ?: 1,
+                fileName = snapshot.fileName,
+                errorMessage = null,
+            )
+        }
+        else -> task
+    }
+}
+
+private fun importedDownloadTask(
+    snapshot: DownloadedSongSnapshot,
+    songDetail: SongDetailSongs?,
+): SongDownloadTask {
+    val size = snapshot.sizeBytes
+    return SongDownloadTask(
+        id = snapshot.id,
+        title = songDetail?.downloadDisplayTitle() ?: "本地歌曲 ${snapshot.id}",
+        artist = songDetail?.downloadDisplayArtist() ?: "本地文件",
+        artworkUri = songDetail?.al?.picUrl.orEmpty(),
+        status = DownloadTaskStatus.Completed,
+        lyricStatus = DownloadLyricStatus.NotStarted,
+        progressBytes = size ?: 1,
+        totalBytes = size ?: 1,
+        fileName = snapshot.fileName,
+        errorMessage = null,
+    )
+}
+
+private fun SongDetailSongs.downloadDisplayTitle(): String =
+    name.ifBlank { "本地歌曲 $id" }
+
+private fun SongDetailSongs.downloadDisplayArtist(): String =
+    ar.joinToString(" / ") { it.name }.ifBlank { "未知艺术家" }

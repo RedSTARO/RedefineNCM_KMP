@@ -7,6 +7,7 @@ import kotlinx.serialization.json.Json
 /** Serializable snapshot of user-configurable settings used for export / import. */
 @Serializable
 data class SettingsBackupData(
+    /** Kept only so older exported files decode; auth cookies are no longer exported/imported. */
     val cookie: String = "",
     val server: String = "",
     val onlinePlayQuality: String = SoundQuality.STANDARD.name,
@@ -23,36 +24,57 @@ data class SettingsBackupData(
 private val backupJson = Json { ignoreUnknownKeys = true; coerceInputValues = true }
 
 /** Reads current settings and returns a JSON string ready to write to a file. */
-fun encodeSettingsBackup(settings: PlatformSettings): String = backupJson.encodeToString(
+fun encodeSettingsBackup(settings: PlatformSettings): String = encodeSettingsBackup(
+    getString = settings::getString,
+    getBoolean = settings::getBoolean,
+)
+
+internal fun encodeSettingsBackup(
+    getString: (key: String, default: String) -> String,
+    getBoolean: (key: String, default: Boolean) -> Boolean,
+): String = backupJson.encodeToString(
     SettingsBackupData(
-        cookie = settings.getString(SettingKeys.COOKIE, ""),
-        server = settings.getString(SettingKeys.SERVER, ""),
-        onlinePlayQuality = settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name),
-        downloadQuality = settings.getString(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name),
-        replacePlaylist = settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false),
-        checkUpdate = settings.getBoolean(SettingKeys.CHECK_UPDATE, false),
-        searchPrediction = settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true),
-        showDownloadStatus = settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false),
-        adaptOriginalAndroidLyric = settings.getBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, false),
-        showTranslatedLyric = settings.getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false),
-        showRomanLyric = settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false),
+        cookie = "",
+        server = getString(SettingKeys.SERVER, ""),
+        onlinePlayQuality = getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name),
+        downloadQuality = getString(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name),
+        replacePlaylist = getBoolean(SettingKeys.REPLACE_PLAYLIST, false),
+        checkUpdate = getBoolean(SettingKeys.CHECK_UPDATE, false),
+        searchPrediction = getBoolean(SettingKeys.SEARCH_PREDICTION, true),
+        showDownloadStatus = getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false),
+        adaptOriginalAndroidLyric = getBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, false),
+        showTranslatedLyric = getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false),
+        showRomanLyric = getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false),
     )
 )
 
 /** Parses [json] and writes values into [settings]. Returns false on any parse error. */
 fun applySettingsBackup(json: String, settings: PlatformSettings): Boolean = try {
+    applySettingsBackup(
+        json = json,
+        setString = settings::setString,
+        setBoolean = settings::setBoolean,
+    )
+} catch (_: Exception) {
+    false
+}
+
+internal fun applySettingsBackup(
+    json: String,
+    setString: (key: String, value: String) -> Unit,
+    setBoolean: (key: String, value: Boolean) -> Unit,
+): Boolean = try {
     val data = backupJson.decodeFromString<SettingsBackupData>(json)
-    if (data.cookie.isNotEmpty()) settings.setString(SettingKeys.COOKIE, data.cookie)
-    if (data.server.isNotEmpty()) settings.setString(SettingKeys.SERVER, data.server)
-    settings.setString(SettingKeys.ONLINE_PLAY_QUALITY, data.onlinePlayQuality)
-    settings.setString(SettingKeys.DOWNLOAD_QUALITY, data.downloadQuality)
-    settings.setBoolean(SettingKeys.REPLACE_PLAYLIST, data.replacePlaylist)
-    settings.setBoolean(SettingKeys.CHECK_UPDATE, data.checkUpdate)
-    settings.setBoolean(SettingKeys.SEARCH_PREDICTION, data.searchPrediction)
-    settings.setBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, data.showDownloadStatus)
-    settings.setBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, data.adaptOriginalAndroidLyric)
-    settings.setBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, data.showTranslatedLyric)
-    settings.setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, data.showRomanLyric)
+    if (data.server.isNotEmpty()) setString(SettingKeys.SERVER, data.server)
+    setString(SettingKeys.ONLINE_PLAY_QUALITY, data.onlinePlayQuality)
+    setString(SettingKeys.DOWNLOAD_QUALITY, data.downloadQuality)
+    setBoolean(SettingKeys.REPLACE_PLAYLIST, data.replacePlaylist)
+    setBoolean(SettingKeys.CHECK_UPDATE, data.checkUpdate)
+    setBoolean(SettingKeys.SEARCH_PREDICTION, data.searchPrediction)
+    setBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, data.showDownloadStatus)
+    setBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, data.adaptOriginalAndroidLyric)
+    setBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, data.showTranslatedLyric)
+    setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, data.showRomanLyric)
     true
 } catch (_: Exception) {
     false
