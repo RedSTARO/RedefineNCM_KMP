@@ -90,7 +90,6 @@ import org.koin.compose.koinInject
 private sealed interface TabDest {
     data object Home : TabDest
     data object My : TabDest
-    data object Downloads : TabDest
     data object Settings : TabDest
 }
 
@@ -98,6 +97,7 @@ private sealed interface PushedDest {
     data object Login : PushedDest
     data object NowPlaying : PushedDest
     data object FullLyric : PushedDest
+    data object Downloads : PushedDest
     data class Playlist(val id: Long) : PushedDest
 }
 
@@ -156,7 +156,7 @@ fun App() {
             fun back() { if (pushedStack.isNotEmpty()) pushedStack.removeAt(pushedStack.lastIndex) }
             fun openDownloads() {
                 pushedStack.clear()
-                currentTab = TabDest.Downloads
+                push(PushedDest.Downloads)
             }
             fun openFullLyric() {
                 val existingIndex = pushedStack.indexOfLast { it is PushedDest.FullLyric }
@@ -170,6 +170,14 @@ fun App() {
             }
 
             BackHandler(enabled = pushedStack.isNotEmpty()) { back() }
+
+            LaunchedEffect(Unit) {
+                AppNavigationRequests.openDownloadsRequestId.collect { requestId ->
+                    if (AppNavigationRequests.consumeOpenDownloadsRequest(requestId)) {
+                        openDownloads()
+                    }
+                }
+            }
 
             // 启动更新检查提示（原版 SplashActivity Toast）
             val snackbarHostState = remember { SnackbarHostState() }
@@ -186,7 +194,6 @@ fun App() {
                 listOf(
                     NavigationItem("推荐", AppIcons.Home, TabDest.Home),
                     NavigationItem("我的", AppIcons.Person, TabDest.My),
-                    NavigationItem("下载", AppIcons.Download, TabDest.Downloads),
                     NavigationItem("设置", AppIcons.Settings, TabDest.Settings),
                 )
             }
@@ -308,10 +315,12 @@ fun App() {
                                                 onOpenFullLyric = ::openFullLyric,
                                             )
                                             is PushedDest.FullLyric -> WebViewLyricScreen(onBack = ::back)
+                                            is PushedDest.Downloads -> DownloadManagementScreen(
+                                                scaffoldPadding = innerPadding,
+                                            )
                                             is PushedDest.Playlist -> PlaylistDetailScreen(
                                                 playlistId = dest.id,
                                                 onBack = ::back,
-                                                onOpenDownloads = ::openDownloads,
                                             )
                                         }
                                         is RootDest.Tab -> when (target.tab) {
@@ -323,9 +332,6 @@ fun App() {
                                             is TabDest.My -> UserPlaylistScreen(
                                                 scaffoldPadding = innerPadding,
                                                 onOpenPlaylist = { push(PushedDest.Playlist(it)) },
-                                            )
-                                            is TabDest.Downloads -> DownloadManagementScreen(
-                                                scaffoldPadding = innerPadding,
                                             )
                                             is TabDest.Settings -> SettingsScreen(
                                                 scaffoldPadding = innerPadding,
@@ -534,6 +540,7 @@ private fun desktopPageTitle(rootDest: RootDest): String =
             is PushedDest.Login -> "登录"
             is PushedDest.NowPlaying -> "正在播放"
             is PushedDest.FullLyric -> "歌词"
+            is PushedDest.Downloads -> "下载管理"
             is PushedDest.Playlist -> "歌单"
         }
     }
@@ -542,7 +549,6 @@ private fun tabTitle(tab: TabDest): String =
     when (tab) {
         is TabDest.Home -> "推荐"
         is TabDest.My -> "我的音乐"
-        is TabDest.Downloads -> "下载管理"
         is TabDest.Settings -> "设置"
     }
 
@@ -697,8 +703,7 @@ private fun tabIndex(tab: TabDest): Int =
     when (tab) {
         is TabDest.Home -> 0
         is TabDest.My -> 1
-        is TabDest.Downloads -> 2
-        is TabDest.Settings -> 3
+        is TabDest.Settings -> 2
     }
 
 private const val PageTransitionMillis = 320

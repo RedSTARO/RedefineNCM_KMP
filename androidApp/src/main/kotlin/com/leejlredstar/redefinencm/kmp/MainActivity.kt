@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
+import com.leejlredstar.redefinencm.kmp.download.DownloadNotificationIntents
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import org.koin.android.ext.android.get
@@ -48,6 +49,7 @@ class MainActivity : ComponentActivity() {
 
         requestRuntimePermissions()
 
+        handleNavigationIntent(intent)
         setContent { App() }
     }
 
@@ -66,6 +68,12 @@ class MainActivity : ComponentActivity() {
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerFuture = null
         super.onDestroy()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNavigationIntent(intent)
     }
 
     private fun requestRuntimePermissions() {
@@ -93,4 +101,13 @@ class MainActivity : ComponentActivity() {
 
     private fun hasPermission(permission: String): Boolean =
         ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+
+    private fun handleNavigationIntent(intent: Intent?) {
+        if (
+            intent?.action == DownloadNotificationIntents.ACTION_OPEN_DOWNLOADS ||
+            intent?.getBooleanExtra(DownloadNotificationIntents.EXTRA_OPEN_DOWNLOADS, false) == true
+        ) {
+            AppNavigationRequests.openDownloads()
+        }
+    }
 }

@@ -60,7 +60,6 @@ import org.koin.compose.koinInject
 fun PlaylistDetailScreen(
     playlistId: Long,
     onBack: () -> Unit,
-    onOpenDownloads: () -> Unit = {},
     viewModel: MainViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
     settings: PlatformSettings = koinInject(),
@@ -133,7 +132,6 @@ fun PlaylistDetailScreen(
                 onPlayAll = { playAll() },
                 onDownloadAll = {
                     viewModel.onDownloadPlaylistClick(playlistId)
-                    onOpenDownloads()
                 },
             )
         }

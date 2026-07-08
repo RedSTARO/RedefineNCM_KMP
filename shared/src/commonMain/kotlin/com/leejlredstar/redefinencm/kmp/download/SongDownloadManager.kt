@@ -120,6 +120,7 @@ class SongDownloadManager(
     private var activeTaskId: Long? = null
 
     fun enqueuePlaylist(playlistId: Long) {
+        DownloadServiceController.ensureRunning()
         scope.launch {
             val songs = repo.getPlaylistTrackAllOnce(playlistId)?.songs.orEmpty()
             enqueueResolvedSongs(songs, playlistId)
@@ -128,6 +129,7 @@ class SongDownloadManager(
 
     fun enqueueSongs(songs: List<SongDetailSongs>, playlistId: Long? = null) {
         if (songs.isEmpty()) return
+        DownloadServiceController.ensureRunning()
         scope.launch { enqueueResolvedSongs(songs, playlistId) }
     }
 
@@ -143,6 +145,7 @@ class SongDownloadManager(
                 songDetails = songDetails,
             )
         }
+        DownloadServiceController.ensureRunning()
         ensureWorker()
     }
 
@@ -162,6 +165,7 @@ class SongDownloadManager(
                 task
             }
         }
+        DownloadServiceController.ensureRunning()
         ensureWorker()
     }
 
@@ -186,6 +190,7 @@ class SongDownloadManager(
                 task
             }
         }
+        DownloadServiceController.ensureRunning()
         ensureWorker()
     }
 
@@ -256,6 +261,7 @@ class SongDownloadManager(
                 }
             }
         }
+        DownloadServiceController.ensureRunning()
         ensureWorker()
     }
 
@@ -308,6 +314,7 @@ class SongDownloadManager(
     }
 
     private fun ensureWorker() {
+        DownloadServiceController.ensureRunning()
         if (workerJob?.isActive == true) return
         val job = scope.launch {
             while (true) {
