@@ -85,7 +85,8 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     LaunchedEffect(engineReady, lyricMediaId) {
         if (!engineReady) return@LaunchedEffect
         val mediaId = lyricMediaId ?: return@LaunchedEffect
-        session.eval("AmllBridge.resetTrack('${mediaId.escapeJsSingleQuoted()}'); AmllBridge.setTime(0);")
+        val position = currentPosition.coerceAtLeast(0L)
+        session.eval("AmllBridge.resetTrack('${mediaId.escapeJsSingleQuoted()}'); AmllBridge.setTime($position);")
     }
 
     // Feed raw LRC once the engine is ready and whenever the track changes.
