@@ -35,7 +35,6 @@ import androidx.compose.foundation.layout.width
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -296,11 +295,6 @@ fun App() {
                                 }
                             }
                             Column(Modifier.weight(1f).fillMaxSize()) {
-                                if (useDesktopLayout) {
-                                    DesktopTopBar(
-                                        title = desktopPageTitle(rootDest),
-                                    )
-                                }
                                 AnimatedContent(
                                     targetState = rootDest,
                                     transitionSpec = { pageTransition(initialState, targetState) },
@@ -503,54 +497,6 @@ private fun DesktopNowPlayingStrip(
         }
     }
 }
-
-@Composable
-private fun DesktopTopBar(
-    title: String,
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        tonalElevation = 0.dp,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column {
-            Row(
-                modifier = Modifier.fillMaxWidth().height(68.dp).padding(horizontal = 28.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.ExtraBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.38f))
-        }
-    }
-}
-
-private fun desktopPageTitle(rootDest: RootDest): String =
-    when (rootDest) {
-        is RootDest.Tab -> tabTitle(rootDest.tab)
-        is RootDest.Pushed -> when (rootDest.dest) {
-            is PushedDest.Login -> "登录"
-            is PushedDest.NowPlaying -> "正在播放"
-            is PushedDest.FullLyric -> "歌词"
-            is PushedDest.Downloads -> "下载管理"
-            is PushedDest.Playlist -> "歌单"
-        }
-    }
-
-private fun tabTitle(tab: TabDest): String =
-    when (tab) {
-        is TabDest.Home -> "推荐"
-        is TabDest.My -> "我的音乐"
-        is TabDest.Settings -> "设置"
-    }
 
 @Composable
 private fun ChromeAccentSourceImage(
