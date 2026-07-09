@@ -20,7 +20,7 @@ import javax.sound.sampled.*
  * via the mp3spi (JavaZOOM) service-provider interface.
  *
  * Placeholder URIs are resolved by [StreamUrlResolver]: if the song has been downloaded
- * to `~/Downloads/RedefineNCM/` it uses the scanned local file URI directly; otherwise it
+ * to `~/Music/RedefineNCM/` it uses the scanned local file URI directly; otherwise it
  * fetches a CDN stream URL via [Repository.getSongUrl].
  *
  * Position is tracked via system-clock elapsed time to handle variable-bit-rate MP3

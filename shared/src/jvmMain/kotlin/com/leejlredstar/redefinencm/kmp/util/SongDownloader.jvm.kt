@@ -19,7 +19,7 @@ actual object SongDownloader {
     ): DownloadedSongFile = withContext(Dispatchers.IO) {
         require(item.url.isNotBlank()) { "下载地址为空" }
 
-        val dir = File(System.getProperty("user.home"), "Downloads/RedefineNCM")
+        val dir = jvmDownloadDirectory()
         if (!dir.exists() && !dir.mkdirs()) error("无法创建下载目录")
 
         val extension = item.url.substringBefore('?')
