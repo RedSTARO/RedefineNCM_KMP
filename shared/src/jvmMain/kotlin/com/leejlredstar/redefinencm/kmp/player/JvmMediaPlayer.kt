@@ -20,8 +20,8 @@ import javax.sound.sampled.*
  * via the mp3spi (JavaZOOM) service-provider interface.
  *
  * Placeholder URIs are resolved by [StreamUrlResolver]: if the song has been downloaded
- * to `~/Music/RedefineNCM/` it uses the scanned local file URI directly; otherwise it
- * fetches a CDN stream URL via [Repository.getSongUrl].
+ * to `~/Music/RedefineNCM/` in a JVM-decodable format it uses the scanned local file URI
+ * directly; otherwise it fetches a supported CDN stream URL via [Repository.getSongUrl].
  *
  * Position is tracked via system-clock elapsed time to handle variable-bit-rate MP3
  * without relying on frame-level seeking.
@@ -37,16 +37,16 @@ class JvmMediaPlayer(
     private val resolver = StreamUrlResolver { mediaId ->
         val id = mediaId.toLong()
 
-        // Check for a locally-downloaded offline file first. The downloader preserves the
-        // server-provided extension, so this must use the snapshot URI instead of `$id.mp3`.
-        DownloadedSongsCache.snapshot()[id]?.uri?.let { uri ->
+        // Check for a locally-downloaded offline file first. Skip unsupported lossless files:
+        // this backend is Java Sound + mp3spi, not a general FFmpeg-style decoder.
+        DownloadedSongsCache.snapshot()[id]?.uri?.takeIf(::isJvmPlayableAudioUri)?.let { uri ->
             return@StreamUrlResolver uri
         }
 
         // Fall through to online CDN resolution.
         val qualityName = settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.EXHIGH.name)
         val quality = runCatching { SoundQuality.valueOf(qualityName) }.getOrDefault(SoundQuality.EXHIGH)
-        repo.getSongUrl(id, quality.name.lowercase())
+        repo.getSongUrl(id, jvmPlaybackQualityLevel(quality))
     }
 
     // ── Queue state ──
@@ -318,6 +318,7 @@ class JvmMediaPlayer(
             }
         } catch (e: Exception) {
             if (isPlaybackCurrent(generation)) {
+                System.err.println("JvmMediaPlayer failed to open audio stream: ${e.javaClass.simpleName}: ${e.message}")
                 _state.value = PlayerState.ERROR
                 _isPlaying.value = false
             }
@@ -461,7 +462,7 @@ class JvmMediaPlayer(
     }
 
     override fun togglePlayPause() {
-        if (_isPlaying.value || _state.value == PlayerState.BUFFERING) pause() else play()
+        if (_isPlaying.value) pause() else play()
     }
 
     override fun seekTo(positionMs: Long) {
