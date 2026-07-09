@@ -47,7 +47,21 @@ fun gitOutput(vararg args: String): String {
     }.standardOutput.asText.get().trim()
 }
 
-val appBaseTag = gitOutput("describe", "--tags", "--match", "v[0-9]*.[0-9]*.[0-9]*", "--abbrev=0")
+fun gitOutputSafe(default: String, vararg args: String): String {
+    return providers.exec {
+        workingDir = rootDir
+        commandLine("git", *args)
+        isIgnoreExitValue = true
+    }.let { exec ->
+        if (exec.result.get().exitValue == 0) {
+            exec.standardOutput.asText.get().trim()
+        } else {
+            default
+        }
+    }
+}
+
+val appBaseTag = gitOutputSafe("v0.0.0", "describe", "--tags", "--match", "v[0-9]*.[0-9]*.[0-9]*", "--abbrev=0")
 if (!semverTagPattern.matches(appBaseTag)) {
     throw GradleException("App base version tag must match v<major>.<minor>.<patch>, got '$appBaseTag'.")
 }
