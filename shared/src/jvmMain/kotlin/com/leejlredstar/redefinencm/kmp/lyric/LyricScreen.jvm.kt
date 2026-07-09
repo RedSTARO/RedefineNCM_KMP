@@ -1,14 +1,22 @@
 package com.leejlredstar.redefinencm.kmp.lyric
 
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
+import androidx.compose.ui.graphics.Color
+import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
+import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOverlayCoordinator
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
@@ -64,6 +72,10 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val showRomanLyric = remember {
         settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)
     }
+    val externalOverlayActive by NativeSurfaceOverlayCoordinator.externalOverlayActive.collectAsState()
+    var controlsRevealRequest by remember { mutableIntStateOf(0) }
+    var inPageOverlayActive by remember { mutableStateOf(false) }
+    val nativeSurfaceVisible = !inPageOverlayActive && !externalOverlayActive
 
     // 资产解包很快（3 个小文件拷贝），首帧前同步执行即可
     val assetsDir = remember { extractAmllAssets() }
@@ -73,6 +85,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             readyFlow = engineReadyFlow,
             onLineClicked = { timeMs, mediaId -> viewModel.onLyricLineClick(mediaId, timeMs) },
             onBack = onBack,
+            onControlsRequested = { controlsRevealRequest++ },
         )
     }
 
@@ -80,6 +93,15 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     LaunchedEffect(session) {
         while (!canvas.isDisplayable || canvas.width <= 0 || canvas.height <= 0) delay(30)
         session.start(canvas, "${fileUrl(File(assetsDir, "player.html"))}?platform=desktop")
+    }
+
+    LaunchedEffect(engineReady) {
+        if (engineReady) session.installControlsRevealHook()
+    }
+
+    LaunchedEffect(nativeSurfaceVisible) {
+        canvas.isVisible = nativeSurfaceVisible
+        session.setNativeWindowVisible(nativeSurfaceVisible)
     }
 
     LaunchedEffect(engineReady, lyricMediaId) {
@@ -144,10 +166,25 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         }
     }
 
-    SwingPanel(
-        factory = { canvas },
-        modifier = Modifier.fillMaxSize(),
-    )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+    ) {
+        SwingPanel(
+            factory = { canvas },
+            update = { it.isVisible = nativeSurfaceVisible },
+            modifier = Modifier.fillMaxSize(),
+        )
+
+        AutoHideMiniPlayerController(
+            modifier = Modifier.fillMaxSize(),
+            initialExpanded = false,
+            showCollapsedWhenHidden = false,
+            externalRevealRequest = controlsRevealRequest,
+            onOverlayVisibilityChanged = { inPageOverlayActive = it },
+        )
+    }
 }
 
 /**
@@ -158,10 +195,12 @@ private class WebviewSession(
     private val readyFlow: MutableStateFlow<Boolean>,
     private val onLineClicked: (Long, String?) -> Unit,
     private val onBack: () -> Unit,
+    private val onControlsRequested: () -> Unit,
 ) {
     private val handle = AtomicLong(0)
     private val jobs = ConcurrentLinkedQueue<String>()
     private val callbackScope = MainScope()
+    @Volatile private var childWindow: com.sun.jna.Pointer? = null
 
     // 强引用回调，防止 JNA 回调桩被 GC（native 正持有其指针）
     private val bindCallback = object : WebviewJna.BindCallback {
@@ -180,6 +219,7 @@ private class WebviewSession(
         }
     }
     private val backCallback = hostCallback("back") { onBack() }
+    private val controlsCallback = hostCallback("controls") { onControlsRequested() }
     private val dispatchCallback = object : WebviewJna.DispatchCallback {
         override fun callback(w: Long, arg: Long) {
             while (true) {
@@ -212,6 +252,7 @@ private class WebviewSession(
             handle.set(w)
             val childHwnd = n.webview_get_window(w)
             if (childHwnd != null) {
+                childWindow = childHwnd
                 runCatching {
                     reparentIntoCanvas(childHwnd, canvasHwnd, width, height)
                 }.onFailure { error ->
@@ -242,10 +283,12 @@ private class WebviewSession(
             n.webview_bind(w, "amllReady", bindCallback, 0)
             n.webview_bind(w, "amllSeek", seekCallback, 0)
             n.webview_bind(w, "amllBack", backCallback, 0)
+            n.webview_bind(w, "amllControls", controlsCallback, 0)
             n.webview_navigate(w, url)
             n.webview_run(w) // 阻塞直到 terminate
             n.webview_destroy(w)
             handle.set(0)
+            childWindow = null
             println("AMLL[wv2] webview loop exited")
         }
     }
@@ -311,6 +354,34 @@ private class WebviewSession(
         if (w == 0L) return
         jobs.add(js)
         runCatching { WebviewJna.N.webview_dispatch(w, dispatchCallback, 0) }
+    }
+
+    fun installControlsRevealHook() {
+        eval(
+            """
+            if (!globalThis.__redefineControlsRevealBound) {
+              globalThis.__redefineControlsRevealBound = true;
+              const revealRedefineControls = () => {
+                try {
+                  if (typeof globalThis.amllControls === 'function') globalThis.amllControls();
+                } catch (_) {}
+              };
+              document.addEventListener('pointerdown', revealRedefineControls, true);
+              document.addEventListener('keydown', revealRedefineControls, true);
+            }
+            """.trimIndent(),
+        )
+    }
+
+    fun setNativeWindowVisible(visible: Boolean) {
+        val child = childWindow ?: return
+        val cmd = if (visible) 8 else 0
+        runCatching {
+            com.sun.jna.platform.win32.User32.INSTANCE.ShowWindow(
+                com.sun.jna.platform.win32.WinDef.HWND(child),
+                cmd,
+            )
+        }
     }
 
     fun stop() {

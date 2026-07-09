@@ -79,6 +79,10 @@ import kotlin.math.abs
 @Composable
 fun AutoHideMiniPlayerController(
     modifier: Modifier = Modifier,
+    initialExpanded: Boolean = true,
+    showCollapsedWhenHidden: Boolean = true,
+    externalRevealRequest: Int = 0,
+    onOverlayVisibilityChanged: (Boolean) -> Unit = {},
     viewModel: NowPlayingViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
 ) {
@@ -91,7 +95,7 @@ fun AutoHideMiniPlayerController(
     val shuffleEnabled by viewModel.shuffleStatus.collectAsState()
     val comments by viewModel.comments.collectAsState()
 
-    var visible by remember { mutableStateOf(true) }
+    var visible by remember { mutableStateOf(initialExpanded) }
     var revealRequest by remember { mutableIntStateOf(0) }
     var showQueue by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
@@ -119,13 +123,24 @@ fun AutoHideMiniPlayerController(
     val accentPalette = contentAccentPalette(accentColor)
 
     fun reveal() {
+        visible = true
         revealRequest += 1
     }
 
-    LaunchedEffect(revealRequest) {
-        visible = true
+    LaunchedEffect(externalRevealRequest) {
+        if (externalRevealRequest > 0) reveal()
+    }
+
+    LaunchedEffect(visible, revealRequest, showQueue, showComments) {
+        if (!visible || showQueue || showComments) return@LaunchedEffect
         delay(3_600)
-        visible = false
+        if (!showQueue && !showComments) visible = false
+    }
+
+    val drawsController = visible || showCollapsedWhenHidden
+    val overlayActive = drawsController || showQueue || showComments
+    LaunchedEffect(overlayActive) {
+        onOverlayVisibilityChanged(overlayActive)
     }
 
     LaunchedEffect(showComments, media?.id) {
@@ -194,7 +209,7 @@ fun AutoHideMiniPlayerController(
                         viewModel.onShuffleClick(!shuffleEnabled)
                     },
                 )
-            } else {
+            } else if (showCollapsedWhenHidden) {
                 CollapsedProgressController(
                     media = media,
                     hasMedia = hasMedia,
