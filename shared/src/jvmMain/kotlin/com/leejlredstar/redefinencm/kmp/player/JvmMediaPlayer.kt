@@ -532,10 +532,10 @@ class JvmMediaPlayer(
         cancelPlaybackSession()
         mutateQueue { PlayQueue.of(items, startIndex) }
         seekOffsetMs = positionMs.coerceAtLeast(0L)
-        _position.value = seekOffsetMs
         _isPlaying.value = false
         _state.value = PlayerState.PAUSED
         publishQueue()
+        _position.value = seekOffsetMs
     }
 
     override fun addToQueue(item: MediaInfo) {

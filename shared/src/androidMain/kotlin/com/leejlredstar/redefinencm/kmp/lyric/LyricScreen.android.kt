@@ -193,8 +193,9 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         if (!engineReady) return@LaunchedEffect
         val mediaId = lyricMediaId ?: return@LaunchedEffect
         Log.d("AMLL", "reset lyric surface for media=$mediaId")
+        val position = currentPosition.coerceAtLeast(0L)
         webView.evaluateJavascript(
-            "AmllBridge.resetTrack(${JSONObject.quote(mediaId)}); AmllBridge.setTime(0);",
+            "AmllBridge.resetTrack(${JSONObject.quote(mediaId)}); AmllBridge.setTime($position);",
             null,
         )
         webView.showAmllStatus("Waiting for lyrics...")
