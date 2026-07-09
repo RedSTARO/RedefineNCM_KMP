@@ -54,8 +54,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val rawRomanLyric by viewModel.rawRomanLyric.collectAsState()
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
-    val duration by viewModel.songLength.collectAsState()
-    val isPlaying by viewModel.isPlaying.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
 
     val engineReadyFlow = remember { MutableStateFlow(false) }
@@ -75,9 +73,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             readyFlow = engineReadyFlow,
             onLineClicked = { timeMs, mediaId -> viewModel.onLyricLineClick(mediaId, timeMs) },
             onBack = onBack,
-            onPlayPause = { viewModel.onPauseClick() },
-            onPrevious = { viewModel.onPervClick() },
-            onNext = { viewModel.onNextClick() },
         )
     }
 
@@ -133,20 +128,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         session.eval("AmllBridge.setTime($currentPosition);")
     }
 
-    LaunchedEffect(engineReady, metadata, currentPosition, duration, isPlaying) {
-        if (!engineReady) return@LaunchedEffect
-        session.eval(
-            "AmllBridge.setControls({" +
-                "title:'${metadata?.title.orEmpty().escapeJsSingleQuoted()}'," +
-                "artist:'${metadata?.artist.orEmpty().escapeJsSingleQuoted()}'," +
-                "artworkUri:'${metadata?.artworkUri.orEmpty().escapeJsSingleQuoted()}'," +
-                "position:$currentPosition," +
-                "duration:$duration," +
-                "isPlaying:$isPlaying" +
-                "});",
-        )
-    }
-
     // Set the blurred album-art background for the current track (full-res:
     // WebView2 的 GPU 合成下全屏 CSS blur 是免费的).
     LaunchedEffect(engineReady, metadata?.artworkUri) {
@@ -176,9 +157,6 @@ private class WebviewSession(
     private val readyFlow: MutableStateFlow<Boolean>,
     private val onLineClicked: (Long, String?) -> Unit,
     private val onBack: () -> Unit,
-    private val onPlayPause: () -> Unit,
-    private val onPrevious: () -> Unit,
-    private val onNext: () -> Unit,
 ) {
     private val handle = AtomicLong(0)
     private val jobs = ConcurrentLinkedQueue<String>()
@@ -201,9 +179,6 @@ private class WebviewSession(
         }
     }
     private val backCallback = hostCallback("back") { onBack() }
-    private val playPauseCallback = hostCallback("playPause") { onPlayPause() }
-    private val previousCallback = hostCallback("previous") { onPrevious() }
-    private val nextCallback = hostCallback("next") { onNext() }
     private val dispatchCallback = object : WebviewJna.DispatchCallback {
         override fun callback(w: Long, arg: Long) {
             while (true) {
@@ -266,9 +241,6 @@ private class WebviewSession(
             n.webview_bind(w, "amllReady", bindCallback, 0)
             n.webview_bind(w, "amllSeek", seekCallback, 0)
             n.webview_bind(w, "amllBack", backCallback, 0)
-            n.webview_bind(w, "amllTogglePlayPause", playPauseCallback, 0)
-            n.webview_bind(w, "amllPrevious", previousCallback, 0)
-            n.webview_bind(w, "amllNext", nextCallback, 0)
             n.webview_navigate(w, url)
             n.webview_run(w) // 阻塞直到 terminate
             n.webview_destroy(w)
