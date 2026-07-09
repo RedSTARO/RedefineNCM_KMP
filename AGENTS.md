@@ -317,18 +317,31 @@ This is its own task and **must not be done from memory**:
 
 ## Conventions
 
-- **Commit messages:** When creating commits or rewriting existing commit messages, the
-  message MUST follow the Header / Body / Footer structure. Header is required. Body and
-  Footer are optional. The commit message prose MUST be English.
-- Header is the first line and MUST be a concise English summary of the change. Do not leave
-  it empty. Do not use Chinese prose in the Header.
-- If Body is present, separate it from the Header with one blank line. Body prose MUST be
-  English and should explain context, rationale, or implementation details that do not fit in
-  the Header.
+- **Commit messages:** When creating commits or rewriting existing commit messages, use the
+  Conventional Commit style below. Header is required. Body and Footer are optional. Commit
+  message prose MUST be English.
+- Header format MUST be `<type>(<scope>): <subject>`, or `<type>: <subject>` when scope is
+  omitted.
+  - `type` is required and MUST be one of: `feat`, `fix`, `docs`, `style`, `refactor`,
+    `perf`, `test`, `chore`, or `revert`.
+  - `scope` is optional and names the affected module or feature.
+  - `subject` is required, should be concise, and should usually stay within 50 characters.
+- If Body is present, separate it from the Header with one blank line. Use it to explain the
+  motivation, concrete changes, and behavior differences from the previous version.
 - If Footer is present, separate it from the Body, or from the Header when Body is omitted,
-  with one blank line. Footer prose and trailers MUST be English.
+  with one blank line. Use it for Breaking Changes and closed issue references such as
+  `Closes #123`.
 - Do not treat Body or Footer as mandatory. Do not reinterpret "English" as "ASCII-only"
   unless the user explicitly asks for that stricter rule.
+- Example:
+  ```text
+  feat(user): add user registration
+
+  Implement registration by email and phone number.
+  Tighten user data validation.
+
+  Closes #456
+  ```
 - If asked to fix non-compliant commit messages, rewrite only the messages that violate this
   rule and preserve the committed file trees.
 - **Kotlin official style** (`kotlin.code.style=official`).
