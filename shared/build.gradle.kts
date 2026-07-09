@@ -90,19 +90,22 @@ kotlin {
             implementation(libs.ktor.client.darwin)
             implementation(libs.sqldelight.native.driver)
         }
-        jvmMain.dependencies {
-            // OkHttp 而非 CIO：目标服务器 DNS 有黑洞 A 记录，CIO 不做多地址回退会连环
-            // ConnectTimeout；OkHttp 的 RouteSelector 会自动换下一个 IP（与 Android 端一致）
-            implementation(libs.ktor.client.okhttp)
-            // Real desktop audio playback (MP3 via mp3spi + javax.sound.sampled)
-            implementation(libs.mp3spi)
-            // Dispatchers.Main for JVM (needed by DesktopFloatingWindowController + jvmTest)
-            implementation(libs.kotlinx.coroutinesSwing)
-            implementation(libs.sqldelight.sqlite.driver)
-            // 系统 WebView（Windows=WebView2/Edge Chromium）承载桌面 AMLL 歌词页 —— GPU 加速、
-            // 完整现代内核。此前的 JavaFX WebKit（WebKit 无 GPU 合成、字体/布局/动画均不完整）
-            // 与 KCEF（已归档、native init 崩溃）均被淘汰。
-            implementation(libs.webview.java)
+        jvmMain {
+            resources.srcDir("src/commonMain/amllAssets")
+            dependencies {
+                // OkHttp 而非 CIO：目标服务器 DNS 有黑洞 A 记录，CIO 不做多地址回退会连环
+                // ConnectTimeout；OkHttp 的 RouteSelector 会自动换下一个 IP（与 Android 端一致）
+                implementation(libs.ktor.client.okhttp)
+                // Real desktop audio playback (MP3 via mp3spi + javax.sound.sampled)
+                implementation(libs.mp3spi)
+                // Dispatchers.Main for JVM (needed by DesktopFloatingWindowController + jvmTest)
+                implementation(libs.kotlinx.coroutinesSwing)
+                implementation(libs.sqldelight.sqlite.driver)
+                // 系统 WebView（Windows=WebView2/Edge Chromium）承载桌面 AMLL 歌词页 —— GPU 加速、
+                // 完整现代内核。此前的 JavaFX WebKit（WebKit 无 GPU 合成、字体/布局/动画均不完整）
+                // 与 KCEF（已归档、native init 崩溃）均被淘汰。
+                implementation(libs.webview.java)
+            }
         }
     }
 }
