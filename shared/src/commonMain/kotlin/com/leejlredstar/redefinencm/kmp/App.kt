@@ -259,12 +259,15 @@ fun App() {
                                 DesktopSidebar(
                                     tabs = tabs,
                                     currentTab = currentTab,
+                                    downloadsSelected = rootDest is RootDest.Pushed &&
+                                        rootDest.dest is PushedDest.Downloads,
                                     accentPalette = chromePalette,
                                     player = player,
                                     onSelectTab = {
                                         pushedStack.clear()
                                         currentTab = it
                                     },
+                                    onOpenDownloads = ::openDownloads,
                                     onOpenNowPlaying = ::openFullLyric,
                                 )
                             } else if (isWide) {
@@ -347,9 +350,11 @@ fun App() {
 private fun DesktopSidebar(
     tabs: List<NavigationItem>,
     currentTab: TabDest,
+    downloadsSelected: Boolean,
     accentPalette: ContentAccentPalette,
     player: PlatformPlayer,
     onSelectTab: (TabDest) -> Unit,
+    onOpenDownloads: () -> Unit,
     onOpenNowPlaying: () -> Unit,
 ) {
     Surface(
@@ -380,12 +385,20 @@ private fun DesktopSidebar(
             Spacer(Modifier.height(8.dp))
             tabs.forEach { item ->
                 DesktopNavItem(
-                    item = item,
+                    label = item.label,
+                    icon = item.icon,
                     selected = currentTab == item.dest,
                     accentPalette = accentPalette,
                     onClick = { onSelectTab(item.dest) },
                 )
             }
+            DesktopNavItem(
+                label = "下载管理",
+                icon = AppIcons.Download,
+                selected = downloadsSelected,
+                accentPalette = accentPalette,
+                onClick = onOpenDownloads,
+            )
             Spacer(Modifier.weight(1f))
             DesktopNowPlayingStrip(
                 player = player,
@@ -398,7 +411,8 @@ private fun DesktopSidebar(
 
 @Composable
 private fun DesktopNavItem(
-    item: NavigationItem,
+    label: String,
+    icon: ImageVector,
     selected: Boolean,
     accentPalette: ContentAccentPalette,
     onClick: () -> Unit,
@@ -415,9 +429,9 @@ private fun DesktopNavItem(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Icon(item.icon, contentDescription = item.label, modifier = Modifier.size(24.dp))
+            Icon(icon, contentDescription = label, modifier = Modifier.size(24.dp))
             Text(
-                text = item.label,
+                text = label,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                 maxLines = 1,
