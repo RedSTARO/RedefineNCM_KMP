@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import java.net.URI
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantLock
 import javax.sound.sampled.*
 
 /**
@@ -88,12 +90,15 @@ class JvmMediaPlayer(
     // ── Audio playback state ──
 
     private val playbackLock = Any()
+    private val pauseLock = ReentrantLock()
+    private val pauseCondition = pauseLock.newCondition()
 
     @Volatile private var playbackGeneration = 0L
     @Volatile private var resolveJob: Job? = null
     @Volatile private var playbackThread: Thread? = null
     @Volatile private var line: SourceDataLine? = null
     @Volatile private var audioStream: AudioInputStream? = null
+    @Volatile private var pauseRequested = false
 
     @Volatile private var playStartNano = 0L
     @Volatile private var seekOffsetMs = 0L
@@ -131,14 +136,25 @@ class JvmMediaPlayer(
     private fun isPlaybackCurrent(generation: Long): Boolean =
         synchronized(playbackLock) { generation == playbackGeneration }
 
+    private fun signalPauseStateChanged() {
+        pauseLock.lock()
+        try {
+            pauseCondition.signalAll()
+        } finally {
+            pauseLock.unlock()
+        }
+    }
+
     private fun beginPlaybackSession(): Long {
         val generation = synchronized(playbackLock) {
             playbackGeneration += 1
+            pauseRequested = false
             resolveJob?.cancel()
             resolveJob = null
             stopPlaybackLocked()
             playbackGeneration
         }
+        signalPauseStateChanged()
         stopPolling()
         return generation
     }
@@ -146,10 +162,12 @@ class JvmMediaPlayer(
     private fun cancelPlaybackSession() {
         synchronized(playbackLock) {
             playbackGeneration += 1
+            pauseRequested = false
             resolveJob?.cancel()
             resolveJob = null
             stopPlaybackLocked()
         }
+        signalPauseStateChanged()
         stopPolling()
     }
 
@@ -161,6 +179,7 @@ class JvmMediaPlayer(
         playbackThread = null
         audioStream = null
         line = null
+        pauseRequested = false
 
         if (threadToStop !== Thread.currentThread()) {
             threadToStop?.interrupt()
@@ -186,6 +205,7 @@ class JvmMediaPlayer(
 
         synchronized(playbackLock) {
             if (generation != playbackGeneration) return
+            pauseRequested = false
             stopPlaybackLocked()
             playbackThread = thread
         }
@@ -264,6 +284,26 @@ class JvmMediaPlayer(
             _state.value = PlayerState.PLAYING
 
             while (!Thread.currentThread().isInterrupted && isPlaybackCurrent(generation)) {
+                var shouldStop = false
+                pauseLock.lock()
+                try {
+                    while (pauseRequested && generation == playbackGeneration && !Thread.currentThread().isInterrupted) {
+                        try {
+                            pauseCondition.await(100, TimeUnit.MILLISECONDS)
+                        } catch (_: InterruptedException) {
+                            Thread.currentThread().interrupt()
+                        }
+                    }
+                } finally {
+                    pauseLock.unlock()
+                }
+                if (generation != playbackGeneration || Thread.currentThread().isInterrupted) {
+                    shouldStop = true
+                } else if (!audioLine.isRunning) {
+                    audioLine.start()
+                    playStartNano = System.nanoTime()
+                }
+                if (shouldStop) break
                 val read = stream.read(buf)
                 if (read < 0) {
                     completedNaturally = true
@@ -366,6 +406,30 @@ class JvmMediaPlayer(
     override fun play() {
         if (_isPlaying.value) return
         if (_state.value == PlayerState.BUFFERING) return
+        val resumed = synchronized(playbackLock) {
+            val thread = playbackThread
+            val currentLine = line
+            if (_state.value == PlayerState.PAUSED &&
+                pauseRequested &&
+                thread != null &&
+                thread.isAlive &&
+                currentLine != null
+            ) {
+                pauseRequested = false
+                playStartNano = System.nanoTime()
+                currentLine.start()
+                _isPlaying.value = true
+                _state.value = PlayerState.PLAYING
+                true
+            } else {
+                false
+            }
+        }
+        if (resumed) {
+            signalPauseStateChanged()
+            startPolling()
+            return
+        }
         queueModel.currentItem?.let { resolveAndPlay(it, _position.value.coerceAtLeast(0L)) }
     }
 
@@ -374,6 +438,23 @@ class JvmMediaPlayer(
         if (playStartNano > 0) seekOffsetMs += (System.nanoTime() - playStartNano) / 1_000_000L
         playStartNano = 0L
         _position.value = seekOffsetMs
+        val pausedActivePlayback = synchronized(playbackLock) {
+            val currentLine = line
+            val thread = playbackThread
+            if (_isPlaying.value && currentLine != null && thread != null && thread.isAlive) {
+                pauseRequested = true
+                currentLine.stop()
+                _isPlaying.value = false
+                _state.value = PlayerState.PAUSED
+                true
+            } else {
+                false
+            }
+        }
+        if (pausedActivePlayback) {
+            signalPauseStateChanged()
+            return
+        }
         cancelPlaybackSession()
         _isPlaying.value = false
         _state.value = PlayerState.PAUSED
@@ -389,6 +470,10 @@ class JvmMediaPlayer(
         val current = _currentMedia.value
         if (current != null && (_isPlaying.value || _state.value == PlayerState.BUFFERING)) {
             resolveAndPlay(current, seekOffsetMs)
+        } else if (current != null && _state.value == PlayerState.PAUSED && playbackThread != null) {
+            cancelPlaybackSession()
+            _isPlaying.value = false
+            _state.value = PlayerState.PAUSED
         }
     }
 
