@@ -17,6 +17,7 @@ object SettingKeys {
     const val ADAPT_ORIGINAL_ANDROID_LYRIC = "adaptOriginalAndroidLyric"
     const val SHOW_TRANSLATED_LYRIC = "showTranslatedLyric"
     const val SHOW_ROMAN_LYRIC = "showRomanLyric"
+    const val PLAYER_VOLUME = "playerVolume"
 }
 
 enum class SoundQuality(val displayName: String) {

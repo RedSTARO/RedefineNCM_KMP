@@ -74,12 +74,21 @@ class IosAVPlayer(
     private val _shuffleEnabled = MutableStateFlow(false)
     override val shuffleEnabled: StateFlow<Boolean> = _shuffleEnabled
 
+    private val _volume = MutableStateFlow(
+        playerVolumeFromPercent(settings.getLong(SettingKeys.PLAYER_VOLUME, DEFAULT_PLAYER_VOLUME_PERCENT))
+    )
+    override val volume: StateFlow<Float> = _volume
+
     // Clock-based position tracking (avoids Kotlin/Native CMTime interop issues)
     private var playStartTimeMs = 0L     // (CFAbsoluteTimeGetCurrent() * 1000.0).toLong() when play started
     private var seekOffsetMs = 0L        // Seek offset within the current track
     private var pollJob: Job? = null
     private var resolveJob: Job? = null
     private var playbackGeneration = 0L
+
+    init {
+        avPlayer.volume = _volume.value
+    }
 
     private fun publishQueue() {
         _queue.value = queueModel.itemsInPlayOrder
@@ -357,6 +366,17 @@ class IosAVPlayer(
     override fun setShuffleEnabled(enabled: Boolean) {
         queueModel = queueModel.setShuffle(enabled)
         publishQueue()
+    }
+
+    override fun setVolume(volume: Float) {
+        val safeVolume = normalizePlayerVolume(volume)
+        val oldPercent = playerVolumeToPercent(_volume.value)
+        val newPercent = playerVolumeToPercent(safeVolume)
+        _volume.value = safeVolume
+        avPlayer.volume = safeVolume
+        if (newPercent != oldPercent) {
+            settings.setLong(SettingKeys.PLAYER_VOLUME, newPercent)
+        }
     }
 
     override fun release() {

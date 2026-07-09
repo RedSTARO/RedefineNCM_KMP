@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.player
 
 import kotlinx.coroutines.flow.StateFlow
+import kotlin.math.roundToLong
 
 /**
  * Cross-platform music player abstraction.
@@ -32,6 +33,9 @@ interface PlatformPlayer {
     /** Whether shuffle mode is enabled. */
     val shuffleEnabled: StateFlow<Boolean>
 
+    /** Output volume in the inclusive range 0f..1f. */
+    val volume: StateFlow<Float>
+
     // ── Playback control ──
 
     fun play()
@@ -61,6 +65,10 @@ interface PlatformPlayer {
     // ── Shuffle ──
 
     fun setShuffleEnabled(enabled: Boolean)
+
+    // ── Volume ──
+
+    fun setVolume(volume: Float)
 
     // ── Lifecycle ──
 
@@ -93,3 +101,19 @@ data class MediaInfo(
 fun interface StreamUrlResolver {
     suspend fun resolve(mediaId: String): String?
 }
+
+internal const val DEFAULT_PLAYER_VOLUME_PERCENT: Long = 100L
+
+internal fun normalizePlayerVolume(volume: Float): Float =
+    when {
+        volume.isNaN() -> 1f
+        volume < 0f -> 0f
+        volume > 1f -> 1f
+        else -> volume
+    }
+
+internal fun playerVolumeFromPercent(percent: Long): Float =
+    percent.coerceIn(0L, 100L).toFloat() / 100f
+
+internal fun playerVolumeToPercent(volume: Float): Long =
+    (normalizePlayerVolume(volume) * 100f).roundToLong().coerceIn(0L, 100L)
