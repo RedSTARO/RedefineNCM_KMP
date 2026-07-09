@@ -9,7 +9,7 @@ import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
-import com.leejlredstar.redefinencm.kmp.util.currentAppVersion
+import com.leejlredstar.redefinencm.kmp.util.currentReleaseVersion
 import com.leejlredstar.redefinencm.kmp.util.fetchLatestReleaseTag
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -71,9 +71,8 @@ class MainViewModel(
     private fun checkAppUpdate() {
         scope.launch(Dispatchers.Default) {
             if (!settings.getBooleanAsync(SettingKeys.CHECK_UPDATE, false)) return@launch
-            // 归一化后比较：GitHub tag 常带 "v" 前缀（v1.2.3），本地 versionName 不带（1.2.3），
-            // 直接字符串比较会永远判为"有新版本"。
-            val current = currentAppVersion()?.normalizeVersion() ?: return@launch
+            // 完整构建版本带提交 hash（v0.0.1.412ae548）；更新检查只比较发布基线 tag。
+            val current = currentReleaseVersion().normalizeVersion()
             val latest = fetchLatestReleaseTag() ?: return@launch
             if (latest.normalizeVersion().isNotEmpty() && latest.normalizeVersion() != current) {
                 updateMessage.value = "发现新版本：$latest"

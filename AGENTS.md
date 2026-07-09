@@ -132,6 +132,24 @@ separate, verified upgrade pass; see [Dependency management](#dependency-managem
 | Gradle (wrapper) | `9.1.0` | `gradle/wrapper/gradle-wrapper.properties` |
 | JDK | 17+ | — |
 
+### Application versioning
+
+App version metadata is Git-derived from `gradle/app-version.gradle.kts`. The required base
+tag format is `v<major>.<minor>.<patch>`; the current base tag is `v0.0.1`. Full app version
+names are `baseTag.shortCommitHash`, e.g. `v0.0.1.cf6cea74`. Build numbers are
+`git rev-list --count HEAD`.
+
+Platform mapping:
+
+- Android: `versionName = full app version`, `versionCode = commit count`.
+- Shared runtime: generated common `BuildInfo` exposes base tag, semantic base version,
+  commit hash, commit-count build number, and full app version.
+- Desktop native distributions: `packageVersion = base semantic version` (without `v`), because
+  native packagers require numeric package versions; runtime code still uses full `BuildInfo`.
+- iOS app + LyricWidget: `CFBundleShortVersionString = base semantic version`,
+  `CFBundleVersion = commit count`, and `RedefineNCMVersionName = full app version`. Xcode build
+  phases run `iosApp/Scripts/stamp-version.sh` to stamp the built product from the same Git data.
+
 > **Convergence status (goal #4):** Kotlin is now `2.4.0` in BOTH repos (converged + verified).
 > **AGP stays at `9.0.1` here** while the original is `9.2.0`: bumping the KMP repo to AGP 9.2.0
 > requires Gradle ≥ 9.4.1, and after that it fails to resolve `aapt2:9.2.0` and breaks

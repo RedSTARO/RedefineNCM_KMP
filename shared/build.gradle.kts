@@ -1,4 +1,69 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.TaskAction
+
+abstract class GenerateAppBuildInfoTask : DefaultTask() {
+    @get:Input
+    abstract val appBaseTag: Property<String>
+
+    @get:Input
+    abstract val appBaseVersion: Property<String>
+
+    @get:Input
+    abstract val appCommitHash: Property<String>
+
+    @get:Input
+    abstract val appVersionCode: Property<Int>
+
+    @get:Input
+    abstract val appVersionName: Property<String>
+
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    @TaskAction
+    fun generate() {
+        val outputDir = outputDirectory.get().asFile
+            .resolve("com/leejlredstar/redefinencm/kmp/util")
+        outputDir.mkdirs()
+        outputDir.resolve("BuildInfo.kt").writeText(
+            """
+            package com.leejlredstar.redefinencm.kmp.util
+
+            object BuildInfo {
+                const val BASE_TAG: String = "${appBaseTag.get()}"
+                const val BASE_VERSION: String = "${appBaseVersion.get()}"
+                const val COMMIT_HASH: String = "${appCommitHash.get()}"
+                const val VERSION_CODE: Int = ${appVersionCode.get()}
+                const val VERSION_NAME: String = "${appVersionName.get()}"
+            }
+            """.trimIndent() + "\n"
+        )
+    }
+}
+
+val resolvedAppBaseTag = rootProject.extra["redefineNcmBaseTag"] as String
+val resolvedAppBaseVersion = rootProject.extra["redefineNcmBaseVersion"] as String
+val resolvedAppCommitHash = rootProject.extra["redefineNcmCommitHash"] as String
+val resolvedAppVersionCode = rootProject.extra["redefineNcmVersionCode"] as Int
+val resolvedAppVersionName = rootProject.extra["redefineNcmVersionName"] as String
+val generatedBuildInfoDir = layout.buildDirectory.dir("generated/redefinencmVersion/commonMain/kotlin")
+
+val generateAppBuildInfo by tasks.registering(GenerateAppBuildInfoTask::class) {
+    group = "versioning"
+    description = "Generates common BuildInfo constants from the Git-derived app version."
+
+    appBaseTag.set(resolvedAppBaseTag)
+    appBaseVersion.set(resolvedAppBaseVersion)
+    appCommitHash.set(resolvedAppCommitHash)
+    appVersionCode.set(resolvedAppVersionCode)
+    appVersionName.set(resolvedAppVersionName)
+    outputDirectory.set(generatedBuildInfoDir)
+}
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -82,6 +147,9 @@ kotlin {
             // SQLDelight — runtime + coroutines Flow support
             implementation(libs.sqldelight.runtime)
             implementation(libs.sqldelight.coroutines)
+        }
+        commonMain {
+            kotlin.srcDir(generateAppBuildInfo)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
