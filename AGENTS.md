@@ -317,6 +317,20 @@ This is its own task and **must not be done from memory**:
 
 ## Conventions
 
+- **Commit messages:** When creating commits or rewriting existing commit messages, the
+  message MUST follow the Header / Body / Footer structure. Header is required. Body and
+  Footer are optional. The commit message prose MUST be English.
+- Header is the first line and MUST be a concise English summary of the change. Do not leave
+  it empty. Do not use Chinese prose in the Header.
+- If Body is present, separate it from the Header with one blank line. Body prose MUST be
+  English and should explain context, rationale, or implementation details that do not fit in
+  the Header.
+- If Footer is present, separate it from the Body, or from the Header when Body is omitted,
+  with one blank line. Footer prose and trailers MUST be English.
+- Do not treat Body or Footer as mandatory. Do not reinterpret "English" as "ASCII-only"
+  unless the user explicitly asks for that stricter rule.
+- If asked to fix non-compliant commit messages, rewrite only the messages that violate this
+  rule and preserve the committed file trees.
 - **Kotlin official style** (`kotlin.code.style=official`).
 - **Compose Multiplatform UI for all platforms.** No SwiftUI/native UI except platform chrome
   (Live Activity widget, floating window, notifications). iOS entry is
