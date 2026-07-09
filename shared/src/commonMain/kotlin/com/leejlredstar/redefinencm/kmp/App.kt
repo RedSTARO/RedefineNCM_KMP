@@ -35,9 +35,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.FabPosition
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -61,7 +63,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -71,12 +72,15 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.lyric.WebViewLyricScreen
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackSeekBar
 import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
+import com.leejlredstar.redefinencm.kmp.ui.screen.CommentBottomSheet
 import com.leejlredstar.redefinencm.kmp.ui.screen.DownloadManagementScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.LoginScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.NowPlayingScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.PlaylistDetailScreen
+import com.leejlredstar.redefinencm.kmp.ui.screen.QueueBottomSheet
 import com.leejlredstar.redefinencm.kmp.ui.screen.SettingsScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.UserPlaylistScreen
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
@@ -87,6 +91,7 @@ import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
+import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import org.koin.compose.koinInject
 
 private sealed interface TabDest {
@@ -449,141 +454,276 @@ private fun DesktopNowPlayingStrip(
     player: PlatformPlayer,
     accentPalette: ContentAccentPalette,
     onOpenNowPlaying: () -> Unit,
+    viewModel: NowPlayingViewModel = koinInject(),
 ) {
     val media by player.currentMedia.collectAsState()
     val isPlaying by player.isPlaying.collectAsState()
     val position by player.position.collectAsState()
     val duration by player.duration.collectAsState()
+    val playList by viewModel.playList.collectAsState()
+    val currentIndex by viewModel.currentMediaIndexInList.collectAsState()
+    val shuffleEnabled by viewModel.shuffleStatus.collectAsState()
+    val comments by viewModel.comments.collectAsState()
     val artwork = media?.artworkUri.orEmpty()
     val hasMedia = media != null
     val safePosition = position.coerceAtLeast(0L)
-    val safeDuration = duration.coerceAtLeast(0L)
-    val progress = if (safeDuration > 0L) {
-        (safePosition.toDouble() / safeDuration.toDouble()).coerceIn(0.0, 1.0).toFloat()
+    val totalDuration = duration
+        .takeIf { it > 0L }
+        ?: media?.duration?.takeIf { it > 0L }
+        ?: 0L
+    val progress = if (totalDuration > 0L) {
+        (safePosition.toDouble() / totalDuration.toDouble()).coerceIn(0.0, 1.0).toFloat()
     } else {
         0f
     }
+    var showQueue by remember { mutableStateOf(false) }
+    var showComments by remember { mutableStateOf(false) }
+    var isDragging by remember(media?.id) { mutableStateOf(false) }
+    var dragProgress by remember(media?.id) { mutableStateOf(progress) }
+    val displayedProgress = if (isDragging) dragProgress else progress
+    val displayedPosition = if (isDragging) {
+        (dragProgress * totalDuration).toLong().coerceIn(0L, totalDuration)
+    } else {
+        safePosition.coerceAtMost(totalDuration.takeIf { it > 0L } ?: safePosition)
+    }
 
-    Surface(
-        onClick = { if (hasMedia) onOpenNowPlaying() },
-        shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+    LaunchedEffect(showComments, media?.id) {
+        if (showComments) viewModel.getComments()
+    }
+
+    Box(Modifier.fillMaxWidth()) {
+        Surface(
+            shape = MaterialTheme.shapes.extraLarge,
+            color = accentPalette.container.copy(alpha = 0.92f),
+            contentColor = accentPalette.onContainer,
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Surface(
-                    shape = MaterialTheme.shapes.medium,
-                    color = accentPalette.container,
-                    contentColor = accentPalette.onContainer,
-                    modifier = Modifier.size(52.dp),
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    if (artwork.isNotBlank()) {
-                        AsyncImage(
-                            model = artwork,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    } else {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Icon(AppIcons.GraphicEq, contentDescription = null, modifier = Modifier.size(24.dp))
+                    Surface(
+                        onClick = { if (hasMedia) onOpenNowPlaying() },
+                        shape = MaterialTheme.shapes.large,
+                        color = accentPalette.quietContainer,
+                        contentColor = accentPalette.onQuietContainer,
+                        modifier = Modifier.size(72.dp),
+                    ) {
+                        if (artwork.isNotBlank()) {
+                            AsyncImage(
+                                model = artwork,
+                                contentDescription = "Album art",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        } else {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Icon(AppIcons.GraphicEq, contentDescription = null, modifier = Modifier.size(30.dp))
+                            }
                         }
                     }
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = media?.title?.takeIf { it.isNotBlank() } ?: "未播放",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = media?.artist?.takeIf { it.isNotBlank() } ?: "RedefineNCM",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = accentPalette.onContainer.copy(alpha = 0.72f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = if (hasMedia) {
+                                "${formatDesktopPlayerDuration(displayedPosition)} / ${formatDesktopPlayerDuration(totalDuration)}"
+                            } else {
+                                "0:00 / 0:00"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = accentPalette.onContainer.copy(alpha = 0.66f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
                 }
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = media?.title ?: "未播放",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = media?.artist ?: "RedefineNCM",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
 
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape),
-                color = accentPalette.accent,
-                trackColor = accentPalette.onQuietContainer.copy(alpha = 0.20f),
-            )
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = if (hasMedia) {
-                        "${formatDesktopPlayerDuration(safePosition)} / ${formatDesktopPlayerDuration(safeDuration)}"
-                    } else {
-                        "0:00 / 0:00"
+                PlaybackSeekBar(
+                    value = displayedProgress.coerceIn(0f, 1f),
+                    enabled = hasMedia && totalDuration > 0L,
+                    accentPalette = accentPalette,
+                    onInteractionStart = { isDragging = true },
+                    onPreview = { percent ->
+                        isDragging = true
+                        dragProgress = percent.coerceIn(0f, 1f)
                     },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
+                    onCommit = { percent ->
+                        dragProgress = percent.coerceIn(0f, 1f)
+                        if (totalDuration > 0L) {
+                            viewModel.onPositionSeekClick(
+                                (dragProgress * totalDuration).toLong().coerceIn(0L, totalDuration),
+                            )
+                        }
+                        isDragging = false
+                    },
+                    onCancel = {
+                        dragProgress = progress
+                        isDragging = false
+                    },
+                    modifier = Modifier.fillMaxWidth().height(30.dp),
                 )
+
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    FilledTonalIconButton(
-                        onClick = { player.seekToPrevious() },
+                    FilledIconToggleButton(
+                        checked = shuffleEnabled,
+                        onCheckedChange = { viewModel.onShuffleClick(!shuffleEnabled) },
                         enabled = hasMedia,
-                        shape = CircleShape,
-                        modifier = Modifier.size(34.dp),
+                        shape = MaterialTheme.shapes.large,
+                        modifier = Modifier.size(38.dp),
+                        colors = IconButtonDefaults.filledIconToggleButtonColors(
+                            containerColor = accentPalette.quietContainer,
+                            contentColor = accentPalette.onQuietContainer,
+                            checkedContainerColor = accentPalette.accent,
+                            checkedContentColor = accentPalette.onAccent,
+                            disabledContainerColor = accentPalette.quietContainer.copy(alpha = 0.44f),
+                            disabledContentColor = accentPalette.onQuietContainer.copy(alpha = 0.38f),
+                        ),
+                    ) {
+                        Icon(
+                            imageVector = if (shuffleEnabled) AppIcons.ShuffleOn else AppIcons.Shuffle,
+                            contentDescription = "随机播放",
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                    FilledTonalIconButton(
+                        onClick = { viewModel.onPervClick() },
+                        enabled = hasMedia,
+                        shape = MaterialTheme.shapes.large,
+                        modifier = Modifier.size(40.dp),
+                        colors = desktopSecondaryButtonColors(accentPalette),
                     ) {
                         Icon(
                             imageVector = AppIcons.KeyboardArrowLeft,
                             contentDescription = "上一首",
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(22.dp),
                         )
                     }
-                    FilledTonalIconButton(
-                        onClick = { player.togglePlayPause() },
+                    FilledIconButton(
+                        onClick = { viewModel.onPauseClick() },
                         enabled = hasMedia,
-                        shape = CircleShape,
-                        modifier = Modifier.size(40.dp),
+                        shape = MaterialTheme.shapes.extraLarge,
+                        modifier = Modifier.size(56.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = accentPalette.accent,
+                            contentColor = accentPalette.onAccent,
+                            disabledContainerColor = accentPalette.quietContainer.copy(alpha = 0.44f),
+                            disabledContentColor = accentPalette.onQuietContainer.copy(alpha = 0.38f),
+                        ),
                     ) {
                         Icon(
                             imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
                             contentDescription = if (isPlaying) "暂停" else "播放",
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(28.dp),
                         )
                     }
                     FilledTonalIconButton(
-                        onClick = { player.seekToNext() },
+                        onClick = { viewModel.onNextClick() },
                         enabled = hasMedia,
-                        shape = CircleShape,
-                        modifier = Modifier.size(34.dp),
+                        shape = MaterialTheme.shapes.large,
+                        modifier = Modifier.size(40.dp),
+                        colors = desktopSecondaryButtonColors(accentPalette),
                     ) {
                         Icon(
                             imageVector = AppIcons.KeyboardArrowRight,
                             contentDescription = "下一首",
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                    FilledTonalIconButton(
+                        onClick = {
+                            viewModel.onPlaylistClick()
+                            showQueue = true
+                        },
+                        enabled = hasMedia,
+                        shape = MaterialTheme.shapes.large,
+                        modifier = Modifier.size(38.dp),
+                        colors = desktopSecondaryButtonColors(accentPalette),
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.QueueMusic,
+                            contentDescription = "播放队列",
                             modifier = Modifier.size(18.dp),
                         )
                     }
                 }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(42.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FilledTonalIconButton(
+                        onClick = { viewModel.onFavClick() },
+                        enabled = hasMedia,
+                        modifier = Modifier.weight(1f),
+                        shape = CircleShape,
+                        colors = desktopSecondaryButtonColors(accentPalette),
+                    ) {
+                        Icon(AppIcons.FavoriteBorder, contentDescription = "收藏")
+                    }
+                    FilledTonalIconButton(
+                        onClick = { showComments = true },
+                        enabled = hasMedia,
+                        modifier = Modifier.weight(1f),
+                        shape = CircleShape,
+                        colors = desktopSecondaryButtonColors(accentPalette),
+                    ) {
+                        Icon(AppIcons.Comment, contentDescription = "评论")
+                    }
+                }
             }
+        }
+
+        if (showQueue) {
+            QueueBottomSheet(
+                playlist = playList,
+                currentIndex = currentIndex?.toIntOrNull() ?: 0,
+                accentPalette = accentPalette,
+                onDismiss = { showQueue = false },
+                onSeekClick = { index -> viewModel.onSeekClick(index) },
+            )
+        }
+
+        if (showComments) {
+            CommentBottomSheet(
+                comments = comments?.hotComments?.ifEmpty { comments?.comments } ?: emptyList(),
+                accentPalette = accentPalette,
+                onDismiss = { showComments = false },
+            )
         }
     }
 }
+
+@Composable
+private fun desktopSecondaryButtonColors(accentPalette: ContentAccentPalette) =
+    IconButtonDefaults.filledTonalIconButtonColors(
+        containerColor = accentPalette.quietContainer,
+        contentColor = accentPalette.onQuietContainer,
+        disabledContainerColor = accentPalette.quietContainer.copy(alpha = 0.44f),
+        disabledContentColor = accentPalette.onQuietContainer.copy(alpha = 0.38f),
+    )
 
 private fun formatDesktopPlayerDuration(millis: Long): String {
     val totalSeconds = millis.coerceAtLeast(0L) / 1000L
