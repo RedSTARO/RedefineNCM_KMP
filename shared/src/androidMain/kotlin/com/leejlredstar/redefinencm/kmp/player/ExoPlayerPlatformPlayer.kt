@@ -92,9 +92,15 @@ class ExoPlayerPlatformPlayer(
     private val _shuffleEnabled = MutableStateFlow(false)
     override val shuffleEnabled: StateFlow<Boolean> = _shuffleEnabled
 
+    private val _volume = MutableStateFlow(
+        playerVolumeFromPercent(settings.getLong(SettingKeys.PLAYER_VOLUME, DEFAULT_PLAYER_VOLUME_PERCENT))
+    )
+    override val volume: StateFlow<Float> = _volume
+
     private var positionJob: Job? = null
 
     init {
+        exoPlayer.volume = _volume.value
         exoPlayer.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) {
                 _isPlaying.value = playing
@@ -215,6 +221,17 @@ class ExoPlayerPlatformPlayer(
         exoPlayer.seekToDefaultPosition(windowIndex)
     }
     override fun setShuffleEnabled(enabled: Boolean) { exoPlayer.shuffleModeEnabled = enabled }
+
+    override fun setVolume(volume: Float) {
+        val safeVolume = normalizePlayerVolume(volume)
+        val oldPercent = playerVolumeToPercent(_volume.value)
+        val newPercent = playerVolumeToPercent(safeVolume)
+        _volume.value = safeVolume
+        exoPlayer.volume = safeVolume
+        if (newPercent != oldPercent) {
+            settings.setLong(SettingKeys.PLAYER_VOLUME, newPercent)
+        }
+    }
 
     override fun setQueue(items: List<MediaInfo>, startIndex: Int) {
         if (items.isEmpty()) {

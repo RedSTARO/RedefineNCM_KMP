@@ -58,6 +58,9 @@ class InMemoryPlatformPlayer(
     private val _shuffleEnabled = MutableStateFlow(false)
     override val shuffleEnabled: StateFlow<Boolean> = _shuffleEnabled.asStateFlow()
 
+    private val _volume = MutableStateFlow(1f)
+    override val volume: StateFlow<Float> = _volume.asStateFlow()
+
     private var ticker: Job? = null
 
     /** Mirror the [PlayQueue] state into the public StateFlows (single source of truth). */
@@ -128,6 +131,10 @@ class InMemoryPlatformPlayer(
     override fun setShuffleEnabled(enabled: Boolean) {
         queueModel = queueModel.setShuffle(enabled)
         publishQueue()
+    }
+
+    override fun setVolume(volume: Float) {
+        _volume.value = normalizePlayerVolume(volume)
     }
 
     override fun release() {

@@ -48,6 +48,8 @@ import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -458,6 +460,7 @@ private fun DesktopNowPlayingStrip(
 ) {
     val media by player.currentMedia.collectAsState()
     val isPlaying by player.isPlaying.collectAsState()
+    val volume by player.volume.collectAsState()
     val position by player.position.collectAsState()
     val duration by player.duration.collectAsState()
     val playList by viewModel.playList.collectAsState()
@@ -580,6 +583,30 @@ private fun DesktopNowPlayingStrip(
                     },
                     modifier = Modifier.fillMaxWidth().height(30.dp),
                 )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(34.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = AppIcons.VolumeUp,
+                        contentDescription = "音量",
+                        tint = accentPalette.onContainer.copy(alpha = 0.76f),
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Slider(
+                        value = volume.coerceIn(0f, 1f),
+                        onValueChange = { player.setVolume(it) },
+                        valueRange = 0f..1f,
+                        modifier = Modifier.weight(1f),
+                        colors = SliderDefaults.colors(
+                            thumbColor = accentPalette.onContainer,
+                            activeTrackColor = accentPalette.onContainer,
+                            inactiveTrackColor = accentPalette.onContainer.copy(alpha = 0.22f),
+                        ),
+                    )
+                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),

@@ -14,6 +14,7 @@ import java.net.URI
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import javax.sound.sampled.*
+import kotlin.math.log10
 
 /**
  * Desktop (JVM) [PlatformPlayer] backed by [javax.sound.sampled] with MP3 support
@@ -86,6 +87,11 @@ class JvmMediaPlayer(
 
     private val _shuffleEnabled = MutableStateFlow(false)
     override val shuffleEnabled: StateFlow<Boolean> = _shuffleEnabled.asStateFlow()
+
+    private val _volume = MutableStateFlow(
+        playerVolumeFromPercent(settings.getLong(SettingKeys.PLAYER_VOLUME, DEFAULT_PLAYER_VOLUME_PERCENT))
+    )
+    override val volume: StateFlow<Float> = _volume.asStateFlow()
 
     // ── Audio playback state ──
 
@@ -197,6 +203,29 @@ class JvmMediaPlayer(
         playStartNano = 0L
     }
 
+    private fun applyVolumeToLine(targetLine: SourceDataLine?, volume: Float = _volume.value) {
+        val audioLine = targetLine ?: return
+        val safeVolume = normalizePlayerVolume(volume)
+        runCatching {
+            when {
+                audioLine.isControlSupported(FloatControl.Type.MASTER_GAIN) -> {
+                    val control = audioLine.getControl(FloatControl.Type.MASTER_GAIN) as FloatControl
+                    val gain = if (safeVolume <= 0f) {
+                        control.minimum
+                    } else {
+                        (20f * log10(safeVolume)).coerceIn(control.minimum, control.maximum)
+                    }
+                    control.value = gain
+                }
+                audioLine.isControlSupported(FloatControl.Type.VOLUME) -> {
+                    val control = audioLine.getControl(FloatControl.Type.VOLUME) as FloatControl
+                    control.value = (control.minimum + (control.maximum - control.minimum) * safeVolume)
+                        .coerceIn(control.minimum, control.maximum)
+                }
+            }
+        }
+    }
+
     private fun openAndPlay(generation: Long, streamUrl: String, startMs: Long) {
         val thread = Thread(
             { runPlayback(generation, streamUrl, startMs) },
@@ -248,6 +277,7 @@ class JvmMediaPlayer(
             val info = DataLine.Info(SourceDataLine::class.java, fmt)
             audioLine = AudioSystem.getLine(info) as SourceDataLine
             audioLine.open(fmt)
+            applyVolumeToLine(audioLine)
 
             synchronized(playbackLock) {
                 if (generation != playbackGeneration) return
@@ -531,6 +561,19 @@ class JvmMediaPlayer(
     override fun setShuffleEnabled(enabled: Boolean) {
         mutateQueue { it.setShuffle(enabled) }
         publishQueue()
+    }
+
+    override fun setVolume(volume: Float) {
+        val safeVolume = normalizePlayerVolume(volume)
+        val oldPercent = playerVolumeToPercent(_volume.value)
+        val newPercent = playerVolumeToPercent(safeVolume)
+        _volume.value = safeVolume
+        synchronized(playbackLock) {
+            applyVolumeToLine(line, safeVolume)
+        }
+        if (newPercent != oldPercent) {
+            settings.setLong(SettingKeys.PLAYER_VOLUME, newPercent)
+        }
     }
 
     override fun release() {

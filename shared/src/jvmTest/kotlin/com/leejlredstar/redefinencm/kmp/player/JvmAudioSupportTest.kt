@@ -24,4 +24,17 @@ class JvmAudioSupportTest {
         assertFalse(isJvmPlayableAudioUri("file:/C:/Music/RedefineNCM/2097485077.flac"))
         assertFalse(isJvmPlayableAudioUri("https://example.com/audio/track.m4a"))
     }
+
+    @Test
+    fun playerVolumeUsesBoundedPercentPersistence() {
+        assertEquals(0f, normalizePlayerVolume(-0.25f))
+        assertEquals(1f, normalizePlayerVolume(1.25f))
+        assertEquals(1f, normalizePlayerVolume(Float.NaN))
+        assertEquals(0.42f, playerVolumeFromPercent(42))
+        assertEquals(0f, playerVolumeFromPercent(-1))
+        assertEquals(1f, playerVolumeFromPercent(101))
+        assertEquals(56L, playerVolumeToPercent(0.555f))
+        assertEquals(0L, playerVolumeToPercent(-0.2f))
+        assertEquals(100L, playerVolumeToPercent(1.2f))
+    }
 }
