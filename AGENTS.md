@@ -434,7 +434,7 @@ Full file-by-file audit against `../RedefineNCM` (frozen 2026-06-12), then close
   reconciles queued tasks with real files while importing disk-only downloads as Completed rows
   with best-effort `/song/detail` metadata. `SongDownloader` actuals only stream files to the
   platform download folder. Android writes `Downloads/RedefineNCM/` through `MediaStore` instead of
-  the system `DownloadManager`; JVM writes `~/Downloads/RedefineNCM/`; iOS remains an explicit
+  the system `DownloadManager`; JVM writes `~/Music/RedefineNCM/`; iOS remains an explicit
   unsupported actual until an NSURLSession-backed writer is implemented.
 - **Playlist behaviors**: `replacePlaylist` setting honored on song click,
   `playlistUpdatePlaycount` reported, no auto-jump to NowPlaying (original behavior).

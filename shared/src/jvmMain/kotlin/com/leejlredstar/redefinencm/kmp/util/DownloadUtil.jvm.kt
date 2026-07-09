@@ -7,7 +7,7 @@ actual fun isSongDownloaded(songId: Long): Boolean {
 }
 
 actual fun scanDownloadedSongs(): List<DownloadedSongSnapshot> {
-    val dir = File(System.getProperty("user.home"), "Downloads/RedefineNCM")
+    val dir = jvmDownloadDirectory()
     if (!dir.exists() || !dir.isDirectory) return emptyList()
     return dir.listFiles()
         ?.asSequence()
@@ -34,7 +34,7 @@ actual fun scanDownloadedSongIds(): Set<Long> =
     scanDownloadedSongs().mapTo(linkedSetOf()) { it.id }
 
 actual fun deleteDownloadedSongFile(songId: Long): Boolean {
-    val dir = File(System.getProperty("user.home"), "Downloads/RedefineNCM")
+    val dir = jvmDownloadDirectory()
     if (!dir.exists() || !dir.isDirectory) return false
     var deleted = false
     dir.listFiles()

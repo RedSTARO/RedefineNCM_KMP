@@ -31,6 +31,6 @@ actual fun platformModule() = module {
 
     // Desktop audio player backed by javax.sound.sampled + mp3spi.
     // Overrides the InMemoryPlatformPlayer default from sharedModule.
-    // Checks ~/Downloads/RedefineNCM/<id>.mp3 before hitting the CDN.
+    // Checks ~/Music/RedefineNCM/<id>.mp3 before hitting the CDN.
     single<PlatformPlayer> { JvmMediaPlayer(get(), get()) }
 }
