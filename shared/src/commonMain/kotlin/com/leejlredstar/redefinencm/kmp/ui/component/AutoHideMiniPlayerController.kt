@@ -476,7 +476,7 @@ private fun ExpandedPlaybackCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                SeekableProgressBar(
+                PlaybackSeekBar(
                     value = sliderValue.coerceIn(0f, 1f),
                     enabled = hasMedia && totalDuration > 0L,
                     accentPalette = accentPalette,
@@ -561,7 +561,7 @@ private fun ExpandedPlaybackCard(
 }
 
 @Composable
-private fun SeekableProgressBar(
+internal fun PlaybackSeekBar(
     value: Float,
     enabled: Boolean,
     accentPalette: ContentAccentPalette,
