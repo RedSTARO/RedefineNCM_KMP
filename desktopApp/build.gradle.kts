@@ -40,6 +40,11 @@ compose.desktop {
                 menuGroup = "RedSTAR"
                 shortcut = true
                 upgradeUuid = "44a6cc76-8441-4e27-9ce0-c6d582a78513"
+
+            macOS {
+                bundleID = "com.redstar.redefinencm"
+                packageName = "RedefineNCM"
+            }
             }
         }
     }
