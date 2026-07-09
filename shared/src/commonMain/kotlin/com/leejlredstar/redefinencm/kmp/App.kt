@@ -32,10 +32,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -59,6 +61,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -449,67 +452,144 @@ private fun DesktopNowPlayingStrip(
 ) {
     val media by player.currentMedia.collectAsState()
     val isPlaying by player.isPlaying.collectAsState()
+    val position by player.position.collectAsState()
+    val duration by player.duration.collectAsState()
     val artwork = media?.artworkUri.orEmpty()
+    val hasMedia = media != null
+    val safePosition = position.coerceAtLeast(0L)
+    val safeDuration = duration.coerceAtLeast(0L)
+    val progress = if (safeDuration > 0L) {
+        (safePosition.toDouble() / safeDuration.toDouble()).coerceIn(0.0, 1.0).toFloat()
+    } else {
+        0f
+    }
 
     Surface(
-        onClick = { if (media != null) onOpenNowPlaying() },
+        onClick = { if (hasMedia) onOpenNowPlaying() },
         shape = MaterialTheme.shapes.extraLarge,
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
         contentColor = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Row(
+        Column(
             modifier = Modifier.fillMaxWidth().padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Surface(
-                shape = MaterialTheme.shapes.medium,
-                color = accentPalette.container,
-                contentColor = accentPalette.onContainer,
-                modifier = Modifier.size(52.dp),
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                if (artwork.isNotBlank()) {
-                    AsyncImage(
-                        model = artwork,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } else {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Icon(AppIcons.GraphicEq, contentDescription = null, modifier = Modifier.size(24.dp))
+                Surface(
+                    shape = MaterialTheme.shapes.medium,
+                    color = accentPalette.container,
+                    contentColor = accentPalette.onContainer,
+                    modifier = Modifier.size(52.dp),
+                ) {
+                    if (artwork.isNotBlank()) {
+                        AsyncImage(
+                            model = artwork,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(AppIcons.GraphicEq, contentDescription = null, modifier = Modifier.size(24.dp))
+                        }
                     }
                 }
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = media?.title ?: "未播放",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = media?.artist ?: "RedefineNCM",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
-            Column(Modifier.weight(1f)) {
+
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape),
+                color = accentPalette.accent,
+                trackColor = accentPalette.onQuietContainer.copy(alpha = 0.20f),
+            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 Text(
-                    text = media?.title ?: "未播放",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = media?.artist ?: "RedefineNCM",
-                    style = MaterialTheme.typography.bodySmall,
+                    text = if (hasMedia) {
+                        "${formatDesktopPlayerDuration(safePosition)} / ${formatDesktopPlayerDuration(safeDuration)}"
+                    } else {
+                        "0:00 / 0:00"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
-            }
-            FilledTonalIconButton(
-                onClick = { player.togglePlayPause() },
-                enabled = media != null,
-                modifier = Modifier.size(42.dp),
-            ) {
-                Icon(
-                    imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
-                    contentDescription = null,
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FilledTonalIconButton(
+                        onClick = { player.seekToPrevious() },
+                        enabled = hasMedia,
+                        shape = CircleShape,
+                        modifier = Modifier.size(34.dp),
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.KeyboardArrowLeft,
+                            contentDescription = "上一首",
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                    FilledTonalIconButton(
+                        onClick = { player.togglePlayPause() },
+                        enabled = hasMedia,
+                        shape = CircleShape,
+                        modifier = Modifier.size(40.dp),
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
+                            contentDescription = if (isPlaying) "暂停" else "播放",
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    FilledTonalIconButton(
+                        onClick = { player.seekToNext() },
+                        enabled = hasMedia,
+                        shape = CircleShape,
+                        modifier = Modifier.size(34.dp),
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.KeyboardArrowRight,
+                            contentDescription = "下一首",
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
             }
         }
     }
+}
+
+private fun formatDesktopPlayerDuration(millis: Long): String {
+    val totalSeconds = millis.coerceAtLeast(0L) / 1000L
+    val minutes = totalSeconds / 60L
+    val seconds = totalSeconds % 60L
+    return "$minutes:${seconds.toString().padStart(2, '0')}"
 }
 
 @Composable
