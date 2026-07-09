@@ -17,6 +17,10 @@ the ways the code on disk does not yet match it.
 > asserted aspiration as fact (claimed dependencies, versions, and SQLDelight that do not
 > exist); that is the failure mode this rewrite exists to prevent. Do not reintroduce it.
 
+## 实操约束（Git）
+
+- 遇到分支同步/提交历史冲突时，优先使用 `git rebase` 处理冲突，不允许默认走 `git merge` 方式。未明确要求保留合并提交时，统一走 rebase 方案。
+
 ---
 
 ## What this is
