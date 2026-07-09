@@ -13,6 +13,7 @@ dependencies {
 
     implementation(compose.desktop.currentOs)
     implementation(libs.kotlinx.coroutinesSwing)
+    implementation(libs.koin.core)
 
     // main.kt's floating-lyrics window uses material3 (MaterialTheme/Surface/Text) directly.
     implementation(libs.compose.material3)

@@ -11,8 +11,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -28,17 +30,16 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.leejlredstar.redefinencm.kmp.di.initKoin
 import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
+import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.smtc.WindowsMediaControls
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
+import org.koin.core.context.GlobalContext
 
 fun main() {
     // AMLL 歌词页现在跑在系统 WebView（Windows=WebView2）里，见 LyricScreen.jvm.kt。
     // 历史教训（勿回退）：JavaFX WebKit 需要 prism.maxvram 调大才不白屏，且无 GPU 合成，
     // 字体/布局/动画均残缺；prism.order=sw 会打满 CPU 饿死网络协程。
     initKoin()
-    // Observe now-playing metadata and forward to OS media controls (Windows SMTC binding is a
-    // documented native TODO; this is a no-op until the helper exists — see WindowsMediaControls).
-    WindowsMediaControls().start()
     application {
         val mainWindowState = rememberWindowState(
             size = DpSize(1280.dp, 820.dp),
@@ -49,6 +50,13 @@ fun main() {
             state = mainWindowState,
             title = "RedefineNCM",
         ) {
+            val player = remember { GlobalContext.get().get<PlatformPlayer>() }
+            val mediaControls = remember(player) { WindowsMediaControls(player) }
+            DisposableEffect(window, mediaControls) {
+                mediaControls.start(window)
+                onDispose { mediaControls.stop() }
+            }
+
             App()
         }
 
