@@ -9,8 +9,11 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-/** 当前应用版本号；Android actual 读 PackageInfo.versionName，其余平台返回 null（跳过检查）。 */
-expect fun currentAppVersion(): String?
+/** 当前应用完整版本号，形如 v0.0.1.412ae548。 */
+fun currentAppVersion(): String = BuildInfo.VERSION_NAME
+
+/** 当前发布基线版本，来自最近的 v<major>.<minor>.<patch> Git tag。 */
+fun currentReleaseVersion(): String = BuildInfo.BASE_TAG
 
 @Serializable
 data class GithubLatestRelease(

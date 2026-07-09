@@ -1,5 +1,7 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
+val appBaseVersion = rootProject.extra["redefineNcmBaseVersion"] as String
+
 plugins {
     alias(libs.plugins.kotlinJvm)
     alias(libs.plugins.composeMultiplatform)
@@ -28,7 +30,7 @@ compose.desktop {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             modules("java.sql")
             packageName = "RedefineNCM"
-            packageVersion = "1.0.0"
+            packageVersion = appBaseVersion
             description = "A third-party NetEase Cloud Music client"
             vendor = "RedSTAR"
 

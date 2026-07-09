@@ -1,5 +1,8 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
+val appVersionCode = rootProject.extra["redefineNcmVersionCode"] as Int
+val appVersionName = rootProject.extra["redefineNcmVersionName"] as String
+
 plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeMultiplatform)
@@ -37,8 +40,8 @@ android {
         applicationId = "com.leejlredstar.redefinencm.kmp"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
     }
     sourceSets {
         getByName("main") {
