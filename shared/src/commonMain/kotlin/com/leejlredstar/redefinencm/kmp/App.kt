@@ -55,6 +55,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -76,6 +77,7 @@ import com.leejlredstar.redefinencm.kmp.lyric.WebViewLyricScreen
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackSeekBar
 import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
+import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOverlayCoordinator
 import com.leejlredstar.redefinencm.kmp.ui.screen.CommentBottomSheet
 import com.leejlredstar.redefinencm.kmp.ui.screen.DownloadManagementScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
@@ -492,6 +494,14 @@ private fun DesktopNowPlayingStrip(
 
     LaunchedEffect(showComments, media?.id) {
         if (showComments) viewModel.getComments()
+    }
+    LaunchedEffect(showQueue, showComments) {
+        NativeSurfaceOverlayCoordinator.setExternalOverlayActive(showQueue || showComments)
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            NativeSurfaceOverlayCoordinator.setExternalOverlayActive(false)
+        }
     }
 
     Box(Modifier.fillMaxWidth()) {
