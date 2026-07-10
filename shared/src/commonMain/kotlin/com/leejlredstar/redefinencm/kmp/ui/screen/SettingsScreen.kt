@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.DropdownMenu
@@ -31,16 +33,22 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
@@ -55,7 +63,7 @@ import com.leejlredstar.redefinencm.kmp.util.applySettingsBackup
 import com.leejlredstar.redefinencm.kmp.util.encodeSettingsBackup
 import com.leejlredstar.redefinencm.kmp.util.rememberExportFileLauncher
 import com.leejlredstar.redefinencm.kmp.util.rememberImportFileLauncher
-import kotlinx.coroutines.Dispatchers
+import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -66,36 +74,91 @@ fun SettingsScreen(
     onOpenLogin: () -> Unit,
     settings: PlatformSettings = koinInject(),
     api: NCMApi = koinInject(),
+    mainViewModel: MainViewModel = koinInject(),
 ) {
-    var cookie by remember { mutableStateOf(settings.getString(SettingKeys.COOKIE, "")) }
-    var server by remember { mutableStateOf(settings.getString(SettingKeys.SERVER, "")) }
-    var onlineQuality by remember { mutableStateOf(settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name)) }
-    var dlQuality by remember { mutableStateOf(settings.getString(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name)) }
-    var replacePlaylist by remember { mutableStateOf(settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false)) }
-    var checkUpdate by remember { mutableStateOf(settings.getBoolean(SettingKeys.CHECK_UPDATE, false)) }
-    var searchPrediction by remember { mutableStateOf(settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true)) }
-    var showDownloadStatus by remember { mutableStateOf(settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false)) }
-    var adaptOriginalLyric by remember { mutableStateOf(settings.getBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, false)) }
-    var showTranslatedLyric by remember { mutableStateOf(settings.getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false)) }
-    var showRomanLyric by remember { mutableStateOf(settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)) }
+    var cookie by remember(settings) { mutableStateOf("") }
+    var server by remember(settings) { mutableStateOf("") }
+    var onlineQuality by remember(settings) { mutableStateOf(SoundQuality.STANDARD.name) }
+    var dlQuality by remember(settings) { mutableStateOf(SoundQuality.STANDARD.name) }
+    var replacePlaylist by remember(settings) { mutableStateOf(false) }
+    var checkUpdate by remember(settings) { mutableStateOf(false) }
+    var searchPrediction by remember(settings) { mutableStateOf(true) }
+    var showDownloadStatus by remember(settings) { mutableStateOf(false) }
+    var adaptOriginalLyric by remember(settings) { mutableStateOf(false) }
+    var showTranslatedLyric by remember(settings) { mutableStateOf(false) }
+    var showRomanLyric by remember(settings) { mutableStateOf(false) }
     var importStatus by remember { mutableStateOf<String?>(null) }
     var serverCheckStatus by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
+    fun reloadSettingsSnapshot() {
+        cookie = settings.getString(SettingKeys.COOKIE, "")
+        server = settings.getString(SettingKeys.SERVER, "")
+        onlineQuality = settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name)
+        dlQuality = settings.getString(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name)
+        replacePlaylist = settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false)
+        checkUpdate = settings.getBoolean(SettingKeys.CHECK_UPDATE, false)
+        searchPrediction = settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true)
+        showDownloadStatus = settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false)
+        adaptOriginalLyric = settings.getBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, false)
+        showTranslatedLyric = settings.getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
+        showRomanLyric = settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)
+    }
+
+    fun flushSettings(
+        onPersisted: () -> Unit = {},
+        onFailure: () -> Unit = ::reloadSettingsSnapshot,
+    ) {
+        scope.launch {
+            runCatching { settings.flush() }
+                .onSuccess { onPersisted() }
+                .onFailure { error ->
+                    onFailure()
+                    importStatus = "✗ 设置保存失败：${error.message ?: "未知错误"}"
+                }
+        }
+    }
+
+    fun persistSettings(
+        write: () -> Unit,
+        onWritten: () -> Unit = {},
+        onPersisted: () -> Unit = {},
+        onFailure: () -> Unit = ::reloadSettingsSnapshot,
+    ) {
+        val writeResult = runCatching(write)
+        if (writeResult.isFailure) {
+            onFailure()
+            importStatus = "✗ 设置保存失败：${writeResult.exceptionOrNull()?.message ?: "未知错误"}"
+            return
+        }
+        onWritten()
+        flushSettings(onPersisted = onPersisted, onFailure = onFailure)
+    }
+
+    LaunchedEffect(settings) {
+        cookie = settings.getStringAsync(SettingKeys.COOKIE, "")
+        server = settings.getStringAsync(SettingKeys.SERVER, "")
+        onlineQuality = settings.getStringAsync(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name)
+        dlQuality = settings.getStringAsync(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name)
+        replacePlaylist = settings.getBooleanAsync(SettingKeys.REPLACE_PLAYLIST, false)
+        checkUpdate = settings.getBooleanAsync(SettingKeys.CHECK_UPDATE, false)
+        searchPrediction = settings.getBooleanAsync(SettingKeys.SEARCH_PREDICTION, true)
+        showDownloadStatus = settings.getBooleanAsync(SettingKeys.SHOW_DOWNLOAD_STATUS, false)
+        adaptOriginalLyric = settings.getBooleanAsync(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, false)
+        showTranslatedLyric = settings.getBooleanAsync(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
+        showRomanLyric = settings.getBooleanAsync(SettingKeys.SHOW_ROMAN_LYRIC, false)
+    }
+
     val launchImport = rememberImportFileLauncher { json ->
-        scope.launch(Dispatchers.Default) {
+        scope.launch {
             if (applySettingsBackup(json, settings)) {
-                cookie = settings.getString(SettingKeys.COOKIE, "")
-                server = settings.getString(SettingKeys.SERVER, "")
-                onlineQuality = settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name)
-                dlQuality = settings.getString(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name)
-                replacePlaylist = settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false)
-                checkUpdate = settings.getBoolean(SettingKeys.CHECK_UPDATE, false)
-                searchPrediction = settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true)
-                showDownloadStatus = settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false)
-                adaptOriginalLyric = settings.getBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, false)
-                showTranslatedLyric = settings.getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
-                showRomanLyric = settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)
+                val persisted = runCatching { settings.flush() }
+                if (persisted.isFailure) {
+                    reloadSettingsSnapshot()
+                    importStatus = "✗ 设置保存失败：${persisted.exceptionOrNull()?.message ?: "未知错误"}"
+                    return@launch
+                }
+                reloadSettingsSnapshot()
                 importStatus = "✓ 导入成功"
             } else {
                 importStatus = "✗ 导入失败，请检查文件格式"
@@ -124,16 +187,30 @@ fun SettingsScreen(
 
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
                 ExpressiveSectionTitle("Server", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
-                SettingsTextField(server, "Server URL", settingsPalette, index = 0, count = 2) { v ->
-                    server = if (v.isNotEmpty() && !v.endsWith("/")) "$v/" else v
-                    settings.setString(SettingKeys.SERVER, server)
-                }
+                SettingsTextField(
+                    value = server,
+                    label = "Server URL",
+                    accentPalette = settingsPalette,
+                    index = 0,
+                    count = 2,
+                    onDraftChange = { server = it },
+                    onCommit = { raw ->
+                        val normalized = normalizeServerInput(raw)
+                        server = normalized
+                        persistSettings({ settings.setString(SettingKeys.SERVER, normalized) })
+                    },
+                )
                 // 原版 ServerItem：调 /inner/version/ 校验服务器可用性并显示版本
                 SettingsButton("检查服务器 ($server)", settingsPalette, index = 1, count = 2) {
+                    val checkedServer = normalizeServerInput(server)
+                    if (checkedServer.isEmpty()) {
+                        serverCheckStatus = "服务器地址不能为空"
+                        return@SettingsButton
+                    }
                     serverCheckStatus = "检查中…"
                     scope.launch {
                         serverCheckStatus = try {
-                            val result = api.innerVersion("${server}inner/version/")
+                            val result = api.innerVersion("${checkedServer}inner/version/")
                             if (result.code == 200) "服务器可用，版本：${result.data.version}"
                             else "服务器不可用（code ${result.code}）"
                         } catch (e: Exception) {
@@ -160,51 +237,69 @@ fun SettingsScreen(
                     count = 2,
                     onClick = onOpenLogin,
                 )
-                SettingsTextField(cookie, "Cookie", settingsPalette, index = 1, count = 2) { v ->
-                    cookie = v
-                    settings.setString(SettingKeys.COOKIE, v)
-                }
+                SettingsTextField(
+                    value = cookie,
+                    label = "Cookie",
+                    accentPalette = settingsPalette,
+                    index = 1,
+                    count = 2,
+                    onDraftChange = { cookie = it },
+                    onCommit = { raw ->
+                        val normalized = raw.trim()
+                        cookie = normalized
+                        persistSettings(
+                            write = { settings.setString(SettingKeys.COOKIE, normalized) },
+                            // Stop old-account work as soon as the process cookie changes. The
+                            // refresh waits on the same settings barrier before resolving UID.
+                            onWritten = { mainViewModel.refreshAccount() },
+                            onFailure = {
+                                reloadSettingsSnapshot()
+                                mainViewModel.refreshAccount()
+                            },
+                        )
+                    },
+                )
 
                 ExpressiveSectionTitle("Playback", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
                 SettingsDropdown(onlineQuality, "Music Quality (Online)", SoundQuality.entries, settingsPalette, index = 0, count = 5) { v ->
                     onlineQuality = v.name
-                    settings.setString(SettingKeys.ONLINE_PLAY_QUALITY, v.name)
+                    persistSettings({ settings.setString(SettingKeys.ONLINE_PLAY_QUALITY, v.name) })
                 }
                 SettingsDropdown(dlQuality, "Music Quality (Download)", SoundQuality.entries, settingsPalette, index = 1, count = 5) { v ->
                     dlQuality = v.name
-                    settings.setString(SettingKeys.DOWNLOAD_QUALITY, v.name)
+                    persistSettings({ settings.setString(SettingKeys.DOWNLOAD_QUALITY, v.name) })
                 }
                 SettingsSwitch(replacePlaylist, "Replace playlist on single song click", settingsPalette, index = 2, count = 5) { v ->
                     replacePlaylist = v
-                    settings.setBoolean(SettingKeys.REPLACE_PLAYLIST, v)
+                    persistSettings({ settings.setBoolean(SettingKeys.REPLACE_PLAYLIST, v) })
                 }
                 SettingsSwitch(searchPrediction, "Search prediction", settingsPalette, index = 3, count = 5) { v ->
                     searchPrediction = v
-                    settings.setBoolean(SettingKeys.SEARCH_PREDICTION, v)
+                    persistSettings({ settings.setBoolean(SettingKeys.SEARCH_PREDICTION, v) })
                 }
                 SettingsSwitch(showDownloadStatus, "Show download status", settingsPalette, index = 4, count = 5) { v ->
                     showDownloadStatus = v
-                    settings.setBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, v)
+                    persistSettings({ settings.setBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, v) })
                 }
 
                 ExpressiveSectionTitle("Lyrics", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
                 SettingsSwitch(adaptOriginalLyric, "Adapt original Android Live Update lyric", settingsPalette, index = 0, count = 3) { v ->
                     adaptOriginalLyric = v
-                    settings.setBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, v)
+                    persistSettings({ settings.setBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, v) })
                 }
                 SettingsSwitch(showTranslatedLyric, "显示翻译歌词", settingsPalette, index = 1, count = 3) { v ->
                     showTranslatedLyric = v
-                    settings.setBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, v)
+                    persistSettings({ settings.setBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, v) })
                 }
                 SettingsSwitch(showRomanLyric, "显示五十音 / 罗马音歌词", settingsPalette, index = 2, count = 3) { v ->
                     showRomanLyric = v
-                    settings.setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, v)
+                    persistSettings({ settings.setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, v) })
                 }
 
                 ExpressiveSectionTitle("General", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
                 SettingsSwitch(checkUpdate, "Check update on startup", settingsPalette, index = 0, count = 1) { v ->
                     checkUpdate = v
-                    settings.setBoolean(SettingKeys.CHECK_UPDATE, v)
+                    persistSettings({ settings.setBoolean(SettingKeys.CHECK_UPDATE, v) })
                 }
 
                 ExpressiveSectionTitle("Backup", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
@@ -266,17 +361,60 @@ private fun SettingsTextField(
     accentPalette: ContentAccentPalette,
     index: Int,
     count: Int,
-    onUpdate: (String) -> Unit,
+    onDraftChange: (String) -> Unit,
+    onCommit: (String) -> Unit,
 ) {
-    var text by remember(value) { mutableStateOf(value) }
+    val textState = remember { mutableStateOf(value) }
+    val committedTextState = remember { mutableStateOf(value) }
+    var text by textState
+    var isFocused by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+    val latestCommit = rememberUpdatedState(onCommit)
+
+    LaunchedEffect(value, isFocused) {
+        if (!isFocused && value != textState.value) {
+            textState.value = value
+            committedTextState.value = value
+        }
+    }
+
+    fun commit() {
+        val draft = textState.value
+        if (draft != committedTextState.value) {
+            committedTextState.value = draft
+            onCommit(draft)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            val draft = textState.value
+            if (draft != committedTextState.value) latestCommit.value(draft)
+        }
+    }
+
     OutlinedTextField(
         value = text,
-        onValueChange = { text = it; onUpdate(it) },
+        onValueChange = {
+            text = it
+            onDraftChange(it)
+        },
         label = { Text(label) },
         singleLine = true,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(
+            onDone = {
+                commit()
+                focusManager.clearFocus()
+            },
+        ),
         shape = connectedListItemShape(index, count),
         modifier = Modifier
             .fillMaxWidth()
+            .onFocusChanged { focusState ->
+                if (isFocused && !focusState.isFocused) commit()
+                isFocused = focusState.isFocused
+            }
             .padding(vertical = 1.5.dp)
             .height(64.dp),
         colors = OutlinedTextFieldDefaults.colors(
@@ -291,6 +429,11 @@ private fun SettingsTextField(
             cursorColor = accentPalette.accent,
         ),
     )
+}
+
+private fun normalizeServerInput(raw: String): String {
+    val trimmed = raw.trim()
+    return if (trimmed.isEmpty()) "" else "${trimmed.trimEnd('/')}/"
 }
 
 @Composable

@@ -8,14 +8,27 @@ data class DownloadedSongSnapshot(
     val lastModifiedEpochMillis: Long? = null,
 )
 
-/** Returns true if a local audio file for [songId] exists in the RedefineNCM download folder. */
-expect fun isSongDownloaded(songId: Long): Boolean
+/**
+ * Result of a platform download-folder scan.
+ *
+ * An empty [DownloadScanResult.Success] means the folder was read successfully and contains no
+ * matching files. [DownloadScanResult.Failure] means the state of the folder is unknown; callers
+ * must retain their previous snapshot and must not infer that previously downloaded files were
+ * deleted.
+ */
+sealed interface DownloadScanResult {
+    data class Success(
+        val snapshots: List<DownloadedSongSnapshot>,
+    ) : DownloadScanResult
 
-/** Scans the RedefineNCM download folder and returns structured local-library entries. */
-expect fun scanDownloadedSongs(): List<DownloadedSongSnapshot>
+    data class Failure(
+        val message: String,
+        val cause: Throwable? = null,
+    ) : DownloadScanResult
+}
 
-/** Platform-specific: scan the download directory and return all downloaded song IDs. */
-expect fun scanDownloadedSongIds(): Set<Long>
+/** Scans the RedefineNCM download folder without collapsing failures into an empty library. */
+expect fun scanDownloadedSongs(): DownloadScanResult
 
 /** Deletes local audio files for [songId] from the RedefineNCM download folder. */
 expect fun deleteDownloadedSongFile(songId: Long): Boolean

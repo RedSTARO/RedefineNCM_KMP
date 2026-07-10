@@ -2,17 +2,14 @@ package com.leejlredstar.redefinencm.kmp.util
 
 import java.io.File
 
-actual fun isSongDownloaded(songId: Long): Boolean {
-    return DownloadedSongsCache.isDownloaded(songId)
-}
-
-actual fun scanDownloadedSongs(): List<DownloadedSongSnapshot> {
+actual fun scanDownloadedSongs(): DownloadScanResult = runCatching {
     val dir = jvmDownloadDirectory()
-    if (!dir.exists() || !dir.isDirectory) return emptyList()
-    return dir.listFiles()
-        ?.asSequence()
-        ?.filter(File::isFile)
-        ?.mapNotNull { file ->
+    if (!dir.exists()) return@runCatching emptyList()
+    check(dir.isDirectory) { "下载路径不是目录：$dir" }
+    val files = dir.listFiles() ?: error("无法读取下载目录：$dir")
+    files.asSequence()
+        .filter(File::isFile)
+        .mapNotNull { file ->
             val songId = file.nameWithoutExtension.toLongOrNull() ?: return@mapNotNull null
             DownloadedSongSnapshot(
                 id = songId,
@@ -22,16 +19,15 @@ actual fun scanDownloadedSongs(): List<DownloadedSongSnapshot> {
                 lastModifiedEpochMillis = file.lastModified().takeIf { it > 0L },
             )
         }
-        ?.sortedWith(
+        .sortedWith(
             compareByDescending<DownloadedSongSnapshot> { it.lastModifiedEpochMillis ?: 0L }
                 .thenBy { it.id }
         )
-        ?.toList()
-        ?: emptyList()
-}
-
-actual fun scanDownloadedSongIds(): Set<Long> =
-    scanDownloadedSongs().mapTo(linkedSetOf()) { it.id }
+        .toList()
+}.fold(
+    onSuccess = DownloadScanResult::Success,
+    onFailure = { error -> DownloadScanResult.Failure("无法读取桌面下载目录", error) },
+)
 
 actual fun deleteDownloadedSongFile(songId: Long): Boolean {
     val dir = jvmDownloadDirectory()

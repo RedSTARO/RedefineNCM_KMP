@@ -31,6 +31,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -66,6 +67,7 @@ fun LoginScreen(
     val qrLoading by viewModel.qrLoading.collectAsState()
     val qrError by viewModel.qrError.collectAsState()
     val qrSuccess by viewModel.qrSuccess.collectAsState()
+    val cookiePersistError by viewModel.cookiePersistError.collectAsState()
 
     var serverField by remember(server) { mutableStateOf(server) }
     var cookieField by remember(cookie) { mutableStateOf(cookie) }
@@ -75,6 +77,10 @@ fun LoginScreen(
     // 原版 QrLogin：进入登录页即自动生成二维码
     LaunchedEffect(Unit) {
         if (qrDataUri.isEmpty() && !qrLoading) viewModel.startQrLogin()
+    }
+
+    DisposableEffect(viewModel) {
+        onDispose { viewModel.onCleared() }
     }
 
     // Auto-close after successful QR login
@@ -293,9 +299,13 @@ fun LoginScreen(
                 Spacer(Modifier.height(20.dp))
                 FilledTonalButton(
                     onClick = {
-                        viewModel.updateServer(serverField.trim())
-                        viewModel.updateCookie(cookieField.trim())
-                        saved = true
+                        saved = false
+                        viewModel.updateCredentials(
+                            newServer = serverField.trim(),
+                            newCookie = cookieField.trim(),
+                        ) {
+                            saved = true
+                        }
                     },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     shape = CircleShape,
@@ -309,9 +319,17 @@ fun LoginScreen(
                 if (saved) {
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        "已保存，重启应用后生效。",
+                        "已保存；Cookie 已生效，服务器地址重启后生效。",
                         style = MaterialTheme.typography.bodyMedium,
                         color = loginPalette.accent,
+                    )
+                }
+                cookiePersistError?.let { error ->
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
                     )
                 }
             }

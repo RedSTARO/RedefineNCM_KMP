@@ -8,6 +8,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import org.koin.mp.KoinPlatform
 import java.io.File
+import java.io.FileNotFoundException
 
 private const val DOWNLOAD_SUBDIR = "RedefineNCM"
 
@@ -15,30 +16,36 @@ private const val DOWNLOAD_SUBDIR = "RedefineNCM"
  * Android-specific: scan the RedefineNCM download folder and return all downloaded songs.
  * Called once by [DownloadedSongsCache] and cached for O(1) lookups.
  */
-actual fun scanDownloadedSongs(): List<DownloadedSongSnapshot> =
-    scanDownloadedSongFiles(validateMediaRows = true).values
-        .sortedWith(
-            compareByDescending<DownloadedSongSnapshot> { it.lastModifiedEpochMillis ?: 0L }
-                .thenBy { it.id }
-        )
-
-actual fun scanDownloadedSongIds(): Set<Long> =
-    scanDownloadedSongFiles(validateMediaRows = true).keys
+actual fun scanDownloadedSongs(): DownloadScanResult =
+    runCatching {
+        scanDownloadedSongFiles(validateMediaRows = true).values
+            .sortedWith(
+                compareByDescending<DownloadedSongSnapshot> { it.lastModifiedEpochMillis ?: 0L }
+                    .thenBy { it.id }
+            )
+    }.fold(
+        onSuccess = DownloadScanResult::Success,
+        onFailure = { error ->
+            DownloadScanResult.Failure("无法读取 Android 下载媒体库", error)
+        },
+    )
 
 fun findDownloadedSongUri(songId: Long): String? =
-    scanDownloadedSongFiles(targetSongId = songId, validateMediaRows = true)[songId]?.uri
+    runCatching {
+        scanDownloadedSongFiles(targetSongId = songId, validateMediaRows = true)[songId]?.uri
+    }.getOrNull()
 
 private fun scanDownloadedSongFiles(
     targetSongId: Long? = null,
     validateMediaRows: Boolean = false,
 ): Map<Long, DownloadedSongSnapshot> {
     val result = linkedMapOf<Long, DownloadedSongSnapshot>()
-    val context = runCatching { KoinPlatform.getKoin().get<Context>() }.getOrNull()
-    if (context != null) {
-        result.putAll(queryMediaStore(context, targetSongId, validateMediaRows))
-    }
-    scanLegacyDownloadDir(targetSongId).forEach { (id, snapshot) ->
-        result.putIfAbsent(id, snapshot)
+    val context = KoinPlatform.getKoin().get<Context>()
+    result.putAll(queryMediaStore(context, targetSongId, validateMediaRows))
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+        scanLegacyDownloadDir(targetSongId).forEach { (id, snapshot) ->
+            result.putIfAbsent(id, snapshot)
+        }
     }
     return result
 }
@@ -78,7 +85,7 @@ private fun queryMediaCollection(
     targetSongId: Long?,
     canFilterRelativePath: Boolean,
     validateRows: Boolean,
-): Map<Long, DownloadedSongSnapshot> = runCatching {
+): Map<Long, DownloadedSongSnapshot> {
     val result = linkedMapOf<Long, DownloadedSongSnapshot>()
     val projection = buildList {
         add(MediaStore.MediaColumns._ID)
@@ -107,8 +114,14 @@ private fun queryMediaCollection(
         }
     }.toTypedArray()
 
-    context.contentResolver.query(collectionUri, projection, selection, selectionArgs, null)
-        ?.use { cursor ->
+    val cursor = context.contentResolver.query(
+        collectionUri,
+        projection,
+        selection,
+        selectionArgs,
+        null,
+    ) ?: error("MediaStore query returned no cursor for $collectionUri")
+    cursor.use {
             val idIndex = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
             val nameIndex = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
             val sizeIndex = cursor.getColumnIndex(MediaStore.MediaColumns.SIZE)
@@ -130,7 +143,6 @@ private fun queryMediaCollection(
                 val mediaId = cursor.getLong(idIndex)
                 val uri = ContentUris.withAppendedId(collectionUri, mediaId).toString()
                 if (validateRows && !isReadableMediaUri(context, uri)) {
-                    deleteStaleMediaRow(context, uri)
                     continue
                 }
                 val sizeBytes = if (sizeIndex >= 0) cursor.getLong(sizeIndex).takeIf { it > 0L } else null
@@ -147,32 +159,30 @@ private fun queryMediaCollection(
                     lastModifiedEpochMillis = modifiedSeconds?.let { it * 1000L },
                 )
             }
-        }
-    result
-}.getOrDefault(emptyMap())
-
-private fun isReadableMediaUri(context: Context, uri: String): Boolean =
-    runCatching {
-        context.contentResolver.openFileDescriptor(Uri.parse(uri), "r")?.use { true } == true
-    }.getOrDefault(false)
-
-private fun deleteStaleMediaRow(context: Context, uri: String) {
-    runCatching {
-        context.contentResolver.delete(Uri.parse(uri), null, null)
     }
+    return result
 }
 
-private fun scanLegacyDownloadDir(targetSongId: Long?): Map<Long, DownloadedSongSnapshot> = runCatching {
+private fun isReadableMediaUri(context: Context, uri: String): Boolean =
+    try {
+        val descriptor = context.contentResolver.openFileDescriptor(Uri.parse(uri), "r")
+            ?: error("Media provider returned no file descriptor for $uri")
+        descriptor.use { true }
+    } catch (_: FileNotFoundException) {
+        false
+    }
+
+private fun scanLegacyDownloadDir(targetSongId: Long?): Map<Long, DownloadedSongSnapshot> {
     val dir = Environment.getExternalStoragePublicDirectory(
         Environment.DIRECTORY_DOWNLOADS + "/$DOWNLOAD_SUBDIR"
     )
     if (!dir.exists() || !dir.isDirectory) {
-        emptyMap()
+        return emptyMap()
     } else {
-        dir.listFiles()
-            ?.asSequence()
-            ?.filter(File::isFile)
-            ?.mapNotNull { file ->
+        val files = dir.listFiles() ?: error("无法读取旧版下载目录：$dir")
+        return files.asSequence()
+            .filter(File::isFile)
+            .mapNotNull { file ->
                 val songId = songIdFromFileName(file.name, targetSongId) ?: return@mapNotNull null
                 songId to DownloadedSongSnapshot(
                     id = songId,
@@ -182,16 +192,9 @@ private fun scanLegacyDownloadDir(targetSongId: Long?): Map<Long, DownloadedSong
                     lastModifiedEpochMillis = file.lastModified().takeIf { it > 0L },
                 )
             }
-            ?.toMap(linkedMapOf()) ?: emptyMap()
+            .toMap(linkedMapOf())
     }
-}.getOrDefault(emptyMap())
-
-/**
- * Legacy direct file-system check. Use [DownloadedSongsCache.isDownloaded] from UI code
- * to avoid repeated directory scans.
- */
-actual fun isSongDownloaded(songId: Long): Boolean =
-    DownloadedSongsCache.isDownloaded(songId)
+}
 
 actual fun deleteDownloadedSongFile(songId: Long): Boolean {
     var deleted = false

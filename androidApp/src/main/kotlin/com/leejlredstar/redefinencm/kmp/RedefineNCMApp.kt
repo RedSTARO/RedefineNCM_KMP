@@ -14,14 +14,23 @@ import coil3.network.ktor3.KtorNetworkFetcherFactory
 import com.leejlredstar.redefinencm.kmp.di.initKoin
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
+import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.mp.KoinPlatform
 
 class RedefineNCMApp : Application(), SingletonImageLoader.Factory {
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     private val syncDownloadedSongState = Runnable {
-        runCatching {
-            KoinPlatform.getKoin().get<SongDownloadManager>().syncWithLocalLibrary()
+        appScope.launch {
+            KoinPlatform.getKoin().get<PlatformSettings>().awaitLoaded()
+            runCatching {
+                KoinPlatform.getKoin().get<SongDownloadManager>().syncWithLocalLibrary()
+            }
         }
     }
     private var downloadedSongsObserver: ContentObserver? = null
@@ -29,6 +38,8 @@ class RedefineNCMApp : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         initKoin { androidContext(this@RedefineNCMApp) }
+        val settings = KoinPlatform.getKoin().get<PlatformSettings>()
+        appScope.launch { settings.awaitLoaded() }
         LyricNotificationController.init(applicationContext)
         registerDownloadedSongsObserver()
     }
