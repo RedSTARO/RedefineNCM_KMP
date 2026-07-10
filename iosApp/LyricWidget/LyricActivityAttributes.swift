@@ -7,15 +7,18 @@ import Foundation
 /// produced by the shared `LyricNotificationController`. The static part (`appName`) is set once
 /// when the activity starts.
 ///
-/// IMPORTANT (Xcode setup): this file must belong to **both** targets — the main app
-/// (`iosApp`) and the widget extension (`LyricWidget`) — so the same type is visible on both
-/// sides. See `SETUP.md`.
+/// This file belongs to the widget target. The app target keeps a structurally identical mirror
+/// in `LiveActivityManager.swift`; the two targets compile in separate products and therefore
+/// cannot share a Swift source declaration directly.
 struct LyricActivityAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
         var title: String
         var artist: String
         var currentLyric: String
         var nextLyric: String
+        var isPlaying: Bool
+        var positionMs: Int64
+        var durationMs: Int64
     }
 
     var appName: String = "RedefineNCM"

@@ -86,11 +86,14 @@ class ExoPlayerPlatformPlayer(
     private val _queue = MutableStateFlow<List<MediaInfo>>(emptyList())
     override val queue: StateFlow<List<MediaInfo>> = _queue
 
-    private val _currentIndex = MutableStateFlow(0)
+    private val _currentIndex = MutableStateFlow(-1)
     override val currentIndex: StateFlow<Int> = _currentIndex
 
     private val _shuffleEnabled = MutableStateFlow(false)
     override val shuffleEnabled: StateFlow<Boolean> = _shuffleEnabled
+
+    private val _queueSnapshot = MutableStateFlow(PlayerQueueSnapshot())
+    override val queueSnapshot: StateFlow<PlayerQueueSnapshot> = _queueSnapshot
 
     private val _volume = MutableStateFlow(
         playerVolumeFromPercent(settings.getLong(SettingKeys.PLAYER_VOLUME, DEFAULT_PLAYER_VOLUME_PERCENT))
@@ -122,7 +125,6 @@ class ExoPlayerPlatformPlayer(
 
             override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
                 // 切换随机模式改变播放顺序，必须整体重建列表与高亮
-                _shuffleEnabled.value = shuffleModeEnabled
                 rebuildQueue()
             }
 
@@ -153,9 +155,7 @@ class ExoPlayerPlatformPlayer(
         val timeline = exoPlayer.currentTimeline
         if (timeline.isEmpty) {
             playOrderWindowIndices = emptyList()
-            _queue.value = emptyList()
-            _currentIndex.value = -1
-            _currentMedia.value = null
+            publishQueueSnapshot(PlayerQueueSnapshot())
             _position.value = 0L
             _duration.value = -1L
             return
@@ -173,11 +173,25 @@ class ExoPlayerPlatformPlayer(
         }
 
         playOrderWindowIndices = indices
-        _queue.value = items
         // 高亮位置直接由本次重建出的 indices 计算，绝不读取旧缓存
-        _currentIndex.value = indices.indexOf(exoPlayer.currentMediaItemIndex)
-        _currentMedia.value = items.getOrNull(_currentIndex.value)
+        val currentIndex = indices.indexOf(exoPlayer.currentMediaItemIndex)
+        publishQueueSnapshot(
+            PlayerQueueSnapshot(
+                items = items,
+                currentIndex = currentIndex,
+                currentMedia = items.getOrNull(currentIndex),
+                shuffleEnabled = shuffle,
+            ),
+        )
         publishCurrentPositionAndDuration()
+    }
+
+    private fun publishQueueSnapshot(snapshot: PlayerQueueSnapshot) {
+        _queueSnapshot.value = snapshot
+        _queue.value = snapshot.items
+        _currentIndex.value = snapshot.currentIndex
+        _currentMedia.value = snapshot.currentMedia
+        _shuffleEnabled.value = snapshot.shuffleEnabled
     }
 
     private fun publishCurrentPositionAndDuration() {

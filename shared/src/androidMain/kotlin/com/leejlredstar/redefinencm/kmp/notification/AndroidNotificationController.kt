@@ -25,7 +25,7 @@ actual object LyricNotificationController {
     private const val NOTIFICATION_ID = 0x4C595243 // "LYRC"
 
     @Volatile
-    private var lastLyric: String? = null
+    private var lastPayload: AndroidLyricPayload? = null
 
     @Volatile
     private var appContext: Context? = null
@@ -42,16 +42,30 @@ actual object LyricNotificationController {
         nextLyric: String?,
         artworkUri: String?,
         isPlaying: Boolean,
+        positionMs: Long,
+        durationMs: Long,
     ) {
         val context = appContext ?: return
         if (!canPostNotifications(context)) return
-        val lyric = currentLyric?.trim().takeUnless { it.isNullOrEmpty() } ?: return
-        if (lyric == lastLyric) return
+        val normalizedTitle = title?.trim().orEmpty()
+        val lyric = currentLyric?.trim().orEmpty().ifEmpty { normalizedTitle }
+        if (lyric.isEmpty()) return
+        val payload = AndroidLyricPayload(
+            title = normalizedTitle,
+            artist = artist?.trim().orEmpty(),
+            currentLyric = lyric,
+            nextLyric = nextLyric?.trim().orEmpty(),
+            artworkUri = artworkUri?.trim().orEmpty(),
+            isPlaying = isPlaying,
+            positionMs = positionMs.coerceAtLeast(0L),
+            durationMs = durationMs,
+        )
+        if (payload == lastPayload) return
 
         // 原版 "Use lyric as title in LiveUpdate"：通知标题直接用当前歌词行
         val displayTitle = lyric
-        val trimmedArtist = artist?.trim().orEmpty()
-        val trimmedNext = nextLyric?.trim().orEmpty()
+        val trimmedArtist = payload.artist
+        val trimmedNext = payload.nextLyric
 
         val contentText = buildString {
             if (trimmedArtist.isNotEmpty()) {
@@ -70,7 +84,10 @@ actual object LyricNotificationController {
         }
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setSmallIcon(
+                if (payload.isPlaying) android.R.drawable.ic_media_play
+                else android.R.drawable.ic_media_pause,
+            )
             .setContentTitle(displayTitle)
             .setContentText(contentText)
             .setSubText(trimmedArtist.ifEmpty { null })
@@ -95,22 +112,32 @@ actual object LyricNotificationController {
                 ),
             )
 
+        if (payload.durationMs > 0L) {
+            val durationSeconds = (payload.durationMs / 1_000L)
+                .coerceIn(1L, Int.MAX_VALUE.toLong())
+                .toInt()
+            val positionSeconds = (payload.positionMs / 1_000L)
+                .coerceIn(0L, durationSeconds.toLong())
+                .toInt()
+            builder.setProgress(durationSeconds, positionSeconds, false)
+        }
+
         if (shouldRequestLiveUpdate(context)) {
             builder.setRequestPromotedOngoing(true)
         }
 
         NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, builder.build())
-        lastLyric = lyric
+        lastPayload = payload
     }
 
     actual fun clearFocus() {
         val context = appContext ?: return
         NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
-        lastLyric = null
+        lastPayload = null
     }
 
     actual fun reset() {
-        lastLyric = null
+        lastPayload = null
     }
 
     private fun ensureChannel(context: Context) {
@@ -144,3 +171,14 @@ actual object LyricNotificationController {
         ) == PackageManager.PERMISSION_GRANTED
     }
 }
+
+private data class AndroidLyricPayload(
+    val title: String,
+    val artist: String,
+    val currentLyric: String,
+    val nextLyric: String,
+    val artworkUri: String,
+    val isPlaying: Boolean,
+    val positionMs: Long,
+    val durationMs: Long,
+)

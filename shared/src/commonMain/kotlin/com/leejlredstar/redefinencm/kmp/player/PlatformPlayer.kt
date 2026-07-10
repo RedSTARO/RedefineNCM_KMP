@@ -33,6 +33,12 @@ interface PlatformPlayer {
     /** Whether shuffle mode is enabled. */
     val shuffleEnabled: StateFlow<Boolean>
 
+    /**
+     * Queue, visible index, current media and shuffle flag from one player timeline snapshot.
+     * [PlayerQueueSnapshot.items] is in actual play order, including when shuffle is enabled.
+     */
+    val queueSnapshot: StateFlow<PlayerQueueSnapshot>
+
     /** Output volume in the inclusive range 0f..1f. */
     val volume: StateFlow<Float>
 
@@ -93,6 +99,13 @@ data class MediaInfo(
     val artworkUri: String = "",
     val placeholderUri: String = "",   // redefinencm://playbackPlaceHolder?id=xxx
     val duration: Long = 0,
+)
+
+data class PlayerQueueSnapshot(
+    val items: List<MediaInfo> = emptyList(),
+    val currentIndex: Int = -1,
+    val currentMedia: MediaInfo? = null,
+    val shuffleEnabled: Boolean = false,
 )
 
 /**

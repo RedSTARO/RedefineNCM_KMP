@@ -12,6 +12,8 @@ actual object LyricNotificationController {
         nextLyric: String?,
         artworkUri: String?,
         isPlaying: Boolean,
+        positionMs: Long,
+        durationMs: Long,
     ) { /* no-op for web */ }
 
     actual fun clearFocus() { /* no-op for web */ }

@@ -24,6 +24,8 @@ expect object LyricNotificationController {
         nextLyric: String?,
         artworkUri: String? = null,
         isPlaying: Boolean = true,
+        positionMs: Long = 0L,
+        durationMs: Long = -1L,
     )
 
     /** Remove the lyric display. */

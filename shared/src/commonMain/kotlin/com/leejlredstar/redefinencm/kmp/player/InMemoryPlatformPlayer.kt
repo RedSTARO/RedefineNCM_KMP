@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import org.koin.mp.KoinPlatformTools
+import org.koin.mp.Lockable
 
 /**
  * In-memory [PlatformPlayer] with **no real audio output**.
@@ -30,8 +32,14 @@ import kotlinx.coroutines.launch
  */
 class InMemoryPlatformPlayer(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+    private val tickerIntervalMs: Long = 1_000L,
 ) : PlatformPlayer {
 
+    init {
+        require(tickerIntervalMs > 0L) { "tickerIntervalMs must be positive" }
+    }
+
+    private val stateLock = Lockable()
     private var queueModel: PlayQueue<MediaInfo> = PlayQueue.empty()
 
     private val _state = MutableStateFlow(PlayerState.IDLE)
@@ -52,85 +60,114 @@ class InMemoryPlatformPlayer(
     private val _queue = MutableStateFlow<List<MediaInfo>>(emptyList())
     override val queue: StateFlow<List<MediaInfo>> = _queue.asStateFlow()
 
-    private val _currentIndex = MutableStateFlow(0)
+    private val _currentIndex = MutableStateFlow(-1)
     override val currentIndex: StateFlow<Int> = _currentIndex.asStateFlow()
 
     private val _shuffleEnabled = MutableStateFlow(false)
     override val shuffleEnabled: StateFlow<Boolean> = _shuffleEnabled.asStateFlow()
+
+    private val _queueSnapshot = MutableStateFlow(PlayerQueueSnapshot())
+    override val queueSnapshot: StateFlow<PlayerQueueSnapshot> = _queueSnapshot.asStateFlow()
 
     private val _volume = MutableStateFlow(1f)
     override val volume: StateFlow<Float> = _volume.asStateFlow()
 
     private var ticker: Job? = null
 
-    /** Mirror the [PlayQueue] state into the public StateFlows (single source of truth). */
-    private fun publishQueue() {
-        _queue.value = queueModel.items
-        _currentIndex.value = queueModel.currentIndex.coerceAtLeast(0)
-        _currentMedia.value = queueModel.currentItem
-        _shuffleEnabled.value = queueModel.shuffleEnabled
-        _duration.value = queueModel.currentItem?.duration?.takeIf { it > 0 } ?: -1L
+    /** Mirror the lock-protected [PlayQueue] state into the public StateFlows. */
+    private fun publishQueueLocked() {
+        val model = queueModel
+        val snapshot = PlayerQueueSnapshot(
+            items = model.itemsInPlayOrder,
+            currentIndex = model.positionInPlayOrder,
+            currentMedia = model.currentItem,
+            shuffleEnabled = model.shuffleEnabled,
+        )
+        _queueSnapshot.value = snapshot
+        _queue.value = snapshot.items
+        _currentIndex.value = snapshot.currentIndex
+        _currentMedia.value = snapshot.currentMedia
+        _shuffleEnabled.value = snapshot.shuffleEnabled
+        _duration.value = snapshot.currentMedia?.duration?.takeIf { it > 0 } ?: -1L
     }
 
     override fun play() {
-        if (queueModel.currentItem == null) return
-        _isPlaying.value = true
-        _state.value = PlayerState.PLAYING
-        startTicker()
+        withStateLock { playLocked() }
     }
 
     override fun pause() {
-        _isPlaying.value = false
-        _state.value = PlayerState.PAUSED
-        stopTicker()
+        withStateLock { pauseLocked() }
     }
 
     override fun togglePlayPause() {
-        if (_isPlaying.value) pause() else play()
+        withStateLock {
+            if (_isPlaying.value) pauseLocked() else playLocked()
+        }
     }
 
     override fun seekTo(positionMs: Long) {
-        val dur = _duration.value
-        _position.value = if (dur > 0) positionMs.coerceIn(0, dur) else positionMs.coerceAtLeast(0)
+        withStateLock {
+            val dur = _duration.value
+            _position.value = if (dur > 0) positionMs.coerceIn(0, dur) else positionMs.coerceAtLeast(0)
+        }
     }
 
     override fun seekToPrevious() {
-        queueModel = queueModel.previous()
-        onTrackChanged()
+        withStateLock {
+            val previous = queueModel.previous(repeat = false)
+            if (previous.currentIndex == queueModel.currentIndex) return@withStateLock
+            queueModel = previous
+            onTrackChangedLocked()
+        }
     }
 
     override fun seekToNext() {
-        queueModel = queueModel.next()
-        onTrackChanged()
+        withStateLock {
+            val next = queueModel.next(repeat = false)
+            if (next.currentIndex == queueModel.currentIndex) return@withStateLock
+            queueModel = next
+            onTrackChangedLocked()
+        }
     }
 
     override fun setQueue(items: List<MediaInfo>, startIndex: Int) {
-        queueModel = PlayQueue.of(items, startIndex)
-        onTrackChanged()
+        withStateLock {
+            queueModel = PlayQueue.of(items, startIndex)
+            onTrackChangedLocked()
+        }
     }
 
     override fun addToQueue(item: MediaInfo) {
-        queueModel = queueModel.addItem(item)
-        publishQueue()
+        withStateLock {
+            queueModel = queueModel.addItem(item)
+            publishQueueLocked()
+        }
     }
 
     override fun clearQueue() {
-        queueModel = PlayQueue.empty()
-        stopTicker()
-        _isPlaying.value = false
-        _state.value = PlayerState.IDLE
-        _position.value = 0L
-        publishQueue()
+        withStateLock {
+            queueModel = PlayQueue.empty()
+            stopTickerLocked()
+            _isPlaying.value = false
+            _state.value = PlayerState.IDLE
+            _position.value = 0L
+            publishQueueLocked()
+        }
     }
 
     override fun skipToIndex(index: Int) {
-        queueModel = queueModel.skipTo(index)
-        onTrackChanged()
+        withStateLock {
+            val originalIndex = queueModel.playOrder.getOrNull(index) ?: return@withStateLock
+            queueModel = queueModel.skipTo(originalIndex)
+            onTrackChangedLocked()
+        }
     }
 
     override fun setShuffleEnabled(enabled: Boolean) {
-        queueModel = queueModel.setShuffle(enabled)
-        publishQueue()
+        withStateLock {
+            queueModel = queueModel.setShuffle(enabled)
+            publishQueueLocked()
+        }
     }
 
     override fun setVolume(volume: Float) {
@@ -138,50 +175,77 @@ class InMemoryPlatformPlayer(
     }
 
     override fun release() {
-        stopTicker()
-        scope.cancel()
-    }
-
-    private fun onTrackChanged() {
-        _position.value = 0L
-        publishQueue()
-        if (queueModel.currentItem != null) {
-            _state.value = if (_isPlaying.value) PlayerState.PLAYING else PlayerState.READY
-            if (_isPlaying.value) startTicker()
-        } else {
-            _state.value = PlayerState.IDLE
-            _isPlaying.value = false
-            stopTicker()
+        withStateLock {
+            stopTickerLocked()
+            scope.cancel()
         }
     }
 
-    private fun startTicker() {
-        stopTicker()
+    private fun playLocked() {
+        if (queueModel.currentItem == null) return
+        if (_state.value == PlayerState.ENDED) _position.value = 0L
+        _isPlaying.value = true
+        _state.value = PlayerState.PLAYING
+        startTickerLocked()
+    }
+
+    private fun pauseLocked() {
+        _isPlaying.value = false
+        _state.value = PlayerState.PAUSED
+        stopTickerLocked()
+    }
+
+    private fun onTrackChangedLocked() {
+        _position.value = 0L
+        publishQueueLocked()
+        if (queueModel.currentItem != null) {
+            _state.value = if (_isPlaying.value) PlayerState.PLAYING else PlayerState.READY
+            if (_isPlaying.value) startTickerLocked()
+        } else {
+            _state.value = PlayerState.IDLE
+            _isPlaying.value = false
+            stopTickerLocked()
+        }
+    }
+
+    private fun startTickerLocked() {
+        stopTickerLocked()
         ticker = scope.launch {
             while (isActive && _isPlaying.value) {
-                delay(1000)
+                delay(tickerIntervalMs)
                 if (!_isPlaying.value) break
-                val dur = _duration.value
-                val next = _position.value + 1000
-                if (dur > 0 && next >= dur) {
-                    // Auto-advance to the next track in play order.
-                    queueModel = queueModel.next()
-                    _position.value = 0L
-                    publishQueue()
-                    if (queueModel.currentItem == null) {
-                        _isPlaying.value = false
-                        _state.value = PlayerState.ENDED
-                        break
+                val shouldContinue = withStateLock {
+                    if (!_isPlaying.value) return@withStateLock false
+                    val dur = _duration.value
+                    val next = _position.value + tickerIntervalMs
+                    if (dur > 0 && next >= dur) {
+                        val nextQueue = queueModel.next(repeat = false)
+                        if (nextQueue.currentIndex == queueModel.currentIndex) {
+                            _position.value = dur
+                            _isPlaying.value = false
+                            _state.value = PlayerState.ENDED
+                            false
+                        } else {
+                            queueModel = nextQueue
+                            _position.value = 0L
+                            publishQueueLocked()
+                            true
+                        }
+                    } else {
+                        _position.value = next
+                        true
                     }
-                } else {
-                    _position.value = next
                 }
+                if (!shouldContinue) break
             }
         }
     }
 
-    private fun stopTicker() {
+    private fun stopTickerLocked() {
         ticker?.cancel()
         ticker = null
     }
+
+    private fun <T> withStateLock(block: () -> T): T =
+        KoinPlatformTools.synchronized(stateLock, block)
 }

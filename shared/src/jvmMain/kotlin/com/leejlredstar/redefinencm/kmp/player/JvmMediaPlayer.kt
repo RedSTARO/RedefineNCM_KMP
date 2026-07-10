@@ -52,17 +52,11 @@ class JvmMediaPlayer(
 
     // ── Queue state ──
 
-    // 队列模型被音频播放线程（自然换曲）与调用线程（切歌/洗牌/换单）并发访问，
-    // 必须串行化其读-改-写，否则会丢更新 / 读到过期队列（本项目高度敏感的队列错位问题）。
-    private val queueLock = Any()
-
-    @Volatile
-    private var queueModel: PlayQueue<MediaInfo> = PlayQueue.empty()
-
-    /** 原子地读-改-写队列模型。 */
-    private inline fun mutateQueue(block: (PlayQueue<MediaInfo>) -> PlayQueue<MediaInfo>) {
-        synchronized(queueLock) { queueModel = block(queueModel) }
-    }
+    // Queue mutations, their publication, and the immediate playback decision are serialized.
+    // Publication itself happens while JvmQueueState owns its lock, so mutation A can never publish
+    // an old snapshot after mutation B has already published a newer one.
+    private val queueOperationLock = Any()
+    private val queueState = JvmQueueState<MediaInfo>()
 
     private val _state = MutableStateFlow(PlayerState.IDLE)
     override val state: StateFlow<PlayerState> = _state.asStateFlow()
@@ -82,11 +76,14 @@ class JvmMediaPlayer(
     private val _queue = MutableStateFlow<List<MediaInfo>>(emptyList())
     override val queue: StateFlow<List<MediaInfo>> = _queue.asStateFlow()
 
-    private val _currentIndex = MutableStateFlow(0)
+    private val _currentIndex = MutableStateFlow(-1)
     override val currentIndex: StateFlow<Int> = _currentIndex.asStateFlow()
 
     private val _shuffleEnabled = MutableStateFlow(false)
     override val shuffleEnabled: StateFlow<Boolean> = _shuffleEnabled.asStateFlow()
+
+    private val _queueSnapshot = MutableStateFlow(PlayerQueueSnapshot())
+    override val queueSnapshot: StateFlow<PlayerQueueSnapshot> = _queueSnapshot.asStateFlow()
 
     private val _volume = MutableStateFlow(
         playerVolumeFromPercent(settings.getLong(SettingKeys.PLAYER_VOLUME, DEFAULT_PLAYER_VOLUME_PERCENT))
@@ -113,13 +110,33 @@ class JvmMediaPlayer(
 
     // ── Internal helpers ──
 
-    private fun publishQueue() {
-        _queue.value = queueModel.items
-        _currentIndex.value = queueModel.currentIndex.coerceAtLeast(0)
-        _currentMedia.value = queueModel.currentItem
-        _shuffleEnabled.value = queueModel.shuffleEnabled
-        _duration.value = queueModel.currentItem?.duration?.takeIf { it > 0 } ?: -1L
+    private fun publishQueueLocked(snapshot: PlayQueue<MediaInfo>) {
+        val publication = snapshot.asJvmQueuePublication()
+        _queueSnapshot.value = PlayerQueueSnapshot(
+            items = publication.items,
+            currentIndex = publication.currentIndex,
+            currentMedia = publication.currentMedia,
+            shuffleEnabled = publication.shuffleEnabled,
+        )
+        _queue.value = publication.items
+        _currentIndex.value = publication.currentIndex
+        _currentMedia.value = publication.currentMedia
+        _shuffleEnabled.value = publication.shuffleEnabled
+        _duration.value = publication.currentMedia?.duration?.takeIf { it > 0 } ?: -1L
     }
+
+    private fun mutateQueue(
+        invalidatesPlaybackClaim: Boolean,
+        block: (PlayQueue<MediaInfo>) -> PlayQueue<MediaInfo>,
+    ): JvmQueueClaim<MediaInfo> = queueState.mutateAndPublish(
+        invalidatesPlaybackClaim = invalidatesPlaybackClaim,
+        block = block,
+        publish = ::publishQueueLocked,
+    )
+
+    private fun currentQueueClaim(): JvmQueueClaim<MediaInfo> = queueState.current()
+
+    private fun currentQueueModel(): PlayQueue<MediaInfo> = currentQueueClaim().model
 
     private fun startPolling() {
         stopPolling()
@@ -226,7 +243,14 @@ class JvmMediaPlayer(
         }
     }
 
-    private fun openAndPlay(generation: Long, streamUrl: String, startMs: Long) {
+    private fun openAndPlay(
+        generation: Long,
+        selectionRevision: Long,
+        media: MediaInfo,
+        streamUrl: String,
+        startMs: Long,
+    ) {
+        if (!queueState.isPlaybackClaimCurrent(selectionRevision, media)) return
         val thread = Thread(
             { runPlayback(generation, streamUrl, startMs) },
             "JvmMediaPlayer-audio-$generation",
@@ -378,29 +402,52 @@ class JvmMediaPlayer(
         }
 
         if (completedNaturally && isPlaybackCurrent(generation)) {
-            _isPlaying.value = false
-            seekOffsetMs = 0L
-            mutateQueue { it.next() }
-            publishQueue()
-            queueModel.currentItem?.let { resolveAndPlay(it, 0L) } ?: run {
-                _state.value = PlayerState.ENDED
+            synchronized(queueOperationLock) {
+                if (!isPlaybackCurrent(generation)) return@synchronized
+                _isPlaying.value = false
+                seekOffsetMs = 0L
+                val previous = currentQueueModel()
+                val next = mutateQueue(invalidatesPlaybackClaim = true) { it.next(repeat = false) }
+                if (next.model.currentIndex != previous.currentIndex) {
+                    onTrackChanged(next, autoplay = true)
+                } else if (queueState.isPlaybackClaimCurrent(
+                        next.selectionRevision,
+                        next.model.currentItem,
+                    )
+                ) {
+                    _position.value = _duration.value.coerceAtLeast(0L)
+                    _state.value = PlayerState.ENDED
+                }
             }
         }
     }
 
-    private fun resolveAndPlay(media: MediaInfo, startMs: Long = seekOffsetMs.coerceAtLeast(0L)) {
+    private fun resolveAndPlay(
+        media: MediaInfo,
+        startMs: Long = seekOffsetMs.coerceAtLeast(0L),
+        selectionRevision: Long = currentQueueClaim().selectionRevision,
+    ) {
+        if (!queueState.isPlaybackClaimCurrent(selectionRevision, media)) return
         val generation = beginPlaybackSession()
         _isPlaying.value = false
         _state.value = PlayerState.BUFFERING
 
         val job = scope.launch {
             val streamUrl = resolver.resolve(media.id)
-            if (!isPlaybackCurrent(generation)) return@launch
+            if (!isPlaybackCurrent(generation) ||
+                !queueState.isPlaybackClaimCurrent(selectionRevision, media)
+            ) return@launch
             if (streamUrl == null) {
                 _state.value = PlayerState.ERROR
                 return@launch
             }
-            openAndPlay(generation, streamUrl, startMs.coerceAtLeast(0L))
+            openAndPlay(
+                generation = generation,
+                selectionRevision = selectionRevision,
+                media = media,
+                streamUrl = streamUrl,
+                startMs = startMs.coerceAtLeast(0L),
+            )
         }
 
         synchronized(playbackLock) {
@@ -412,18 +459,19 @@ class JvmMediaPlayer(
         }
     }
 
-    private fun onTrackChanged(autoplay: Boolean) {
+    private fun onTrackChanged(claim: JvmQueueClaim<MediaInfo>, autoplay: Boolean) {
+        val snapshot = claim.model
+        if (!queueState.isPlaybackClaimCurrent(claim.selectionRevision, snapshot.currentItem)) return
         _position.value = 0L
         seekOffsetMs = 0L
-        publishQueue()
-        val current = queueModel.currentItem
+        val current = snapshot.currentItem
         when {
             current == null -> {
                 cancelPlaybackSession()
                 _state.value = PlayerState.IDLE
                 _isPlaying.value = false
             }
-            autoplay -> resolveAndPlay(current, 0L)
+            autoplay -> resolveAndPlay(current, 0L, claim.selectionRevision)
             else -> {
                 cancelPlaybackSession()
                 _isPlaying.value = false
@@ -437,6 +485,10 @@ class JvmMediaPlayer(
     override fun play() {
         if (_isPlaying.value) return
         if (_state.value == PlayerState.BUFFERING) return
+        if (_state.value == PlayerState.ENDED) {
+            seekOffsetMs = 0L
+            _position.value = 0L
+        }
         val resumed = synchronized(playbackLock) {
             val thread = playbackThread
             val currentLine = line
@@ -461,7 +513,12 @@ class JvmMediaPlayer(
             startPolling()
             return
         }
-        queueModel.currentItem?.let { resolveAndPlay(it, _position.value.coerceAtLeast(0L)) }
+        synchronized(queueOperationLock) {
+            val claim = currentQueueClaim()
+            claim.model.currentItem?.let {
+                resolveAndPlay(it, _position.value.coerceAtLeast(0L), claim.selectionRevision)
+            }
+        }
     }
 
     override fun pause() {
@@ -498,69 +555,94 @@ class JvmMediaPlayer(
     override fun seekTo(positionMs: Long) {
         seekOffsetMs = positionMs.coerceAtLeast(0)
         _position.value = seekOffsetMs
-        val current = _currentMedia.value
-        if (current != null && (_isPlaying.value || _state.value == PlayerState.BUFFERING)) {
-            resolveAndPlay(current, seekOffsetMs)
-        } else if (current != null && _state.value == PlayerState.PAUSED && playbackThread != null) {
-            cancelPlaybackSession()
-            _isPlaying.value = false
-            _state.value = PlayerState.PAUSED
+        synchronized(queueOperationLock) {
+            val claim = currentQueueClaim()
+            val current = claim.model.currentItem
+            if (current != null && (_isPlaying.value || _state.value == PlayerState.BUFFERING)) {
+                resolveAndPlay(current, seekOffsetMs, claim.selectionRevision)
+            } else if (current != null && _state.value == PlayerState.PAUSED && playbackThread != null) {
+                cancelPlaybackSession()
+                _isPlaying.value = false
+                _state.value = PlayerState.PAUSED
+            }
         }
     }
 
     override fun seekToPrevious() {
-        val autoplay = _isPlaying.value || _state.value == PlayerState.BUFFERING
-        mutateQueue { it.previous() }
-        onTrackChanged(autoplay)
+        synchronized(queueOperationLock) {
+            val autoplay = _isPlaying.value || _state.value == PlayerState.BUFFERING
+            val previous = currentQueueModel()
+            val next = mutateQueue(invalidatesPlaybackClaim = true) { it.previous(repeat = false) }
+            if (next.model.currentIndex != previous.currentIndex) onTrackChanged(next, autoplay)
+        }
     }
 
     override fun seekToNext() {
-        val autoplay = _isPlaying.value || _state.value == PlayerState.BUFFERING
-        mutateQueue { it.next() }
-        onTrackChanged(autoplay)
+        synchronized(queueOperationLock) {
+            val autoplay = _isPlaying.value || _state.value == PlayerState.BUFFERING
+            val previous = currentQueueModel()
+            val next = mutateQueue(invalidatesPlaybackClaim = true) { it.next(repeat = false) }
+            if (next.model.currentIndex != previous.currentIndex) {
+                onTrackChanged(next, autoplay)
+            } else if (autoplay && queueState.isPlaybackClaimCurrent(
+                    next.selectionRevision,
+                    next.model.currentItem,
+                )
+            ) {
+                cancelPlaybackSession()
+                _isPlaying.value = false
+                _state.value = PlayerState.ENDED
+            }
+        }
     }
 
     override fun setQueue(items: List<MediaInfo>, startIndex: Int) {
-        mutateQueue { PlayQueue.of(items, startIndex) }
-        onTrackChanged(autoplay = true)
+        synchronized(queueOperationLock) {
+            val claim = mutateQueue(invalidatesPlaybackClaim = true) { PlayQueue.of(items, startIndex) }
+            onTrackChanged(claim, autoplay = true)
+        }
     }
 
     override fun restoreQueue(items: List<MediaInfo>, startIndex: Int, positionMs: Long) {
         // 恢复队列但不自动播放（默认实现的 setQueue→pause 存在异步竞态：
         // resolveAndPlay 解析完成晚于 pause，会照样出声）。play() 时会从
         // seekOffsetMs 起播（openAndPlay 尊重该偏移）。
-        cancelPlaybackSession()
-        mutateQueue { PlayQueue.of(items, startIndex) }
-        seekOffsetMs = positionMs.coerceAtLeast(0L)
-        _isPlaying.value = false
-        _state.value = PlayerState.PAUSED
-        publishQueue()
-        _position.value = seekOffsetMs
+        synchronized(queueOperationLock) {
+            val claim = mutateQueue(invalidatesPlaybackClaim = true) { PlayQueue.of(items, startIndex) }
+            onTrackChanged(claim, autoplay = false)
+            seekOffsetMs = positionMs.coerceAtLeast(0L)
+            _position.value = seekOffsetMs
+        }
     }
 
     override fun addToQueue(item: MediaInfo) {
-        mutateQueue { it.addItem(item) }
-        publishQueue()
+        synchronized(queueOperationLock) {
+            mutateQueue(invalidatesPlaybackClaim = false) { it.addItem(item) }
+        }
     }
 
     override fun clearQueue() {
-        cancelPlaybackSession()
-        mutateQueue { PlayQueue.empty() }
-        _isPlaying.value = false
-        _state.value = PlayerState.IDLE
-        _position.value = 0L
-        publishQueue()
+        synchronized(queueOperationLock) {
+            val claim = mutateQueue(invalidatesPlaybackClaim = true) { PlayQueue.empty() }
+            onTrackChanged(claim, autoplay = false)
+        }
     }
 
     override fun skipToIndex(index: Int) {
-        val autoplay = _isPlaying.value || _state.value == PlayerState.BUFFERING
-        mutateQueue { it.skipTo(index) }
-        onTrackChanged(autoplay)
+        synchronized(queueOperationLock) {
+            val autoplay = _isPlaying.value || _state.value == PlayerState.BUFFERING
+            val claim = mutateQueue(invalidatesPlaybackClaim = true) { queue ->
+                val itemIndex = queue.playOrder.getOrNull(index) ?: index
+                queue.skipTo(itemIndex)
+            }
+            onTrackChanged(claim, autoplay)
+        }
     }
 
     override fun setShuffleEnabled(enabled: Boolean) {
-        mutateQueue { it.setShuffle(enabled) }
-        publishQueue()
+        synchronized(queueOperationLock) {
+            mutateQueue(invalidatesPlaybackClaim = false) { it.setShuffle(enabled) }
+        }
     }
 
     override fun setVolume(volume: Float) {
@@ -580,4 +662,58 @@ class JvmMediaPlayer(
         cancelPlaybackSession()
         scope.cancel()
     }
+}
+
+internal data class JvmQueuePublication<T>(
+    val items: List<T>,
+    val currentIndex: Int,
+    val currentMedia: T?,
+    val shuffleEnabled: Boolean,
+)
+
+internal fun <T> PlayQueue<T>.asJvmQueuePublication(): JvmQueuePublication<T> =
+    JvmQueuePublication(
+        items = itemsInPlayOrder,
+        currentIndex = positionInPlayOrder,
+        currentMedia = currentItem,
+        shuffleEnabled = shuffleEnabled,
+    )
+
+internal data class JvmQueueClaim<T>(
+    val model: PlayQueue<T>,
+    val revision: Long,
+    val selectionRevision: Long,
+)
+
+/** Serializes queue mutation and publication as one atomic operation. */
+internal class JvmQueueState<T>(initial: PlayQueue<T> = PlayQueue.empty()) {
+    private val lock = Any()
+    private var model = initial
+    private var revision = 0L
+    private var selectionRevision = 0L
+
+    fun mutateAndPublish(
+        invalidatesPlaybackClaim: Boolean,
+        block: (PlayQueue<T>) -> PlayQueue<T>,
+        publish: (PlayQueue<T>) -> Unit,
+    ): JvmQueueClaim<T> = synchronized(lock) {
+        check(revision != Long.MAX_VALUE) { "JVM queue revision exhausted" }
+        if (invalidatesPlaybackClaim) {
+            check(selectionRevision != Long.MAX_VALUE) { "JVM selection revision exhausted" }
+            selectionRevision += 1L
+        }
+        model = block(model)
+        revision += 1L
+        publish(model)
+        JvmQueueClaim(model, revision, selectionRevision)
+    }
+
+    fun current(): JvmQueueClaim<T> = synchronized(lock) {
+        JvmQueueClaim(model, revision, selectionRevision)
+    }
+
+    fun isPlaybackClaimCurrent(expectedSelectionRevision: Long, expectedMedia: T?): Boolean =
+        synchronized(lock) {
+            selectionRevision == expectedSelectionRevision && model.currentItem == expectedMedia
+        }
 }
