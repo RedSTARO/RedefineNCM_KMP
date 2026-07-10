@@ -144,9 +144,8 @@ kotlin {
             // Image loading — coil-compose + Ktor-backed network fetcher
             implementation(libs.coil.compose)
             implementation(libs.coil.network.ktor3)
-            // SQLDelight — runtime + coroutines Flow support
+            // SQLDelight runtime
             implementation(libs.sqldelight.runtime)
-            implementation(libs.sqldelight.coroutines)
         }
         commonMain {
             kotlin.srcDir(generateAppBuildInfo)
@@ -173,6 +172,9 @@ kotlin {
                 // 完整现代内核。此前的 JavaFX WebKit（WebKit 无 GPU 合成、字体/布局/动画均不完整）
                 // 与 KCEF（已归档、native init 崩溃）均被淘汰。
                 implementation(libs.webview.java)
+                // Linux desktop transport controls: a real MPRIS service on the session D-Bus.
+                implementation(libs.dbus.java.core)
+                runtimeOnly(libs.dbus.java.native.unixsocket)
             }
         }
     }

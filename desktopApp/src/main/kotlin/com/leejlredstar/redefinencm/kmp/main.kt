@@ -31,7 +31,7 @@ import androidx.compose.ui.window.rememberWindowState
 import com.leejlredstar.redefinencm.kmp.di.initKoin
 import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
-import com.leejlredstar.redefinencm.kmp.smtc.WindowsMediaControls
+import com.leejlredstar.redefinencm.kmp.smtc.DesktopMediaControls
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
 import org.koin.core.context.GlobalContext
 
@@ -51,7 +51,7 @@ fun main() {
             title = "RedefineNCM",
         ) {
             val player = remember { GlobalContext.get().get<PlatformPlayer>() }
-            val mediaControls = remember(player) { WindowsMediaControls(player) }
+            val mediaControls = remember(player) { DesktopMediaControls(player) }
             DisposableEffect(window, mediaControls) {
                 mediaControls.start(window)
                 onDispose { mediaControls.stop() }
@@ -104,8 +104,10 @@ private fun ApplicationScope.FloatingLyricWindow() {
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Text(
-                            text = data?.currentLyric?.ifBlank { data?.title.orEmpty() }
-                                ?: "RedefineNCM",
+                            text = data?.let { lyric ->
+                                val state = if (lyric.isPlaying) "▶" else "Ⅱ"
+                                "$state ${lyric.currentLyric.ifBlank { lyric.title }}"
+                            } ?: "RedefineNCM",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onSurface,
