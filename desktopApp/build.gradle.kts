@@ -19,7 +19,7 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.uiToolingPreview)
 
-    // SLF4J backend so KCEF/JCEF + Ktor logs print to the console (otherwise NOP — no logs).
+    // SLF4J backend so dbus-java and Ktor diagnostics are not discarded by a NOP provider.
     implementation(libs.slf4j.simple)
 }
 
@@ -29,7 +29,16 @@ compose.desktop {
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            modules("java.sql")
+            // jdeps output for Compose/JNA/SQLDelight/dbus-java. Keep the packaged runtime able
+            // to authenticate to the Linux session bus and load the native transport backends.
+            modules(
+                "java.instrument",
+                "java.management",
+                "java.prefs",
+                "java.sql",
+                "jdk.security.auth",
+                "jdk.unsupported",
+            )
             packageName = "RedefineNCM"
             packageVersion = appBaseVersion
             description = "A third-party NetEase Cloud Music client"
@@ -40,11 +49,11 @@ compose.desktop {
                 menuGroup = "RedSTAR"
                 shortcut = true
                 upgradeUuid = "44a6cc76-8441-4e27-9ce0-c6d582a78513"
+            }
 
             macOS {
                 bundleID = "com.redstar.redefinencm"
                 packageName = "RedefineNCM"
-            }
             }
         }
     }
