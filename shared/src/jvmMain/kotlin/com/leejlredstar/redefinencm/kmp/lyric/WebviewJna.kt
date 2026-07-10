@@ -5,6 +5,9 @@ import com.sun.jna.Library
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
 
 /**
  * webview 0.11（系统 WebView2）的精简 Kotlin JNA 绑定。
@@ -51,18 +54,52 @@ internal interface WebviewJna : Library {
         }
 
         private fun extractAndLoadNative() {
+            check(desktopEmbeddedWebViewSupported()) {
+                "The bundled lyric WebView native is available only on Windows x64"
+            }
             val res = "/dev/webview/webview_java/natives/x86_64/windows_nt/webview.dll"
-            val target = File(System.getProperty("java.io.tmpdir"), "redefinencm-webview.dll")
-            runCatching {
-                WebviewJna::class.java.getResourceAsStream(res)?.use { input ->
-                    target.outputStream().use { output -> input.copyTo(output) }
-                } ?: error("webview native missing on classpath: $res")
-            }.onFailure {
-                // 已有旧副本被占用时拷贝失败可以容忍，直接加载旧副本
-                if (!target.exists()) throw it
+            val bytes = WebviewJna::class.java.getResourceAsStream(res)?.use { it.readBytes() }
+                ?: error("webview native missing on classpath: $res")
+            val digest = bytes.sha256Hex()
+            val directory = File(
+                System.getProperty("java.io.tmpdir"),
+                "redefinencm-native/webview/$digest",
+            )
+            check(directory.mkdirs() || directory.isDirectory) {
+                "Cannot create native extraction directory: $directory"
+            }
+            val target = File(directory, "webview.dll")
+            if (!target.isFile || !target.readBytes().contentEquals(bytes)) {
+                val temporary = Files.createTempFile(directory.toPath(), "webview-", ".tmp")
+                try {
+                    Files.write(temporary, bytes)
+                    check(Files.readAllBytes(temporary).sha256Hex() == digest) {
+                        "Extracted WebView native failed integrity verification"
+                    }
+                    runCatching {
+                        Files.move(
+                            temporary,
+                            target.toPath(),
+                            StandardCopyOption.ATOMIC_MOVE,
+                            StandardCopyOption.REPLACE_EXISTING,
+                        )
+                    }.getOrElse {
+                        Files.move(temporary, target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                    }
+                } finally {
+                    Files.deleteIfExists(temporary)
+                }
+            }
+            check(target.readBytes().sha256Hex() == digest) {
+                "WebView native integrity check failed: $target"
             }
             System.load(target.absolutePath)
             System.setProperty("jna.library.path", target.parent)
         }
+
+        private fun ByteArray.sha256Hex(): String =
+            MessageDigest.getInstance("SHA-256")
+                .digest(this)
+                .joinToString("") { byte -> "%02x".format(byte) }
     }
 }

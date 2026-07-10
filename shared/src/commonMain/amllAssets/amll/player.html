@@ -16,8 +16,7 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
     width: 100%; height: 100%; min-height: 100%; overflow: hidden; background: #0a0a0a;
-    /* 注意：不能写 system-ui / -apple-system —— JavaFX WebKit 不认识这些关键字，
-       会把整条 font-family 声明判为无效，回退到衬线默认字体（中文=宋体）。 */
+    /* Keep an explicit cross-platform CJK font stack for stable lyric metrics. */
     font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
   }
   /* Blurred album-art background. AMLL's lyric rendering (plus-lighter blend) is designed to
@@ -174,10 +173,6 @@
 <button id="desktop-back" class="desktop-control" type="button" aria-label="返回">‹</button>
 
 <script>
-// ── CDN fallback: esm.sh handles PixiJS transitive deps ──
-const CDN = "https://esm.sh/@applemusic-like-lyrics";
-const VER = "latest";
-
 // Surface any failure on-screen (and to the host console) so a blank panel becomes a
 // readable error on both Android WebView and desktop WebView2, not just black.
 let errored = false;
@@ -294,10 +289,6 @@ function notifyHostLyricLineClicked(timeMs, mediaId) {
     globalThis.AmllCallback.onLyricLineClicked(safeTime, safeMediaId);
   } else if (typeof globalThis.amllSeek === "function") {
     globalThis.amllSeek(safeTime, safeMediaId);
-  } else if (globalThis.amllHost && globalThis.amllHost.onLyricLineClicked) {
-    globalThis.amllHost.onLyricLineClicked(safeTime, safeMediaId);
-  } else if (typeof globalThis.cefQuery === "function") {
-    globalThis.cefQuery({ request: "seekTo:" + safeTime + ":" + safeMediaId, onSuccess: function () {}, onFailure: function () {} });
   }
 }
 
@@ -390,58 +381,6 @@ function installLyricClickSeeking() {
   }, true);
 }
 
-function normalizeYrcWordStart(lineStart, lineDuration, wordStart) {
-  if (wordStart < lineStart && wordStart <= lineDuration) return lineStart + wordStart;
-  return wordStart;
-}
-
-function parseYrcText(yrcText) {
-  const lines = [];
-  const lineRegex = /^\[(\d+),(\d+)\](.*)$/;
-  const wordRegex = /\((\d+),(\d+)(?:,\d+)?\)([^()]*)/g;
-
-  for (const rawLine of String(yrcText || "").split(/\r?\n/)) {
-    const match = rawLine.trim().match(lineRegex);
-    if (!match) continue;
-
-    const lineStart = Number(match[1]) || 0;
-    const lineDuration = Number(match[2]) || 0;
-    const body = match[3] || "";
-    const words = [];
-    let wordMatch;
-    wordRegex.lastIndex = 0;
-    while ((wordMatch = wordRegex.exec(body)) !== null) {
-      const rawStart = Number(wordMatch[1]) || 0;
-      const duration = Math.max(0, Number(wordMatch[2]) || 0);
-      const word = wordMatch[3] || "";
-      if (!word) continue;
-      const startTime = normalizeYrcWordStart(lineStart, lineDuration, rawStart);
-      words.push({ startTime, endTime: startTime + duration, word });
-    }
-    if (!words.length) continue;
-
-    const fallbackEnd = lineStart + Math.max(0, lineDuration);
-    const endTime = Math.max(fallbackEnd, ...words.map((word) => word.endTime));
-    lines.push({
-      startTime: lineStart,
-      endTime,
-      words,
-      translatedLyric: "",
-      romanLyric: "",
-      isBG: false,
-      isDuet: false,
-    });
-  }
-
-  lines.sort((a, b) => a.startTime - b.startTime);
-  for (let i = 0; i < lines.length - 1; i++) {
-    if (lines[i].endTime <= lines[i].startTime || lines[i].endTime > lines[i + 1].startTime) {
-      lines[i].endTime = lines[i + 1].startTime;
-    }
-  }
-  return lines;
-}
-
 function parseLrcSupplement(lrcText) {
   const entries = [];
   const timeRegex = /\[(\d+):(\d+(?:\.\d+)?)\]/g;
@@ -512,12 +451,11 @@ function installWordLyricSupport() {
     this.player?.setLyricLines([]);
   };
 
-  bridge.parseYrc = parseYrcText;
   if (bridge.__redefineWordLyricWrapped) return;
   bridge.__redefineWordLyricWrapped = true;
   bridge.loadWordLyrics = function (yrcText, mediaId, options) {
     if (!this.player) return;
-    const parsed = parseYrcText(yrcText);
+    const parsed = this.parseYrc ? this.parseYrc(yrcText) : [];
     const primaryLines = parsed.length ? parsed : (this.parseLrc ? this.parseLrc(yrcText) : []);
     const lines = applyLyricOptions(primaryLines, options);
     setCurrentLyricLines(lines, mediaId);
@@ -535,18 +473,13 @@ function signalReady() {
     globalThis.AmllCallback.onReady();            // Android @JavascriptInterface
   } else if (typeof globalThis.amllReady === "function") {
     globalThis.amllReady();                       // desktop webview_java (WebView2) bind
-  } else if (globalThis.amllHost && globalThis.amllHost.onReady) {
-    globalThis.amllHost.onReady();                // desktop JavaFX JSObject bridge (legacy)
-  } else if (typeof globalThis.cefQuery === "function") {
-    globalThis.cefQuery({ request: "onReady", onSuccess: function () {}, onFailure: function () {} });
   } else {
-    // The host bridge can be injected AFTER the page finishes loading (e.g. JavaFX sets
-    // window.amllHost on load SUCCEEDED), which may be after the engine mounts. Retry.
-    setTimeout(signalReady, 100);
+    showError("native host bridge is unavailable");
   }
 }
 
-// Try local bundle first, fall back to CDN
+// The lyric engine is part of the signed application. Fail fast when that asset is
+// absent or incompatible instead of executing mutable remote code inside a native bridge.
 async function loadEngine() {
   // Load the locally bundled engine as a CLASSIC script. Android WebView blocks
   // dynamic import()/module scripts over file:// (opaque origin → CORS failure),
@@ -559,90 +492,24 @@ async function loadEngine() {
     s.onerror = () => resolve(false);
     document.head.appendChild(s);
   });
-  setStatus(localOk ? "bundle loaded, starting engine…" : "local bundle missing, trying CDN…");
+  if (!localOk) {
+    showError("bundled lyric engine is missing");
+    return;
+  }
+  setStatus("bundle loaded, starting engine…");
   try {
     applyViewportSize();
-    if (localOk && globalThis.AmllBridge && globalThis.AmllBridge.init()) {
+    if (globalThis.AmllBridge && globalThis.AmllBridge.init()) {
       applyViewportSize();
       installWordLyricSupport();
       setStatus("waiting for lyrics...");
       signalReady();
       return;
     }
-    if (localOk) setStatus("engine init returned false, trying CDN…");
+    showError("bundled lyric engine failed to initialize");
   } catch (e) {
     showError("local engine init threw: " + (e && e.message ? e.message : e));
-    console.warn("AMLL: local engine init failed, falling back to CDN", e);
   }
-
-  // CDN fallback with importmap
-  const imp = document.createElement("script");
-  imp.type = "importmap-shim";
-  imp.textContent = JSON.stringify({
-    imports: {
-      "@applemusic-like-lyrics/core": `${CDN}/core@${VER}/+esm`,
-      "@applemusic-like-lyrics/lyric": `${CDN}/lyric@${VER}/+esm`,
-    },
-  });
-  document.head.appendChild(imp);
-
-  // Load es-module-shims for importmap support
-  const shim = document.createElement("script");
-  shim.src = "https://ga.jspm.io/npm:es-module-shims@2/dist/es-module-shims.js";
-  shim.async = true;
-  document.head.appendChild(shim);
-
-  await new Promise((resolve) => (shim.onload = resolve));
-
-  const main = document.createElement("script");
-  main.type = "esms-import";
-  main.textContent = `
-    import { LyricPlayer } from "@applemusic-like-lyrics/core";
-    import { parseLrc } from "@applemusic-like-lyrics/lyric";
-
-    globalThis.AmllBridge = {
-      LyricPlayer, parseLrc, player: null,
-      init() {
-        const root = document.getElementById("amll-root");
-        if (!root) return false;
-        this.player = new LyricPlayer();
-        root.appendChild(this.player.getElement());
-        globalThis.AmllPage && globalThis.AmllPage.applyViewportSize();
-        let last = -1;
-        const frame = (t) => {
-          if (last < 0) last = t;
-          this.player.update(t - last);
-          last = t;
-          requestAnimationFrame(frame);
-        };
-        requestAnimationFrame(frame);
-        return true;
-      },
-      loadLyrics(lrcText) {
-        if (!this.player) return;
-        this.player.setLyricLines(parseLrc(lrcText));
-        globalThis.AmllPage && globalThis.AmllPage.hideLoading();
-      },
-      setTime(timeMs) {
-        this.player?.setCurrentTime(timeMs);
-      },
-      setBackground(url) {
-        const el = document.getElementById("bg");
-        if (el && url) el.style.backgroundImage = 'url("' + url + '")';
-      },
-      setTheme(theme) {
-        document.documentElement.setAttribute("data-theme", theme);
-      },
-    };
-
-    globalThis.installWordLyricSupport && globalThis.installWordLyricSupport();
-
-    // Auto-init
-    const ok = globalThis.AmllBridge.init();
-    if (!ok) console.error("AMLL: failed to init");
-    else globalThis.signalReady && globalThis.signalReady();
-  `;
-  document.body.appendChild(main);
 }
 
 loadEngine();

@@ -6,10 +6,10 @@
     "build": "node build.js"
   },
   "dependencies": {
-    "@applemusic-like-lyrics/core": "^0.5.1",
-    "@applemusic-like-lyrics/lyric": "^1.0.1"
+    "@applemusic-like-lyrics/core": "0.5.2",
+    "@applemusic-like-lyrics/lyric": "1.0.2"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0"
+    "esbuild": "0.25.12"
   }
 }

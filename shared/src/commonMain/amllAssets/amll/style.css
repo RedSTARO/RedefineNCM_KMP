@@ -29,55 +29,58 @@
   }
 }
 .FmKaba_lyricLineWrapper {
+  box-sizing: border-box;
+  width: 100%;
+  padding: .4em var(--lyric-line-padding-x);
   will-change:
     transform,
     opacity,
     filter;
+  border-radius: .25em;
   flex-direction: column;
   align-items: flex-start;
-  width: 100%;
-  transition: opacity .4s, filter .4s;
+  gap: .3em;
+  transition:
+    opacity .4s,
+    filter .4s,
+    background-color .25s;
   display: flex;
   position: absolute;
   top: 0;
   left: 0;
+}
+.FmKaba_lyricLineWrapper:hover {
+  background-color: var(--amll-lp-hover-bg-color, #fff1);
+}
+.FmKaba_lyricLineWrapper:active {
+  background-color: var(--amll-lp-hover-bg-color, #ffffff05);
 }
 .FmKaba_lyricLine {
   box-sizing: border-box;
   width: var(--amll-lp-width, 100%);
   min-width: var(--amll-lp-width, 100%);
   max-width: var(--amll-lp-width, 100%);
-  contain: content;
+  contain: layout style paint;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 40px;
   backface-visibility: hidden;
   transform-origin: 0;
-  will-change: transform;
-  border-radius: .25em;
+  will-change:
+    transform,
+    filter,
+    opacity;
   height: fit-content;
-  padding: .5em 1em;
-  transition: background-color .25s, box-shadow .25s;
+  margin: -.2em;
+  padding: .2em;
+  transition: box-shadow .25s;
   position: relative;
-}
-@media screen and (max-width: 500px) {
-  .FmKaba_lyricLine {
-    padding-left: 20px;
-    padding-right: 20px;
-  }
-}
-.FmKaba_lyricLine.FmKaba_dirty {
-  opacity: 0;
-  visibility: hidden;
-}
-.FmKaba_lyricLine:has(> *):hover {
-  background-color: var(--amll-lp-hover-bg-color, #fff1);
-}
-.FmKaba_lyricLine:has(> *):active {
-  background-color: var(--amll-lp-hover-bg-color, #ffffff05);
 }
 .FmKaba_lyricDuetLine {
   text-align: right;
   transform-origin: 100%;
 }
 .FmKaba_lyricMainLine {
+  contain: layout style;
   margin: -1em;
   padding: 1em;
   transition: opacity .3s .1s;
@@ -115,7 +118,8 @@
 .FmKaba_lyricMainLine span.FmKaba_emphasizeWrapper {
   white-space: pre-wrap;
   vertical-align: bottom;
-  will-change: transform;
+  will-change: transform, text-shadow;
+  contain: layout style;
   margin: -1em;
   padding: 1em;
   display: inline-block;
@@ -127,14 +131,13 @@
   padding: 1em;
 }
 :is(:is(.FmKaba_lyricMainLine > span, .FmKaba_lyricMainLine span.FmKaba_emphasizeWrapper).FmKaba_emphasize, :is(.FmKaba_lyricMainLine > span, .FmKaba_lyricMainLine span.FmKaba_emphasizeWrapper) span.FmKaba_emphasize) > span {
-  will-change: transform;
+  will-change: transform, text-shadow;
   backface-visibility: hidden;
   margin: -1em;
   padding: 1em;
 }
 .FmKaba_lyricBgLine {
   opacity: .4;
-  padding: 1vh calc(var(--amll-lp-line-padding-x, 1em) / var(--amll-lp-bg-line-scale, .7));
   font-size: max(calc(1em * var(--amll-lp-bg-line-scale, .7)), 10px);
   transition: background-color .25s, box-shadow .25s;
 }
@@ -169,32 +172,36 @@
   display: none;
 }
 .FmKaba_bgWrapper {
+  top: 100%;
+  left: var(--lyric-line-padding-x);
   z-index: -1;
   align-items: inherit;
+  width: calc(100% - var(--lyric-line-padding-x) * 2);
   visibility: visible;
   pointer-events: auto;
   opacity: 0;
-  width: 100%;
-  transform-origin: var(--lyric-line-padding-x) top;
+  transform-origin: 0 0;
   flex-direction: column;
   transition: opacity .3s;
   display: flex;
   position: absolute;
-  top: 100%;
-  left: 0;
 }
 .FmKaba_bgWrapperTop {
-  transform-origin: var(--lyric-line-padding-x) bottom;
+  transform-origin: 0 100%;
+  width: 100%;
   margin-top: -999px;
   position: relative;
   top: auto;
   bottom: auto;
+  left: 0;
 }
 .FmKaba_bgWrapperActive {
   opacity: 1;
+  width: 100%;
   position: relative;
   top: auto;
   bottom: auto;
+  left: 0;
 }
 .FmKaba_bgWrapperHidden {
   visibility: hidden;
@@ -251,6 +258,14 @@
 .amll-lyric-player:hover .FmKaba_lyricLineWrapper {
   filter: unset !important;
 }
+.amll-lyric-player:not(.FmKaba_playing) .FmKaba_bgWrapper {
+  opacity: 1;
+  width: 100%;
+  position: relative;
+  top: auto;
+  bottom: auto;
+  left: 0;
+}
 .amll-lyric-player.FmKaba_hasDuetLine .FmKaba_lyricLine:not(.FmKaba_lyricDuetLine) {
   padding-right: 15%;
 }
@@ -261,14 +276,8 @@
   align-items: flex-end;
 }
 .amll-lyric-player.FmKaba_hasDuetLine .FmKaba_lyricLineWrapper:has(.FmKaba_lyricDuetLine) .FmKaba_bgWrapper {
-  transform-origin: calc(100% - var(--lyric-line-padding-x)) top;
+  transform-origin: 100% 0;
 }
 .amll-lyric-player.FmKaba_hasDuetLine .FmKaba_lyricLineWrapper:has(.FmKaba_lyricDuetLine) .FmKaba_bgWrapperTop {
-  transform-origin: calc(100% - var(--lyric-line-padding-x)) bottom;
-}
-.amll-lyric-player:not(.FmKaba_playing) .FmKaba_bgWrapper {
-  opacity: 1;
-  position: relative;
-  top: auto;
-  bottom: auto;
+  transform-origin: 100% 100%;
 }
