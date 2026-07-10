@@ -8,3 +8,6 @@ INSERT OR REPLACE INTO CachedRecommendSongs(singleton, json) VALUES (0, :json);
 
 select:
 SELECT json FROM CachedRecommendSongs WHERE singleton = 0;
+
+deleteAll:
+DELETE FROM CachedRecommendSongs;
