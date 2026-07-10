@@ -17,10 +17,11 @@ struct LyricLiveActivity: Widget {
                 .padding(.vertical, 12)
                 .activityBackgroundTint(Color.black.opacity(0.55))
                 .activitySystemActionForegroundColor(Color.white)
+                .widgetURL(URL(string: "redefinencm://nowplaying"))
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Image(systemName: "music.note")
+                    Image(systemName: context.state.isPlaying ? "play.fill" : "pause.fill")
                         .font(.title3)
                         .foregroundStyle(.pink)
                 }
@@ -48,11 +49,21 @@ struct LyricLiveActivity: Widget {
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
+                        if context.state.durationMs > 0 {
+                            ProgressView(
+                                value: min(
+                                    Double(context.state.positionMs),
+                                    Double(context.state.durationMs)
+                                ),
+                                total: Double(context.state.durationMs)
+                            )
+                            .tint(.pink)
+                        }
                     }
                     .frame(maxWidth: .infinity)
                 }
             } compactLeading: {
-                Image(systemName: "music.note")
+                Image(systemName: context.state.isPlaying ? "play.fill" : "pause.fill")
                     .foregroundStyle(.pink)
             } compactTrailing: {
                 Text(context.state.currentLyric)
@@ -60,7 +71,7 @@ struct LyricLiveActivity: Widget {
                     .lineLimit(1)
                     .frame(maxWidth: 96)
             } minimal: {
-                Image(systemName: "music.note")
+                Image(systemName: context.state.isPlaying ? "play.fill" : "pause.fill")
                     .foregroundStyle(.pink)
             }
             .widgetURL(URL(string: "redefinencm://nowplaying"))
@@ -93,6 +104,13 @@ private struct LockScreenLyricView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                }
+                if state.durationMs > 0 {
+                    ProgressView(
+                        value: min(Double(state.positionMs), Double(state.durationMs)),
+                        total: Double(state.durationMs)
+                    )
+                    .tint(.pink)
                 }
             }
             Spacer(minLength: 0)

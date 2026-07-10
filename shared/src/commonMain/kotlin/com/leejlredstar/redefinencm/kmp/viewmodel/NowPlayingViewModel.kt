@@ -14,8 +14,8 @@ import kotlinx.coroutines.flow.*
  * Ported from the original Android NowPlayingViewModel.
  *
  * Key invariant (preserved from original):
- * playList, playOrderWindowIndices, and currentMediaIndexInList MUST always be
- * rebuilt together from the current Player state via rebuildPlaylistFromTimeline().
+ * The visible queue and current highlight MUST always be rebuilt together from the current
+ * Player state via rebuildPlaylistFromTimeline().
  * Never update them independently — this prevents the shuffle highlight misalignment bug.
  */
 class NowPlayingViewModel(
@@ -33,8 +33,8 @@ class NowPlayingViewModel(
     val shuffleStatus = MutableStateFlow(false)
 
     // ── Queue ──
-    val playList = MutableStateFlow<List<MediaInfo>>(emptyList())
-    val currentMediaIndexInList = MutableStateFlow<String?>(null)
+    private val _queueSnapshot = MutableStateFlow(PlayerQueueSnapshot())
+    val queueSnapshot: StateFlow<PlayerQueueSnapshot> = _queueSnapshot.asStateFlow()
 
     // ── Lyrics ──
     val lyricIndex = MutableStateFlow(0)
@@ -47,14 +47,15 @@ class NowPlayingViewModel(
     val rawRomanLyric = MutableStateFlow("")
     val wordLyricLines = MutableStateFlow<List<LyricParser.WordLine>>(emptyList())
     val lyricMediaId = MutableStateFlow<String?>(null)
+    val lyricLoadError = MutableStateFlow<String?>(null)
 
     // ── Comments ──
     val comments = MutableStateFlow<CommentMusic?>(null)
+    val commentsLoadError = MutableStateFlow<String?>(null)
 
     init {
         initPlayerSync()
         initLyricSync()
-        rebuildPlaylistFromTimeline()
     }
 
     private fun initPlayerSync() {
@@ -78,6 +79,7 @@ class NowPlayingViewModel(
         scope.launch {
             player.duration.collect { dur ->
                 songLength.value = dur
+                MediaControlsIntegrator.updateMetadata(duration = dur)
             }
         }
         scope.launch {
@@ -85,6 +87,7 @@ class NowPlayingViewModel(
                 currentMedia.value = media
                 commentsFetchJob?.cancel()
                 comments.value = null
+                commentsLoadError.value = null
                 if (media != null) {
                     MediaControlsIntegrator.updateMetadata(
                         title = media.title,
@@ -102,18 +105,13 @@ class NowPlayingViewModel(
                 }
             }
         }
+        // Queue/order/index/current media are published by each player as one immutable snapshot.
+        // This is the only input to visible queue state, so shuffle transitions cannot combine a
+        // new order with the previous index.
         scope.launch {
-            player.shuffleEnabled.collect { shuffle ->
-                shuffleStatus.value = shuffle
+            player.queueSnapshot.collect { snapshot ->
+                rebuildPlaylistFromTimeline(snapshot)
             }
-        }
-        // 队列/当前索引变化（切歌、洗牌、换单）时实时重建可见列表与高亮，
-        // 与原版 onMediaItemTransition/onTimelineChanged → rebuildPlaylistFromTimeline 对齐
-        scope.launch {
-            player.queue.collect { rebuildPlaylistFromTimeline() }
-        }
-        scope.launch {
-            player.currentIndex.collect { rebuildPlaylistFromTimeline() }
         }
     }
 
@@ -122,31 +120,57 @@ class NowPlayingViewModel(
      * from the current Player state. This is the SINGLE rebuild path —
      * all track transitions, shuffle toggles, and timeline changes go through here.
      */
-    fun rebuildPlaylistFromTimeline() {
-        val queue = player.queue.value
-        val currentIdx = player.currentIndex.value
-
-        playList.value = queue
-        currentMediaIndexInList.value = currentIdx.toString()
+    fun rebuildPlaylistFromTimeline(snapshot: PlayerQueueSnapshot = player.queueSnapshot.value) {
+        _queueSnapshot.value = snapshot
+        shuffleStatus.value = snapshot.shuffleEnabled
     }
 
     private fun initLyricSync() {
         scope.launch {
-            combine(currentPosition, lyricMap) { pos, map ->
-                computeLyricIndex(pos, map)
-            }.distinctUntilChanged().collect { idx ->
-                lyricIndex.value = idx.coerceAtLeast(0)
-                val map = lyricMap.value
-                val media = currentMedia.value
-                val values = map.values.toList()
-                LyricNotificationController.updateLyric(
-                    title = media?.title,
-                    artist = media?.artist,
-                    currentLyric = values.getOrNull(idx),
-                    nextLyric = values.getOrNull(idx + 1),
-                    artworkUri = media?.artworkUri,
-                    isPlaying = isPlaying.value,
+            val playbackProgress = combine(currentPosition, songLength) { position, duration ->
+                position to duration
+            }
+            combine(
+                playbackProgress,
+                lyricMap,
+                currentMedia,
+                isPlaying,
+                lyricMediaId,
+            ) { progress, map, media, playing, loadedLyricMediaId ->
+                val (position, duration) = progress
+                val lyricsBelongToMedia = media != null && media.id == loadedLyricMediaId
+                val index = if (lyricsBelongToMedia) {
+                    computeLyricIndex(position, map).coerceAtLeast(0)
+                } else {
+                    0
+                }
+                val values = if (lyricsBelongToMedia) map.values.toList() else emptyList()
+                LyricNotificationPayload(
+                    index = index,
+                    media = media,
+                    currentLyric = values.getOrNull(index),
+                    nextLyric = values.getOrNull(index + 1),
+                    isPlaying = playing,
+                    positionMs = (position.coerceAtLeast(0L) / 1_000L) * 1_000L,
+                    durationMs = duration,
                 )
+            }.distinctUntilChanged().collect { payload ->
+                lyricIndex.value = payload.index
+                val media = payload.media
+                if (media == null) {
+                    LyricNotificationController.clearFocus()
+                } else {
+                    LyricNotificationController.updateLyric(
+                        title = media.title,
+                        artist = media.artist,
+                        currentLyric = payload.currentLyric,
+                        nextLyric = payload.nextLyric,
+                        artworkUri = media.artworkUri,
+                        isPlaying = payload.isPlaying,
+                        positionMs = payload.positionMs,
+                        durationMs = payload.durationMs,
+                    )
+                }
             }
         }
     }
@@ -176,50 +200,63 @@ class NowPlayingViewModel(
         lyricFetchJob = scope.launch(Dispatchers.Default) {
             val id = mediaId.toLongOrNull() ?: return@launch
             var settled = false
+            var lastFailure: Exception? = null
             // 网络瞬断（连接超时）时 safeApiCall 返回 null，缓存又没有 → flow 一个值都不发，
             // rawLyric 会永远停在空串（AMLL/歌词页黑屏）。这里对"无任何响应"重试几次。
             repeat(4) { attempt ->
-                repo.getLyric(id).collect { lyric ->
-                    val lrcText = lyric?.lrc?.lyric?.takeIf { it.isNotBlank() }
-                    val yrcText = lyric?.yrc?.lyric?.takeIf { it.isNotBlank() }
-                    val translatedText = lyric?.tlyric?.lyric?.takeIf { it.isNotBlank() }
-                    val romanText = lyric?.romalrc?.lyric?.takeIf { it.isNotBlank() }
-                    if (lrcText != null || yrcText != null) {
-                        val wordLines = yrcText
-                            ?.let { runCatching { LyricParser.parseYrc(it) }.getOrDefault(emptyList()) }
-                            .orEmpty()
-                        val plainLyricText = lrcText ?: LyricParser.toLrcText(wordLines)
-                        val displayLyricMap = if (wordLines.isNotEmpty()) {
-                            LyricParser.toLineLyricMap(wordLines)
-                        } else {
-                            parseLineLyrics(lrcText, wordLines)
+                try {
+                    repo.getLyric(id).collect { lyric ->
+                        val lrcText = lyric?.lrc?.lyric?.takeIf { it.isNotBlank() }
+                        val yrcText = lyric?.yrc?.lyric?.takeIf { it.isNotBlank() }
+                        val translatedText = lyric?.tlyric?.lyric?.takeIf { it.isNotBlank() }
+                        val romanText = lyric?.romalrc?.lyric?.takeIf { it.isNotBlank() }
+                        if (lrcText != null || yrcText != null) {
+                            val wordLines = yrcText
+                                ?.let { runCatching { LyricParser.parseYrc(it) }.getOrDefault(emptyList()) }
+                                .orEmpty()
+                            val plainLyricText = lrcText ?: LyricParser.toLrcText(wordLines)
+                            val displayLyricMap = if (wordLines.isNotEmpty()) {
+                                LyricParser.toLineLyricMap(wordLines)
+                            } else {
+                                parseLineLyrics(lrcText, wordLines)
+                            }
+                            applyLyricsForMedia(mediaId) {
+                                lyricLoadError.value = null
+                                rawWordLyric.value = if (wordLines.isNotEmpty()) yrcText.orEmpty() else ""
+                                wordLyricLines.value = wordLines
+                                rawTranslatedLyric.value = translatedText.orEmpty()
+                                rawRomanLyric.value = romanText.orEmpty()
+                                rawLyric.value = plainLyricText
+                                lyricMap.value = displayLyricMap
+                            }
+                            settled = true
+                        } else if (lyric != null) {
+                            // 服务器有响应但确实没有歌词 —— 不再重试
+                            applyLyricsForMedia(mediaId) {
+                                lyricLoadError.value = null
+                                rawLyric.value = ""
+                                rawWordLyric.value = ""
+                                rawTranslatedLyric.value = ""
+                                rawRomanLyric.value = ""
+                                wordLyricLines.value = emptyList()
+                                lyricMap.value = linkedMapOf(0L to "No lyric available")
+                            }
+                            settled = true
                         }
-                        applyLyricsForMedia(mediaId) {
-                            rawWordLyric.value = if (wordLines.isNotEmpty()) yrcText.orEmpty() else ""
-                            wordLyricLines.value = wordLines
-                            rawTranslatedLyric.value = translatedText.orEmpty()
-                            rawRomanLyric.value = romanText.orEmpty()
-                            rawLyric.value = plainLyricText
-                            lyricMap.value = displayLyricMap
-                        }
-                        settled = true
-                    } else if (lyric != null) {
-                        // 服务器有响应但确实没有歌词 —— 不再重试
-                        applyLyricsForMedia(mediaId) {
-                            rawLyric.value = ""
-                            rawWordLyric.value = ""
-                            rawTranslatedLyric.value = ""
-                            rawRomanLyric.value = ""
-                            wordLyricLines.value = emptyList()
-                            lyricMap.value = linkedMapOf(0L to "No lyric available")
-                        }
-                        settled = true
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (failure: Exception) {
+                    lastFailure = failure
+                    applyLyricsForMedia(mediaId) {
+                        lyricLoadError.value = failure.message ?: "歌词缓存失败"
                     }
                 }
                 if (settled) return@launch
                 if (attempt < 3) delay(2_000)
             }
             applyLyricsForMedia(mediaId) {
+                lyricLoadError.value = lastFailure?.message ?: "歌词请求失败"
                 rawLyric.value = ""
                 rawWordLyric.value = ""
                 rawTranslatedLyric.value = ""
@@ -238,6 +275,7 @@ class NowPlayingViewModel(
         rawTranslatedLyric.value = ""
         rawRomanLyric.value = ""
         wordLyricLines.value = emptyList()
+        lyricLoadError.value = null
         lyricMap.value = linkedMapOf(0L to "Loading Lyric")
     }
 
@@ -249,7 +287,8 @@ class NowPlayingViewModel(
         rawTranslatedLyric.value = ""
         rawRomanLyric.value = ""
         wordLyricLines.value = emptyList()
-        lyricMap.value = linkedMapOf(0L to "No media")
+        lyricLoadError.value = null
+        lyricMap.value = linkedMapOf()
     }
 
     private inline fun applyLyricsForMedia(mediaId: String, block: () -> Unit) {
@@ -277,9 +316,18 @@ class NowPlayingViewModel(
         val mediaId = currentMedia.value?.id ?: return
         val id = mediaId.toLongOrNull() ?: return
         commentsFetchJob = scope.launch(Dispatchers.Default) {
-            repo.getCommentMusic(id).collect { detail ->
+            commentsLoadError.value = null
+            try {
+                repo.getCommentMusic(id).collect { detail ->
+                    if (currentMedia.value?.id == mediaId) {
+                        comments.value = detail
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (failure: Exception) {
                 if (currentMedia.value?.id == mediaId) {
-                    comments.value = detail
+                    commentsLoadError.value = failure.message ?: "评论加载失败"
                 }
             }
         }
@@ -322,4 +370,14 @@ class NowPlayingViewModel(
         commentsFetchJob?.cancel()
         scope.cancel()
     }
+
+    private data class LyricNotificationPayload(
+        val index: Int,
+        val media: MediaInfo?,
+        val currentLyric: String?,
+        val nextLyric: String?,
+        val isPlaying: Boolean,
+        val positionMs: Long,
+        val durationMs: Long,
+    )
 }

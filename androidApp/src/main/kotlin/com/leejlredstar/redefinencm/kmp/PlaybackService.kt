@@ -5,8 +5,19 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
+import com.leejlredstar.redefinencm.kmp.player.AndroidMediaSessionInitializationState
 import com.leejlredstar.redefinencm.kmp.player.ExoPlayerPlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.player.canExposeAndroidMediaSession
+import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import org.koin.android.ext.android.get
 
 /**
@@ -24,19 +35,50 @@ import org.koin.android.ext.android.get
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaSessionService() {
 
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var mediaSession: MediaSession? = null
+    private var initializationJob: Job? = null
+    @Volatile
+    private var initializationState = AndroidMediaSessionInitializationState.Loading
 
     override fun onCreate() {
         super.onCreate()
-        val exoPlayer = (get<PlatformPlayer>() as ExoPlayerPlatformPlayer).exoPlayer
-        mediaSession = MediaSession.Builder(this, exoPlayer).build()
+        initializationJob = serviceScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            try {
+                get<PlatformSettings>().awaitLoaded()
+                val exoPlayer = (get<PlatformPlayer>() as ExoPlayerPlatformPlayer).exoPlayer
+                mediaSession = MediaSession.Builder(this@PlaybackService, exoPlayer).build()
+                initializationState = AndroidMediaSessionInitializationState.Ready
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                initializationState = AndroidMediaSessionInitializationState.Failed
+                System.err.println("PlaybackService initialization failed: ${error.message}")
+                stopSelf()
+            }
+        }
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
+        val session = mediaSession
+        return if (canExposeAndroidMediaSession(initializationState, session != null)) {
+            session
+        } else {
+            // MediaSessionService has a synchronous callback and cannot suspend a cold external
+            // controller while DataStore loads. That first connection is rejected; the caller must
+            // reconnect. MainActivity waits for settings first, and UNDISPATCHED therefore creates
+            // the normal in-app session synchronously before onCreate returns.
+            null
+        }
+    }
 
     override fun onDestroy() {
+        initializationState = AndroidMediaSessionInitializationState.Destroyed
+        initializationJob?.cancel()
+        initializationJob = null
         mediaSession?.release()
         mediaSession = null
+        serviceScope.cancel()
         LyricNotificationController.clearFocus()
         super.onDestroy()
     }

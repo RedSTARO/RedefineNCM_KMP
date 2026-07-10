@@ -11,12 +11,16 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.leejlredstar.redefinencm.kmp.download.DownloadNotificationIntents
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
+import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
+import com.leejlredstar.redefinencm.kmp.util.requiresLegacyDownloadWritePermission
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
+import kotlinx.coroutines.launch
 import org.koin.android.ext.android.get
 
 class MainActivity : ComponentActivity() {
@@ -31,36 +35,59 @@ class MainActivity : ComponentActivity() {
      * 只为生命周期而存在。
      */
     private var controllerFuture: ListenableFuture<MediaController>? = null
+    private val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) {
+        lifecycleScope.launch {
+            get<PlatformSettings>().awaitLoaded()
+            runCatching { get<SongDownloadManager>().syncWithLocalLibrary() }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
-        // started 状态兜底：即使 controller 断开（Activity 销毁）且未在播放，
-        // 服务也不随 unbind 立即销毁，避免会话反复重建。
-        // 播放中的保活与此无关 —— Media3 在播放开始时会自行把服务升为
-        // started + foreground（原生媒体通知），Activity 死活不影响。
-        startService(Intent(this, PlaybackService::class.java))
+        lifecycleScope.launch {
+            get<PlatformSettings>().awaitLoaded()
 
-        controllerFuture = MediaController.Builder(
-            this,
-            SessionToken(this, ComponentName(this, PlaybackService::class.java)),
-        ).buildAsync()
+            // 服务、播放器和 UI 都只能在 DataStore 初始快照就绪后创建；否则同步 getter
+            // 会合法地返回默认值，并把错误的音量/服务器配置固化进进程级单例。
+            startService(Intent(this@MainActivity, PlaybackService::class.java))
+            controllerFuture = MediaController.Builder(
+                this@MainActivity,
+                SessionToken(
+                    this@MainActivity,
+                    ComponentName(this@MainActivity, PlaybackService::class.java),
+                ),
+            ).buildAsync()
 
-        requestRuntimePermissions()
-
-        handleNavigationIntent(intent)
-        setContent { App() }
+            requestRuntimePermissions()
+            handleNavigationIntent(intent)
+            setContent { App() }
+        }
     }
 
     override fun onResume() {
         super.onResume()
-        runCatching { get<SongDownloadManager>().syncWithLocalLibrary() }
+        lifecycleScope.launch {
+            get<PlatformSettings>().awaitLoaded()
+            runCatching { get<SongDownloadManager>().syncWithLocalLibrary() }
+        }
     }
 
     override fun onPause() {
         // 与原版 MainActivity.onPause 一致：离开前台时保存播放状态（队列/索引/进度/随机）
-        runCatching { get<MainViewModel>().savePlayerStatus() }
+        lifecycleScope.launch {
+            val settings = get<PlatformSettings>()
+            settings.awaitLoaded()
+            runCatching {
+                settings.flush()
+                get<MainViewModel>().savePlayerStatus()
+            }.onFailure { error ->
+                System.err.println("Failed to flush settings before pause: ${error.message}")
+            }
+        }
         super.onPause()
     }
 
@@ -88,15 +115,23 @@ class MainActivity : ComponentActivity() {
                 if (!hasPermission(Manifest.permission.READ_MEDIA_AUDIO)) {
                     add(Manifest.permission.READ_MEDIA_AUDIO)
                 }
-            } else if (!hasPermission(Manifest.permission.READ_EXTERNAL_STORAGE)) {
-                add(Manifest.permission.READ_EXTERNAL_STORAGE)
+            } else {
+                if (!hasPermission(Manifest.permission.READ_EXTERNAL_STORAGE)) {
+                    add(Manifest.permission.READ_EXTERNAL_STORAGE)
+                }
+                if (
+                    requiresLegacyDownloadWritePermission(
+                        sdkInt = Build.VERSION.SDK_INT,
+                        permissionGranted = hasPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                    )
+                ) {
+                    add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                }
             }
         }
         if (permissions.isEmpty()) return
 
-        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-            runCatching { get<SongDownloadManager>().syncWithLocalLibrary() }
-        }.launch(permissions.toTypedArray())
+        permissionLauncher.launch(permissions.toTypedArray())
     }
 
     private fun hasPermission(permission: String): Boolean =

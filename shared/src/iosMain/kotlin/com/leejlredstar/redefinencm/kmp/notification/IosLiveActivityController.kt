@@ -30,6 +30,7 @@ actual object LyricNotificationController {
     val liveActivityData: StateFlow<LiveActivityData?> = _liveActivityData.asStateFlow()
 
     private var observerJob: Job? = null
+    private var lastPayload: IosLyricPayload? = null
 
     /**
      * Swift bridge: the Swift `LiveActivityManager` calls this once at startup. [onChange] fires
@@ -56,24 +57,45 @@ actual object LyricNotificationController {
         nextLyric: String?,
         artworkUri: String?,
         isPlaying: Boolean,
+        positionMs: Long,
+        durationMs: Long,
     ) {
-        val lyric = currentLyric?.trim().takeUnless { it.isNullOrEmpty() } ?: return
-
-        _liveActivityData.value = LiveActivityData(
-            title = title ?: "",
-            artist = artist ?: "",
+        val normalizedTitle = title?.trim().orEmpty()
+        val lyric = currentLyric?.trim().orEmpty().ifEmpty { normalizedTitle }
+        if (lyric.isEmpty()) return
+        val payload = IosLyricPayload(
+            title = normalizedTitle,
+            artist = artist?.trim().orEmpty(),
             currentLyric = lyric,
             nextLyric = nextLyric?.trim().orEmpty(),
-            artworkUri = artworkUri ?: "",
+            artworkUri = artworkUri?.trim().orEmpty(),
+            isPlaying = isPlaying,
+            positionMs = positionMs.coerceAtLeast(0L),
+            durationMs = durationMs,
+        )
+        if (payload == lastPayload) return
+        lastPayload = payload
+
+        _liveActivityData.value = LiveActivityData(
+            title = payload.title,
+            artist = payload.artist,
+            currentLyric = payload.currentLyric,
+            nextLyric = payload.nextLyric,
+            artworkUri = payload.artworkUri,
+            isPlaying = payload.isPlaying,
+            positionMs = payload.positionMs,
+            durationMs = payload.durationMs,
             timestamp = currentTimeMillis(),
         )
     }
 
     actual fun clearFocus() {
+        lastPayload = null
         _liveActivityData.value = null
     }
 
     actual fun reset() {
+        lastPayload = null
         _liveActivityData.value = null
     }
 
@@ -91,5 +113,19 @@ data class LiveActivityData(
     val currentLyric: String,
     val nextLyric: String,
     val artworkUri: String,
+    val isPlaying: Boolean,
+    val positionMs: Long,
+    val durationMs: Long,
     val timestamp: Long,
+)
+
+private data class IosLyricPayload(
+    val title: String,
+    val artist: String,
+    val currentLyric: String,
+    val nextLyric: String,
+    val artworkUri: String,
+    val isPlaying: Boolean,
+    val positionMs: Long,
+    val durationMs: Long,
 )
