@@ -1,7 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.di
 
 import com.leejlredstar.redefinencm.kmp.data.Repository
-import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.data.db.AppDatabase
 import com.leejlredstar.redefinencm.kmp.data.db.DatabaseDriverFactory
@@ -15,6 +14,8 @@ import org.koin.core.context.startKoin
 import org.koin.core.module.Module
 import org.koin.dsl.KoinAppDeclaration
 import org.koin.dsl.module
+import org.koin.mp.KoinPlatformTools
+import org.koin.mp.Lockable
 
 /**
  * Koin DI modules for the shared KMP module.
@@ -33,14 +34,15 @@ expect fun platformModule(): Module
  * - Android `Application.onCreate()` → `initKoin { androidContext(this@App) }` (the Android
  *   `platformModule()` builds `PlatformSettings(get())`, which resolves the Context provided here)
  */
-private var koinStarted = false
+private val koinInitLock = Lockable()
 
 fun initKoin(config: KoinAppDeclaration? = null) {
-    if (koinStarted) return
-    koinStarted = true
-    startKoin {
-        config?.invoke(this)
-        modules(sharedModule, platformModule())
+    KoinPlatformTools.synchronized(koinInitLock) {
+        if (KoinPlatformTools.defaultContext().getOrNull() != null) return@synchronized
+        startKoin {
+            config?.invoke(this)
+            modules(sharedModule, platformModule())
+        }
     }
 }
 

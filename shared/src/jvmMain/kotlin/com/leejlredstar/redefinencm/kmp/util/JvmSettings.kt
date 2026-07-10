@@ -7,6 +7,10 @@ import java.util.prefs.Preferences
 actual class PlatformSettings {
     private val prefs = Preferences.userRoot().node("com.leejlredstar.redefinencm.kmp")
 
+    actual suspend fun awaitLoaded() = Unit
+
+    actual suspend fun flush() = Unit
+
     actual fun getString(key: String, default: String): String {
         return prefs.get(key, default)
     }
@@ -16,8 +20,7 @@ actual class PlatformSettings {
     }
 
     actual fun setString(key: String, value: String) {
-        prefs.put(key, value)
-        prefs.flush()
+        persistValue(key, value)
     }
 
     actual fun getBoolean(key: String, default: Boolean): Boolean {
@@ -29,8 +32,7 @@ actual class PlatformSettings {
     }
 
     actual fun setBoolean(key: String, value: Boolean) {
-        prefs.putBoolean(key, value)
-        prefs.flush()
+        persistValue(key, value.toString())
     }
 
     actual fun getLong(key: String, default: Long): Long {
@@ -42,7 +44,18 @@ actual class PlatformSettings {
     }
 
     actual fun setLong(key: String, value: Long) {
-        prefs.putLong(key, value)
-        prefs.flush()
+        persistValue(key, value.toString())
+    }
+
+    private fun persistValue(key: String, value: String) {
+        val previous = prefs.get(key, null)
+        try {
+            prefs.put(key, value)
+            prefs.flush()
+        } catch (error: Exception) {
+            if (previous == null) prefs.remove(key) else prefs.put(key, previous)
+            runCatching { prefs.flush() }
+            throw error
+        }
     }
 }

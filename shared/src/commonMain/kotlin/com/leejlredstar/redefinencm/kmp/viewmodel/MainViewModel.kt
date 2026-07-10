@@ -11,8 +11,27 @@ import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.currentReleaseVersion
 import com.leejlredstar.redefinencm.kmp.util.fetchLatestReleaseTag
+import com.leejlredstar.redefinencm.kmp.util.isNewerReleaseVersion
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+internal fun accountCookieFingerprint(cookie: String): Long {
+    var hash = -3750763034362895579L // FNV-1a 64-bit offset basis represented as a signed Long.
+    cookie.forEach { character ->
+        hash = hash xor character.code.toLong()
+        hash *= 1099511628211L
+    }
+    return hash
+}
+
+internal fun isCachedAccountIdentityValid(
+    cookie: String,
+    uid: Long,
+    fingerprint: Long,
+): Boolean =
+    cookie.isNotBlank() && uid != 0L && fingerprint == accountCookieFingerprint(cookie)
 
 /**
  * Ported from the original Android MainViewModel.
@@ -27,6 +46,9 @@ class MainViewModel(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var lastSavedPlayerStatus: PlayerStatus? = null
+    private val playerStatusSaveMutex = Mutex()
+    val playerStatusSaveError = MutableStateFlow<String?>(null)
+    val playerStatusLoadError = MutableStateFlow<String?>(null)
 
     // ── User ──
     private val _uid = MutableStateFlow(0L)
@@ -34,10 +56,17 @@ class MainViewModel(
 
     val userDetail = MutableStateFlow<UserDetail?>(null)
     val userPlaylists = MutableStateFlow<List<UserPlaylistEach>>(emptyList())
+    val accountLoadError = MutableStateFlow<String?>(null)
+    private val accountGeneration = MutableStateFlow(0L)
+    private var accountJob: Job? = null
 
     // ── Playlist ──
     val playlistDetail = MutableStateFlow<PlaylistDetail?>(null)
     val playlistSongs = MutableStateFlow<PlaylistTrackAll?>(null)
+    val playlistLoadError = MutableStateFlow<String?>(null)
+    private val playlistGeneration = MutableStateFlow(0L)
+    private val activePlaylistId = MutableStateFlow<Long?>(null)
+    private var playlistJob: Job? = null
 
     // ── Recommend ──
     val recommendResource = MutableStateFlow<RecommendResource?>(null)
@@ -54,13 +83,7 @@ class MainViewModel(
     val updateMessage = MutableStateFlow<String?>(null)
 
     init {
-        scope.launch(Dispatchers.Default) {
-            // 先解析 UID（原版 fetchUID 为阻塞式，保证后续用户请求携带有效 uid）
-            fetchUID()
-            fetchUserData()
-            fetchUserPlaylists()
-        }
-        fetchRecommend()
+        loadAccount(clearPersistedAccount = false)
         restorePlayerStatus()
         downloadManager.syncWithLocalLibrary()
         initPlayerStatusAutosave()
@@ -70,17 +93,16 @@ class MainViewModel(
     /** checkUpdate 设置开启时，比较 GitHub 最新 release tag 与本地版本，不同则提示。 */
     private fun checkAppUpdate() {
         scope.launch(Dispatchers.Default) {
+            settings.awaitLoaded()
             if (!settings.getBooleanAsync(SettingKeys.CHECK_UPDATE, false)) return@launch
             // 完整构建版本带提交 hash（v0.0.1.412ae548）；更新检查只比较发布基线 tag。
-            val current = currentReleaseVersion().normalizeVersion()
+            val current = currentReleaseVersion()
             val latest = fetchLatestReleaseTag() ?: return@launch
-            if (latest.normalizeVersion().isNotEmpty() && latest.normalizeVersion() != current) {
+            if (isNewerReleaseVersion(latest, current)) {
                 updateMessage.value = "发现新版本：$latest"
             }
         }
     }
-
-    private fun String.normalizeVersion(): String = trim().removePrefix("v").removePrefix("V").trim()
 
     fun consumeUpdateMessage() {
         updateMessage.value = null
@@ -94,10 +116,10 @@ class MainViewModel(
     }
 
     private fun buildPlayerStatus(): PlayerStatus? {
-        val queue = player.queue.value
-        if (queue.isEmpty()) return null
+        val queueSnapshot = player.queueSnapshot.value
+        if (queueSnapshot.items.isEmpty()) return null
         return PlayerStatus(
-            playlist = queue.map {
+            playlist = queueSnapshot.items.map {
                 PersistedMediaItem(
                     id = it.id,
                     title = it.title,
@@ -107,17 +129,25 @@ class MainViewModel(
                     duration = it.duration,
                 )
             },
-            index = player.currentIndex.value.coerceAtLeast(0),
+            index = queueSnapshot.currentIndex.coerceAtLeast(0),
             position = player.position.value,
             isPlaying = player.isPlaying.value,
-            isShuffling = player.shuffleEnabled.value,
+            isShuffling = queueSnapshot.shuffleEnabled,
         )
     }
 
     private suspend fun savePlayerStatus(status: PlayerStatus) {
-        if (status == lastSavedPlayerStatus) return
-        repo.savePlayerStatus(status)
-        lastSavedPlayerStatus = status
+        playerStatusSaveMutex.withLock {
+            if (status == lastSavedPlayerStatus) return
+            repo.savePlayerStatus(status)
+                .onSuccess {
+                    lastSavedPlayerStatus = status
+                    playerStatusSaveError.value = null
+                }
+                .onFailure { failure ->
+                    playerStatusSaveError.value = failure.message ?: "播放状态保存失败"
+                }
+        }
     }
 
     private suspend fun saveCurrentPlayerStatus() {
@@ -126,13 +156,15 @@ class MainViewModel(
 
     private fun initPlayerStatusAutosave() {
         scope.launch(Dispatchers.Default) {
-            combine(player.queue, player.currentIndex, player.shuffleEnabled) { _, _, _ -> Unit }
+            combine(player.queueSnapshot, player.isPlaying) { _, _ -> Unit }
                 .drop(1)
                 .collect { saveCurrentPlayerStatus() }
         }
         scope.launch(Dispatchers.Default) {
             while (isActive) {
-                delay(2_000)
+                // Position-only changes are checkpointed periodically. Queue, track, shuffle and
+                // play/pause changes are persisted immediately by the flow above.
+                delay(PLAYER_POSITION_CHECKPOINT_MS)
                 saveCurrentPlayerStatus()
             }
         }
@@ -142,7 +174,13 @@ class MainViewModel(
         // DB 读取 + 整条播放列表 JSON 反序列化放后台，避免启动时阻塞主线程（Android 主线程/桌面 EDT）；
         // 但 player 操作（ExoPlayer 要求主线程）切回 Main 执行。
         scope.launch(Dispatchers.Default) {
-            val status = repo.getPlayerStatus() ?: return@launch
+            val status = repo.getPlayerStatus()
+                .onFailure { failure ->
+                    playerStatusLoadError.value = failure.message ?: "播放状态读取失败"
+                }
+                .getOrNull()
+                ?: return@launch
+            playerStatusLoadError.value = null
             if (status.playlist.isEmpty()) return@launch
             lastSavedPlayerStatus = status
             val items = status.playlist.map {
@@ -158,7 +196,7 @@ class MainViewModel(
             }
             withContext(Dispatchers.Main) {
                 // 播放器里已有队列时不覆盖（例如服务先于 UI 恢复了状态）
-                if (player.queue.value.isNotEmpty()) return@withContext
+                if (player.queueSnapshot.value.items.isNotEmpty()) return@withContext
                 player.restoreQueue(items, status.index.coerceIn(0, items.lastIndex), status.position)
                 player.setShuffleEnabled(status.isShuffling)
                 // 原版恢复时不自动播放（play() 被注释掉），此处保持一致
@@ -166,83 +204,158 @@ class MainViewModel(
         }
     }
 
-    private suspend fun fetchUID() {
-        val cached = settings.getLongAsync(SettingKeys.UID, 0L)
-        if (cached != 0L) {
-            _uid.value = cached
-            return
+    private suspend fun resolveUid(ignorePersistedUid: Boolean, cookie: String): Long {
+        if (!ignorePersistedUid) {
+            val cachedUid = settings.getLongAsync(SettingKeys.UID, 0L)
+            val cachedFingerprint = settings.getLongAsync(SettingKeys.UID_COOKIE_FINGERPRINT, 0L)
+            if (isCachedAccountIdentityValid(cookie, cachedUid, cachedFingerprint)) {
+                return cachedUid
+            }
         }
-        // 无缓存时走 /user/account 解析（原版 retrofit.userAccount().account.id）
-        val accountId = repo.getUserAccount()?.account?.id ?: 0L
-        if (accountId != 0L) {
-            _uid.value = accountId
-            settings.setLong(SettingKeys.UID, accountId)
+        return repo.getUserAccount()?.account?.id ?: 0L
+    }
+
+    /** Login/account changes invalidate all work started for the previous credential. */
+    private fun loadAccount(clearPersistedAccount: Boolean) {
+        val generation = accountGeneration.updateAndGet { it + 1L }
+        accountJob?.cancel()
+        accountLoadError.value = null
+        if (clearPersistedAccount) {
+            _uid.value = 0L
+            userDetail.value = null
+            userPlaylists.value = emptyList()
+            recommendResource.value = null
+            recommendSongs.value = null
+        }
+        accountJob = scope.launch(Dispatchers.Default) {
+            try {
+                settings.awaitLoaded()
+                val cookie = settings.getStringAsync(SettingKeys.COOKIE, "")
+                if (clearPersistedAccount) {
+                    settings.setLong(SettingKeys.UID, 0L)
+                    settings.setLong(SettingKeys.UID_COOKIE_FINGERPRINT, 0L)
+                    settings.flush()
+                    repo.clearAccountScopedCaches().getOrThrow()
+                }
+
+                val resolvedUid = resolveUid(
+                    ignorePersistedUid = clearPersistedAccount,
+                    cookie = cookie,
+                )
+                ensureActive()
+                if (accountGeneration.value != generation) return@launch
+                if (resolvedUid == 0L) {
+                    settings.setLong(SettingKeys.UID, 0L)
+                    settings.setLong(SettingKeys.UID_COOKIE_FINGERPRINT, 0L)
+                    settings.flush()
+                    return@launch
+                }
+                settings.setLong(SettingKeys.UID, resolvedUid)
+                settings.setLong(
+                    SettingKeys.UID_COOKIE_FINGERPRINT,
+                    accountCookieFingerprint(cookie),
+                )
+                settings.flush()
+                ensureActive()
+                if (accountGeneration.value != generation) return@launch
+                _uid.value = resolvedUid
+
+                coroutineScope {
+                    launch {
+                        repo.getUserDetail(resolvedUid).collect { detail ->
+                            if (accountGeneration.value == generation && _uid.value == resolvedUid) {
+                                userDetail.value = detail
+                            }
+                        }
+                    }
+                    launch {
+                        repo.getUserPlaylist(resolvedUid).collect { detail ->
+                            if (accountGeneration.value == generation && _uid.value == resolvedUid) {
+                                userPlaylists.value = detail?.playlist.orEmpty()
+                            }
+                        }
+                    }
+                    launch {
+                        repo.getRecommendResource(
+                            uid = resolvedUid,
+                            readCache = !clearPersistedAccount,
+                        ).collect { detail ->
+                            if (accountGeneration.value == generation && _uid.value == resolvedUid) {
+                                recommendResource.value = detail
+                            }
+                        }
+                    }
+                    launch {
+                        repo.getRecommendSongs(
+                            uid = resolvedUid,
+                            readCache = !clearPersistedAccount,
+                        ).collect { detail ->
+                            if (accountGeneration.value == generation && _uid.value == resolvedUid) {
+                                recommendSongs.value = detail
+                            }
+                        }
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (failure: Exception) {
+                if (accountGeneration.value == generation) {
+                    _uid.value = 0L
+                    userDetail.value = null
+                    userPlaylists.value = emptyList()
+                    recommendResource.value = null
+                    recommendSongs.value = null
+                    settings.setLong(SettingKeys.UID, 0L)
+                    settings.setLong(SettingKeys.UID_COOKIE_FINGERPRINT, 0L)
+                    runCatching { settings.flush() }
+                    accountLoadError.value = failure.message ?: "账号数据加载失败"
+                }
+            }
         }
     }
 
-    /** 登录/换号后调用：清掉缓存 UID 并重新拉取用户数据。 */
+    /** 登录、退出或换号后调用。 */
     fun refreshAccount() {
-        settings.setLong(SettingKeys.UID, 0L)
-        _uid.value = 0L
-        scope.launch(Dispatchers.Default) {
-            fetchUID()
-            fetchUserData()
-            fetchUserPlaylists()
-        }
-    }
-
-    fun fetchUserData() {
-        scope.launch(Dispatchers.Default) {
-            val uid = _uid.value
-            if (uid == 0L) {
-                userDetail.value = null
-                return@launch
-            }
-            repo.getUserDetail(uid).collect { detail ->
-                userDetail.value = detail
-            }
-        }
-    }
-
-    fun fetchUserPlaylists() {
-        scope.launch(Dispatchers.Default) {
-            val uid = _uid.value
-            if (uid == 0L) {
-                userPlaylists.value = emptyList()
-                return@launch
-            }
-            repo.getUserPlaylist(uid).collect { detail ->
-                userPlaylists.value = detail?.playlist ?: emptyList()
-            }
-        }
+        loadAccount(clearPersistedAccount = true)
     }
 
     fun fetchPlaylistDetail(songlistID: Long) {
-        scope.launch(Dispatchers.Default) {
-            repo.getPlaylistDetail(songlistID).collect { detail ->
-                playlistDetail.value = detail
-            }
-        }
-        fetchPlaylistTrackAll(songlistID)
-    }
-
-    fun fetchPlaylistTrackAll(songlistID: Long) {
-        scope.launch(Dispatchers.Default) {
-            repo.getPlaylistTrackAll(songlistID).collect { detail ->
-                playlistSongs.value = detail
-            }
-        }
-    }
-
-    fun fetchRecommend() {
-        scope.launch(Dispatchers.Default) {
-            repo.getRecommendResource().collect { detail ->
-                recommendResource.value = detail
-            }
-        }
-        scope.launch(Dispatchers.Default) {
-            repo.getRecommendSongs().collect { detail ->
-                recommendSongs.value = detail
+        val generation = playlistGeneration.updateAndGet { it + 1L }
+        playlistJob?.cancel()
+        activePlaylistId.value = songlistID
+        playlistDetail.value = null
+        playlistSongs.value = null
+        playlistLoadError.value = null
+        playlistJob = scope.launch(Dispatchers.Default) {
+            try {
+                coroutineScope {
+                    launch {
+                        repo.getPlaylistDetail(songlistID).collect { detail ->
+                            if (
+                                playlistGeneration.value == generation &&
+                                activePlaylistId.value == songlistID
+                            ) {
+                                playlistDetail.value = detail
+                            }
+                        }
+                    }
+                    launch {
+                        repo.getPlaylistTrackAll(songlistID).collect { detail ->
+                            if (
+                                playlistGeneration.value == generation &&
+                                activePlaylistId.value == songlistID
+                            ) {
+                                playlistSongs.value = detail
+                            }
+                        }
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (failure: Exception) {
+                if (playlistGeneration.value == generation) {
+                    playlistLoadError.value = failure.message ?: "歌单加载失败"
+                }
             }
         }
     }
@@ -250,7 +363,11 @@ class MainViewModel(
     // ── Download（应用内下载队列；不再使用系统 DownloadManager）──
 
     fun onDownloadPlaylistClick(songlistID: Long) {
-        val currentSongs = playlistSongs.value?.songs.orEmpty()
+        val currentSongs = if (activePlaylistId.value == songlistID) {
+            playlistSongs.value?.songs.orEmpty()
+        } else {
+            emptyList()
+        }
         if (currentSongs.isNotEmpty()) {
             downloadManager.enqueueSongs(currentSongs, songlistID)
         } else {
@@ -311,5 +428,9 @@ class MainViewModel(
 
     fun onCleared() {
         scope.cancel()
+    }
+
+    private companion object {
+        const val PLAYER_POSITION_CHECKPOINT_MS = 30_000L
     }
 }

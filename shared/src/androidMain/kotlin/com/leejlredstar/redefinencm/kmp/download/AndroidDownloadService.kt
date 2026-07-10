@@ -14,6 +14,7 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -40,6 +41,7 @@ class AndroidDownloadService : Service() {
         super.onCreate()
         ensureChannel()
         serviceScope.launch {
+            KoinPlatform.getKoin().get<PlatformSettings>().awaitLoaded()
             downloadManager.tasks.collectLatest { tasks ->
                 render(tasks)
             }
@@ -47,11 +49,17 @@ class AndroidDownloadService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        promoteToForeground(downloadManager.tasks.value)
-        when (intent?.action) {
-            ACTION_PAUSE_ALL -> downloadManager.pauseAll()
-            ACTION_RESUME_ALL -> downloadManager.resumeAll()
-            ACTION_CANCEL_ALL -> downloadManager.cancelAll()
+        // startForegroundService 的 5 秒门限不能等待磁盘；先发不依赖设置的空状态通知，
+        // 设置快照就绪后再解析 manager 和执行命令。
+        promoteToForeground(emptyList())
+        serviceScope.launch {
+            KoinPlatform.getKoin().get<PlatformSettings>().awaitLoaded()
+            promoteToForeground(downloadManager.tasks.value)
+            when (intent?.action) {
+                ACTION_PAUSE_ALL -> downloadManager.pauseAll()
+                ACTION_RESUME_ALL -> downloadManager.resumeAll()
+                ACTION_CANCEL_ALL -> downloadManager.cancelAll()
+            }
         }
         return START_NOT_STICKY
     }

@@ -285,6 +285,7 @@ data class LikeList(
 
 @Serializable
 data class CommentMusic(
+    val code: Int = 0,
     val isMusician: Boolean = false,
     val userId: Long = 0,
     val topComments: List<CommentMusicComments> = emptyList(),

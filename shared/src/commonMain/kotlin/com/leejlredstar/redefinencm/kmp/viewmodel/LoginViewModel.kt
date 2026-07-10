@@ -24,25 +24,15 @@ class LoginViewModel(
 
     private val _cookie = MutableStateFlow("")
     val cookie: StateFlow<String> = _cookie.asStateFlow()
-
-    private val _cookieLoginLoading = MutableStateFlow(false)
-    val cookieLoginLoading: StateFlow<Boolean> = _cookieLoginLoading.asStateFlow()
-
-    private val _cookieLoginErrorMessage = MutableStateFlow("")
-    val cookieLoginErrorMessage: StateFlow<String> = _cookieLoginErrorMessage.asStateFlow()
+    private val _cookiePersistError = MutableStateFlow<String?>(null)
+    val cookiePersistError: StateFlow<String?> = _cookiePersistError.asStateFlow()
 
     // QR login: store the base64 PNG as a data URI for Coil
     private val _qrDataUri = MutableStateFlow("")
     val qrDataUri: StateFlow<String> = _qrDataUri.asStateFlow()
 
-    private val _qrUrl = MutableStateFlow("")
-    val qrUrl: StateFlow<String> = _qrUrl.asStateFlow()
-
     private val _qrBitmapBytes = MutableStateFlow<ByteArray?>(null)
     val qrBitmapBytes: StateFlow<ByteArray?> = _qrBitmapBytes.asStateFlow()
-
-    private val _qrUnikey = MutableStateFlow("")
-    val qrUnikey: StateFlow<String> = _qrUnikey.asStateFlow()
 
     private val _qrScanStatus = MutableStateFlow("点击生成二维码")
     val qrScanStatus: StateFlow<String> = _qrScanStatus.asStateFlow()
@@ -56,39 +46,40 @@ class LoginViewModel(
     private val _qrSuccess = MutableStateFlow(false)
     val qrSuccess: StateFlow<Boolean> = _qrSuccess.asStateFlow()
 
-    private var qrPollJob: Job? = null
     private var qrLoginJob: Job? = null
 
     init {
-        loadServer()
-        _cookie.value = settings.getString(SettingKeys.COOKIE, "")
-    }
-
-    private fun loadServer() {
         scope.launch {
+            settings.awaitLoaded()
             _server.value = settings.getStringAsync(SettingKeys.SERVER, "http://ncm.tryagain.icu/")
+            _cookie.value = settings.getStringAsync(SettingKeys.COOKIE, "")
         }
     }
 
-    fun updateCookie(newCookie: String) {
-        _cookie.value = newCookie
-        settings.setString(SettingKeys.COOKIE, newCookie)
-        // Cookie 现取现用（HttpClientFactory 每请求读 settings），登录后立刻重拉账号数据，
-        // 无需重启即可从"未登录"切到"已登录"。
-        mainViewModel.refreshAccount()
-    }
-
-    fun updateServer(newServer: String) {
-        _server.value = newServer
-        settings.setString(SettingKeys.SERVER, newServer)
-    }
-
-    fun setCookieLoginLoading(loading: Boolean) {
-        _cookieLoginLoading.value = loading
-    }
-
-    fun setCookieLoginError(message: String) {
-        _cookieLoginErrorMessage.value = message
+    fun updateCredentials(
+        newServer: String,
+        newCookie: String,
+        onPersisted: (() -> Unit)? = null,
+    ) {
+        scope.launch {
+            settings.awaitLoaded()
+            val previousServer = settings.getString(SettingKeys.SERVER, _server.value)
+            try {
+                _server.value = newServer
+                settings.setString(SettingKeys.SERVER, newServer)
+                persistCookie(newCookie).getOrThrow()
+                onPersisted?.invoke()
+            } catch (failure: Exception) {
+                // Cookie persistence already rolls back identity state. Restore the server as the
+                // same user action must not report success after only half of its values survived.
+                runCatching {
+                    settings.setString(SettingKeys.SERVER, previousServer)
+                    settings.flush()
+                }
+                _server.value = settings.getString(SettingKeys.SERVER, previousServer)
+                _cookiePersistError.value = failure.message ?: "设置保存失败"
+            }
+        }
     }
 
     /**
@@ -96,8 +87,6 @@ class LoginViewModel(
      */
     fun startQrLogin() {
         qrLoginJob?.cancel()
-        qrPollJob?.cancel()
-        qrPollJob = null
         // 网络必须离开 Main：桌面端 Main=Swing EDT，在 EDT 上跑 Ktor 连接协程会被 UI 渲染
         // 饿死导致零星 ConnectTimeout（与歌词拉取同源问题）。状态写回用 StateFlow，线程安全。
         qrLoginJob = scope.launch(Dispatchers.Default) {
@@ -107,29 +96,25 @@ class LoginViewModel(
                 _qrSuccess.value = false
                 _qrScanStatus.value = "正在生成二维码…"
                 _qrDataUri.value = ""
-                _qrUrl.value = ""
                 _qrBitmapBytes.value = null
 
                 // 1. Get QR key
                 val keyResult = safeApiCall { api.loginQrKey() }
-                println("[QR] loginQrKey result: code=${keyResult?.code}, unikey=${keyResult?.data?.unikey}")
+                    ?.takeIf { it.code == 200 }
                 val key = keyResult?.data?.unikey
                 if (key.isNullOrEmpty()) {
                     _qrScanStatus.value = "获取 key 失败，请重试"
                     _qrError.value = "服务器返回空 key"
-                    _qrLoading.value = false
                     return@launch
                 }
-                _qrUnikey.value = key
 
                 // 2. Create QR code
                 val createResult = safeApiCall { api.loginQrCreate(key, qrimg = true) }
+                    ?.takeIf { it.code == 200 }
                 val imgBase64 = createResult?.data?.qrimg
-                val directUrl = createResult?.data?.qrurl
                 if (imgBase64.isNullOrEmpty()) {
                     _qrScanStatus.value = "生成二维码失败"
                     _qrError.value = "服务器未返回二维码"
-                    _qrLoading.value = false
                     return@launch
                 }
                 // Strip any data URI prefix and decode PNG bytes for Compose rendering
@@ -139,16 +124,16 @@ class LoginViewModel(
                 _qrScanStatus.value = "请用网易云音乐 App 扫码"
                 _qrLoading.value = false
 
-                // 3. Poll login status every 2s（同样离开 Main）
-                qrPollJob?.cancel()
-                qrPollJob = scope.launch(Dispatchers.Default) {
+                // 3. Poll login status every 2s, bounded by the QR lifetime. Keeping creation and
+                // polling in one structured job guarantees that cancel/onCleared stops both.
+                val finished = withTimeoutOrNull(QR_POLL_TIMEOUT_MS) {
                     while (isActive) {
-                        delay(2000)
+                        delay(QR_POLL_INTERVAL_MS)
                         val checkResult = safeApiCall { api.loginQrCheck(key) }
                         when (checkResult?.code) {
                             800 -> {
                                 _qrScanStatus.value = "二维码已过期，请重新生成"
-                                break
+                                return@withTimeoutOrNull true
                             }
                             801 -> { /* waiting for scan */ }
                             802 -> {
@@ -157,15 +142,20 @@ class LoginViewModel(
                             803 -> {
                                 val cookie = checkResult.cookie
                                 if (!cookie.isNullOrEmpty()) {
-                                    updateCookie(cookie)
-                                    _cookie.value = cookie
-                                    _qrScanStatus.value = "登录成功！"
-                                    _qrSuccess.value = true
+                                    persistCookie(cookie)
+                                        .onSuccess {
+                                            _qrScanStatus.value = "登录成功！"
+                                            _qrSuccess.value = true
+                                        }
+                                        .onFailure { failure ->
+                                            _qrScanStatus.value = "登录状态保存失败"
+                                            _qrError.value = failure.message ?: "Cookie 保存失败"
+                                        }
                                 } else {
                                     _qrScanStatus.value = "登录成功但未获取到 Cookie"
                                     _qrError.value = "服务器返回空 Cookie"
                                 }
-                                break
+                                return@withTimeoutOrNull true
                             }
                             else -> {
                                 _qrScanStatus.value = checkResult?.message
@@ -173,12 +163,17 @@ class LoginViewModel(
                             }
                         }
                     }
+                    false
+                }
+                if (finished == null && currentCoroutineContext().isActive) {
+                    _qrScanStatus.value = "二维码已过期，请重新生成"
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 _qrScanStatus.value = "网络错误"
                 _qrError.value = e.message ?: "未知错误"
+            } finally {
                 _qrLoading.value = false
             }
         }
@@ -187,10 +182,7 @@ class LoginViewModel(
     fun cancelQrLogin() {
         qrLoginJob?.cancel()
         qrLoginJob = null
-        qrPollJob?.cancel()
-        qrPollJob = null
         _qrDataUri.value = ""
-        _qrUrl.value = ""
         _qrBitmapBytes.value = null
         _qrScanStatus.value = "点击生成二维码"
         _qrLoading.value = false
@@ -209,9 +201,45 @@ class LoginViewModel(
         return kotlin.io.encoding.Base64.decode(padded)
     }
 
+    private suspend fun persistCookie(newCookie: String): Result<Unit> {
+        settings.awaitLoaded()
+        val previousCookie = settings.getString(SettingKeys.COOKIE, _cookie.value)
+        val previousUid = settings.getLong(SettingKeys.UID, 0L)
+        val previousFingerprint = settings.getLong(SettingKeys.UID_COOKIE_FINGERPRINT, 0L)
+        return withContext(NonCancellable) {
+            try {
+                _cookie.value = newCookie
+                _cookiePersistError.value = null
+                // Clear the identity binding before changing the credential. Even if the process
+                // dies between individual DataStore edits, startup will never trust the old UID
+                // for the new cookie.
+                settings.setLong(SettingKeys.UID, 0L)
+                settings.setLong(SettingKeys.UID_COOKIE_FINGERPRINT, 0L)
+                settings.setString(SettingKeys.COOKIE, newCookie)
+                settings.flush()
+                mainViewModel.refreshAccount()
+                Result.success(Unit)
+            } catch (failure: Exception) {
+                // Setters update the process cache synchronously. Roll all three values back so a
+                // failed commit cannot leave requests using an unpersisted credential.
+                settings.setLong(SettingKeys.UID, previousUid)
+                settings.setLong(SettingKeys.UID_COOKIE_FINGERPRINT, previousFingerprint)
+                settings.setString(SettingKeys.COOKIE, previousCookie)
+                runCatching { settings.flush() }
+                _cookie.value = previousCookie
+                _cookiePersistError.value = failure.message ?: "Cookie 保存失败"
+                Result.failure(failure)
+            }
+        }
+    }
+
     fun onCleared() {
         qrLoginJob?.cancel()
-        qrPollJob?.cancel()
         scope.cancel()
+    }
+
+    private companion object {
+        const val QR_POLL_INTERVAL_MS = 2_000L
+        const val QR_POLL_TIMEOUT_MS = 5 * 60_000L
     }
 }

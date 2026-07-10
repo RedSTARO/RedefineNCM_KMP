@@ -10,14 +10,13 @@ import platform.Foundation.NSUserDomainMask
 
 private const val DOWNLOAD_SUBDIR = "RedefineNCM"
 
-actual fun isSongDownloaded(songId: Long): Boolean =
-    DownloadedSongsCache.isDownloaded(songId)
-
-actual fun scanDownloadedSongs(): List<DownloadedSongSnapshot> {
+actual fun scanDownloadedSongs(): DownloadScanResult = runCatching {
     val dir = iosDownloadDirectoryPath()
     val manager = NSFileManager.defaultManager
-    if (!manager.fileExistsAtPath(dir)) return emptyList()
-    return (manager.contentsOfDirectoryAtPath(dir, error = null).orEmpty())
+    if (!manager.fileExistsAtPath(dir)) return@runCatching emptyList()
+    val entries = manager.contentsOfDirectoryAtPath(dir, error = null)
+        ?: error("无法读取 iOS 下载目录：$dir")
+    entries
         .asSequence()
         .mapNotNull { entry -> (entry as? String)?.toDownloadedSongSnapshot(dir) }
         .sortedWith(
@@ -25,10 +24,10 @@ actual fun scanDownloadedSongs(): List<DownloadedSongSnapshot> {
                 .thenBy { it.id }
         )
         .toList()
-}
-
-actual fun scanDownloadedSongIds(): Set<Long> =
-    scanDownloadedSongs().mapTo(linkedSetOf()) { it.id }
+}.fold(
+    onSuccess = DownloadScanResult::Success,
+    onFailure = { error -> DownloadScanResult.Failure("无法读取 iOS 下载目录", error) },
+)
 
 actual fun deleteDownloadedSongFile(songId: Long): Boolean {
     val dir = iosDownloadDirectoryPath()

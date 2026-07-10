@@ -1,11 +1,61 @@
 package com.leejlredstar.redefinencm.kmp.download
 
 import com.leejlredstar.redefinencm.kmp.util.DownloadedSongSnapshot
+import kotlinx.coroutines.Job
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class SongDownloadManagerTest {
+
+    @Test
+    fun cancelledWorkerKeepsSlotUntilCompletionCallbackClearsIt() {
+        val oldWorker = Job()
+        oldWorker.cancel()
+
+        assertFalse(oldWorker.isActive)
+        assertFalse(canStartDownloadWorker(oldWorker))
+        assertTrue(canStartDownloadWorker(existingWorker = null))
+    }
+
+    @Test
+    fun staleWorkerCannotMutateImmediatelyResumedTask() {
+        val reclaimed = SongDownloadTask(
+            id = 999,
+            title = "Song",
+            artist = "Artist",
+            artworkUri = "",
+            status = DownloadTaskStatus.Resolving,
+            executionGeneration = 2L,
+        )
+
+        assertFalse(
+            canOwnedDownloadTaskTransition(
+                task = reclaimed,
+                generation = 1L,
+                expectedStatus = DownloadTaskStatus.Resolving,
+            )
+        )
+        assertTrue(
+            canOwnedDownloadTaskTransition(
+                task = reclaimed,
+                generation = 2L,
+                expectedStatus = DownloadTaskStatus.Resolving,
+            )
+        )
+    }
+
+    @Test
+    fun capturedExecutionCanOnlyCancelItsOwnTask() {
+        val firstJob = Job()
+        val execution = ActiveDownloadExecution(taskId = 1000L, job = firstJob)
+
+        assertTrue(activeDownloadJobForTask(execution, 1000L) === firstJob)
+        assertNull(activeDownloadJobForTask(execution, 1001L))
+        assertNull(activeDownloadJobForTask(execution = null, taskId = 1000L))
+    }
 
     @Test
     fun completedTaskBecomesDeletedWhenLocalFileIsMissing() {

@@ -6,6 +6,10 @@ import kotlinx.coroutines.withContext
 
 actual class PlatformSettings {
 
+    actual suspend fun awaitLoaded() = Unit
+
+    actual suspend fun flush() = Unit
+
     actual fun getString(key: String, default: String): String {
         return localStorage.getItem(key) ?: default
     }

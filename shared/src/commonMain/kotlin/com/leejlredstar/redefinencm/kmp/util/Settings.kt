@@ -8,6 +8,7 @@ object SettingKeys {
     const val COOKIE = "cookie"
     const val SERVER = "server"
     const val UID = "uid"
+    const val UID_COOKIE_FINGERPRINT = "uidCookieFingerprint"
     const val ONLINE_PLAY_QUALITY = "onlinePlayQuality"
     const val DOWNLOAD_QUALITY = "downloadQuality"
     const val REPLACE_PLAYLIST = "replacePlaylist"
@@ -35,6 +36,12 @@ enum class SoundQuality(val displayName: String) {
 }
 
 expect class PlatformSettings {
+    /** Wait until the platform's persisted settings have been loaded into its process snapshot. */
+    suspend fun awaitLoaded()
+
+    /** Wait until every settings write enqueued before this call has reached persistent storage. */
+    suspend fun flush()
+
     fun getString(key: String, default: String): String
     suspend fun getStringAsync(key: String, default: String): String
     fun setString(key: String, value: String)
