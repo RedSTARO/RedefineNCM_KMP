@@ -70,7 +70,7 @@ import com.leejlredstar.redefinencm.kmp.ui.screen.CommentBottomSheet
 import com.leejlredstar.redefinencm.kmp.ui.screen.QueueBottomSheet
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
-import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
+import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
@@ -90,9 +90,10 @@ fun AutoHideMiniPlayerController(
     val isPlaying by player.isPlaying.collectAsState()
     val position by player.position.collectAsState()
     val duration by player.duration.collectAsState()
-    val playList by viewModel.playList.collectAsState()
-    val currentIndex by viewModel.currentMediaIndexInList.collectAsState()
-    val shuffleEnabled by viewModel.shuffleStatus.collectAsState()
+    val queueSnapshot by viewModel.queueSnapshot.collectAsState()
+    val playList = queueSnapshot.items
+    val currentIndex = queueSnapshot.currentIndex
+    val shuffleEnabled = queueSnapshot.shuffleEnabled
     val comments by viewModel.comments.collectAsState()
 
     var visible by remember { mutableStateOf(initialExpanded) }
@@ -229,7 +230,7 @@ fun AutoHideMiniPlayerController(
         if (showQueue) {
             QueueBottomSheet(
                 playlist = playList,
-                currentIndex = currentIndex?.toIntOrNull() ?: 0,
+                currentIndex = currentIndex,
                 accentPalette = accentPalette,
                 onDismiss = { showQueue = false },
                 onSeekClick = { index ->
@@ -797,14 +798,16 @@ private fun ControllerAccentSourceImage(
     onAccentColor: (Color) -> Unit,
 ) {
     if (sourceUrl.isNullOrBlank()) return
+    val extractAccent = rememberThemeColorExtractor(
+        requestKey = sourceUrl,
+        onAccentColor = onAccentColor,
+    )
     AsyncImage(
         model = sourceUrl,
         contentDescription = null,
         contentScale = ContentScale.Crop,
         modifier = Modifier.size(1.dp).alpha(0f),
-        onSuccess = { state ->
-            themeColorFromCoilImage(state.result.image)?.let { onAccentColor(Color(it)) }
-        },
+        onSuccess = { state -> extractAccent(state.result.image) },
     )
 }
 

@@ -2,10 +2,20 @@ package com.leejlredstar.redefinencm.kmp.ui.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
+import coil3.Image
+import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Immutable
 data class ContentAccentPalette(
@@ -55,6 +65,47 @@ fun contentAccentPalette(source: Color): ContentAccentPalette {
 
 fun contentColorFor(background: Color): Color =
     if (background.luminance() > 0.54f) Color(0xFF101010) else Color.White
+
+/**
+ * Creates an image-success callback that performs platform palette extraction away from the
+ * UI thread, then publishes the resulting Compose color back on the composition scope.
+ */
+@Composable
+fun rememberThemeColorExtractor(
+    requestKey: Any?,
+    preferStyle: Int = 0,
+    onAccentColor: (Color) -> Unit,
+): (Image) -> Unit {
+    val scope = rememberCoroutineScope()
+    val latestCallback = rememberUpdatedState(onAccentColor)
+    val extraction = remember(requestKey, preferStyle) { ThemeColorExtractionState() }
+    DisposableEffect(extraction) {
+        onDispose {
+            extraction.generation += 1
+            extraction.job?.cancel()
+            extraction.job = null
+        }
+    }
+    return remember(scope, extraction, preferStyle) {
+        { image ->
+            val generation = ++extraction.generation
+            extraction.job?.cancel()
+            extraction.job = scope.launch {
+                val color = withContext(Dispatchers.Default) {
+                    themeColorFromCoilImage(image, preferStyle)?.let { Color(it) }
+                }
+                if (generation == extraction.generation) {
+                    color?.let { latestCallback.value(it) }
+                }
+            }
+        }
+    }
+}
+
+private class ThemeColorExtractionState(
+    var generation: Long = 0L,
+    var job: Job? = null,
+)
 
 private fun normalizeAccent(source: Color, isDark: Boolean): Color {
     val opaque = source.copy(alpha = 1f)

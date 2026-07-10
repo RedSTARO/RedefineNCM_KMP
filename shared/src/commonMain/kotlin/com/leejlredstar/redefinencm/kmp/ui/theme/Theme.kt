@@ -33,8 +33,8 @@ private val ExpressiveShapes = Shapes(
  * wired here yet: it needs an expect/actual color-scheme provider, since
  * `dynamicColorScheme` is Android/Context-only and unavailable in commonMain. Until then,
  * the static [LightColors] / [DarkColors] schemes are used on every platform. Album-art
- * accent colors are applied locally per screen via `util/ImageColorExtractor`, not through
- * the global scheme.
+ * accent colors are extracted from Coil images and applied locally through [ContentAccentPalette],
+ * not through the global scheme.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable

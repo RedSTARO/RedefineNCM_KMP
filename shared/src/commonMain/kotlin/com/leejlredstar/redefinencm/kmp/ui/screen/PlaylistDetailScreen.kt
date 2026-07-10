@@ -50,9 +50,9 @@ import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
-import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import org.koin.compose.koinInject
 
@@ -66,8 +66,8 @@ fun PlaylistDetailScreen(
 ) {
     val detail by viewModel.playlistDetail.collectAsState()
     val tracks by viewModel.playlistSongs.collectAsState()
-    val songs = tracks?.songs ?: emptyList()
-    val playlist = detail?.playlist
+    val playlist = detail?.playlist?.takeIf { it.id == playlistId }
+    val songs = if (playlist != null) tracks?.songs.orEmpty() else emptyList()
     // 原版 ShowPlaylistDetailPage：点单曲时按 replacePlaylist 设置决定替换整单还是单曲队列
     val replacePlaylist = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false) }
 
@@ -163,6 +163,10 @@ private fun PlaylistHeader(
     onDownloadAll: () -> Unit,
 ) {
     val fallbackAccentColor = MaterialTheme.colorScheme.primaryContainer
+    val extractAccent = rememberThemeColorExtractor(
+        requestKey = coverUrl,
+        onAccentColor = onAccentColor,
+    )
     Column(Modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
@@ -207,9 +211,7 @@ private fun PlaylistHeader(
                     .padding(top = 8.dp)
                     .size(200.dp)
                     .clip(RoundedCornerShape(36.dp)),
-                onSuccess = { state ->
-                    themeColorFromCoilImage(state.result.image)?.let { onAccentColor(Color(it)) }
-                },
+                onSuccess = { state -> extractAccent(state.result.image) },
                 onError = { onAccentColor(fallbackAccentColor) },
             )
         }

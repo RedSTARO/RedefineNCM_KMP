@@ -41,7 +41,7 @@ import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
-import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
+import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import org.koin.compose.koinInject
 
@@ -131,6 +131,10 @@ private fun UserPlaylistHero(
     accentPalette: ContentAccentPalette,
     onAccentColor: (Color) -> Unit,
 ) {
+    val extractAccent = rememberThemeColorExtractor(
+        requestKey = backgroundUrl ?: avatarUrl,
+        onAccentColor = onAccentColor,
+    )
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -164,9 +168,7 @@ private fun UserPlaylistHero(
                     )
                 },
             contentScale = ContentScale.Crop,
-            onSuccess = { state ->
-                themeColorFromCoilImage(state.result.image)?.let { onAccentColor(Color(it)) }
-            },
+            onSuccess = { state -> extractAccent(state.result.image) },
         )
 
         Column(
@@ -185,7 +187,7 @@ private fun UserPlaylistHero(
                     .border(4.dp, accentPalette.container, CircleShape),
                 onSuccess = { state ->
                     if (backgroundUrl.isNullOrBlank()) {
-                        themeColorFromCoilImage(state.result.image)?.let { onAccentColor(Color(it)) }
+                        extractAccent(state.result.image)
                     }
                 },
             )

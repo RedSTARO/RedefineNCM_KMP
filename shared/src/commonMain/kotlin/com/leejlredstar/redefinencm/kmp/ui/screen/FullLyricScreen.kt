@@ -51,8 +51,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.util.LyricParser
-import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -79,7 +79,10 @@ fun FullLyricScreen(
     val metadata by viewModel.currentMedia.collectAsState()
 
     val defaultHeroColor = MaterialTheme.colorScheme.primaryContainer
-    var themeColor by remember { mutableStateOf(defaultHeroColor) }
+    var themeColor by remember(metadata?.artworkUri, defaultHeroColor) {
+        mutableStateOf(defaultHeroColor)
+    }
+    val extractThemeColor = rememberThemeColorExtractor(metadata?.artworkUri) { themeColor = it }
     val heroColor by animateColorAsState(themeColor, spring(), label = "hero")
     val accentPalette = contentAccentPalette(heroColor)
 
@@ -96,11 +99,18 @@ fun FullLyricScreen(
     LaunchedEffect(lyricIndex, isUserScrolling) {
         if (!isUserScrolling && lyricIndex in lyricEntries.indices && lyricEntries.isNotEmpty()) {
             programmaticScroll = true
-            listState.animateScrollToItem(
-                index = lyricIndex,
-                scrollOffset = listState.layoutInfo.viewportSize.height / 2,
-            )
-            programmaticScroll = false
+            try {
+                listState.animateScrollToItem(
+                    // The first LazyColumn item is the leading spacer.
+                    index = lyricIndex + 1,
+                    // A negative offset places the item below the viewport start.
+                    scrollOffset = -(listState.layoutInfo.viewportSize.height / 2).coerceAtLeast(0),
+                )
+            } finally {
+                // A newer lyric line cancels this LaunchedEffect while an animation is active.
+                // Always clear the guard or all later user scrolls would be misclassified.
+                programmaticScroll = false
+            }
         }
     }
 
@@ -140,9 +150,7 @@ fun FullLyricScreen(
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
-            onSuccess = { state ->
-                themeColorFromCoilImage(state.result.image)?.let { themeColor = Color(it) }
-            },
+            onSuccess = { state -> extractThemeColor(state.result.image) },
         )
         Box(
             modifier = Modifier
