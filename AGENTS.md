@@ -81,26 +81,28 @@ prioritized, declare `wasmJs { browser(); binaries.executable() }`, add those de
 reconcile `Platform.wasm.kt` with the real `Platform` interface. Stubs are acceptable; full
 parity is not required.
 
-### D3 — Local cache is SQLDelight — **DONE (updated 2026-07-04)**
+### D3 — Local cache is SQLDelight — **DONE (updated 2026-07-10)**
 
 The original caches via Room (cache-then-network). The KMP replacement is **SQLDelight**, now
 fully wired: plugin + 9 `.sq` tables under `shared/src/commonMain/sqldelight/` (user detail /
 user playlist / playlist detail / playlist tracks / recommend ×2 / lyric / comment /
 **PlayerStatus**) + `DatabaseDriverFactory` expect/actuals (android/native/sqlite). `Repository`
 implements cache-then-network for all cached endpoints and persists/restores the play queue
-via the `PlayerStatus` table.
+via the `PlayerStatus` table. Schema version 2 includes a formal `1.sqm` migration for the
+playlist detail/tracks, comment, and player-status tables; platform drivers must use
+`AppDatabase.Schema` migrations rather than ad-hoc `onOpen` table creation.
 
 ### D4 — Notification / now-playing surfaces are one common contract, four platform actuals
 
 `commonMain` owns the contract; each platform renders it natively:
 
 - **`notification/LyricNotificationController`** — `expect object` with
-  `updateLyric(title, artist, currentLyric, nextLyric, artworkUri)`, `clearFocus()`,
+  `updateLyric(title, artist, currentLyric, nextLyric, artworkUri, isPlaying, positionMs, durationMs)`, `clearFocus()`,
   `reset()`. This is the **lyric display** surface.
 - **`smtc/MediaControlsIntegrator`** — common `object` holding `MediaControlMetadata`
   (title/artist/album/artwork/duration/position/isPlaying) for OS media controls. This is
-  the **transport controls** surface. (It currently lives in a file misnamed
-  `WindowsSmtcIntegration.kt` — see divergence list.)
+  the **transport controls** surface. Windows-specific WinRT code lives separately in
+  `jvmMain/smtc/WindowsMediaControls.kt`.
 
 Platform actuals:
 
@@ -111,11 +113,12 @@ Platform actuals:
 | Desktop (JVM) | Frameless, always-on-top **Compose floating window** | **Windows SMTC** (JNA/COM); **MPRIS** (D-Bus) on Linux |
 | Web (WASM) | No-op stub | No-op stub |
 
-**iOS bridge pattern (decided):** Kotlin does **not** call ActivityKit directly. The Kotlin
-`LyricNotificationController` writes a `LiveActivityData` value (mirrored as a Swift
-`Codable`) into an **App Group `NSUserDefaults`**; a **Swift Widget Extension** target reads
-it and drives the Live Activity. The Widget Extension target does not exist in the Xcode
-project yet (TODO).
+**iOS bridge pattern (updated decision, 2026-07-10):** Kotlin does **not** call ActivityKit
+directly. `LyricNotificationController` exposes `LiveActivityData` to the Swift main-app
+bridge, which serially starts/updates/ends the ActivityKit activity. The `LyricWidget`
+extension renders the resulting `ContentState`; it is wired into the Xcode project. Text does
+not require an App Group. An App Group is only needed if artwork is later shared with the
+extension through a file cache.
 
 ---
 
@@ -166,7 +169,7 @@ Platform mapping:
 > `:androidApp:compileDebugKotlin`, full `:androidApp:assembleDebug` (APK). **Only iOS can't build
 > here** (Windows, no Xcode — `iosSimulatorArm64Test` is auto-disabled). **After editing, run the
 > relevant compile/test task** — reasoning alone missed real errors the build caught (a `/*` in a
-> KDoc, `parameter()` not on `defaultRequest`, missing `ImageColorExtractor` actuals, etc.). Do NOT
+> KDoc, `parameter()` not on `defaultRequest`, missing platform color extraction actuals, etc.). Do NOT
 > run GUI tasks (`:desktopApp:run`/`hotRun`) non-interactively — they hang.
 
 ### Version-coupling rules (when editing versions)
@@ -194,7 +197,7 @@ RedefineNCM_KMP/
 │       │   ├── App.kt                   # Root composable + hand-rolled back-stack nav
 │       │   ├── Platform.kt              # expect fun getPlatform(): Platform
 │       │   ├── data/
-│       │   │   ├── Repository.kt        # Wraps NCMApi + safeApiCall, exposes Flows (network-only)
+│       │   │   ├── Repository.kt        # Cache-then-network SQLDelight repository + write Results
 │       │   │   └── api/
 │       │   │       ├── HttpClientFactory.kt   # Ktor client factory + safeApiCall<T>()
 │       │   │       ├── NCMApi.kt              # NeteaseCloudMusicApi client (Ktor)
@@ -209,14 +212,14 @@ RedefineNCM_KMP/
 │       │   │   └── (MediaControlsIntegrator)        # ⚠ currently in jvmMain, not commonMain — see divergence
 │       │   ├── util/
 │       │   │   ├── LyricParser.kt        # Pure-Kotlin LRC parser
-│       │   │   ├── ImageColorExtractor.kt # expect class — album-art accent extraction
+│       │   │   ├── CoilImageTheme.kt      # expect fun themeColorFromCoilImage — album-art accent
 │       │   │   └── Settings.kt           # expect class PlatformSettings + SettingKeys
 │       │   ├── viewmodel/
 │       │   │   ├── LoginViewModel.kt
 │       │   │   ├── MainViewModel.kt
 │       │   │   └── NowPlayingViewModel.kt # holds shuffle invariant (rebuildPlaylistFromTimeline)
 │       │   └── ui/
-│       │       ├── screen/NowPlayingScreen.kt   # ⚠ exists but not wired into App()
+│       │       ├── screen/NowPlayingScreen.kt   # primary expanded-player route
 │       │       ├── component/Expressive.kt      # connected-list shapes
 │       │       └── theme/{Color,Type,Theme}.kt  # M3 Expressive shapes/type (approximation — see #3)
 │       ├── androidMain/  …/Platform.android.kt, notification/AndroidNotificationController.kt,
@@ -227,7 +230,7 @@ RedefineNCM_KMP/
 │       │                  notification/IosLiveActivityController.kt (Live Activity data bridge),
 │       │                  di/IosPlatformModule.kt, util/IosSettings.kt
 │       ├── jvmMain/      …/Platform.jvm.kt, notification/DesktopFloatingWindowController.kt,
-│       │                  smtc/WindowsSmtcIntegration.kt (⚠ data-model only; misnamed),
+│       │                  smtc/WindowsMediaControls.kt (native WinRT SMTC binding),
 │       │                  di/JvmPlatformModule.kt, util/JvmSettings.kt
 │       ├── wasmJsMain/   …/Platform.wasm.kt, notification/WasmNotificationStub.kt,
 │       │                  di/WasmPlatformModule.kt, util/WasmSettings.kt  (⚠ target not declared — D2)
@@ -391,8 +394,8 @@ This is its own task and **must not be done from memory**:
 Applies to all platforms, and the original Android repo is kept aligned (goal #3).
 
 - **Color:** `surface` for page bases; `surfaceContainerHigh` / `surfaceContainerHighest` for
-  tonal panels and list rows. Album-art–derived accents via `ImageColorExtractor` as gradient
-  endpoints / highlights.
+  tonal panels and list rows. Album-art–derived accents via `themeColorFromCoilImage()` as
+  gradient endpoints / highlights; extraction runs off the UI thread and is keyed by artwork.
 - **Shape — connected-list language:** large outer corners (~28dp), tight inner corners
   (~6dp), small vertical gaps (~1.5dp) between rows; implemented in
   `ui/component/Expressive.kt` (`connectedListItemShape()`). Interactive elements use pill
@@ -469,8 +472,8 @@ Full file-by-file audit against `../RedefineNCM` (frozen 2026-06-12), then close
   reconciles queued tasks with real files while importing disk-only downloads as Completed rows
   with best-effort `/song/detail` metadata. `SongDownloader` actuals only stream files to the
   platform download folder. Android writes `Downloads/RedefineNCM/` through `MediaStore` instead of
-  the system `DownloadManager`; JVM writes `~/Music/RedefineNCM/`; iOS remains an explicit
-  unsupported actual until an NSURLSession-backed writer is implemented.
+  the system `DownloadManager`; JVM writes `~/Music/RedefineNCM/`; iOS streams into
+  `Documents/RedefineNCM/` and uses an NSURLSession background transfer for durable downloads.
 - **Playlist behaviors**: `replacePlaylist` setting honored on song click,
   `playlistUpdatePlaycount` reported, no auto-jump to NowPlaying (original behavior).
 - **Album-art theme color**: `themeColorFromCoilImage()` expect/actual (Android Palette /
@@ -498,7 +501,7 @@ Full file-by-file audit against `../RedefineNCM` (frozen 2026-06-12), then close
       `:androidApp:compileDebugKotlin`, `:androidApp:assembleDebug` (APK). iOS not buildable here
       (Windows/no Xcode). The build caught several issues reading had missed — all fixed:
       KDoc `/*`, `defaultRequest` lacking `parameter()` (use `url.parameters.append`), missing
-      `ImageColorExtractor` actuals, desktopApp missing material3, androidx.core too old for
+      platform color extraction actuals, desktopApp missing material3, androidx.core too old for
       `setRequestPromotedOngoing`, and a `PlayQueueTest` `List<String>`/`List<String?>` inference.
 - Note: `compose.materialIconsExtended` is deprecated (pinned 1.7.3, no updates) — works for now;
   migrate to Material Symbols / vector resources eventually.
@@ -513,6 +516,8 @@ Full file-by-file audit against `../RedefineNCM` (frozen 2026-06-12), then close
 
 ### Dead / leftover code
 - [x] **`Greeting.kt` / `GreetingUtil.kt` + `compose-multiplatform.xml` deleted** (2026-06-13) — template stubs removed; no references existed.
+- [x] **Unused `ImageColorExtractor` expect/actual chain, template tests, duplicate YRC/download
+      reconciliation code, and tracked runtime artifacts removed** (2026-07-10).
 - [ ] **`wasmJsMain/` is dormant** (D2: target intentionally not declared; web is P3). Its
       `Platform.wasm.kt` and `WasmNotificationStub` reference an interface shape that doesn't
       exist (`Platform.isDesktop/isMobile`) — they must be reconciled with the real
