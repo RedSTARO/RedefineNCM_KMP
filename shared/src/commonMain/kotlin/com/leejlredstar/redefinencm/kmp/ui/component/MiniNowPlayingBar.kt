@@ -38,7 +38,7 @@ import coil3.request.crossfade
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentColorFor
-import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
+import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import org.koin.compose.koinInject
 
 /**
@@ -65,7 +65,10 @@ fun MiniNowPlayingBar(
     }
 
     val defaultContainerColor = MaterialTheme.colorScheme.primaryContainer
-    var themeColor by remember { mutableStateOf(defaultContainerColor) }
+    var themeColor by remember(media?.artworkUri, defaultContainerColor) {
+        mutableStateOf(defaultContainerColor)
+    }
+    val extractThemeColor = rememberThemeColorExtractor(media?.artworkUri) { themeColor = it }
     val accentPalette = contentAccentPalette(themeColor)
     val containerColor by animateColorAsState(
         targetValue = accentPalette.container,
@@ -103,9 +106,7 @@ fun MiniNowPlayingBar(
                             modifier = Modifier
                                 .size(42.dp)
                                 .clip(CircleShape),
-                            onSuccess = { state ->
-                                themeColorFromCoilImage(state.result.image)?.let { themeColor = Color(it) }
-                            },
+                            onSuccess = { state -> extractThemeColor(state.result.image) },
                         )
                     } else {
                         Surface(

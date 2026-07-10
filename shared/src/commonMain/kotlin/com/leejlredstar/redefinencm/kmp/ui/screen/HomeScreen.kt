@@ -55,8 +55,8 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
-import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import org.koin.compose.koinInject
 
@@ -294,6 +294,10 @@ private fun HomeAccountAvatar(
     onAccentColor: (Color) -> Unit,
 ) {
     val avatarPalette = contentAccentPalette(accentColor)
+    val extractAccent = rememberThemeColorExtractor(
+        requestKey = avatarUrl,
+        onAccentColor = onAccentColor,
+    )
     Surface(
         onClick = onOpenMy,
         shape = CircleShape,
@@ -315,9 +319,7 @@ private fun HomeAccountAvatar(
                 contentDescription = nickname,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
-                onSuccess = { state ->
-                    themeColorFromCoilImage(state.result.image)?.let { onAccentColor(Color(it)) }
-                },
+                onSuccess = { state -> extractAccent(state.result.image) },
             )
         }
     }

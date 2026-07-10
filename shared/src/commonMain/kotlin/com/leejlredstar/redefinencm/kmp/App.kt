@@ -62,6 +62,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -90,10 +94,10 @@ import com.leejlredstar.redefinencm.kmp.ui.screen.UserPlaylistScreen
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
-import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import org.koin.compose.koinInject
@@ -110,6 +114,51 @@ private sealed interface PushedDest {
     data object FullLyric : PushedDest
     data object Downloads : PushedDest
     data class Playlist(val id: Long) : PushedDest
+}
+
+private val tabDestSaver = Saver<TabDest, String>(
+    save = { destination ->
+        when (destination) {
+            TabDest.Home -> "home"
+            TabDest.My -> "my"
+            TabDest.Settings -> "settings"
+        }
+    },
+    restore = { saved ->
+        when (saved) {
+            "my" -> TabDest.My
+            "settings" -> TabDest.Settings
+            else -> TabDest.Home
+        }
+    },
+)
+
+private val pushedStackSaver = listSaver<SnapshotStateList<PushedDest>, String>(
+    save = { stack -> stack.map(::encodePushedDestination) },
+    restore = { saved ->
+        mutableStateListOf<PushedDest>().apply {
+            saved.mapNotNullTo(this, ::decodePushedDestination)
+        }
+    },
+)
+
+private fun encodePushedDestination(destination: PushedDest): String = when (destination) {
+    PushedDest.Login -> "login"
+    PushedDest.NowPlaying -> "now-playing"
+    PushedDest.FullLyric -> "full-lyric"
+    PushedDest.Downloads -> "downloads"
+    is PushedDest.Playlist -> "playlist:${destination.id}"
+}
+
+private fun decodePushedDestination(saved: String): PushedDest? = when (saved) {
+    "login" -> PushedDest.Login
+    "now-playing" -> PushedDest.NowPlaying
+    "full-lyric" -> PushedDest.FullLyric
+    "downloads" -> PushedDest.Downloads
+    else -> saved.removePrefix("playlist:")
+        .takeIf { saved.startsWith("playlist:") }
+        ?.toLongOrNull()
+        ?.let(PushedDest::Playlist)
 }
 
 private data class NavigationItem(
@@ -136,9 +185,26 @@ private sealed interface RootDest {
  */
 @Composable
 fun App() {
+    val settings: PlatformSettings = koinInject()
+    var initialCookie by remember(settings) { mutableStateOf<String?>(null) }
+    LaunchedEffect(settings) {
+        initialCookie = settings.getStringAsync(SettingKeys.COOKIE, "")
+    }
+
     RedefineNCMTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-            val settings: PlatformSettings = koinInject()
+            initialCookie?.let { cookie ->
+                AppContent(settings = settings, initialCookie = cookie)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppContent(
+    settings: PlatformSettings,
+    initialCookie: String,
+) {
             val mainViewModel: MainViewModel = koinInject()
             val player: PlatformPlayer = koinInject()
             val currentMedia by player.currentMedia.collectAsState()
@@ -156,11 +222,13 @@ fun App() {
             val chromePalette = contentAccentPalette(chromeAccent)
             val platform = remember { getPlatform() }
 
-            var currentTab by remember { mutableStateOf<TabDest>(TabDest.Home) }
-            val pushedStack = remember {
+            var currentTab by rememberSaveable(stateSaver = tabDestSaver) {
+                mutableStateOf<TabDest>(TabDest.Home)
+            }
+            val pushedStack = rememberSaveable(saver = pushedStackSaver) {
                 mutableStateListOf<PushedDest>().apply {
                     // 原版 SplashActivity：无 cookie 时先进登录页
-                    if (settings.getString(SettingKeys.COOKIE, "").isBlank()) add(PushedDest.Login)
+                    if (initialCookie.isBlank()) add(PushedDest.Login)
                 }
             }
             fun push(dest: PushedDest) = pushedStack.add(dest)
@@ -168,6 +236,16 @@ fun App() {
             fun openDownloads() {
                 pushedStack.clear()
                 push(PushedDest.Downloads)
+            }
+            fun openNowPlaying() {
+                val existingIndex = pushedStack.indexOfLast { it is PushedDest.NowPlaying }
+                if (existingIndex >= 0) {
+                    while (pushedStack.lastIndex > existingIndex) {
+                        pushedStack.removeAt(pushedStack.lastIndex)
+                    }
+                } else {
+                    push(PushedDest.NowPlaying)
+                }
             }
             fun openFullLyric() {
                 val existingIndex = pushedStack.indexOfLast { it is PushedDest.FullLyric }
@@ -186,6 +264,13 @@ fun App() {
                 AppNavigationRequests.openDownloadsRequestId.collect { requestId ->
                     if (AppNavigationRequests.consumeOpenDownloadsRequest(requestId)) {
                         openDownloads()
+                    }
+                }
+            }
+            LaunchedEffect(Unit) {
+                AppNavigationRequests.openNowPlayingRequestId.collect { requestId ->
+                    if (AppNavigationRequests.consumeOpenNowPlayingRequest(requestId)) {
+                        openNowPlaying()
                     }
                 }
             }
@@ -262,7 +347,7 @@ fun App() {
                                 enter = miniPlayerEnterTransition(),
                                 exit = miniPlayerExitTransition(),
                             ) {
-                                MiniNowPlayingBar(onExpand = ::openFullLyric)
+                                MiniNowPlayingBar(onExpand = ::openNowPlaying)
                             }
                         },
                     ) { innerPadding ->
@@ -280,7 +365,7 @@ fun App() {
                                         currentTab = it
                                     },
                                     onOpenDownloads = ::openDownloads,
-                                    onOpenNowPlaying = ::openFullLyric,
+                                    onOpenNowPlaying = ::openNowPlaying,
                                 )
                             } else if (isWide) {
                                 AnimatedVisibility(
@@ -354,8 +439,6 @@ fun App() {
                     }
                 }
             }
-        }
-    }
 }
 
 @Composable
@@ -465,9 +548,10 @@ private fun DesktopNowPlayingStrip(
     val volume by player.volume.collectAsState()
     val position by player.position.collectAsState()
     val duration by player.duration.collectAsState()
-    val playList by viewModel.playList.collectAsState()
-    val currentIndex by viewModel.currentMediaIndexInList.collectAsState()
-    val shuffleEnabled by viewModel.shuffleStatus.collectAsState()
+    val queueSnapshot by viewModel.queueSnapshot.collectAsState()
+    val playList = queueSnapshot.items
+    val currentIndex = queueSnapshot.currentIndex
+    val shuffleEnabled = queueSnapshot.shuffleEnabled
     val comments by viewModel.comments.collectAsState()
     val artwork = media?.artworkUri.orEmpty()
     val hasMedia = media != null
@@ -736,7 +820,7 @@ private fun DesktopNowPlayingStrip(
         if (showQueue) {
             QueueBottomSheet(
                 playlist = playList,
-                currentIndex = currentIndex?.toIntOrNull() ?: 0,
+                currentIndex = currentIndex,
                 accentPalette = accentPalette,
                 onDismiss = { showQueue = false },
                 onSeekClick = { index -> viewModel.onSeekClick(index) },
@@ -775,14 +859,16 @@ private fun ChromeAccentSourceImage(
     onAccentColor: (Color) -> Unit,
 ) {
     if (sourceUrl.isNullOrBlank()) return
+    val extractAccent = rememberThemeColorExtractor(
+        requestKey = sourceUrl,
+        onAccentColor = onAccentColor,
+    )
     AsyncImage(
         model = sourceUrl,
         contentDescription = null,
         contentScale = ContentScale.Crop,
         modifier = Modifier.size(1.dp).alpha(0f),
-        onSuccess = { state ->
-            themeColorFromCoilImage(state.result.image)?.let { onAccentColor(Color(it)) }
-        },
+        onSuccess = { state -> extractAccent(state.result.image) },
     )
 }
 

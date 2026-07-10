@@ -30,7 +30,7 @@ import kotlinx.coroutines.launch
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
-import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
+import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import org.koin.compose.koinInject
 
@@ -45,14 +45,15 @@ fun NowPlayingScreen(
     viewModel: NowPlayingViewModel = koinInject(),
 ) {
     val metadata by viewModel.currentMedia.collectAsState()
-    val currentIndex by viewModel.currentMediaIndexInList.collectAsState()
+    val queueSnapshot by viewModel.queueSnapshot.collectAsState()
+    val currentIndex = queueSnapshot.currentIndex
     val lyricMap by viewModel.lyricMap.collectAsState()
     val lyricIndex by viewModel.lyricIndex.collectAsState()
-    val shuffleStatus by viewModel.shuffleStatus.collectAsState()
+    val shuffleStatus = queueSnapshot.shuffleEnabled
     val isPlaying by viewModel.isPlaying.collectAsState()
     val position by viewModel.currentPosition.collectAsState()
     val songLength by viewModel.songLength.collectAsState()
-    val playList by viewModel.playList.collectAsState()
+    val playList = queueSnapshot.items
     val comments by viewModel.comments.collectAsState()
 
     var showPlaylist by remember { mutableStateOf(false) }
@@ -135,7 +136,7 @@ fun NowPlayingScreen(
     if (showPlaylist) {
         QueueBottomSheet(
             playlist = playList,
-            currentIndex = currentIndex?.toIntOrNull() ?: 0,
+            currentIndex = currentIndex,
             accentPalette = accentPalette,
             onDismiss = { showPlaylist = false },
             onSeekClick = { viewModel.onSeekClick(it) },
@@ -160,6 +161,10 @@ private fun SongHeroSection(
     modifier: Modifier = Modifier,
 ) {
     val fallbackAccentColor = MaterialTheme.colorScheme.primaryContainer
+    val extractAccent = rememberThemeColorExtractor(
+        requestKey = metadata?.artworkUri,
+        onAccentColor = onAccentColor,
+    )
     Column(modifier.fillMaxWidth()) {
         BoxWithConstraints(
             modifier = Modifier
@@ -211,10 +216,8 @@ private fun SongHeroSection(
                         .fillMaxSize()
                         .padding(10.dp)
                         .clip(MaterialTheme.shapes.extraLarge),
-                    onSuccess = { state ->
-                        // 原版 SongDetails：封面 Palette 取色驱动 hero 渐变
-                        themeColorFromCoilImage(state.result.image)?.let { onAccentColor(Color(it)) }
-                    },
+                    // 原版 SongDetails：封面 Palette 取色驱动 hero 渐变
+                    onSuccess = { state -> extractAccent(state.result.image) },
                     onError = { onAccentColor(fallbackAccentColor) },
                 )
             }
@@ -263,11 +266,15 @@ fun LyricSection(
     LaunchedEffect(lyricIndex, isUserScrolling) {
         if (lyricIndex >= 0 && lyricIndex < lyricEntries.size && !isUserScrolling) {
             programmaticScroll = true
-            listState.animateScrollToItem(
-                index = lyricIndex,
-                scrollOffset = (listState.layoutInfo.viewportSize.height / 2).coerceAtLeast(0),
-            )
-            programmaticScroll = false
+            try {
+                listState.animateScrollToItem(
+                    // The first LazyColumn item is the leading spacer.
+                    index = lyricIndex + 1,
+                    scrollOffset = -(listState.layoutInfo.viewportSize.height / 2).coerceAtLeast(0),
+                )
+            } finally {
+                programmaticScroll = false
+            }
         }
     }
 
@@ -300,6 +307,8 @@ fun LyricSection(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
+            item { Spacer(Modifier.height(96.dp)) }
+
             itemsIndexed(lyricEntries) { index, entry ->
                 val isCurrent = index == lyricIndex
 
@@ -347,6 +356,8 @@ fun LyricSection(
                     )
                 }
             }
+
+            item { Spacer(Modifier.height(96.dp)) }
         }
     }
 }
