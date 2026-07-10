@@ -30,45 +30,56 @@ abstract class PrintAppVersionTask : DefaultTask() {
 }
 
 val semverTagPattern = Regex("""v\d+\.\d+\.\d+""")
+val versionLabelPattern = Regex("""[A-Za-z0-9][A-Za-z0-9._-]*""")
 
-val gitHeadText = providers.fileContents(layout.projectDirectory.file(".git/HEAD")).asText.get().trim()
-if (gitHeadText.startsWith("ref: ")) {
-    val gitHeadRef = gitHeadText.removePrefix("ref: ").trim()
-    val gitHeadRefFile = layout.projectDirectory.file(".git/$gitHeadRef")
-    if (gitHeadRefFile.asFile.isFile) {
-        providers.fileContents(gitHeadRefFile).asText.get()
-    }
-}
-
-fun gitOutput(vararg args: String): String {
-    return providers.exec {
-        workingDir = rootDir
-        commandLine("git", *args)
-    }.standardOutput.asText.get().trim()
-}
-
-fun gitOutputSafe(default: String, vararg args: String): String {
-    return providers.exec {
+fun gitOutputOrNull(vararg args: String): String? = runCatching {
+    providers.exec {
         workingDir = rootDir
         commandLine("git", *args)
         isIgnoreExitValue = true
     }.let { exec ->
         if (exec.result.get().exitValue == 0) {
-            exec.standardOutput.asText.get().trim()
+            exec.standardOutput.asText.get().trim().takeIf(String::isNotEmpty)
         } else {
-            default
+            null
         }
     }
+}.getOrNull()
+
+fun versionInput(environmentName: String, vararg gitArgs: String): String {
+    return providers.environmentVariable(environmentName).orNull
+        ?.trim()
+        ?.takeIf(String::isNotEmpty)
+        ?: gitOutputOrNull(*gitArgs)
+        ?: throw GradleException(
+            "Cannot derive app version from Git. Set $environmentName when building " +
+                "from a source archive or another checkout without Git metadata.",
+        )
 }
 
-val appBaseTag = gitOutputSafe("v0.0.0", "describe", "--tags", "--match", "v[0-9]*.[0-9]*.[0-9]*", "--abbrev=0")
+val appBaseTag = versionInput(
+    "REDEFINE_NCM_BASE_TAG",
+    "describe",
+    "--tags",
+    "--match",
+    "v[0-9]*.[0-9]*.[0-9]*",
+    "--abbrev=0",
+)
 if (!semverTagPattern.matches(appBaseTag)) {
     throw GradleException("App base version tag must match v<major>.<minor>.<patch>, got '$appBaseTag'.")
 }
 
 val appBaseVersion = appBaseTag.removePrefix("v")
-val appCommitHash = gitOutput("rev-parse", "--short=8", "HEAD")
-val appVersionCode = gitOutput("rev-list", "--count", "HEAD").toInt()
+val appCommitHash = versionInput("REDEFINE_NCM_COMMIT_HASH", "rev-parse", "--short=8", "HEAD")
+if (!versionLabelPattern.matches(appCommitHash)) {
+    throw GradleException(
+        "App commit label may contain only letters, digits, '.', '_' and '-', got '$appCommitHash'.",
+    )
+}
+val appVersionCode = versionInput("REDEFINE_NCM_VERSION_CODE", "rev-list", "--count", "HEAD")
+    .toIntOrNull()
+    ?.takeIf { it > 0 }
+    ?: throw GradleException("REDEFINE_NCM_VERSION_CODE must be a positive integer.")
 val appVersionName = "$appBaseTag.$appCommitHash"
 
 allprojects {
