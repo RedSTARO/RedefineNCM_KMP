@@ -8,3 +8,6 @@ INSERT OR REPLACE INTO CachedRecommendResource(singleton, json) VALUES (0, :json
 
 select:
 SELECT json FROM CachedRecommendResource WHERE singleton = 0;
+
+deleteAll:
+DELETE FROM CachedRecommendResource;

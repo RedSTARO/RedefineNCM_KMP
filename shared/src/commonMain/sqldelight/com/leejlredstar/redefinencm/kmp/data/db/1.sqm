@@ -1,0 +1,19 @@
+CREATE TABLE IF NOT EXISTS CachedPlaylistDetail (
+  playlist_id INTEGER NOT NULL PRIMARY KEY,
+  json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS CachedPlaylistTrackAll (
+  playlist_id INTEGER NOT NULL PRIMARY KEY,
+  json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS CachedCommentMusic (
+  song_id INTEGER NOT NULL PRIMARY KEY,
+  json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS PlayerStatus (
+  id INTEGER NOT NULL PRIMARY KEY,
+  json TEXT NOT NULL
+);
