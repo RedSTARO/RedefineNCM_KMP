@@ -17,6 +17,7 @@ import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.graphics.Color
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOverlayCoordinator
+import com.leejlredstar.redefinencm.kmp.ui.screen.FullLyricScreen
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
@@ -35,8 +36,10 @@ import kotlinx.serialization.json.longOrNull
 import org.koin.compose.koinInject
 import java.awt.Canvas
 import java.io.File
-import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.ArrayDeque
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
 import java.awt.Color as AwtColor
 
@@ -54,6 +57,11 @@ import java.awt.Color as AwtColor
  */
 @Composable
 actual fun WebViewLyricScreen(onBack: () -> Unit) {
+    if (!desktopEmbeddedWebViewSupported()) {
+        FullLyricScreen(onBack = onBack)
+        return
+    }
+
     val viewModel: NowPlayingViewModel = koinInject()
     val settings: PlatformSettings = koinInject()
     val rawLyric by viewModel.rawLyric.collectAsState()
@@ -66,6 +74,12 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
 
     val engineReadyFlow = remember { MutableStateFlow(false) }
     val engineReady by engineReadyFlow.collectAsState()
+    val engineErrorFlow = remember { MutableStateFlow<String?>(null) }
+    val engineError by engineErrorFlow.collectAsState()
+    if (engineError != null) {
+        FullLyricScreen(onBack = onBack)
+        return
+    }
     val showTranslatedLyric = remember {
         settings.getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
     }
@@ -83,6 +97,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val session = remember(viewModel) {
         WebviewSession(
             readyFlow = engineReadyFlow,
+            errorFlow = engineErrorFlow,
             onLineClicked = { timeMs, mediaId -> viewModel.onLyricLineClick(mediaId, timeMs) },
             onBack = onBack,
             onControlsRequested = { controlsRevealRequest++ },
@@ -148,7 +163,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     // Push playback position; the page's rAF loop animates between updates.
     LaunchedEffect(engineReady, currentPosition) {
         if (!engineReady) return@LaunchedEffect
-        session.eval("AmllBridge.setTime($currentPosition);")
+        session.evalLatest("AmllBridge.setTime($currentPosition);")
     }
 
     // Set the blurred album-art background for the current track (full-res:
@@ -193,28 +208,38 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
  */
 private class WebviewSession(
     private val readyFlow: MutableStateFlow<Boolean>,
+    private val errorFlow: MutableStateFlow<String?>,
     private val onLineClicked: (Long, String?) -> Unit,
     private val onBack: () -> Unit,
     private val onControlsRequested: () -> Unit,
 ) {
     private val handle = AtomicLong(0)
-    private val jobs = ConcurrentLinkedQueue<String>()
+    private val started = AtomicBoolean(false)
+    private val stopped = AtomicBoolean(false)
+    private val eventThread = AtomicReference<Thread?>(null)
+    private val jobsLock = Any()
+    private val jobs = ArrayDeque<String>()
+    private val latestEval = AtomicReference<String?>(null)
     private val callbackScope = MainScope()
     @Volatile private var childWindow: com.sun.jna.Pointer? = null
 
     // 强引用回调，防止 JNA 回调桩被 GC（native 正持有其指针）
     private val bindCallback = object : WebviewJna.BindCallback {
         override fun callback(seq: Long, req: String?, arg: Long) {
-            println("AMLL[wv2] onReady received -> engineReady=true")
-            readyFlow.value = true
+            callbackScope.launch {
+                println("AMLL[wv2] onReady received -> engineReady=true")
+                readyFlow.value = true
+            }
             runCatching { WebviewJna.N.webview_return(handle.get(), seq, 0, "null") }
         }
     }
     private val seekCallback = object : WebviewJna.BindCallback {
         override fun callback(seq: Long, req: String?, arg: Long) {
             val (timeMs, mediaId) = parseAmllSeekRequest(req)
-            println("AMLL[wv2] line click seek media=$mediaId to $timeMs")
-            onLineClicked(timeMs, mediaId)
+            callbackScope.launch {
+                println("AMLL[wv2] line click seek media=$mediaId to $timeMs")
+                onLineClicked(timeMs, mediaId)
+            }
             runCatching { WebviewJna.N.webview_return(handle.get(), seq, 0, "null") }
         }
     }
@@ -223,74 +248,92 @@ private class WebviewSession(
     private val dispatchCallback = object : WebviewJna.DispatchCallback {
         override fun callback(w: Long, arg: Long) {
             while (true) {
-                val js = jobs.poll() ?: break
+                val js = synchronized(jobsLock) {
+                    if (jobs.isEmpty()) null else jobs.removeFirst()
+                } ?: break
+                runCatching { WebviewJna.N.webview_eval(w, js) }
+            }
+            latestEval.getAndSet(null)?.let { js ->
                 runCatching { WebviewJna.N.webview_eval(w, js) }
             }
         }
     }
 
     fun start(canvas: Canvas, url: String) {
-        if (handle.get() != 0L) return
+        if (!started.compareAndSet(false, true) || stopped.get()) return
         val canvasHwnd = resolveCanvasHwnd(canvas)
         if (canvasHwnd == null) {
-            println("AMLL[wv2] no valid HWND for canvas — cannot embed")
+            errorFlow.value = "无法获取桌面窗口句柄"
+            started.set(false)
             return
         }
         // AWT 报告逻辑尺寸（DIP），MoveWindow 要物理像素 —— 乘每屏 DPI 缩放
         val width = canvas.physicalWidth()
         val height = canvas.physicalHeight()
-        thread(name = "amll-webview2", isDaemon = true) {
-            val n = WebviewJna.N
-            // 这版 dll 的嵌入分支（window 参数非 null）必崩，只能走自建窗口路径，
-            // 然后用 SetParent 把它收编为 Canvas 的子窗口 —— dll 自己的 WndProc、
-            // DPI 与 WM_SIZE→resize_webview 逻辑全部保留，尺寸联动免费获得。
-            val w = n.webview_create(0, null)
-            if (w == 0L) {
-                println("AMLL[wv2] webview_create failed (WebView2 runtime missing?)")
-                return@thread
-            }
-            handle.set(w)
-            val childHwnd = n.webview_get_window(w)
-            if (childHwnd != null) {
-                childWindow = childHwnd
-                runCatching {
-                    reparentIntoCanvas(childHwnd, canvasHwnd, width, height)
-                }.onFailure { error ->
-                    println("AMLL[wv2] failed to reparent webview window: ${error.message}")
-                    n.webview_destroy(w)
-                    handle.set(0)
-                    return@thread
-                }
-                println("AMLL[wv2] webview window $childHwnd reparented into canvas $canvasHwnd (${width}x$height)")
-                // Canvas 尺寸变化（窗口拉伸/最大化）时让子窗口跟随铺满；
-                // dll 的 WndProc 收到 WM_SIZE 后会自行调整 WebView2 controller bounds。
-                canvas.addComponentListener(object : java.awt.event.ComponentAdapter() {
-                    override fun componentResized(e: java.awt.event.ComponentEvent) {
-                        val u32 = com.sun.jna.platform.win32.User32.INSTANCE
-                        u32.MoveWindow(
-                            com.sun.jna.platform.win32.WinDef.HWND(childHwnd),
-                            0, 0, canvas.physicalWidth(), canvas.physicalHeight(), true,
-                        )
-                    }
-                })
-            } else {
-                println("AMLL[wv2] webview_get_window returned null — closing standalone window")
-                n.webview_destroy(w)
-                handle.set(0)
-                return@thread
-            }
+        val worker = thread(name = "amll-webview2", isDaemon = true, start = false) {
+            var native: WebviewJna? = null
+            var webview = 0L
+            var resizeListener: java.awt.event.ComponentListener? = null
+            try {
+                if (stopped.get()) return@thread
+                native = WebviewJna.N
+                webview = native.webview_create(0, null)
+                if (webview == 0L) error("WebView2 runtime unavailable")
+                if (stopped.get()) return@thread
+                if (!handle.compareAndSet(0L, webview)) error("WebView session already owns a handle")
 
-            n.webview_bind(w, "amllReady", bindCallback, 0)
-            n.webview_bind(w, "amllSeek", seekCallback, 0)
-            n.webview_bind(w, "amllBack", backCallback, 0)
-            n.webview_bind(w, "amllControls", controlsCallback, 0)
-            n.webview_navigate(w, url)
-            n.webview_run(w) // 阻塞直到 terminate
-            n.webview_destroy(w)
-            handle.set(0)
-            childWindow = null
-            println("AMLL[wv2] webview loop exited")
+                val childHwnd = native.webview_get_window(webview)
+                    ?: error("webview_get_window returned null")
+                childWindow = childHwnd
+                reparentIntoCanvas(childHwnd, canvasHwnd, width, height)
+                println("AMLL[wv2] webview window $childHwnd reparented into canvas $canvasHwnd (${width}x$height)")
+
+                resizeListener = object : java.awt.event.ComponentAdapter() {
+                    override fun componentResized(e: java.awt.event.ComponentEvent) {
+                        runCatching {
+                            com.sun.jna.platform.win32.User32.INSTANCE.MoveWindow(
+                                com.sun.jna.platform.win32.WinDef.HWND(childHwnd),
+                                0, 0, canvas.physicalWidth(), canvas.physicalHeight(), true,
+                            )
+                        }
+                    }
+                }
+                canvas.addComponentListener(resizeListener)
+
+                native.webview_bind(webview, "amllReady", bindCallback, 0)
+                native.webview_bind(webview, "amllSeek", seekCallback, 0)
+                native.webview_bind(webview, "amllBack", backCallback, 0)
+                native.webview_bind(webview, "amllControls", controlsCallback, 0)
+                native.webview_navigate(webview, url)
+                if (stopped.get()) native.webview_terminate(webview)
+                native.webview_run(webview)
+            } catch (error: Throwable) {
+                if (!stopped.get()) {
+                    System.err.println("AMLL[wv2] session failed: ${error.message}")
+                    errorFlow.value = error.message ?: "WebView2 启动失败"
+                }
+            } finally {
+                resizeListener?.let(canvas::removeComponentListener)
+                readyFlow.value = false
+                childWindow = null
+                synchronized(jobsLock) { jobs.clear() }
+                latestEval.set(null)
+                if (webview != 0L) {
+                    handle.compareAndSet(webview, 0L)
+                    runCatching { native?.webview_destroy(webview) }
+                }
+                started.set(false)
+                eventThread.compareAndSet(Thread.currentThread(), null)
+                println("AMLL[wv2] webview loop exited")
+            }
         }
+        eventThread.set(worker)
+        if (stopped.get()) {
+            eventThread.compareAndSet(worker, null)
+            started.set(false)
+            return
+        }
+        worker.start()
     }
 
     /** 把 webview 自建的顶层窗口改造成 Canvas 的无边框子窗口并铺满。 */
@@ -350,9 +393,25 @@ private class WebviewSession(
     }
 
     fun eval(js: String) {
+        if (stopped.get()) return
         val w = handle.get()
         if (w == 0L) return
-        jobs.add(js)
+        synchronized(jobsLock) {
+            if (jobs.size >= MAX_PENDING_EVALS) jobs.removeFirst()
+            jobs.addLast(js)
+        }
+        dispatch(w)
+    }
+
+    fun evalLatest(js: String) {
+        if (stopped.get()) return
+        val w = handle.get()
+        if (w == 0L) return
+        latestEval.set(js)
+        dispatch(w)
+    }
+
+    private fun dispatch(w: Long) {
         runCatching { WebviewJna.N.webview_dispatch(w, dispatchCallback, 0) }
     }
 
@@ -385,9 +444,16 @@ private class WebviewSession(
     }
 
     fun stop() {
+        if (!stopped.compareAndSet(false, true)) return
+        readyFlow.value = false
+        synchronized(jobsLock) { jobs.clear() }
+        latestEval.set(null)
         val w = handle.get()
         if (w != 0L) runCatching { WebviewJna.N.webview_terminate(w) }
         callbackScope.cancel()
+        eventThread.get()?.takeIf { it !== Thread.currentThread() }?.let { worker ->
+            runCatching { worker.join(STOP_JOIN_TIMEOUT_MS) }
+        }
     }
 
     /**
@@ -442,6 +508,11 @@ private class WebviewSession(
             }
             runCatching { WebviewJna.N.webview_return(handle.get(), seq, 0, "null") }
         }
+    }
+
+    private companion object {
+        const val MAX_PENDING_EVALS = 64
+        const val STOP_JOIN_TIMEOUT_MS = 1_500L
     }
 }
 
@@ -544,3 +615,10 @@ private fun buildLyricOptionsJs(
         "romanLyric:'${romanLyric.escapeJsSingleQuoted()}'," +
         "showTranslation:$showTranslatedLyric," +
         "showRoman:$showRomanLyric}"
+
+internal fun desktopEmbeddedWebViewSupported(
+    osName: String = System.getProperty("os.name").orEmpty(),
+    osArch: String = System.getProperty("os.arch").orEmpty(),
+): Boolean =
+    osName.contains("Windows", ignoreCase = true) &&
+        (osArch.equals("amd64", ignoreCase = true) || osArch.equals("x86_64", ignoreCase = true))

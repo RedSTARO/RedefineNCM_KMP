@@ -5,6 +5,7 @@ import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
 import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
 import android.webkit.RenderProcessGoneDetail
@@ -29,6 +30,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -71,6 +74,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
 
     val context = LocalContext.current
     var engineReady by remember { mutableStateOf(false) }
+    var rendererGeneration by remember { mutableIntStateOf(0) }
     val lyricForWeb = remember(rawLyric, lyricMap) {
         rawLyric.takeIf { it.isNotBlank() } ?: lyricMap.toLrcFallback()
     }
@@ -85,7 +89,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         platformSettings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)
     }
 
-    val webView = remember {
+    val webView = remember(context, rendererGeneration) {
         if ((context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
             WebView.setWebContentsDebuggingEnabled(true)
         }
@@ -151,7 +155,10 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
                 override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
                     Log.e("AMLL", "renderer gone, didCrash=${detail.didCrash()}")
                     engineReady = false
-                    view.destroy()
+                    view.post {
+                        (view.parent as? ViewGroup)?.removeView(view)
+                        rendererGeneration += 1
+                    }
                     return true
                 }
             }
@@ -255,7 +262,9 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             .fillMaxSize()
             .background(Color.Black),
     ) {
-        AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
+        key(rendererGeneration) {
+            AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
+        }
 
         IconButton(
             onClick = onBack,
