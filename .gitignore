@@ -19,3 +19,10 @@ captures
 **/xcshareddata/WorkspaceSettings.xcsettings
 node_modules/
 .codex-remote-attachments/
+__pycache__/
+*.py[cod]
+
+# Local runtime/debug artifacts must never enter source control.
+/dump.rdb
+/out.kt
+/desktopApp/webview.dll
