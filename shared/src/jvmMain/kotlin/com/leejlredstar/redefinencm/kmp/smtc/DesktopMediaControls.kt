@@ -95,11 +95,13 @@ private class WindowsMediaControlsBackend(
     override val status: StateFlow<DesktopMediaControlsStatus> = _status.asStateFlow()
     private val _lastError = MutableStateFlow<String?>(null)
     override val lastError: StateFlow<String?> = _lastError.asStateFlow()
-    private var job: Job? = null
+    private var statusJob: Job? = null
+    private var errorJob: Job? = null
 
     override fun start(window: Window) {
-        job?.cancel()
-        job = scope.launch {
+        statusJob?.cancel()
+        errorJob?.cancel()
+        statusJob = scope.launch {
             delegate.status.collect { state ->
                 _status.value = when (state) {
                     WindowsMediaControls.IntegrationStatus.NotStarted -> DesktopMediaControlsStatus.NotStarted
@@ -107,19 +109,17 @@ private class WindowsMediaControlsBackend(
                     WindowsMediaControls.IntegrationStatus.Forwarding -> DesktopMediaControlsStatus.Forwarding
                     WindowsMediaControls.IntegrationStatus.NativeError -> DesktopMediaControlsStatus.NativeError
                 }
-                _lastError.value = if (state == WindowsMediaControls.IntegrationStatus.NativeError) {
-                    "Windows SMTC initialization or update failed; see the preceding native error"
-                } else {
-                    null
-                }
             }
         }
+        errorJob = scope.launch { delegate.lastError.collect { _lastError.value = it } }
         delegate.start(window)
     }
 
     override fun stop() {
-        job?.cancel()
-        job = null
+        statusJob?.cancel()
+        errorJob?.cancel()
+        statusJob = null
+        errorJob = null
         delegate.stop()
         _lastError.value = null
         _status.value = DesktopMediaControlsStatus.NotStarted

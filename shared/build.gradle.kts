@@ -185,6 +185,8 @@ kotlin {
                 // 完整现代内核。此前的 JavaFX WebKit（WebKit 无 GPU 合成、字体/布局/动画均不完整）
                 // 与 KCEF（已归档、native init 崩溃）均被淘汰。
                 implementation(libs.webview.java)
+                // Windows SMTC and macOS now-playing bindings call native APIs through JNA.
+                implementation(libs.jna)
                 // Linux desktop transport controls: a real MPRIS service on the session D-Bus.
                 implementation(libs.dbus.java.core)
                 runtimeOnly(libs.dbus.java.native.unixsocket)

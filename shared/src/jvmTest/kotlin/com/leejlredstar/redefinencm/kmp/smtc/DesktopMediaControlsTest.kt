@@ -2,6 +2,8 @@ package com.leejlredstar.redefinencm.kmp.smtc
 
 import com.leejlredstar.redefinencm.kmp.player.InMemoryPlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
+import java.awt.EventQueue
+import java.awt.Frame
 import kotlin.math.absoluteValue
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -19,6 +21,56 @@ class DesktopMediaControlsTest {
         assertEquals(DesktopTransportKind.MacOsNowPlaying, desktopTransportKind("Mac OS X"))
         assertEquals(DesktopTransportKind.MacOsNowPlaying, desktopTransportKind("Darwin"))
         assertEquals(DesktopTransportKind.Unsupported, desktopTransportKind("FreeBSD"))
+    }
+
+    @Test
+    fun windowsSmtcCreatesANativeSessionForARealTopLevelWindow() {
+        if (!System.getProperty("os.name").contains("Windows", ignoreCase = true)) return
+
+        val player = InMemoryPlatformPlayer(tickerIntervalMs = 60_000L)
+        val frame = createOffscreenTestFrame()
+        val controls = WindowsMediaControls(player)
+        try {
+            // Compose Desktop starts/stops the binding on the AWT event thread. The implementation
+            // then owns one dedicated MTA thread for native creation, publication, and release.
+            EventQueue.invokeAndWait { controls.start(frame) }
+            awaitCondition { controls.status.value != WindowsMediaControls.IntegrationStatus.NotStarted }
+            assertEquals(
+                WindowsMediaControls.IntegrationStatus.Forwarding,
+                controls.status.value,
+                "Windows SMTC failed to bind to the test HWND",
+            )
+
+            val expectedMetadata = MediaControlMetadata(
+                title = "Windows SMTC Test",
+                artist = "RedefineNCM",
+                album = "Native Integration",
+                duration = 120_000L,
+                position = 4_000L,
+                isPlaying = true,
+            )
+            MediaControlsIntegrator.updateMetadata(
+                title = expectedMetadata.title,
+                artist = expectedMetadata.artist,
+                album = expectedMetadata.album,
+                duration = expectedMetadata.duration,
+                position = expectedMetadata.position,
+                isPlaying = expectedMetadata.isPlaying,
+            )
+            awaitCondition { controls.lastPublishedMetadata == expectedMetadata }
+            assertEquals(
+                WindowsMediaControls.IntegrationStatus.Forwarding,
+                controls.status.value,
+                controls.lastError.value.orEmpty(),
+            )
+        } finally {
+            EventQueue.invokeAndWait {
+                controls.stop()
+                frame.dispose()
+            }
+            MediaControlsIntegrator.clear()
+            player.release()
+        }
     }
 
     @Test
@@ -126,6 +178,18 @@ class DesktopMediaControlsTest {
             player.release()
         }
     }
+}
+
+private fun createOffscreenTestFrame(): Frame {
+    var frame: Frame? = null
+    EventQueue.invokeAndWait {
+        frame = Frame("RedefineNCM SMTC Test").apply {
+            setSize(320, 180)
+            setLocation(-10_000, -10_000)
+            isVisible = true
+        }
+    }
+    return checkNotNull(frame)
 }
 
 private fun awaitCondition(timeoutMs: Long = 5_000L, predicate: () -> Boolean) {

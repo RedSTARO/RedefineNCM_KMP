@@ -75,8 +75,14 @@ media3 1.10.1 ・ androidx.palette 1.0.0 ・ compileSdk/targetSdk 36 / minSdk 24
 
 ### B. 需要外部环境
 - [ ] **iOS 构建与验证**：需 macOS + Xcode 16+（AVPlayer、Live Activity、NSURLSession 后台下载源码已就绪；专辑色提取仍为 fallback）
-- [ ] **Windows SMTC 原生 helper**：C++/WinRT DLL（见 `WindowsMediaControls` KDoc）
 - [ ] **AGP 9.2.0 收敛**：仍卡上游（aapt2 解析 + 配置缓存）
+
+### C. Windows 系统媒体协议
+- [x] **Windows SMTC 直接绑定**（2026-07-11）：通过 JNA/COM WinRT
+      `ISystemMediaTransportControlsInterop::GetForWindow` 绑定 Desktop 顶层 HWND，无需
+      C++ helper DLL；Windows 11 + JDK 21 原生测试已验证 session 创建、元数据和 timeline
+      发布；所有 WinRT 创建、更新和释放固定在同一 MTA 线程。`WinGuid` 必须保持非
+      private，JNA 需要从自身模块反射 `Structure` 字段。
 
 ## 2.5 桌面 AMLL 实机调试（2026-07-04，computer-use 实机验证通过）
 
