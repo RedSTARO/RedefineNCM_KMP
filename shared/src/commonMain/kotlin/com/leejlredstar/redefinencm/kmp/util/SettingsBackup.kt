@@ -42,7 +42,7 @@ internal fun encodeSettingsBackup(
         checkUpdate = getBoolean(SettingKeys.CHECK_UPDATE, false),
         searchPrediction = getBoolean(SettingKeys.SEARCH_PREDICTION, true),
         showDownloadStatus = getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false),
-        adaptOriginalAndroidLyric = getBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, false),
+        adaptOriginalAndroidLyric = getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false),
         showTranslatedLyric = getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false),
         showRomanLyric = getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false),
     )
@@ -72,7 +72,7 @@ internal fun applySettingsBackup(
     setBoolean(SettingKeys.CHECK_UPDATE, data.checkUpdate)
     setBoolean(SettingKeys.SEARCH_PREDICTION, data.searchPrediction)
     setBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, data.showDownloadStatus)
-    setBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, data.adaptOriginalAndroidLyric)
+    setBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, data.adaptOriginalAndroidLyric)
     setBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, data.showTranslatedLyric)
     setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, data.showRomanLyric)
     true

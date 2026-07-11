@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.asStateFlow
  * This controller manages the state that the window renders.
  */
 actual object LyricNotificationController {
+    actual val supportsOptionalSurfaceControl: Boolean = true
+    actual val optionalSurfaceSettingLabel: String = "启用桌面歌词"
+
     private val _floatingLyricData = MutableStateFlow<FloatingLyricData?>(null)
     val floatingLyricData: StateFlow<FloatingLyricData?> = _floatingLyricData.asStateFlow()
 
@@ -19,7 +22,20 @@ actual object LyricNotificationController {
     val isWindowVisible: StateFlow<Boolean> = _isWindowVisible.asStateFlow()
     private var currentTrackKey: String? = null
     private var dismissedTrackKey: String? = null
+    private var optionalSurfaceEnabled = false
+    private var latestLyricData: FloatingLyricData? = null
 
+    @Synchronized
+    actual fun setOptionalSurfaceEnabled(enabled: Boolean) {
+        optionalSurfaceEnabled = enabled
+        if (enabled) {
+            latestLyricData?.let(::publish)
+        } else {
+            clearDisplayedState()
+        }
+    }
+
+    @Synchronized
     actual fun updateLyric(
         title: String?,
         artist: String?,
@@ -40,6 +56,12 @@ actual object LyricNotificationController {
             positionMs = positionMs.coerceAtLeast(0L),
             durationMs = durationMs,
         )
+        latestLyricData = data
+        if (!optionalSurfaceEnabled) return
+        publish(data)
+    }
+
+    private fun publish(data: FloatingLyricData) {
         if (_floatingLyricData.value == data) return
         _floatingLyricData.value = data
         val trackKey = "${data.title}\u0000${data.artist}\u0000${data.artworkUri}"
@@ -47,28 +69,37 @@ actual object LyricNotificationController {
         if (dismissedTrackKey != trackKey) _isWindowVisible.value = true
     }
 
+    @Synchronized
     actual fun clearFocus() {
-        _floatingLyricData.value = null
-        _isWindowVisible.value = false
-        currentTrackKey = null
-        dismissedTrackKey = null
+        latestLyricData = null
+        clearDisplayedState()
     }
 
+    @Synchronized
     actual fun reset() {
+        latestLyricData = null
+        clearDisplayedState()
+    }
+
+    private fun clearDisplayedState() {
         _floatingLyricData.value = null
         _isWindowVisible.value = false
         currentTrackKey = null
         dismissedTrackKey = null
     }
 
+    @Synchronized
     fun show() {
+        if (!optionalSurfaceEnabled || _floatingLyricData.value == null) return
         dismissedTrackKey = null
         _isWindowVisible.value = true
     }
+    @Synchronized
     fun hide() {
         dismissedTrackKey = currentTrackKey
         _isWindowVisible.value = false
     }
+    @Synchronized
     fun toggle() { if (_isWindowVisible.value) hide() else show() }
 }
 

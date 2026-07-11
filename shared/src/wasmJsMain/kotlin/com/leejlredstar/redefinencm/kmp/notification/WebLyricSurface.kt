@@ -4,6 +4,11 @@ package com.leejlredstar.redefinencm.kmp.notification
 
 /** Browser lyric surface: a live DOM pill, tab title, and an optional granted notification. */
 actual object LyricNotificationController {
+    actual val supportsOptionalSurfaceControl: Boolean = false
+    actual val optionalSurfaceSettingLabel: String = ""
+
+    actual fun setOptionalSurfaceEnabled(enabled: Boolean) = Unit
+
     actual fun updateLyric(
         title: String?,
         artist: String?,

@@ -15,7 +15,8 @@ object SettingKeys {
     const val CHECK_UPDATE = "checkUpdate"
     const val SHOW_DOWNLOAD_STATUS = "showDownloadStatus"
     const val SEARCH_PREDICTION = "searchPrediction"
-    const val ADAPT_ORIGINAL_ANDROID_LYRIC = "adaptOriginalAndroidLyric"
+    // Keep the legacy persisted key so existing preferences and exported backups remain valid.
+    const val ENABLE_EXTRA_LYRIC_SURFACE = "adaptOriginalAndroidLyric"
     const val SHOW_TRANSLATED_LYRIC = "showTranslatedLyric"
     const val SHOW_ROMAN_LYRIC = "showRomanLyric"
     const val PLAYER_VOLUME = "playerVolume"

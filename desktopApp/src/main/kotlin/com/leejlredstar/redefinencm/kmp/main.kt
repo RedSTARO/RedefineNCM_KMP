@@ -33,6 +33,8 @@ import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.smtc.DesktopMediaControls
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
+import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
+import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import org.koin.core.context.GlobalContext
 
 fun main() {
@@ -40,6 +42,10 @@ fun main() {
     // 历史教训（勿回退）：JavaFX WebKit 需要 prism.maxvram 调大才不白屏，且无 GPU 合成，
     // 字体/布局/动画均残缺；prism.order=sw 会打满 CPU 饿死网络协程。
     initKoin()
+    val settings = GlobalContext.get().get<PlatformSettings>()
+    LyricNotificationController.setOptionalSurfaceEnabled(
+        settings.getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false),
+    )
     application {
         val mainWindowState = rememberWindowState(
             size = DpSize(1280.dp, 820.dp),

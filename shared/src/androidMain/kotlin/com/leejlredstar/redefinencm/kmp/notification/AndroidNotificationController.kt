@@ -23,17 +23,33 @@ actual object LyricNotificationController {
     private const val CHANNEL_ID = "live_update_lyric"
     private const val NOTIFICATION_ID = 0x4C595243 // "LYRC"
 
-    @Volatile
-    private var lastPayload: AndroidLyricPayload? = null
+    actual val supportsOptionalSurfaceControl: Boolean = true
+    actual val optionalSurfaceSettingLabel: String = "启用额外 Live Update 歌词"
 
-    @Volatile
+    private var latestPayload: AndroidLyricPayload? = null
+    private var lastPostedPayload: AndroidLyricPayload? = null
+    private var optionalSurfaceEnabled = false
     private var appContext: Context? = null
 
+    @Synchronized
     fun init(context: Context) {
         appContext = context.applicationContext
         ensureChannel(context)
+        if (optionalSurfaceEnabled) latestPayload?.let(::postPayload)
     }
 
+    @Synchronized
+    actual fun setOptionalSurfaceEnabled(enabled: Boolean) {
+        optionalSurfaceEnabled = enabled
+        if (enabled) {
+            latestPayload?.let(::postPayload)
+        } else {
+            lastPostedPayload = null
+            appContext?.let { NotificationManagerCompat.from(it).cancel(NOTIFICATION_ID) }
+        }
+    }
+
+    @Synchronized
     actual fun updateLyric(
         title: String?,
         artist: String?,
@@ -44,8 +60,6 @@ actual object LyricNotificationController {
         positionMs: Long,
         durationMs: Long,
     ) {
-        val context = appContext ?: return
-        if (!canPostNotifications(context)) return
         val normalizedTitle = title?.trim().orEmpty()
         val lyric = currentLyric?.trim().orEmpty().ifEmpty { normalizedTitle }
         if (lyric.isEmpty()) return
@@ -59,10 +73,18 @@ actual object LyricNotificationController {
             positionMs = positionMs.coerceAtLeast(0L),
             durationMs = durationMs,
         )
-        if (payload == lastPayload) return
+        latestPayload = payload
+        postPayload(payload)
+    }
+
+    private fun postPayload(payload: AndroidLyricPayload) {
+        if (!optionalSurfaceEnabled) return
+        val context = appContext ?: return
+        if (!canPostNotifications(context)) return
+        if (payload == lastPostedPayload) return
 
         // 原版 "Use lyric as title in LiveUpdate"：通知标题直接用当前歌词行
-        val displayTitle = lyric
+        val displayTitle = payload.currentLyric
         val trimmedArtist = payload.artist
         val trimmedNext = payload.nextLyric
 
@@ -71,11 +93,11 @@ actual object LyricNotificationController {
                 append(trimmedArtist)
                 append(" · ")
             }
-            append(lyric)
+            append(payload.currentLyric)
         }
 
         val detailText = buildString {
-            append(lyric)
+            append(payload.currentLyric)
             if (trimmedNext.isNotEmpty()) {
                 appendLine()
                 append(trimmedNext)
@@ -119,17 +141,20 @@ actual object LyricNotificationController {
         }
 
         NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, builder.build())
-        lastPayload = payload
+        lastPostedPayload = payload
     }
 
+    @Synchronized
     actual fun clearFocus() {
-        val context = appContext ?: return
-        NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
-        lastPayload = null
+        latestPayload = null
+        lastPostedPayload = null
+        appContext?.let { NotificationManagerCompat.from(it).cancel(NOTIFICATION_ID) }
     }
 
+    @Synchronized
     actual fun reset() {
-        lastPayload = null
+        latestPayload = null
+        lastPostedPayload = null
     }
 
     private fun ensureChannel(context: Context) {
