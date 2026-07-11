@@ -324,6 +324,7 @@ in — see Goal #4).
 | DI | Koin `4.2.1`: koin-core, koin-compose | commonMain |
 | Images | Coil `3.5.0`: coil-compose (group `io.coil-kt.coil3`) | commonMain |
 | Web runtime | `kotlinx-browser 0.5.0` + Ktor JS engine `3.5.0` | wasmJsMain |
+| Desktop native APIs | JNA `5.14.0` + dbus-java `5.2.0` | jvmMain |
 | Android settings | `androidx.datastore:datastore-preferences 1.2.0` | androidMain |
 | Android audio | `media3-exoplayer 1.10.1` + `media3-session 1.10.1` | androidMain + :androidApp |
 
@@ -601,7 +602,10 @@ feature gap; platform integrations use target-specific actuals:
         `:androidApp:assembleDebug` (APK), `:shared:compileKotlinJvm`, `:shared:jvmTest` all green.
 - [x] **Desktop native media controls are implemented.** Windows SMTC uses direct JNA/COM WinRT
       interop without a helper DLL; Linux uses MPRIS. Both consume the shared metadata and player
-      command pipeline.
+      command pipeline. Windows has a real-HWND native regression test; JNA `Structure` types used
+      across the module boundary must not be private because JDK 21 blocks reflective field access.
+      Keep all Windows session creation, metadata/timeline updates, and release on the dedicated
+      SMTC MTA thread so `RoInitialize` and `RoUninitialize` stay paired on one thread.
 - [x] **iOS Live Activity source and Xcode target are wired.** Kotlin publishes serial
       `LiveActivityData`; Swift drives ActivityKit and the LyricWidget extension renders Lock Screen
       and Dynamic Island content. Runtime verification still requires macOS and a real iOS build.

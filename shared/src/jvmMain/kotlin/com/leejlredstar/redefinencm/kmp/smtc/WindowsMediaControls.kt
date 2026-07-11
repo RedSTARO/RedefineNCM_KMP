@@ -13,22 +13,30 @@ import com.sun.jna.ptr.LongByReference
 import com.sun.jna.ptr.PointerByReference
 import com.sun.jna.win32.StdCallLibrary
 import java.awt.Window
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 /**
  * Windows System Media Transport Controls (SMTC) integration.
  *
  * Desktop WinRT apps obtain SMTC through `ISystemMediaTransportControlsInterop::GetForWindow`.
  * Compose Desktop gives us a real HWND through JNA, so this binding can stay in JVM code: no
- * bundled helper DLL and no build-time Windows SDK requirement.
+ * bundled helper DLL and no build-time Windows SDK requirement. Session creation, updates, and
+ * release stay on one dedicated MTA thread so RoInitialize/RoUninitialize remain balanced.
  */
 class WindowsMediaControls(
     private val player: PlatformPlayer,
@@ -40,101 +48,113 @@ class WindowsMediaControls(
         NativeError,
     }
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val lock = Any()
+    private val commandScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _status = MutableStateFlow(IntegrationStatus.NotStarted)
     val status: StateFlow<IntegrationStatus> = _status.asStateFlow()
+    private val _lastError = MutableStateFlow<String?>(null)
+    val lastError: StateFlow<String?> = _lastError.asStateFlow()
+    private val lastPublishedMetadataRef = AtomicReference<MediaControlMetadata?>(null)
+    internal val lastPublishedMetadata: MediaControlMetadata?
+        get() = lastPublishedMetadataRef.get()
 
-    private var collectJob: Job? = null
+    private var nativeDispatcher: ExecutorCoroutineDispatcher? = null
+    private var integrationJob: Job? = null
     private var session: WindowsSmtcSession? = null
     private var lastDisplayKey: DisplayKey? = null
     private var lastPlaybackKey: PlaybackKey? = null
 
     /** Begin observing shared metadata and forwarding it to Windows SMTC. */
     fun start(window: Window) {
+        stop()
+        _lastError.value = null
+        lastPublishedMetadataRef.set(null)
         if (!isWindows()) {
+            _lastError.value = "Windows SMTC is unavailable on ${System.getProperty("os.name")}"
             _status.value = IntegrationStatus.UnsupportedHost
             return
         }
 
         val hwnd = runCatching { Native.getWindowPointer(window) }.getOrNull()
         if (hwnd == null || hwnd == Pointer.NULL) {
+            _lastError.value = "Compose Desktop did not expose a valid top-level HWND"
             _status.value = IntegrationStatus.NativeError
             return
         }
 
-        val created = runCatching {
-            WindowsSmtcSession.create(hwnd, ::handleButtonPressed)
-        }.onFailure { error ->
-            println("SMTC init failed: ${error.message}")
-        }.getOrNull() ?: run {
-            _status.value = IntegrationStatus.NativeError
-            return
-        }
-
-        synchronized(lock) {
-            collectJob?.cancel()
-            session?.close()
-            session = created
-            lastDisplayKey = null
-            lastPlaybackKey = null
-        }
-
-        collectJob = scope.launch {
-            MediaControlsIntegrator.metadata.collect { meta ->
-                pushToOs(meta)
+        val dispatcher = Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "RedefineNCM-Windows-SMTC").apply { isDaemon = true }
+        }.asCoroutineDispatcher()
+        nativeDispatcher = dispatcher
+        integrationJob = CoroutineScope(SupervisorJob() + dispatcher).launch {
+            try {
+                session = WindowsSmtcSession.create(hwnd, ::handleButtonPressed)
+                lastDisplayKey = null
+                lastPlaybackKey = null
+                _lastError.value = null
+                _status.value = IntegrationStatus.Forwarding
+                MediaControlsIntegrator.metadata.collect(::pushToOs)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                _lastError.value = "SMTC initialization failed: ${error.message ?: error::class.simpleName}"
+                System.err.println(_lastError.value)
+                _status.value = IntegrationStatus.NativeError
+            } finally {
+                closeNativeSession()
             }
         }
-        _status.value = IntegrationStatus.Forwarding
     }
 
     fun stop() {
-        collectJob?.cancel()
-        collectJob = null
-        synchronized(lock) {
-            session?.close()
-            session = null
-            lastDisplayKey = null
-            lastPlaybackKey = null
+        val job = integrationJob
+        val dispatcher = nativeDispatcher
+        integrationJob = null
+        nativeDispatcher = null
+        if (job != null && dispatcher != null) {
+            runBlocking { job.cancelAndJoin() }
+            dispatcher.close()
         }
+        lastPublishedMetadataRef.set(null)
+        _lastError.value = null
         _status.value = IntegrationStatus.NotStarted
     }
 
     private fun pushToOs(meta: MediaControlMetadata) {
         runCatching {
-            synchronized(lock) {
-                val currentSession = session ?: return
-                if (meta.title.isBlank() && meta.artist.isBlank()) {
-                    currentSession.clear()
-                    lastDisplayKey = null
-                    lastPlaybackKey = null
-                } else {
-                    val displayKey = DisplayKey(meta.title, meta.artist, meta.album)
-                    if (displayKey != lastDisplayKey) {
-                        currentSession.updateDisplay(meta)
-                        lastDisplayKey = displayKey
-                    }
+            val currentSession = session ?: return
+            if (meta.title.isBlank() && meta.artist.isBlank()) {
+                currentSession.clear()
+                lastDisplayKey = null
+                lastPlaybackKey = null
+            } else {
+                val displayKey = DisplayKey(meta.title, meta.artist, meta.album)
+                if (displayKey != lastDisplayKey) {
+                    currentSession.updateDisplay(meta)
+                    lastDisplayKey = displayKey
+                }
 
-                    val playbackKey = PlaybackKey(
-                        isPlaying = meta.isPlaying,
-                        durationMs = meta.duration.coerceAtLeast(0L),
-                        positionSecond = meta.position.coerceAtLeast(0L) / 1000L,
-                    )
-                    if (playbackKey != lastPlaybackKey) {
-                        currentSession.updatePlayback(meta)
-                        lastPlaybackKey = playbackKey
-                    }
+                val playbackKey = PlaybackKey(
+                    isPlaying = meta.isPlaying,
+                    durationMs = meta.duration.coerceAtLeast(0L),
+                    positionSecond = meta.position.coerceAtLeast(0L) / 1000L,
+                )
+                if (playbackKey != lastPlaybackKey) {
+                    currentSession.updatePlayback(meta)
+                    lastPlaybackKey = playbackKey
                 }
             }
+            lastPublishedMetadataRef.set(meta)
+            _lastError.value = null
             _status.value = IntegrationStatus.Forwarding
         }.onFailure { error ->
-            println("SMTC update failed: ${error.message}")
+            _lastError.value = "SMTC update failed: ${error.message ?: error::class.simpleName}"
+            System.err.println(_lastError.value)
             _status.value = IntegrationStatus.NativeError
         }
     }
 
     private fun handleButtonPressed(button: Int) {
-        scope.launch {
+        commandScope.launch {
             when (button) {
                 BUTTON_PLAY -> player.play()
                 BUTTON_PAUSE -> player.pause()
@@ -147,6 +167,16 @@ class WindowsMediaControls(
 
     private fun isWindows(): Boolean =
         System.getProperty("os.name").contains("Windows", ignoreCase = true)
+
+    private fun closeNativeSession() {
+        val currentSession = session
+        session = null
+        lastDisplayKey = null
+        lastPlaybackKey = null
+        runCatching { currentSession?.close() }.onFailure { error ->
+            System.err.println("SMTC shutdown failed: ${error.message ?: error::class.simpleName}")
+        }
+    }
 
     private data class DisplayKey(
         val title: String,
@@ -228,17 +258,20 @@ class WindowsMediaControls(
         fun close() {
             if (closed) return
             closed = true
-            runCatching { clear() }
-            runCatching {
-                if (buttonToken != 0L) {
-                    comInvokeInt(controls, VTABLE_SMTC_REMOVE_BUTTON_PRESSED, buttonToken)
+            try {
+                runCatching { clear() }
+                runCatching {
+                    if (buttonToken != 0L) {
+                        comInvokeInt(controls, VTABLE_SMTC_REMOVE_BUTTON_PRESSED, buttonToken)
+                    }
                 }
-            }
-            buttonHandler.releaseReference()
-            controls2?.let { release(it) }
-            release(controls)
-            if (roInitialized) {
-                Combase.INSTANCE.RoUninitialize()
+                buttonHandler.releaseReference()
+                controls2?.let { runCatching { release(it) } }
+                runCatching { release(controls) }
+            } finally {
+                if (roInitialized) {
+                    Combase.INSTANCE.RoUninitialize()
+                }
             }
         }
 
@@ -422,7 +455,9 @@ class WindowsMediaControls(
         }
     }
 
-    private open class WinGuid() : Structure() {
+    // JNA reflects Structure fields from its own module. The structure class itself therefore
+    // cannot be private on JDK 21+, even when every field is exposed with @JvmField.
+    internal open class WinGuid() : Structure() {
         @JvmField var data1: Int = 0
         @JvmField var data2: Short = 0
         @JvmField var data3: Short = 0
