@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.util.LyricParser
@@ -289,6 +290,8 @@ fun FullLyricScreen(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+
+        AutoHideMiniPlayerController(modifier = Modifier.fillMaxSize())
     }
 }
 

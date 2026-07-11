@@ -5,6 +5,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
+import com.leejlredstar.redefinencm.kmp.notification.createNowPlayingPendingIntent
 import com.leejlredstar.redefinencm.kmp.player.AndroidMediaSessionInitializationState
 import com.leejlredstar.redefinencm.kmp.player.ExoPlayerPlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
@@ -47,7 +48,10 @@ class PlaybackService : MediaSessionService() {
             try {
                 get<PlatformSettings>().awaitLoaded()
                 val exoPlayer = (get<PlatformPlayer>() as ExoPlayerPlatformPlayer).exoPlayer
-                mediaSession = MediaSession.Builder(this@PlaybackService, exoPlayer).build()
+                val sessionBuilder = MediaSession.Builder(this@PlaybackService, exoPlayer)
+                createNowPlayingPendingIntent(this@PlaybackService, requestCode = 0x4D454449)
+                    ?.let(sessionBuilder::setSessionActivity)
+                mediaSession = sessionBuilder.build()
                 initializationState = AndroidMediaSessionInitializationState.Ready
             } catch (cancelled: CancellationException) {
                 throw cancelled

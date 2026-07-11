@@ -39,7 +39,7 @@ media3 1.10.1 ・ androidx.palette 1.0.0 ・ compileSdk/targetSdk 36 / minSdk 24
 | 歌单详情（封面取色 hero + 播放全部 + 下载全部 + 下载状态指示） | ✅ |
 | replacePlaylist 设置（单曲点击：单曲队列 vs 整单队列） | ✅ |
 | playlistUpdatePlaycount 上报 | ✅ |
-| NowPlaying（取色 hero、歌词、进度、控制、队列 sheet、评论 sheet） | ✅（另有 AMLL 全屏歌词模式，超出原版） |
+| 全屏播放器（AMLL/Compose fallback、进度、控制、队列 sheet、评论 sheet） | ✅（MiniNowPlaying 与系统入口直接打开；旧 KMP NowPlaying 已移除） |
 | 随机播放不变量（播放顺序队列 + 高亮同源重建） | ✅（ExoPlayer 按 timeline 播放顺序重建 + skipToIndex 映射窗口索引；VM 实时订阅） |
 | 播放状态持久化（队列/索引/进度/shuffle，onPause 存、启动恢复不自动播） | ✅（PlayerStatus.sq + PlatformPlayer.restoreQueue） |
 | 歌单批量下载（5 首/批，跳过已存在） | ✅（common 编排；Android MediaStore/JVM 文件系统/iOS NSURLSession/Web OPFS） |

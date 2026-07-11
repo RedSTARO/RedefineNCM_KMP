@@ -4,7 +4,6 @@ import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -103,14 +102,7 @@ actual object LyricNotificationController {
                     .bigText(detailText)
                     .setSummaryText(trimmedArtist.ifEmpty { null }),
             )
-            .setContentIntent(
-                PendingIntent.getActivity(
-                    context, 0,
-                    context.packageManager
-                        .getLaunchIntentForPackage(context.packageName),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                ),
-            )
+            .setContentIntent(createNowPlayingPendingIntent(context, requestCode = NOTIFICATION_ID))
 
         if (payload.durationMs > 0L) {
             val durationSeconds = (payload.durationMs / 1_000L)

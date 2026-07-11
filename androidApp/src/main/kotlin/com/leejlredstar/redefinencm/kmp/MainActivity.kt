@@ -17,6 +17,7 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.leejlredstar.redefinencm.kmp.download.DownloadNotificationIntents
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
+import com.leejlredstar.redefinencm.kmp.notification.NowPlayingNotificationIntents
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.requiresLegacyDownloadWritePermission
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
@@ -138,11 +139,29 @@ class MainActivity : ComponentActivity() {
         ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
 
     private fun handleNavigationIntent(intent: Intent?) {
-        if (
-            intent?.action == DownloadNotificationIntents.ACTION_OPEN_DOWNLOADS ||
-            intent?.getBooleanExtra(DownloadNotificationIntents.EXTRA_OPEN_DOWNLOADS, false) == true
-        ) {
-            AppNavigationRequests.openDownloads()
+        if (intent == null) return
+        var consumed = false
+        when {
+            intent.action == DownloadNotificationIntents.ACTION_OPEN_DOWNLOADS ||
+                intent.getBooleanExtra(DownloadNotificationIntents.EXTRA_OPEN_DOWNLOADS, false) -> {
+                AppNavigationRequests.openDownloads()
+                consumed = true
+            }
+            intent.action == NowPlayingNotificationIntents.ACTION_OPEN_NOW_PLAYING ||
+                intent.getBooleanExtra(
+                    NowPlayingNotificationIntents.EXTRA_OPEN_NOW_PLAYING,
+                    false,
+                ) -> {
+                AppNavigationRequests.openNowPlaying()
+                consumed = true
+            }
+        }
+        if (consumed) {
+            // Navigation intents are one-shot. Leaving them on the Activity would reopen the
+            // full-screen player/downloads after a configuration change or process recreation.
+            intent.action = null
+            intent.removeExtra(DownloadNotificationIntents.EXTRA_OPEN_DOWNLOADS)
+            intent.removeExtra(NowPlayingNotificationIntents.EXTRA_OPEN_NOW_PLAYING)
         }
     }
 }

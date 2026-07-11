@@ -82,13 +82,12 @@ import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackSeekBar
 import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOverlayCoordinator
-import com.leejlredstar.redefinencm.kmp.ui.screen.CommentBottomSheet
+import com.leejlredstar.redefinencm.kmp.ui.component.CommentBottomSheet
+import com.leejlredstar.redefinencm.kmp.ui.component.QueueBottomSheet
 import com.leejlredstar.redefinencm.kmp.ui.screen.DownloadManagementScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.LoginScreen
-import com.leejlredstar.redefinencm.kmp.ui.screen.NowPlayingScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.PlaylistDetailScreen
-import com.leejlredstar.redefinencm.kmp.ui.screen.QueueBottomSheet
 import com.leejlredstar.redefinencm.kmp.ui.screen.SettingsScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.UserPlaylistScreen
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
@@ -110,7 +109,6 @@ private sealed interface TabDest {
 
 private sealed interface PushedDest {
     data object Login : PushedDest
-    data object NowPlaying : PushedDest
     data object FullLyric : PushedDest
     data object Downloads : PushedDest
     data class Playlist(val id: Long) : PushedDest
@@ -137,14 +135,19 @@ private val pushedStackSaver = listSaver<SnapshotStateList<PushedDest>, String>(
     save = { stack -> stack.map(::encodePushedDestination) },
     restore = { saved ->
         mutableStateListOf<PushedDest>().apply {
-            saved.mapNotNullTo(this, ::decodePushedDestination)
+            saved.mapNotNull(::decodePushedDestination).forEach { destination ->
+                // Old versions could save NowPlaying -> FullLyric. Both now decode to the
+                // sole full-screen player, so collapse the duplicate during state migration.
+                if (destination !is PushedDest.FullLyric || lastOrNull() !is PushedDest.FullLyric) {
+                    add(destination)
+                }
+            }
         }
     },
 )
 
 private fun encodePushedDestination(destination: PushedDest): String = when (destination) {
     PushedDest.Login -> "login"
-    PushedDest.NowPlaying -> "now-playing"
     PushedDest.FullLyric -> "full-lyric"
     PushedDest.Downloads -> "downloads"
     is PushedDest.Playlist -> "playlist:${destination.id}"
@@ -152,7 +155,8 @@ private fun encodePushedDestination(destination: PushedDest): String = when (des
 
 private fun decodePushedDestination(saved: String): PushedDest? = when (saved) {
     "login" -> PushedDest.Login
-    "now-playing" -> PushedDest.NowPlaying
+    // Migrate navigation state saved before the legacy KMP player was removed.
+    "now-playing" -> PushedDest.FullLyric
     "full-lyric" -> PushedDest.FullLyric
     "downloads" -> PushedDest.Downloads
     else -> saved.removePrefix("playlist:")
@@ -179,7 +183,7 @@ private sealed interface RootDest {
 
 /**
  * Root composable shared across Android / iOS / Desktop / Web. 3-tab nav (Recommend / My /
- * Settings) with a push stack for Login, NowPlaying, PlaylistDetail. 窄屏用底部 NavigationBar，
+ * Settings) with a push stack for Login, FullLyric, Downloads, and PlaylistDetail. 窄屏用底部 NavigationBar，
  * 宽屏（≥600dp）用侧边 NavigationRail（原版 WindowWidthSizeClass 响应式布局）。
  * Koin must already be started before this is called.
  */
@@ -237,16 +241,6 @@ private fun AppContent(
                 pushedStack.clear()
                 push(PushedDest.Downloads)
             }
-            fun openNowPlaying() {
-                val existingIndex = pushedStack.indexOfLast { it is PushedDest.NowPlaying }
-                if (existingIndex >= 0) {
-                    while (pushedStack.lastIndex > existingIndex) {
-                        pushedStack.removeAt(pushedStack.lastIndex)
-                    }
-                } else {
-                    push(PushedDest.NowPlaying)
-                }
-            }
             fun openFullLyric() {
                 val existingIndex = pushedStack.indexOfLast { it is PushedDest.FullLyric }
                 if (existingIndex >= 0) {
@@ -270,7 +264,7 @@ private fun AppContent(
             LaunchedEffect(Unit) {
                 AppNavigationRequests.openNowPlayingRequestId.collect { requestId ->
                     if (AppNavigationRequests.consumeOpenNowPlayingRequest(requestId)) {
-                        openNowPlaying()
+                        openFullLyric()
                     }
                 }
             }
@@ -303,7 +297,7 @@ private fun AppContent(
                     val useDesktopLayout = platform.isDesktop
                     val isWide = maxWidth >= 600.dp
                     val showMiniPlayer = pushedStack.lastOrNull().let {
-                        it !is PushedDest.NowPlaying && it !is PushedDest.FullLyric
+                        it !is PushedDest.FullLyric
                     }
                     val rootDest = pushedStack.lastOrNull()
                         ?.let { RootDest.Pushed(it, pushedStack.size) }
@@ -347,7 +341,7 @@ private fun AppContent(
                                 enter = miniPlayerEnterTransition(),
                                 exit = miniPlayerExitTransition(),
                             ) {
-                                MiniNowPlayingBar(onExpand = ::openNowPlaying)
+                                MiniNowPlayingBar(onExpand = ::openFullLyric)
                             }
                         },
                     ) { innerPadding ->
@@ -365,7 +359,7 @@ private fun AppContent(
                                         currentTab = it
                                     },
                                     onOpenDownloads = ::openDownloads,
-                                    onOpenNowPlaying = ::openNowPlaying,
+                                    onOpenNowPlaying = ::openFullLyric,
                                 )
                             } else if (isWide) {
                                 AnimatedVisibility(
@@ -404,10 +398,6 @@ private fun AppContent(
                                     when (target) {
                                         is RootDest.Pushed -> when (val dest = target.dest) {
                                             is PushedDest.Login -> LoginScreen(onBack = ::back)
-                                            is PushedDest.NowPlaying -> NowPlayingScreen(
-                                                onBack = ::back,
-                                                onOpenFullLyric = ::openFullLyric,
-                                            )
                                             is PushedDest.FullLyric -> WebViewLyricScreen(onBack = ::back)
                                             is PushedDest.Downloads -> DownloadManagementScreen(
                                                 scaffoldPadding = innerPadding,
@@ -590,6 +580,8 @@ private fun DesktopNowPlayingStrip(
 
     Box(Modifier.fillMaxWidth()) {
         Surface(
+            onClick = { if (hasMedia) onOpenNowPlaying() },
+            enabled = hasMedia,
             shape = MaterialTheme.shapes.extraLarge,
             color = accentPalette.container.copy(alpha = 0.92f),
             contentColor = accentPalette.onContainer,
@@ -604,7 +596,6 @@ private fun DesktopNowPlayingStrip(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Surface(
-                        onClick = { if (hasMedia) onOpenNowPlaying() },
                         shape = MaterialTheme.shapes.large,
                         color = accentPalette.quietContainer,
                         contentColor = accentPalette.onQuietContainer,
@@ -874,7 +865,6 @@ private fun ChromeAccentSourceImage(
 
 private fun pageTransition(initial: RootDest, target: RootDest): ContentTransform =
     when {
-        isNowPlayingSheetTransition(initial, target) -> sheetTransition(showingSheet = isNowPlaying(target))
         isFullLyricSheetTransition(initial, target) -> sheetTransition(showingSheet = isFullLyric(target))
         initial is RootDest.Tab && target is RootDest.Tab -> {
             val forward = tabIndex(target.tab) > tabIndex(initial.tab)
@@ -990,14 +980,8 @@ private fun miniPlayerExitTransition(): ExitTransition =
         animationSpec = tween(180, easing = FastOutSlowInEasing),
     ) + fadeOut(animationSpec = tween(120, easing = LinearOutSlowInEasing))
 
-private fun isNowPlayingSheetTransition(initial: RootDest, target: RootDest): Boolean =
-    isNowPlaying(initial) || isNowPlaying(target)
-
 private fun isFullLyricSheetTransition(initial: RootDest, target: RootDest): Boolean =
     isFullLyric(initial) || isFullLyric(target)
-
-private fun isNowPlaying(dest: RootDest): Boolean =
-    (dest as? RootDest.Pushed)?.dest is PushedDest.NowPlaying
 
 private fun isFullLyric(dest: RootDest): Boolean =
     (dest as? RootDest.Pushed)?.dest is PushedDest.FullLyric
