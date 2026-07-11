@@ -84,8 +84,8 @@ actual object LyricNotificationController {
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(
-                if (payload.isPlaying) android.R.drawable.ic_media_play
-                else android.R.drawable.ic_media_pause,
+                if (payload.isPlaying) android.R.drawable.ic_media_pause
+                else android.R.drawable.ic_media_play,
             )
             .setContentTitle(displayTitle)
             .setContentText(contentText)
