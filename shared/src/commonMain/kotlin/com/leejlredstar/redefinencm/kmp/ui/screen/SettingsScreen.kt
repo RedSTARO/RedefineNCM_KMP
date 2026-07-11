@@ -52,6 +52,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
+import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
@@ -84,7 +85,7 @@ fun SettingsScreen(
     var checkUpdate by remember(settings) { mutableStateOf(false) }
     var searchPrediction by remember(settings) { mutableStateOf(true) }
     var showDownloadStatus by remember(settings) { mutableStateOf(false) }
-    var adaptOriginalLyric by remember(settings) { mutableStateOf(false) }
+    var extraLyricSurfaceEnabled by remember(settings) { mutableStateOf(false) }
     var showTranslatedLyric by remember(settings) { mutableStateOf(false) }
     var showRomanLyric by remember(settings) { mutableStateOf(false) }
     var importStatus by remember { mutableStateOf<String?>(null) }
@@ -100,7 +101,8 @@ fun SettingsScreen(
         checkUpdate = settings.getBoolean(SettingKeys.CHECK_UPDATE, false)
         searchPrediction = settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true)
         showDownloadStatus = settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false)
-        adaptOriginalLyric = settings.getBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, false)
+        extraLyricSurfaceEnabled = settings.getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false)
+        LyricNotificationController.setOptionalSurfaceEnabled(extraLyricSurfaceEnabled)
         showTranslatedLyric = settings.getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
         showRomanLyric = settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)
     }
@@ -144,7 +146,8 @@ fun SettingsScreen(
         checkUpdate = settings.getBooleanAsync(SettingKeys.CHECK_UPDATE, false)
         searchPrediction = settings.getBooleanAsync(SettingKeys.SEARCH_PREDICTION, true)
         showDownloadStatus = settings.getBooleanAsync(SettingKeys.SHOW_DOWNLOAD_STATUS, false)
-        adaptOriginalLyric = settings.getBooleanAsync(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, false)
+        extraLyricSurfaceEnabled = settings.getBooleanAsync(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false)
+        LyricNotificationController.setOptionalSurfaceEnabled(extraLyricSurfaceEnabled)
         showTranslatedLyric = settings.getBooleanAsync(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
         showRomanLyric = settings.getBooleanAsync(SettingKeys.SHOW_ROMAN_LYRIC, false)
     }
@@ -283,15 +286,29 @@ fun SettingsScreen(
                 }
 
                 ExpressiveSectionTitle("Lyrics", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
-                SettingsSwitch(adaptOriginalLyric, "Adapt original Android Live Update lyric", settingsPalette, index = 0, count = 3) { v ->
-                    adaptOriginalLyric = v
-                    persistSettings({ settings.setBoolean(SettingKeys.ADAPT_ORIGINAL_ANDROID_LYRIC, v) })
+                val lyricSettingCount = if (LyricNotificationController.supportsOptionalSurfaceControl) 3 else 2
+                if (LyricNotificationController.supportsOptionalSurfaceControl) {
+                    SettingsSwitch(
+                        extraLyricSurfaceEnabled,
+                        LyricNotificationController.optionalSurfaceSettingLabel,
+                        settingsPalette,
+                        index = 0,
+                        count = lyricSettingCount,
+                    ) { enabled ->
+                        extraLyricSurfaceEnabled = enabled
+                        persistSettings(
+                            write = { settings.setBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, enabled) },
+                            onWritten = {
+                                LyricNotificationController.setOptionalSurfaceEnabled(enabled)
+                            },
+                        )
+                    }
                 }
-                SettingsSwitch(showTranslatedLyric, "显示翻译歌词", settingsPalette, index = 1, count = 3) { v ->
+                SettingsSwitch(showTranslatedLyric, "显示翻译歌词", settingsPalette, index = if (lyricSettingCount == 3) 1 else 0, count = lyricSettingCount) { v ->
                     showTranslatedLyric = v
                     persistSettings({ settings.setBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, v) })
                 }
-                SettingsSwitch(showRomanLyric, "显示五十音 / 罗马音歌词", settingsPalette, index = 2, count = 3) { v ->
+                SettingsSwitch(showRomanLyric, "显示五十音 / 罗马音歌词", settingsPalette, index = lyricSettingCount - 1, count = lyricSettingCount) { v ->
                     showRomanLyric = v
                     persistSettings({ settings.setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, v) })
                 }

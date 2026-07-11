@@ -46,4 +46,25 @@ class SettingsBackupTest {
         assertFalse(SettingKeys.COOKIE in writtenStrings)
         assertTrue(writtenStrings[SettingKeys.SERVER] == "http://server/")
     }
+
+    @Test
+    fun extraLyricSurfaceSettingKeepsLegacyBackupCompatibility() {
+        val json = encodeSettingsBackup(
+            getString = { _, default -> default },
+            getBoolean = { key, default ->
+                if (key == SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE) true else default
+            },
+        )
+        val writtenBooleans = mutableMapOf<String, Boolean>()
+
+        assertTrue(json.contains("\"adaptOriginalAndroidLyric\":true"))
+        assertTrue(
+            applySettingsBackup(
+                json = json,
+                setString = { _, _ -> },
+                setBoolean = { key, value -> writtenBooleans[key] = value },
+            ),
+        )
+        assertTrue(writtenBooleans[SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE] == true)
+    }
 }

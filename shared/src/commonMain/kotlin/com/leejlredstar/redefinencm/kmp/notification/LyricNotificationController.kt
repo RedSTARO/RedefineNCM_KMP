@@ -9,6 +9,21 @@ package com.leejlredstar.redefinencm.kmp.notification
  * - Web: No-op (stub)
  */
 expect object LyricNotificationController {
+    /** Whether this target exposes an optional, extra lyric surface in Settings. */
+    val supportsOptionalSurfaceControl: Boolean
+
+    /** Platform-specific Settings label for the optional lyric surface. */
+    val optionalSurfaceSettingLabel: String
+
+    /**
+     * Enable or disable the optional lyric surface.
+     *
+     * Android maps this to the extra Live Update notification and Desktop maps it to the
+     * floating desktop-lyrics window. iOS Live Activity and Web lyrics are intentionally not
+     * controlled by this setting.
+     */
+    fun setOptionalSurfaceEnabled(enabled: Boolean)
+
     /**
      * Update the displayed lyric content.
      * @param title Song title

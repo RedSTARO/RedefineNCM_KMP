@@ -15,6 +15,7 @@ import com.leejlredstar.redefinencm.kmp.di.initKoin
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
+import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -39,8 +40,13 @@ class RedefineNCMApp : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         initKoin { androidContext(this@RedefineNCMApp) }
         val settings = KoinPlatform.getKoin().get<PlatformSettings>()
-        appScope.launch { settings.awaitLoaded() }
         LyricNotificationController.init(applicationContext)
+        appScope.launch {
+            settings.awaitLoaded()
+            LyricNotificationController.setOptionalSurfaceEnabled(
+                settings.getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false),
+            )
+        }
         registerDownloadedSongsObserver()
     }
 

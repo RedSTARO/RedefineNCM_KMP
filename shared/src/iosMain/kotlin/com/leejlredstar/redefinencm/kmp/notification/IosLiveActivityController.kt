@@ -24,6 +24,11 @@ import platform.posix.time
  *   Live Activity would require App-Group image caching (TODO).
  */
 actual object LyricNotificationController {
+    actual val supportsOptionalSurfaceControl: Boolean = false
+    actual val optionalSurfaceSettingLabel: String = ""
+
+    actual fun setOptionalSurfaceEnabled(enabled: Boolean) = Unit
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private val _liveActivityData = MutableStateFlow<LiveActivityData?>(null)

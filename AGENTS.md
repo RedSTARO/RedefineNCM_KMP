@@ -509,9 +509,10 @@ feature gap; platform integrations use target-specific actuals:
   color + spring animation), PlaylistDetail hero, and the full-screen player fallback.
 - **Search shared-element transition** (pill → bar) via `SharedTransitionLayout` in HomeScreen.
 - **Responsive nav**: NavigationRail on ≥600dp; no-cookie startup routes to Login.
-- **Settings**: server availability check (`/inner/version/`), `adaptOriginalAndroidLyric`
-  toggle (unconsumed, same as original); comment cache table; live-update notification uses
-  the lyric as its title (original behavior).
+- **Settings**: server availability check (`/inner/version/`); the legacy-persisted
+  `adaptOriginalAndroidLyric` value now controls the optional Android Live Update notification
+  and Desktop floating-lyrics window (default off, immediate enable/disable); iOS Live Activity
+  and Web lyrics remain independent. The live-update notification uses the lyric as its title.
 - **Update check on launch** (checkUpdate setting → GitHub releases/latest → Snackbar).
 - Skipped intentionally: `HiddenTestActivity`, `serverMocker` (dev tools), `dailysignin`
   (declared but never called in the original either).

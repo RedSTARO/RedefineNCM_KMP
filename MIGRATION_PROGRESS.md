@@ -47,7 +47,7 @@ media3 1.10.1 ・ androidx.palette 1.0.0 ・ compileSdk/targetSdk 36 / minSdk 24
 | Room 缓存（cache-then-network） | ✅ SQLDelight 9 表（含 CommentMusic、PlayerStatus） |
 | QR 登录 + Cookie 登录 | ✅（修复了二维码 bitmap 从未赋值导致不显示的 bug） |
 | UID 解析（缓存 → /user/account 兜底） | ✅（修复原 stub 不调 API 的问题；另支持换号后 refreshAccount） |
-| 设置页（server 检查按钮 + 全部开关 + 备份导入导出） | ✅（含 adaptOriginalAndroidLyric 开关，与原版一样暂无消费方） |
+| 设置页（server 检查按钮 + 全部开关 + 备份导入导出） | ✅（旧 adaptOriginalAndroidLyric 值现控制 Android 额外 Live Update / Desktop 桌面歌词，默认关闭并即时生效） |
 | 迷你播放条（图取色容器色 + 亮度自适应内容色 + spring 动画 + 跑马灯） | ✅ |
 | 封面取色（Palette muted→vibrant→dominant） | ✅ Android=Palette；JVM/Web=采样量化近似；iOS=stub |
 | 实况通知歌词（歌词作标题 + Android 16 Live Update + 媒体按钮） | ✅（Web 始终有页内歌词层和标题；已授权时同步系统通知） |
