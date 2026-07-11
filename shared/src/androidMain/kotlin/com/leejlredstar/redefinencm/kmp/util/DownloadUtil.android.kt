@@ -16,7 +16,7 @@ private const val DOWNLOAD_SUBDIR = "RedefineNCM"
  * Android-specific: scan the RedefineNCM download folder and return all downloaded songs.
  * Called once by [DownloadedSongsCache] and cached for O(1) lookups.
  */
-actual fun scanDownloadedSongs(): DownloadScanResult =
+actual suspend fun scanDownloadedSongs(): DownloadScanResult =
     runCatching {
         scanDownloadedSongFiles(validateMediaRows = true).values
             .sortedWith(
@@ -196,7 +196,7 @@ private fun scanLegacyDownloadDir(targetSongId: Long?): Map<Long, DownloadedSong
     }
 }
 
-actual fun deleteDownloadedSongFile(songId: Long): Boolean {
+actual suspend fun deleteDownloadedSongFile(songId: Long): Boolean {
     var deleted = false
     val context = runCatching { KoinPlatform.getKoin().get<Context>() }.getOrNull()
     if (context != null) {

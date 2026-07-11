@@ -28,7 +28,7 @@ sealed interface DownloadScanResult {
 }
 
 /** Scans the RedefineNCM download folder without collapsing failures into an empty library. */
-expect fun scanDownloadedSongs(): DownloadScanResult
+expect suspend fun scanDownloadedSongs(): DownloadScanResult
 
 /** Deletes local audio files for [songId] from the RedefineNCM download folder. */
-expect fun deleteDownloadedSongFile(songId: Long): Boolean
+expect suspend fun deleteDownloadedSongFile(songId: Long): Boolean

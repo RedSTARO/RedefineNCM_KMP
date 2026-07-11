@@ -1,25 +1,35 @@
 package com.leejlredstar.redefinencm.kmp.di
 
 import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
+import com.leejlredstar.redefinencm.kmp.data.db.DatabaseDriverFactory
+import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.player.WebPlatformPlayer
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.js.Js
 import org.koin.dsl.module
 
-// NOTE: dormant until the wasmJs target is declared in shared/build.gradle.kts (decision D2).
 actual fun platformModule() = module {
-    // Ktor HttpClient (JS engine) configured with base URL + realIP + cookie from settings.
+    // The Fetch API forbids a user-defined Cookie header. NCM API accepts the same cookie value
+    // as a query parameter, so Web uses that transport and disables URL logging in the factory.
     single<HttpClient> {
         val settings = get<PlatformSettings>()
         HttpClientFactory.create(
-            baseUrl = settings.getString(SettingKeys.SERVER, "http://ncm.tryagain.icu/"),
+            baseUrl = settings.getString(SettingKeys.SERVER, "https://ncm.tryagain.icu/"),
             realIP = "192.168.1.1",
             cookieProvider = { settings.getString(SettingKeys.COOKIE, "") },
             engineFactory = Js,
+            cookieTransport = HttpClientFactory.CookieTransport.QUERY_PARAMETER,
         )
     }
 
     // PlatformSettings backed by localStorage
     single { PlatformSettings() }
+
+    // SQLDelight over the synchronous browser-storage driver.
+    single { DatabaseDriverFactory() }
+
+    // Real browser audio output; overrides the common in-memory reference player.
+    single<PlatformPlayer> { WebPlatformPlayer(get(), get()) }
 }

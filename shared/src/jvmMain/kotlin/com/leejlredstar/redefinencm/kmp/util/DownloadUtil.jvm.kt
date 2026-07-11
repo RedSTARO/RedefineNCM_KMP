@@ -2,7 +2,7 @@ package com.leejlredstar.redefinencm.kmp.util
 
 import java.io.File
 
-actual fun scanDownloadedSongs(): DownloadScanResult = runCatching {
+actual suspend fun scanDownloadedSongs(): DownloadScanResult = runCatching {
     val dir = jvmDownloadDirectory()
     if (!dir.exists()) return@runCatching emptyList()
     check(dir.isDirectory) { "下载路径不是目录：$dir" }
@@ -29,7 +29,7 @@ actual fun scanDownloadedSongs(): DownloadScanResult = runCatching {
     onFailure = { error -> DownloadScanResult.Failure("无法读取桌面下载目录", error) },
 )
 
-actual fun deleteDownloadedSongFile(songId: Long): Boolean {
+actual suspend fun deleteDownloadedSongFile(songId: Long): Boolean {
     val dir = jvmDownloadDirectory()
     if (!dir.exists() || !dir.isDirectory) return false
     var deleted = false

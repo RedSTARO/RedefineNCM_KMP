@@ -10,7 +10,7 @@ import platform.Foundation.NSUserDomainMask
 
 private const val DOWNLOAD_SUBDIR = "RedefineNCM"
 
-actual fun scanDownloadedSongs(): DownloadScanResult = runCatching {
+actual suspend fun scanDownloadedSongs(): DownloadScanResult = runCatching {
     val dir = iosDownloadDirectoryPath()
     val manager = NSFileManager.defaultManager
     if (!manager.fileExistsAtPath(dir)) return@runCatching emptyList()
@@ -29,7 +29,7 @@ actual fun scanDownloadedSongs(): DownloadScanResult = runCatching {
     onFailure = { error -> DownloadScanResult.Failure("无法读取 iOS 下载目录", error) },
 )
 
-actual fun deleteDownloadedSongFile(songId: Long): Boolean {
+actual suspend fun deleteDownloadedSongFile(songId: Long): Boolean {
     val dir = iosDownloadDirectoryPath()
     val manager = NSFileManager.defaultManager
     val entries = manager.contentsOfDirectoryAtPath(dir, error = null).orEmpty()

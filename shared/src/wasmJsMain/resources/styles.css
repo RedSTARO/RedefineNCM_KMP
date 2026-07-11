@@ -1,0 +1,49 @@
+html,
+body,
+#redefineNcmApp {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+html,
+body {
+    overflow: hidden;
+    overscroll-behavior: none;
+    background: #101116;
+}
+
+canvas {
+    display: block;
+}
+
+#redefineNcmApp {
+    visibility: hidden;
+}
+
+#redefineNcmBoot {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483647;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 14px;
+    color: #d7e5df;
+    background: #101116;
+    font: 600 15px/1.5 system-ui, "Microsoft YaHei", sans-serif;
+}
+
+.boot-spinner {
+    width: 34px;
+    height: 34px;
+    border: 3px solid rgba(119, 210, 181, .22);
+    border-top-color: #77d2b5;
+    border-radius: 50%;
+    animation: boot-spin .8s linear infinite;
+}
+
+@keyframes boot-spin {
+    to { transform: rotate(360deg); }
+}

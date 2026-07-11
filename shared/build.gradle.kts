@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.Property
@@ -86,6 +87,17 @@ kotlin {
     }
     
     jvm()
+
+    @OptIn(ExperimentalWasmDsl::class)
+    wasmJs {
+        outputModuleName = "redefinencm"
+        browser {
+            commonWebpackConfig {
+                outputFileName = "redefinencm.js"
+            }
+        }
+        binaries.executable()
+    }
     
     androidLibrary {
        namespace = "com.leejlredstar.redefinencm.kmp.shared"
@@ -152,6 +164,7 @@ kotlin {
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
+            implementation(libs.kotlinx.coroutines.test)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
@@ -175,6 +188,14 @@ kotlin {
                 // Linux desktop transport controls: a real MPRIS service on the session D-Bus.
                 implementation(libs.dbus.java.core)
                 runtimeOnly(libs.dbus.java.native.unixsocket)
+            }
+        }
+        wasmJsMain {
+            // AMLL 静态资源与 Android/Desktop 使用同一份源文件，避免 Web 打包出旧副本。
+            resources.srcDir("src/commonMain/amllAssets")
+            dependencies {
+                implementation(libs.kotlinx.browser)
+                implementation(libs.ktor.client.js)
             }
         }
     }
