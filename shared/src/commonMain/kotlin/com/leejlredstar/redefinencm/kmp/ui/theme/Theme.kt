@@ -42,11 +42,13 @@ fun RedefineNCMTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
+    val fontFamily = LocalPreloadedFontFamily.current ?: platformFontFamily()
+    val typography = ExpressiveTypography.withFontFamily(fontFamily)
     MaterialExpressiveTheme(
         colorScheme = if (darkTheme) DarkColors else LightColors,
         motionScheme = MotionScheme.expressive(),
         shapes = ExpressiveShapes,
-        typography = ExpressiveTypography,
+        typography = typography,
         content = content,
     )
 }

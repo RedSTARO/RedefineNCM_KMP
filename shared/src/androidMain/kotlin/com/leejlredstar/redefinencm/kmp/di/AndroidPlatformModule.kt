@@ -16,7 +16,7 @@ actual fun platformModule() = module {
     single<HttpClient> {
         val settings = get<PlatformSettings>()
         HttpClientFactory.create(
-            baseUrl = settings.getString(SettingKeys.SERVER, "http://ncm.tryagain.icu/"),
+            baseUrl = settings.getString(SettingKeys.SERVER, "https://ncm.tryagain.icu/"),
             realIP = "192.168.1.1",
             cookieProvider = { settings.getString(SettingKeys.COOKIE, "") },
             engineFactory = OkHttp,

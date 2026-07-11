@@ -31,7 +31,7 @@ object DownloadedSongsCache {
 
     fun snapshot(): Map<Long, DownloadedSongSnapshot> = cacheState.value.snapshots
 
-    fun refreshSnapshots(): DownloadScanResult {
+    suspend fun refreshSnapshots(): DownloadScanResult {
         val revisionAtStart = cacheState.value.revision
         return when (val scanResult = scanDownloadedSongs()) {
             is DownloadScanResult.Failure -> scanResult

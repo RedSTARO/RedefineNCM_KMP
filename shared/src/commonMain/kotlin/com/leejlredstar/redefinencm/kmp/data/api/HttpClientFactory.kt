@@ -20,7 +20,8 @@ import kotlinx.serialization.json.Json
  * - sets the configurable base URL (without it, `NCMApi`'s relative paths can't resolve),
  * - injects the `realIP` query parameter on every request,
  * - injects a `timestamp` query parameter on every request (cache-buster),
- * - attaches the cleaned auth cookie as a header when present.
+ * - attaches the cleaned auth cookie as a header when present (or as the browser API's `cookie`
+ *   query parameter on Web, where Fetch forbids setting the Cookie header).
  *
  * Deviation from the original: the original skipped the cookie for login paths. Ktor's
  * `defaultRequest` runs before the per-request path is merged, so a path check there is not
@@ -35,11 +36,17 @@ import kotlinx.serialization.json.Json
  */
 object HttpClientFactory {
 
+    enum class CookieTransport {
+        HEADER,
+        QUERY_PARAMETER,
+    }
+
     fun create(
         baseUrl: String,
         realIP: String,
         cookieProvider: () -> String,
         engineFactory: HttpClientEngineFactory<*>,
+        cookieTransport: CookieTransport = CookieTransport.HEADER,
     ): HttpClient {
         return HttpClient(engineFactory) {
             install(ContentNegotiation) {
@@ -51,7 +58,14 @@ object HttpClientFactory {
             }
             install(Logging) {
                 logger = Logger.DEFAULT
-                level = LogLevel.HEADERS
+                // Browsers forbid setting Cookie headers, so the Web target sends the cookie as
+                // an API query parameter. Disable request logging there or the credential would
+                // be printed as part of the URL.
+                level = if (cookieTransport == CookieTransport.QUERY_PARAMETER) {
+                    LogLevel.NONE
+                } else {
+                    LogLevel.HEADERS
+                }
                 // 绝不把会话 Cookie（账号凭证）打进日志——只留占位，避免凭证泄漏到 logcat/控制台
                 sanitizeHeader { header -> header == HttpHeaders.Cookie }
             }
@@ -72,7 +86,10 @@ object HttpClientFactory {
                 // 每请求现取 cookie：登录写入 settings 后无需重启即刻生效
                 val cleanedCookie = cleanCookie(cookieProvider())
                 if (cleanedCookie.isNotEmpty()) {
-                    header(HttpHeaders.Cookie, cleanedCookie)
+                    when (cookieTransport) {
+                        CookieTransport.HEADER -> header(HttpHeaders.Cookie, cleanedCookie)
+                        CookieTransport.QUERY_PARAMETER -> url.parameters.append("cookie", cleanedCookie)
+                    }
                 }
             }
             expectSuccess = false
@@ -124,7 +141,9 @@ suspend fun <T> safeApiCall(apiCall: suspend () -> T): T? {
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        println("safeApiCall failed: ${e.message}")
+        // Exception messages from HTTP clients can contain the complete request URL. Web sends
+        // the NCM cookie as a query parameter, so logging the message could expose credentials.
+        println("safeApiCall failed: ${e::class.simpleName ?: "Exception"}")
         null
     }
 }

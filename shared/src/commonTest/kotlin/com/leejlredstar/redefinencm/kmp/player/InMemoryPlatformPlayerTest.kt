@@ -1,16 +1,19 @@
 package com.leejlredstar.redefinencm.kmp.player
 
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class InMemoryPlatformPlayerTest {
     private val tracks = List(5) { index ->
         MediaInfo(id = index.toString(), title = "track-$index", artist = "artist")
@@ -36,22 +39,29 @@ class InMemoryPlatformPlayerTest {
     }
 
     @Test
-    fun concurrentQueueCommandsPreserveSnapshotInvariant() = runBlocking {
+    fun concurrentQueueCommandsPreserveSnapshotInvariant() = runTest {
         val player = InMemoryPlatformPlayer()
         try {
             player.setQueue(tracks, startIndex = 2)
             coroutineScope {
-                launch(Dispatchers.Default) {
-                    repeat(200) { iteration -> player.setShuffleEnabled(iteration % 2 == 0) }
+                launch {
+                    repeat(200) { iteration ->
+                        player.setShuffleEnabled(iteration % 2 == 0)
+                        yield()
+                    }
                 }
-                launch(Dispatchers.Default) {
+                launch {
                     repeat(200) {
                         player.seekToNext()
                         player.seekToPrevious()
+                        yield()
                     }
                 }
-                launch(Dispatchers.Default) {
-                    repeat(200) { iteration -> player.skipToIndex(iteration % tracks.size) }
+                launch {
+                    repeat(200) { iteration ->
+                        player.skipToIndex(iteration % tracks.size)
+                        yield()
+                    }
                 }
             }
 
@@ -102,14 +112,15 @@ class InMemoryPlatformPlayerTest {
     }
 
     @Test
-    fun singleTrackNaturalCompletionReachesEnded() = runBlocking {
-        val player = InMemoryPlatformPlayer(tickerIntervalMs = 1L)
+    fun singleTrackNaturalCompletionReachesEnded() = runTest {
+        val player = InMemoryPlatformPlayer(scope = backgroundScope, tickerIntervalMs = 1L)
         try {
             player.setQueue(
                 listOf(MediaInfo(id = "single", title = "Single", artist = "Artist", duration = 1L))
             )
             player.play()
-            delay(20L)
+            advanceTimeBy(1L)
+            runCurrent()
 
             assertEquals(PlayerState.ENDED, player.state.value)
             assertFalse(player.isPlaying.value)

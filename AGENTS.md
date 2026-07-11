@@ -37,7 +37,7 @@ Targets, in priority order:
 | **Android** | P0 | Live-update **notification** lyric (`MediaStyle` / custom notification) |
 | **iOS** | P0 | **Live Activities → 灵动岛 (Dynamic Island)** + Lock Screen lyric |
 | **Desktop / JVM** | P0 | **Floating always-on-top desktop-lyrics window** + **Windows SMTC** (System Media Transport Controls); MPRIS on Linux, MPNowPlayingInfoCenter on macOS |
-| **Web / WASM** | P3 (lowest) | Basic playback; scaffolded, not feature-complete |
+| **Web / WASM** | P3 (enabled) | Browser audio + Media Session, OPFS offline downloads, in-page/system lyric surface |
 
 The app talks to a self-hosted
 [NeteaseCloudMusicApi](https://github.com/Binaryify/NeteaseCloudMusicApi)-style backend
@@ -46,7 +46,7 @@ typically against a server on the same LAN or localhost (so cleartext HTTP must 
 
 ### Active goals driving current work
 
-1. Complete the KMP migration to all four targets (Android, iOS, Desktop first; Web last).
+1. Keep all four enabled targets behaviorally aligned as common features evolve.
 2. Per-platform "now playing" surfaces: Android notification → **iOS Dynamic Island**,
    **desktop floating lyric window**, **Windows media protocol (SMTC)**.
 3. **Material 3 Expressive** UI, applied consistently here **and** kept aligned in the
@@ -71,22 +71,27 @@ Gradle plugin names the source set **`jvmMain`** (and `jvmTest`). The `desktopMa
 be deleted. All desktop-specific code lives in `jvmMain/`. (If a future change switches to
 `jvm("desktop")`, do the rename in one commit and update this decision — do not leave both.)
 
-### D2 — `wasmJs` target is intentionally deferred (web is P3)
+### D2 — `wasmJs` browser target is enabled — **DONE (updated 2026-07-11)**
 
-`wasmJsMain/` source exists but the `wasmJs` target is **deliberately not declared** in
-`shared/build.gradle.kts` yet — so that source is currently dormant (not compiled). Rationale:
-web is the lowest priority, and declaring the target pulls web-only deps whose versions add
-risk to the P0 build (`ktor-client-js`, `kotlinx-browser` for `localStorage`). When web is
-prioritized, declare `wasmJs { browser(); binaries.executable() }`, add those deps, and
-reconcile `Platform.wasm.kt` with the real `Platform` interface. Stubs are acceptable; full
-parity is not required.
+`shared/build.gradle.kts` declares `wasmJs { browser(); binaries.executable() }` and compiles
+`wasmJsMain/` as the fourth production target. Web uses the same common Compose screens,
+navigation, repository, queue invariant, settings and download orchestration as the native
+targets. Platform actuals provide `HTMLAudioElement` playback, Media Session transport controls,
+browser-history back handling, browser-storage-backed SQLDelight queries, OPFS downloads and
+offline playback, palette extraction, settings import/export, and a visible lyric surface. Web
+also bundles Noto Sans SC and preloads it before exposing the Compose canvas, because CanvasKit
+cannot rely on host CJK fonts for dynamic Chinese song titles and lyrics.
+
+Page lifecycle is a locked behavior: `visibilitychange` to hidden, `pagehide`, and
+`beforeunload` must pause playback. Pausing must also invalidate an in-flight stream-URL lookup,
+otherwise a late response can start audio after the page has been left.
 
 ### D3 — Local cache is SQLDelight — **DONE (updated 2026-07-10)**
 
 The original caches via Room (cache-then-network). The KMP replacement is **SQLDelight**, now
 fully wired: plugin + 9 `.sq` tables under `shared/src/commonMain/sqldelight/` (user detail /
 user playlist / playlist detail / playlist tracks / recommend ×2 / lyric / comment /
-**PlayerStatus**) + `DatabaseDriverFactory` expect/actuals (android/native/sqlite). `Repository`
+**PlayerStatus**) + `DatabaseDriverFactory` expect/actuals (android/native/sqlite/browser storage). `Repository`
 implements cache-then-network for all cached endpoints and persists/restores the play queue
 via the `PlayerStatus` table. Schema version 2 includes a formal `1.sqm` migration for the
 playlist detail/tracks, comment, and player-status tables; platform drivers must use
@@ -111,7 +116,7 @@ Platform actuals:
 | Android | Live-update `Notification` (MediaStyle / custom RemoteViews) on a channel | Media3 `MediaSession` |
 | iOS | ActivityKit **Live Activity** → Dynamic Island + Lock Screen | `MPNowPlayingInfoCenter` / `MPRemoteCommandCenter` |
 | Desktop (JVM) | Frameless, always-on-top **Compose floating window** | **Windows SMTC** (JNA/COM); **MPRIS** (D-Bus) on Linux |
-| Web (WASM) | No-op stub | No-op stub |
+| Web (WASM) | In-page lyric pill + document title; system notification when permission is already granted | Browser Media Session metadata/actions + `HTMLAudioElement` |
 
 **iOS bridge pattern (updated decision, 2026-07-10):** Kotlin does **not** call ActivityKit
 directly. `LyricNotificationController` exposes `LiveActivityData` to the Swift main-app
@@ -232,8 +237,9 @@ RedefineNCM_KMP/
 │       ├── jvmMain/      …/Platform.jvm.kt, notification/DesktopFloatingWindowController.kt,
 │       │                  smtc/WindowsMediaControls.kt (native WinRT SMTC binding),
 │       │                  di/JvmPlatformModule.kt, util/JvmSettings.kt
-│       ├── wasmJsMain/   …/Platform.wasm.kt, notification/WasmNotificationStub.kt,
-│       │                  di/WasmPlatformModule.kt, util/WasmSettings.kt  (⚠ target not declared — D2)
+│       ├── wasmJsMain/   …/main.kt, Platform.wasm.kt, player/WebPlatformPlayer.kt,
+│       │                  notification/, data/db/BrowserStorageSqlDriver.kt,
+│       │                  di/WasmPlatformModule.kt, util/{WasmSettings,WebDownloadStorage}.kt
 │       ├── commonTest/   SharedCommonTest.kt (placeholder)
 │       └── jvmTest/      player/PlayQueueTest.kt (shuffle invariant regression suite — passes)
 ├── androidApp/    AGP application; MainActivity; PlaybackService (MediaSessionService);
@@ -310,6 +316,7 @@ in — see Goal #4).
 | Concurrency | `kotlinx-coroutines-core 1.11.0` | commonMain |
 | DI | Koin `4.2.1`: koin-core, koin-compose | commonMain |
 | Images | Coil `3.5.0`: coil-compose (group `io.coil-kt.coil3`) | commonMain |
+| Web runtime | `kotlinx-browser 0.5.0` + Ktor JS engine `3.5.0` | wasmJsMain |
 | Android settings | `androidx.datastore:datastore-preferences 1.2.0` | androidMain |
 | Android audio | `media3-exoplayer 1.10.1` + `media3-session 1.10.1` | androidMain + :androidApp |
 
@@ -422,7 +429,8 @@ Applies to all platforms, and the original Android repo is kept aligned (goal #3
 ## Build & run
 
 Prereqs: JDK 17, Android SDK (compileSdk 36 / build-tools / minSdk 24), Xcode 16+ (iOS,
-macOS only), IntelliJ IDEA / Android Studio with the KMP plugin.
+macOS only), IntelliJ IDEA / Android Studio with the KMP plugin. Web browser tests require a
+locally available Chrome/Chromium-compatible headless browser.
 
 ```sh
 # Android
@@ -432,13 +440,24 @@ macOS only), IntelliJ IDEA / Android Studio with the KMP plugin.
 ./gradlew :shared:jvmTest
 # iOS (macOS only) — then open iosApp/iosApp.xcodeproj in Xcode
 ./gradlew :shared:iosSimulatorArm64Test
-# Web (after D2 — declaring the wasmJs target)
-./gradlew :shared:wasmJsBrowserRun
+# Web development server
+./gradlew :shared:wasmJsBrowserDevelopmentRun
+# Web browser tests + production static distribution
+./gradlew :shared:wasmJsBrowserTest :shared:wasmJsBrowserDistribution
 # All tests
 ./gradlew :shared:allTests
 ```
 
 `usesCleartextTraffic="true"` must be set in `androidApp`'s manifest (self-hosted HTTP API).
+
+The Web production distribution is emitted at
+`shared/build/dist/wasmJs/productionExecutable/`. Deploy it as a static site with the correct
+`.wasm` MIME type. Browser networking requires CORS from the configured API/audio/image hosts;
+an HTTPS page cannot call HTTP resources. Fetch cannot set a `Cookie` header, so Web sends the
+cleaned cookie through the API's `cookie` query parameter. OPFS downloads require HTTPS or
+`localhost` plus browser OPFS support. Browser autoplay, Media Session and Notification support
+remain browser policy/capability boundaries; rejected autoplay leaves the player paused, and
+lyrics remain visible in-page even when system notification support is unavailable.
 
 ---
 
@@ -448,8 +467,8 @@ This is the **only** section describing what's broken/missing. Treat it as the w
 Everything above describes the target; everything here is a gap to close.
 
 ### Feature-parity pass vs the original app — DONE + BUILD-VERIFIED (2026-07-04)
-Full file-by-file audit against `../RedefineNCM` (frozen 2026-06-12), then closed every gap
-(Android + common; other targets get stubs per current priority):
+Full file-by-file audit against `../RedefineNCM` (frozen 2026-06-12), then closed every common
+feature gap; platform integrations use target-specific actuals:
 - **fetchUID** now really calls `/user/account` and caches the UID (was a stub that never
   fetched); `refreshAccount()` clears it on account switch.
 - **QR login fix**: the QR PNG bytes were never assigned → image never showed; now decoded
@@ -488,12 +507,12 @@ Full file-by-file audit against `../RedefineNCM` (frozen 2026-06-12), then close
 - Skipped intentionally: `HiddenTestActivity`, `serverMocker` (dev tools), `dailysignin`
   (declared but never called in the original either).
 
-### Build catalog — DONE + BUILD-VERIFIED (Android + Desktop, 2026-06-11)
+### Build catalog — DONE + BUILD-VERIFIED (Android + Desktop + Web, updated 2026-07-11)
 - [x] `libs.versions.toml` + `shared/build.gradle.kts` declare every dependency the code imports
       (Ktor 3.5.0, kotlinx-serialization-json 1.11.0 + plugin, kotlinx-coroutines-core 1.11.0,
       Koin 4.2.1 + koin-android, Coil 3.5.0 coil-compose, datastore + androidx.core on androidMain,
-      `compose.materialIconsExtended` + `compose.material3` on :desktopApp). Engines scoped per
-      source set (okhttp/darwin/cio).
+      `compose.material3` on :desktopApp, and the Web browser dependencies). Engines are scoped
+      per source set (OkHttp on Android/JVM, Darwin on iOS, JS/Fetch on Web).
 - [x] kotlinx-serialization Gradle plugin applied (root `apply false` + `:shared`).
 - [x] Dead `shared/src/desktopMain/` deleted (D1).
 - [x] **VERIFIED GREEN:** `:shared:compileKotlinJvm`, `:desktopApp:compileKotlin`,
@@ -503,8 +522,12 @@ Full file-by-file audit against `../RedefineNCM` (frozen 2026-06-12), then close
       KDoc `/*`, `defaultRequest` lacking `parameter()` (use `url.parameters.append`), missing
       platform color extraction actuals, desktopApp missing material3, androidx.core too old for
       `setRequestPromotedOngoing`, and a `PlayQueueTest` `List<String>`/`List<String?>` inference.
-- Note: `compose.materialIconsExtended` is deprecated (pinned 1.7.3, no updates) — works for now;
-  migrate to Material Symbols / vector resources eventually.
+- [x] **Web verified locally:** `:shared:compileKotlinWasmJs`,
+      `:shared:wasmJsBrowserTest`, and `:shared:wasmJsBrowserDistribution` pass on Windows;
+      Chrome Headless covers SQL persistence, page-exit lifecycle, and a real OPFS
+      download/scan/blob-URL/delete round trip. The same tasks are enforced by `build-web` CI.
+- [x] Deprecated `compose.materialIconsExtended` removed; shared self-drawn Material Symbols are
+      used instead (2026-07-04).
 
 ### Goal #4 toolchain convergence — Kotlin DONE+verified; AGP deferred
 - [x] **Kotlin `2.3.21 → 2.4.0`** (+ CMP `1.11.0 → 1.11.1`) — bumped and **build-verified** on
@@ -518,58 +541,38 @@ Full file-by-file audit against `../RedefineNCM` (frozen 2026-06-12), then close
 - [x] **`Greeting.kt` / `GreetingUtil.kt` + `compose-multiplatform.xml` deleted** (2026-06-13) — template stubs removed; no references existed.
 - [x] **Unused `ImageColorExtractor` expect/actual chain, template tests, duplicate YRC/download
       reconciliation code, and tracked runtime artifacts removed** (2026-07-10).
-- [ ] **`wasmJsMain/` is dormant** (D2: target intentionally not declared; web is P3). Its
-      `Platform.wasm.kt` and `WasmNotificationStub` reference an interface shape that doesn't
-      exist (`Platform.isDesktop/isMobile`) — they must be reconciled with the real
-      `Platform` interface (which currently has only `name`) **and** the wasm deps added
-      (`ktor-client-js`, `kotlinx-browser` for `localStorage`) when web is enabled.
+- [x] **`wasmJsMain/` enabled and completed** (2026-07-11) — target, entry point, dependencies,
+      real browser player, Media Session, local persistence, OPFS download/offline playback,
+      platform actuals, browser tests and production distribution are wired. Page hiding/exiting
+      pauses playback and cancels pending stream resolution.
 
 ### Latent runtime gaps (compile fine; will surface when exercised)
-- [x] **HttpClient base URL / cookie wired** (2026-06-11) — every `platformModule()` now builds
-      its client via `HttpClientFactory.create(baseUrl, realIP, cookie, engine)`, sourcing
-      `baseUrl` (SettingKeys.SERVER, default `http://ncm.tryagain.icu/`) and `cookie`
+- [x] **HttpClient base URL / cookie wired** (updated 2026-07-11) — every `platformModule()` now builds
+      its client via `HttpClientFactory.create(baseUrl, realIP, cookieProvider, engine)`, sourcing
+      `baseUrl` (SettingKeys.SERVER, default `https://ncm.tryagain.icu/`) and `cookie`
       (SettingKeys.COOKIE) from `PlatformSettings`. `HttpClientFactory.create` was completed to
       port the original's interceptor (base URL + `realIP` 192.168.1.1 + `timestamp` cache-buster
-      via Ktor `getTimeMillis()` + cleaned cookie header). Remaining nuances: (a) the client is a
-      Koin singleton built once, so changing server/cookie takes effect next launch (matches the
-      original `RetrofitInstance` object); (b) cookie is attached whenever non-empty rather than
-      skipped on `/login/*` (Ktor `defaultRequest` can't see the per-request path) — refine with a
-      send-pipeline interceptor if strict per-path skipping is needed.
+      via Ktor `getTimeMillis()` + cleaned cookie). The base URL is fixed when the Koin singleton
+      is created, so changing the server takes effect next launch; the cookie provider is read on
+      every request, so login/logout applies immediately. Native targets send the cookie header;
+      Web uses the API-compatible `cookie` query parameter because Fetch forbids that header.
+      A non-empty cookie is attached to login paths too, matching the existing port behavior.
 - [x] **`kotlinx-coroutines-swing` added to `shared/jvmMain`** (2026-06-13) — `Dispatchers.Main` now resolvable in `jvmTest` and `DesktopFloatingWindowController`; still present in `desktopApp` (harmless duplicate).
 - [x] **Coil network fetcher added** (`coil-network-ktor3`) — remote album art loads;
       `RedefineNCMApp` registers `KtorNetworkFetcherFactory`.
-- [ ] **`Platform` interface has only `name`.** If form-factor branching is wanted, add
-      `isDesktop`/`isMobile` (with defaults) to the interface and update all actuals — the
-      removed `desktopMain` and the dormant wasm code assumed these existed.
+- [x] **`Platform` form-factor flags reconciled** — `isDesktop`/`isMobile` have common defaults;
+      all enabled targets, including Web, compile against the same interface.
 
 ### Misplaced / misnamed
 - [x] **`MediaControlsIntegrator` moved to commonMain** (2026-06-11) — now in
       `commonMain/smtc/MediaControls.kt`; the misnamed `jvmMain/.../WindowsSmtcIntegration.kt` was
       deleted and replaced by `jvmMain/smtc/WindowsMediaControls.kt` (the OS binding home).
 
-### Implemented as stub / not wired
-- [~] **`App.kt` now renders the real screen** (2026-06-11) — `App()` is
-      `RedefineNCMTheme { Surface { NowPlayingScreen() } }` (no more "Click me!" template).
-      DI graph is now both defined *and* initialised; **build-unverified** but reasoning-verified:
-      - [x] **PlatformPlayer binding** — `sharedModule` binds `InMemoryPlatformPlayer` (pure-Kotlin
-        reference player over the tested `PlayQueue`; no real audio). Android `platformModule()` now
-        overrides this with `ExoPlayerPlatformPlayer` (see Android audio backend below).
-      - [x] **Fixed latent DI bug** — `NowPlayingViewModel` was bound with 3 `get()`s but its 3rd
-        param `lyricBus = LyricBus` is an object default → now 2 `get()`s.
-      - [x] **`initKoin()` wired in all entry points** — idempotent `initKoin(config)` in
-        `di/Modules.kt` (guards on `GlobalContext.getOrNull()`). Desktop `main.kt` and iOS
-        `MainViewController` call `initKoin()`; Android `RedefineNCMApp : Application` calls
-        `initKoin { androidContext(this) }` (so `PlatformSettings(get())` resolves the Context) +
-        `LyricNotificationController.init(...)`. Added `koin-android` to `:androidApp`; registered
-        the Application + INTERNET/POST_NOTIFICATIONS perms + `usesCleartextTraffic` in the manifest.
-      - **BUILD-VERIFIED on Android + Desktop (2026-06-11):** `:androidApp:assembleDebug` (APK),
-        `:desktopApp:compileKotlin`, `:shared:jvmTest` all green — the DI graph (incl. koin-compose
-        global-context fallback) compiles/assembles; the Android Application + manifest are valid.
-        **iOS path unverified** (no Mac). Now (2026-06-11): **Home is the entry** + a hand-rolled
-        back-stack nav (`App.kt`) with Home / Search / PlaylistDetail / Login / NowPlaying screens,
-        all M3 Expressive and build-verified. Remaining: (1) User + Settings screens + QR-login UI;
-        (2) RUN it (`:desktopApp:run`, GUI) to confirm runtime DI/render; JVM audio backend still
-        needed (Desktop still uses `InMemoryPlatformPlayer`); iOS AVPlayer backend deferred (needs Mac).
+### Platform integration status
+- [x] **App, DI and real players are wired on all enabled targets.** `initKoin()` runs from every
+      entry point; Android binds `ExoPlayerPlatformPlayer`, Desktop binds `JvmMediaPlayer`, iOS
+      binds `IosAVPlayer`, and Web binds `WebPlatformPlayer`. Android, Desktop and Web are
+      build-verified in this repository; iOS source remains macOS/Xcode-gated.
 - [x] **Android audio backend — ExoPlayer + MediaSession, BUILD-VERIFIED** (2026-06-13).
       `media3-exoplayer 1.10.1` + `media3-session` added to `androidMain` (and to `:androidApp`
       directly for `PlaybackService`).
@@ -588,31 +591,16 @@ Full file-by-file audit against `../RedefineNCM` (frozen 2026-06-12), then close
         `lyricMap` → `lyricIndex` + calls `LyricNotificationController.updateLyric(...)`.
       - **Build-verified:** `:shared:compileAndroidMain`, `:androidApp:compileDebugKotlin`,
         `:androidApp:assembleDebug` (APK), `:shared:compileKotlinJvm`, `:shared:jvmTest` all green.
-      - **Remaining for JVM/Desktop:** JVM player backed by `mp3spi` / `javax.sound.sampled` (the
-        Desktop still uses `InMemoryPlatformPlayer`).
-      - **Remaining for iOS:** AVPlayer-backed `PlatformPlayer` in `iosMain` (needs Mac + Xcode).
-- [~] **Windows SMTC — pipeline wired (compile-verified), native OS binding TODO** (2026-06-11).
-      `MediaControlMetadata` + `MediaControlsIntegrator` are in `commonMain/smtc/MediaControls.kt`;
-      `NowPlayingViewModel` feeds it (title/artist/album/duration/isPlaying); `jvmMain/smtc/
-      WindowsMediaControls` observes it (started from `desktopApp/main.kt`). The final OS push is a
-      no-op pending a **native WinRT helper DLL** (SMTC has no runtime-verifiable JVM/JNA-WinRT
-      path) — precise recipe is in the `WindowsMediaControls` KDoc. Linux MPRIS / macOS
-      MPNowPlayingInfoCenter are analogous, also TODO.
-- [~] **iOS Live Activity — Swift source written** (2026-06-11), Xcode target wiring is the only
-      remaining (build-gated) step. Added: `iosApp/LyricWidget/` (`LyricActivityAttributes`,
-      `LyricLiveActivity` = Lock Screen + Dynamic Island UI, `LyricWidgetBundle`, `Info.plist`),
-      `iosApp/iosApp/LiveActivityManager.swift` (drives `Activity.request/update/end` from the
-      Kotlin stream), `iOSApp.swift` starts it, app `Info.plist` sets `NSSupportsLiveActivities`.
-      Kotlin `LyricNotificationController` gained `startObserving/stopObserving` for Swift. Uses
-      ActivityKit `ContentState` (no App Group needed for text; artwork-in-LA = App-Group TODO).
-      **Remaining:** add the Widget Extension target in Xcode + target memberships — see
-      `iosApp/LyricWidget/SETUP.md`. Like all platform now-playing surfaces, it only shows once
-      the playback/lyric pipeline calls `LyricNotificationController.updateLyric(...)`.
+- [x] **Desktop native media controls are implemented.** Windows SMTC uses direct JNA/COM WinRT
+      interop without a helper DLL; Linux uses MPRIS. Both consume the shared metadata and player
+      command pipeline.
+- [x] **iOS Live Activity source and Xcode target are wired.** Kotlin publishes serial
+      `LiveActivityData`; Swift drives ActivityKit and the LyricWidget extension renders Lock Screen
+      and Dynamic Island content. Runtime verification still requires macOS and a real iOS build.
 - [x] **Desktop floating window is wired** (2026-06-11) — `desktopApp/main.kt` now opens a
       second frameless / translucent / always-on-top Compose window that renders
       `DesktopFloatingWindowController`'s `floatingLyricData` when `isWindowVisible` is true.
-      Remaining: the playback/lyric pipeline must call `LyricNotificationController.show()` +
-      `updateLyric(...)` to populate it (today nothing drives it, so it stays hidden).
+      The common playback/lyric pipeline drives `LyricNotificationController.updateLyric(...)`.
 - [x] **`Theme.kt` now uses real `MaterialExpressiveTheme`** (2026-06-11) with
       `MotionScheme.expressive()` + the Expressive shape/type scales. Remaining: dynamic /
       album-art–derived color schemes via an expect/actual provider (`dynamicColorScheme` is
@@ -622,12 +610,14 @@ Full file-by-file audit against `../RedefineNCM` (frozen 2026-06-12), then close
 - [x] **SQLDelight cache** (D3) — DONE (plugin + 9 tables + drivers + cache-then-network +
       PlayerStatus queue persistence; build-verified 2026-07-04).
 - [x] **`PlayQueue` + `PlayQueueTest`** (shuffle regression suite) — DONE (2026-06-11), pure
-      Kotlin, fully reasoned (build-unverified like everything here). Next: have the real
-      `PlatformPlayer` actuals + `NowPlayingViewModel` delegate to `PlayQueue`.
+      Kotlin and build-verified. Android, Desktop and Web publish queue/index/current media from a
+      single rebuilt play-order snapshot; do not reintroduce parallel ordering paths.
 - [ ] Domain model layer (DTO → domain mapping), if desired.
 - [ ] Voyager navigation wiring (confirm whether Voyager is the chosen nav or remove it).
 - [ ] Goal #4 verified dependency upgrade + cross-repo version convergence.
-- [ ] CI pipeline.
+- [x] CI pipeline covers common tests, Android, all three Desktop packages, iOS compile/Xcode
+      checks, Web browser tests + production distribution, artifacts, tag releases and aggregate
+      Telegram status.
 
 > **When in doubt, the source on disk is the truth about _what exists_; this document is the
 > truth about _what it should become_.** If they conflict on a fact (e.g., a version number),

@@ -51,7 +51,7 @@ class LoginViewModel(
     init {
         scope.launch {
             settings.awaitLoaded()
-            _server.value = settings.getStringAsync(SettingKeys.SERVER, "http://ncm.tryagain.icu/")
+            _server.value = settings.getStringAsync(SettingKeys.SERVER, "https://ncm.tryagain.icu/")
             _cookie.value = settings.getStringAsync(SettingKeys.COOKIE, "")
         }
     }
