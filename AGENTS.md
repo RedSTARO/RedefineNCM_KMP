@@ -224,7 +224,7 @@ RedefineNCM_KMP/
 │       │   │   ├── MainViewModel.kt
 │       │   │   └── NowPlayingViewModel.kt # holds shuffle invariant (rebuildPlaylistFromTimeline)
 │       │   └── ui/
-│       │       ├── screen/NowPlayingScreen.kt   # primary expanded-player route
+│       │       ├── screen/FullLyricScreen.kt     # Compose fallback for the full-screen player
 │       │       ├── component/Expressive.kt      # connected-list shapes
 │       │       └── theme/{Color,Type,Theme}.kt  # M3 Expressive shapes/type (approximation — see #3)
 │       ├── androidMain/  …/Platform.android.kt, notification/AndroidNotificationController.kt,
@@ -277,6 +277,13 @@ RedefineNCM_KMP/
    LRC `LinkedHashMap<Long?, String?>` → current index → UI scroll **and**
    `LyricNotificationController.updateLyric(...)` (notification / Dynamic Island / floating
    window).
+
+The only full-screen playback route is `WebViewLyricScreen`: Android and supported Windows
+Desktop hosts render AMLL, while other JVM platforms, iOS, and Web use `FullLyricScreen` as
+the Compose fallback. `MiniNowPlayingBar`, the
+Desktop playback strip, and OS/deep-link now-playing requests must open this route directly.
+The former common `NowPlayingScreen` has been removed and must not be restored as a parallel
+player page.
 
 ### Shuffle / queue ordering invariant (FROM ORIGINAL — DO NOT BREAK)
 
@@ -412,8 +419,9 @@ Applies to all platforms, and the original Android repo is kept aligned (goal #3
 - **Prefer the real Expressive APIs** (`MaterialExpressiveTheme`, motion scheme) where the
   pinned `material3` version provides them, rather than only custom shapes on plain
   `MaterialTheme` (current `Theme.kt` is the latter — an approximation; upgrade it).
-- **Per-screen:** NowPlaying (album-art hero gradient, oversized rounded cover ~252dp, bold
-  marquee title); Playlist detail (album-color gradient header, pill "Play All", connected
+- **Per-screen:** Full-screen player (AMLL on Android/supported Windows Desktop,
+  `FullLyricScreen` fallback on other JVM platforms/iOS/Web, with the shared auto-hiding
+  playback console); Playlist detail (album-color gradient header, pill "Play All", connected
   rows with download indicators); User page (blurred hero + avatar, badged playlists);
   Search (pill→bar shared-element transition, suggestion list); Downloads (queue summary hero,
   progress rows, pause/resume/cancel/retry controls); Settings (gradient hero, tonal rows, pill
@@ -494,10 +502,10 @@ feature gap; platform integrations use target-specific actuals:
   the system `DownloadManager`; JVM writes `~/Music/RedefineNCM/`; iOS streams into
   `Documents/RedefineNCM/` and uses an NSURLSession background transfer for durable downloads.
 - **Playlist behaviors**: `replacePlaylist` setting honored on song click,
-  `playlistUpdatePlaycount` reported, no auto-jump to NowPlaying (original behavior).
+  `playlistUpdatePlaycount` reported, no auto-jump to the full-screen player (original behavior).
 - **Album-art theme color**: `themeColorFromCoilImage()` expect/actual (Android Palette /
   JVM Skia sampling / iOS stub) wired into MiniNowPlayingBar (with luminance-adaptive content
-  color + spring animation), NowPlaying hero, PlaylistDetail hero, FullLyric hero.
+  color + spring animation), PlaylistDetail hero, and the full-screen player fallback.
 - **Search shared-element transition** (pill → bar) via `SharedTransitionLayout` in HomeScreen.
 - **Responsive nav**: NavigationRail on ≥600dp; no-cookie startup routes to Login.
 - **Settings**: server availability check (`/inner/version/`), `adaptOriginalAndroidLyric`

@@ -19,6 +19,7 @@ object AppNavigationRequests {
     }
 
     fun openNowPlaying() {
+        // OS now-playing surfaces and deep links open the sole full-screen player route.
         _openNowPlayingRequestId.update { it + 1 }
     }
 

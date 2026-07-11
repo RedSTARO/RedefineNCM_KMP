@@ -66,8 +66,6 @@ import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
-import com.leejlredstar.redefinencm.kmp.ui.screen.CommentBottomSheet
-import com.leejlredstar.redefinencm.kmp.ui.screen.QueueBottomSheet
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor

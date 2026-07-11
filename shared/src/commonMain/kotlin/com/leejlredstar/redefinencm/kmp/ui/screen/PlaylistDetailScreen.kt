@@ -75,7 +75,7 @@ fun PlaylistDetailScreen(
         viewModel.fetchPlaylistDetail(playlistId)
     }
 
-    // 播放后停留在歌单页（与原版一致，靠迷你播放条进入 NowPlaying）
+    // 播放后停留在歌单页（与原版一致，靠迷你播放条进入全屏播放器）
     fun playAll() {
         if (songs.isEmpty()) return
         player.setQueue(songs.map { it.toMediaInfo() }, 0)
