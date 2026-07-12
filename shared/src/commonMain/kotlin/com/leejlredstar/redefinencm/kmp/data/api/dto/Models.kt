@@ -39,6 +39,27 @@ data class UserDetailProfile(
     val gender: Int = 0,
 )
 
+@Serializable
+data class UserLevelResponse(
+    val code: Int = 0,
+    val full: Boolean = false,
+    val data: UserLevelData? = null,
+    val message: String? = null,
+    val msg: String? = null,
+)
+
+@Serializable
+data class UserLevelData(
+    val userId: Long = 0,
+    val info: String = "",
+    val progress: Double = 0.0,
+    val nextPlayCount: Long = 0,
+    val nextLoginCount: Long = 0,
+    val nowPlayCount: Long = 0,
+    val nowLoginCount: Long = 0,
+    val level: Int = 0,
+)
+
 // ── Login ──
 
 @Serializable

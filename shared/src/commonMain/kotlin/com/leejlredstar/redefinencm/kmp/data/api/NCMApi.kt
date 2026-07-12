@@ -83,6 +83,9 @@ class NCMApi(private val client: HttpClient) {
     suspend fun userDetail(uid: Long): UserDetail =
         client.get("/user/detail") { parameter("uid", uid) }.body()
 
+    suspend fun userLevel(): UserLevelResponse =
+        client.get("/user/level").body()
+
     // ── Login ──
 
     suspend fun loginStatus(cookie: String): LoginStatus =

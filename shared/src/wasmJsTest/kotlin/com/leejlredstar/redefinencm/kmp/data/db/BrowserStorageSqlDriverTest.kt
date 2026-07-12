@@ -20,6 +20,7 @@ class BrowserStorageSqlDriverTest {
         val firstDriver = DatabaseDriverFactory().createDriver()
         AppDatabase(firstDriver).apply {
             cachedUserDetailQueries.upsert(42L, "{\"name\":\"web\"}")
+            cachedUserLevelQueries.upsert(42L, "{\"level\":7}")
             cachedRecommendSongsQueries.upsert("{\"songs\":[]}")
             playerStatusQueries.upsert("{\"index\":0}")
         }
@@ -33,6 +34,10 @@ class BrowserStorageSqlDriverTest {
                 database.cachedUserDetailQueries.selectByUid(42L).executeAsOne(),
             )
             assertEquals(
+                "{\"level\":7}",
+                database.cachedUserLevelQueries.selectByUid(42L).executeAsOne(),
+            )
+            assertEquals(
                 "{\"songs\":[]}",
                 database.cachedRecommendSongsQueries.select().executeAsOne(),
             )
@@ -42,6 +47,28 @@ class BrowserStorageSqlDriverTest {
             )
         } finally {
             secondDriver.close()
+        }
+    }
+
+    @Test
+    fun versionTwoStorageMigratesToUserLevelCache() {
+        localStorage.setItem("redefinencm.db.schemaVersion", "2")
+
+        val driver = DatabaseDriverFactory().createDriver()
+        try {
+            val database = AppDatabase(driver)
+            database.cachedUserLevelQueries.upsert(42L, "{\"level\":7}")
+
+            assertEquals(
+                "{\"level\":7}",
+                database.cachedUserLevelQueries.selectByUid(42L).executeAsOne(),
+            )
+            assertEquals(
+                AppDatabase.Schema.version.toString(),
+                localStorage.getItem("redefinencm.db.schemaVersion"),
+            )
+        } finally {
+            driver.close()
         }
     }
 

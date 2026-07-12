@@ -16,9 +16,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -39,6 +41,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.leejlredstar.redefinencm.kmp.data.api.dto.UserLevelResponse
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveCacheHint
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
@@ -50,6 +53,43 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import org.koin.compose.koinInject
+import kotlin.math.roundToInt
+
+internal data class UserLevelDisplay(
+    val summary: String,
+    val nextLevelLabel: String?,
+    val progressLabel: String,
+    val progress: Float,
+)
+
+internal fun userLevelDisplay(response: UserLevelResponse?): UserLevelDisplay? {
+    val data = response?.data ?: return null
+    val progress = when {
+        response.full -> 1f
+        data.progress.isFinite() -> data.progress.coerceIn(0.0, 1.0).toFloat()
+        else -> 0f
+    }
+    return UserLevelDisplay(
+        summary = "Lv.${data.level} · 听歌 ${data.nowPlayCount} 首 · 登录 ${data.nowLoginCount} 天",
+        nextLevelLabel = if (response.full) {
+            null
+        } else {
+            buildList {
+                if (data.nextPlayCount > 0) add("听歌 ${data.nextPlayCount} 首")
+                if (data.nextLoginCount > 0) add("登录 ${data.nextLoginCount} 天")
+            }.takeIf { it.isNotEmpty() }?.joinToString(
+                separator = " · ",
+                prefix = "下一级门槛：",
+            )
+        },
+        progressLabel = if (response.full) {
+            "已达到最高等级"
+        } else {
+            "等级进度 ${(progress * 100).roundToInt()}%"
+        },
+        progress = progress,
+    )
+}
 
 @Composable
 fun UserPlaylistScreen(
@@ -58,17 +98,21 @@ fun UserPlaylistScreen(
     viewModel: MainViewModel = koinInject(),
 ) {
     val userDetail by viewModel.userDetail.collectAsState()
+    val userLevel by viewModel.userLevel.collectAsState()
     val playlists by viewModel.userPlaylists.collectAsState()
     val playlistsLoaded by viewModel.userPlaylistsLoaded.collectAsState()
     val accountLoading by viewModel.accountLoading.collectAsState()
     val accountLoadError by viewModel.accountLoadError.collectAsState()
     val userDetailLoadError by viewModel.userDetailLoadError.collectAsState()
+    val userLevelLoadError by viewModel.userLevelLoadError.collectAsState()
     val userPlaylistsLoadError by viewModel.userPlaylistsLoadError.collectAsState()
     val userDetailFromCache by viewModel.userDetailFromCache.collectAsState()
+    val userLevelFromCache by viewModel.userLevelFromCache.collectAsState()
     val userPlaylistsFromCache by viewModel.userPlaylistsFromCache.collectAsState()
     val uid by viewModel.uid.collectAsState()
     val hasCachedContent =
         (userDetailFromCache && userDetail != null) ||
+            (userLevelFromCache && userLevel?.data != null) ||
             userPlaylistsFromCache
     val hasAccountContent = userDetail != null || playlistsLoaded
     val defaultAccentColor = MaterialTheme.colorScheme.primaryContainer
@@ -97,9 +141,12 @@ fun UserPlaylistScreen(
                         backgroundUrl = detail.profile.backgroundUrl,
                         avatarUrl = detail.profile.avatarUrl,
                         nickname = detail.profile.nickname,
-                        userId = detail.profile.userId.toString(),
+                        userLevel = userLevel,
+                        levelLoading = userLevel == null && userLevelLoadError == null && accountLoading,
+                        levelLoadFailed = userLevel == null && userLevelLoadError != null,
                         accentPalette = accentPalette,
                         onAccentColor = { rawAccentColor = it },
+                        onRetryLevel = viewModel::retryAccountData,
                     )
                 }
             }
@@ -217,10 +264,14 @@ private fun UserPlaylistHero(
     backgroundUrl: String?,
     avatarUrl: String?,
     nickname: String,
-    userId: String,
+    userLevel: UserLevelResponse?,
+    levelLoading: Boolean,
+    levelLoadFailed: Boolean,
     accentPalette: ContentAccentPalette,
     onAccentColor: (Color) -> Unit,
+    onRetryLevel: () -> Unit,
 ) {
+    val levelDisplay = userLevelDisplay(userLevel)
     var backgroundAccent by remember(backgroundUrl) { mutableStateOf<Color?>(null) }
     var avatarAccent by remember(avatarUrl) { mutableStateOf<Color?>(null) }
     val extractBackgroundAccent = rememberThemeColorExtractor(backgroundUrl) { backgroundAccent = it }
@@ -298,10 +349,46 @@ private fun UserPlaylistHero(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = "ID: $userId",
+                        text = levelDisplay?.summary ?: if (levelLoading) {
+                            "正在加载等级信息…"
+                        } else {
+                            "等级信息暂不可用"
+                        },
                         style = MaterialTheme.typography.labelLarge,
                         color = accentPalette.secondaryOnQuietContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
+                    if (levelLoadFailed) {
+                        TextButton(onClick = onRetryLevel) {
+                            Text("重试")
+                        }
+                    }
+                    levelDisplay?.let { display ->
+                        Spacer(Modifier.height(4.dp))
+                        display.nextLevelLabel?.let { label ->
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = accentPalette.secondaryOnQuietContainer,
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                            )
+                            Spacer(Modifier.height(2.dp))
+                        }
+                        Text(
+                            text = display.progressLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = accentPalette.secondaryOnQuietContainer,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        LinearProgressIndicator(
+                            progress = { display.progress },
+                            modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape),
+                            color = accentPalette.accent,
+                            trackColor = accentPalette.onQuietContainer.copy(alpha = 0.14f),
+                        )
+                    }
                 }
             }
         }

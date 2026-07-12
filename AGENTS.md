@@ -86,15 +86,15 @@ Page lifecycle is a locked behavior: `visibilitychange` to hidden, `pagehide`, a
 `beforeunload` must pause playback. Pausing must also invalidate an in-flight stream-URL lookup,
 otherwise a late response can start audio after the page has been left.
 
-### D3 — Local cache is SQLDelight — **DONE (updated 2026-07-10)**
+### D3 — Local cache is SQLDelight — **DONE (updated 2026-07-13)**
 
 The original caches via Room (cache-then-network). The KMP replacement is **SQLDelight**, now
-fully wired: plugin + 9 `.sq` tables under `shared/src/commonMain/sqldelight/` (user detail /
-user playlist / playlist detail / playlist tracks / recommend ×2 / lyric / comment /
+fully wired: plugin + 10 `.sq` tables under `shared/src/commonMain/sqldelight/` (user detail /
+user level / user playlist / playlist detail / playlist tracks / recommend ×2 / lyric / comment /
 **PlayerStatus**) + `DatabaseDriverFactory` expect/actuals (android/native/sqlite/browser storage). `Repository`
 implements cache-then-network for all cached endpoints and persists/restores the play queue
-via the `PlayerStatus` table. Schema version 2 includes a formal `1.sqm` migration for the
-playlist detail/tracks, comment, and player-status tables; platform drivers must use
+via the `PlayerStatus` table. Schema version 3 includes formal `1.sqm` and `2.sqm` migrations
+for the playlist detail/tracks, comment, player-status, and user-level tables; platform drivers must use
 `AppDatabase.Schema` migrations rather than ad-hoc `onOpen` table creation.
 
 ### D4 — Notification / now-playing surfaces are one common contract, four platform actuals
@@ -690,8 +690,8 @@ feature gap; platform integrations use target-specific actuals:
       while JVM/iOS/Web share the RGB555 quantizer.
 
 ### Not started
-- [x] **SQLDelight cache** (D3) — DONE (plugin + 9 tables + drivers + cache-then-network +
-      PlayerStatus queue persistence; build-verified 2026-07-04).
+- [x] **SQLDelight cache** (D3) — DONE (plugin + 10 tables + drivers + cache-then-network +
+      PlayerStatus queue persistence; build-verified 2026-07-13).
 - [x] **`PlayQueue` + `PlayQueueTest`** (shuffle regression suite) — DONE (2026-06-11), pure
       Kotlin and build-verified. Android, Desktop and Web publish queue/index/current media from a
       single rebuilt play-order snapshot; do not reintroduce parallel ordering paths.

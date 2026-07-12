@@ -266,6 +266,7 @@ internal class BrowserStorageSqlDriver : SqlDriver {
             "CachedPlaylistDetail",
             "CachedPlaylistTrackAll",
             "CachedUserDetail",
+            "CachedUserLevel",
             "CachedUserPlaylist",
         )
 
@@ -277,6 +278,7 @@ internal class BrowserStorageSqlDriver : SqlDriver {
             "CREATE TABLE IF NOT EXISTS CachedRecommendResource ( singleton INTEGER NOT NULL PRIMARY KEY DEFAULT 0, json TEXT NOT NULL )",
             "CREATE TABLE IF NOT EXISTS CachedRecommendSongs ( singleton INTEGER NOT NULL PRIMARY KEY DEFAULT 0, json TEXT NOT NULL )",
             "CREATE TABLE IF NOT EXISTS CachedUserDetail ( uid INTEGER NOT NULL PRIMARY KEY, json TEXT NOT NULL )",
+            "CREATE TABLE IF NOT EXISTS CachedUserLevel ( uid INTEGER NOT NULL PRIMARY KEY, json TEXT NOT NULL )",
             "CREATE TABLE IF NOT EXISTS CachedUserPlaylist ( uid INTEGER NOT NULL PRIMARY KEY, json TEXT NOT NULL )",
             "CREATE TABLE IF NOT EXISTS PlayerStatus ( id INTEGER NOT NULL PRIMARY KEY, json TEXT NOT NULL )",
         )
@@ -289,6 +291,7 @@ internal class BrowserStorageSqlDriver : SqlDriver {
             "INSERT OR REPLACE INTO CachedRecommendResource(singleton, json) VALUES (0, ?)" to "CachedRecommendResource",
             "INSERT OR REPLACE INTO CachedRecommendSongs(singleton, json) VALUES (0, ?)" to "CachedRecommendSongs",
             "INSERT OR REPLACE INTO CachedUserDetail(uid, json) VALUES (?, ?)" to "CachedUserDetail",
+            "INSERT OR REPLACE INTO CachedUserLevel(uid, json) VALUES (?, ?)" to "CachedUserLevel",
             "INSERT OR REPLACE INTO CachedUserPlaylist(uid, json) VALUES (?, ?)" to "CachedUserPlaylist",
             "INSERT OR REPLACE INTO PlayerStatus(id, json) VALUES (1, ?)" to "PlayerStatus",
         )
@@ -301,6 +304,7 @@ internal class BrowserStorageSqlDriver : SqlDriver {
             "SELECT json FROM CachedRecommendResource WHERE singleton = 0" to "CachedRecommendResource",
             "SELECT json FROM CachedRecommendSongs WHERE singleton = 0" to "CachedRecommendSongs",
             "SELECT json FROM CachedUserDetail WHERE uid = ?" to "CachedUserDetail",
+            "SELECT json FROM CachedUserLevel WHERE uid = ?" to "CachedUserLevel",
             "SELECT json FROM CachedUserPlaylist WHERE uid = ?" to "CachedUserPlaylist",
             "SELECT json FROM PlayerStatus WHERE id = 1" to "PlayerStatus",
         )

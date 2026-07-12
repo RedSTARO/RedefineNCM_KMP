@@ -75,6 +75,29 @@ class Repository(
         },
     )
 
+    fun getUserLevel(uid: Long): Flow<CacheThenNetworkData<UserLevelResponse>> {
+        require(uid > 0) { "uid must be positive" }
+        return cacheThenNetworkFlow(
+            readCache = {
+                runCatching {
+                    db.cachedUserLevelQueries.selectByUid(uid).executeAsOneOrNull()
+                        ?.let { json.decodeFromString<UserLevelResponse>(it) }
+                }.getOrNull()?.takeIf { response ->
+                    response.code == API_SUCCESS_CODE && response.data?.userId == uid
+                }
+            },
+            fetchNetwork = {
+                safeApiCall { api.userLevel() }
+                    ?.takeIf { response ->
+                        response.code == API_SUCCESS_CODE && response.data?.userId == uid
+                    }
+            },
+            writeCache = { network ->
+                db.cachedUserLevelQueries.upsert(uid, json.encodeToString(network))
+            },
+        )
+    }
+
     fun getUserPlaylist(uid: Long): Flow<CacheThenNetworkData<UserPlaylist>> = cacheThenNetworkFlow(
         readCache = {
             runCatching {
