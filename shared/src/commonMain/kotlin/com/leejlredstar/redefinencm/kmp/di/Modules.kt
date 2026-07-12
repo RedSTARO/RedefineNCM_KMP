@@ -10,6 +10,7 @@ import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.viewmodel.LoginViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
+import com.leejlredstar.redefinencm.kmp.viewmodel.SongRecognitionViewModel
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
 import org.koin.dsl.KoinAppDeclaration
@@ -72,4 +73,6 @@ val sharedModule = module {
     // Single — the now-playing state is inherently global (only one song plays at a time).
     // The full-screen player and compact playback controls inject this same instance.
     single { NowPlayingViewModel(get(), get()) }
+    // Factory — recording and cancellation are scoped to one pushed recognition page.
+    factory { SongRecognitionViewModel(get(), get(), get()) }
 }

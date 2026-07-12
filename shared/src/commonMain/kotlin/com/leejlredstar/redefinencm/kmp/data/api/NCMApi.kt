@@ -71,6 +71,12 @@ class NCMApi(private val client: HttpClient) {
             parameter("ids", ids.joinToString(","))
         }.body()
 
+    suspend fun audioMatch(durationSeconds: Int, audioFingerprint: String): AudioMatch =
+        client.post("/audio/match") {
+            parameter("duration", durationSeconds)
+            parameter("audioFP", audioFingerprint)
+        }.body()
+
     // ── Search ──
 
     suspend fun search(keywords: String, limit: Int = 30): SearchResult =

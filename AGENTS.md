@@ -213,6 +213,10 @@ RedefineNCM_KMP/
 │       │   │   └── LyricBus.kt          # Shared lyric/position event bus (MutableStateFlow)
 │       │   ├── notification/
 │       │   │   └── LyricNotificationController.kt   # expect object (lyric display surface)
+│       │   ├── recognition/
+│       │   │   ├── AudioFingerprint.kt   # Pure-Kotlin fingerprint extractor + codec
+│       │   │   ├── MicrophoneRecorder.kt # common capture contract
+│       │   │   └── PcmResampler.kt       # platform PCM → 8 kHz mono
 │       │   ├── smtc/
 │       │   │   └── (MediaControlsIntegrator)        # ⚠ currently in jvmMain, not commonMain — see divergence
 │       │   ├── util/
@@ -222,26 +226,32 @@ RedefineNCM_KMP/
 │       │   ├── viewmodel/
 │       │   │   ├── LoginViewModel.kt
 │       │   │   ├── MainViewModel.kt
-│       │   │   └── NowPlayingViewModel.kt # holds shuffle invariant (rebuildPlaylistFromTimeline)
+│       │   │   ├── NowPlayingViewModel.kt # holds shuffle invariant (rebuildPlaylistFromTimeline)
+│       │   │   └── SongRecognitionViewModel.kt
 │       │   └── ui/
 │       │       ├── screen/FullLyricScreen.kt     # Compose fallback for the full-screen player
+│       │       ├── screen/SongRecognitionScreen.kt
 │       │       ├── component/Expressive.kt      # connected-list shapes
 │       │       └── theme/{Color,Type,Theme}.kt  # real M3 Expressive theme + image-derived palettes
 │       ├── androidMain/  …/Platform.android.kt, notification/AndroidNotificationController.kt,
 │       │                  di/AndroidPlatformModule.kt, util/AndroidSettings.kt,
+│       │                  recognition/AndroidMicrophoneRecorder.kt,
 │       │                  player/ExoPlayerPlatformPlayer.kt (Media3/ExoPlayer PlatformPlayer impl),
 │       │                  player/RedirectingDataSource.kt (placeholder URI → CDN URL resolver)
 │       ├── iosMain/      …/Platform.ios.kt, MainViewController.kt,
 │       │                  notification/IosLiveActivityController.kt (Live Activity data bridge),
-│       │                  di/IosPlatformModule.kt, util/IosSettings.kt
+│       │                  di/IosPlatformModule.kt, util/IosSettings.kt,
+│       │                  recognition/IosMicrophoneRecorder.kt
 │       ├── jvmMain/      …/Platform.jvm.kt, notification/DesktopFloatingWindowController.kt,
 │       │                  smtc/WindowsMediaControls.kt (native WinRT SMTC binding),
-│       │                  di/JvmPlatformModule.kt, util/JvmSettings.kt
+│       │                  di/JvmPlatformModule.kt, util/JvmSettings.kt,
+│       │                  recognition/JvmMicrophoneRecorder.kt
 │       ├── wasmJsMain/   …/main.kt, Platform.wasm.kt, player/WebPlatformPlayer.kt,
 │       │                  notification/, data/db/BrowserStorageSqlDriver.kt,
-│       │                  di/WasmPlatformModule.kt, util/{WasmSettings,WebDownloadStorage}.kt
-│       ├── commonTest/   SharedCommonTest.kt (placeholder)
-│       └── jvmTest/      player/PlayQueueTest.kt (shuffle invariant regression suite — passes)
+│       │                  di/WasmPlatformModule.kt, util/{WasmSettings,WebDownloadStorage}.kt,
+│       │                  recognition/WasmMicrophoneRecorder.kt
+│       ├── commonTest/   Shared business, API, player, recognition and UI regression tests
+│       └── jvmTest/      JVM database, media-control and platform integration tests
 ├── androidApp/    AGP application; MainActivity; PlaybackService (MediaSessionService);
 │                  RedefineNCMApp; depends on :shared + media3 directly
 ├── desktopApp/    Compose Desktop app; main.kt; depends on :shared
@@ -284,6 +294,25 @@ the Compose fallback. `MiniNowPlayingBar`, the
 Desktop playback strip, and OS/deep-link now-playing requests must open this route directly.
 The former common `NowPlayingScreen` has been removed and must not be restored as a parallel
 player page.
+
+### Song recognition contract
+
+The Home “音乐工具” card opens the shared Compose `SongRecognitionScreen`. Recognition is
+implemented in Kotlin source on every target: Android `AudioRecord`, iOS `AVAudioEngine`, JVM
+Java Sound, and Web `getUserMedia` / `MediaRecorder` / Web Audio through typed Kotlin/Wasm
+`external` declarations. The recognition path adds no handwritten JavaScript or TypeScript.
+
+Each attempt produces exactly three seconds of mono PCM for common processing.
+`prepareRecognitionSamples()` resamples it to 24,000 Float32 samples at 8 kHz, then
+`AudioFingerprint` generates the native fingerprint. The algorithm is derived from Open Orpheus;
+preserve the attribution and MIT notice in `THIRD_PARTY_NOTICES.md`.
+
+`NCMApi.audioMatch()` sends `POST /audio/match` with query parameters `duration=3` and
+`audioFP=<base64 fingerprint>` to the configured backend. `data.type == 1` carries matched
+`result` entries; `data.type == 0` is a valid no-match response. Missing `data`, unknown types,
+or empty matched results are protocol errors. Matched songs use the legacy fields `artists`,
+`album`, and `duration`. `audioFP` is microphone-derived sensitive data and must remain redacted
+from HTTP logs.
 
 ### Shuffle / queue ordering invariant (FROM ORIGINAL — DO NOT BREAK)
 
@@ -467,6 +496,9 @@ cleaned cookie through the API's `cookie` query parameter. OPFS downloads requir
 `localhost` plus browser OPFS support. Browser autoplay, Media Session and Notification support
 remain browser policy/capability boundaries; rejected autoplay leaves the player paused, and
 lyrics remain visible in-page even when system notification support is unavailable.
+Web microphone access for song recognition requires HTTPS or `localhost` plus site microphone
+permission. An HTTPS deployment also cannot call an HTTP `/audio/match` backend; the backend must
+use HTTPS and allow the Web origin through CORS.
 
 ---
 
@@ -583,6 +615,13 @@ feature gap; platform integrations use target-specific actuals:
       entry point; Android binds `ExoPlayerPlatformPlayer`, Desktop binds `JvmMediaPlayer`, iOS
       binds `IosAVPlayer`, and Web binds `WebPlatformPlayer`. Android, Desktop and Web are
       build-verified in this repository; iOS source remains macOS/Xcode-gated.
+- [x] **Song recognition is wired on all enabled targets** (2026-07-12). Shared fingerprint,
+      resampler, DTO and ViewModel tests pass in `:shared:jvmTest`; Desktop compilation, Android
+      assembly, and Wasm compilation/browser tests/distribution are green. A recorded audio sample
+      generated by the Kotlin fingerprint path matched through the live LAN `/audio/match` backend.
+      **Verification boundary:** these checks do not exercise live microphone capture on real
+      Android, iOS, Desktop, or Web devices. iOS remains source-only here because Windows has no
+      Xcode.
 - [x] **Android audio backend — ExoPlayer + MediaSession, BUILD-VERIFIED** (2026-06-13).
       `media3-exoplayer 1.10.1` + `media3-session` added to `androidMain` (and to `:androidApp`
       directly for `PlaybackService`).

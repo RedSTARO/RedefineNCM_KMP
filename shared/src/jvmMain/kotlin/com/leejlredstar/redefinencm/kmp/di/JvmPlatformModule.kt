@@ -4,6 +4,8 @@ import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
 import com.leejlredstar.redefinencm.kmp.data.db.DatabaseDriverFactory
 import com.leejlredstar.redefinencm.kmp.player.JvmMediaPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.recognition.JvmMicrophoneRecorder
+import com.leejlredstar.redefinencm.kmp.recognition.MicrophoneRecorder
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import io.ktor.client.HttpClient
@@ -33,4 +35,7 @@ actual fun platformModule() = module {
     // Overrides the InMemoryPlatformPlayer default from sharedModule.
     // Uses JVM-decodable local files before hitting the CDN.
     single<PlatformPlayer> { JvmMediaPlayer(get(), get()) }
+
+    // Java Sound 麦克风输入；录音生命周期由调用协程控制。
+    single<MicrophoneRecorder> { JvmMicrophoneRecorder() }
 }

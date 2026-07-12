@@ -21,6 +21,8 @@
 	</array>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>用于听歌识曲时采集环境中的音乐</string>
 	<key>RedefineNCMVersionName</key>
 	<string>$(APP_VERSION_NAME)</string>
 	<key>UIBackgroundModes</key>

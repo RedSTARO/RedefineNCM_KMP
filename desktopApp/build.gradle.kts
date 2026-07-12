@@ -55,6 +55,12 @@ compose.desktop {
             macOS {
                 bundleID = "com.redstar.redefinencm"
                 packageName = "RedefineNCM"
+                infoPlist {
+                    extraKeysRawXml = """
+                        <key>NSMicrophoneUsageDescription</key>
+                        <string>用于听歌识曲时采集环境中的音乐</string>
+                    """.trimIndent()
+                }
             }
         }
     }

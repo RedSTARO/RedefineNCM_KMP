@@ -93,6 +93,7 @@ import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.LoginScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.PlaylistDetailScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.SettingsScreen
+import com.leejlredstar.redefinencm.kmp.ui.screen.SongRecognitionScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.UserPlaylistScreen
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
@@ -115,6 +116,7 @@ private sealed interface PushedDest {
     data object Login : PushedDest
     data object FullLyric : PushedDest
     data object Downloads : PushedDest
+    data object SongRecognition : PushedDest
     data class Playlist(val id: Long) : PushedDest
 }
 
@@ -154,6 +156,7 @@ private fun encodePushedDestination(destination: PushedDest): String = when (des
     PushedDest.Login -> "login"
     PushedDest.FullLyric -> "full-lyric"
     PushedDest.Downloads -> "downloads"
+    PushedDest.SongRecognition -> "song-recognition"
     is PushedDest.Playlist -> "playlist:${destination.id}"
 }
 
@@ -163,6 +166,7 @@ private fun decodePushedDestination(saved: String): PushedDest? = when (saved) {
     "now-playing" -> PushedDest.FullLyric
     "full-lyric" -> PushedDest.FullLyric
     "downloads" -> PushedDest.Downloads
+    "song-recognition" -> PushedDest.SongRecognition
     else -> saved.removePrefix("playlist:")
         .takeIf { saved.startsWith("playlist:") }
         ?.toLongOrNull()
@@ -404,6 +408,9 @@ private fun AppContent(
                                             is PushedDest.Downloads -> DownloadManagementScreen(
                                                 scaffoldPadding = innerPadding,
                                             )
+                                            is PushedDest.SongRecognition -> SongRecognitionScreen(
+                                                onBack = ::back,
+                                            )
                                             is PushedDest.Playlist -> PlaylistDetailScreen(
                                                 playlistId = dest.id,
                                                 onBack = ::back,
@@ -414,6 +421,7 @@ private fun AppContent(
                                                 scaffoldPadding = innerPadding,
                                                 onOpenPlaylist = { push(PushedDest.Playlist(it)) },
                                                 onOpenMy = { currentTab = TabDest.My },
+                                                onOpenRecognition = { push(PushedDest.SongRecognition) },
                                             )
                                             is TabDest.My -> UserPlaylistScreen(
                                                 scaffoldPadding = innerPadding,
