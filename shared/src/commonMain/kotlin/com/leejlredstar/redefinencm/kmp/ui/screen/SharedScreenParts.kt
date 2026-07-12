@@ -289,12 +289,14 @@ fun <T> SectionWithLazyRow(
     errorMessage: String? = null,
     onRetry: (() -> Unit)? = null,
     key: ((T) -> Any)? = null,
+    action: (@Composable () -> Unit)? = null,
     itemContent: @Composable (T) -> Unit,
 ) {
     Column(modifier = Modifier.padding(top = 20.dp)) {
         ExpressiveSectionTitle(
             text = title,
             modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+            action = action,
         )
         if (isLoading) {
             ExpressiveLoadingState(
