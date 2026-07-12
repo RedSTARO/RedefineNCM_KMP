@@ -99,14 +99,22 @@ data class DownloadQueueSummary(
     val paused: Int = 0,
 )
 
+sealed interface LocalLibrarySyncState {
+    data object Idle : LocalLibrarySyncState
+    data object Syncing : LocalLibrarySyncState
+    data class Error(val message: String) : LocalLibrarySyncState
+}
+
 class SongDownloadManager(
     private val repo: Repository,
     private val settings: PlatformSettings,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _tasks = MutableStateFlow<List<SongDownloadTask>>(emptyList())
+    private val _localLibrarySyncState = MutableStateFlow<LocalLibrarySyncState>(LocalLibrarySyncState.Idle)
 
     val tasks: StateFlow<List<SongDownloadTask>> = _tasks.asStateFlow()
+    val localLibrarySyncState: StateFlow<LocalLibrarySyncState> = _localLibrarySyncState.asStateFlow()
     val summary: StateFlow<DownloadQueueSummary> = _tasks
         .map { tasks ->
             DownloadQueueSummary(
@@ -127,6 +135,7 @@ class SongDownloadManager(
     private val activeExecution = MutableStateFlow<ActiveDownloadExecution?>(null)
     private val workerStartMutex = Mutex()
     private val syncMutex = Mutex()
+    private var localLibrarySyncJob: Job? = null
     private val executionSequence = MutableStateFlow(0L)
 
     fun enqueuePlaylist(playlistId: Long) {
@@ -347,9 +356,24 @@ class SongDownloadManager(
     }
 
     fun syncWithLocalLibrary() {
-        scope.launch {
-            syncMutex.withLock {
-                reconcileWithLocalLibrary()
+        if (localLibrarySyncJob?.isActive == true) return
+        localLibrarySyncJob = scope.launch {
+            _localLibrarySyncState.value = LocalLibrarySyncState.Syncing
+            try {
+                val failureMessage = syncMutex.withLock {
+                    reconcileWithLocalLibrary()
+                }
+                _localLibrarySyncState.value = if (failureMessage == null) {
+                    LocalLibrarySyncState.Idle
+                } else {
+                    LocalLibrarySyncState.Error(failureMessage)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                _localLibrarySyncState.value = LocalLibrarySyncState.Error(
+                    failure.message ?: "本地音乐库同步失败",
+                )
             }
         }
     }
@@ -358,9 +382,11 @@ class SongDownloadManager(
         scope.cancel()
     }
 
-    private suspend fun reconcileWithLocalLibrary() {
+    private suspend fun reconcileWithLocalLibrary(): String? {
         val scan = DownloadedSongsCache.refreshSnapshots()
-        if (scan is DownloadScanResult.Failure) return
+        if (scan is DownloadScanResult.Failure) {
+            return scan.message.ifBlank { "无法读取本地音乐库" }
+        }
         val localFiles = (scan as DownloadScanResult.Success).snapshots.associateBy { it.id }
         val knownIds = _tasks.value.mapTo(mutableSetOf()) { it.id }
         val localOnlyIds = localFiles.keys
@@ -378,6 +404,7 @@ class SongDownloadManager(
                 songDetails = localOnlyDetails,
             )
         }
+        return null
     }
 
     private fun ensureWorker() {

@@ -226,7 +226,7 @@ RedefineNCM_KMP/
 │       │   └── ui/
 │       │       ├── screen/FullLyricScreen.kt     # Compose fallback for the full-screen player
 │       │       ├── component/Expressive.kt      # connected-list shapes
-│       │       └── theme/{Color,Type,Theme}.kt  # M3 Expressive shapes/type (approximation — see #3)
+│       │       └── theme/{Color,Type,Theme}.kt  # real M3 Expressive theme + image-derived palettes
 │       ├── androidMain/  …/Platform.android.kt, notification/AndroidNotificationController.kt,
 │       │                  di/AndroidPlatformModule.kt, util/AndroidSettings.kt,
 │       │                  player/ExoPlayerPlatformPlayer.kt (Media3/ExoPlayer PlatformPlayer impl),
@@ -417,9 +417,9 @@ Applies to all platforms, and the original Android repo is kept aligned (goal #3
   (`RoundedCornerShape(50%)`) or `extraLarge` shapes.
 - **Typography:** aggressive weight/size contrast — bold headlines (`DisplaySmall`,
   `HeadlineLarge`), regular body, lighter captions. Use the M3 Expressive type scale.
-- **Prefer the real Expressive APIs** (`MaterialExpressiveTheme`, motion scheme) where the
-  pinned `material3` version provides them, rather than only custom shapes on plain
-  `MaterialTheme` (current `Theme.kt` is the latter — an approximation; upgrade it).
+- **Use the real Expressive APIs** (`MaterialExpressiveTheme`, motion scheme) provided by the
+  pinned `material3` version; custom shapes and page palettes extend that theme rather than
+  replacing it.
 - **Per-screen:** Full-screen player (AMLL on Android/supported Windows Desktop,
   `FullLyricScreen` fallback on other JVM platforms/iOS/Web, with the shared auto-hiding
   playback console); Playlist detail (album-color gradient header, pill "Play All", connected
@@ -610,14 +610,15 @@ feature gap; platform integrations use target-specific actuals:
 - [x] **iOS Live Activity source and Xcode target are wired.** Kotlin publishes serial
       `LiveActivityData`; Swift drives ActivityKit and the LyricWidget extension renders Lock Screen
       and Dynamic Island content. Runtime verification still requires macOS and a real iOS build.
-- [x] **Desktop floating window is wired** (2026-06-11) — `desktopApp/main.kt` now opens a
-      second frameless / translucent / always-on-top Compose window that renders
-      `DesktopFloatingWindowController`'s `floatingLyricData` when `isWindowVisible` is true.
-      The common playback/lyric pipeline drives `LyricNotificationController.updateLyric(...)`.
-- [x] **`Theme.kt` now uses real `MaterialExpressiveTheme`** (2026-06-11) with
-      `MotionScheme.expressive()` + the Expressive shape/type scales. Remaining: dynamic /
-      album-art–derived color schemes via an expect/actual provider (`dynamicColorScheme` is
-      Android-only).
+- [x] **Desktop floating window is wired and Expressive** (updated 2026-07-12) —
+      `desktopApp/main.kt` opens a frameless / translucent Compose window, derives its palette
+      from the visible artwork, exposes transport controls and a user-toggleable always-on-top
+      state, and renders `DesktopFloatingWindowController`'s `floatingLyricData`.
+- [x] **The shared UI uses real Material 3 Expressive** (updated 2026-07-12) —
+      `MaterialExpressiveTheme`, `MotionScheme.expressive()`, the complete typography scale,
+      shared page/state/motion primitives, and visible-image-driven local palettes are applied
+      across the KMP pages. Palette foreground roles are contrast-checked; Android uses Palette
+      while JVM/iOS/Web share the RGB555 quantizer.
 
 ### Not started
 - [x] **SQLDelight cache** (D3) — DONE (plugin + 9 tables + drivers + cache-then-network +

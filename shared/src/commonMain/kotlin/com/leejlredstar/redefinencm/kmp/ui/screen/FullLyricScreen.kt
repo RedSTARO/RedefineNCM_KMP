@@ -3,17 +3,19 @@ package com.leejlredstar.redefinencm.kmp.ui.screen
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -37,7 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -45,15 +47,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.util.LyricParser
+import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -74,6 +84,7 @@ fun FullLyricScreen(
     viewModel: NowPlayingViewModel = koinInject(),
 ) {
     val lyricMap by viewModel.lyricMap.collectAsState()
+    val lyricUiState by viewModel.lyricUiState.collectAsState()
     val lyricIndex by viewModel.lyricIndex.collectAsState()
     val wordLyricLines by viewModel.wordLyricLines.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
@@ -131,7 +142,7 @@ fun FullLyricScreen(
     }
 
     // ── Main container with cursor drawn on top via drawWithContent ──
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(
@@ -145,6 +156,12 @@ fun FullLyricScreen(
             )
             
     ) {
+        val compactHeight = maxHeight < 600.dp
+        val lyricTopPadding = if (compactHeight) 72.dp else 100.dp
+        val lyricBottomPadding = if (compactHeight) 72.dp else 104.dp
+        val lyricEdgeSpacer = (maxHeight * 0.38f).coerceIn(120.dp, 300.dp)
+        val featherHeight = if (compactHeight) 48.dp else 80.dp
+
         // ── Album art background ──
         AsyncImage(
             model = metadata?.artworkUri,
@@ -193,59 +210,106 @@ fun FullLyricScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 100.dp, bottom = 140.dp),
+                .padding(top = lyricTopPadding, bottom = lyricBottomPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            item { Spacer(Modifier.height(250.dp)) }
+            item { Spacer(Modifier.height(lyricEdgeSpacer)) }
 
-            itemsIndexed(lyricEntries, key = { idx, _ -> idx }) { idx, entry ->
-                val isCurrent = idx == lyricIndex
-                val dist = kotlin.math.abs(idx - lyricIndex)
+            when {
+                metadata == null -> item(key = "no-media") {
+                    ExpressiveStatePanel(
+                        title = "还没有播放音乐",
+                        message = "选择一首歌曲后，歌词会显示在这里。",
+                        icon = AppIcons.GraphicEq,
+                        accentPalette = accentPalette,
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                    )
+                }
+                lyricUiState is LyricUiState.Loading || lyricUiState is LyricUiState.Idle -> item(
+                    key = "lyric-loading",
+                ) {
+                    ExpressiveLoadingState(
+                        label = "正在加载歌词…",
+                        accentColor = accentPalette.accent,
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                    )
+                }
+                lyricUiState is LyricUiState.Error -> item(key = "lyric-error") {
+                    ExpressiveStatePanel(
+                        title = "歌词加载失败",
+                        message = (lyricUiState as LyricUiState.Error).message,
+                        icon = AppIcons.Refresh,
+                        tone = ExpressiveStateTone.Error,
+                        accentPalette = accentPalette,
+                        actionLabel = "重试",
+                        onAction = viewModel::retryLyrics,
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                    )
+                }
+                lyricUiState is LyricUiState.Empty -> item(key = "lyric-empty") {
+                    ExpressiveStatePanel(
+                        title = "暂无歌词",
+                        message = "这首歌曲暂时没有可用歌词。",
+                        icon = AppIcons.GraphicEq,
+                        accentPalette = accentPalette,
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                    )
+                }
+                else -> itemsIndexed(
+                    items = lyricEntries,
+                    key = { idx, entry -> "${entry.key}:$idx" },
+                ) { idx, entry ->
+                    val isCurrent = idx == lyricIndex
+                    val dist = kotlin.math.abs(idx - lyricIndex)
 
-                val alpha = when {
-                    dist == 0 -> 1f
-                    dist <= 2 -> 1f - dist * 0.18f
-                    else -> 0.40f
-                }
-                val fontSize = when {
-                    dist == 0 -> 20.sp
-                    dist == 1 -> 17.sp
-                    else -> 15.sp
-                }
-                val wordLine = if (isCurrent) findWordLine(entry.key, wordLyricLines) else null
-                val seekToLine: () -> Unit = {
-                    entry.key?.let { timestamp ->
-                        viewModel.onPositionSeekClick(timestamp)
-                        resumeJob?.cancel()
-                        isUserScrolling = false
+                    val alpha = when {
+                        dist == 0 -> 1f
+                        dist <= 2 -> 1f - dist * 0.18f
+                        else -> 0.40f
                     }
-                }
-                if (wordLine != null) {
-                    WordLyricKaraokeLine(
-                        line = wordLine,
-                        positionMs = currentPosition,
-                        alpha = alpha,
-                        fontSize = fontSize,
-                        highlightColor = accentPalette.accent,
-                        onClick = seekToLine,
-                    )
-                } else {
-                    LyricKaraokeLine(
-                        text = entry.value?.ifBlank { "· · ·" } ?: "· · ·",
-                        fontSize = fontSize,
-                        onClick = seekToLine,
-                    )
+                    val fontSize = when {
+                        dist == 0 -> 20.sp
+                        dist == 1 -> 17.sp
+                        else -> 15.sp
+                    }
+                    val wordLine = if (isCurrent) findWordLine(entry.key, wordLyricLines) else null
+                    val seekToLine: (() -> Unit)? = entry.key?.let { timestamp ->
+                        {
+                            viewModel.onPositionSeekClick(timestamp)
+                            resumeJob?.cancel()
+                            isUserScrolling = false
+                        }
+                    }
+                    if (wordLine != null) {
+                        WordLyricKaraokeLine(
+                            line = wordLine,
+                            positionMs = currentPosition,
+                            alpha = alpha,
+                            fontSize = fontSize,
+                            highlightColor = accentPalette.accent,
+                            isCurrent = isCurrent,
+                            onClick = seekToLine,
+                        )
+                    } else {
+                        LyricKaraokeLine(
+                            text = entry.value?.ifBlank { "· · ·" } ?: "· · ·",
+                            alpha = alpha,
+                            fontSize = fontSize,
+                            isCurrent = isCurrent,
+                            onClick = seekToLine,
+                        )
+                    }
                 }
             }
 
-            item { Spacer(Modifier.height(250.dp)) }
+            item { Spacer(Modifier.height(lyricEdgeSpacer)) }
         }
 
         // ── Gradient feather edges ──
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(80.dp)
+                .height(featherHeight)
                 .align(Alignment.TopCenter)
                 .background(
                     Brush.verticalGradient(
@@ -256,7 +320,7 @@ fun FullLyricScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(80.dp)
+                .height(featherHeight)
                 .align(Alignment.BottomCenter)
                 .background(
                     Brush.verticalGradient(
@@ -264,32 +328,6 @@ fun FullLyricScreen(
                     ),
                 ),
         )
-
-        // ── Song info at bottom ──
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(horizontal = 24.dp, vertical = 24.dp)
-                .fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = metadata?.title?.ifBlank { "Unknown" } ?: "Unknown",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color.White.copy(alpha = 0.9f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.basicMarquee(),
-            )
-            Text(
-                text = metadata?.artist?.ifBlank { "Unknown" } ?: "Unknown",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.55f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
 
         AutoHideMiniPlayerController(modifier = Modifier.fillMaxSize())
     }
@@ -315,10 +353,11 @@ private fun WordLyricKaraokeLine(
     alpha: Float,
     fontSize: TextUnit,
     highlightColor: Color,
-    onClick: () -> Unit,
+    isCurrent: Boolean,
+    onClick: (() -> Unit)?,
 ) {
-    val dimColor = Color.White.copy(alpha = 0.45f)
-    val brightColor = Color.White.copy(alpha = alpha)
+    val dimColor = Color(0xFFC8C8C8)
+    val brightColor = lerp(dimColor, Color.White, alpha.coerceIn(0f, 1f))
     val annotatedText = buildAnnotatedString {
         line.words.forEach { word ->
             val current = positionMs in word.startTimeMs until word.endTimeMs.coerceAtLeast(word.startTimeMs + 1L)
@@ -342,10 +381,29 @@ private fun WordLyricKaraokeLine(
         }
     }
 
+    val seekModifier = if (onClick != null) {
+        Modifier.clickable(
+            role = Role.Button,
+            onClickLabel = "跳转到这句歌词",
+            onClick = onClick,
+        )
+    } else {
+        Modifier
+    }
     Box(
         modifier = Modifier
+            .widthIn(max = 840.dp)
             .fillMaxWidth()
-            .pointerInput(onClick) { detectTapGestures { onClick() } }
+            .heightIn(min = 48.dp)
+            .then(seekModifier)
+            .semantics {
+                selected = isCurrent
+                stateDescription = when {
+                    onClick == null -> "歌词间隔"
+                    isCurrent -> "当前歌词"
+                    else -> "歌词"
+                }
+            }
             .padding(vertical = 3.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -363,23 +421,48 @@ private fun WordLyricKaraokeLine(
 @Composable
 private fun LyricKaraokeLine(
     text: String,
+    alpha: Float,
     fontSize: TextUnit,
-    onClick: () -> Unit,
+    isCurrent: Boolean,
+    onClick: (() -> Unit)?,
 ) {
-    val dimColor = Color.White.copy(alpha = 0.45f)
+    val lineColor = if (isCurrent) {
+        Color.White
+    } else {
+        lerp(Color(0xFFC8C8C8), Color.White, alpha.coerceIn(0f, 1f))
+    }
 
+    val seekModifier = if (onClick != null) {
+        Modifier.clickable(
+            role = Role.Button,
+            onClickLabel = "跳转到这句歌词",
+            onClick = onClick,
+        )
+    } else {
+        Modifier
+    }
     Box(
         modifier = Modifier
+            .widthIn(max = 840.dp)
             .fillMaxWidth()
-            .pointerInput(onClick) { detectTapGestures { onClick() } }
+            .heightIn(min = 48.dp)
+            .then(seekModifier)
+            .semantics {
+                selected = isCurrent
+                stateDescription = when {
+                    onClick == null -> "歌词间隔"
+                    isCurrent -> "当前歌词"
+                    else -> "歌词"
+                }
+            }
             .padding(vertical = 3.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = text,
-            color = dimColor,
+            color = lineColor,
             fontSize = fontSize,
-            fontWeight = FontWeight.Normal,
+            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
             textAlign = TextAlign.Center,
             maxLines = 2,
             softWrap = true,

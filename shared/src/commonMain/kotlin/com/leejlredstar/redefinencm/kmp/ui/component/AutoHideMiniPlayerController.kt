@@ -13,19 +13,20 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -39,9 +40,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -51,14 +55,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -93,6 +108,8 @@ fun AutoHideMiniPlayerController(
     val currentIndex = queueSnapshot.currentIndex
     val shuffleEnabled = queueSnapshot.shuffleEnabled
     val comments by viewModel.comments.collectAsState()
+    val commentsLoading by viewModel.commentsLoading.collectAsState()
+    val commentsLoadError by viewModel.commentsLoadError.collectAsState()
 
     var visible by remember { mutableStateOf(initialExpanded) }
     var revealRequest by remember { mutableIntStateOf(0) }
@@ -120,6 +137,7 @@ fun AutoHideMiniPlayerController(
         label = "fullLyricControlAccent",
     )
     val accentPalette = contentAccentPalette(accentColor)
+    val extractAccent = rememberThemeColorExtractor(media?.artworkUri) { rawAccentColor = it }
 
     fun reveal() {
         visible = true
@@ -147,11 +165,6 @@ fun AutoHideMiniPlayerController(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        ControllerAccentSourceImage(
-            sourceUrl = media?.artworkUri,
-            onAccentColor = { rawAccentColor = it },
-        )
-
         AnimatedContent(
             targetState = visible,
             modifier = Modifier
@@ -172,6 +185,7 @@ fun AutoHideMiniPlayerController(
                     progress = progress,
                     shuffleEnabled = shuffleEnabled,
                     accentPalette = accentPalette,
+                    onArtworkLoaded = extractAccent,
                     onReveal = ::reveal,
                     onCollapse = { visible = false },
                     onSeek = { targetPosition ->
@@ -243,6 +257,9 @@ fun AutoHideMiniPlayerController(
                 comments = comments?.hotComments?.ifEmpty { comments?.comments } ?: emptyList(),
                 accentPalette = accentPalette,
                 onDismiss = { showComments = false },
+                isLoading = commentsLoading,
+                errorMessage = commentsLoadError,
+                onRetry = viewModel::getComments,
             )
         }
     }
@@ -263,7 +280,7 @@ private fun fullLyricControllerTransform(expanding: Boolean): ContentTransform {
         ) + scaleIn(
             initialScale = enterScale,
             transformOrigin = bottomCenter,
-            animationSpec = tween(320, easing = FastOutSlowInEasing),
+            animationSpec = tween(ExpressiveMotion.LongMillis, easing = FastOutSlowInEasing),
         )
         ) togetherWith (
         fadeOut(
@@ -274,7 +291,7 @@ private fun fullLyricControllerTransform(expanding: Boolean): ContentTransform {
         ) + scaleOut(
             targetScale = exitScale,
             transformOrigin = bottomCenter,
-            animationSpec = tween(280, easing = FastOutSlowInEasing),
+            animationSpec = tween(ExpressiveMotion.EmphasizedMillis, easing = FastOutSlowInEasing),
         )
         )
 }
@@ -289,6 +306,7 @@ private fun FullLyricControlConsole(
     progress: Float,
     shuffleEnabled: Boolean,
     accentPalette: ContentAccentPalette,
+    onArtworkLoaded: (coil3.Image) -> Unit,
     onReveal: () -> Unit,
     onCollapse: () -> Unit,
     onSeek: (Long) -> Unit,
@@ -312,6 +330,7 @@ private fun FullLyricControlConsole(
             totalDuration = totalDuration,
             progress = progress,
             accentPalette = accentPalette,
+            onArtworkLoaded = onArtworkLoaded,
             onReveal = onReveal,
             onCollapse = onCollapse,
             onSeek = onSeek,
@@ -324,7 +343,7 @@ private fun FullLyricControlConsole(
                 .padding(horizontal = 16.dp)
                 .widthIn(max = 620.dp)
                 .fillMaxWidth()
-                .height(58.dp),
+                .height(64.dp),
             shape = CircleShape,
             color = accentPalette.quietContainer.copy(alpha = 0.88f),
             contentColor = accentPalette.onQuietContainer,
@@ -399,6 +418,7 @@ private fun ExpandedPlaybackCard(
     totalDuration: Long,
     progress: Float,
     accentPalette: ContentAccentPalette,
+    onArtworkLoaded: (coil3.Image) -> Unit,
     onReveal: () -> Unit,
     onCollapse: () -> Unit,
     onSeek: (Long) -> Unit,
@@ -416,7 +436,7 @@ private fun ExpandedPlaybackCard(
     }
 
     Surface(
-        modifier = Modifier
+                        modifier = Modifier
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .widthIn(max = 620.dp)
             .fillMaxWidth(),
@@ -432,22 +452,25 @@ private fun ExpandedPlaybackCard(
             if (hasMedia) {
                 AsyncImage(
                     model = media?.artworkUri,
-                    contentDescription = "Album art",
+                    contentDescription = "${media?.title ?: "当前歌曲"}封面",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .size(72.dp)
                         .clip(MaterialTheme.shapes.large)
-                        .pointerInput(onCollapse) {
-                            detectTapGestures { onCollapse() }
-                        },
+                        .clickable(
+                            onClickLabel = "收起播放控制",
+                            onClick = onCollapse,
+                        ),
+                    onSuccess = { state -> onArtworkLoaded(state.result.image) },
                 )
             } else {
                 Surface(
                     modifier = Modifier
                         .size(72.dp)
-                        .pointerInput(onCollapse) {
-                            detectTapGestures { onCollapse() }
-                        },
+                        .clickable(
+                            onClickLabel = "收起播放控制",
+                            onClick = onCollapse,
+                        ),
                     shape = MaterialTheme.shapes.large,
                     color = accentPalette.onContainer.copy(alpha = 0.16f),
                     contentColor = accentPalette.onContainer,
@@ -471,21 +494,22 @@ private fun ExpandedPlaybackCard(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .pointerInput(onCollapse) {
-                            detectTapGestures { onCollapse() }
-                        },
+                        .clickable(
+                            onClickLabel = "收起播放控制",
+                            onClick = onCollapse,
+                        ),
                 ) {
                     Text(
-                        text = media?.title?.takeIf { it.isNotBlank() } ?: "Not playing",
+                        text = media?.title?.takeIf { it.isNotBlank() } ?: "未播放",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.ExtraBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = media?.artist?.takeIf { it.isNotBlank() } ?: "No playback yet",
+                        text = media?.artist?.takeIf { it.isNotBlank() } ?: "选择歌曲开始播放",
                         style = MaterialTheme.typography.labelMedium,
-                        color = accentPalette.onContainer.copy(alpha = 0.72f),
+                            color = accentPalette.secondaryOnContainer,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -516,7 +540,7 @@ private fun ExpandedPlaybackCard(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(34.dp),
+                        .height(48.dp),
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -530,7 +554,7 @@ private fun ExpandedPlaybackCard(
                             "0:00 / 0:00"
                         },
                         style = MaterialTheme.typography.labelSmall,
-                        color = accentPalette.onContainer.copy(alpha = 0.72f),
+                    color = accentPalette.secondaryOnContainer,
                         maxLines = 1,
                     )
                     Row(
@@ -540,14 +564,14 @@ private fun ExpandedPlaybackCard(
                         IconButton(
                             onClick = onPrevious,
                             enabled = hasMedia,
-                            modifier = Modifier.size(30.dp),
+                            modifier = Modifier.size(48.dp),
                         ) {
                             Icon(AppIcons.KeyboardArrowLeft, contentDescription = "上一首")
                         }
                         FilledIconButton(
                             onClick = onPlayPause,
                             enabled = hasMedia,
-                            modifier = Modifier.size(34.dp),
+                            modifier = Modifier.size(48.dp),
                             colors = IconButtonDefaults.filledIconButtonColors(
                                 containerColor = accentPalette.onContainer.copy(alpha = 0.18f),
                                 contentColor = accentPalette.onContainer,
@@ -563,7 +587,7 @@ private fun ExpandedPlaybackCard(
                         IconButton(
                             onClick = onNext,
                             enabled = hasMedia,
-                            modifier = Modifier.size(30.dp),
+                            modifier = Modifier.size(48.dp),
                         ) {
                             Icon(AppIcons.KeyboardArrowRight, contentDescription = "下一首")
                         }
@@ -586,74 +610,47 @@ internal fun PlaybackSeekBar(
     modifier: Modifier = Modifier,
 ) {
     var pendingValue by remember { mutableStateOf(value.coerceIn(0f, 1f)) }
+    var interactionActive by remember { mutableStateOf(false) }
     LaunchedEffect(value) {
-        pendingValue = value.coerceIn(0f, 1f)
+        if (!interactionActive) pendingValue = value.coerceIn(0f, 1f)
     }
 
-    fun fractionFromX(x: Float, width: Int): Float =
-        if (width <= 0) 0f else (x / width.toFloat()).coerceIn(0f, 1f)
+    DisposableEffect(Unit) {
+        onDispose {
+            if (interactionActive) onCancel()
+        }
+    }
 
-    BoxWithConstraints(
-        modifier = modifier
-            .pointerInput(enabled) {
-                detectTapGestures { offset ->
-                    if (!enabled) return@detectTapGestures
-                    onInteractionStart()
-                    val fraction = fractionFromX(offset.x, size.width)
-                    pendingValue = fraction
-                    onPreview(fraction)
-                    onCommit(fraction)
-                }
+    Slider(
+        value = pendingValue.coerceIn(0f, 1f),
+        onValueChange = { updated ->
+            if (!interactionActive) {
+                interactionActive = true
+                onInteractionStart()
             }
-            .pointerInput(enabled) {
-                detectHorizontalDragGestures(
-                    onDragStart = { offset ->
-                        if (!enabled) return@detectHorizontalDragGestures
-                        onInteractionStart()
-                        val fraction = fractionFromX(offset.x, size.width)
-                        pendingValue = fraction
-                        onPreview(fraction)
-                    },
-                    onHorizontalDrag = { change, _ ->
-                        if (!enabled) return@detectHorizontalDragGestures
-                        val fraction = fractionFromX(change.position.x, size.width)
-                        pendingValue = fraction
-                        onPreview(fraction)
-                        change.consume()
-                    },
-                    onDragEnd = {
-                        if (enabled) onCommit(pendingValue)
-                    },
-                    onDragCancel = {
-                        pendingValue = value.coerceIn(0f, 1f)
-                        onCancel()
-                    },
-                )
-            },
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        val safeValue = pendingValue.coerceIn(0f, 1f)
-        LinearProgressIndicator(
-            progress = { safeValue },
-            modifier = Modifier
-                .align(Alignment.Center)
-                .fillMaxWidth()
-                .height(6.dp)
-                .clip(CircleShape),
-            color = if (enabled) accentPalette.onContainer else accentPalette.onContainer.copy(alpha = 0.28f),
-            trackColor = accentPalette.onContainer.copy(alpha = if (enabled) 0.22f else 0.12f),
-        )
-        Surface(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .offset(x = (maxWidth - 12.dp) * safeValue)
-                .size(12.dp),
-            shape = CircleShape,
-            color = if (enabled) accentPalette.onContainer else accentPalette.onContainer.copy(alpha = 0.38f),
-            contentColor = accentPalette.container,
-            tonalElevation = 0.dp,
-        ) {}
-    }
+            pendingValue = updated.coerceIn(0f, 1f)
+            onPreview(pendingValue)
+        },
+        onValueChangeFinished = {
+            if (interactionActive) {
+                onCommit(pendingValue)
+                interactionActive = false
+            }
+        },
+        enabled = enabled,
+        valueRange = 0f..1f,
+        modifier = Modifier
+            .heightIn(min = ExpressiveLayout.MinimumTouchTarget)
+            .then(modifier),
+        colors = SliderDefaults.colors(
+            thumbColor = accentPalette.onContainer,
+            activeTrackColor = accentPalette.onContainer,
+            inactiveTrackColor = accentPalette.onContainer.copy(alpha = 0.22f),
+            disabledThumbColor = accentPalette.onContainer.copy(alpha = 0.38f),
+            disabledActiveTrackColor = accentPalette.onContainer.copy(alpha = 0.28f),
+            disabledInactiveTrackColor = accentPalette.onContainer.copy(alpha = 0.12f),
+        ),
+    )
 }
 
 @Composable
@@ -695,7 +692,7 @@ private fun CollapsedProgressController(
     }
     val swipeAlpha by animateFloatAsState(
         targetValue = abs(dragFraction).coerceIn(0f, 1f),
-        animationSpec = tween(120, easing = LinearOutSlowInEasing),
+        animationSpec = tween(ExpressiveMotion.FastMillis, easing = LinearOutSlowInEasing),
         label = "collapsedControllerSwipeAlpha",
     )
 
@@ -704,6 +701,7 @@ private fun CollapsedProgressController(
             .padding(horizontal = 24.dp)
             .widthIn(min = 220.dp, max = 420.dp)
             .fillMaxWidth(0.72f)
+            .heightIn(min = ExpressiveLayout.MinimumTouchTarget)
             .graphicsLayer {
                 translationX = animatedOffset
                 scaleX = animatedScale
@@ -744,6 +742,45 @@ private fun CollapsedProgressController(
                     onTap = { onReveal() },
                     onDoubleTap = { onTogglePlayPause() },
                 )
+            }
+            .onKeyEvent { event ->
+                if (event.type != KeyEventType.KeyUp) {
+                    false
+                } else if (event.key == Key.Enter || event.key == Key.Spacebar) {
+                    onReveal()
+                    true
+                } else {
+                    false
+                }
+            }
+            .focusable()
+            .semantics(mergeDescendants = true) {
+                role = Role.Button
+                contentDescription = if (hasMedia) {
+                    "${media?.title ?: "当前歌曲"}，播放控制"
+                } else {
+                    "当前没有播放歌曲"
+                }
+                onClick(label = "展开播放控制") {
+                    onReveal()
+                    true
+                }
+                if (hasMedia) {
+                    customActions = listOf(
+                        CustomAccessibilityAction(if (isPlaying) "暂停" else "播放") {
+                            onTogglePlayPause()
+                            true
+                        },
+                        CustomAccessibilityAction("上一首") {
+                            onPrevious()
+                            true
+                        },
+                        CustomAccessibilityAction("下一首") {
+                            onNext()
+                            true
+                        },
+                    )
+                }
             },
         shape = CircleShape,
         color = accentPalette.quietContainer.copy(alpha = 0.78f + swipeAlpha * 0.12f),
@@ -757,7 +794,7 @@ private fun CollapsedProgressController(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = media?.title?.takeIf { it.isNotBlank() } ?: "Not playing",
+                    text = media?.title?.takeIf { it.isNotBlank() } ?: "未播放",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
@@ -769,9 +806,11 @@ private fun CollapsedProgressController(
                         "${formatControllerDuration(position)} / ${formatControllerDuration(totalDuration)}"
                     } else "0:00 / 0:00",
                     style = MaterialTheme.typography.labelSmall,
-                    color = accentPalette.onQuietContainer.copy(
-                        alpha = if (swipeLabel != null) 0.96f else if (isPlaying) 0.82f else 0.58f,
-                    ),
+                    color = if (swipeLabel != null) {
+                        accentPalette.onQuietContainer
+                    } else {
+                        accentPalette.secondaryOnQuietContainer
+                    },
                     modifier = Modifier.padding(start = 10.dp),
                     maxLines = 1,
                 )
@@ -788,25 +827,6 @@ private fun CollapsedProgressController(
             )
         }
     }
-}
-
-@Composable
-private fun ControllerAccentSourceImage(
-    sourceUrl: String?,
-    onAccentColor: (Color) -> Unit,
-) {
-    if (sourceUrl.isNullOrBlank()) return
-    val extractAccent = rememberThemeColorExtractor(
-        requestKey = sourceUrl,
-        onAccentColor = onAccentColor,
-    )
-    AsyncImage(
-        model = sourceUrl,
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        modifier = Modifier.size(1.dp).alpha(0f),
-        onSuccess = { state -> extractAccent(state.result.image) },
-    )
 }
 
 private fun formatControllerDuration(millis: Long): String {

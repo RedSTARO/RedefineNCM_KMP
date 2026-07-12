@@ -10,6 +10,14 @@ import com.leejlredstar.redefinencm.kmp.util.LyricParser
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
+sealed interface LyricUiState {
+    data object Idle : LyricUiState
+    data object Loading : LyricUiState
+    data object Empty : LyricUiState
+    data class Content(val lineCount: Int) : LyricUiState
+    data class Error(val message: String) : LyricUiState
+}
+
 /**
  * Ported from the original Android NowPlayingViewModel.
  *
@@ -38,19 +46,19 @@ class NowPlayingViewModel(
 
     // ── Lyrics ──
     val lyricIndex = MutableStateFlow(0)
-    val lyricMap = MutableStateFlow<LinkedHashMap<Long?, String?>>(
-        linkedMapOf(0L to "Loading Lyric")
-    )
+    val lyricMap = MutableStateFlow<LinkedHashMap<Long?, String?>>(linkedMapOf())
     val rawLyric = MutableStateFlow("") // raw LRC text for external lyric renderers
     val rawWordLyric = MutableStateFlow("") // raw YRC text for word-level external lyric renderers
     val rawTranslatedLyric = MutableStateFlow("")
     val rawRomanLyric = MutableStateFlow("")
     val wordLyricLines = MutableStateFlow<List<LyricParser.WordLine>>(emptyList())
     val lyricMediaId = MutableStateFlow<String?>(null)
+    val lyricUiState = MutableStateFlow<LyricUiState>(LyricUiState.Idle)
     val lyricLoadError = MutableStateFlow<String?>(null)
 
     // ── Comments ──
     val comments = MutableStateFlow<CommentMusic?>(null)
+    val commentsLoading = MutableStateFlow(false)
     val commentsLoadError = MutableStateFlow<String?>(null)
 
     init {
@@ -87,6 +95,7 @@ class NowPlayingViewModel(
                 currentMedia.value = media
                 commentsFetchJob?.cancel()
                 comments.value = null
+                commentsLoading.value = false
                 commentsLoadError.value = null
                 if (media != null) {
                     MediaControlsIntegrator.updateMetadata(
@@ -198,7 +207,15 @@ class NowPlayingViewModel(
         // 网络必须离开 Main：桌面端 Main=Swing EDT，AMLL 软件渲染期间 EDT 饱和会把
         // 运行其上的 Ktor 连接协程饿到超时（实测 /lyric 连环 ConnectTimeout 的根因）
         lyricFetchJob = scope.launch(Dispatchers.Default) {
-            val id = mediaId.toLongOrNull() ?: return@launch
+            val id = mediaId.toLongOrNull()
+            if (id == null) {
+                applyLyricsForMedia(mediaId) {
+                    val message = "歌曲标识无效，无法加载歌词"
+                    lyricLoadError.value = message
+                    lyricUiState.value = LyricUiState.Error(message)
+                }
+                return@launch
+            }
             var settled = false
             var lastFailure: Exception? = null
             // 网络瞬断（连接超时）时 safeApiCall 返回 null，缓存又没有 → flow 一个值都不发，
@@ -220,14 +237,29 @@ class NowPlayingViewModel(
                             } else {
                                 parseLineLyrics(lrcText, wordLines)
                             }
-                            applyLyricsForMedia(mediaId) {
-                                lyricLoadError.value = null
-                                rawWordLyric.value = if (wordLines.isNotEmpty()) yrcText.orEmpty() else ""
-                                wordLyricLines.value = wordLines
-                                rawTranslatedLyric.value = translatedText.orEmpty()
-                                rawRomanLyric.value = romanText.orEmpty()
-                                rawLyric.value = plainLyricText
-                                lyricMap.value = displayLyricMap
+                            if (displayLyricMap.isEmpty()) {
+                                applyLyricsForMedia(mediaId) {
+                                    val message = "歌词解析失败"
+                                    lyricLoadError.value = message
+                                    rawLyric.value = ""
+                                    rawWordLyric.value = ""
+                                    rawTranslatedLyric.value = ""
+                                    rawRomanLyric.value = ""
+                                    wordLyricLines.value = emptyList()
+                                    lyricMap.value = linkedMapOf()
+                                    lyricUiState.value = LyricUiState.Error(message)
+                                }
+                            } else {
+                                applyLyricsForMedia(mediaId) {
+                                    lyricLoadError.value = null
+                                    rawWordLyric.value = if (wordLines.isNotEmpty()) yrcText.orEmpty() else ""
+                                    wordLyricLines.value = wordLines
+                                    rawTranslatedLyric.value = translatedText.orEmpty()
+                                    rawRomanLyric.value = romanText.orEmpty()
+                                    rawLyric.value = plainLyricText
+                                    lyricMap.value = displayLyricMap
+                                    lyricUiState.value = LyricUiState.Content(displayLyricMap.size)
+                                }
                             }
                             settled = true
                         } else if (lyric != null) {
@@ -239,7 +271,8 @@ class NowPlayingViewModel(
                                 rawTranslatedLyric.value = ""
                                 rawRomanLyric.value = ""
                                 wordLyricLines.value = emptyList()
-                                lyricMap.value = linkedMapOf(0L to "No lyric available")
+                                lyricMap.value = linkedMapOf()
+                                lyricUiState.value = LyricUiState.Empty
                             }
                             settled = true
                         }
@@ -248,21 +281,20 @@ class NowPlayingViewModel(
                     throw e
                 } catch (failure: Exception) {
                     lastFailure = failure
-                    applyLyricsForMedia(mediaId) {
-                        lyricLoadError.value = failure.message ?: "歌词缓存失败"
-                    }
                 }
                 if (settled) return@launch
                 if (attempt < 3) delay(2_000)
             }
             applyLyricsForMedia(mediaId) {
-                lyricLoadError.value = lastFailure?.message ?: "歌词请求失败"
+                val message = lastFailure?.message ?: "歌词请求失败"
+                lyricLoadError.value = message
                 rawLyric.value = ""
                 rawWordLyric.value = ""
                 rawTranslatedLyric.value = ""
                 rawRomanLyric.value = ""
                 wordLyricLines.value = emptyList()
-                lyricMap.value = linkedMapOf(0L to "歌词加载失败")
+                lyricMap.value = linkedMapOf()
+                lyricUiState.value = LyricUiState.Error(message)
             }
         }
     }
@@ -276,7 +308,8 @@ class NowPlayingViewModel(
         rawRomanLyric.value = ""
         wordLyricLines.value = emptyList()
         lyricLoadError.value = null
-        lyricMap.value = linkedMapOf(0L to "Loading Lyric")
+        lyricMap.value = linkedMapOf()
+        lyricUiState.value = LyricUiState.Loading
     }
 
     private fun clearLyrics() {
@@ -289,6 +322,7 @@ class NowPlayingViewModel(
         wordLyricLines.value = emptyList()
         lyricLoadError.value = null
         lyricMap.value = linkedMapOf()
+        lyricUiState.value = LyricUiState.Idle
     }
 
     private inline fun applyLyricsForMedia(mediaId: String, block: () -> Unit) {
@@ -307,27 +341,51 @@ class NowPlayingViewModel(
                 wordLines
                     .takeIf { it.isNotEmpty() }
                     ?.let { LyricParser.toLineLyricMap(it) }
-                    ?: linkedMapOf(0L to "Lyric parse error")
+                    ?: linkedMapOf()
             }
+    }
+
+    fun retryLyrics() {
+        currentMedia.value?.id?.let(::fetchLyrics)
     }
 
     fun getComments() {
         commentsFetchJob?.cancel()
         val mediaId = currentMedia.value?.id ?: return
         val id = mediaId.toLongOrNull() ?: return
+        commentsLoading.value = true
+        commentsLoadError.value = null
         commentsFetchJob = scope.launch(Dispatchers.Default) {
-            commentsLoadError.value = null
+            var emitted = false
             try {
                 repo.getCommentMusic(id).collect { detail ->
                     if (currentMedia.value?.id == mediaId) {
+                        emitted = true
                         comments.value = detail
                     }
+                }
+                if (
+                    !emitted &&
+                    currentMedia.value?.id == mediaId &&
+                    currentCoroutineContext()[Job] == commentsFetchJob
+                ) {
+                    commentsLoadError.value = "评论加载失败，请检查网络后重试"
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (failure: Exception) {
-                if (currentMedia.value?.id == mediaId) {
+                if (
+                    currentMedia.value?.id == mediaId &&
+                    currentCoroutineContext()[Job] == commentsFetchJob
+                ) {
                     commentsLoadError.value = failure.message ?: "评论加载失败"
+                }
+            } finally {
+                if (
+                    currentMedia.value?.id == mediaId &&
+                    currentCoroutineContext()[Job] == commentsFetchJob
+                ) {
+                    commentsLoading.value = false
                 }
             }
         }
