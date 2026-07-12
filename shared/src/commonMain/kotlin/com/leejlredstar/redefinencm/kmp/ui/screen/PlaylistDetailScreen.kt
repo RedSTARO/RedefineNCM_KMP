@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -47,6 +46,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
@@ -66,8 +69,11 @@ fun PlaylistDetailScreen(
 ) {
     val detail by viewModel.playlistDetail.collectAsState()
     val tracks by viewModel.playlistSongs.collectAsState()
+    val loading by viewModel.playlistLoading.collectAsState()
+    val loadError by viewModel.playlistLoadError.collectAsState()
+    val detailLoadError by viewModel.playlistDetailLoadError.collectAsState()
     val playlist = detail?.playlist?.takeIf { it.id == playlistId }
-    val songs = if (playlist != null) tracks?.songs.orEmpty() else emptyList()
+    val songs = tracks?.songs.orEmpty()
     // 原版 ShowPlaylistDetailPage：点单曲时按 replacePlaylist 设置决定替换整单还是单曲队列
     val replacePlaylist = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false) }
 
@@ -108,46 +114,86 @@ fun PlaylistDetailScreen(
     )
     val accentPalette = contentAccentPalette(animatedAccentColor)
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        accentPalette.pageStart,
-                        accentPalette.pageMiddle,
-                        accentPalette.pageEnd,
-                    ),
-                ),
-            ),
+    ExpressivePage(
+        accentPalette = accentPalette,
     ) {
-        item {
-            PlaylistHeader(
-                coverUrl = playlist?.coverImgUrl,
-                title = playlist?.name ?: "加载中…",
-                trackCountText = trackCountText,
-                accentPalette = accentPalette,
-                onAccentColor = { rawAccentColor = it },
-                onBack = onBack,
-                onPlayAll = { playAll() },
-                onDownloadAll = {
-                    viewModel.onDownloadPlaylistClick(playlistId)
-                },
-            )
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
+            item(key = "playlist-header") {
+                PlaylistHeader(
+                    coverUrl = playlist?.coverImgUrl,
+                    title = playlist?.name ?: "歌单",
+                    trackCountText = trackCountText,
+                    actionsEnabled = songs.isNotEmpty(),
+                    accentPalette = accentPalette,
+                    onAccentColor = { rawAccentColor = it },
+                    onBack = onBack,
+                    onPlayAll = { playAll() },
+                    onDownloadAll = {
+                        viewModel.onDownloadPlaylistClick(playlistId)
+                    },
+                )
+            }
+            if (!loading && loadError == null && detailLoadError != null) {
+                item(key = "playlist-detail-error") {
+                    ExpressiveStatePanel(
+                        title = "歌单资料暂不可用",
+                        message = detailLoadError.orEmpty(),
+                        icon = AppIcons.Refresh,
+                        tone = ExpressiveStateTone.Error,
+                        accentPalette = accentPalette,
+                        actionLabel = "重试",
+                        onAction = { viewModel.fetchPlaylistDetail(playlistId) },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
+            }
+            when {
+                loading -> item(key = "playlist-loading") {
+                    ExpressiveLoadingState(
+                        label = "正在加载歌单与歌曲…",
+                        accentColor = accentPalette.accent,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
+                loadError != null -> item(key = "playlist-error") {
+                    ExpressiveStatePanel(
+                        title = "歌单加载失败",
+                        message = loadError.orEmpty(),
+                        icon = AppIcons.Refresh,
+                        tone = ExpressiveStateTone.Error,
+                        accentPalette = accentPalette,
+                        actionLabel = "重试",
+                        onAction = { viewModel.fetchPlaylistDetail(playlistId) },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
+                songs.isEmpty() -> item(key = "playlist-empty") {
+                    ExpressiveStatePanel(
+                        title = "歌单里还没有歌曲",
+                        message = "添加歌曲后，它们会显示在这里。",
+                        icon = AppIcons.QueueMusic,
+                        accentPalette = accentPalette,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
+                else -> itemsIndexed(
+                    items = songs,
+                    key = { _, song -> song.id },
+                ) { i, song ->
+                    SongRow(
+                        index = i,
+                        title = song.name,
+                        artist = song.ar.joinToString(" / ") { it.name },
+                        artworkUri = song.al.picUrl,
+                        shape = connectedListItemShape(i, songs.size),
+                        onClick = { playSong(i) },
+                        songId = song.id,
+                        accentColor = animatedAccentColor,
+                    )
+                }
+            }
+            item { Spacer(Modifier.height(96.dp)) }
         }
-        itemsIndexed(songs) { i, song ->
-            SongRow(
-                index = i,
-                title = song.name,
-                artist = song.ar.joinToString(" / ") { it.name },
-                artworkUri = song.al.picUrl,
-                shape = connectedListItemShape(i, songs.size),
-                onClick = { playSong(i) },
-                songId = song.id,
-                accentColor = animatedAccentColor,
-            )
-        }
-        item { Spacer(Modifier.height(96.dp)) }
     }
 }
 
@@ -156,6 +202,7 @@ private fun PlaylistHeader(
     coverUrl: String?,
     title: String,
     trackCountText: String,
+    actionsEnabled: Boolean,
     accentPalette: ContentAccentPalette,
     onAccentColor: (Color) -> Unit,
     onBack: () -> Unit,
@@ -204,13 +251,13 @@ private fun PlaylistHeader(
 
             AsyncImage(
                 model = coverUrl,
-                contentDescription = "Playlist Cover",
+                        contentDescription = "歌单封面",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .align(Alignment.Center)
                     .padding(top = 8.dp)
                     .size(200.dp)
-                    .clip(RoundedCornerShape(36.dp)),
+                    .clip(MaterialTheme.shapes.extraLarge),
                 onSuccess = { state -> extractAccent(state.result.image) },
                 onError = { onAccentColor(fallbackAccentColor) },
             )
@@ -229,7 +276,7 @@ private fun PlaylistHeader(
             Text(
                 text = "$trackCountText 首歌曲",
                 style = MaterialTheme.typography.labelLarge,
-                color = accentPalette.onQuietContainer.copy(alpha = 0.72f),
+                        color = accentPalette.secondaryOnQuietContainer,
             )
             Spacer(Modifier.height(20.dp))
             Row(
@@ -238,6 +285,7 @@ private fun PlaylistHeader(
             ) {
                 Button(
                     onClick = onPlayAll,
+                    enabled = actionsEnabled,
                     modifier = Modifier
                         .weight(1f)
                         .height(56.dp),
@@ -254,6 +302,7 @@ private fun PlaylistHeader(
                 }
                 FilledTonalIconButton(
                     onClick = onDownloadAll,
+                    enabled = actionsEnabled,
                     modifier = Modifier.size(56.dp),
                     shape = MaterialTheme.shapes.large,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(

@@ -56,14 +56,19 @@ class MainViewModel(
 
     val userDetail = MutableStateFlow<UserDetail?>(null)
     val userPlaylists = MutableStateFlow<List<UserPlaylistEach>>(emptyList())
+    val accountLoading = MutableStateFlow(false)
     val accountLoadError = MutableStateFlow<String?>(null)
+    val userDetailLoadError = MutableStateFlow<String?>(null)
+    val userPlaylistsLoadError = MutableStateFlow<String?>(null)
     private val accountGeneration = MutableStateFlow(0L)
     private var accountJob: Job? = null
 
     // ── Playlist ──
     val playlistDetail = MutableStateFlow<PlaylistDetail?>(null)
     val playlistSongs = MutableStateFlow<PlaylistTrackAll?>(null)
+    val playlistLoading = MutableStateFlow(false)
     val playlistLoadError = MutableStateFlow<String?>(null)
+    val playlistDetailLoadError = MutableStateFlow<String?>(null)
     private val playlistGeneration = MutableStateFlow(0L)
     private val activePlaylistId = MutableStateFlow<Long?>(null)
     private var playlistJob: Job? = null
@@ -71,11 +76,15 @@ class MainViewModel(
     // ── Recommend ──
     val recommendResource = MutableStateFlow<RecommendResource?>(null)
     val recommendSongs = MutableStateFlow<RecommendSongs?>(null)
+    val recommendResourceLoadError = MutableStateFlow<String?>(null)
+    val recommendSongsLoadError = MutableStateFlow<String?>(null)
 
     // ── Search ──
     val searchResults = MutableStateFlow<List<SongDetailSongs>>(emptyList())
     val searchSuggestions = MutableStateFlow<List<String>>(emptyList())
     val searchLoading = MutableStateFlow(false)
+    val searchSubmittedQuery = MutableStateFlow<String?>(null)
+    val searchError = MutableStateFlow<String?>(null)
     private var searchJob: Job? = null
     private var suggestionJob: Job? = null
 
@@ -219,7 +228,12 @@ class MainViewModel(
     private fun loadAccount(clearPersistedAccount: Boolean) {
         val generation = accountGeneration.updateAndGet { it + 1L }
         accountJob?.cancel()
+        accountLoading.value = true
         accountLoadError.value = null
+        userDetailLoadError.value = null
+        userPlaylistsLoadError.value = null
+        recommendResourceLoadError.value = null
+        recommendSongsLoadError.value = null
         if (clearPersistedAccount) {
             _uid.value = 0L
             userDetail.value = null
@@ -262,37 +276,77 @@ class MainViewModel(
 
                 coroutineScope {
                     launch {
+                        var emitted = false
                         repo.getUserDetail(resolvedUid).collect { detail ->
                             if (accountGeneration.value == generation && _uid.value == resolvedUid) {
+                                emitted = detail != null || emitted
                                 userDetail.value = detail
+                                if (detail != null) userDetailLoadError.value = null
                             }
+                        }
+                        if (
+                            !emitted &&
+                            accountGeneration.value == generation &&
+                            _uid.value == resolvedUid
+                        ) {
+                            userDetailLoadError.value = "用户资料加载失败，请检查网络后重试"
                         }
                     }
                     launch {
+                        var emitted = false
                         repo.getUserPlaylist(resolvedUid).collect { detail ->
                             if (accountGeneration.value == generation && _uid.value == resolvedUid) {
+                                emitted = detail != null || emitted
                                 userPlaylists.value = detail?.playlist.orEmpty()
+                                if (detail != null) userPlaylistsLoadError.value = null
                             }
+                        }
+                        if (
+                            !emitted &&
+                            accountGeneration.value == generation &&
+                            _uid.value == resolvedUid
+                        ) {
+                            userPlaylistsLoadError.value = "歌单加载失败，请检查网络后重试"
                         }
                     }
                     launch {
+                        var emitted = false
                         repo.getRecommendResource(
                             uid = resolvedUid,
                             readCache = !clearPersistedAccount,
                         ).collect { detail ->
                             if (accountGeneration.value == generation && _uid.value == resolvedUid) {
+                                emitted = detail != null || emitted
                                 recommendResource.value = detail
+                                if (detail != null) recommendResourceLoadError.value = null
                             }
+                        }
+                        if (
+                            !emitted &&
+                            accountGeneration.value == generation &&
+                            _uid.value == resolvedUid
+                        ) {
+                            recommendResourceLoadError.value = "推荐歌单加载失败，请检查网络后重试"
                         }
                     }
                     launch {
+                        var emitted = false
                         repo.getRecommendSongs(
                             uid = resolvedUid,
                             readCache = !clearPersistedAccount,
                         ).collect { detail ->
                             if (accountGeneration.value == generation && _uid.value == resolvedUid) {
+                                emitted = detail != null || emitted
                                 recommendSongs.value = detail
+                                if (detail != null) recommendSongsLoadError.value = null
                             }
+                        }
+                        if (
+                            !emitted &&
+                            accountGeneration.value == generation &&
+                            _uid.value == resolvedUid
+                        ) {
+                            recommendSongsLoadError.value = "每日推荐加载失败，请检查网络后重试"
                         }
                     }
                 }
@@ -310,6 +364,10 @@ class MainViewModel(
                     runCatching { settings.flush() }
                     accountLoadError.value = failure.message ?: "账号数据加载失败"
                 }
+            } finally {
+                if (accountGeneration.value == generation) {
+                    accountLoading.value = false
+                }
             }
         }
     }
@@ -319,14 +377,23 @@ class MainViewModel(
         loadAccount(clearPersistedAccount = true)
     }
 
+    /** Retry account-scoped cache/network reads without clearing the persisted identity. */
+    fun retryAccountData() {
+        loadAccount(clearPersistedAccount = false)
+    }
+
     fun fetchPlaylistDetail(songlistID: Long) {
         val generation = playlistGeneration.updateAndGet { it + 1L }
         playlistJob?.cancel()
         activePlaylistId.value = songlistID
         playlistDetail.value = null
         playlistSongs.value = null
+        playlistLoading.value = true
         playlistLoadError.value = null
+        playlistDetailLoadError.value = null
         playlistJob = scope.launch(Dispatchers.Default) {
+            var detailEmitted = false
+            var tracksEmitted = false
             try {
                 coroutineScope {
                     launch {
@@ -335,6 +402,7 @@ class MainViewModel(
                                 playlistGeneration.value == generation &&
                                 activePlaylistId.value == songlistID
                             ) {
+                                detailEmitted = detail != null || detailEmitted
                                 playlistDetail.value = detail
                             }
                         }
@@ -345,16 +413,35 @@ class MainViewModel(
                                 playlistGeneration.value == generation &&
                                 activePlaylistId.value == songlistID
                             ) {
+                                tracksEmitted = detail != null || tracksEmitted
                                 playlistSongs.value = detail
                             }
                         }
                     }
+                }
+                if (
+                    !detailEmitted &&
+                    playlistGeneration.value == generation &&
+                    activePlaylistId.value == songlistID
+                ) {
+                    playlistDetailLoadError.value = "歌单资料加载失败，可重试以恢复封面与简介"
+                }
+                if (
+                    !tracksEmitted &&
+                    playlistGeneration.value == generation &&
+                    activePlaylistId.value == songlistID
+                ) {
+                    playlistLoadError.value = "歌曲列表加载失败，请检查网络后重试"
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (failure: Exception) {
                 if (playlistGeneration.value == generation) {
                     playlistLoadError.value = failure.message ?: "歌单加载失败"
+                }
+            } finally {
+                if (playlistGeneration.value == generation) {
+                    playlistLoading.value = false
                 }
             }
         }
@@ -388,14 +475,28 @@ class MainViewModel(
         if (query.isEmpty()) {
             searchResults.value = emptyList()
             searchLoading.value = false
+            searchSubmittedQuery.value = null
+            searchError.value = null
             return
         }
         searchSuggestions.value = emptyList()
+        searchSubmittedQuery.value = query
+        searchError.value = null
         searchJob = scope.launch(Dispatchers.Default) {
             searchLoading.value = true
             try {
                 val response = repo.search(query)
                 searchResults.value = response?.result?.songs ?: emptyList()
+                if (response == null) {
+                    searchError.value = "搜索失败，请检查网络后重试"
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                if (currentCoroutineContext()[Job] == searchJob) {
+                    searchResults.value = emptyList()
+                    searchError.value = "搜索失败，请检查网络后重试"
+                }
             } finally {
                 if (currentCoroutineContext()[Job] == searchJob) {
                     searchLoading.value = false
@@ -424,6 +525,8 @@ class MainViewModel(
         searchResults.value = emptyList()
         searchSuggestions.value = emptyList()
         searchLoading.value = false
+        searchSubmittedQuery.value = null
+        searchError.value = null
     }
 
     fun onCleared() {

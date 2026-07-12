@@ -18,6 +18,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -49,11 +50,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
@@ -80,6 +85,9 @@ fun HomeScreen(
 ) {
     val recommend by viewModel.recommendSongs.collectAsState()
     val recommendResource by viewModel.recommendResource.collectAsState()
+    val accountLoading by viewModel.accountLoading.collectAsState()
+    val resourceLoadError by viewModel.recommendResourceLoadError.collectAsState()
+    val songsLoadError by viewModel.recommendSongsLoadError.collectAsState()
     val userDetail by viewModel.userDetail.collectAsState()
     val dailySongs = recommend?.data?.dailySongs ?: emptyList()
     val resources = recommendResource?.recommend ?: emptyList()
@@ -87,7 +95,10 @@ fun HomeScreen(
     val defaultPageAccent = MaterialTheme.colorScheme.primaryContainer
     val avatarUrl = userDetail?.profile?.avatarUrl
     val nickname = userDetail?.profile?.nickname ?: "我的"
-    var rawPageAccent by remember(avatarUrl, defaultPageAccent) {
+    val pageAccentSource = resources.firstOrNull()?.picUrl
+        ?: dailySongs.firstOrNull()?.al?.picUrl
+        ?: avatarUrl
+    var rawPageAccent by remember(pageAccentSource, defaultPageAccent) {
         mutableStateOf(defaultPageAccent)
     }
     val pageAccent by animateColorAsState(
@@ -99,35 +110,29 @@ fun HomeScreen(
 
     BackHandler(enabled = showSearch) { showSearch = false }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        pagePalette.pageStart,
-                        pagePalette.pageMiddle,
-                        pagePalette.pageEnd,
-                    ),
-                ),
-            )
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(bottom = scaffoldPadding.calculateBottomPadding()),
+    ExpressivePage(
+        accentPalette = pagePalette,
+        contentWindowInsets = WindowInsets.statusBars,
+        contentPadding = PaddingValues(bottom = scaffoldPadding.calculateBottomPadding()),
     ) {
         SharedTransitionLayout {
             val sharedTransitionScope = this
 
             AnimatedVisibility(
                 visible = !showSearch,
-                enter = fadeIn(animationSpec = tween(180, easing = LinearOutSlowInEasing)) +
+                enter = fadeIn(
+                    animationSpec = tween(ExpressiveMotion.ShortMillis, easing = LinearOutSlowInEasing),
+                ) +
                     scaleIn(
                         initialScale = 0.985f,
-                        animationSpec = tween(260, easing = FastOutSlowInEasing),
+                        animationSpec = tween(ExpressiveMotion.MediumMillis, easing = FastOutSlowInEasing),
                     ),
-                exit = fadeOut(animationSpec = tween(120, easing = LinearOutSlowInEasing)) +
+                exit = fadeOut(
+                    animationSpec = tween(ExpressiveMotion.FastMillis, easing = LinearOutSlowInEasing),
+                ) +
                     scaleOut(
                         targetScale = 0.985f,
-                        animationSpec = tween(180, easing = FastOutSlowInEasing),
+                        animationSpec = tween(ExpressiveMotion.ShortMillis, easing = FastOutSlowInEasing),
                     ),
             ) {
                 val animatedVisibilityScope = this
@@ -143,7 +148,11 @@ fun HomeScreen(
                             avatarUrl = avatarUrl,
                             nickname = nickname,
                             onOpenMy = onOpenMy,
-                            onAccentColor = { rawPageAccent = it },
+                            onAccentColor = if (pageAccentSource == avatarUrl) {
+                                { color -> rawPageAccent = color }
+                            } else {
+                                null
+                            },
                             onClick = { showSearch = true },
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
@@ -154,10 +163,19 @@ fun HomeScreen(
                         SectionWithLazyRow(
                             title = "推荐歌单",
                             items = resources,
+                            isLoading = accountLoading && recommendResource == null,
+                            errorMessage = resourceLoadError,
+                            onRetry = viewModel::retryAccountData,
+                            key = { resource -> resource.id },
                             itemContent = { res ->
                                 RecommendSquareCard(
                                     picUrl = res.picUrl,
                                     text = res.name,
+                                    onAccentColor = if (res.picUrl == pageAccentSource) {
+                                        { color -> rawPageAccent = color }
+                                    } else {
+                                        null
+                                    },
                                     onClick = { onOpenPlaylist(res.id) },
                                 )
                             },
@@ -168,10 +186,19 @@ fun HomeScreen(
                         SectionWithLazyRow(
                             title = "每日推荐",
                             items = dailySongs,
+                            isLoading = accountLoading && recommend == null,
+                            errorMessage = songsLoadError,
+                            onRetry = viewModel::retryAccountData,
+                            key = { song -> song.id },
                             itemContent = { song ->
                                 RecommendSquareCard(
                                     picUrl = song.al.picUrl,
                                     text = song.name,
+                                    onAccentColor = if (song.al.picUrl == pageAccentSource) {
+                                        { color -> rawPageAccent = color }
+                                    } else {
+                                        null
+                                    },
                                     onClick = {
                                         // 原版 onPlaySingleSongClick：单曲独立队列
                                         player.setQueue(listOf(song.toMediaInfo()), 0)
@@ -188,14 +215,20 @@ fun HomeScreen(
             AnimatedVisibility(
                 visible = showSearch,
                 enter = fadeIn(
-                    animationSpec = tween(180, delayMillis = 80, easing = LinearOutSlowInEasing),
+                    animationSpec = tween(
+                        ExpressiveMotion.ShortMillis,
+                        delayMillis = ExpressiveMotion.EnterDelayMillis,
+                        easing = LinearOutSlowInEasing,
+                    ),
                 ) + slideInVertically(
-                    animationSpec = tween(280, easing = FastOutSlowInEasing),
+                    animationSpec = tween(ExpressiveMotion.EmphasizedMillis, easing = FastOutSlowInEasing),
                     initialOffsetY = { it / 10 },
                 ),
-                exit = fadeOut(animationSpec = tween(120, easing = LinearOutSlowInEasing)) +
+                exit = fadeOut(
+                    animationSpec = tween(ExpressiveMotion.FastMillis, easing = LinearOutSlowInEasing),
+                ) +
                     slideOutVertically(
-                        animationSpec = tween(180, easing = FastOutSlowInEasing),
+                        animationSpec = tween(ExpressiveMotion.ShortMillis, easing = FastOutSlowInEasing),
                         targetOffsetY = { it / 12 },
                     ),
             ) {
@@ -218,7 +251,7 @@ private fun HomeHero(
     avatarUrl: String?,
     nickname: String,
     onOpenMy: () -> Unit,
-    onAccentColor: (Color) -> Unit,
+    onAccentColor: ((Color) -> Unit)?,
     onClick: () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
@@ -246,13 +279,19 @@ private fun HomeHero(
                 )
                 .padding(20.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
+            BoxWithConstraints {
+                val compactHeader = maxWidth < 300.dp
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
                     Text(
                         text = "RedefineNCM",
-                        style = MaterialTheme.typography.displaySmall,
+                        style = if (compactHeader) {
+                            MaterialTheme.typography.headlineSmall
+                        } else {
+                            MaterialTheme.typography.displaySmall
+                        },
                         fontWeight = FontWeight.ExtraBold,
-                        color = heroPalette.onContainer,
+                        color = heroPalette.onPageStart,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -260,19 +299,20 @@ private fun HomeHero(
                     Text(
                         text = "推荐 · $dailySongCount 首每日歌曲 · $playlistCount 张歌单",
                         style = MaterialTheme.typography.titleMedium,
-                        color = heroPalette.onQuietContainer.copy(alpha = 0.78f),
+                        color = heroPalette.secondaryOnPageStart,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    }
+                    Spacer(Modifier.size(if (compactHeader) 8.dp else 16.dp))
+                    HomeAccountAvatar(
+                        avatarUrl = avatarUrl,
+                        nickname = nickname,
+                        accentColor = accentColor,
+                        onOpenMy = onOpenMy,
+                        onAccentColor = onAccentColor,
+                    )
                 }
-                Spacer(Modifier.size(16.dp))
-                HomeAccountAvatar(
-                    avatarUrl = avatarUrl,
-                    nickname = nickname,
-                    accentColor = accentColor,
-                    onOpenMy = onOpenMy,
-                    onAccentColor = onAccentColor,
-                )
             }
             Spacer(Modifier.height(18.dp))
             SearchBox(
@@ -291,35 +331,39 @@ private fun HomeAccountAvatar(
     nickname: String,
     accentColor: Color,
     onOpenMy: () -> Unit,
-    onAccentColor: (Color) -> Unit,
+    onAccentColor: ((Color) -> Unit)?,
 ) {
     val avatarPalette = contentAccentPalette(accentColor)
     val extractAccent = rememberThemeColorExtractor(
         requestKey = avatarUrl,
-        onAccentColor = onAccentColor,
+        onAccentColor = onAccentColor ?: {},
     )
     Surface(
         onClick = onOpenMy,
         shape = CircleShape,
         color = avatarPalette.container,
         contentColor = avatarPalette.onContainer,
-        modifier = Modifier.size(64.dp),
+        modifier = Modifier
+            .size(56.dp)
+            .semantics { contentDescription = "打开${nickname.ifBlank { "我的" }}的个人页" },
     ) {
         if (avatarUrl.isNullOrBlank()) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                 Icon(
                     imageVector = AppIcons.Person,
-                    contentDescription = nickname,
+                    contentDescription = null,
                     modifier = Modifier.size(28.dp),
                 )
             }
         } else {
             AsyncImage(
                 model = avatarUrl,
-                contentDescription = nickname,
+                contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
-                onSuccess = { state -> extractAccent(state.result.image) },
+                onSuccess = { state ->
+                    if (onAccentColor != null) extractAccent(state.result.image)
+                },
             )
         }
     }
@@ -362,7 +406,7 @@ private fun SearchBox(
                 Text(
                     text = "搜索歌曲、歌单...",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = searchPalette.onQuietContainer.copy(alpha = 0.78f),
+                color = searchPalette.secondaryOnQuietContainer,
                 )
             }
         }

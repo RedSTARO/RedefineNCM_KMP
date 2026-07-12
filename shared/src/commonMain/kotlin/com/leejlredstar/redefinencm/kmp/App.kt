@@ -69,10 +69,13 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -80,6 +83,7 @@ import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.lyric.WebViewLyricScreen
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackSeekBar
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
 import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOverlayCoordinator
 import com.leejlredstar.redefinencm.kmp.ui.component.CommentBottomSheet
@@ -212,8 +216,7 @@ private fun AppContent(
             val mainViewModel: MainViewModel = koinInject()
             val player: PlatformPlayer = koinInject()
             val currentMedia by player.currentMedia.collectAsState()
-            val userDetail by mainViewModel.userDetail.collectAsState()
-            val chromeAccentSource = currentMedia?.artworkUri ?: userDetail?.profile?.avatarUrl
+            val chromeAccentSource = currentMedia?.artworkUri
             val defaultChromeAccent = MaterialTheme.colorScheme.primaryContainer
             var rawChromeAccent by remember(chromeAccentSource, defaultChromeAccent) {
                 mutableStateOf(defaultChromeAccent)
@@ -289,14 +292,12 @@ private fun AppContent(
             }
 
             Box(Modifier.fillMaxSize()) {
-                ChromeAccentSourceImage(
-                    sourceUrl = chromeAccentSource,
-                    onAccentColor = { rawChromeAccent = it },
-                )
                 BoxWithConstraints(Modifier.fillMaxSize()) {
-                    val useDesktopLayout = platform.isDesktop
+                    // Desktop chrome must follow the available window, not only the target.
+                    // A compact desktop window uses the same adaptive rail/bar patterns as mobile.
+                    val useDesktopLayout = platform.isDesktop && maxWidth >= 900.dp && maxHeight >= 720.dp
                     val isWide = maxWidth >= 600.dp
-                    val showMiniPlayer = pushedStack.lastOrNull().let {
+                    val showMiniPlayer = currentMedia != null && pushedStack.lastOrNull().let {
                         it !is PushedDest.FullLyric
                     }
                     val rootDest = pushedStack.lastOrNull()
@@ -321,14 +322,14 @@ private fun AppContent(
                                         NavigationBarItem(
                                             selected = currentTab == item.dest,
                                             onClick = { currentTab = item.dest },
-                                            icon = { Icon(item.icon, contentDescription = item.label) },
+                                            icon = { Icon(item.icon, contentDescription = null) },
                                             label = { Text(item.label) },
                                             colors = NavigationBarItemDefaults.colors(
                                                 indicatorColor = chromePalette.container,
                                                 selectedIconColor = chromePalette.onContainer,
                                                 selectedTextColor = chromePalette.onQuietContainer,
-                                                unselectedIconColor = chromePalette.onQuietContainer.copy(alpha = 0.64f),
-                                                unselectedTextColor = chromePalette.onQuietContainer.copy(alpha = 0.64f),
+                                                unselectedIconColor = chromePalette.secondaryOnQuietContainer,
+                                                unselectedTextColor = chromePalette.secondaryOnQuietContainer,
                                             ),
                                         )
                                     }
@@ -341,7 +342,10 @@ private fun AppContent(
                                 enter = miniPlayerEnterTransition(),
                                 exit = miniPlayerExitTransition(),
                             ) {
-                                MiniNowPlayingBar(onExpand = ::openFullLyric)
+                                MiniNowPlayingBar(
+                                    onExpand = ::openFullLyric,
+                                    onAccentColor = { rawChromeAccent = it },
+                                )
                             }
                         },
                     ) { innerPadding ->
@@ -350,15 +354,13 @@ private fun AppContent(
                                 DesktopSidebar(
                                     tabs = tabs,
                                     currentTab = currentTab,
-                                    downloadsSelected = rootDest is RootDest.Pushed &&
-                                        rootDest.dest is PushedDest.Downloads,
                                     accentPalette = chromePalette,
                                     player = player,
                                     onSelectTab = {
                                         pushedStack.clear()
                                         currentTab = it
                                     },
-                                    onOpenDownloads = ::openDownloads,
+                                    onChromeAccent = { rawChromeAccent = it },
                                     onOpenNowPlaying = ::openFullLyric,
                                 )
                             } else if (isWide) {
@@ -374,14 +376,14 @@ private fun AppContent(
                                             NavigationRailItem(
                                                 selected = currentTab == item.dest,
                                                 onClick = { currentTab = item.dest },
-                                                icon = { Icon(item.icon, contentDescription = item.label) },
+                                                icon = { Icon(item.icon, contentDescription = null) },
                                                 label = { Text(item.label) },
                                                 colors = NavigationRailItemDefaults.colors(
                                                     indicatorColor = chromePalette.container,
                                                     selectedIconColor = chromePalette.onContainer,
                                                     selectedTextColor = chromePalette.onQuietContainer,
-                                                    unselectedIconColor = chromePalette.onQuietContainer.copy(alpha = 0.64f),
-                                                    unselectedTextColor = chromePalette.onQuietContainer.copy(alpha = 0.64f),
+                                                    unselectedIconColor = chromePalette.secondaryOnQuietContainer,
+                                                    unselectedTextColor = chromePalette.secondaryOnQuietContainer,
                                                 ),
                                             )
                                         }
@@ -435,11 +437,10 @@ private fun AppContent(
 private fun DesktopSidebar(
     tabs: List<NavigationItem>,
     currentTab: TabDest,
-    downloadsSelected: Boolean,
     accentPalette: ContentAccentPalette,
     player: PlatformPlayer,
     onSelectTab: (TabDest) -> Unit,
-    onOpenDownloads: () -> Unit,
+    onChromeAccent: (Color) -> Unit,
     onOpenNowPlaying: () -> Unit,
 ) {
     Surface(
@@ -462,7 +463,7 @@ private fun DesktopSidebar(
                 Text(
                     text = "Desktop",
                     style = MaterialTheme.typography.labelLarge,
-                    color = accentPalette.onQuietContainer.copy(alpha = 0.64f),
+                    color = accentPalette.secondaryOnQuietContainer,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -477,17 +478,11 @@ private fun DesktopSidebar(
                     onClick = { onSelectTab(item.dest) },
                 )
             }
-            DesktopNavItem(
-                label = "下载管理",
-                icon = AppIcons.Download,
-                selected = downloadsSelected,
-                accentPalette = accentPalette,
-                onClick = onOpenDownloads,
-            )
             Spacer(Modifier.weight(1f))
             DesktopNowPlayingStrip(
                 player = player,
                 accentPalette = accentPalette,
+                onAccentColor = onChromeAccent,
                 onOpenNowPlaying = onOpenNowPlaying,
             )
         }
@@ -507,14 +502,20 @@ private fun DesktopNavItem(
         shape = MaterialTheme.shapes.large,
         color = if (selected) accentPalette.container else Color.Transparent,
         contentColor = if (selected) accentPalette.onContainer else accentPalette.onQuietContainer,
-        modifier = Modifier.fillMaxWidth().height(52.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .semantics {
+                role = Role.Tab
+                this.selected = selected
+            },
     ) {
         Row(
             modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Icon(icon, contentDescription = label, modifier = Modifier.size(24.dp))
+            Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.titleMedium,
@@ -530,6 +531,7 @@ private fun DesktopNavItem(
 private fun DesktopNowPlayingStrip(
     player: PlatformPlayer,
     accentPalette: ContentAccentPalette,
+    onAccentColor: (Color) -> Unit,
     onOpenNowPlaying: () -> Unit,
     viewModel: NowPlayingViewModel = koinInject(),
 ) {
@@ -543,7 +545,10 @@ private fun DesktopNowPlayingStrip(
     val currentIndex = queueSnapshot.currentIndex
     val shuffleEnabled = queueSnapshot.shuffleEnabled
     val comments by viewModel.comments.collectAsState()
+    val commentsLoading by viewModel.commentsLoading.collectAsState()
+    val commentsLoadError by viewModel.commentsLoadError.collectAsState()
     val artwork = media?.artworkUri.orEmpty()
+    val extractAccent = rememberThemeColorExtractor(artwork) { onAccentColor(it) }
     val hasMedia = media != null
     val safePosition = position.coerceAtLeast(0L)
     val totalDuration = duration
@@ -580,8 +585,6 @@ private fun DesktopNowPlayingStrip(
 
     Box(Modifier.fillMaxWidth()) {
         Surface(
-            onClick = { if (hasMedia) onOpenNowPlaying() },
-            enabled = hasMedia,
             shape = MaterialTheme.shapes.extraLarge,
             color = accentPalette.container.copy(alpha = 0.92f),
             contentColor = accentPalette.onContainer,
@@ -591,10 +594,19 @@ private fun DesktopNowPlayingStrip(
                 modifier = Modifier.fillMaxWidth().padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                Surface(
+                    onClick = onOpenNowPlaying,
+                    enabled = hasMedia,
+                    shape = MaterialTheme.shapes.large,
+                    color = Color.Transparent,
+                    contentColor = accentPalette.onContainer,
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
+                    Row(
+                        modifier = Modifier.padding(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
                     Surface(
                         shape = MaterialTheme.shapes.large,
                         color = accentPalette.quietContainer,
@@ -604,9 +616,10 @@ private fun DesktopNowPlayingStrip(
                         if (artwork.isNotBlank()) {
                             AsyncImage(
                                 model = artwork,
-                                contentDescription = "Album art",
+                                contentDescription = "当前歌曲封面",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize(),
+                                onSuccess = { state -> extractAccent(state.result.image) },
                             )
                         } else {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -614,7 +627,7 @@ private fun DesktopNowPlayingStrip(
                             }
                         }
                     }
-                    Column(Modifier.weight(1f)) {
+                        Column(Modifier.weight(1f)) {
                         Text(
                             text = media?.title?.takeIf { it.isNotBlank() } ?: "未播放",
                             style = MaterialTheme.typography.titleMedium,
@@ -625,7 +638,7 @@ private fun DesktopNowPlayingStrip(
                         Text(
                             text = media?.artist?.takeIf { it.isNotBlank() } ?: "RedefineNCM",
                             style = MaterialTheme.typography.labelMedium,
-                            color = accentPalette.onContainer.copy(alpha = 0.72f),
+                            color = accentPalette.secondaryOnContainer,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -636,11 +649,12 @@ private fun DesktopNowPlayingStrip(
                                 "0:00 / 0:00"
                             },
                             style = MaterialTheme.typography.labelSmall,
-                            color = accentPalette.onContainer.copy(alpha = 0.66f),
+                            color = accentPalette.secondaryOnContainer,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(top = 4.dp),
                         )
+                        }
                     }
                 }
 
@@ -666,18 +680,18 @@ private fun DesktopNowPlayingStrip(
                         dragProgress = progress
                         isDragging = false
                     },
-                    modifier = Modifier.fillMaxWidth().height(30.dp),
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
                 )
 
                 Row(
-                    modifier = Modifier.fillMaxWidth().height(34.dp),
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
                         imageVector = AppIcons.VolumeUp,
                         contentDescription = "音量",
-                        tint = accentPalette.onContainer.copy(alpha = 0.76f),
+                        tint = accentPalette.secondaryOnContainer,
                         modifier = Modifier.size(18.dp),
                     )
                     Slider(
@@ -703,7 +717,7 @@ private fun DesktopNowPlayingStrip(
                         onCheckedChange = { viewModel.onShuffleClick(!shuffleEnabled) },
                         enabled = hasMedia,
                         shape = MaterialTheme.shapes.large,
-                        modifier = Modifier.size(38.dp),
+                        modifier = Modifier.size(48.dp),
                         colors = IconButtonDefaults.filledIconToggleButtonColors(
                             containerColor = accentPalette.quietContainer,
                             contentColor = accentPalette.onQuietContainer,
@@ -723,7 +737,7 @@ private fun DesktopNowPlayingStrip(
                         onClick = { viewModel.onPervClick() },
                         enabled = hasMedia,
                         shape = MaterialTheme.shapes.large,
-                        modifier = Modifier.size(40.dp),
+                        modifier = Modifier.size(48.dp),
                         colors = desktopSecondaryButtonColors(accentPalette),
                     ) {
                         Icon(
@@ -754,7 +768,7 @@ private fun DesktopNowPlayingStrip(
                         onClick = { viewModel.onNextClick() },
                         enabled = hasMedia,
                         shape = MaterialTheme.shapes.large,
-                        modifier = Modifier.size(40.dp),
+                        modifier = Modifier.size(48.dp),
                         colors = desktopSecondaryButtonColors(accentPalette),
                     ) {
                         Icon(
@@ -770,7 +784,7 @@ private fun DesktopNowPlayingStrip(
                         },
                         enabled = hasMedia,
                         shape = MaterialTheme.shapes.large,
-                        modifier = Modifier.size(38.dp),
+                        modifier = Modifier.size(48.dp),
                         colors = desktopSecondaryButtonColors(accentPalette),
                     ) {
                         Icon(
@@ -782,7 +796,7 @@ private fun DesktopNowPlayingStrip(
                 }
 
                 Row(
-                    modifier = Modifier.fillMaxWidth().height(42.dp),
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -823,6 +837,9 @@ private fun DesktopNowPlayingStrip(
                 comments = comments?.hotComments?.ifEmpty { comments?.comments } ?: emptyList(),
                 accentPalette = accentPalette,
                 onDismiss = { showComments = false },
+                isLoading = commentsLoading,
+                errorMessage = commentsLoadError,
+                onRetry = viewModel::getComments,
             )
         }
     }
@@ -842,25 +859,6 @@ private fun formatDesktopPlayerDuration(millis: Long): String {
     val minutes = totalSeconds / 60L
     val seconds = totalSeconds % 60L
     return "$minutes:${seconds.toString().padStart(2, '0')}"
-}
-
-@Composable
-private fun ChromeAccentSourceImage(
-    sourceUrl: String?,
-    onAccentColor: (Color) -> Unit,
-) {
-    if (sourceUrl.isNullOrBlank()) return
-    val extractAccent = rememberThemeColorExtractor(
-        requestKey = sourceUrl,
-        onAccentColor = onAccentColor,
-    )
-    AsyncImage(
-        model = sourceUrl,
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        modifier = Modifier.size(1.dp).alpha(0f),
-        onSuccess = { state -> extractAccent(state.result.image) },
-    )
 }
 
 private fun pageTransition(initial: RootDest, target: RootDest): ContentTransform =
@@ -900,7 +898,7 @@ private fun sheetTransition(showingSheet: Boolean): ContentTransform =
                 initialOffsetY = { it / 2 },
             ) + pageFadeIn()
             ) togetherWith (
-            fadeOut(animationSpec = tween(180, easing = LinearOutSlowInEasing)) +
+            fadeOut(animationSpec = tween(ExpressiveMotion.ShortMillis, easing = LinearOutSlowInEasing)) +
                 scaleOut(
                     targetScale = 0.98f,
                     animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
@@ -909,7 +907,11 @@ private fun sheetTransition(showingSheet: Boolean): ContentTransform =
     } else {
         (
             fadeIn(
-                animationSpec = tween(180, delayMillis = 60, easing = LinearOutSlowInEasing),
+                animationSpec = tween(
+                    ExpressiveMotion.ShortMillis,
+                    delayMillis = ExpressiveMotion.EnterDelayMillis,
+                    easing = LinearOutSlowInEasing,
+                ),
             ) + scaleIn(
                 initialScale = 0.98f,
                 animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
@@ -918,19 +920,27 @@ private fun sheetTransition(showingSheet: Boolean): ContentTransform =
             slideOutVertically(
                 animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
                 targetOffsetY = { it / 2 },
-            ) + fadeOut(animationSpec = tween(160, easing = LinearOutSlowInEasing))
+            ) + fadeOut(
+                animationSpec = tween(ExpressiveMotion.QuickMillis, easing = LinearOutSlowInEasing),
+            )
             )
     }
 
 private fun fadeThroughTransition(): ContentTransform =
-    (pageFadeIn(delayMillis = 90) + pageScaleIn()) togetherWith
+        (pageFadeIn(delayMillis = ExpressiveMotion.StaggerDelayMillis) + pageScaleIn()) togetherWith
         (pageFadeOut() + pageScaleOut())
 
-private fun pageFadeIn(delayMillis: Int = 60): EnterTransition =
-    fadeIn(animationSpec = tween(180, delayMillis = delayMillis, easing = LinearOutSlowInEasing))
+private fun pageFadeIn(delayMillis: Int = ExpressiveMotion.EnterDelayMillis): EnterTransition =
+    fadeIn(
+        animationSpec = tween(
+            ExpressiveMotion.ShortMillis,
+            delayMillis = delayMillis,
+            easing = LinearOutSlowInEasing,
+        ),
+    )
 
 private fun pageFadeOut(): ExitTransition =
-    fadeOut(animationSpec = tween(120, easing = LinearOutSlowInEasing))
+    fadeOut(animationSpec = tween(ExpressiveMotion.FastMillis, easing = LinearOutSlowInEasing))
 
 private fun pageScaleIn(): EnterTransition =
     scaleIn(
@@ -948,37 +958,37 @@ private fun bottomNavEnterTransition(): EnterTransition =
     slideInVertically(
         animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
         initialOffsetY = { it },
-    ) + fadeIn(animationSpec = tween(180, easing = LinearOutSlowInEasing))
+    ) + fadeIn(animationSpec = tween(ExpressiveMotion.ShortMillis, easing = LinearOutSlowInEasing))
 
 private fun bottomNavExitTransition(): ExitTransition =
     slideOutVertically(
-        animationSpec = tween(220, easing = FastOutSlowInEasing),
+        animationSpec = tween(ExpressiveMotion.StandardMillis, easing = FastOutSlowInEasing),
         targetOffsetY = { it },
-    ) + fadeOut(animationSpec = tween(120, easing = LinearOutSlowInEasing))
+    ) + fadeOut(animationSpec = tween(ExpressiveMotion.FastMillis, easing = LinearOutSlowInEasing))
 
 private fun railEnterTransition(): EnterTransition =
     slideInHorizontally(
         animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
         initialOffsetX = { -it },
-    ) + fadeIn(animationSpec = tween(180, easing = LinearOutSlowInEasing))
+    ) + fadeIn(animationSpec = tween(ExpressiveMotion.ShortMillis, easing = LinearOutSlowInEasing))
 
 private fun railExitTransition(): ExitTransition =
     slideOutHorizontally(
-        animationSpec = tween(220, easing = FastOutSlowInEasing),
+        animationSpec = tween(ExpressiveMotion.StandardMillis, easing = FastOutSlowInEasing),
         targetOffsetX = { -it },
-    ) + fadeOut(animationSpec = tween(120, easing = LinearOutSlowInEasing))
+    ) + fadeOut(animationSpec = tween(ExpressiveMotion.FastMillis, easing = LinearOutSlowInEasing))
 
 private fun miniPlayerEnterTransition(): EnterTransition =
     scaleIn(
         initialScale = 0.88f,
-        animationSpec = tween(260, easing = FastOutSlowInEasing),
-    ) + fadeIn(animationSpec = tween(160, easing = LinearOutSlowInEasing))
+        animationSpec = tween(ExpressiveMotion.MediumMillis, easing = FastOutSlowInEasing),
+    ) + fadeIn(animationSpec = tween(ExpressiveMotion.QuickMillis, easing = LinearOutSlowInEasing))
 
 private fun miniPlayerExitTransition(): ExitTransition =
     scaleOut(
         targetScale = 0.88f,
-        animationSpec = tween(180, easing = FastOutSlowInEasing),
-    ) + fadeOut(animationSpec = tween(120, easing = LinearOutSlowInEasing))
+        animationSpec = tween(ExpressiveMotion.ShortMillis, easing = FastOutSlowInEasing),
+    ) + fadeOut(animationSpec = tween(ExpressiveMotion.FastMillis, easing = LinearOutSlowInEasing))
 
 private fun isFullLyricSheetTransition(initial: RootDest, target: RootDest): Boolean =
     isFullLyric(initial) || isFullLyric(target)
@@ -993,4 +1003,4 @@ private fun tabIndex(tab: TabDest): Int =
         is TabDest.Settings -> 2
     }
 
-private const val PageTransitionMillis = 320
+private const val PageTransitionMillis = ExpressiveMotion.LongMillis

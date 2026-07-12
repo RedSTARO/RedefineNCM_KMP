@@ -29,21 +29,25 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
 import com.leejlredstar.redefinencm.kmp.data.api.dto.UserPlaylistEach
 import com.leejlredstar.redefinencm.kmp.download.DownloadTaskStatus
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveArtwork
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
@@ -114,32 +118,35 @@ fun SongRow(
                 }
             }
             Spacer(Modifier.width(12.dp))
-            AsyncImage(
+            ExpressiveArtwork(
                 model = artworkUri,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.size(56.dp).clip(MaterialTheme.shapes.medium),
-                onSuccess = { state ->
+                modifier = Modifier.size(56.dp),
+                shape = MaterialTheme.shapes.medium,
+                containerColor = accentPalette.container,
+                contentColor = accentPalette.onContainer,
+                onImageLoaded = { image ->
                     if (accentColor == null) {
-                        extractAccent(state.result.image)
+                        extractAccent(image)
                     }
                 },
             )
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = title.ifBlank { "Unknown" },
+                    text = title.ifBlank { "未知歌曲" },
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     color = accentPalette.onQuietContainer,
                 )
                 Text(
-                    text = artist.ifBlank { "Unknown" },
+                    text = artist.ifBlank { "未知歌手" },
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    color = accentPalette.onQuietContainer.copy(alpha = 0.72f),
+                    color = accentPalette.secondaryOnQuietContainer,
                 )
             }
             if (songId != null && settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false)) {
@@ -176,15 +183,15 @@ fun SongRow(
                             else -> AppIcons.AttachFile
                         },
                         contentDescription = when {
-                            downloaded -> "Downloaded"
-                            isFailed -> "Download failed"
-                            isActive -> "Downloading"
-                            else -> "Not downloaded"
+                            downloaded -> "已下载"
+                            isFailed -> "下载失败"
+                            isActive -> "正在下载"
+                            else -> "未下载"
                         },
                         tint = when {
                             downloaded || isActive -> accentPalette.onContainer
                             isFailed -> MaterialTheme.colorScheme.onErrorContainer
-                            else -> accentPalette.onQuietContainer.copy(alpha = 0.72f)
+                            else -> accentPalette.secondaryOnQuietContainer
                         },
                         modifier = Modifier.padding(6.dp).size(18.dp),
                     )
@@ -223,17 +230,23 @@ fun RecommendSquareCard(
         onClick = onClick,
         modifier = Modifier
             .padding(end = 12.dp, top = 8.dp, bottom = 8.dp)
-            .size(168.dp),
+            .size(168.dp)
+            .semantics(mergeDescendants = true) {
+                if (text == "私人雷达") contentDescription = text
+            },
         shape = MaterialTheme.shapes.extraLarge,
         color = accentPalette.quietContainer,
     ) {
         Box(Modifier.fillMaxSize()) {
-            AsyncImage(
+            ExpressiveArtwork(
                 model = picUrl,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
+                shape = MaterialTheme.shapes.extraLarge,
+                containerColor = accentPalette.quietContainer,
+                contentColor = accentPalette.onQuietContainer,
                 contentScale = ContentScale.Crop,
-                onSuccess = { state -> extractAccent(state.result.image) },
+                onImageLoaded = extractAccent,
             )
             // 原版特例：私人雷达封面自带文字，不叠加遮罩与标题
             if (text != "私人雷达") {
@@ -272,6 +285,10 @@ fun RecommendSquareCard(
 fun <T> SectionWithLazyRow(
     title: String,
     items: List<T>,
+    isLoading: Boolean = false,
+    errorMessage: String? = null,
+    onRetry: (() -> Unit)? = null,
+    key: ((T) -> Any)? = null,
     itemContent: @Composable (T) -> Unit,
 ) {
     Column(modifier = Modifier.padding(top = 20.dp)) {
@@ -279,23 +296,31 @@ fun <T> SectionWithLazyRow(
             text = title,
             modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
         )
-        if (items.isEmpty()) {
-            val emptyPalette = contentAccentPalette(MaterialTheme.colorScheme.secondaryContainer)
-            Surface(
-                shape = MaterialTheme.shapes.extraLarge,
-                color = emptyPalette.quietContainer,
-                contentColor = emptyPalette.onQuietContainer,
+        if (isLoading) {
+            ExpressiveLoadingState(
+                label = "正在加载$title…",
                 modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = "No data available.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(20.dp),
-                )
-            }
+            )
+        } else if (errorMessage != null) {
+            ExpressiveStatePanel(
+                title = "$title 加载失败",
+                message = errorMessage,
+                icon = AppIcons.Refresh,
+                tone = ExpressiveStateTone.Error,
+                actionLabel = onRetry?.let { "重试" },
+                onAction = onRetry,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        } else if (items.isEmpty()) {
+            ExpressiveStatePanel(
+                title = "暂无$title",
+                message = "稍后刷新后再来看看。",
+                icon = AppIcons.GraphicEq,
+                modifier = Modifier.fillMaxWidth(),
+            )
         } else {
             LazyRow {
-                items(items) { item -> itemContent(item) }
+                items(items = items, key = key) { item -> itemContent(item) }
             }
         }
     }
@@ -338,16 +363,17 @@ fun PlaylistCard(
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AsyncImage(
+            ExpressiveArtwork(
                 model = userPlaylistEach.coverImgUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(60.dp)
-                    .clip(MaterialTheme.shapes.large),
-                onSuccess = { state ->
+                modifier = Modifier.size(60.dp),
+                shape = MaterialTheme.shapes.large,
+                containerColor = accentPalette.container,
+                contentColor = accentPalette.onContainer,
+                onImageLoaded = { image ->
                     if (accentColor == null) {
-                        extractAccent(state.result.image)
+                        extractAccent(image)
                     }
                 },
             )
@@ -364,14 +390,14 @@ fun PlaylistCard(
                 Text(
                     text = userPlaylistEach.creator.nickname,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = accentPalette.onQuietContainer.copy(alpha = 0.72f),
+                    color = accentPalette.secondaryOnQuietContainer,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = "${userPlaylistEach.trackCount} 首 · ${compactCount(userPlaylistEach.playCount)} 次播放",
                     style = MaterialTheme.typography.labelMedium,
-                    color = accentPalette.onQuietContainer.copy(alpha = 0.62f),
+                    color = accentPalette.secondaryOnQuietContainer,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

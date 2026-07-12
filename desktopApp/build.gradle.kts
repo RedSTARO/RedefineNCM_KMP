@@ -18,6 +18,7 @@ dependencies {
     // main.kt's floating-lyrics window uses material3 (MaterialTheme/Surface/Text) directly.
     implementation(libs.compose.material3)
     implementation(libs.compose.uiToolingPreview)
+    implementation(libs.coil.compose)
 
     // SLF4J backend so dbus-java and Ktor diagnostics are not discarded by a NOP provider.
     implementation(libs.slf4j.simple)

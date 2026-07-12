@@ -1,5 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -16,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -24,14 +25,18 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -52,12 +57,18 @@ import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.download.DownloadQueueSummary
 import com.leejlredstar.redefinencm.kmp.download.DownloadLyricStatus
 import com.leejlredstar.redefinencm.kmp.download.DownloadTaskStatus
+import com.leejlredstar.redefinencm.kmp.download.LocalLibrarySyncState
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadTask
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
 import org.koin.compose.koinInject
 
@@ -82,6 +93,14 @@ private enum class DownloadInfoBadgeTone {
     Error,
 }
 
+private sealed interface DownloadDestructiveAction {
+    data object CancelAll : DownloadDestructiveAction
+    data object ClearFinished : DownloadDestructiveAction
+    data class CancelTask(val id: Long, val title: String) : DownloadDestructiveAction
+    data class RemoveTask(val id: Long, val title: String) : DownloadDestructiveAction
+    data class DeleteSong(val id: Long, val title: String) : DownloadDestructiveAction
+}
+
 @Composable
 fun DownloadManagementScreen(
     scaffoldPadding: PaddingValues,
@@ -89,8 +108,22 @@ fun DownloadManagementScreen(
 ) {
     val tasks by downloadManager.tasks.collectAsState()
     val summary by downloadManager.summary.collectAsState()
+    val localLibrarySyncState by downloadManager.localLibrarySyncState.collectAsState()
     var filter by remember { mutableStateOf(DownloadFilter.All) }
-    val palette = contentAccentPalette(MaterialTheme.colorScheme.tertiaryContainer)
+    var pendingDestructiveAction by remember { mutableStateOf<DownloadDestructiveAction?>(null) }
+    val representativeTask = remember(tasks) {
+        tasks.firstOrNull { it.isActive } ?: tasks.firstOrNull()
+    }
+    val defaultAccent = MaterialTheme.colorScheme.tertiaryContainer
+    var rawAccent by remember(representativeTask?.artworkUri, defaultAccent) {
+        mutableStateOf(defaultAccent)
+    }
+    val pageAccent by animateColorAsState(
+        targetValue = rawAccent,
+        animationSpec = spring(),
+        label = "downloadPageAccent",
+    )
+    val palette = contentAccentPalette(pageAccent)
 
     LaunchedEffect(downloadManager) {
         downloadManager.syncWithLocalLibrary()
@@ -113,73 +146,129 @@ fun DownloadManagementScreen(
         }
     }
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        palette.pageStart,
-                        palette.pageMiddle,
-                        palette.pageEnd,
-                    ),
-                ),
-            )
-            .windowInsetsPadding(WindowInsets.statusBars),
-        contentPadding = PaddingValues(bottom = scaffoldPadding.calculateBottomPadding() + 96.dp),
+    ExpressivePage(
+        accentPalette = palette,
+        contentWindowInsets = WindowInsets.statusBars,
     ) {
-        item {
-            DownloadHero(
-                summary = summary,
-                accentPalette = palette,
-                onPauseAll = downloadManager::pauseAll,
-                onResumeAll = downloadManager::resumeAll,
-                onCancelAll = downloadManager::cancelAll,
-                onClearFinished = downloadManager::clearFinished,
-                onSyncLocalLibrary = downloadManager::syncWithLocalLibrary,
-            )
-        }
-        item {
-            DownloadFilterRow(
-                selected = filter,
-                onSelected = { filter = it },
-                accentPalette = palette,
-            )
-        }
-        if (visibleTasks.isEmpty()) {
-            item { DownloadEmptyState(filter, palette) }
-        } else {
-            itemsIndexed(
-                items = visibleTasks,
-                key = { _, task -> task.id },
-            ) { index, task ->
-                DownloadTaskRow(
-                    task = task,
-                    shape = connectedListItemShape(index, visibleTasks.size),
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = scaffoldPadding.calculateBottomPadding() + 96.dp),
+        ) {
+            item {
+                DownloadHero(
+                    summary = summary,
+                    representativeTask = representativeTask,
                     accentPalette = palette,
-                    onPause = { downloadManager.pause(task.id) },
-                    onResume = { downloadManager.resume(task.id) },
-                    onCancel = { downloadManager.cancel(task.id) },
-                    onRetry = { downloadManager.retry(task.id) },
-                    onRemove = { downloadManager.remove(task.id) },
-                    onDeleteSong = { downloadManager.deleteDownloadedSong(task.id) },
+                    onAccentColor = { rawAccent = it },
+                    onPauseAll = downloadManager::pauseAll,
+                    onResumeAll = downloadManager::resumeAll,
+                    onCancelAll = {
+                        pendingDestructiveAction = DownloadDestructiveAction.CancelAll
+                    },
+                    onClearFinished = {
+                        pendingDestructiveAction = DownloadDestructiveAction.ClearFinished
+                    },
+                    localLibrarySyncState = localLibrarySyncState,
+                    onSyncLocalLibrary = downloadManager::syncWithLocalLibrary,
                 )
             }
+            item {
+                DownloadFilterRow(
+                    selected = filter,
+                    onSelected = { filter = it },
+                    accentPalette = palette,
+                )
+            }
+            if (localLibrarySyncState is LocalLibrarySyncState.Error) {
+                item(key = "local-library-sync-error") {
+                    ExpressiveStatePanel(
+                        title = "本地音乐库同步失败",
+                        message = (localLibrarySyncState as LocalLibrarySyncState.Error).message,
+                        icon = AppIcons.Refresh,
+                        tone = ExpressiveStateTone.Error,
+                        accentPalette = palette,
+                        actionLabel = "重试",
+                        onAction = downloadManager::syncWithLocalLibrary,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
+            }
+            if (localLibrarySyncState is LocalLibrarySyncState.Syncing && tasks.isEmpty()) {
+                item(key = "local-library-syncing") {
+                    ExpressiveLoadingState(
+                        label = "正在扫描本地音乐库…",
+                        accentColor = palette.accent,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
+            } else if (
+                visibleTasks.isEmpty() &&
+                localLibrarySyncState !is LocalLibrarySyncState.Error
+            ) {
+                item { DownloadEmptyState(filter, palette) }
+            } else {
+                itemsIndexed(
+                    items = visibleTasks,
+                    key = { _, task -> task.id },
+                ) { index, task ->
+                    DownloadTaskRow(
+                        task = task,
+                        shape = connectedListItemShape(index, visibleTasks.size),
+                        accentPalette = palette,
+                        onPause = { downloadManager.pause(task.id) },
+                        onResume = { downloadManager.resume(task.id) },
+                        onCancel = {
+                            pendingDestructiveAction = DownloadDestructiveAction.CancelTask(task.id, task.title)
+                        },
+                        onRetry = { downloadManager.retry(task.id) },
+                        onRemove = {
+                            pendingDestructiveAction = DownloadDestructiveAction.RemoveTask(task.id, task.title)
+                        },
+                        onDeleteSong = {
+                            pendingDestructiveAction = DownloadDestructiveAction.DeleteSong(task.id, task.title)
+                        },
+                    )
+                }
+            }
+            item { Spacer(Modifier.height(24.dp)) }
         }
-        item { Spacer(Modifier.height(24.dp)) }
+    }
+
+    pendingDestructiveAction?.let { action ->
+        DownloadDestructiveConfirmationDialog(
+            action = action,
+            onDismiss = { pendingDestructiveAction = null },
+            onConfirm = {
+                pendingDestructiveAction = null
+                when (action) {
+                    DownloadDestructiveAction.CancelAll -> downloadManager.cancelAll()
+                    DownloadDestructiveAction.ClearFinished -> downloadManager.clearFinished()
+                    is DownloadDestructiveAction.CancelTask -> downloadManager.cancel(action.id)
+                    is DownloadDestructiveAction.RemoveTask -> downloadManager.remove(action.id)
+                    is DownloadDestructiveAction.DeleteSong -> downloadManager.deleteDownloadedSong(action.id)
+                }
+            },
+        )
     }
 }
 
 @Composable
 private fun DownloadHero(
     summary: DownloadQueueSummary,
+    representativeTask: SongDownloadTask?,
     accentPalette: ContentAccentPalette,
+    onAccentColor: (Color) -> Unit,
     onPauseAll: () -> Unit,
     onResumeAll: () -> Unit,
     onCancelAll: () -> Unit,
     onClearFinished: () -> Unit,
+    localLibrarySyncState: LocalLibrarySyncState,
     onSyncLocalLibrary: () -> Unit,
 ) {
+    val extractAccent = rememberThemeColorExtractor(
+        requestKey = representativeTask?.artworkUri,
+        onAccentColor = onAccentColor,
+    )
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -194,29 +283,57 @@ private fun DownloadHero(
             )
             .padding(horizontal = 24.dp, vertical = 24.dp),
     ) {
-        Surface(
-            shape = CircleShape,
-            color = accentPalette.container,
-            contentColor = accentPalette.onContainer,
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(18.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                AppIcons.Download,
-                contentDescription = null,
-                modifier = Modifier.padding(12.dp).size(28.dp),
-            )
+            Surface(
+                modifier = Modifier.size(112.dp),
+                shape = MaterialTheme.shapes.extraLarge,
+                color = accentPalette.container,
+                contentColor = accentPalette.onContainer,
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        AppIcons.Download,
+                        contentDescription = null,
+                        modifier = Modifier.size(36.dp),
+                    )
+                    if (!representativeTask?.artworkUri.isNullOrBlank()) {
+                        AsyncImage(
+                            model = representativeTask.artworkUri,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                            onSuccess = { state -> extractAccent(state.result.image) },
+                        )
+                    }
+                }
+            }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "下载管理",
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = accentPalette.onPageMiddle,
+                )
+                Text(
+                    text = "队列、进度和失败项都在这里处理",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = accentPalette.secondaryOnPageMiddle,
+                )
+                representativeTask?.let { task ->
+                    Text(
+                        text = if (task.isActive) "正在处理 · ${task.title}" else "最近任务 · ${task.title}",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = accentPalette.onPageMiddle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+            }
         }
-        Spacer(Modifier.height(16.dp))
-        Text(
-            text = "下载管理",
-            style = MaterialTheme.typography.displaySmall,
-            fontWeight = FontWeight.ExtraBold,
-            color = accentPalette.onQuietContainer,
-        )
-        Text(
-            text = "队列、进度和失败项都在这里处理",
-            style = MaterialTheme.typography.bodyLarge,
-            color = accentPalette.onQuietContainer.copy(alpha = 0.72f),
-        )
         Spacer(Modifier.height(20.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             item { DownloadStatPill("全部", summary.total, accentPalette) }
@@ -231,6 +348,7 @@ private fun DownloadHero(
                 Button(
                     onClick = onPauseAll,
                     enabled = summary.active > 0,
+                    modifier = Modifier.height(48.dp),
                     shape = CircleShape,
                     contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
                     colors = ButtonDefaults.buttonColors(
@@ -247,6 +365,7 @@ private fun DownloadHero(
                 Button(
                     onClick = onResumeAll,
                     enabled = summary.paused > 0,
+                    modifier = Modifier.height(48.dp),
                     shape = CircleShape,
                     contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
                     colors = ButtonDefaults.buttonColors(
@@ -262,19 +381,29 @@ private fun DownloadHero(
             item {
                 FilledTonalIconButton(
                     onClick = onSyncLocalLibrary,
+                    enabled = localLibrarySyncState !is LocalLibrarySyncState.Syncing,
+                    modifier = Modifier.size(48.dp),
                     shape = MaterialTheme.shapes.large,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = accentPalette.quietContainer,
                         contentColor = accentPalette.onQuietContainer,
                     ),
                 ) {
-                    Icon(AppIcons.Refresh, contentDescription = "同步本地库")
+                    if (localLibrarySyncState is LocalLibrarySyncState.Syncing) {
+                        LoadingIndicator(
+                            color = accentPalette.onQuietContainer,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    } else {
+                        Icon(AppIcons.Refresh, contentDescription = "同步本地库")
+                    }
                 }
             }
             item {
                 FilledTonalIconButton(
                     onClick = onCancelAll,
                     enabled = summary.active > 0 || summary.paused > 0,
+                    modifier = Modifier.size(48.dp),
                     shape = MaterialTheme.shapes.large,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = accentPalette.quietContainer,
@@ -288,6 +417,7 @@ private fun DownloadHero(
                 FilledTonalIconButton(
                     onClick = onClearFinished,
                     enabled = summary.completed > 0 || summary.failed > 0,
+                    modifier = Modifier.size(48.dp),
                     shape = MaterialTheme.shapes.large,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = accentPalette.quietContainer,
@@ -335,7 +465,15 @@ private fun DownloadFilterRow(
             FilterChip(
                 selected = selected == filter,
                 onClick = { onSelected(filter) },
+                modifier = Modifier.height(48.dp),
                 label = { Text(filter.label) },
+                colors = FilterChipDefaults.filterChipColors(
+                    containerColor = accentPalette.quietContainer,
+                    labelColor = accentPalette.onQuietContainer,
+                    selectedContainerColor = accentPalette.container,
+                    selectedLabelColor = accentPalette.onContainer,
+                    selectedLeadingIconColor = accentPalette.onContainer,
+                ),
                 leadingIcon = if (selected == filter) {
                     { Icon(AppIcons.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
                 } else {
@@ -391,7 +529,7 @@ private fun DownloadTaskRow(
                 Text(
                     text = task.artist,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = accentPalette.onQuietContainer.copy(alpha = 0.72f),
+                    color = accentPalette.secondaryOnQuietContainer,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -461,7 +599,7 @@ private fun DownloadInfoBadgeSurface(
         DownloadInfoBadgeTone.Accent -> accentPalette.onContainer
         DownloadInfoBadgeTone.Success -> MaterialTheme.colorScheme.onPrimaryContainer
         DownloadInfoBadgeTone.Error -> MaterialTheme.colorScheme.onErrorContainer
-        DownloadInfoBadgeTone.Neutral -> accentPalette.onQuietContainer.copy(alpha = 0.78f)
+                DownloadInfoBadgeTone.Neutral -> accentPalette.secondaryOnQuietContainer
     }
 
     Surface(
@@ -559,7 +697,7 @@ private fun SmallDownloadAction(
 ) {
     FilledTonalIconButton(
         onClick = onClick,
-        modifier = Modifier.size(40.dp),
+        modifier = Modifier.size(48.dp),
         shape = MaterialTheme.shapes.large,
         colors = IconButtonDefaults.filledTonalIconButtonColors(
             containerColor = if (isDestructive) {
@@ -583,30 +721,89 @@ private fun DownloadEmptyState(
     filter: DownloadFilter,
     accentPalette: ContentAccentPalette,
 ) {
-    Surface(
-        shape = MaterialTheme.shapes.extraLarge,
-        color = accentPalette.quietContainer,
-        contentColor = accentPalette.onQuietContainer,
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
-    ) {
-        Box(
-            modifier = Modifier.fillMaxWidth().padding(28.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = when (filter) {
-                    DownloadFilter.All -> "暂无下载任务"
-                    DownloadFilter.Active -> "没有正在进行的任务"
-                    DownloadFilter.Paused -> "没有暂停的任务"
-                    DownloadFilter.Completed -> "没有已完成任务"
-                    DownloadFilter.Deleted -> "没有已删除任务"
-                    DownloadFilter.Failed -> "没有失败或取消的任务"
-                },
-                style = MaterialTheme.typography.titleMedium,
-                color = accentPalette.onQuietContainer.copy(alpha = 0.72f),
-            )
+    val title = when (filter) {
+        DownloadFilter.All -> "暂无下载任务"
+        DownloadFilter.Active -> "没有正在进行的任务"
+        DownloadFilter.Paused -> "没有暂停的任务"
+        DownloadFilter.Completed -> "没有已完成任务"
+        DownloadFilter.Deleted -> "没有已删除任务"
+        DownloadFilter.Failed -> "没有失败或取消的任务"
+    }
+    val message = when (filter) {
+        DownloadFilter.All -> "从歌单或歌曲页面发起下载后，进度会显示在这里。"
+        else -> "当前筛选条件下没有任务，可以切换上方筛选项查看其他下载。"
+    }
+    ExpressiveStatePanel(
+        title = title,
+        message = message,
+        icon = AppIcons.Download,
+        accentPalette = accentPalette,
+        modifier = Modifier.padding(16.dp),
+    )
+}
+
+@Composable
+private fun DownloadDestructiveConfirmationDialog(
+    action: DownloadDestructiveAction,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val title: String
+    val message: String
+    val confirmLabel: String
+    when (action) {
+        DownloadDestructiveAction.CancelAll -> {
+            title = "取消全部下载？"
+            message = "进行中和已暂停的任务将标记为已取消，已完成的下载不受影响。"
+            confirmLabel = "取消全部"
+        }
+        DownloadDestructiveAction.ClearFinished -> {
+            title = "清理已结束任务？"
+            message = "已完成、失败、取消和已删除的任务记录会从列表移除，本地歌曲不会被删除。"
+            confirmLabel = "清理"
+        }
+        is DownloadDestructiveAction.CancelTask -> {
+            title = "取消「${action.title}」？"
+            message = "这个下载会停止，并保留为可重试的已取消任务。"
+            confirmLabel = "取消下载"
+        }
+        is DownloadDestructiveAction.RemoveTask -> {
+            title = "移除「${action.title}」？"
+            message = "只移除任务记录，不会删除已经保存的本地歌曲。"
+            confirmLabel = "移除"
+        }
+        is DownloadDestructiveAction.DeleteSong -> {
+            title = "删除「${action.title}」？"
+            message = "本地音频文件将被永久删除；之后仍可从任务列表重新下载。"
+            confirmLabel = "删除歌曲"
         }
     }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = AppIcons.Delete,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+            )
+        },
+        title = { Text(title) },
+        text = { Text(message) },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            ) {
+                Text(confirmLabel)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("返回")
+            }
+        },
+    )
 }
 
 @Composable

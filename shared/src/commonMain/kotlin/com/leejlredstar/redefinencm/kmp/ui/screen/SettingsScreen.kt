@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -20,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.ButtonDefaults
@@ -32,10 +35,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -49,11 +54,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
@@ -65,6 +81,7 @@ import com.leejlredstar.redefinencm.kmp.util.encodeSettingsBackup
 import com.leejlredstar.redefinencm.kmp.util.rememberExportFileLauncher
 import com.leejlredstar.redefinencm.kmp.util.rememberImportFileLauncher
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -90,6 +107,11 @@ fun SettingsScreen(
     var showRomanLyric by remember(settings) { mutableStateOf(false) }
     var importStatus by remember { mutableStateOf<String?>(null) }
     var serverCheckStatus by remember { mutableStateOf<String?>(null) }
+    var settingsLoaded by remember(settings) { mutableStateOf(false) }
+    var settingsLoadError by remember(settings) { mutableStateOf<String?>(null) }
+    var settingsLoadRequest by remember(settings) { mutableIntStateOf(0) }
+    var serverCheckGeneration by remember { mutableIntStateOf(0) }
+    var showImportConfirmation by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     fun reloadSettingsSnapshot() {
@@ -127,6 +149,7 @@ fun SettingsScreen(
         onPersisted: () -> Unit = {},
         onFailure: () -> Unit = ::reloadSettingsSnapshot,
     ) {
+        importStatus = null
         val writeResult = runCatching(write)
         if (writeResult.isFailure) {
             onFailure()
@@ -137,19 +160,28 @@ fun SettingsScreen(
         flushSettings(onPersisted = onPersisted, onFailure = onFailure)
     }
 
-    LaunchedEffect(settings) {
-        cookie = settings.getStringAsync(SettingKeys.COOKIE, "")
-        server = settings.getStringAsync(SettingKeys.SERVER, "")
-        onlineQuality = settings.getStringAsync(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name)
-        dlQuality = settings.getStringAsync(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name)
-        replacePlaylist = settings.getBooleanAsync(SettingKeys.REPLACE_PLAYLIST, false)
-        checkUpdate = settings.getBooleanAsync(SettingKeys.CHECK_UPDATE, false)
-        searchPrediction = settings.getBooleanAsync(SettingKeys.SEARCH_PREDICTION, true)
-        showDownloadStatus = settings.getBooleanAsync(SettingKeys.SHOW_DOWNLOAD_STATUS, false)
-        extraLyricSurfaceEnabled = settings.getBooleanAsync(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false)
-        LyricNotificationController.setOptionalSurfaceEnabled(extraLyricSurfaceEnabled)
-        showTranslatedLyric = settings.getBooleanAsync(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
-        showRomanLyric = settings.getBooleanAsync(SettingKeys.SHOW_ROMAN_LYRIC, false)
+    LaunchedEffect(settings, settingsLoadRequest) {
+        settingsLoaded = false
+        settingsLoadError = null
+        try {
+            cookie = settings.getStringAsync(SettingKeys.COOKIE, "")
+            server = settings.getStringAsync(SettingKeys.SERVER, "")
+            onlineQuality = settings.getStringAsync(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name)
+            dlQuality = settings.getStringAsync(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name)
+            replacePlaylist = settings.getBooleanAsync(SettingKeys.REPLACE_PLAYLIST, false)
+            checkUpdate = settings.getBooleanAsync(SettingKeys.CHECK_UPDATE, false)
+            searchPrediction = settings.getBooleanAsync(SettingKeys.SEARCH_PREDICTION, true)
+            showDownloadStatus = settings.getBooleanAsync(SettingKeys.SHOW_DOWNLOAD_STATUS, false)
+            extraLyricSurfaceEnabled = settings.getBooleanAsync(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false)
+            LyricNotificationController.setOptionalSurfaceEnabled(extraLyricSurfaceEnabled)
+            showTranslatedLyric = settings.getBooleanAsync(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
+            showRomanLyric = settings.getBooleanAsync(SettingKeys.SHOW_ROMAN_LYRIC, false)
+            settingsLoaded = true
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            settingsLoadError = failure.message ?: "设置读取失败"
+        }
     }
 
     val launchImport = rememberImportFileLauncher { json ->
@@ -171,32 +203,75 @@ fun SettingsScreen(
     val launchExport = rememberExportFileLauncher()
     val settingsPalette = contentAccentPalette(MaterialTheme.colorScheme.secondaryContainer)
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(bottom = scaffoldPadding.calculateBottomPadding())
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        settingsPalette.pageStart,
-                        settingsPalette.pageMiddle,
-                        settingsPalette.pageEnd,
-                    ),
-                ),
-            ),
+    ExpressivePage(
+        accentPalette = settingsPalette,
+        maxContentWidth = ExpressiveLayout.ReadingContentMaxWidth,
+        contentPadding = PaddingValues(bottom = scaffoldPadding.calculateBottomPadding()),
     ) {
-        SettingsHero(settingsPalette)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+        ) {
+            SettingsHero(settingsPalette)
 
-        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                ExpressiveSectionTitle("Server", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
+            if (settingsLoadError != null) {
+                ExpressiveStatePanel(
+                    title = "设置读取失败",
+                    message = settingsLoadError.orEmpty(),
+                    icon = AppIcons.Refresh,
+                    tone = ExpressiveStateTone.Error,
+                    accentPalette = settingsPalette,
+                    actionLabel = "重试",
+                    onAction = { settingsLoadRequest += 1 },
+                    modifier = Modifier.padding(20.dp),
+                )
+            } else if (!settingsLoaded) {
+                ExpressiveLoadingState(
+                    label = "正在加载设置…",
+                    accentColor = settingsPalette.accent,
+                    modifier = Modifier.padding(20.dp),
+                )
+            } else {
+                Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                importStatus?.let { status ->
+                    val isSuccess = status.startsWith("✓")
+                    Surface(
+                        shape = MaterialTheme.shapes.large,
+                        color = if (isSuccess) {
+                            settingsPalette.container
+                        } else {
+                            MaterialTheme.colorScheme.errorContainer
+                        },
+                        contentColor = if (isSuccess) {
+                            settingsPalette.onContainer
+                        } else {
+                            MaterialTheme.colorScheme.onErrorContainer
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp)
+                            .semantics { liveRegion = LiveRegionMode.Polite },
+                    ) {
+                        Text(
+                            text = status,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        )
+                    }
+                }
+                ExpressiveSectionTitle("服务器", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
                 SettingsTextField(
                     value = server,
-                    label = "Server URL",
+                    label = "服务器地址",
                     accentPalette = settingsPalette,
                     index = 0,
                     count = 2,
-                    onDraftChange = { server = it },
+                    onDraftChange = {
+                        server = it
+                        serverCheckGeneration += 1
+                        serverCheckStatus = null
+                    },
                     onCommit = { raw ->
                         val normalized = normalizeServerInput(raw)
                         server = normalized
@@ -206,32 +281,59 @@ fun SettingsScreen(
                 // 原版 ServerItem：调 /inner/version/ 校验服务器可用性并显示版本
                 SettingsButton("检查服务器 ($server)", settingsPalette, index = 1, count = 2) {
                     val checkedServer = normalizeServerInput(server)
+                    val checkGeneration = ++serverCheckGeneration
                     if (checkedServer.isEmpty()) {
                         serverCheckStatus = "服务器地址不能为空"
                         return@SettingsButton
                     }
                     serverCheckStatus = "检查中…"
                     scope.launch {
-                        serverCheckStatus = try {
+                        val resultStatus = try {
                             val result = api.innerVersion("${checkedServer}inner/version/")
                             if (result.code == 200) "服务器可用，版本：${result.data.version}"
                             else "服务器不可用（code ${result.code}）"
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
                         } catch (e: Exception) {
                             "服务器不可用：${e.message}"
+                        }
+                        if (
+                            checkGeneration == serverCheckGeneration &&
+                            normalizeServerInput(server) == checkedServer
+                        ) {
+                            serverCheckStatus = resultStatus
                         }
                     }
                 }
                 serverCheckStatus?.let { status ->
-                    Text(
-                        text = status,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (status.startsWith("服务器可用")) settingsPalette.accent
-                                else MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
-                    )
+                    val success = status.startsWith("服务器可用")
+                    val checking = status.startsWith("检查中")
+                    Surface(
+                        shape = MaterialTheme.shapes.large,
+                        color = when {
+                            success -> settingsPalette.container
+                            checking -> settingsPalette.quietContainer
+                            else -> MaterialTheme.colorScheme.errorContainer
+                        },
+                        contentColor = when {
+                            success -> settingsPalette.onContainer
+                            checking -> settingsPalette.onQuietContainer
+                            else -> MaterialTheme.colorScheme.onErrorContainer
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp)
+                            .semantics { liveRegion = LiveRegionMode.Polite },
+                    ) {
+                        Text(
+                            text = status,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                        )
+                    }
                 }
 
-                ExpressiveSectionTitle("Account", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
+                ExpressiveSectionTitle("账号", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
                 SettingsButton(
                     label = if (cookie.isBlank()) "扫码 / 登录" else "重新登录 / 换号",
                     leadingIcon = AppIcons.QrCode2,
@@ -243,6 +345,7 @@ fun SettingsScreen(
                 SettingsTextField(
                     value = cookie,
                     label = "Cookie",
+                    obscureText = true,
                     accentPalette = settingsPalette,
                     index = 1,
                     count = 2,
@@ -263,29 +366,29 @@ fun SettingsScreen(
                     },
                 )
 
-                ExpressiveSectionTitle("Playback", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
-                SettingsDropdown(onlineQuality, "Music Quality (Online)", SoundQuality.entries, settingsPalette, index = 0, count = 5) { v ->
+                ExpressiveSectionTitle("播放", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
+                SettingsDropdown(onlineQuality, "在线播放音质", SoundQuality.entries, settingsPalette, index = 0, count = 5) { v ->
                     onlineQuality = v.name
                     persistSettings({ settings.setString(SettingKeys.ONLINE_PLAY_QUALITY, v.name) })
                 }
-                SettingsDropdown(dlQuality, "Music Quality (Download)", SoundQuality.entries, settingsPalette, index = 1, count = 5) { v ->
+                SettingsDropdown(dlQuality, "下载音质", SoundQuality.entries, settingsPalette, index = 1, count = 5) { v ->
                     dlQuality = v.name
                     persistSettings({ settings.setString(SettingKeys.DOWNLOAD_QUALITY, v.name) })
                 }
-                SettingsSwitch(replacePlaylist, "Replace playlist on single song click", settingsPalette, index = 2, count = 5) { v ->
+                SettingsSwitch(replacePlaylist, "点击单曲时替换播放队列", settingsPalette, index = 2, count = 5) { v ->
                     replacePlaylist = v
                     persistSettings({ settings.setBoolean(SettingKeys.REPLACE_PLAYLIST, v) })
                 }
-                SettingsSwitch(searchPrediction, "Search prediction", settingsPalette, index = 3, count = 5) { v ->
+                SettingsSwitch(searchPrediction, "搜索联想", settingsPalette, index = 3, count = 5) { v ->
                     searchPrediction = v
                     persistSettings({ settings.setBoolean(SettingKeys.SEARCH_PREDICTION, v) })
                 }
-                SettingsSwitch(showDownloadStatus, "Show download status", settingsPalette, index = 4, count = 5) { v ->
+                SettingsSwitch(showDownloadStatus, "显示下载状态", settingsPalette, index = 4, count = 5) { v ->
                     showDownloadStatus = v
                     persistSettings({ settings.setBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, v) })
                 }
 
-                ExpressiveSectionTitle("Lyrics", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
+                ExpressiveSectionTitle("歌词", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
                 val lyricSettingCount = if (LyricNotificationController.supportsOptionalSurfaceControl) 3 else 2
                 if (LyricNotificationController.supportsOptionalSurfaceControl) {
                     SettingsSwitch(
@@ -313,27 +416,47 @@ fun SettingsScreen(
                     persistSettings({ settings.setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, v) })
                 }
 
-                ExpressiveSectionTitle("General", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
-                SettingsSwitch(checkUpdate, "Check update on startup", settingsPalette, index = 0, count = 1) { v ->
+                ExpressiveSectionTitle("通用", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
+                SettingsSwitch(checkUpdate, "启动时检查更新", settingsPalette, index = 0, count = 1) { v ->
                     checkUpdate = v
                     persistSettings({ settings.setBoolean(SettingKeys.CHECK_UPDATE, v) })
                 }
 
-                ExpressiveSectionTitle("Backup", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
-                SettingsButton("Export settings", settingsPalette, index = 0, count = 2) { launchExport(encodeSettingsBackup(settings)) }
-                SettingsButton("Import settings", settingsPalette, index = 1, count = 2) { launchImport() }
-                importStatus?.let { status ->
-                    Text(
-                        text = status,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (status.startsWith("✓")) settingsPalette.accent
-                                else MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
-                    )
+                ExpressiveSectionTitle("备份", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
+                SettingsButton("导出设置", settingsPalette, index = 0, count = 2) { launchExport(encodeSettingsBackup(settings)) }
+                SettingsButton("导入设置", settingsPalette, index = 1, count = 2) {
+                    showImportConfirmation = true
                 }
 
-            Spacer(Modifier.height(48.dp))
+                    Spacer(Modifier.height(48.dp))
+                }
+            }
         }
+    }
+
+    if (showImportConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showImportConfirmation = false },
+            title = { Text("导入并覆盖当前设置？") },
+            text = {
+                Text("导入文件会覆盖账号 Cookie、服务器地址、播放与歌词偏好。建议先导出当前设置作为备份。")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showImportConfirmation = false
+                        launchImport()
+                    },
+                ) {
+                    Text("选择文件")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showImportConfirmation = false }) {
+                    Text("取消")
+                }
+            },
+        )
     }
 }
 
@@ -357,15 +480,15 @@ private fun SettingsHero(accentPalette: ContentAccentPalette) {
     ) {
         Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 18.dp)) {
             Text(
-                text = "Settings",
+                text = "设置",
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.ExtraBold,
-                color = accentPalette.onContainer,
+                color = accentPalette.onPageStart,
             )
             Text(
-                text = "Account, playback, cache and backup",
+                text = "账号、播放、歌词与备份",
                 style = MaterialTheme.typography.titleMedium,
-                color = accentPalette.onQuietContainer.copy(alpha = 0.78f),
+                color = accentPalette.secondaryOnPageStart,
             )
         }
     }
@@ -375,6 +498,7 @@ private fun SettingsHero(accentPalette: ContentAccentPalette) {
 private fun SettingsTextField(
     value: String,
     label: String,
+    obscureText: Boolean = false,
     accentPalette: ContentAccentPalette,
     index: Int,
     count: Int,
@@ -385,6 +509,7 @@ private fun SettingsTextField(
     val committedTextState = remember { mutableStateOf(value) }
     var text by textState
     var isFocused by remember { mutableStateOf(false) }
+    var revealText by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
     val latestCommit = rememberUpdatedState(onCommit)
 
@@ -418,6 +543,20 @@ private fun SettingsTextField(
         },
         label = { Text(label) },
         singleLine = true,
+        visualTransformation = if (obscureText && !revealText) {
+            PasswordVisualTransformation()
+        } else {
+            VisualTransformation.None
+        },
+        trailingIcon = if (obscureText) {
+            {
+                TextButton(onClick = { revealText = !revealText }) {
+                    Text(if (revealText) "隐藏" else "显示")
+                }
+            }
+        } else {
+            null
+        },
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(
             onDone = {
@@ -433,14 +572,14 @@ private fun SettingsTextField(
                 isFocused = focusState.isFocused
             }
             .padding(vertical = 1.5.dp)
-            .height(64.dp),
+            .heightIn(min = 64.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = accentPalette.quietContainer,
             unfocusedContainerColor = accentPalette.quietContainer,
             focusedTextColor = accentPalette.onQuietContainer,
             unfocusedTextColor = accentPalette.onQuietContainer,
             focusedLabelColor = accentPalette.accent,
-            unfocusedLabelColor = accentPalette.onQuietContainer.copy(alpha = 0.72f),
+            unfocusedLabelColor = accentPalette.secondaryOnQuietContainer,
             focusedBorderColor = accentPalette.accent,
             unfocusedBorderColor = accentPalette.onQuietContainer.copy(alpha = 0.18f),
             cursorColor = accentPalette.accent,
@@ -467,7 +606,17 @@ private fun SettingsSwitch(
         shape = connectedListItemShape(index, count),
         color = accentPalette.quietContainer,
         contentColor = accentPalette.onQuietContainer,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 1.5.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 1.5.dp)
+            .toggleable(
+                value = state,
+                role = Role.Switch,
+                onValueChange = { updated ->
+                    state = updated
+                    onUpdate(updated)
+                },
+            ),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
@@ -477,12 +626,12 @@ private fun SettingsSwitch(
             Spacer(Modifier.width(16.dp))
             Switch(
                 checked = state,
-                onCheckedChange = { state = it; onUpdate(it) },
+                onCheckedChange = null,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = accentPalette.onAccent,
                     checkedTrackColor = accentPalette.accent,
                     checkedBorderColor = accentPalette.accent,
-                    uncheckedThumbColor = accentPalette.onQuietContainer.copy(alpha = 0.70f),
+            uncheckedThumbColor = accentPalette.secondaryOnQuietContainer,
                     uncheckedTrackColor = accentPalette.onQuietContainer.copy(alpha = 0.12f),
                     uncheckedBorderColor = accentPalette.onQuietContainer.copy(alpha = 0.24f),
                 ),
@@ -520,13 +669,16 @@ private fun SettingsDropdown(
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelMedium,
-                    color = accentPalette.onQuietContainer.copy(alpha = 0.72f),
+                    color = accentPalette.secondaryOnQuietContainer,
                 )
                 Text(text = current.toString(), style = MaterialTheme.typography.bodyLarge)
             }
-            IconButton(onClick = { expanded = !expanded }) {
-                Icon(AppIcons.ArrowDropDown, contentDescription = null, tint = accentPalette.accent)
-            }
+            Icon(
+                AppIcons.ArrowDropDown,
+                contentDescription = null,
+                tint = accentPalette.accent,
+                modifier = Modifier.padding(12.dp),
+            )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { opt ->

@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +40,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
@@ -53,6 +58,11 @@ fun UserPlaylistScreen(
 ) {
     val userDetail by viewModel.userDetail.collectAsState()
     val playlists by viewModel.userPlaylists.collectAsState()
+    val accountLoading by viewModel.accountLoading.collectAsState()
+    val accountLoadError by viewModel.accountLoadError.collectAsState()
+    val userDetailLoadError by viewModel.userDetailLoadError.collectAsState()
+    val userPlaylistsLoadError by viewModel.userPlaylistsLoadError.collectAsState()
+    val uid by viewModel.uid.collectAsState()
     val defaultAccentColor = MaterialTheme.colorScheme.primaryContainer
     var rawAccentColor by remember(
         userDetail?.profile?.backgroundUrl,
@@ -68,57 +78,121 @@ fun UserPlaylistScreen(
     )
     val accentPalette = contentAccentPalette(animatedAccentColor)
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        accentPalette.pageStart,
-                        accentPalette.pageMiddle,
-                        accentPalette.pageEnd,
-                    ),
-                ),
-            )
-            .padding(bottom = scaffoldPadding.calculateBottomPadding()),
+    ExpressivePage(
+        accentPalette = accentPalette,
+        contentPadding = PaddingValues(bottom = scaffoldPadding.calculateBottomPadding()),
     ) {
-        item {
-            UserPlaylistHero(
-                backgroundUrl = userDetail?.profile?.backgroundUrl,
-                avatarUrl = userDetail?.profile?.avatarUrl,
-                nickname = userDetail?.profile?.nickname ?: "Unknown User",
-                userId = userDetail?.profile?.userId?.toString() ?: "N/A",
-                accentPalette = accentPalette,
-                onAccentColor = { rawAccentColor = it },
-            )
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
+            userDetail?.let { detail ->
+                item(key = "user-hero") {
+                    UserPlaylistHero(
+                        backgroundUrl = detail.profile.backgroundUrl,
+                        avatarUrl = detail.profile.avatarUrl,
+                        nickname = detail.profile.nickname,
+                        userId = detail.profile.userId.toString(),
+                        accentPalette = accentPalette,
+                        onAccentColor = { rawAccentColor = it },
+                    )
+                }
+            }
+            when {
+                accountLoading && userDetail == null -> item(key = "account-loading") {
+                    ExpressiveLoadingState(
+                        label = "正在加载账号与歌单…",
+                        accentColor = accentPalette.accent,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
+                (accountLoadError != null || userDetailLoadError != null) && userDetail == null -> item(
+                    key = "account-error",
+                ) {
+                    ExpressiveStatePanel(
+                        title = "账号数据加载失败",
+                        message = accountLoadError ?: userDetailLoadError.orEmpty(),
+                        icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Refresh,
+                        tone = ExpressiveStateTone.Error,
+                        accentPalette = accentPalette,
+                        actionLabel = "重试",
+                        onAction = viewModel::retryAccountData,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
+                uid == 0L -> item(key = "login-hint") {
+                    LoginMovedHint(accentPalette)
+                }
+                userDetail == null -> item(key = "profile-unavailable") {
+                    ExpressiveStatePanel(
+                        title = "用户资料暂不可用",
+                        message = "账号已登录，但用户资料未能加载。",
+                        icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Refresh,
+                        tone = ExpressiveStateTone.Error,
+                        accentPalette = accentPalette,
+                        actionLabel = "重试",
+                        onAction = viewModel::retryAccountData,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
+                else -> {
+                    item(key = "playlist-heading") {
+                        ExpressiveSectionTitle(
+                            text = "我的歌单",
+                            supportingText = "收藏与创建的歌单",
+                            modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 12.dp),
+                        )
+                    }
+                    if (accountLoading && playlists.isEmpty()) {
+                        item(key = "playlist-loading") {
+                            ExpressiveLoadingState(
+                                label = "正在加载我的歌单…",
+                                accentColor = accentPalette.accent,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        }
+                    } else if (userPlaylistsLoadError != null && playlists.isEmpty()) {
+                        item(key = "playlist-error") {
+                            ExpressiveStatePanel(
+                                title = "歌单加载失败",
+                                message = userPlaylistsLoadError.orEmpty(),
+                                icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Refresh,
+                                tone = ExpressiveStateTone.Error,
+                                accentPalette = accentPalette,
+                                actionLabel = "重试",
+                                onAction = viewModel::retryAccountData,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        }
+                    } else if (playlists.isEmpty()) {
+                        item(key = "playlist-empty") {
+                            ExpressiveStatePanel(
+                                title = "还没有歌单",
+                                message = "登录后的收藏与创建歌单会显示在这里。",
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                accentPalette = accentPalette,
+                            )
+                        }
+                    } else {
+                        itemsIndexed(
+                            items = playlists,
+                            key = { _, playlist -> playlist.id },
+                        ) { index, pl ->
+                            PlaylistCard(
+                                userPlaylistEach = pl,
+                                specialCard = when {
+                                    pl.name.contains("喜欢的音乐") -> "fav"
+                                    pl.name.contains("私人雷达") -> "radar"
+                                    else -> "no"
+                                },
+                                index = index,
+                                count = playlists.size,
+                                accentColor = animatedAccentColor,
+                                onClick = { onOpenPlaylist(pl.id) },
+                            )
+                        }
+                    }
+                }
+            }
+            item { Spacer(Modifier.height(96.dp)) }
         }
-        if (userDetail == null) {
-            item {
-                LoginMovedHint(accentPalette)
-            }
-        } else {
-            item {
-                ExpressiveSectionTitle(
-                    text = "我的歌单",
-                    modifier = Modifier.padding(start = 24.dp, top = 16.dp, bottom = 12.dp),
-                )
-            }
-            itemsIndexed(playlists) { index, pl ->
-                PlaylistCard(
-                    userPlaylistEach = pl,
-                    specialCard = when {
-                        pl.name.contains("喜欢的音乐") -> "fav"
-                        pl.name.contains("私人雷达") -> "radar"
-                        else -> "no"
-                    },
-                    index = index,
-                    count = playlists.size,
-                    accentColor = animatedAccentColor,
-                    onClick = { onOpenPlaylist(pl.id) },
-                )
-            }
-        }
-        item { Spacer(Modifier.height(96.dp)) }
     }
 }
 
@@ -131,10 +205,13 @@ private fun UserPlaylistHero(
     accentPalette: ContentAccentPalette,
     onAccentColor: (Color) -> Unit,
 ) {
-    val extractAccent = rememberThemeColorExtractor(
-        requestKey = backgroundUrl ?: avatarUrl,
-        onAccentColor = onAccentColor,
-    )
+    var backgroundAccent by remember(backgroundUrl) { mutableStateOf<Color?>(null) }
+    var avatarAccent by remember(avatarUrl) { mutableStateOf<Color?>(null) }
+    val extractBackgroundAccent = rememberThemeColorExtractor(backgroundUrl) { backgroundAccent = it }
+    val extractAvatarAccent = rememberThemeColorExtractor(avatarUrl) { avatarAccent = it }
+    LaunchedEffect(backgroundAccent, avatarAccent) {
+        (backgroundAccent ?: avatarAccent)?.let(onAccentColor)
+    }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -168,7 +245,7 @@ private fun UserPlaylistHero(
                     )
                 },
             contentScale = ContentScale.Crop,
-            onSuccess = { state -> extractAccent(state.result.image) },
+            onSuccess = { state -> extractBackgroundAccent(state.result.image) },
         )
 
         Column(
@@ -185,11 +262,7 @@ private fun UserPlaylistHero(
                     .size(112.dp)
                     .clip(CircleShape)
                     .border(4.dp, accentPalette.container, CircleShape),
-                onSuccess = { state ->
-                    if (backgroundUrl.isNullOrBlank()) {
-                        extractAccent(state.result.image)
-                    }
-                },
+                onSuccess = { state -> extractAvatarAccent(state.result.image) },
             )
             Spacer(Modifier.height(12.dp))
             Surface(
@@ -211,7 +284,7 @@ private fun UserPlaylistHero(
                     Text(
                         text = "ID: $userId",
                         style = MaterialTheme.typography.labelLarge,
-                        color = accentPalette.onQuietContainer.copy(alpha = 0.72f),
+                        color = accentPalette.secondaryOnQuietContainer,
                     )
                 }
             }

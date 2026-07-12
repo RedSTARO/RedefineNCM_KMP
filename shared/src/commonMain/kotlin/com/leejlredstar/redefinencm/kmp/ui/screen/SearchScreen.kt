@@ -3,9 +3,8 @@ package com.leejlredstar.redefinencm.kmp.ui.screen
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,7 +18,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -36,12 +34,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
@@ -63,12 +66,21 @@ fun SearchScreen(
     val results by viewModel.searchResults.collectAsState()
     val suggestions by viewModel.searchSuggestions.collectAsState()
     val loading by viewModel.searchLoading.collectAsState()
+    val submittedQuery by viewModel.searchSubmittedQuery.collectAsState()
+    val searchError by viewModel.searchError.collectAsState()
     var query by remember { mutableStateOf("") }
     val keyboard = LocalSoftwareKeyboardController.current
+    val focusRequester = remember { FocusRequester() }
     val searchPrediction = remember { settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true) }
     val searchPalette = contentAccentPalette(MaterialTheme.colorScheme.tertiaryContainer)
 
     LaunchedEffect(Unit) { viewModel.clearSearch() }
+    LaunchedEffect(Unit) {
+        delay(220)
+        if (runCatching { focusRequester.requestFocus() }.isSuccess) {
+            keyboard?.show()
+        }
+    }
 
     LaunchedEffect(query) {
         if (query.isBlank()) {
@@ -84,21 +96,14 @@ fun SearchScreen(
         keyboard?.hide()
         viewModel.search(text)
     }
+    val submittedMatchesQuery = submittedQuery != null && submittedQuery == query.trim()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        searchPalette.pageStart,
-                        searchPalette.pageMiddle,
-                        searchPalette.pageEnd,
-                    ),
-                ),
-            )
-            .padding(horizontal = 16.dp),
+    ExpressivePage(
+        accentPalette = searchPalette,
+        maxContentWidth = com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout.ReadingContentMaxWidth,
+        contentPadding = PaddingValues(horizontal = 16.dp),
     ) {
+        Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -138,6 +143,7 @@ fun SearchScreen(
                             rememberSharedContentState(SharedKeys.search()),
                             animatedVisibilityScope,
                         )
+                        .focusRequester(focusRequester)
                         .fillMaxWidth(),
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = searchPalette.quietContainer,
@@ -145,7 +151,7 @@ fun SearchScreen(
                         focusedTextColor = searchPalette.onQuietContainer,
                         unfocusedTextColor = searchPalette.onQuietContainer,
                         focusedLeadingIconColor = searchPalette.accent,
-                        unfocusedLeadingIconColor = searchPalette.onQuietContainer.copy(alpha = 0.72f),
+                        unfocusedLeadingIconColor = searchPalette.secondaryOnQuietContainer,
                         focusedTrailingIconColor = searchPalette.onQuietContainer,
                         unfocusedTrailingIconColor = searchPalette.onQuietContainer,
                         focusedIndicatorColor = Color.Transparent,
@@ -158,20 +164,62 @@ fun SearchScreen(
         Spacer(Modifier.height(8.dp))
 
         when {
-            loading -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Surface(
-                        shape = MaterialTheme.shapes.extraLarge,
-                        color = searchPalette.quietContainer,
-                        contentColor = searchPalette.accent,
-                    ) {
-                        CircularProgressIndicator(Modifier.padding(28.dp))
+            loading && submittedMatchesQuery -> {
+                ExpressiveLoadingState(
+                    label = "正在搜索“${submittedQuery ?: query}”…",
+                    accentColor = searchPalette.accent,
+                    modifier = Modifier.padding(top = 24.dp),
+                )
+            }
+            searchError != null && submittedMatchesQuery -> {
+                ExpressiveStatePanel(
+                    title = "搜索失败",
+                    message = searchError.orEmpty(),
+                    icon = AppIcons.Refresh,
+                    tone = ExpressiveStateTone.Error,
+                    accentPalette = searchPalette,
+                    actionLabel = "重试",
+                    onAction = { submit(submittedQuery ?: query) },
+                    modifier = Modifier.padding(top = 24.dp),
+                )
+            }
+            results.isNotEmpty() && submittedMatchesQuery -> {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    itemsIndexed(
+                        items = results,
+                        key = { _, song -> song.id },
+                    ) { index, song ->
+                        SongRow(
+                            index = index,
+                            title = song.name,
+                            artist = song.ar.joinToString(" / ") { it.name }.ifEmpty { "未知歌手" },
+                            artworkUri = song.al.picUrl,
+                            shape = connectedListItemShape(index, results.size),
+                            onClick = {
+                                player.setQueue(listOf(song.toMediaInfo()), 0)
+                                player.play()
+                                onBack()
+                            },
+                            songId = song.id,
+                        )
                     }
                 }
             }
-            results.isEmpty() && searchPrediction && suggestions.isNotEmpty() -> {
+            submittedMatchesQuery -> {
+                ExpressiveStatePanel(
+                    title = "没有找到结果",
+                    message = "没有找到与“$submittedQuery”匹配的歌曲，试试更短的关键词。",
+                    icon = AppIcons.Search,
+                    accentPalette = searchPalette,
+                    modifier = Modifier.padding(top = 24.dp),
+                )
+            }
+            query.isNotBlank() && searchPrediction && suggestions.isNotEmpty() -> {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    itemsIndexed(suggestions) { index, keyword ->
+                    itemsIndexed(
+                        items = suggestions,
+                        key = { _, keyword -> keyword },
+                    ) { index, keyword ->
                         Surface(
                             onClick = { submit(keyword) },
                             shape = connectedListItemShape(index, suggestions.size),
@@ -197,39 +245,24 @@ fun SearchScreen(
                     }
                 }
             }
-            results.isNotEmpty() -> {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    itemsIndexed(results) { index, song ->
-                        SongRow(
-                            index = index,
-                            title = song.name,
-                            artist = song.ar.joinToString(" / ") { it.name }.ifEmpty { "未知歌手" },
-                            artworkUri = song.al.picUrl,
-                            shape = connectedListItemShape(index, results.size),
-                            onClick = {
-                                player.setQueue(listOf(song.toMediaInfo()), 0)
-                                player.play()
-                                onBack()
-                            },
-                            songId = song.id,
-                        )
-                    }
-                }
-            }
             query.isNotBlank() -> {
-                Surface(
-                    shape = MaterialTheme.shapes.extraLarge,
-                    color = searchPalette.quietContainer,
-                    contentColor = searchPalette.onQuietContainer,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = "按搜索键查找 \"$query\"",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(20.dp),
-                    )
-                }
+                ExpressiveStatePanel(
+                    title = "准备搜索",
+                    message = "按键盘搜索键查找“$query”。",
+                    icon = AppIcons.Search,
+                    accentPalette = searchPalette,
+                )
             }
+            else -> {
+                ExpressiveStatePanel(
+                    title = "发现想听的音乐",
+                    message = "输入歌曲名、歌手或专辑开始搜索。",
+                    icon = AppIcons.Search,
+                    accentPalette = searchPalette,
+                    modifier = Modifier.padding(top = 24.dp),
+                )
+            }
+        }
         }
     }
 }

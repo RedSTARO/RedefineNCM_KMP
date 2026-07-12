@@ -3,6 +3,8 @@ package com.leejlredstar.redefinencm.kmp.lyric
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -13,14 +15,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOverlayCoordinator
 import com.leejlredstar.redefinencm.kmp.ui.screen.FullLyricScreen
+import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
+import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
+import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
 import com.sun.jna.Native
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
@@ -68,6 +78,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val rawWordLyric by viewModel.rawWordLyric.collectAsState()
     val rawTranslatedLyric by viewModel.rawTranslatedLyric.collectAsState()
     val rawRomanLyric by viewModel.rawRomanLyric.collectAsState()
+    val lyricUiState by viewModel.lyricUiState.collectAsState()
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
@@ -89,7 +100,10 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val externalOverlayActive by NativeSurfaceOverlayCoordinator.externalOverlayActive.collectAsState()
     var controlsRevealRequest by remember { mutableIntStateOf(0) }
     var inPageOverlayActive by remember { mutableStateOf(false) }
-    val nativeSurfaceVisible = !inPageOverlayActive && !externalOverlayActive
+    val lyricStateOverlayActive = lyricUiState !is LyricUiState.Content
+    val nativeSurfaceVisible = !inPageOverlayActive &&
+        !externalOverlayActive &&
+        !lyricStateOverlayActive
 
     // 资产解包很快（3 个小文件拷贝），首帧前同步执行即可
     val assetsDir = remember { extractAmllAssets() }
@@ -134,11 +148,12 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         rawLyric,
         rawTranslatedLyric,
         rawRomanLyric,
+        lyricUiState,
     ) {
         if (!engineReady) return@LaunchedEffect
         val mediaId = lyricMediaId ?: return@LaunchedEffect
-        if (rawWordLyric.isEmpty() && rawLyric.isEmpty()) {
-            println("AMLL[wv2] engineReady but rawLyric is EMPTY (no lyrics fetched)")
+        if (lyricUiState !is LyricUiState.Content) {
+            session.eval("AmllBridge.loadLyrics('');")
             return@LaunchedEffect
         }
         val lyricOptions = buildLyricOptionsJs(
@@ -191,6 +206,48 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             update = { it.isVisible = nativeSurfaceVisible },
             modifier = Modifier.fillMaxSize(),
         )
+
+        val statePalette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
+        when (val state = lyricUiState) {
+            is LyricUiState.Idle -> ExpressiveStatePanel(
+                title = "还没有播放音乐",
+                message = "选择一首歌曲后，歌词会显示在这里。",
+                icon = AppIcons.GraphicEq,
+                accentPalette = statePalette,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(horizontal = 32.dp),
+            )
+            is LyricUiState.Loading -> ExpressiveLoadingState(
+                label = "正在加载歌词…",
+                accentColor = statePalette.accent,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(horizontal = 32.dp),
+            )
+            is LyricUiState.Empty -> ExpressiveStatePanel(
+                title = "暂无歌词",
+                message = "这首歌曲暂时没有可用歌词。",
+                icon = AppIcons.GraphicEq,
+                accentPalette = statePalette,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(horizontal = 32.dp),
+            )
+            is LyricUiState.Error -> ExpressiveStatePanel(
+                title = "歌词加载失败",
+                message = state.message,
+                icon = AppIcons.Refresh,
+                tone = ExpressiveStateTone.Error,
+                accentPalette = statePalette,
+                actionLabel = "重试",
+                onAction = viewModel::retryLyrics,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(horizontal = 32.dp),
+            )
+            is LyricUiState.Content -> Unit
+        }
 
         AutoHideMiniPlayerController(
             modifier = Modifier.fillMaxSize(),
