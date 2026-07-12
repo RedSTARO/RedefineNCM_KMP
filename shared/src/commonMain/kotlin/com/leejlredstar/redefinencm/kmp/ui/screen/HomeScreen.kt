@@ -99,6 +99,8 @@ fun HomeScreen(
     val accountLoading by viewModel.accountLoading.collectAsState()
     val resourceLoadError by viewModel.recommendResourceLoadError.collectAsState()
     val songsLoadError by viewModel.recommendSongsLoadError.collectAsState()
+    val resourceFromCache by viewModel.recommendResourceFromCache.collectAsState()
+    val songsFromCache by viewModel.recommendSongsFromCache.collectAsState()
     val userDetail by viewModel.userDetail.collectAsState()
     val dailySongs = recommend?.data?.dailySongs ?: emptyList()
     val resources = recommendResource?.recommend ?: emptyList()
@@ -175,6 +177,8 @@ fun HomeScreen(
                             title = "推荐歌单",
                             items = resources,
                             isLoading = accountLoading && recommendResource == null,
+                            isFromCache = resourceFromCache,
+                            isRefreshing = accountLoading,
                             errorMessage = resourceLoadError,
                             onRetry = viewModel::retryAccountData,
                             key = { resource -> resource.id },
@@ -198,6 +202,8 @@ fun HomeScreen(
                             title = "每日推荐",
                             items = dailySongs,
                             isLoading = accountLoading && recommend == null,
+                            isFromCache = songsFromCache,
+                            isRefreshing = accountLoading,
                             errorMessage = songsLoadError,
                             onRetry = viewModel::retryAccountData,
                             key = { song -> song.id },

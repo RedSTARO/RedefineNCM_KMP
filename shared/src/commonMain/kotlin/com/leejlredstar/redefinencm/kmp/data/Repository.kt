@@ -16,6 +16,33 @@ enum class LyricCacheStatus {
     Failed,
 }
 
+enum class CacheThenNetworkSource {
+    CACHE,
+    NETWORK,
+}
+
+data class CacheThenNetworkData<out T>(
+    val value: T,
+    val source: CacheThenNetworkSource,
+) {
+    val isFromCache: Boolean
+        get() = source == CacheThenNetworkSource.CACHE
+}
+
+internal fun <T> cacheThenNetworkFlow(
+    readCache: () -> T?,
+    fetchNetwork: suspend () -> T?,
+    writeCache: (T) -> Unit,
+): Flow<CacheThenNetworkData<T>> = flow {
+    readCache()?.let { cached ->
+        emit(CacheThenNetworkData(cached, CacheThenNetworkSource.CACHE))
+    }
+    fetchNetwork()?.let { network ->
+        writeCache(network)
+        emit(CacheThenNetworkData(network, CacheThenNetworkSource.NETWORK))
+    }
+}
+
 class Repository(
     private val api: NCMApi,
     private val db: AppDatabase,
@@ -32,59 +59,71 @@ class Repository(
     suspend fun getUserAccount(): UserAccount? =
         safeApiCall { api.userAccount() }?.takeIf { it.code == API_SUCCESS_CODE }
 
-    fun getUserDetail(uid: Long): Flow<UserDetail?> = flow {
-        runCatching {
-            db.cachedUserDetailQueries.selectByUid(uid).executeAsOneOrNull()
-                ?.let { json.decodeFromString<UserDetail>(it) }
-        }.getOrNull()?.takeIf { it.code == API_SUCCESS_CODE }?.let { emit(it) }
-        safeApiCall { api.userDetail(uid) }
-            ?.takeIf { it.code == API_SUCCESS_CODE }
-            ?.let { network ->
-                db.cachedUserDetailQueries.upsert(uid, json.encodeToString(network))
-                emit(network)
-            }
-    }
+    fun getUserDetail(uid: Long): Flow<CacheThenNetworkData<UserDetail>> = cacheThenNetworkFlow(
+        readCache = {
+            runCatching {
+                db.cachedUserDetailQueries.selectByUid(uid).executeAsOneOrNull()
+                    ?.let { json.decodeFromString<UserDetail>(it) }
+            }.getOrNull()?.takeIf { it.code == API_SUCCESS_CODE }
+        },
+        fetchNetwork = {
+            safeApiCall { api.userDetail(uid) }
+                ?.takeIf { it.code == API_SUCCESS_CODE }
+        },
+        writeCache = { network ->
+            db.cachedUserDetailQueries.upsert(uid, json.encodeToString(network))
+        },
+    )
 
-    fun getUserPlaylist(uid: Long): Flow<UserPlaylist?> = flow {
-        runCatching {
-            db.cachedUserPlaylistQueries.selectByUid(uid).executeAsOneOrNull()
-                ?.let { json.decodeFromString<UserPlaylist>(it) }
-        }.getOrNull()?.takeIf { it.code == API_SUCCESS_CODE }?.let { emit(it) }
-        safeApiCall { api.userPlaylist(uid) }
-            ?.takeIf { it.code == API_SUCCESS_CODE }
-            ?.let { network ->
-                db.cachedUserPlaylistQueries.upsert(uid, json.encodeToString(network))
-                emit(network)
-            }
-    }
+    fun getUserPlaylist(uid: Long): Flow<CacheThenNetworkData<UserPlaylist>> = cacheThenNetworkFlow(
+        readCache = {
+            runCatching {
+                db.cachedUserPlaylistQueries.selectByUid(uid).executeAsOneOrNull()
+                    ?.let { json.decodeFromString<UserPlaylist>(it) }
+            }.getOrNull()?.takeIf { it.code == API_SUCCESS_CODE }
+        },
+        fetchNetwork = {
+            safeApiCall { api.userPlaylist(uid) }
+                ?.takeIf { it.code == API_SUCCESS_CODE }
+        },
+        writeCache = { network ->
+            db.cachedUserPlaylistQueries.upsert(uid, json.encodeToString(network))
+        },
+    )
 
     // ── Playlist ──
 
-    fun getPlaylistDetail(id: Long): Flow<PlaylistDetail?> = flow {
-        runCatching {
-            db.cachedPlaylistDetailQueries.selectById(id).executeAsOneOrNull()
-                ?.let { json.decodeFromString<PlaylistDetail>(it) }
-        }.getOrNull()?.takeIf { it.code == API_SUCCESS_CODE }?.let { emit(it) }
-        safeApiCall { api.playlistDetail(id) }
-            ?.takeIf { it.code == API_SUCCESS_CODE }
-            ?.let { network ->
-                db.cachedPlaylistDetailQueries.upsert(id, json.encodeToString(network))
-                emit(network)
-            }
-    }
+    fun getPlaylistDetail(id: Long): Flow<CacheThenNetworkData<PlaylistDetail>> = cacheThenNetworkFlow(
+        readCache = {
+            runCatching {
+                db.cachedPlaylistDetailQueries.selectById(id).executeAsOneOrNull()
+                    ?.let { json.decodeFromString<PlaylistDetail>(it) }
+            }.getOrNull()?.takeIf { it.code == API_SUCCESS_CODE }
+        },
+        fetchNetwork = {
+            safeApiCall { api.playlistDetail(id) }
+                ?.takeIf { it.code == API_SUCCESS_CODE }
+        },
+        writeCache = { network ->
+            db.cachedPlaylistDetailQueries.upsert(id, json.encodeToString(network))
+        },
+    )
 
-    fun getPlaylistTrackAll(id: Long): Flow<PlaylistTrackAll?> = flow {
-        runCatching {
-            db.cachedPlaylistTrackAllQueries.selectById(id).executeAsOneOrNull()
-                ?.let { json.decodeFromString<PlaylistTrackAll>(it) }
-        }.getOrNull()?.takeIf { it.code == API_SUCCESS_CODE }?.let { emit(it) }
-        safeApiCall { api.playlistTrackAll(id) }
-            ?.takeIf { it.code == API_SUCCESS_CODE }
-            ?.let { network ->
-                db.cachedPlaylistTrackAllQueries.upsert(id, json.encodeToString(network))
-                emit(network)
-            }
-    }
+    fun getPlaylistTrackAll(id: Long): Flow<CacheThenNetworkData<PlaylistTrackAll>> = cacheThenNetworkFlow(
+        readCache = {
+            runCatching {
+                db.cachedPlaylistTrackAllQueries.selectById(id).executeAsOneOrNull()
+                    ?.let { json.decodeFromString<PlaylistTrackAll>(it) }
+            }.getOrNull()?.takeIf { it.code == API_SUCCESS_CODE }
+        },
+        fetchNetwork = {
+            safeApiCall { api.playlistTrackAll(id) }
+                ?.takeIf { it.code == API_SUCCESS_CODE }
+        },
+        writeCache = { network ->
+            db.cachedPlaylistTrackAllQueries.upsert(id, json.encodeToString(network))
+        },
+    )
 
     /** 一次性网络获取歌单全部曲目（批量下载用，不走缓存流）。 */
     suspend fun getPlaylistTrackAllOnce(id: Long): PlaylistTrackAll? =
@@ -96,47 +135,61 @@ class Repository(
 
     // ── Recommend ──
 
-    fun getRecommendSongs(uid: Long, readCache: Boolean = true): Flow<RecommendSongs?> = flow {
-        if (readCache) {
-            runCatching {
-                db.cachedRecommendSongsQueries.select().executeAsOneOrNull()
-                    ?.let { json.decodeFromString<CachedRecommendSongsEntry>(it) }
-            }.getOrNull()
-                ?.takeIf { it.uid == uid }
-                ?.value
-                ?.takeIf { it.code == API_SUCCESS_CODE }
-                ?.let { emit(it) }
-        }
-        safeApiCall { api.recommendSongs() }
-            ?.takeIf { it.code == API_SUCCESS_CODE }
-            ?.let { network ->
-                db.cachedRecommendSongsQueries.upsert(
-                    json.encodeToString(CachedRecommendSongsEntry(uid, network)),
-                )
-                emit(network)
+    fun getRecommendSongs(
+        uid: Long,
+        readCache: Boolean = true,
+    ): Flow<CacheThenNetworkData<RecommendSongs>> = cacheThenNetworkFlow(
+        readCache = {
+            if (!readCache) {
+                null
+            } else {
+                runCatching {
+                    db.cachedRecommendSongsQueries.select().executeAsOneOrNull()
+                        ?.let { json.decodeFromString<CachedRecommendSongsEntry>(it) }
+                }.getOrNull()
+                    ?.takeIf { it.uid == uid }
+                    ?.value
+                    ?.takeIf { it.code == API_SUCCESS_CODE }
             }
-    }
+        },
+        fetchNetwork = {
+            safeApiCall { api.recommendSongs() }
+                ?.takeIf { it.code == API_SUCCESS_CODE }
+        },
+        writeCache = { network ->
+            db.cachedRecommendSongsQueries.upsert(
+                json.encodeToString(CachedRecommendSongsEntry(uid, network)),
+            )
+        },
+    )
 
-    fun getRecommendResource(uid: Long, readCache: Boolean = true): Flow<RecommendResource?> = flow {
-        if (readCache) {
-            runCatching {
-                db.cachedRecommendResourceQueries.select().executeAsOneOrNull()
-                    ?.let { json.decodeFromString<CachedRecommendResourceEntry>(it) }
-            }.getOrNull()
-                ?.takeIf { it.uid == uid }
-                ?.value
-                ?.takeIf { it.code == API_SUCCESS_CODE }
-                ?.let { emit(it) }
-        }
-        safeApiCall { api.recommendResource() }
-            ?.takeIf { it.code == API_SUCCESS_CODE }
-            ?.let { network ->
-                db.cachedRecommendResourceQueries.upsert(
-                    json.encodeToString(CachedRecommendResourceEntry(uid, network)),
-                )
-                emit(network)
+    fun getRecommendResource(
+        uid: Long,
+        readCache: Boolean = true,
+    ): Flow<CacheThenNetworkData<RecommendResource>> = cacheThenNetworkFlow(
+        readCache = {
+            if (!readCache) {
+                null
+            } else {
+                runCatching {
+                    db.cachedRecommendResourceQueries.select().executeAsOneOrNull()
+                        ?.let { json.decodeFromString<CachedRecommendResourceEntry>(it) }
+                }.getOrNull()
+                    ?.takeIf { it.uid == uid }
+                    ?.value
+                    ?.takeIf { it.code == API_SUCCESS_CODE }
             }
-    }
+        },
+        fetchNetwork = {
+            safeApiCall { api.recommendResource() }
+                ?.takeIf { it.code == API_SUCCESS_CODE }
+        },
+        writeCache = { network ->
+            db.cachedRecommendResourceQueries.upsert(
+                json.encodeToString(CachedRecommendResourceEntry(uid, network)),
+            )
+        },
+    )
 
     /** Account-scoped singleton caches must not survive a cookie/account switch. */
     fun clearAccountScopedCaches(): Result<Unit> = runCatching {
@@ -148,18 +201,21 @@ class Repository(
 
     // ── Comment ──
 
-    fun getCommentMusic(id: Long): Flow<CommentMusic?> = flow {
-        runCatching {
-            db.cachedCommentMusicQueries.selectBySongId(id).executeAsOneOrNull()
-                ?.let { json.decodeFromString<CommentMusic>(it) }
-        }.getOrNull()?.takeIf { it.code == API_SUCCESS_CODE }?.let { emit(it) }
-        safeApiCall { api.commentMusic(id) }
-            ?.takeIf { it.code == API_SUCCESS_CODE }
-            ?.let { network ->
-                db.cachedCommentMusicQueries.upsert(id, json.encodeToString(network))
-                emit(network)
-            }
-    }
+    fun getCommentMusic(id: Long): Flow<CacheThenNetworkData<CommentMusic>> = cacheThenNetworkFlow(
+        readCache = {
+            runCatching {
+                db.cachedCommentMusicQueries.selectBySongId(id).executeAsOneOrNull()
+                    ?.let { json.decodeFromString<CommentMusic>(it) }
+            }.getOrNull()?.takeIf { it.code == API_SUCCESS_CODE }
+        },
+        fetchNetwork = {
+            safeApiCall { api.commentMusic(id) }
+                ?.takeIf { it.code == API_SUCCESS_CODE }
+        },
+        writeCache = { network ->
+            db.cachedCommentMusicQueries.upsert(id, json.encodeToString(network))
+        },
+    )
 
     // ── Lyric ──
 

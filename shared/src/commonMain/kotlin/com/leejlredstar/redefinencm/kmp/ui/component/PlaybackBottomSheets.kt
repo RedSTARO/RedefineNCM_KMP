@@ -186,12 +186,15 @@ fun QueueBottomSheet(
 @Composable
 fun CommentBottomSheet(
     comments: List<CommentMusicComments>,
+    hasLoadedData: Boolean,
     accentPalette: ContentAccentPalette,
     onDismiss: () -> Unit,
     isLoading: Boolean = false,
+    isFromCache: Boolean = false,
     errorMessage: String? = null,
     onRetry: (() -> Unit)? = null,
 ) {
+    val showInitialLoading = isLoading && !hasLoadedData
     val commentEntries = remember(comments) {
         val occurrences = mutableMapOf<String, Int>()
         comments.map { comment ->
@@ -217,7 +220,7 @@ fun CommentBottomSheet(
         ExpressiveSectionTitle(
             text = "歌曲评论",
             supportingText = when {
-                isLoading -> "正在加载评论"
+                showInitialLoading -> "正在加载评论"
                 errorMessage != null -> "评论暂时无法加载"
                 comments.isEmpty() -> "暂无评论"
                 else -> "共 ${comments.size} 条评论"
@@ -229,7 +232,15 @@ fun CommentBottomSheet(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(bottom = 24.dp),
         ) {
-            if (isLoading) {
+            if (isFromCache) {
+                item(key = "comments-cache-hint") {
+                    ExpressiveCacheHint(
+                        isRefreshing = isLoading,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                }
+            }
+            if (showInitialLoading) {
                 item(key = "loading-comments") {
                     ExpressiveLoadingState(
                         label = "正在加载评论…",
@@ -261,7 +272,7 @@ fun CommentBottomSheet(
                     )
                 }
             }
-            if (!isLoading && errorMessage == null) {
+            if (!showInitialLoading && errorMessage == null) {
                 itemsIndexed(
                     items = commentEntries,
                     key = { _, entry -> entry.key },

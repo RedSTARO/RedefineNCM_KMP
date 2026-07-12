@@ -547,6 +547,7 @@ private fun DesktopNowPlayingStrip(
     val comments by viewModel.comments.collectAsState()
     val commentsLoading by viewModel.commentsLoading.collectAsState()
     val commentsLoadError by viewModel.commentsLoadError.collectAsState()
+    val commentsFromCache by viewModel.commentsFromCache.collectAsState()
     val artwork = media?.artworkUri.orEmpty()
     val extractAccent = rememberThemeColorExtractor(artwork) { onAccentColor(it) }
     val hasMedia = media != null
@@ -835,9 +836,11 @@ private fun DesktopNowPlayingStrip(
         if (showComments) {
             CommentBottomSheet(
                 comments = comments?.hotComments?.ifEmpty { comments?.comments } ?: emptyList(),
+                hasLoadedData = comments != null,
                 accentPalette = accentPalette,
                 onDismiss = { showComments = false },
                 isLoading = commentsLoading,
+                isFromCache = commentsFromCache,
                 errorMessage = commentsLoadError,
                 onRetry = viewModel::getComments,
             )

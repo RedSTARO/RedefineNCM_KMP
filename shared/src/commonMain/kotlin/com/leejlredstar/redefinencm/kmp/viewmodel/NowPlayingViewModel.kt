@@ -60,6 +60,7 @@ class NowPlayingViewModel(
     val comments = MutableStateFlow<CommentMusic?>(null)
     val commentsLoading = MutableStateFlow(false)
     val commentsLoadError = MutableStateFlow<String?>(null)
+    val commentsFromCache = MutableStateFlow(false)
 
     init {
         initPlayerSync()
@@ -97,6 +98,7 @@ class NowPlayingViewModel(
                 comments.value = null
                 commentsLoading.value = false
                 commentsLoadError.value = null
+                commentsFromCache.value = false
                 if (media != null) {
                     MediaControlsIntegrator.updateMetadata(
                         title = media.title,
@@ -358,10 +360,11 @@ class NowPlayingViewModel(
         commentsFetchJob = scope.launch(Dispatchers.Default) {
             var emitted = false
             try {
-                repo.getCommentMusic(id).collect { detail ->
+                repo.getCommentMusic(id).collect { emission ->
                     if (currentMedia.value?.id == mediaId) {
                         emitted = true
-                        comments.value = detail
+                        comments.value = emission.value
+                        commentsFromCache.value = emission.isFromCache
                     }
                 }
                 if (

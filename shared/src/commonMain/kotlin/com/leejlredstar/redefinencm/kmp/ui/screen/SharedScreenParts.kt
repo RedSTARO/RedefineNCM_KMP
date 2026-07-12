@@ -43,6 +43,7 @@ import com.leejlredstar.redefinencm.kmp.data.api.dto.UserPlaylistEach
 import com.leejlredstar.redefinencm.kmp.download.DownloadTaskStatus
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveCacheHint
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveArtwork
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
@@ -286,6 +287,8 @@ fun <T> SectionWithLazyRow(
     title: String,
     items: List<T>,
     isLoading: Boolean = false,
+    isFromCache: Boolean = false,
+    isRefreshing: Boolean = false,
     errorMessage: String? = null,
     onRetry: (() -> Unit)? = null,
     key: ((T) -> Any)? = null,
@@ -298,12 +301,13 @@ fun <T> SectionWithLazyRow(
             modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
             action = action,
         )
-        if (isLoading) {
-            ExpressiveLoadingState(
-                label = "正在加载$title…",
-                modifier = Modifier.fillMaxWidth(),
+        if (isFromCache) {
+            ExpressiveCacheHint(
+                isRefreshing = isRefreshing,
+                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
             )
-        } else if (errorMessage != null) {
+        }
+        if (errorMessage != null) {
             ExpressiveStatePanel(
                 title = "$title 加载失败",
                 message = errorMessage,
@@ -311,6 +315,11 @@ fun <T> SectionWithLazyRow(
                 tone = ExpressiveStateTone.Error,
                 actionLabel = onRetry?.let { "重试" },
                 onAction = onRetry,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        } else if (isLoading) {
+            ExpressiveLoadingState(
+                label = "正在加载$title…",
                 modifier = Modifier.fillMaxWidth(),
             )
         } else if (items.isEmpty()) {

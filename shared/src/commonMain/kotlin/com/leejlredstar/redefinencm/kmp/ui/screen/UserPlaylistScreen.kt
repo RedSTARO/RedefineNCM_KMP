@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveCacheHint
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
@@ -58,11 +59,18 @@ fun UserPlaylistScreen(
 ) {
     val userDetail by viewModel.userDetail.collectAsState()
     val playlists by viewModel.userPlaylists.collectAsState()
+    val playlistsLoaded by viewModel.userPlaylistsLoaded.collectAsState()
     val accountLoading by viewModel.accountLoading.collectAsState()
     val accountLoadError by viewModel.accountLoadError.collectAsState()
     val userDetailLoadError by viewModel.userDetailLoadError.collectAsState()
     val userPlaylistsLoadError by viewModel.userPlaylistsLoadError.collectAsState()
+    val userDetailFromCache by viewModel.userDetailFromCache.collectAsState()
+    val userPlaylistsFromCache by viewModel.userPlaylistsFromCache.collectAsState()
     val uid by viewModel.uid.collectAsState()
+    val hasCachedContent =
+        (userDetailFromCache && userDetail != null) ||
+            userPlaylistsFromCache
+    val hasAccountContent = userDetail != null || playlistsLoaded
     val defaultAccentColor = MaterialTheme.colorScheme.primaryContainer
     var rawAccentColor by remember(
         userDetail?.profile?.backgroundUrl,
@@ -95,15 +103,16 @@ fun UserPlaylistScreen(
                     )
                 }
             }
-            when {
-                accountLoading && userDetail == null -> item(key = "account-loading") {
-                    ExpressiveLoadingState(
-                        label = "正在加载账号与歌单…",
-                        accentColor = accentPalette.accent,
-                        modifier = Modifier.padding(16.dp),
+            if (hasCachedContent) {
+                item(key = "account-cache-hint") {
+                    ExpressiveCacheHint(
+                        isRefreshing = accountLoading,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     )
                 }
-                (accountLoadError != null || userDetailLoadError != null) && userDetail == null -> item(
+            }
+            when {
+                (accountLoadError != null || userDetailLoadError != null) && !hasAccountContent -> item(
                     key = "account-error",
                 ) {
                     ExpressiveStatePanel(
@@ -117,10 +126,17 @@ fun UserPlaylistScreen(
                         modifier = Modifier.padding(16.dp),
                     )
                 }
+                accountLoading && !hasAccountContent -> item(key = "account-loading") {
+                    ExpressiveLoadingState(
+                        label = "正在加载账号与歌单…",
+                        accentColor = accentPalette.accent,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
                 uid == 0L -> item(key = "login-hint") {
                     LoginMovedHint(accentPalette)
                 }
-                userDetail == null -> item(key = "profile-unavailable") {
+                !hasAccountContent -> item(key = "profile-unavailable") {
                     ExpressiveStatePanel(
                         title = "用户资料暂不可用",
                         message = "账号已登录，但用户资料未能加载。",
@@ -140,15 +156,7 @@ fun UserPlaylistScreen(
                             modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 12.dp),
                         )
                     }
-                    if (accountLoading && playlists.isEmpty()) {
-                        item(key = "playlist-loading") {
-                            ExpressiveLoadingState(
-                                label = "正在加载我的歌单…",
-                                accentColor = accentPalette.accent,
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                            )
-                        }
-                    } else if (userPlaylistsLoadError != null && playlists.isEmpty()) {
+                    if (userPlaylistsLoadError != null && !playlistsLoaded) {
                         item(key = "playlist-error") {
                             ExpressiveStatePanel(
                                 title = "歌单加载失败",
@@ -158,6 +166,14 @@ fun UserPlaylistScreen(
                                 accentPalette = accentPalette,
                                 actionLabel = "重试",
                                 onAction = viewModel::retryAccountData,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        }
+                    } else if (accountLoading && !playlistsLoaded) {
+                        item(key = "playlist-loading") {
+                            ExpressiveLoadingState(
+                                label = "正在加载我的歌单…",
+                                accentColor = accentPalette.accent,
                                 modifier = Modifier.padding(horizontal = 16.dp),
                             )
                         }

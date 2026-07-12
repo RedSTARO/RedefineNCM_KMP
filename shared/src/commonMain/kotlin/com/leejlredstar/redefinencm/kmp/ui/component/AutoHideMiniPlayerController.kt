@@ -110,6 +110,7 @@ fun AutoHideMiniPlayerController(
     val comments by viewModel.comments.collectAsState()
     val commentsLoading by viewModel.commentsLoading.collectAsState()
     val commentsLoadError by viewModel.commentsLoadError.collectAsState()
+    val commentsFromCache by viewModel.commentsFromCache.collectAsState()
 
     var visible by remember { mutableStateOf(initialExpanded) }
     var revealRequest by remember { mutableIntStateOf(0) }
@@ -255,9 +256,11 @@ fun AutoHideMiniPlayerController(
         if (showComments) {
             CommentBottomSheet(
                 comments = comments?.hotComments?.ifEmpty { comments?.comments } ?: emptyList(),
+                hasLoadedData = comments != null,
                 accentPalette = accentPalette,
                 onDismiss = { showComments = false },
                 isLoading = commentsLoading,
+                isFromCache = commentsFromCache,
                 errorMessage = commentsLoadError,
                 onRetry = viewModel::getComments,
             )

@@ -56,10 +56,13 @@ class MainViewModel(
 
     val userDetail = MutableStateFlow<UserDetail?>(null)
     val userPlaylists = MutableStateFlow<List<UserPlaylistEach>>(emptyList())
+    val userPlaylistsLoaded = MutableStateFlow(false)
     val accountLoading = MutableStateFlow(false)
     val accountLoadError = MutableStateFlow<String?>(null)
     val userDetailLoadError = MutableStateFlow<String?>(null)
     val userPlaylistsLoadError = MutableStateFlow<String?>(null)
+    val userDetailFromCache = MutableStateFlow(false)
+    val userPlaylistsFromCache = MutableStateFlow(false)
     private val accountGeneration = MutableStateFlow(0L)
     private var accountJob: Job? = null
 
@@ -69,6 +72,8 @@ class MainViewModel(
     val playlistLoading = MutableStateFlow(false)
     val playlistLoadError = MutableStateFlow<String?>(null)
     val playlistDetailLoadError = MutableStateFlow<String?>(null)
+    val playlistDetailFromCache = MutableStateFlow(false)
+    val playlistSongsFromCache = MutableStateFlow(false)
     private val playlistGeneration = MutableStateFlow(0L)
     private val activePlaylistId = MutableStateFlow<Long?>(null)
     private var playlistJob: Job? = null
@@ -78,6 +83,8 @@ class MainViewModel(
     val recommendSongs = MutableStateFlow<RecommendSongs?>(null)
     val recommendResourceLoadError = MutableStateFlow<String?>(null)
     val recommendSongsLoadError = MutableStateFlow<String?>(null)
+    val recommendResourceFromCache = MutableStateFlow(false)
+    val recommendSongsFromCache = MutableStateFlow(false)
 
     // ── Search ──
     val searchResults = MutableStateFlow<List<SongDetailSongs>>(emptyList())
@@ -238,8 +245,13 @@ class MainViewModel(
             _uid.value = 0L
             userDetail.value = null
             userPlaylists.value = emptyList()
+            userPlaylistsLoaded.value = false
             recommendResource.value = null
             recommendSongs.value = null
+            userDetailFromCache.value = false
+            userPlaylistsFromCache.value = false
+            recommendResourceFromCache.value = false
+            recommendSongsFromCache.value = false
         }
         accountJob = scope.launch(Dispatchers.Default) {
             try {
@@ -277,11 +289,13 @@ class MainViewModel(
                 coroutineScope {
                     launch {
                         var emitted = false
-                        repo.getUserDetail(resolvedUid).collect { detail ->
+                        repo.getUserDetail(resolvedUid).collect { emission ->
                             if (accountGeneration.value == generation && _uid.value == resolvedUid) {
-                                emitted = detail != null || emitted
+                                val detail = emission.value
+                                emitted = true
                                 userDetail.value = detail
-                                if (detail != null) userDetailLoadError.value = null
+                                userDetailFromCache.value = emission.isFromCache
+                                userDetailLoadError.value = null
                             }
                         }
                         if (
@@ -294,11 +308,13 @@ class MainViewModel(
                     }
                     launch {
                         var emitted = false
-                        repo.getUserPlaylist(resolvedUid).collect { detail ->
+                        repo.getUserPlaylist(resolvedUid).collect { emission ->
                             if (accountGeneration.value == generation && _uid.value == resolvedUid) {
-                                emitted = detail != null || emitted
-                                userPlaylists.value = detail?.playlist.orEmpty()
-                                if (detail != null) userPlaylistsLoadError.value = null
+                                emitted = true
+                                userPlaylists.value = emission.value.playlist
+                                userPlaylistsLoaded.value = true
+                                userPlaylistsFromCache.value = emission.isFromCache
+                                userPlaylistsLoadError.value = null
                             }
                         }
                         if (
@@ -314,11 +330,12 @@ class MainViewModel(
                         repo.getRecommendResource(
                             uid = resolvedUid,
                             readCache = !clearPersistedAccount,
-                        ).collect { detail ->
+                        ).collect { emission ->
                             if (accountGeneration.value == generation && _uid.value == resolvedUid) {
-                                emitted = detail != null || emitted
-                                recommendResource.value = detail
-                                if (detail != null) recommendResourceLoadError.value = null
+                                emitted = true
+                                recommendResource.value = emission.value
+                                recommendResourceFromCache.value = emission.isFromCache
+                                recommendResourceLoadError.value = null
                             }
                         }
                         if (
@@ -334,11 +351,12 @@ class MainViewModel(
                         repo.getRecommendSongs(
                             uid = resolvedUid,
                             readCache = !clearPersistedAccount,
-                        ).collect { detail ->
+                        ).collect { emission ->
                             if (accountGeneration.value == generation && _uid.value == resolvedUid) {
-                                emitted = detail != null || emitted
-                                recommendSongs.value = detail
-                                if (detail != null) recommendSongsLoadError.value = null
+                                emitted = true
+                                recommendSongs.value = emission.value
+                                recommendSongsFromCache.value = emission.isFromCache
+                                recommendSongsLoadError.value = null
                             }
                         }
                         if (
@@ -357,8 +375,13 @@ class MainViewModel(
                     _uid.value = 0L
                     userDetail.value = null
                     userPlaylists.value = emptyList()
+                    userPlaylistsLoaded.value = false
                     recommendResource.value = null
                     recommendSongs.value = null
+                    userDetailFromCache.value = false
+                    userPlaylistsFromCache.value = false
+                    recommendResourceFromCache.value = false
+                    recommendSongsFromCache.value = false
                     settings.setLong(SettingKeys.UID, 0L)
                     settings.setLong(SettingKeys.UID_COOKIE_FINGERPRINT, 0L)
                     runCatching { settings.flush() }
@@ -391,30 +414,34 @@ class MainViewModel(
         playlistLoading.value = true
         playlistLoadError.value = null
         playlistDetailLoadError.value = null
+        playlistDetailFromCache.value = false
+        playlistSongsFromCache.value = false
         playlistJob = scope.launch(Dispatchers.Default) {
             var detailEmitted = false
             var tracksEmitted = false
             try {
                 coroutineScope {
                     launch {
-                        repo.getPlaylistDetail(songlistID).collect { detail ->
+                        repo.getPlaylistDetail(songlistID).collect { emission ->
                             if (
                                 playlistGeneration.value == generation &&
                                 activePlaylistId.value == songlistID
                             ) {
-                                detailEmitted = detail != null || detailEmitted
-                                playlistDetail.value = detail
+                                detailEmitted = true
+                                playlistDetail.value = emission.value
+                                playlistDetailFromCache.value = emission.isFromCache
                             }
                         }
                     }
                     launch {
-                        repo.getPlaylistTrackAll(songlistID).collect { detail ->
+                        repo.getPlaylistTrackAll(songlistID).collect { emission ->
                             if (
                                 playlistGeneration.value == generation &&
                                 activePlaylistId.value == songlistID
                             ) {
-                                tracksEmitted = detail != null || tracksEmitted
-                                playlistSongs.value = detail
+                                tracksEmitted = true
+                                playlistSongs.value = emission.value
+                                playlistSongsFromCache.value = emission.isFromCache
                             }
                         }
                     }
