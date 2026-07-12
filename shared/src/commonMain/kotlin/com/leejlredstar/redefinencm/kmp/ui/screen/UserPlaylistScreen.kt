@@ -62,6 +62,15 @@ internal data class UserLevelDisplay(
     val progress: Float,
 )
 
+internal fun isFavoritePlaylist(
+    specialType: Int,
+    name: String,
+    creatorUserId: Long,
+    currentUserId: Long,
+): Boolean = currentUserId > 0L &&
+    creatorUserId == currentUserId &&
+    (specialType == 5 || (specialType == 0 && name.endsWith("喜欢的音乐")))
+
 internal fun userLevelDisplay(response: UserLevelResponse?): UserLevelDisplay? {
     val data = response?.data ?: return null
     val progress = when {
@@ -106,10 +115,13 @@ fun UserPlaylistScreen(
     val userDetailLoadError by viewModel.userDetailLoadError.collectAsState()
     val userLevelLoadError by viewModel.userLevelLoadError.collectAsState()
     val userPlaylistsLoadError by viewModel.userPlaylistsLoadError.collectAsState()
+    val intelligenceLoadingPlaylistId by viewModel.intelligenceLoadingPlaylistId.collectAsState()
+    val intelligenceError by viewModel.intelligenceError.collectAsState()
     val userDetailFromCache by viewModel.userDetailFromCache.collectAsState()
     val userLevelFromCache by viewModel.userLevelFromCache.collectAsState()
     val userPlaylistsFromCache by viewModel.userPlaylistsFromCache.collectAsState()
     val uid by viewModel.uid.collectAsState()
+    var lastIntelligencePlaylistId by remember { mutableStateOf<Long?>(null) }
     val hasCachedContent =
         (userDetailFromCache && userDetail != null) ||
             (userLevelFromCache && userLevel?.data != null) ||
@@ -203,6 +215,22 @@ fun UserPlaylistScreen(
                             modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 12.dp),
                         )
                     }
+                    if (intelligenceError != null) {
+                        item(key = "intelligence-error") {
+                            ExpressiveStatePanel(
+                                title = "心动模式启动失败",
+                                message = intelligenceError.orEmpty(),
+                                icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Favorite,
+                                tone = ExpressiveStateTone.Error,
+                                accentPalette = accentPalette,
+                                actionLabel = lastIntelligencePlaylistId?.let { "重试" },
+                                onAction = lastIntelligencePlaylistId?.let { playlistId ->
+                                    { viewModel.startIntelligenceMode(playlistId) }
+                                },
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                            )
+                        }
+                    }
                     if (userPlaylistsLoadError != null && !playlistsLoaded) {
                         item(key = "playlist-error") {
                             ExpressiveStatePanel(
@@ -238,10 +266,16 @@ fun UserPlaylistScreen(
                             items = playlists,
                             key = { _, playlist -> playlist.id },
                         ) { index, pl ->
+                            val isFavorite = isFavoritePlaylist(
+                                specialType = pl.specialType,
+                                name = pl.name,
+                                creatorUserId = pl.creator.userId,
+                                currentUserId = uid,
+                            )
                             PlaylistCard(
                                 userPlaylistEach = pl,
                                 specialCard = when {
-                                    pl.name.contains("喜欢的音乐") -> "fav"
+                                    isFavorite -> "fav"
                                     pl.name.contains("私人雷达") -> "radar"
                                     else -> "no"
                                 },
@@ -249,6 +283,15 @@ fun UserPlaylistScreen(
                                 count = playlists.size,
                                 accentColor = animatedAccentColor,
                                 onClick = { onOpenPlaylist(pl.id) },
+                                onSpecialClick = if (isFavorite) {
+                                    {
+                                        lastIntelligencePlaylistId = pl.id
+                                        viewModel.startIntelligenceMode(pl.id)
+                                    }
+                                } else {
+                                    null
+                                },
+                                specialActionLoading = intelligenceLoadingPlaylistId == pl.id,
                             )
                         }
                     }

@@ -125,6 +125,7 @@ data class UserPlaylistEach(
     val coverImgUrl: String = "",
     val trackCount: Long = 0,
     val playCount: Long = 0,
+    val specialType: Int = 0,
     val creator: UserPlaylistCreator = UserPlaylistCreator(),
     val description: String = "",
 )
@@ -163,6 +164,22 @@ data class PlaylistTrackAll(
 @Serializable
 data class PlaylistUpdatePlayCount(
     val code: Int = 0,
+)
+
+@Serializable
+data class IntelligenceListResponse(
+    val code: Int = 0,
+    val data: List<IntelligenceListItem>? = null,
+    val message: String? = null,
+    val msg: String? = null,
+)
+
+@Serializable
+data class IntelligenceListItem(
+    val id: Long = 0,
+    val alg: String? = null,
+    val recommended: Boolean = false,
+    val songInfo: SongDetailSongs? = null,
 )
 
 // ── Songs ──

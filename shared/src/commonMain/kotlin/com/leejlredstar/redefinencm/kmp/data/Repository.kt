@@ -156,6 +156,18 @@ class Repository(
     suspend fun updatePlaylistPlaycount(id: Long): Boolean =
         safeApiCall { api.playlistUpdatePlaycount(id) }?.code == API_SUCCESS_CODE
 
+    suspend fun getIntelligenceList(
+        id: Long,
+        pid: Long,
+        sid: Long? = null,
+    ): IntelligenceListResponse? {
+        require(id > 0) { "id must be positive" }
+        require(pid > 0) { "pid must be positive" }
+        require(sid == null || sid > 0) { "sid must be positive when provided" }
+        return safeApiCall { api.intelligenceList(id, pid, sid) }
+            ?.takeIf { it.code == API_SUCCESS_CODE }
+    }
+
     // ── Recommend ──
 
     fun getRecommendSongs(
@@ -380,6 +392,18 @@ class Repository(
 
     suspend fun like(songId: Long?): Like? {
         return safeApiCall { api.like(songId) }?.takeIf { it.code == API_SUCCESS_CODE }
+    }
+
+    suspend fun getLikedSongIds(uid: Long): List<Long> {
+        require(uid > 0) { "uid must be positive" }
+        return safeApiCall { api.likelist(uid) }
+            ?.takeIf { it.code == API_SUCCESS_CODE }
+            ?.ids
+            ?.asSequence()
+            ?.filter { it > 0 }
+            ?.distinct()
+            ?.toList()
+            .orEmpty()
     }
 
     // ── Player status（播放状态持久化，对应原版 Room playerStatus 表）──
