@@ -69,9 +69,41 @@ class DatabaseMigrationTest {
                 assertTrue("CachedPlaylistTrackAll" in tables)
                 assertTrue("CachedCommentMusic" in tables)
                 assertTrue("PlayerStatus" in tables)
+                assertTrue("CachedUserLevel" in tables)
 
                 assertEquals(AppDatabase.Schema.version, readUserVersion(jdbcUrl))
             }
+        } finally {
+            driver.close()
+            databaseFile.toPath().deleteIfExists()
+            directory.deleteIfExists()
+        }
+    }
+
+    @Test
+    fun versionTwoDatabaseAddsUserLevelCacheWithoutLosingExistingData() {
+        val directory = Files.createTempDirectory("redefinencm-db-level-migration-")
+        val databaseFile = directory.resolve("legacy.db").toFile()
+        val jdbcUrl = "jdbc:sqlite:${databaseFile.absolutePath}"
+
+        DriverManager.getConnection(jdbcUrl).use { connection ->
+            connection.createStatement().use { statement ->
+                statement.execute("CREATE TABLE CachedUserDetail (uid INTEGER NOT NULL PRIMARY KEY, json TEXT NOT NULL)")
+                statement.execute("INSERT INTO CachedUserDetail(uid, json) VALUES (42, '{\"name\":\"kept\"}')")
+                statement.execute("PRAGMA user_version = 2")
+            }
+        }
+
+        val driver = openJvmDatabase(databaseFile)
+        try {
+            val database = AppDatabase(driver)
+            assertEquals("{\"name\":\"kept\"}", database.cachedUserDetailQueries.selectByUid(42).executeAsOne())
+            database.cachedUserLevelQueries.upsert(42, "{\"level\":7}")
+            assertEquals(
+                "{\"level\":7}",
+                database.cachedUserLevelQueries.selectByUid(42).executeAsOne(),
+            )
+            assertEquals(AppDatabase.Schema.version, readUserVersion(jdbcUrl))
         } finally {
             driver.close()
             databaseFile.toPath().deleteIfExists()

@@ -55,13 +55,16 @@ class MainViewModel(
     val uid: StateFlow<Long> = _uid.asStateFlow()
 
     val userDetail = MutableStateFlow<UserDetail?>(null)
+    val userLevel = MutableStateFlow<UserLevelResponse?>(null)
     val userPlaylists = MutableStateFlow<List<UserPlaylistEach>>(emptyList())
     val userPlaylistsLoaded = MutableStateFlow(false)
     val accountLoading = MutableStateFlow(false)
     val accountLoadError = MutableStateFlow<String?>(null)
     val userDetailLoadError = MutableStateFlow<String?>(null)
+    val userLevelLoadError = MutableStateFlow<String?>(null)
     val userPlaylistsLoadError = MutableStateFlow<String?>(null)
     val userDetailFromCache = MutableStateFlow(false)
+    val userLevelFromCache = MutableStateFlow(false)
     val userPlaylistsFromCache = MutableStateFlow(false)
     private val accountGeneration = MutableStateFlow(0L)
     private var accountJob: Job? = null
@@ -240,17 +243,20 @@ class MainViewModel(
         accountLoading.value = true
         accountLoadError.value = null
         userDetailLoadError.value = null
+        userLevelLoadError.value = null
         userPlaylistsLoadError.value = null
         recommendResourceLoadError.value = null
         recommendSongsLoadError.value = null
         if (clearPersistedAccount) {
             _uid.value = 0L
             userDetail.value = null
+            userLevel.value = null
             userPlaylists.value = emptyList()
             userPlaylistsLoaded.value = false
             recommendResource.value = null
             recommendSongs.value = null
             userDetailFromCache.value = false
+            userLevelFromCache.value = false
             userPlaylistsFromCache.value = false
             recommendResourceFromCache.value = false
             recommendSongsFromCache.value = false
@@ -306,6 +312,24 @@ class MainViewModel(
                             _uid.value == resolvedUid
                         ) {
                             userDetailLoadError.value = "用户资料加载失败，请检查网络后重试"
+                        }
+                    }
+                    launch {
+                        var emitted = false
+                        repo.getUserLevel(resolvedUid).collect { emission ->
+                            if (accountGeneration.value == generation && _uid.value == resolvedUid) {
+                                emitted = true
+                                userLevel.value = emission.value
+                                userLevelFromCache.value = emission.isFromCache
+                                userLevelLoadError.value = null
+                            }
+                        }
+                        if (
+                            !emitted &&
+                            accountGeneration.value == generation &&
+                            _uid.value == resolvedUid
+                        ) {
+                            userLevelLoadError.value = "用户等级信息加载失败，请检查网络后重试"
                         }
                     }
                     launch {
@@ -376,11 +400,14 @@ class MainViewModel(
                 if (accountGeneration.value == generation) {
                     _uid.value = 0L
                     userDetail.value = null
+                    userLevel.value = null
                     userPlaylists.value = emptyList()
                     userPlaylistsLoaded.value = false
+                    userLevelLoadError.value = null
                     recommendResource.value = null
                     recommendSongs.value = null
                     userDetailFromCache.value = false
+                    userLevelFromCache.value = false
                     userPlaylistsFromCache.value = false
                     recommendResourceFromCache.value = false
                     recommendSongsFromCache.value = false
