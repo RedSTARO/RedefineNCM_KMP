@@ -47,6 +47,8 @@
     transform: scale(1.06);
   }
   html[data-platform="android"] .amll-lyric-player {
+    /* Match AMLL's .75em interlude-dot inset; the line's -.2em margin is cancelled below. */
+    --lyric-line-padding-x: .75em;
     mix-blend-mode: normal !important;
     color: rgba(255,255,255,0.94);
     text-shadow: 0 2px 18px rgba(0,0,0,0.55);
@@ -61,7 +63,7 @@
     transform: translateZ(0);
   }
   html[data-platform="android"] .FmKaba_lyricLine {
-    padding: .42em var(--amll-lp-line-padding-x, 1em);
+    padding: .42em .2em;
   }
   .FmKaba_lyricLine,
   .FmKaba_lyricLineWrapper,
