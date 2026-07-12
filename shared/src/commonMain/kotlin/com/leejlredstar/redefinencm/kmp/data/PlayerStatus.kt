@@ -14,6 +14,7 @@ data class PersistedMediaItem(
     val albumTitle: String = "",
     val artworkUri: String = "",
     val duration: Long = 0,
+    val sourceId: String = "",
 )
 
 @Serializable

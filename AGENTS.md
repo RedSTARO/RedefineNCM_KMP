@@ -295,6 +295,30 @@ Desktop playback strip, and OS/deep-link now-playing requests must open this rou
 The former common `NowPlayingScreen` has been removed and must not be restored as a parallel
 player page.
 
+### Playback reporting contract
+
+`PlaybackReportingCoordinator` is an eager process-wide common singleton. Platform players do
+not call reporting endpoints directly; they publish a monotonic `playbackOccurrence` whenever a
+real item selection occurs. Queue replacement, manual/natural track transitions, and replay after
+`ENDED` advance it exactly once. Pause/resume, seek within the current item, shuffle changes, and
+queue append do not.
+
+For each actually playing selection, the coordinator generates one 12-character uppercase
+alphanumeric relay session ID and calls `/relay/play/state/submit` at start, on changed
+pause/mode/final state, and every 30 seconds while playing. `playMode` is `random` under shuffle
+and otherwise `list_loop`; `type` is `song`. Relay has a bounded latest-state queue, while each
+one-shot scrobble dispatches independently, so a 60-second relay timeout cannot block the
+half-play report or create an unbounded telemetry queue.
+
+`/scrobble/v1` is attempted at most once per playback session after verified position progress
+reaches half of the known whole-second duration; unknown duration uses 30 seconds. Position
+progress is bounded by monotonic elapsed time so seeks, buffering, stalled playback, and system
+sleep do not manufacture listening time. A failed or ambiguous scrobble is not retried because
+the backend can partially accept PLV before PLD fails and exposes no idempotency key. Playlist
+items carry and persist `sourceId`; `source` remains the backend default `list`. Reporting actions
+bind the cleaned Cookie snapshot from session creation, then re-check the current account before
+dispatch, so a later account switch cannot send an old action with the new account credential.
+
 ### Song recognition contract
 
 The Home “音乐工具” card opens the shared Compose `SongRecognitionScreen`. Recognition is
@@ -622,6 +646,12 @@ feature gap; platform integrations use target-specific actuals:
       **Verification boundary:** these checks do not exercise live microphone capture on real
       Android, iOS, Desktop, or Web devices. iOS remains source-only here because Windows has no
       Xcode.
+- [ ] **Playback reporting backend deployment is externally gated** (2026-07-13). The client has
+      `/scrobble/v1` and `/relay/play/state/submit` integration plus common/JVM/Android-host/Wasm
+      verification. The configured LAN backend reported `4.30.2` and returned HTTP 404 for both
+      routes; relay landed after that version and scrobble V1 requires an api-enhanced source set
+      containing the 4.36.x-era module. Upgrade/deploy the backend before claiming live end-to-end
+      reporting. Windows cannot validate the iOS runtime path.
 - [x] **Android audio backend — ExoPlayer + MediaSession, BUILD-VERIFIED** (2026-06-13).
       `media3-exoplayer 1.10.1` + `media3-session` added to `androidMain` (and to `:androidApp`
       directly for `PlaybackService`).

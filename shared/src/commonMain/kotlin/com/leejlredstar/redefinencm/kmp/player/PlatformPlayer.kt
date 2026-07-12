@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.player
 
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.roundToLong
 
@@ -23,6 +24,15 @@ interface PlatformPlayer {
 
     /** Current media item metadata. */
     val currentMedia: StateFlow<MediaInfo?>
+
+    /**
+     * Monotonically increasing playback-selection occurrence.
+     *
+     * This changes whenever a playback item is genuinely selected, including selecting the
+     * same song again after [PlayerState.ENDED] and moving between adjacent equal songs. Plain
+     * pause/resume, seek, shuffle and queue-append operations do not change it.
+     */
+    val playbackOccurrence: StateFlow<Long>
 
     /** The current play queue. */
     val queue: StateFlow<List<MediaInfo>>
@@ -99,6 +109,7 @@ data class MediaInfo(
     val artworkUri: String = "",
     val placeholderUri: String = "",   // redefinencm://playbackPlaceHolder?id=xxx
     val duration: Long = 0,
+    val sourceId: String = "",
 )
 
 data class PlayerQueueSnapshot(
@@ -130,3 +141,8 @@ internal fun playerVolumeFromPercent(percent: Long): Float =
 
 internal fun playerVolumeToPercent(volume: Float): Long =
     (normalizePlayerVolume(volume) * 100f).roundToLong().coerceIn(0L, 100L)
+
+internal fun MutableStateFlow<Long>.advancePlaybackOccurrence() {
+    check(value != Long.MAX_VALUE) { "Playback occurrence exhausted" }
+    value += 1L
+}

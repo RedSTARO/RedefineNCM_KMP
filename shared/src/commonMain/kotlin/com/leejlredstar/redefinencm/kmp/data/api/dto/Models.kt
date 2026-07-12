@@ -2,6 +2,7 @@ package com.leejlredstar.redefinencm.kmp.data.api.dto
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 // ── User / Account ──
 
@@ -221,6 +222,29 @@ data class AudioMatchSong(
     val duration: Long = 0,
     val mvid: Long = 0,
     val fee: Int = 0,
+)
+
+// ── Playback reporting ──
+
+/**
+ * `/scrobble/v1` can return different `details` shapes for PLV and PLD failures, so the
+ * payload must remain untyped until the response code is known.
+ */
+@Serializable
+data class ScrobbleV1Response(
+    val code: Int = 0,
+    val data: String? = null,
+    val msg: String? = null,
+    val details: JsonElement? = null,
+)
+
+/** `/relay/play/state/submit` forwards an upstream response whose `data` schema is not fixed. */
+@Serializable
+data class PlayStateSubmitResponse(
+    val code: Int = 0,
+    val data: JsonElement? = null,
+    val msg: String? = null,
+    val message: String? = null,
 )
 
 // ── Search ──

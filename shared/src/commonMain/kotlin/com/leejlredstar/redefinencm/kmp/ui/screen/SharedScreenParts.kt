@@ -58,7 +58,9 @@ import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import org.koin.compose.koinInject
 
 /** Map an API song DTO to the player's [MediaInfo] (placeholder URI resolved at play time). */
-fun SongDetailSongs.toMediaInfo(): MediaInfo = MediaInfo(
+fun SongDetailSongs.toMediaInfo(
+    sourceId: String = "",
+): MediaInfo = MediaInfo(
     id = id.toString(),
     title = name,
     artist = ar.joinToString(", ") { it.name },
@@ -66,6 +68,7 @@ fun SongDetailSongs.toMediaInfo(): MediaInfo = MediaInfo(
     artworkUri = al.picUrl,
     placeholderUri = "redefinencm://playbackPlaceHolder?id=$id",
     duration = dt,
+    sourceId = sourceId,
 )
 
 /** Connected-list song row: index + artwork + title/artist. Reused by Home/Search/Playlist. */

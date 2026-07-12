@@ -60,6 +60,8 @@ class IosAVPlayer(
     override val duration: StateFlow<Long> = _duration
     private val _currentMedia = MutableStateFlow<MediaInfo?>(null)
     override val currentMedia: StateFlow<MediaInfo?> = _currentMedia
+    private val _playbackOccurrence = MutableStateFlow(0L)
+    override val playbackOccurrence: StateFlow<Long> = _playbackOccurrence
     private val _queue = MutableStateFlow<List<MediaInfo>>(emptyList())
     override val queue: StateFlow<List<MediaInfo>> = _queue
     private val _currentIndex = MutableStateFlow(-1)
@@ -129,16 +131,27 @@ class IosAVPlayer(
             clearQueue()
             return
         }
-        _position.value = 0L
         publishQueue()
-        resolveAndPlay(media, startMs = 0L, autoplay = autoplay)
+        _position.value = 0L
+        resolveAndPlay(
+            media = media,
+            startMs = 0L,
+            autoplay = autoplay,
+            onPrepared = { _playbackOccurrence.advancePlaybackOccurrence() },
+        )
     }
 
-    private fun resolveAndPlay(media: MediaInfo, startMs: Long, autoplay: Boolean) {
+    private fun resolveAndPlay(
+        media: MediaInfo,
+        startMs: Long,
+        autoplay: Boolean,
+        onPrepared: () -> Unit = {},
+    ) {
         val generation = beginPlaybackSession(clearItem = true)
         _position.value = startMs.coerceAtLeast(0L)
         _state.value = PlayerState.BUFFERING
         updateNowPlayingInfo()
+        onPrepared()
         resolveJob = scope.launch {
             val streamUrl = resolver.resolve(media.id)
             if (!isPlaybackCurrent(generation)) return@launch
@@ -201,6 +214,7 @@ class IosAVPlayer(
         val media = _currentMedia.value ?: return
         if (_state.value == PlayerState.ENDED) {
             _position.value = 0L
+            _playbackOccurrence.advancePlaybackOccurrence()
             avPlayer.currentItem?.let { avPlayer.seekToTime(CMTimeMake(0L, 1000)) }
         }
         if (avPlayer.currentItem == null) {
@@ -215,7 +229,7 @@ class IosAVPlayer(
     }
 
     override fun pause() {
-        if (_state.value == PlayerState.IDLE) return
+        if (_state.value == PlayerState.IDLE || _state.value == PlayerState.ENDED) return
         if (_state.value == PlayerState.BUFFERING) {
             beginPlaybackSession(clearItem = true)
         } else {
@@ -237,6 +251,9 @@ class IosAVPlayer(
             ?.let { positionMs.coerceIn(0L, it) }
             ?: positionMs.coerceAtLeast(0L)
         _position.value = bounded
+        if (_state.value == PlayerState.ENDED && (_duration.value <= 0L || bounded < _duration.value)) {
+            _state.value = PlayerState.PAUSED
+        }
         if (avPlayer.currentItem != null) {
             avPlayer.seekToTime(CMTimeMake(bounded, 1000))
         } else {
@@ -286,6 +303,7 @@ class IosAVPlayer(
         _isPlaying.value = false
         _state.value = PlayerState.PAUSED
         updateNowPlayingInfo()
+        _playbackOccurrence.advancePlaybackOccurrence()
     }
 
     override fun addToQueue(item: MediaInfo) {
@@ -307,16 +325,18 @@ class IosAVPlayer(
     override fun skipToIndex(index: Int) {
         val itemIndex = queueModel.playOrder.getOrNull(index) ?: index
         if (itemIndex !in queueModel.items.indices) return
+        if (itemIndex == queueModel.currentIndex) return
         val autoplay = _isPlaying.value || _state.value == PlayerState.BUFFERING
         queueModel = queueModel.skipTo(itemIndex)
-        publishQueue()
         if (autoplay) {
             playCurrentFromQueue(autoplay = true)
         } else {
+            publishQueue()
             beginPlaybackSession(clearItem = true)
             _position.value = 0L
             _state.value = PlayerState.PAUSED
             updateNowPlayingInfo()
+            _playbackOccurrence.advancePlaybackOccurrence()
         }
     }
 

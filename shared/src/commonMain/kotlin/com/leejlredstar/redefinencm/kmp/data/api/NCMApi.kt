@@ -6,6 +6,69 @@ import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 
+private val playSessionIdPattern = Regex("^[A-Z0-9]{12}$")
+
+internal fun scrobbleV1QueryParameters(
+    id: Long,
+    timeSeconds: Long,
+    sourceId: String?,
+    source: String?,
+    name: String?,
+    artist: String?,
+    bitrate: Int?,
+    level: String?,
+    totalSeconds: Long?,
+): List<Pair<String, String>> {
+    require(id > 0) { "id must be positive" }
+    require(timeSeconds > 0) { "timeSeconds must be positive" }
+
+    return buildList {
+        add("id" to id.toString())
+        add("time" to timeSeconds.toString())
+        sourceId?.takeIf(String::isNotBlank)?.let { add("sourceid" to it) }
+        source?.takeIf(String::isNotBlank)?.let { add("source" to it) }
+        name?.takeIf(String::isNotBlank)?.let { add("name" to it) }
+        artist?.takeIf(String::isNotBlank)?.let { add("artist" to it) }
+        bitrate?.takeIf { it > 0 }?.let { add("bitrate" to it.toString()) }
+        level?.takeIf(String::isNotBlank)?.let { add("level" to it) }
+        totalSeconds?.takeIf { it > 0 }?.let { add("total" to it.toString()) }
+    }
+}
+
+internal fun submitPlayStateQueryParameters(
+    id: Long,
+    sessionId: String,
+    progressSeconds: Long,
+    playMode: String,
+    type: String,
+): List<Pair<String, String>> {
+    require(id > 0) { "id must be positive" }
+    require(playSessionIdPattern.matches(sessionId)) {
+        "sessionId must contain exactly 12 uppercase letters or digits"
+    }
+    require(progressSeconds >= 0) { "progressSeconds must not be negative" }
+    require(playMode.isNotBlank()) { "playMode must not be blank" }
+    require(type.isNotBlank()) { "type must not be blank" }
+
+    return listOf(
+        "id" to id.toString(),
+        "sessionId" to sessionId,
+        "progress" to progressSeconds.toString(),
+        "playMode" to playMode,
+        "type" to type,
+    )
+}
+
+private fun HttpRequestBuilder.appendQueryParameters(parameters: List<Pair<String, String>>) {
+    parameters.forEach { (name, value) -> parameter(name, value) }
+}
+
+private fun HttpRequestBuilder.appendCredentialCookie(credentialCookie: String?) {
+    credentialCookie?.takeIf(String::isNotBlank)?.let {
+        attributes.put(NcmCredentialCookieAttribute, it)
+    }
+}
+
 /**
  * NeteaseCloudMusicApi service interface implemented via Ktor.
  * Ported from the original Retrofit NCMApi with the same endpoint structure.
@@ -76,6 +139,56 @@ class NCMApi(private val client: HttpClient) {
             parameter("duration", durationSeconds)
             parameter("audioFP", audioFingerprint)
         }.body()
+
+    // ── Playback reporting ──
+
+    suspend fun scrobbleV1(
+        id: Long,
+        timeSeconds: Long,
+        sourceId: String? = null,
+        source: String? = null,
+        name: String? = null,
+        artist: String? = null,
+        bitrate: Int? = null,
+        level: String? = null,
+        totalSeconds: Long? = null,
+        credentialCookie: String? = null,
+    ): ScrobbleV1Response = client.get("/scrobble/v1") {
+        appendQueryParameters(
+            scrobbleV1QueryParameters(
+                id = id,
+                timeSeconds = timeSeconds,
+                sourceId = sourceId,
+                source = source,
+                name = name,
+                artist = artist,
+                bitrate = bitrate,
+                level = level,
+                totalSeconds = totalSeconds,
+            ),
+        )
+        appendCredentialCookie(credentialCookie)
+    }.body()
+
+    suspend fun submitPlayState(
+        id: Long,
+        sessionId: String,
+        progressSeconds: Long,
+        playMode: String,
+        type: String = "song",
+        credentialCookie: String? = null,
+    ): PlayStateSubmitResponse = client.get("/relay/play/state/submit") {
+        appendQueryParameters(
+            submitPlayStateQueryParameters(
+                id = id,
+                sessionId = sessionId,
+                progressSeconds = progressSeconds,
+                playMode = playMode,
+                type = type,
+            ),
+        )
+        appendCredentialCookie(credentialCookie)
+    }.body()
 
     // ── Search ──
 
