@@ -69,6 +69,12 @@ class MainViewModel(
     private val accountGeneration = MutableStateFlow(0L)
     private var accountJob: Job? = null
 
+    // ── Intelligence playback ──
+    val intelligenceLoadingPlaylistId = MutableStateFlow<Long?>(null)
+    val intelligenceError = MutableStateFlow<String?>(null)
+    private val intelligenceGeneration = MutableStateFlow(0L)
+    private var intelligenceJob: Job? = null
+
     // ── Playlist ──
     val playlistDetail = MutableStateFlow<PlaylistDetail?>(null)
     val playlistSongs = MutableStateFlow<PlaylistTrackAll?>(null)
@@ -238,6 +244,7 @@ class MainViewModel(
 
     /** Login/account changes invalidate all work started for the previous credential. */
     private fun loadAccount(clearPersistedAccount: Boolean) {
+        cancelIntelligenceRequest()
         val generation = accountGeneration.updateAndGet { it + 1L }
         accountJob?.cancel()
         accountLoading.value = true
@@ -432,6 +439,78 @@ class MainViewModel(
     /** Retry account-scoped cache/network reads without clearing the persisted identity. */
     fun retryAccountData() {
         loadAccount(clearPersistedAccount = false)
+    }
+
+    fun startIntelligenceMode(playlistId: Long) {
+        val generation = intelligenceGeneration.updateAndGet { it + 1L }
+        intelligenceJob?.cancel()
+        intelligenceJob = null
+        intelligenceLoadingPlaylistId.value = null
+        intelligenceError.value = null
+
+        val requestUid = _uid.value
+        if (playlistId <= 0L) {
+            intelligenceError.value = "喜欢歌单 ID 无效"
+            return
+        }
+        if (requestUid <= 0L) {
+            intelligenceError.value = "请先登录后再使用心动模式"
+            return
+        }
+
+        intelligenceLoadingPlaylistId.value = playlistId
+        intelligenceJob = scope.launch(Dispatchers.Default) {
+            try {
+                val seed = selectIntelligenceSeed(repo.getLikedSongIds(requestUid))
+                    ?: error("无法获取喜欢的音乐，请检查网络、登录状态或歌单内容")
+                ensureActive()
+                if (!isCurrentIntelligenceRequest(generation, requestUid)) return@launch
+
+                val response = repo.getIntelligenceList(
+                    id = seed,
+                    pid = playlistId,
+                ) ?: error("心动模式列表获取失败，请检查网络后重试")
+                val queue = buildIntelligenceQueue(
+                    songInfos = response.data.orEmpty().map { it.songInfo },
+                    playlistId = playlistId,
+                )
+                if (queue.isEmpty()) error("心动模式返回的歌曲列表为空")
+                ensureActive()
+                if (!isCurrentIntelligenceRequest(generation, requestUid)) return@launch
+
+                withContext(Dispatchers.Main) {
+                    if (isCurrentIntelligenceRequest(generation, requestUid)) {
+                        replaceQueueWithIntelligenceList(player, queue)
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                if (isCurrentIntelligenceRequest(generation, requestUid)) {
+                    intelligenceError.value = failure.message ?: "心动模式启动失败"
+                }
+            } finally {
+                if (isCurrentIntelligenceRequest(generation, requestUid)) {
+                    intelligenceLoadingPlaylistId.value = null
+                    if (currentCoroutineContext()[Job] == intelligenceJob) {
+                        intelligenceJob = null
+                    }
+                }
+            }
+        }
+    }
+
+    private fun isCurrentIntelligenceRequest(
+        generation: Long,
+        uid: Long,
+    ): Boolean = intelligenceGeneration.value == generation && _uid.value == uid
+
+    private fun cancelIntelligenceRequest() {
+        intelligenceGeneration.updateAndGet { it + 1L }
+        intelligenceJob?.cancel()
+        intelligenceJob = null
+        intelligenceLoadingPlaylistId.value = null
+        intelligenceError.value = null
     }
 
     fun fetchPlaylistDetail(songlistID: Long) {

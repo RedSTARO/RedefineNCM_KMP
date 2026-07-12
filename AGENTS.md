@@ -319,6 +319,22 @@ items carry and persist `sourceId`; `source` remains the backend default `list`.
 bind the cleaned Cookie snapshot from session creation, then re-check the current account before
 dispatch, so a later account switch cannot send an old action with the new account credential.
 
+### Intelligence playback contract
+
+The current account's own `specialType == 5` playlist is its liked-music playlist; both that
+playlist and the legacy standard-Chinese-name fallback must have `creator.userId` equal to the
+current UID. Its trailing heart is an independent action, while clicking the rest of the row
+continues to open playlist detail. The action selects a random positive song ID from `/likelist`,
+then calls `/playmode/intelligence/list` with that ID and the liked playlist ID. `sid` is omitted
+because the backend already defaults `startMusicId` to `id`.
+
+Intelligence responses are dynamic and are not persisted in SQLDelight. Valid `songInfo` entries
+keep server order, are de-duplicated by song ID, carry the liked playlist ID as `sourceId`, and
+replace the current queue at index zero. Ordinary shuffle must be disabled before queue replacement:
+the server has already ordered the recommendations, and a second shuffle would corrupt that order
+and misreport the relay mode as `random`. Empty/failed responses must leave the existing queue
+unchanged. Account refresh or switching cancels the in-flight request.
+
 ### Song recognition contract
 
 The Home “音乐工具” card opens the shared Compose `SongRecognitionScreen`. Recognition is

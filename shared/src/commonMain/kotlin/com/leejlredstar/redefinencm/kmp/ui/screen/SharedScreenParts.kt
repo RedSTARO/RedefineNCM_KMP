@@ -18,7 +18,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -50,6 +50,7 @@ import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
+import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
@@ -348,6 +349,8 @@ fun PlaylistCard(
     count: Int,
     accentColor: Color? = null,
     onClick: () -> Unit,
+    onSpecialClick: (() -> Unit)? = null,
+    specialActionLoading: Boolean = false,
 ) {
     val fallbackAccent = MaterialTheme.colorScheme.tertiaryContainer
     var imageAccent by remember(userPlaylistEach.coverImgUrl, specialCard, accentColor, fallbackAccent) {
@@ -418,19 +421,49 @@ fun PlaylistCard(
             }
             if (specialCard != "no") {
                 Spacer(modifier = Modifier.width(12.dp))
-                Surface(
-                    shape = CircleShape,
-                    color = accentPalette.container,
-                    contentColor = accentPalette.onContainer,
-                ) {
-                    Icon(
-                        imageVector = if (specialCard == "fav") AppIcons.Favorite
-                        else AppIcons.GraphicEq,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .padding(8.dp)
-                            .size(18.dp),
-                    )
+                if (specialCard == "fav" && onSpecialClick != null) {
+                    Surface(
+                        onClick = {
+                            if (!specialActionLoading) onSpecialClick()
+                        },
+                        shape = CircleShape,
+                        color = accentPalette.container,
+                        contentColor = accentPalette.onContainer,
+                    ) {
+                        if (specialActionLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier
+                                    .padding(8.dp)
+                                    .size(18.dp)
+                                    .semantics { contentDescription = "正在启动心动模式" },
+                                color = accentPalette.onContainer,
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = AppIcons.Favorite,
+                                contentDescription = "启动心动模式",
+                                modifier = Modifier
+                                    .padding(8.dp)
+                                    .size(18.dp),
+                            )
+                        }
+                    }
+                } else {
+                    Surface(
+                        shape = CircleShape,
+                        color = accentPalette.container,
+                        contentColor = accentPalette.onContainer,
+                    ) {
+                        Icon(
+                            imageVector = if (specialCard == "fav") AppIcons.Favorite
+                            else AppIcons.GraphicEq,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .padding(8.dp)
+                                .size(18.dp),
+                        )
+                    }
                 }
             }
         }

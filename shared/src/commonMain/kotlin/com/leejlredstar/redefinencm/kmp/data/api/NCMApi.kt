@@ -8,6 +8,22 @@ import io.ktor.http.*
 
 private val playSessionIdPattern = Regex("^[A-Z0-9]{12}$")
 
+internal fun intelligenceListQueryParameters(
+    id: Long,
+    pid: Long,
+    sid: Long?,
+): List<Pair<String, String>> {
+    require(id > 0) { "id must be positive" }
+    require(pid > 0) { "pid must be positive" }
+    require(sid == null || sid > 0) { "sid must be positive when provided" }
+
+    return buildList {
+        add("id" to id.toString())
+        add("pid" to pid.toString())
+        sid?.let { add("sid" to it.toString()) }
+    }
+}
+
 internal fun scrobbleV1QueryParameters(
     id: Long,
     timeSeconds: Long,
@@ -123,6 +139,14 @@ class NCMApi(private val client: HttpClient) {
 
     suspend fun playlistUpdatePlaycount(id: Long): PlaylistUpdatePlayCount =
         client.get("/playlist/update/playcount") { parameter("id", id) }.body()
+
+    suspend fun intelligenceList(
+        id: Long,
+        pid: Long,
+        sid: Long? = null,
+    ): IntelligenceListResponse = client.get("/playmode/intelligence/list") {
+        appendQueryParameters(intelligenceListQueryParameters(id, pid, sid))
+    }.body()
 
     // ── Song ──
 
