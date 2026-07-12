@@ -41,6 +41,14 @@ Web 生产文件输出到 `shared/build/dist/wasmJs/productionExecutable/`，可
 ./gradlew :shared:wasmJsBrowserTest
 ```
 
+## 听歌识曲
+
+首页“音乐工具”提供听歌识曲入口。Android、iOS、Desktop/JVM 和 Web 的录音链路均以
+Kotlin 源码实现；共用代码将本次三秒录音转换为 8 kHz 单声道 PCM，生成音频指纹后调用
+当前服务器的 `POST /audio/match?duration=3&audioFP=...`。Web 端通过 Kotlin/Wasm typed
+`external` 声明调用 `MediaRecorder` 和 Web Audio，没有新增 JS/TS 识曲实现。指纹算法来源及
+MIT 许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
 ## Web 行为与浏览器约束
 
 Web 目标使用 `HTMLAudioElement` 播放、Media Session 提供系统媒体控制、OPFS 保存下载，
@@ -51,6 +59,8 @@ Web 目标使用 `HTMLAudioElement` 播放、Media Session 提供系统媒体控
 
 - API 服务、音频和图片资源必须允许 Web 站点来源的 CORS；HTTPS 页面不能访问 HTTP
   资源，否则会被浏览器的混合内容策略拦截。
+- 听歌识曲的麦克风仅在 HTTPS 或 `localhost` 安全上下文可用，并需要站点麦克风权限；
+  HTTPS 部署时 `/audio/match` 后端也必须使用 HTTPS，否则会被混合内容策略拦截。
 - 浏览器禁止应用设置 `Cookie` 请求头，Web 端改用 API 支持的 `cookie` 查询参数；服务端
   必须兼容该参数，并应避免在访问日志中长期保存它。
 - 首次播放通常需要用户手势。浏览器拒绝自动播放时，播放器保持暂停，等待用户再次点击。

@@ -4,6 +4,8 @@ import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
 import com.leejlredstar.redefinencm.kmp.data.db.DatabaseDriverFactory
 import com.leejlredstar.redefinencm.kmp.player.IosAVPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.recognition.IosMicrophoneRecorder
+import com.leejlredstar.redefinencm.kmp.recognition.MicrophoneRecorder
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import io.ktor.client.HttpClient
@@ -31,4 +33,7 @@ actual fun platformModule() = module {
 
     // Real AVPlayer-backed audio playback, overriding the shared InMemoryPlatformPlayer.
     single<PlatformPlayer> { IosAVPlayer(get(), get()) }
+
+    // AVAudioEngine 麦克风输入；结束后恢复 AVPlayer 使用的 Playback 会话。
+    single<MicrophoneRecorder> { IosMicrophoneRecorder() }
 }

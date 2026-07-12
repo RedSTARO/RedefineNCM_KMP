@@ -293,6 +293,10 @@ class Repository(
             }
     }
 
+    suspend fun audioMatch(durationSeconds: Int, audioFingerprint: String): AudioMatch? =
+        safeApiCall { api.audioMatch(durationSeconds, audioFingerprint) }
+            ?.takeIf { it.code == API_SUCCESS_CODE }
+
     // ── Search ──
 
     suspend fun search(keyword: String): SearchResult? {

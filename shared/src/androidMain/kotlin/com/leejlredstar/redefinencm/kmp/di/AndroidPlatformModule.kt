@@ -4,6 +4,8 @@ import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
 import com.leejlredstar.redefinencm.kmp.data.db.DatabaseDriverFactory
 import com.leejlredstar.redefinencm.kmp.player.ExoPlayerPlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.recognition.AndroidMicrophoneRecorder
+import com.leejlredstar.redefinencm.kmp.recognition.MicrophoneRecorder
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import io.ktor.client.HttpClient
@@ -33,4 +35,7 @@ actual fun platformModule() = module {
     // Must be resolved on the main thread (ExoPlayer requirement); Koin singleton lives for the
     // app lifetime. PlaybackService wraps the same ExoPlayer instance in a MediaSession.
     single<PlatformPlayer> { ExoPlayerPlatformPlayer(androidContext(), get(), get()) }
+
+    // 前台听歌识曲使用的原始 PCM 麦克风输入。
+    single<MicrophoneRecorder> { AndroidMicrophoneRecorder(androidContext()) }
 }

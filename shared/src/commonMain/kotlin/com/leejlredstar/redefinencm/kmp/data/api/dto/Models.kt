@@ -189,6 +189,40 @@ data class SongAlbum(
     val picUrl: String = "",
 )
 
+// ── Audio recognition ──
+
+@Serializable
+data class AudioMatch(
+    val code: Int = 0,
+    val data: AudioMatchData? = null,
+)
+
+@Serializable
+data class AudioMatchData(
+    val type: Int = -1,
+    val queryId: String = "",
+    val result: List<AudioMatchResult>? = null,
+    val noMatchReason: Int? = null,
+)
+
+@Serializable
+data class AudioMatchResult(
+    val startTime: Long = 0,
+    val song: AudioMatchSong = AudioMatchSong(),
+)
+
+/** `/audio/match` still returns the legacy long-form song field names. */
+@Serializable
+data class AudioMatchSong(
+    val id: Long = 0,
+    val name: String = "",
+    val artists: List<SongArtist> = emptyList(),
+    val album: SongAlbum = SongAlbum(),
+    val duration: Long = 0,
+    val mvid: Long = 0,
+    val fee: Int = 0,
+)
+
 // ── Search ──
 
 @Serializable

@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.ButtonDefaults
@@ -62,6 +63,7 @@ import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
@@ -91,6 +93,7 @@ fun HomeScreen(
     scaffoldPadding: PaddingValues,
     onOpenPlaylist: (Long) -> Unit,
     onOpenMy: () -> Unit,
+    onOpenRecognition: () -> Unit,
     viewModel: MainViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
 ) {
@@ -169,6 +172,13 @@ fun HomeScreen(
                             onClick = { showSearch = true },
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
+                        )
+                    }
+
+                    item(key = "music-tools") {
+                        RecognitionToolSection(
+                            accentColor = pageAccent,
+                            onOpenRecognition = onOpenRecognition,
                         )
                     }
 
@@ -271,6 +281,92 @@ fun HomeScreen(
                     onBack = { showSearch = false },
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = this,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecognitionToolSection(
+    accentColor: Color,
+    onOpenRecognition: () -> Unit,
+) {
+    Column(modifier = Modifier.padding(top = 20.dp)) {
+        ExpressiveSectionTitle(
+            text = "音乐工具",
+            supportingText = "从周围声音发现歌曲",
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+        )
+        LazyRow {
+            item(key = "song-recognition") {
+                RecognitionToolCard(
+                    accentColor = accentColor,
+                    onClick = onOpenRecognition,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecognitionToolCard(
+    accentColor: Color,
+    onClick: () -> Unit,
+) {
+    val palette = contentAccentPalette(accentColor)
+    Surface(
+        onClick = onClick,
+        shape = MaterialTheme.shapes.extraLarge,
+        color = palette.quietContainer,
+        contentColor = palette.onQuietContainer,
+        modifier = Modifier
+            .padding(end = 12.dp, top = 8.dp, bottom = 8.dp)
+            .size(168.dp)
+            .semantics(mergeDescendants = true) {
+                contentDescription = "打开听歌识曲"
+            },
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            palette.pageStart,
+                            palette.container,
+                            palette.quietContainer,
+                        ),
+                    ),
+                )
+                .padding(16.dp),
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = palette.container,
+                contentColor = palette.onContainer,
+                modifier = Modifier.size(64.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = AppIcons.GraphicEq,
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
+            }
+            Column(modifier = Modifier.align(Alignment.BottomStart)) {
+                Text(
+                    text = "听歌识曲",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = palette.onQuietContainer,
+                )
+                Text(
+                    text = "录制三秒开始匹配",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = palette.secondaryOnQuietContainer,
+                    maxLines = 1,
                 )
             }
         }

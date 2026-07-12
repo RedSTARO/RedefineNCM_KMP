@@ -12,6 +12,20 @@ import io.ktor.util.date.getTimeMillis
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 
+private val sensitiveQueryParameterPattern =
+    Regex("(?i)([?&](?:audioFP|cookie)=)[^&\\s]*")
+
+internal fun redactSensitiveQueryParameters(message: String): String =
+    sensitiveQueryParameterPattern.replace(message) { match ->
+        "${match.groupValues[1]}<redacted>"
+    }
+
+private object SensitiveQueryRedactingLogger : Logger {
+    override fun log(message: String) {
+        Logger.DEFAULT.log(redactSensitiveQueryParameters(message))
+    }
+}
+
 /**
  * Creates and configures a Ktor HttpClient for the NCM API. The engine is provided by each
  * platform (OkHttp / Darwin / CIO / Js) via [engineFactory].
@@ -57,7 +71,9 @@ object HttpClientFactory {
                 })
             }
             install(Logging) {
-                logger = Logger.DEFAULT
+                // Request URLs can contain the microphone-derived audioFP. Redact it before
+                // forwarding Ktor's log line to logcat/console.
+                logger = SensitiveQueryRedactingLogger
                 // Browsers forbid setting Cookie headers, so the Web target sends the cookie as
                 // an API query parameter. Disable request logging there or the credential would
                 // be printed as part of the URL.
