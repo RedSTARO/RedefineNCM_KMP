@@ -35,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,6 +53,8 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.ApplicationScope
 import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.WindowDecoration
+import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
@@ -70,6 +73,7 @@ import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import org.koin.core.context.GlobalContext
 import java.awt.Dimension
 
+@OptIn(ExperimentalComposeUiApi::class)
 fun main() {
     // AMLL 歌词页现在跑在系统 WebView（Windows=WebView2）里，见 LyricScreen.jvm.kt。
     // 历史教训（勿回退）：JavaFX WebKit 需要 prism.maxvram 调大才不白屏，且无 GPU 合成，
@@ -88,6 +92,8 @@ fun main() {
             onCloseRequest = ::exitApplication,
             state = mainWindowState,
             title = "RedefineNCM",
+            decoration = WindowDecoration.Undecorated(),
+            resizable = true,
         ) {
             val player = remember { GlobalContext.get().get<PlatformPlayer>() }
             val mediaControls = remember(player) { DesktopMediaControls(player) }
@@ -96,7 +102,45 @@ fun main() {
                 onDispose { mediaControls.stop() }
             }
 
-            App()
+            val density = LocalDensity.current
+            LaunchedEffect(window, density) {
+                window.minimumSize = Dimension(
+                    with(density) { 720.dp.roundToPx() },
+                    with(density) { 520.dp.roundToPx() },
+                )
+            }
+
+            val toggleMaximize = {
+                mainWindowState.placement = if (
+                    mainWindowState.placement == WindowPlacement.Maximized
+                ) {
+                    WindowPlacement.Floating
+                } else {
+                    WindowPlacement.Maximized
+                }
+            }
+            RedefineNCMTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.surface,
+                ) {
+                    Column(Modifier.fillMaxSize()) {
+                        Win10WindowChrome(
+                            isMaximized = mainWindowState.placement == WindowPlacement.Maximized,
+                            onMinimize = { mainWindowState.isMinimized = true },
+                            onToggleMaximize = toggleMaximize,
+                            onClose = ::exitApplication,
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                        ) {
+                            App()
+                        }
+                    }
+                }
+            }
         }
 
         // Desktop floating-lyrics window (goal #2: the desktop equivalent of the Android
