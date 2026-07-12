@@ -46,6 +46,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveCacheHint
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
@@ -72,8 +73,11 @@ fun PlaylistDetailScreen(
     val loading by viewModel.playlistLoading.collectAsState()
     val loadError by viewModel.playlistLoadError.collectAsState()
     val detailLoadError by viewModel.playlistDetailLoadError.collectAsState()
+    val detailFromCache by viewModel.playlistDetailFromCache.collectAsState()
+    val songsFromCache by viewModel.playlistSongsFromCache.collectAsState()
     val playlist = detail?.playlist?.takeIf { it.id == playlistId }
     val songs = tracks?.songs.orEmpty()
+    val hasCachedContent = detailFromCache || songsFromCache
     // 原版 ShowPlaylistDetailPage：点单曲时按 replacePlaylist 设置决定替换整单还是单曲队列
     val replacePlaylist = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false) }
 
@@ -133,6 +137,14 @@ fun PlaylistDetailScreen(
                     },
                 )
             }
+            if (hasCachedContent) {
+                item(key = "playlist-cache-hint") {
+                    ExpressiveCacheHint(
+                        isRefreshing = loading,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                }
+            }
             if (!loading && loadError == null && detailLoadError != null) {
                 item(key = "playlist-detail-error") {
                     ExpressiveStatePanel(
@@ -148,14 +160,14 @@ fun PlaylistDetailScreen(
                 }
             }
             when {
-                loading -> item(key = "playlist-loading") {
+                loading && tracks == null -> item(key = "playlist-loading") {
                     ExpressiveLoadingState(
                         label = "正在加载歌单与歌曲…",
                         accentColor = accentPalette.accent,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
-                loadError != null -> item(key = "playlist-error") {
+                loadError != null && tracks == null -> item(key = "playlist-error") {
                     ExpressiveStatePanel(
                         title = "歌单加载失败",
                         message = loadError.orEmpty(),
@@ -167,7 +179,7 @@ fun PlaylistDetailScreen(
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
-                songs.isEmpty() -> item(key = "playlist-empty") {
+                tracks != null && songs.isEmpty() -> item(key = "playlist-empty") {
                     ExpressiveStatePanel(
                         title = "歌单里还没有歌曲",
                         message = "添加歌曲后，它们会显示在这里。",

@@ -135,6 +135,30 @@ fun ExpressiveSectionTitle(
     }
 }
 
+/** Small provenance hint shown while visible content still comes from SQLDelight. */
+@Composable
+fun ExpressiveCacheHint(
+    isRefreshing: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val label = if (isRefreshing) "缓存数据 · 正在更新" else "当前为缓存数据"
+    Surface(
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier.semantics {
+            liveRegion = LiveRegionMode.Polite
+            stateDescription = label
+        },
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+        )
+    }
+}
+
 /** Full-window page background with a bounded content pane on larger windows. */
 @Composable
 fun ExpressivePage(
