@@ -3,17 +3,21 @@ package com.leejlredstar.redefinencm.kmp.data.api
 import io.ktor.client.*
 import io.ktor.client.engine.*
 import io.ktor.client.plugins.*
+import io.ktor.client.plugins.api.createClientPlugin
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.plugins.logging.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
+import io.ktor.util.AttributeKey
 import io.ktor.util.date.getTimeMillis
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 
 private val sensitiveQueryParameterPattern =
     Regex("(?i)([?&](?:audioFP|cookie)=)[^&\\s]*")
+
+internal val NcmCredentialCookieAttribute = AttributeKey<String>("NcmCredentialCookie")
 
 internal fun redactSensitiveQueryParameters(message: String): String =
     sensitiveQueryParameterPattern.replace(message) { match ->
@@ -37,16 +41,13 @@ private object SensitiveQueryRedactingLogger : Logger {
  * - attaches the cleaned auth cookie as a header when present (or as the browser API's `cookie`
  *   query parameter on Web, where Fetch forbids setting the Cookie header).
  *
- * Deviation from the original: the original skipped the cookie for login paths. Ktor's
- * `defaultRequest` runs before the per-request path is merged, so a path check there is not
- * reliable; instead the cookie is attached whenever it is non-empty (when the user is not logged
- * in it is empty, so login flows are unaffected in practice). Refine with a send-pipeline
- * interceptor if strict per-path skipping is needed.
+ * Deviation from the original: the original skipped the cookie for login paths. This client keeps
+ * the existing port behavior and attaches it whenever non-empty; before login it is empty.
  *
  * The base URL is fixed at creation time (changing the server still needs a client rebuild /
- * relaunch), but the cookie is read **fresh per request** via [cookieProvider], so logging in
- * (which writes the cookie into settings) takes effect immediately on the next request without a
- * relaunch.
+ * relaunch). Normal requests read the cookie **fresh per request** via [cookieProvider]. A request
+ * carrying [NcmCredentialCookieAttribute] instead uses that cleaned snapshot; playback reporting
+ * uses it to prevent an account switch from changing credentials after an action was created.
  */
 object HttpClientFactory {
 
@@ -92,6 +93,27 @@ object HttpClientFactory {
                 requestTimeoutMillis = 60_000
                 socketTimeoutMillis = 60_000
             }
+            install(createClientPlugin("NcmCookieTransport") {
+                onRequest { request, _ ->
+                    val rawCookie = request.attributes.getOrNull(NcmCredentialCookieAttribute)
+                        ?: request.url.parameters["cookie"]
+                        ?: request.headers[HttpHeaders.Cookie]
+                        ?: cookieProvider()
+                    val cleanedCookie = cleanCookie(rawCookie)
+                    request.headers.remove(HttpHeaders.Cookie)
+                    request.url.parameters.remove("cookie")
+                    if (cleanedCookie.isNotEmpty()) {
+                        when (cookieTransport) {
+                            CookieTransport.HEADER -> request.headers.append(
+                                HttpHeaders.Cookie,
+                                cleanedCookie,
+                            )
+                            CookieTransport.QUERY_PARAMETER ->
+                                request.url.parameters.append("cookie", cleanedCookie)
+                        }
+                    }
+                }
+            })
             defaultRequest {
                 url(baseUrl)
                 contentType(ContentType.Application.Json)
@@ -99,14 +121,6 @@ object HttpClientFactory {
                 // so default query params are appended via url.parameters (merged into every request).
                 url.parameters.append("realIP", realIP)
                 url.parameters.append("timestamp", getTimeMillis().toString())
-                // 每请求现取 cookie：登录写入 settings 后无需重启即刻生效
-                val cleanedCookie = cleanCookie(cookieProvider())
-                if (cleanedCookie.isNotEmpty()) {
-                    when (cookieTransport) {
-                        CookieTransport.HEADER -> header(HttpHeaders.Cookie, cleanedCookie)
-                        CookieTransport.QUERY_PARAMETER -> url.parameters.append("cookie", cleanedCookie)
-                    }
-                }
             }
             expectSuccess = false
         }
@@ -117,7 +131,7 @@ object HttpClientFactory {
      * Persisted login strings can contain Set-Cookie attributes; those are not cookies and must
      * not be replayed as Cookie header pairs.
      */
-    private fun cleanCookie(raw: String): String =
+    internal fun cleanCookie(raw: String): String =
         raw.split(";")
             .asSequence()
             .map { it.trim() }

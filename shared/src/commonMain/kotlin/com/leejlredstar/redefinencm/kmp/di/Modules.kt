@@ -6,6 +6,7 @@ import com.leejlredstar.redefinencm.kmp.data.db.AppDatabase
 import com.leejlredstar.redefinencm.kmp.data.db.DatabaseDriverFactory
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.player.InMemoryPlatformPlayer
+import com.leejlredstar.redefinencm.kmp.player.PlaybackReportingCoordinator
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.viewmodel.LoginViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
@@ -64,6 +65,10 @@ val sharedModule = module {
     // PlatformPlayer should bind it in platformModule() and remove this default (or load with
     // Koin override). NowPlayingViewModel resolves PlatformPlayer from here.
     single<PlatformPlayer> { InMemoryPlatformPlayer() }
+
+    // Eager process-wide reporter: playback accounting must not depend on whether a particular
+    // screen or ViewModel has already been composed.
+    single(createdAtStart = true) { PlaybackReportingCoordinator(get(), get(), get()) }
 
     // ViewModels
     factory { LoginViewModel(get(), get(), get()) }

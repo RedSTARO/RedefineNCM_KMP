@@ -143,6 +143,7 @@ class MainViewModel(
                     albumTitle = it.albumTitle,
                     artworkUri = it.artworkUri,
                     duration = it.duration,
+                    sourceId = it.sourceId,
                 )
             },
             index = queueSnapshot.currentIndex.coerceAtLeast(0),
@@ -208,6 +209,7 @@ class MainViewModel(
                     artworkUri = it.artworkUri,
                     placeholderUri = "redefinencm://playbackPlaceHolder?id=${it.id}",
                     duration = it.duration,
+                    sourceId = it.sourceId,
                 )
             }
             withContext(Dispatchers.Main) {

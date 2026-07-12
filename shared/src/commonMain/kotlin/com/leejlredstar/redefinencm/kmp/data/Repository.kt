@@ -297,6 +297,52 @@ class Repository(
         safeApiCall { api.audioMatch(durationSeconds, audioFingerprint) }
             ?.takeIf { it.code == API_SUCCESS_CODE }
 
+    // ── Playback reporting ──
+
+    suspend fun scrobbleV1(
+        id: Long,
+        timeSeconds: Long,
+        sourceId: String? = null,
+        source: String? = null,
+        name: String? = null,
+        artist: String? = null,
+        bitrate: Int? = null,
+        level: String? = null,
+        totalSeconds: Long? = null,
+        credentialCookie: String? = null,
+    ): Boolean = safeApiCall {
+        api.scrobbleV1(
+            id = id,
+            timeSeconds = timeSeconds,
+            sourceId = sourceId,
+            source = source,
+            name = name,
+            artist = artist,
+            bitrate = bitrate,
+            level = level,
+            totalSeconds = totalSeconds,
+            credentialCookie = credentialCookie,
+        )
+    }?.code == API_SUCCESS_CODE
+
+    suspend fun submitPlayState(
+        id: Long,
+        sessionId: String,
+        progressSeconds: Long,
+        playMode: String,
+        type: String = "song",
+        credentialCookie: String? = null,
+    ): Boolean = safeApiCall {
+        api.submitPlayState(
+            id = id,
+            sessionId = sessionId,
+            progressSeconds = progressSeconds,
+            playMode = playMode,
+            type = type,
+            credentialCookie = credentialCookie,
+        )
+    }?.code == API_SUCCESS_CODE
+
     // ── Search ──
 
     suspend fun search(keyword: String): SearchResult? {

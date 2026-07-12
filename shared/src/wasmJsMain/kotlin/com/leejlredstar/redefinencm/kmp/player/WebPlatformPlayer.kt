@@ -71,6 +71,9 @@ class WebPlatformPlayer(
     private val _currentMedia = MutableStateFlow<MediaInfo?>(null)
     override val currentMedia: StateFlow<MediaInfo?> = _currentMedia.asStateFlow()
 
+    private val _playbackOccurrence = MutableStateFlow(0L)
+    override val playbackOccurrence: StateFlow<Long> = _playbackOccurrence.asStateFlow()
+
     private val _queue = MutableStateFlow<List<MediaInfo>>(emptyList())
     override val queue: StateFlow<List<MediaInfo>> = _queue.asStateFlow()
 
@@ -319,7 +322,6 @@ class WebPlatformPlayer(
         val generation = invalidatePlayback(clearSource = true)
         val media = queueModel.currentItem
         pendingSeekMs = positionMs.coerceAtLeast(0L)
-        _position.value = pendingSeekMs
         publishQueue()
         if (media == null) {
             _state.value = PlayerState.IDLE
@@ -327,9 +329,11 @@ class WebPlatformPlayer(
             _duration.value = -1L
             return
         }
+        _position.value = pendingSeekMs
         _state.value = if (autoplay) PlayerState.BUFFERING else PlayerState.PAUSED
         playRequested = autoplay
         updateWebMediaSessionPlaybackState("paused")
+        _playbackOccurrence.advancePlaybackOccurrence()
         if (autoplay) resolveAndLoad(media, generation, pendingSeekMs)
     }
 
@@ -413,6 +417,7 @@ class WebPlatformPlayer(
         if (_state.value == PlayerState.ENDED) {
             pendingSeekMs = 0L
             _position.value = 0L
+            _playbackOccurrence.advancePlaybackOccurrence()
             if (loadedMediaId == media.id && audio.readyState > 0) {
                 runCatching { audio.currentTime = 0.0 }
             }
@@ -532,6 +537,7 @@ class WebPlatformPlayer(
     override fun skipToIndex(index: Int) {
         if (released) return
         val itemIndex = queueModel.playOrder.getOrNull(index) ?: return
+        if (itemIndex == queueModel.currentIndex) return
         val autoplay = playRequested || _isPlaying.value || _state.value == PlayerState.BUFFERING
         queueModel = queueModel.skipTo(itemIndex)
         selectCurrentTrack(autoplay = autoplay)

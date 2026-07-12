@@ -88,17 +88,38 @@ fun PlaylistDetailScreen(
     // 播放后停留在歌单页（与原版一致，靠迷你播放条进入全屏播放器）
     fun playAll() {
         if (songs.isEmpty()) return
-        player.setQueue(songs.map { it.toMediaInfo() }, 0)
+        player.setQueue(
+            songs.map {
+                it.toMediaInfo(
+                    sourceId = playlistId.toString(),
+                )
+            },
+            0,
+        )
         viewModel.updatePlaylistPlaycount(playlistId)
     }
 
     fun playSong(index: Int) {
         val song = songs.getOrNull(index) ?: return
         if (replacePlaylist) {
-            player.setQueue(songs.map { it.toMediaInfo() }, index)
+            player.setQueue(
+                songs.map {
+                    it.toMediaInfo(
+                        sourceId = playlistId.toString(),
+                    )
+                },
+                index,
+            )
         } else {
             // 原版 onPlaySingleSongClick：单曲独立队列
-            player.setQueue(listOf(song.toMediaInfo()), 0)
+            player.setQueue(
+                listOf(
+                    song.toMediaInfo(
+                        sourceId = playlistId.toString(),
+                    ),
+                ),
+                0,
+            )
         }
         viewModel.updatePlaylistPlaycount(playlistId)
     }

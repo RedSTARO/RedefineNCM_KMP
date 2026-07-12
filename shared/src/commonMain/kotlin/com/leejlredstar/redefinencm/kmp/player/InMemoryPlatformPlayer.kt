@@ -57,6 +57,9 @@ class InMemoryPlatformPlayer(
     private val _currentMedia = MutableStateFlow<MediaInfo?>(null)
     override val currentMedia: StateFlow<MediaInfo?> = _currentMedia.asStateFlow()
 
+    private val _playbackOccurrence = MutableStateFlow(0L)
+    override val playbackOccurrence: StateFlow<Long> = _playbackOccurrence.asStateFlow()
+
     private val _queue = MutableStateFlow<List<MediaInfo>>(emptyList())
     override val queue: StateFlow<List<MediaInfo>> = _queue.asStateFlow()
 
@@ -109,6 +112,9 @@ class InMemoryPlatformPlayer(
         withStateLock {
             val dur = _duration.value
             _position.value = if (dur > 0) positionMs.coerceIn(0, dur) else positionMs.coerceAtLeast(0)
+            if (_state.value == PlayerState.ENDED && (dur <= 0L || _position.value < dur)) {
+                _state.value = PlayerState.PAUSED
+            }
         }
     }
 
@@ -158,7 +164,9 @@ class InMemoryPlatformPlayer(
     override fun skipToIndex(index: Int) {
         withStateLock {
             val originalIndex = queueModel.playOrder.getOrNull(index) ?: return@withStateLock
-            queueModel = queueModel.skipTo(originalIndex)
+            val selected = queueModel.skipTo(originalIndex)
+            if (selected.currentIndex == queueModel.currentIndex) return@withStateLock
+            queueModel = selected
             onTrackChangedLocked()
         }
     }
@@ -183,23 +191,28 @@ class InMemoryPlatformPlayer(
 
     private fun playLocked() {
         if (queueModel.currentItem == null) return
-        if (_state.value == PlayerState.ENDED) _position.value = 0L
+        if (_state.value == PlayerState.ENDED) {
+            _position.value = 0L
+            _playbackOccurrence.advancePlaybackOccurrence()
+        }
         _isPlaying.value = true
         _state.value = PlayerState.PLAYING
         startTickerLocked()
     }
 
     private fun pauseLocked() {
+        if (_state.value == PlayerState.ENDED) return
         _isPlaying.value = false
         _state.value = PlayerState.PAUSED
         stopTickerLocked()
     }
 
     private fun onTrackChangedLocked() {
-        _position.value = 0L
         publishQueueLocked()
+        _position.value = 0L
         if (queueModel.currentItem != null) {
             _state.value = if (_isPlaying.value) PlayerState.PLAYING else PlayerState.READY
+            _playbackOccurrence.advancePlaybackOccurrence()
             if (_isPlaying.value) startTickerLocked()
         } else {
             _state.value = PlayerState.IDLE
@@ -227,8 +240,9 @@ class InMemoryPlatformPlayer(
                             false
                         } else {
                             queueModel = nextQueue
-                            _position.value = 0L
                             publishQueueLocked()
+                            _position.value = 0L
+                            _playbackOccurrence.advancePlaybackOccurrence()
                             true
                         }
                     } else {

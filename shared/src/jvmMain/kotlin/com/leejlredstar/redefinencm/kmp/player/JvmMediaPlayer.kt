@@ -73,6 +73,9 @@ class JvmMediaPlayer(
     private val _currentMedia = MutableStateFlow<MediaInfo?>(null)
     override val currentMedia: StateFlow<MediaInfo?> = _currentMedia.asStateFlow()
 
+    private val _playbackOccurrence = MutableStateFlow(0L)
+    override val playbackOccurrence: StateFlow<Long> = _playbackOccurrence.asStateFlow()
+
     private val _queue = MutableStateFlow<List<MediaInfo>>(emptyList())
     override val queue: StateFlow<List<MediaInfo>> = _queue.asStateFlow()
 
@@ -426,11 +429,13 @@ class JvmMediaPlayer(
         media: MediaInfo,
         startMs: Long = seekOffsetMs.coerceAtLeast(0L),
         selectionRevision: Long = currentQueueClaim().selectionRevision,
+        onPrepared: () -> Unit = {},
     ) {
         if (!queueState.isPlaybackClaimCurrent(selectionRevision, media)) return
         val generation = beginPlaybackSession()
         _isPlaying.value = false
         _state.value = PlayerState.BUFFERING
+        onPrepared()
 
         val job = scope.launch {
             val streamUrl = resolver.resolve(media.id)
@@ -462,20 +467,26 @@ class JvmMediaPlayer(
     private fun onTrackChanged(claim: JvmQueueClaim<MediaInfo>, autoplay: Boolean) {
         val snapshot = claim.model
         if (!queueState.isPlaybackClaimCurrent(claim.selectionRevision, snapshot.currentItem)) return
+        val current = snapshot.currentItem
         _position.value = 0L
         seekOffsetMs = 0L
-        val current = snapshot.currentItem
         when {
             current == null -> {
                 cancelPlaybackSession()
                 _state.value = PlayerState.IDLE
                 _isPlaying.value = false
             }
-            autoplay -> resolveAndPlay(current, 0L, claim.selectionRevision)
+            autoplay -> resolveAndPlay(
+                media = current,
+                startMs = 0L,
+                selectionRevision = claim.selectionRevision,
+                onPrepared = { _playbackOccurrence.advancePlaybackOccurrence() },
+            )
             else -> {
                 cancelPlaybackSession()
                 _isPlaying.value = false
                 _state.value = PlayerState.PAUSED
+                _playbackOccurrence.advancePlaybackOccurrence()
             }
         }
     }
@@ -485,7 +496,8 @@ class JvmMediaPlayer(
     override fun play() {
         if (_isPlaying.value) return
         if (_state.value == PlayerState.BUFFERING) return
-        if (_state.value == PlayerState.ENDED) {
+        val replayingEndedItem = _state.value == PlayerState.ENDED
+        if (replayingEndedItem) {
             seekOffsetMs = 0L
             _position.value = 0L
         }
@@ -516,6 +528,7 @@ class JvmMediaPlayer(
         synchronized(queueOperationLock) {
             val claim = currentQueueClaim()
             claim.model.currentItem?.let {
+                if (replayingEndedItem) _playbackOccurrence.advancePlaybackOccurrence()
                 resolveAndPlay(it, _position.value.coerceAtLeast(0L), claim.selectionRevision)
             }
         }
@@ -555,6 +568,12 @@ class JvmMediaPlayer(
     override fun seekTo(positionMs: Long) {
         seekOffsetMs = positionMs.coerceAtLeast(0)
         _position.value = seekOffsetMs
+        if (
+            _state.value == PlayerState.ENDED &&
+            (_duration.value <= 0L || seekOffsetMs < _duration.value)
+        ) {
+            _state.value = PlayerState.PAUSED
+        }
         synchronized(queueOperationLock) {
             val claim = currentQueueClaim()
             val current = claim.model.currentItem
@@ -631,8 +650,10 @@ class JvmMediaPlayer(
     override fun skipToIndex(index: Int) {
         synchronized(queueOperationLock) {
             val autoplay = _isPlaying.value || _state.value == PlayerState.BUFFERING
+            val previous = currentQueueModel()
+            val itemIndex = previous.playOrder.getOrNull(index) ?: return@synchronized
+            if (itemIndex == previous.currentIndex) return@synchronized
             val claim = mutateQueue(invalidatesPlaybackClaim = true) { queue ->
-                val itemIndex = queue.playOrder.getOrNull(index) ?: index
                 queue.skipTo(itemIndex)
             }
             onTrackChanged(claim, autoplay)

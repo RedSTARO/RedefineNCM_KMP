@@ -112,6 +112,66 @@ class InMemoryPlatformPlayerTest {
     }
 
     @Test
+    fun playbackOccurrenceTracksSelectionsWithoutCollapsingEqualSongs() {
+        val duplicate = MediaInfo(id = "same", title = "Same", artist = "Artist")
+        val player = InMemoryPlatformPlayer()
+        try {
+            assertEquals(0L, player.playbackOccurrence.value)
+
+            player.setQueue(listOf(duplicate, duplicate), startIndex = 0)
+            assertEquals(1L, player.playbackOccurrence.value)
+
+            player.play()
+            player.pause()
+            player.seekTo(500L)
+            player.setShuffleEnabled(false)
+            player.addToQueue(duplicate)
+            assertEquals(1L, player.playbackOccurrence.value)
+
+            player.seekToNext()
+            assertEquals(1, player.currentIndex.value)
+            assertEquals(2L, player.playbackOccurrence.value)
+
+            player.seekToPrevious()
+            assertEquals(0, player.currentIndex.value)
+            assertEquals(3L, player.playbackOccurrence.value)
+
+            player.skipToIndex(1)
+            assertEquals(4L, player.playbackOccurrence.value)
+            player.skipToIndex(1)
+            assertEquals(4L, player.playbackOccurrence.value)
+
+            player.restoreQueue(listOf(duplicate), startIndex = 0, positionMs = 200L)
+            assertEquals(5L, player.playbackOccurrence.value)
+        } finally {
+            player.release()
+        }
+    }
+
+    @Test
+    fun naturalTransitionAdvancesPlaybackOccurrence() = runTest {
+        val duplicate = MediaInfo(
+            id = "same",
+            title = "Same",
+            artist = "Artist",
+            duration = 1L,
+        )
+        val player = InMemoryPlatformPlayer(scope = backgroundScope, tickerIntervalMs = 1L)
+        try {
+            player.setQueue(listOf(duplicate, duplicate))
+            player.play()
+
+            advanceTimeBy(1L)
+            runCurrent()
+
+            assertEquals(1, player.currentIndex.value)
+            assertEquals(2L, player.playbackOccurrence.value)
+        } finally {
+            player.release()
+        }
+    }
+
+    @Test
     fun singleTrackNaturalCompletionReachesEnded() = runTest {
         val player = InMemoryPlatformPlayer(scope = backgroundScope, tickerIntervalMs = 1L)
         try {
@@ -126,6 +186,74 @@ class InMemoryPlatformPlayerTest {
             assertFalse(player.isPlaying.value)
             assertEquals(1L, player.position.value)
             assertEquals("single", player.currentMedia.value?.id)
+            assertEquals(1L, player.playbackOccurrence.value)
+
+            player.play()
+
+            assertEquals(PlayerState.PLAYING, player.state.value)
+            assertEquals(0L, player.position.value)
+            assertEquals(2L, player.playbackOccurrence.value)
+        } finally {
+            player.release()
+        }
+    }
+
+    @Test
+    fun endedPausePreservesReplayOccurrenceBoundary() = runTest {
+        val player = InMemoryPlatformPlayer(scope = backgroundScope, tickerIntervalMs = 1L)
+        try {
+            player.setQueue(
+                listOf(MediaInfo(id = "single", title = "Single", artist = "Artist", duration = 1L)),
+            )
+            player.play()
+            advanceTimeBy(1L)
+            runCurrent()
+
+            player.pause()
+            assertEquals(PlayerState.ENDED, player.state.value)
+            player.play()
+
+            assertEquals(2L, player.playbackOccurrence.value)
+        } finally {
+            player.release()
+        }
+    }
+
+    @Test
+    fun seekBackFromEndedRemainsTheSameSelectionOccurrence() = runTest {
+        val player = InMemoryPlatformPlayer(scope = backgroundScope, tickerIntervalMs = 1L)
+        try {
+            player.setQueue(
+                listOf(MediaInfo(id = "single", title = "Single", artist = "Artist", duration = 1L)),
+            )
+            player.play()
+            advanceTimeBy(1L)
+            runCurrent()
+
+            player.seekTo(0L)
+            assertEquals(PlayerState.PAUSED, player.state.value)
+            player.play()
+
+            assertEquals(1L, player.playbackOccurrence.value)
+        } finally {
+            player.release()
+        }
+    }
+
+    @Test
+    fun replacingQueueWithEmptyResetsPositionWithoutCreatingOccurrence() {
+        val player = InMemoryPlatformPlayer()
+        try {
+            player.setQueue(tracks.take(1), startIndex = 0)
+            player.seekTo(500L)
+            val occurrence = player.playbackOccurrence.value
+
+            player.setQueue(emptyList(), startIndex = 0)
+
+            assertEquals(PlayerState.IDLE, player.state.value)
+            assertEquals(null, player.currentMedia.value)
+            assertEquals(0L, player.position.value)
+            assertEquals(occurrence, player.playbackOccurrence.value)
         } finally {
             player.release()
         }

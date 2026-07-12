@@ -49,6 +49,20 @@ Kotlin 源码实现；共用代码将本次三秒录音转换为 8 kHz 单声道
 `external` 声明调用 `MediaRecorder` 和 Web Audio，没有新增 JS/TS 识曲实现。指纹算法来源及
 MIT 许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
+## 播放上报
+
+登录后真正开始播放时，共用协调器会为每次选曲建立独立会话：
+
+- `/relay/play/state/submit` 在开始、暂停/模式变化、结束以及播放中每 30 秒提交进度；
+- `/scrobble/v1` 在有效播放进度达到歌曲时长一半后至多尝试一次，拖动、缓冲、卡住和
+  系统休眠时间不计入；
+- 歌单播放会携带 `sourceid=歌单 ID`，`source` 使用后端默认值 `list`；
+- Web 和原生端都把请求绑定到会话建立时的 Cookie 快照，换号后的旧请求不会借用新账号凭证。
+
+后端必须实际提供这两个 api-enhanced 路由。2026-07-13 检查的局域网服务版本为 `4.30.2`，
+两条路由均返回 404；客户端构建与本地协议测试通过不等于线上打卡成功。部署包含
+`/scrobble/v1` 的 4.36.x-era 后端后，仍需用真实账号完成端到端验证。
+
 ## Web 行为与浏览器约束
 
 Web 目标使用 `HTMLAudioElement` 播放、Media Session 提供系统媒体控制、OPFS 保存下载，
