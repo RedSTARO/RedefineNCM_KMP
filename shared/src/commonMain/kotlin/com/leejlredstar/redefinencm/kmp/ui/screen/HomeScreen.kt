@@ -34,6 +34,8 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -56,6 +58,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
@@ -68,6 +71,14 @@ import org.koin.compose.koinInject
 /** 共享元素 key（原版 SharedKeys）。 */
 object SharedKeys {
     fun search() = "search-bar"
+}
+
+internal fun replaceQueueWithDailyRecommendations(
+    player: PlatformPlayer,
+    songs: List<SongDetailSongs>,
+) {
+    if (songs.isEmpty()) return
+    player.setQueue(songs.map { it.toMediaInfo() }, 0)
 }
 
 /**
@@ -190,6 +201,24 @@ fun HomeScreen(
                             errorMessage = songsLoadError,
                             onRetry = viewModel::retryAccountData,
                             key = { song -> song.id },
+                            action = {
+                                FilledTonalButton(
+                                    onClick = {
+                                        replaceQueueWithDailyRecommendations(player, dailySongs)
+                                    },
+                                    enabled = dailySongs.isNotEmpty(),
+                                    shape = CircleShape,
+                                    contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                                ) {
+                                    Icon(
+                                        imageVector = AppIcons.PlayArrow,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                    Spacer(Modifier.size(8.dp))
+                                    Text("播放全部")
+                                }
+                            },
                             itemContent = { song ->
                                 RecommendSquareCard(
                                     picUrl = song.al.picUrl,
