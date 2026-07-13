@@ -18,6 +18,8 @@ class WebDownloadStorageTest {
             val downloaded = WebDownloadStorage.download(
                 item = DownloadRequestItem(
                     id = songId,
+                    resumeKey = "standard",
+                    representationKey = "standard",
                     title = "Browser test",
                     artist = "RedefineNCM",
                     artworkUri = "",

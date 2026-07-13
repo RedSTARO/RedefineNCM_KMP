@@ -7,6 +7,8 @@ import androidx.core.content.ContextCompat
 import org.koin.mp.KoinPlatform
 
 actual object DownloadServiceController {
+    actual fun supportsPersistentDownloadQueue(): Boolean = true
+
     actual fun ensureRunning() {
         val context = KoinPlatform.getKoin().get<Context>().applicationContext
         val intent = Intent(context, AndroidDownloadService::class.java)

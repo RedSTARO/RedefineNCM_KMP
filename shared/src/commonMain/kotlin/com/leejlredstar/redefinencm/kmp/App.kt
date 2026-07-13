@@ -174,6 +174,15 @@ private fun decodePushedDestination(saved: String): PushedDest? = when (saved) {
         ?.let(PushedDest::Playlist)
 }
 
+internal fun <T> MutableList<T>.focusOrPush(destination: T) {
+    val existingIndex = lastIndexOf(destination)
+    if (existingIndex >= 0) {
+        while (lastIndex > existingIndex) removeAt(lastIndex)
+    } else {
+        add(destination)
+    }
+}
+
 private data class NavigationItem(
     val label: String,
     val icon: ImageVector,
@@ -246,18 +255,10 @@ private fun AppContent(
             fun push(dest: PushedDest) = pushedStack.add(dest)
             fun back() { if (pushedStack.isNotEmpty()) pushedStack.removeAt(pushedStack.lastIndex) }
             fun openDownloads() {
-                pushedStack.clear()
-                push(PushedDest.Downloads)
+                pushedStack.focusOrPush(PushedDest.Downloads)
             }
             fun openFullLyric() {
-                val existingIndex = pushedStack.indexOfLast { it is PushedDest.FullLyric }
-                if (existingIndex >= 0) {
-                    while (pushedStack.lastIndex > existingIndex) {
-                        pushedStack.removeAt(pushedStack.lastIndex)
-                    }
-                } else {
-                    push(PushedDest.FullLyric)
-                }
+                pushedStack.focusOrPush(PushedDest.FullLyric)
             }
 
             BackHandler(enabled = pushedStack.isNotEmpty()) { back() }

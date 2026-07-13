@@ -11,8 +11,8 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import com.leejlredstar.redefinencm.kmp.util.canPostNotifications
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
+import com.leejlredstar.redefinencm.kmp.util.canPostNotifications
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -20,6 +20,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import org.koin.mp.KoinPlatform
 import kotlin.math.roundToInt
@@ -40,8 +41,17 @@ class AndroidDownloadService : Service() {
         ensureChannel()
         serviceScope.launch {
             KoinPlatform.getKoin().get<PlatformSettings>().awaitLoaded()
-            downloadManager.tasks.collectLatest { tasks ->
-                render(tasks)
+            downloadManager.awaitRestored()
+            combine(
+                downloadManager.tasks,
+                downloadManager.destructiveTaskIdsInProgress,
+            ) { tasks, destructiveTaskIds ->
+                DownloadServiceSnapshot(
+                    tasks = tasks,
+                    hasDestructiveOperations = destructiveTaskIds.isNotEmpty(),
+                )
+            }.collectLatest { snapshot ->
+                render(snapshot)
             }
         }
     }
@@ -52,6 +62,7 @@ class AndroidDownloadService : Service() {
         promoteToForeground(analyzeDownloadTasks(emptyList()))
         serviceScope.launch {
             KoinPlatform.getKoin().get<PlatformSettings>().awaitLoaded()
+            downloadManager.awaitRestored()
             promoteToForeground(analyzeDownloadTasks(downloadManager.tasks.value))
             when (intent?.action) {
                 ACTION_PAUSE_ALL -> downloadManager.pauseAll()
@@ -69,10 +80,17 @@ class AndroidDownloadService : Service() {
         super.onDestroy()
     }
 
-    private fun render(tasks: List<SongDownloadTask>) {
+    private suspend fun render(snapshot: DownloadServiceSnapshot) {
+        val tasks = snapshot.tasks
+        if (snapshot.hasDestructiveOperations) {
+            if (tasks.isNotEmpty()) hasSeenTasks = true
+            emptyStopJob?.cancel()
+            promoteToForeground(analyzeDownloadTasks(tasks))
+            return
+        }
         if (tasks.isEmpty()) {
             if (hasSeenTasks) {
-                removeNotificationAndStop()
+                stopAfterPersisting(tasks, removeNotification = true)
             } else {
                 scheduleEmptyStop()
             }
@@ -84,6 +102,38 @@ class AndroidDownloadService : Service() {
         val statistics = analyzeDownloadTasks(tasks)
         if (statistics.firstActiveTask != null) {
             promoteToForeground(statistics)
+        } else {
+            stopAfterPersisting(tasks, removeNotification = false)
+        }
+    }
+
+    private suspend fun stopAfterPersisting(
+        observedTasks: List<SongDownloadTask>,
+        removeNotification: Boolean,
+    ) {
+        val statistics = analyzeDownloadTasks(observedTasks)
+        while (true) {
+            val persisted = downloadManager.flushPersistentDownloadQueue()
+
+            // collectLatest can finish a non-cancellable database write after a newer snapshot
+            // has arrived. Never detach or stop using stale task/destructive-operation state.
+            if (
+                downloadManager.tasks.value !== observedTasks ||
+                downloadManager.destructiveTaskIdsInProgress.value.isNotEmpty()
+            ) return
+
+            if (persisted) break
+
+            // Keep the foreground guarantee while durable queue storage is unavailable. A state
+            // change cancels this delay through collectLatest; otherwise retry until storage works.
+            promoteToForeground(statistics)
+            delay(PERSISTENCE_RETRY_DELAY_MS)
+        }
+
+        if (statistics.firstActiveTask != null) return
+
+        if (removeNotification) {
+            removeNotificationAndStop()
         } else {
             postRegularNotification(statistics)
             detachForeground()
@@ -142,7 +192,7 @@ class AndroidDownloadService : Service() {
             .setContentText(text)
             .setContentIntent(openDownloadsPendingIntent())
             .setOnlyAlertOnce(true)
-            .setOngoing(foreground && activeTask != null)
+            .setOngoing(foreground)
             .setSilent(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -216,8 +266,9 @@ class AndroidDownloadService : Service() {
         if (emptyStopJob?.isActive == true) return
         emptyStopJob = serviceScope.launch {
             delay(EMPTY_QUEUE_STOP_DELAY_MS)
-            if (!hasSeenTasks && downloadManager.tasks.value.isEmpty()) {
-                removeNotificationAndStop()
+            val tasks = downloadManager.tasks.value
+            if (!hasSeenTasks && tasks.isEmpty()) {
+                stopAfterPersisting(tasks, removeNotification = true)
             }
         }
     }
@@ -275,6 +326,11 @@ class AndroidDownloadService : Service() {
         val current: Int,
     )
 
+    private data class DownloadServiceSnapshot(
+        val tasks: List<SongDownloadTask>,
+        val hasDestructiveOperations: Boolean,
+    )
+
     companion object {
         const val ACTION_START = "com.leejlredstar.redefinencm.kmp.download.START"
         private const val ACTION_PAUSE_ALL = "com.leejlredstar.redefinencm.kmp.download.PAUSE_ALL"
@@ -284,5 +340,6 @@ class AndroidDownloadService : Service() {
         private const val NOTIFICATION_ID = 0x444C4F44 // "DLOD"
         private const val PROGRESS_MAX = 1_000
         private const val EMPTY_QUEUE_STOP_DELAY_MS = 15_000L
+        private const val PERSISTENCE_RETRY_DELAY_MS = 2_000L
     }
 }

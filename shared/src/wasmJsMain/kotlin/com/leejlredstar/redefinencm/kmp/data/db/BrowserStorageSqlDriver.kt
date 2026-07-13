@@ -173,7 +173,7 @@ internal class BrowserStorageSqlDriver : SqlDriver {
     }
 
     private fun keyForTable(table: String, values: List<Any?>): Long = when (table) {
-        "CachedRecommendResource", "CachedRecommendSongs" -> 0L
+        "CachedRecommendResource", "CachedRecommendSongs", "DownloadQueue" -> 0L
         "PlayerStatus" -> 1L
         in KEYED_TABLES -> values.firstOrNull() as? Long
             ?: error("Missing primary key for $table")
@@ -271,6 +271,7 @@ internal class BrowserStorageSqlDriver : SqlDriver {
             "CREATE TABLE IF NOT EXISTS CachedUserDetail ( uid INTEGER NOT NULL PRIMARY KEY, json TEXT NOT NULL )",
             "CREATE TABLE IF NOT EXISTS CachedUserLevel ( uid INTEGER NOT NULL PRIMARY KEY, json TEXT NOT NULL )",
             "CREATE TABLE IF NOT EXISTS CachedUserPlaylist ( uid INTEGER NOT NULL PRIMARY KEY, json TEXT NOT NULL )",
+            "CREATE TABLE IF NOT EXISTS DownloadQueue ( singleton INTEGER NOT NULL PRIMARY KEY DEFAULT 0, json TEXT NOT NULL )",
             "CREATE TABLE IF NOT EXISTS PlayerStatus ( id INTEGER NOT NULL PRIMARY KEY, json TEXT NOT NULL )",
         )
 
@@ -284,6 +285,7 @@ internal class BrowserStorageSqlDriver : SqlDriver {
             "INSERT OR REPLACE INTO CachedUserDetail(uid, json) VALUES (?, ?)" to "CachedUserDetail",
             "INSERT OR REPLACE INTO CachedUserLevel(uid, json) VALUES (?, ?)" to "CachedUserLevel",
             "INSERT OR REPLACE INTO CachedUserPlaylist(uid, json) VALUES (?, ?)" to "CachedUserPlaylist",
+            "INSERT OR REPLACE INTO DownloadQueue(singleton, json) VALUES (0, ?)" to "DownloadQueue",
             "INSERT OR REPLACE INTO PlayerStatus(id, json) VALUES (1, ?)" to "PlayerStatus",
         )
 
@@ -297,12 +299,14 @@ internal class BrowserStorageSqlDriver : SqlDriver {
             "SELECT json FROM CachedUserDetail WHERE uid = ?" to "CachedUserDetail",
             "SELECT json FROM CachedUserLevel WHERE uid = ?" to "CachedUserLevel",
             "SELECT json FROM CachedUserPlaylist WHERE uid = ?" to "CachedUserPlaylist",
+            "SELECT json FROM DownloadQueue WHERE singleton = 0" to "DownloadQueue",
             "SELECT json FROM PlayerStatus WHERE id = 1" to "PlayerStatus",
         )
 
         val DELETE_SQL_TO_TABLE = mapOf(
             "DELETE FROM CachedRecommendResource" to "CachedRecommendResource",
             "DELETE FROM CachedRecommendSongs" to "CachedRecommendSongs",
+            "DELETE FROM DownloadQueue" to "DownloadQueue",
         )
     }
 }

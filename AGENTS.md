@@ -89,12 +89,13 @@ otherwise a late response can start audio after the page has been left.
 ### D3 — Local cache is SQLDelight — **DONE (updated 2026-07-13)**
 
 The original caches via Room (cache-then-network). The KMP replacement is **SQLDelight**, now
-fully wired: plugin + 10 `.sq` tables under `shared/src/commonMain/sqldelight/` (user detail /
+fully wired: plugin + 11 `.sq` tables under `shared/src/commonMain/sqldelight/` (user detail /
 user level / user playlist / playlist detail / playlist tracks / recommend ×2 / lyric / comment /
-**PlayerStatus**) + `DatabaseDriverFactory` expect/actuals (android/native/sqlite/browser storage). `Repository`
+**PlayerStatus** / **DownloadQueue**) + `DatabaseDriverFactory` expect/actuals
+(android/native/sqlite/browser storage). `Repository`
 implements cache-then-network for all cached endpoints and persists/restores the play queue
-via the `PlayerStatus` table. Schema version 3 includes formal `1.sqm` and `2.sqm` migrations
-for the playlist detail/tracks, comment, player-status, and user-level tables; platform drivers must use
+via the `PlayerStatus` table. Schema version 4 includes formal `1.sqm`, `2.sqm`, and `3.sqm` migrations
+for the playlist detail/tracks, comment, player-status, user-level, and download-queue tables; platform drivers must use
 `AppDatabase.Schema` migrations rather than ad-hoc `onOpen` table creation.
 
 ### D4 — Notification / now-playing surfaces are one common contract, four platform actuals
@@ -588,7 +589,12 @@ feature gap; platform integrations use target-specific actuals:
   a foreground data-sync service and its notification is the entry point into that page. It stores
   the actual downloaded quality from
   `/song/url/v1`'s returned `level` and prefetches/caches lyrics in SQLDelight after the audio file
-  is written. Local-library sync is snapshot-based, not ID-only: platform scans return
+  is written. The ordered queue is persisted in SQLDelight before Android starts the foreground
+  service; interrupted active states restore as queued work on the next process launch. Android
+  keeps resumable partial files in app-private storage, validates HTTP byte ranges with strong ETag
+  or Last-Modified `If-Range`, and publishes to MediaStore only after the complete file is present;
+  a missing validator, changed entity, or server that ignores Range restarts safely from byte zero.
+  Local-library sync is snapshot-based, not ID-only: platform scans return
   `DownloadedSongSnapshot` (song ID, file name, URI, size, modified time), `DownloadedSongsCache`
   caches that snapshot for O(1) row indicators, and `SongDownloadManager.syncWithLocalLibrary()`
   reconciles queued tasks with real files while importing disk-only downloads as Completed rows
@@ -735,8 +741,8 @@ feature gap; platform integrations use target-specific actuals:
       while JVM/iOS/Web share the RGB555 quantizer.
 
 ### Not started
-- [x] **SQLDelight cache** (D3) — DONE (plugin + 10 tables + drivers + cache-then-network +
-      PlayerStatus queue persistence; build-verified 2026-07-13).
+- [x] **SQLDelight cache** (D3) — DONE (plugin + 11 tables + drivers + cache-then-network +
+      PlayerStatus playback persistence + DownloadQueue task persistence; build-verified 2026-07-13).
 - [x] **`PlayQueue` + `PlayQueueTest`** (shuffle regression suite) — DONE (2026-06-11), pure
       Kotlin and build-verified. Android, Desktop and Web publish queue/index/current media from a
       single rebuilt play-order snapshot; do not reintroduce parallel ordering paths.
