@@ -316,11 +316,10 @@ remain server rejections rather than permanently disabling the route.
 reaches half of the known whole-second duration; unknown duration uses 30 seconds. Position
 progress is bounded by monotonic elapsed time so seeks, buffering, stalled playback, and system
 sleep do not manufacture listening time. A failed or ambiguous scrobble is not retried because
-the backend can partially accept PLV before PLD fails and exposes no idempotency key. An explicit
-HTML route 404 is the only fallback trigger: old backends receive separate `startplay` and `play`
-`POST /weblog` actions. That compatibility path requires a positive playlist `sourceId` and derives
-`os=osx` only on the action-bound cleaned Cookie snapshot; it never writes the derived Cookie to
-settings. Playlist items carry and persist `sourceId`; `source` remains the backend default `list`.
+the backend can partially accept PLV before PLD fails and exposes no idempotency key. Scrobble uses
+only `/scrobble/v1`; an HTML route 404 is reported as unsupported and does not trigger another
+reporting endpoint. Playlist items carry and persist `sourceId`; `source` remains the backend
+default `list`.
 
 Reporting actions bind the cleaned Cookie snapshot from session creation, then re-check the current
 account before dispatch and after every readback. Status is credential-scoped and carries a monotonic
@@ -677,19 +676,16 @@ feature gap; platform integrations use target-specific actuals:
       **Verification boundary:** these checks do not exercise live microphone capture on real
       Android, iOS, Desktop, or Web devices. iOS remains source-only here because Windows has no
       Xcode.
-- [x] **Playback record reporting + account readback — LIVE-VERIFIED** (2026-07-13). The client uses
-      `/scrobble/v1` when available and falls back from an HTML route 404 to the verified two-stage
-      `/weblog` contract on the configured `4.30.2` backend. A real-account controlled test confirmed
-      the target in both weekly records and recent plays after roughly three seconds; the legacy
-      `/scrobble` wrapper and a no-`os=osx` control produced no account-side change. Structured result
-      state, bounded account readback, credential/generation isolation, SQLDelight level-cache refresh,
-      and current-account UI refresh are implemented and covered by common/JVM tests.
-- [ ] **Relay deployment + precise inbound playback roaming are externally gated** (2026-07-13).
-      The configured `4.30.2` backend returns HTML 404 for `/relay/play/state/submit`. Current upstream
-      exposes submit but no pull/get contract, and record/recent endpoints omit progress, session ID,
-      play mode, revision, and remote queue state. Outbound relay becomes usable after a compatible
-      backend deployment; exact two-way progress/queue restoration needs a new server API. Windows
-      cannot validate the iOS runtime path.
+- [x] **Playback record reporting + account readback — IMPLEMENTED, ROUTE-VERIFIED** (2026-07-13).
+      The configured backend was upgraded to `4.36.2`; route probes confirm `/scrobble/v1` and
+      `/relay/play/state/submit` are registered. Scrobble now uses `/scrobble/v1` exclusively.
+      Structured result state, bounded account readback, credential/generation isolation, SQLDelight
+      level-cache refresh, and current-account UI refresh are covered by common/JVM tests. A direct
+      real-account accounting check against the upgraded `/scrobble/v1` route is still pending.
+- [ ] **Precise inbound playback roaming remains externally gated** (2026-07-13). The deployed relay
+      route supports submit, but no pull/get contract is available, and record/recent endpoints omit
+      progress, session ID, play mode, revision, and remote queue state. Exact two-way progress/queue
+      restoration needs a new server API. Windows cannot validate the iOS runtime path.
 - [x] **Android audio backend — ExoPlayer + MediaSession, BUILD-VERIFIED** (2026-06-13).
       `media3-exoplayer 1.10.1` + `media3-session` added to `androidMain` (and to `:androidApp`
       directly for `PlaybackService`).

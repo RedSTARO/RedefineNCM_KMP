@@ -1,7 +1,5 @@
 package com.leejlredstar.redefinencm.kmp.data
 
-import com.leejlredstar.redefinencm.kmp.data.api.playWeblogLogs
-import com.leejlredstar.redefinencm.kmp.data.api.startplayWeblogLogs
 import com.leejlredstar.redefinencm.kmp.data.api.dto.RecentSongEntry
 import com.leejlredstar.redefinencm.kmp.data.api.dto.RecentSongsData
 import com.leejlredstar.redefinencm.kmp.data.api.dto.RecentSongsResponse
@@ -12,43 +10,10 @@ import com.leejlredstar.redefinencm.kmp.data.api.dto.UserRecordEntry
 import com.leejlredstar.redefinencm.kmp.data.api.dto.UserRecordResponse
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class PlaybackReportingModelsTest {
-    @Test
-    fun weblogCredentialDerivationOnlyReplacesTheActionSnapshotOs() {
-        assertEquals(
-            "MUSIC_U=token; os=osx",
-            weblogCredentialCookie("MUSIC_U=token; os=pc"),
-        )
-        assertEquals(
-            "MUSIC_U=token; os=osx",
-            weblogCredentialCookie("MUSIC_U=token"),
-        )
-        assertEquals(
-            "MUSIC_U=token; os=osx",
-            weblogCredentialCookie("MUSIC_U=token; OS=android; os=pc"),
-        )
-        assertFailsWith<IllegalArgumentException> { weblogCredentialCookie("") }
-    }
-
-    @Test
-    fun weblogPayloadsMatchTheVerifiedTwoStageContract() {
-        val startplay = startplayWeblogLogs(songId = 42, sourceId = 7)
-        val play = playWeblogLogs(songId = 42, sourceId = 7, timeSeconds = 30)
-
-        assertEquals(
-            """[{"action":"startplay","json":{"id":42,"type":"song","mainsite":"1","mainsiteWeb":"1","content":"id=7"}}]""",
-            startplay,
-        )
-        assertEquals(
-            """[{"action":"play","json":{"download":0,"end":"playend","id":42,"sourceId":7,"time":30,"type":"song","wifi":0,"source":"list","mainsite":"1","mainsiteWeb":"1","content":"id=7"}}]""",
-            play,
-        )
-    }
-
     @Test
     fun accountSnapshotComparisonDetectsRecordRecentAndLevelChanges() {
         val before = snapshot(

@@ -25,7 +25,7 @@ class PlaybackSyncDisplayTest {
                     ),
                     scrobble = status(
                         phase = PlaybackReportingPhase.ACCOUNT_VERIFIED,
-                        endpoint = PlaybackReportEndpoint.WEBLOG,
+                        endpoint = PlaybackReportEndpoint.SCROBBLE_V1,
                         comparison = comparison(recordAppeared = true),
                     ),
                 ),
@@ -79,7 +79,7 @@ class PlaybackSyncDisplayTest {
                     ),
                     scrobble = status(
                         phase = PlaybackReportingPhase.ACCOUNT_VERIFIED,
-                        endpoint = PlaybackReportEndpoint.WEBLOG,
+                        endpoint = PlaybackReportEndpoint.SCROBBLE_V1,
                         generation = 1L,
                         comparison = comparison(recordAppeared = true),
                     ),

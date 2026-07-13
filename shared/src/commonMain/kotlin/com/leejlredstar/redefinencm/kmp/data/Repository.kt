@@ -1,13 +1,10 @@
 package com.leejlredstar.redefinencm.kmp.data
 
-import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.data.api.NcmHttpResponse
 import com.leejlredstar.redefinencm.kmp.data.api.NcmResponseBodyKind
 import com.leejlredstar.redefinencm.kmp.data.api.dto.*
-import com.leejlredstar.redefinencm.kmp.data.api.playWeblogLogs
 import com.leejlredstar.redefinencm.kmp.data.api.safeApiCall
-import com.leejlredstar.redefinencm.kmp.data.api.startplayWeblogLogs
 import com.leejlredstar.redefinencm.kmp.data.db.AppDatabase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -59,8 +56,6 @@ class Repository(
     private val db: AppDatabase,
 ) {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
-    private val scrobbleCapability = MutableStateFlow(EndpointCapability.UNKNOWN)
-    private val scrobbleCapabilityMutex = Mutex()
     private val relayCapability = MutableStateFlow(EndpointCapability.UNKNOWN)
     private val relayCapabilityMutex = Mutex()
     private val userLevelRequestMutex = Mutex()
@@ -453,49 +448,24 @@ class Repository(
         totalSeconds: Long? = null,
         credentialCookie: String? = null,
     ): PlaybackReportResult {
-        val requestPrimary: suspend () -> PlaybackReportResult? = requestPrimary@{
-            val response = safeApiCall {
-                api.scrobbleV1(
-                    id = id,
-                    timeSeconds = timeSeconds,
-                    sourceId = sourceId,
-                    source = source,
-                    name = name,
-                    artist = artist,
-                    bitrate = bitrate,
-                    level = level,
-                    totalSeconds = totalSeconds,
-                    credentialCookie = credentialCookie,
-                )
-            } ?: return@requestPrimary PlaybackReportResult.TransportFailure(
-                endpoint = PlaybackReportEndpoint.SCROBBLE_V1,
-                reason = PlaybackReportFailureReason.REQUEST_FAILED,
+        val response = safeApiCall {
+            api.scrobbleV1(
+                id = id,
+                timeSeconds = timeSeconds,
+                sourceId = sourceId,
+                source = source,
+                name = name,
+                artist = artist,
+                bitrate = bitrate,
+                level = level,
+                totalSeconds = totalSeconds,
+                credentialCookie = credentialCookie,
             )
-            if (response.isHtmlNotFound) {
-                scrobbleCapability.value = EndpointCapability.UNSUPPORTED
-                null
-            } else {
-                scrobbleCapability.value = EndpointCapability.AVAILABLE
-                response.toScrobbleResult()
-            }
-        }
-
-        val primaryResult = when (scrobbleCapability.value) {
-            EndpointCapability.UNSUPPORTED -> null
-            EndpointCapability.AVAILABLE -> requestPrimary()
-            EndpointCapability.UNKNOWN -> scrobbleCapabilityMutex.withLock {
-                when (scrobbleCapability.value) {
-                    EndpointCapability.UNSUPPORTED -> null
-                    else -> requestPrimary()
-                }
-            }
-        }
-        return primaryResult ?: submitWeblogFallback(
-            id = id,
-            timeSeconds = timeSeconds,
-            sourceId = sourceId,
-            credentialCookie = credentialCookie,
+        } ?: return PlaybackReportResult.TransportFailure(
+            endpoint = PlaybackReportEndpoint.SCROBBLE_V1,
+            reason = PlaybackReportFailureReason.REQUEST_FAILED,
         )
+        return response.toScrobbleResult()
     }
 
     suspend fun submitPlayState(
@@ -547,66 +517,6 @@ class Repository(
         }
     }
 
-    private suspend fun submitWeblogFallback(
-        id: Long,
-        timeSeconds: Long,
-        sourceId: String?,
-        credentialCookie: String?,
-    ): PlaybackReportResult {
-        val parsedSourceId = sourceId?.trim()?.toLongOrNull()?.takeIf { it > 0L }
-            ?: return PlaybackReportResult.Rejected(
-                endpoint = PlaybackReportEndpoint.WEBLOG,
-                reason = PlaybackReportRejectionReason.INVALID_INPUT,
-                details = PlaybackReportDetails(message = "sourceId must be a positive integer"),
-            )
-        val cleanedCredential = HttpClientFactory.cleanCookie(credentialCookie.orEmpty())
-        if (cleanedCredential.isEmpty()) {
-            return PlaybackReportResult.Rejected(
-                endpoint = PlaybackReportEndpoint.WEBLOG,
-                reason = PlaybackReportRejectionReason.INVALID_INPUT,
-                details = PlaybackReportDetails(message = "credential cookie is required"),
-            )
-        }
-        val actionCredential = weblogCredentialCookie(cleanedCredential)
-        val startplay = safeApiCall {
-            api.weblog(
-                logs = startplayWeblogLogs(id, parsedSourceId),
-                credentialCookie = actionCredential,
-            )
-        } ?: return PlaybackReportResult.TransportFailure(
-            endpoint = PlaybackReportEndpoint.WEBLOG,
-            reason = PlaybackReportFailureReason.REQUEST_FAILED,
-        )
-        val startplayResult = startplay.toWeblogStageResult()
-        if (startplayResult !is PlaybackReportResult.Accepted) return startplayResult
-
-        val play = safeApiCall {
-            api.weblog(
-                logs = playWeblogLogs(id, parsedSourceId, timeSeconds),
-                credentialCookie = actionCredential,
-            )
-        } ?: return PlaybackReportResult.TransportFailure(
-            endpoint = PlaybackReportEndpoint.WEBLOG,
-            reason = PlaybackReportFailureReason.REQUEST_FAILED,
-        )
-        val playResult = play.toWeblogStageResult()
-        if (playResult !is PlaybackReportResult.Accepted) return playResult
-        val playBody = checkNotNull(play.body)
-
-        return PlaybackReportResult.Accepted(
-            endpoint = PlaybackReportEndpoint.WEBLOG,
-            httpStatus = play.statusCode,
-            serverCode = playBody.code,
-            details = reportDetails(
-                data = playBody.data,
-                message = playBody.msg ?: playBody.message,
-                details = playBody.details,
-                startplayCode = startplay.body?.code,
-                playCode = playBody.code,
-            ),
-        )
-    }
-
     // ── Search ──
 
     suspend fun search(keyword: String): SearchResult? {
@@ -655,28 +565,6 @@ private enum class EndpointCapability {
 
 private const val MAX_REPORT_TEXT_LENGTH = 1_024
 private const val MAX_REPORT_DETAILS_LENGTH = 4_096
-
-internal fun weblogCredentialCookie(rawCredential: String): String {
-    val cleaned = HttpClientFactory.cleanCookie(rawCredential)
-    require(cleaned.isNotEmpty()) { "credential cookie must not be empty" }
-    // LAN 4.30.2 live verification only accounted the two-stage weblog actions as macOS.
-    // Derive that platform marker on the action snapshot; never persist it to settings.
-    var osWritten = false
-    val parts = cleaned.split(';').mapNotNull { rawPart ->
-        val part = rawPart.trim()
-        val name = part.substringBefore('=', missingDelimiterValue = "").trim()
-        if (!name.equals("os", ignoreCase = true)) {
-            part.takeIf(String::isNotEmpty)
-        } else if (!osWritten) {
-            osWritten = true
-            "os=osx"
-        } else {
-            null
-        }
-    }.toMutableList()
-    if (!osWritten) parts += "os=osx"
-    return parts.joinToString("; ")
-}
 
 private fun NcmHttpResponse<ScrobbleV1Response>.toScrobbleResult(): PlaybackReportResult {
     if (isHtmlNotFound) {
@@ -732,37 +620,6 @@ private fun NcmHttpResponse<PlayStateSubmitResponse>.toRelayResult(): PlaybackRe
     }
 }
 
-private fun NcmHttpResponse<WeblogResponse>.toWeblogStageResult(): PlaybackReportResult {
-    if (isHtmlNotFound) {
-        return PlaybackReportResult.Unsupported(
-            endpoint = PlaybackReportEndpoint.WEBLOG,
-            htmlResponse = bodyKind == NcmResponseBodyKind.HTML,
-        )
-    }
-    val response = body
-    if (response == null) return invalidResponseResult(PlaybackReportEndpoint.WEBLOG)
-    val details = reportDetails(
-        data = response.data,
-        message = response.msg ?: response.message,
-        details = response.details,
-    )
-    return if (statusCode in 200..299 && response.code == 200) {
-        PlaybackReportResult.Accepted(
-            endpoint = PlaybackReportEndpoint.WEBLOG,
-            httpStatus = statusCode,
-            serverCode = response.code,
-            details = details,
-        )
-    } else {
-        PlaybackReportResult.Rejected(
-            endpoint = PlaybackReportEndpoint.WEBLOG,
-            httpStatus = statusCode,
-            serverCode = response.code,
-            details = details,
-        )
-    }
-}
-
 private fun NcmHttpResponse<*>.invalidResponseResult(
     endpoint: PlaybackReportEndpoint,
 ): PlaybackReportResult = if (statusCode in 200..299) {
@@ -782,14 +639,10 @@ private fun reportDetails(
     data: Any?,
     message: String?,
     details: JsonElement?,
-    startplayCode: Int? = null,
-    playCode: Int? = null,
 ): PlaybackReportDetails = PlaybackReportDetails(
     data = data?.toString()?.take(MAX_REPORT_TEXT_LENGTH),
     message = message?.trim()?.take(MAX_REPORT_TEXT_LENGTH),
     serverDetails = details?.toString()?.take(MAX_REPORT_DETAILS_LENGTH),
-    startplayCode = startplayCode,
-    playCode = playCode,
 )
 
 @Serializable
