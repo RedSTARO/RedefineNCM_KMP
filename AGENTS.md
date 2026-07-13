@@ -308,16 +308,31 @@ alphanumeric relay session ID and calls `/relay/play/state/submit` at start, on 
 pause/mode/final state, and every 30 seconds while playing. `playMode` is `random` under shuffle
 and otherwise `list_loop`; `type` is `song`. Relay has a bounded latest-state queue, while each
 one-shot scrobble dispatches independently, so a 60-second relay timeout cannot block the
-half-play report or create an unbounded telemetry queue.
+half-play report or create an unbounded telemetry queue. Structured relay results remain visible;
+an unmistakable HTML route 404 is cached as unsupported, while JSON 404 and other server bodies
+remain server rejections rather than permanently disabling the route.
 
 `/scrobble/v1` is attempted at most once per playback session after verified position progress
 reaches half of the known whole-second duration; unknown duration uses 30 seconds. Position
 progress is bounded by monotonic elapsed time so seeks, buffering, stalled playback, and system
 sleep do not manufacture listening time. A failed or ambiguous scrobble is not retried because
-the backend can partially accept PLV before PLD fails and exposes no idempotency key. Playlist
-items carry and persist `sourceId`; `source` remains the backend default `list`. Reporting actions
-bind the cleaned Cookie snapshot from session creation, then re-check the current account before
-dispatch, so a later account switch cannot send an old action with the new account credential.
+the backend can partially accept PLV before PLD fails and exposes no idempotency key. An explicit
+HTML route 404 is the only fallback trigger: old backends receive separate `startplay` and `play`
+`POST /weblog` actions. That compatibility path requires a positive playlist `sourceId` and derives
+`os=osx` only on the action-bound cleaned Cookie snapshot; it never writes the derived Cookie to
+settings. Playlist items carry and persist `sourceId`; `source` remains the backend default `list`.
+
+Reporting actions bind the cleaned Cookie snapshot from session creation, then re-check the current
+account before dispatch and after every readback. Status is credential-scoped and carries a monotonic
+reporting generation, so a previous account or an older replay of the same song cannot overwrite the
+current result. Accepted scrobbles trigger bounded before/after reads of `/user/record`,
+`/record/recent/song`, and `/user/level`; the refreshed level replaces both the SQLDelight cache and
+the current account UI snapshot. Only target-song record appearance/play-count growth or target-song
+recent-play movement proves account-side accounting. Level count and record score are supplemental
+diagnostics, not standalone proof. The current public backend exposes relay submit but no relay pull;
+history endpoints do not contain `progress`, `sessionId`, or `playMode`, so precise inbound playback
+roaming must remain unavailable rather than being inferred from recent history. `NOT_REFLECTED` is a
+conservative bounded-window result, not proof that an asynchronously processed report will never land.
 
 ### Intelligence playback contract
 
@@ -662,12 +677,19 @@ feature gap; platform integrations use target-specific actuals:
       **Verification boundary:** these checks do not exercise live microphone capture on real
       Android, iOS, Desktop, or Web devices. iOS remains source-only here because Windows has no
       Xcode.
-- [ ] **Playback reporting backend deployment is externally gated** (2026-07-13). The client has
-      `/scrobble/v1` and `/relay/play/state/submit` integration plus common/JVM/Android-host/Wasm
-      verification. The configured LAN backend reported `4.30.2` and returned HTTP 404 for both
-      routes; relay landed after that version and scrobble V1 requires an api-enhanced source set
-      containing the 4.36.x-era module. Upgrade/deploy the backend before claiming live end-to-end
-      reporting. Windows cannot validate the iOS runtime path.
+- [x] **Playback record reporting + account readback — LIVE-VERIFIED** (2026-07-13). The client uses
+      `/scrobble/v1` when available and falls back from an HTML route 404 to the verified two-stage
+      `/weblog` contract on the configured `4.30.2` backend. A real-account controlled test confirmed
+      the target in both weekly records and recent plays after roughly three seconds; the legacy
+      `/scrobble` wrapper and a no-`os=osx` control produced no account-side change. Structured result
+      state, bounded account readback, credential/generation isolation, SQLDelight level-cache refresh,
+      and current-account UI refresh are implemented and covered by common/JVM tests.
+- [ ] **Relay deployment + precise inbound playback roaming are externally gated** (2026-07-13).
+      The configured `4.30.2` backend returns HTML 404 for `/relay/play/state/submit`. Current upstream
+      exposes submit but no pull/get contract, and record/recent endpoints omit progress, session ID,
+      play mode, revision, and remote queue state. Outbound relay becomes usable after a compatible
+      backend deployment; exact two-way progress/queue restoration needs a new server API. Windows
+      cannot validate the iOS runtime path.
 - [x] **Android audio backend — ExoPlayer + MediaSession, BUILD-VERIFIED** (2026-06-13).
       `media3-exoplayer 1.10.1` + `media3-session` added to `androidMain` (and to `:androidApp`
       directly for `PlaybackService`).

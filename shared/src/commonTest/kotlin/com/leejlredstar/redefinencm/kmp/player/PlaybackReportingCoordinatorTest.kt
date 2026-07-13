@@ -183,10 +183,12 @@ class PlaybackReportingCoordinatorTest {
         val firstSession = first.filterIsInstance<PlaybackReportingAction.SubmitPlayState>().single()
         val secondRelays = second.filterIsInstance<PlaybackReportingAction.SubmitPlayState>()
         assertEquals("SESSION00001", firstSession.sessionId)
+        assertEquals(1L, firstSession.reportingGeneration)
         // The old session's final payload is unchanged (progress 0), so it is deduplicated.
         assertTrue(boundary.isEmpty())
         assertTrue(stale.isEmpty())
         assertEquals(listOf("SESSION00002"), secondRelays.map { it.sessionId })
+        assertEquals(listOf(2L), secondRelays.map { it.reportingGeneration })
     }
 
     @Test

@@ -5,9 +5,15 @@ import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.data.db.AppDatabase
 import com.leejlredstar.redefinencm.kmp.test.testHttpClient
 import com.sun.net.httpserver.HttpServer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import java.net.InetSocketAddress
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -103,6 +109,63 @@ class RepositoryUserLevelTest {
             driver.close()
             client.close()
             server.stop(0)
+        }
+    }
+
+    @Test
+    fun olderLevelResponseCannotOverwriteANewerCommittedRefresh() = runBlocking {
+        val requestCount = AtomicInteger()
+        val firstStarted = CountDownLatch(1)
+        val releaseFirst = CountDownLatch(1)
+        val executor = Executors.newCachedThreadPool()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
+            this.executor = executor
+            createContext("/") { exchange ->
+                val requestNumber = requestCount.incrementAndGet()
+                if (requestNumber == 1) {
+                    firstStarted.countDown()
+                    releaseFirst.await(5, TimeUnit.SECONDS)
+                }
+                val nowPlayCount = if (requestNumber == 1) 10 else 20
+                val body = levelResponse(
+                    userId = 42,
+                    progress = nowPlayCount / 100.0,
+                    nowPlayCount = nowPlayCount.toLong(),
+                ).encodeToByteArray()
+                exchange.responseHeaders.add("Content-Type", "application/json")
+                exchange.sendResponseHeaders(200, body.size.toLong())
+                exchange.responseBody.use { it.write(body) }
+            }
+            start()
+        }
+        val client = testHttpClient(server.address.port)
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        AppDatabase.Schema.create(driver)
+        val database = AppDatabase(driver)
+        val repository = Repository(NCMApi(client), database)
+
+        try {
+            val older = async(Dispatchers.Default) { repository.getUserLevel(42).toList() }
+            assertTrue(firstStarted.await(5, TimeUnit.SECONDS))
+
+            val newer = withTimeout(5_000L) { repository.refreshUserLevel(42) }
+            assertEquals(20L, newer?.data?.nowPlayCount)
+            releaseFirst.countDown()
+
+            val olderEmissions = withTimeout(5_000L) { older.await() }
+            assertEquals(1, olderEmissions.size)
+            assertEquals(CacheThenNetworkSource.NETWORK, olderEmissions.single().source)
+            assertEquals(20L, olderEmissions.single().value.data?.nowPlayCount)
+            assertTrue(
+                database.cachedUserLevelQueries.selectByUid(42).executeAsOne()
+                    .contains("\"nowPlayCount\":20"),
+            )
+        } finally {
+            releaseFirst.countDown()
+            driver.close()
+            client.close()
+            server.stop(0)
+            executor.shutdownNow()
         }
     }
 

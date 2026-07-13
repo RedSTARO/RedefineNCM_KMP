@@ -60,6 +60,46 @@ data class UserLevelData(
     val level: Int = 0,
 )
 
+@Serializable
+data class UserRecordResponse(
+    val code: Int = 0,
+    val weekData: List<UserRecordEntry> = emptyList(),
+    val allData: List<UserRecordEntry> = emptyList(),
+    val message: String? = null,
+    val msg: String? = null,
+)
+
+@Serializable
+data class UserRecordEntry(
+    val song: SongDetailSongs = SongDetailSongs(),
+    val playCount: Long = 0,
+    val score: Long = 0,
+)
+
+@Serializable
+data class RecentSongsResponse(
+    val code: Int = 0,
+    val data: RecentSongsData? = null,
+    val message: String? = null,
+    val msg: String? = null,
+)
+
+@Serializable
+data class RecentSongsData(
+    val total: Long = 0,
+    val list: List<RecentSongEntry> = emptyList(),
+)
+
+@Serializable
+data class RecentSongEntry(
+    val resourceId: Long = 0,
+    val playTime: Long = 0,
+    val resourceType: String = "",
+    val data: SongDetailSongs = SongDetailSongs(),
+    val banned: Boolean = false,
+    val multiTerminalInfo: JsonElement? = null,
+)
+
 // ── Login ──
 
 @Serializable
@@ -281,6 +321,15 @@ data class ScrobbleV1Response(
 data class PlayStateSubmitResponse(
     val code: Int = 0,
     val data: JsonElement? = null,
+    val msg: String? = null,
+    val message: String? = null,
+)
+
+@Serializable
+data class WeblogResponse(
+    val code: Int = 0,
+    val data: JsonElement? = null,
+    val details: JsonElement? = null,
     val msg: String? = null,
     val message: String? = null,
 )
