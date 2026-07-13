@@ -57,7 +57,7 @@ internal class BrowserStorageSqlDriver : SqlDriver {
                 require(parameters == expectedParameters) {
                     "Expected $expectedParameters parameters for $table, got $parameters"
                 }
-                val key = keyForUpsert(table, statement.values)
+                val key = keyForTable(table, statement.values)
                 val json = statement.values.lastOrNull() as? String
                     ?: error("Missing JSON value for $table")
                 writeStorageValue(storageKey(table, key), json)
@@ -83,7 +83,7 @@ internal class BrowserStorageSqlDriver : SqlDriver {
         val statement = BrowserPreparedStatement(parameters).also { prepared ->
             binders?.invoke(prepared)
         }
-        val key = keyForSelect(table, statement.values)
+        val key = keyForTable(table, statement.values)
         val value = readStorageValue(storageKey(table, key))
         return mapper(BrowserCursor(value))
     }
@@ -172,15 +172,7 @@ internal class BrowserStorageSqlDriver : SqlDriver {
         }
     }
 
-    private fun keyForUpsert(table: String, values: List<Any?>): Long = when (table) {
-        "CachedRecommendResource", "CachedRecommendSongs" -> 0L
-        "PlayerStatus" -> 1L
-        in KEYED_TABLES -> values.firstOrNull() as? Long
-            ?: error("Missing primary key for $table")
-        else -> error("Unknown browser cache table: $table")
-    }
-
-    private fun keyForSelect(table: String, values: List<Any?>): Long = when (table) {
+    private fun keyForTable(table: String, values: List<Any?>): Long = when (table) {
         "CachedRecommendResource", "CachedRecommendSongs" -> 0L
         "PlayerStatus" -> 1L
         in KEYED_TABLES -> values.firstOrNull() as? Long
@@ -195,9 +187,7 @@ internal class BrowserStorageSqlDriver : SqlDriver {
         return storageKeys().filter { it.startsWith(prefix) }
     }
 
-    private fun snapshotStorage(): Map<String, String> = buildMap {
-        storageKeys().forEach { key -> readStorageValue(key)?.let { put(key, it) } }
-    }
+    private fun snapshotStorage(): Map<String, String> = volatileStorage.toMap()
 
     private fun restoreStorage(snapshot: Map<String, String>) {
         val oldKeys = storageKeys()
@@ -255,11 +245,12 @@ internal class BrowserStorageSqlDriver : SqlDriver {
         volatileStorage.putAll(loaded)
     }.isSuccess
 
-    private fun String.normalizedSql(): String = trim().replace(Regex("\\s+"), " ")
+    private fun String.normalizedSql(): String = trim().replace(SQL_WHITESPACE, " ")
 
     private companion object {
         const val STORAGE_PREFIX = "redefinencm.db."
         const val SCHEMA_VERSION_KEY = "${STORAGE_PREFIX}schemaVersion"
+        val SQL_WHITESPACE = Regex("\\s+")
         val KEYED_TABLES = setOf(
             "CachedCommentMusic",
             "CachedLyric",

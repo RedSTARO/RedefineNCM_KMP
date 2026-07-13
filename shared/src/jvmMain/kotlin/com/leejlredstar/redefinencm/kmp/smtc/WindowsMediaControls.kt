@@ -166,7 +166,7 @@ class WindowsMediaControls(
     }
 
     private fun isWindows(): Boolean =
-        System.getProperty("os.name").contains("Windows", ignoreCase = true)
+        desktopTransportKind(System.getProperty("os.name")) == DesktopTransportKind.WindowsSmtc
 
     private fun closeNativeSession() {
         val currentSession = session

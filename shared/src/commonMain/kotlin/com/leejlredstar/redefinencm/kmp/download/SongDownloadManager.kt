@@ -99,6 +99,46 @@ data class DownloadQueueSummary(
     val paused: Int = 0,
 )
 
+internal data class DownloadTaskStatistics(
+    val summary: DownloadQueueSummary,
+    val firstActiveTask: SongDownloadTask?,
+)
+
+internal fun analyzeDownloadTasks(tasks: List<SongDownloadTask>): DownloadTaskStatistics {
+    var active = 0
+    var completed = 0
+    var failed = 0
+    var deleted = 0
+    var paused = 0
+    var firstActiveTask: SongDownloadTask? = null
+    tasks.forEach { task ->
+        if (task.isActive) {
+            active += 1
+            if (firstActiveTask == null) firstActiveTask = task
+        }
+        when (task.status) {
+            DownloadTaskStatus.Completed -> completed += 1
+            DownloadTaskStatus.Failed,
+            DownloadTaskStatus.Cancelled,
+            -> failed += 1
+            DownloadTaskStatus.Deleted -> deleted += 1
+            DownloadTaskStatus.Paused -> paused += 1
+            else -> Unit
+        }
+    }
+    return DownloadTaskStatistics(
+        summary = DownloadQueueSummary(
+            total = tasks.size,
+            active = active,
+            completed = completed,
+            failed = failed,
+            deleted = deleted,
+            paused = paused,
+        ),
+        firstActiveTask = firstActiveTask,
+    )
+}
+
 sealed interface LocalLibrarySyncState {
     data object Idle : LocalLibrarySyncState
     data object Syncing : LocalLibrarySyncState
@@ -116,18 +156,7 @@ class SongDownloadManager(
     val tasks: StateFlow<List<SongDownloadTask>> = _tasks.asStateFlow()
     val localLibrarySyncState: StateFlow<LocalLibrarySyncState> = _localLibrarySyncState.asStateFlow()
     val summary: StateFlow<DownloadQueueSummary> = _tasks
-        .map { tasks ->
-            DownloadQueueSummary(
-                total = tasks.size,
-                active = tasks.count { it.isActive },
-                completed = tasks.count { it.status == DownloadTaskStatus.Completed },
-                failed = tasks.count {
-                    it.status == DownloadTaskStatus.Failed || it.status == DownloadTaskStatus.Cancelled
-                },
-                deleted = tasks.count { it.status == DownloadTaskStatus.Deleted },
-                paused = tasks.count { it.status == DownloadTaskStatus.Paused },
-            )
-        }
+        .map { tasks -> analyzeDownloadTasks(tasks).summary }
         .stateIn(scope, SharingStarted.Eagerly, DownloadQueueSummary())
 
     @Volatile
@@ -265,14 +294,15 @@ class SongDownloadManager(
                 if (deleted) DownloadedSongsCache.remove(taskId)
                 // Always rescan. A platform delete may remove one duplicate while another provider
                 // row/file remains; trusting a Boolean OR would falsely report the song as gone.
-                val scanResult = DownloadedSongsCache.refreshSnapshots()
-                if (scanResult is DownloadScanResult.Failure) {
-                    updateTask(taskId) { task ->
-                        task.copy(errorMessage = scanResult.message.ifBlank { "无法确认本地文件状态" })
+                val localFiles = when (val scanResult = DownloadedSongsCache.refreshSnapshots()) {
+                    is DownloadScanResult.Failure -> {
+                        updateTask(taskId) { task ->
+                            task.copy(errorMessage = scanResult.message.ifBlank { "无法确认本地文件状态" })
+                        }
+                        return@withLock
                     }
-                    return@withLock
+                    is DownloadScanResult.Success -> scanResult.snapshots.associateBy { it.id }
                 }
-                val localFiles = (scanResult as DownloadScanResult.Success).snapshots.associateBy { it.id }
                 _tasks.update { tasks ->
                     tasks.map { task ->
                         when {
@@ -383,11 +413,11 @@ class SongDownloadManager(
     }
 
     private suspend fun reconcileWithLocalLibrary(): String? {
-        val scan = DownloadedSongsCache.refreshSnapshots()
-        if (scan is DownloadScanResult.Failure) {
-            return scan.message.ifBlank { "无法读取本地音乐库" }
+        val localFiles = when (val scan = DownloadedSongsCache.refreshSnapshots()) {
+            is DownloadScanResult.Failure ->
+                return scan.message.ifBlank { "无法读取本地音乐库" }
+            is DownloadScanResult.Success -> scan.snapshots.associateBy { it.id }
         }
-        val localFiles = (scan as DownloadScanResult.Success).snapshots.associateBy { it.id }
         val knownIds = _tasks.value.mapTo(mutableSetOf()) { it.id }
         val localOnlyIds = localFiles.keys
             .filter { it !in knownIds }
@@ -638,10 +668,10 @@ class SongDownloadManager(
         }
     }
 
-    private fun normalizeQualityLevel(level: String?): String? =
-        level?.trim()
-            ?.takeIf { it.isNotEmpty() && it.lowercase() != "null" }
-            ?.lowercase()
+    private fun normalizeQualityLevel(level: String?): String? {
+        val normalized = level?.trim()?.lowercase()
+        return normalized?.takeIf { it.isNotEmpty() && it != "null" }
+    }
 
     private fun SongDetailSongs.toDownloadTask(
         playlistId: Long?,

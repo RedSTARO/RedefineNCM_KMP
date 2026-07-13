@@ -25,7 +25,7 @@ class DesktopMediaControlsTest {
 
     @Test
     fun windowsSmtcCreatesANativeSessionForARealTopLevelWindow() {
-        if (!System.getProperty("os.name").contains("Windows", ignoreCase = true)) return
+        if (desktopTransportKind(System.getProperty("os.name")) != DesktopTransportKind.WindowsSmtc) return
 
         val player = InMemoryPlatformPlayer(tickerIntervalMs = 60_000L)
         val frame = createOffscreenTestFrame()

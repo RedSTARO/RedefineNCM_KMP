@@ -1,13 +1,8 @@
 package com.leejlredstar.redefinencm.kmp.data.api
 
+import com.leejlredstar.redefinencm.kmp.test.testHttpClient
 import com.sun.net.httpserver.HttpServer
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.plugins.defaultRequest
-import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.Json
 import java.net.InetSocketAddress
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -45,7 +40,7 @@ class UserLevelApiTest {
             }
             start()
         }
-        val client = testClient(server.address.port)
+        val client = testHttpClient(server.address.port)
 
         try {
             val response = NCMApi(client).userLevel()
@@ -60,12 +55,4 @@ class UserLevelApiTest {
         }
     }
 
-    private fun testClient(port: Int): HttpClient = HttpClient(OkHttp) {
-        install(ContentNegotiation) {
-            json(Json { ignoreUnknownKeys = true; isLenient = true })
-        }
-        defaultRequest {
-            url("http://127.0.0.1:$port")
-        }
-    }
 }

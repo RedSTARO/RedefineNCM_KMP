@@ -1,15 +1,13 @@
 package com.leejlredstar.redefinencm.kmp.notification
 
-import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
-import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
+import com.leejlredstar.redefinencm.kmp.util.canPostNotifications
 
 /**
  * 实况歌词通知（Android 平台的 now-playing 歌词面）。
@@ -181,12 +179,6 @@ actual object LyricNotificationController {
         return manager?.canPostPromotedNotifications() == true
     }
 
-    private fun canPostNotifications(context: Context): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
-        return ContextCompat.checkSelfPermission(
-            context, Manifest.permission.POST_NOTIFICATIONS
-        ) == PackageManager.PERMISSION_GRANTED
-    }
 }
 
 private data class AndroidLyricPayload(

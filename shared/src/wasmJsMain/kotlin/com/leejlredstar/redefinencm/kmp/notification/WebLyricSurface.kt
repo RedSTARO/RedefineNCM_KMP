@@ -125,7 +125,8 @@ private fun updateBrowserLyricSurface(
             document.body.appendChild(surface);
         }
 
-        const currentText = currentLyric.trim() || title.trim() || "RedefineNCM";
+        const trimmedCurrentLyric = currentLyric.trim();
+        const currentText = trimmedCurrentLyric || title.trim() || "RedefineNCM";
         const detailText = nextLyric.trim() || [title, artist].filter(Boolean).join(" · ");
         const currentNode = surface.querySelector('[data-role="current"]');
         const nextNode = surface.querySelector('[data-role="next"]');
@@ -142,8 +143,8 @@ private fun updateBrowserLyricSurface(
         }
         const ratio = durationMs > 0 ? Math.max(0, Math.min(1, positionMs / durationMs)) : 0;
         surface.querySelector('[data-role="progress"]').style.transform = "scaleX(" + ratio + ")";
-        document.title = currentLyric.trim()
-            ? currentLyric.trim() + " — " + (title || "RedefineNCM")
+        document.title = trimmedCurrentLyric
+            ? trimmedCurrentLyric + " — " + (title || "RedefineNCM")
             : (title || "RedefineNCM");
 
         const notificationSignature = [currentText, detailText, artworkUri].join("\u0000");

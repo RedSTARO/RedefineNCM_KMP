@@ -550,14 +550,21 @@ private fun ExpandedPlaybackCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = if (hasMedia) {
-                            "${formatControllerDuration(displayPosition)} / ${formatControllerDuration(totalDuration)}"
+                    val playbackTimeLabel = remember(
+                        hasMedia,
+                        displayPosition.coerceAtLeast(0L) / 1_000L,
+                        totalDuration.coerceAtLeast(0L) / 1_000L,
+                    ) {
+                        if (hasMedia) {
+                            "${formatPlaybackDuration(displayPosition)} / ${formatPlaybackDuration(totalDuration)}"
                         } else {
                             "0:00 / 0:00"
-                        },
+                        }
+                    }
+                    Text(
+                        text = playbackTimeLabel,
                         style = MaterialTheme.typography.labelSmall,
-                    color = accentPalette.secondaryOnContainer,
+                        color = accentPalette.secondaryOnContainer,
                         maxLines = 1,
                     )
                     Row(
@@ -796,6 +803,18 @@ private fun CollapsedProgressController(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                val playbackTimeLabel = remember(
+                    swipeLabel,
+                    hasMedia,
+                    position.coerceAtLeast(0L) / 1_000L,
+                    totalDuration.coerceAtLeast(0L) / 1_000L,
+                ) {
+                    swipeLabel ?: if (hasMedia) {
+                        "${formatPlaybackDuration(position)} / ${formatPlaybackDuration(totalDuration)}"
+                    } else {
+                        "0:00 / 0:00"
+                    }
+                }
                 Text(
                     text = media?.title?.takeIf { it.isNotBlank() } ?: "未播放",
                     style = MaterialTheme.typography.labelMedium,
@@ -805,9 +824,7 @@ private fun CollapsedProgressController(
                     modifier = Modifier.weight(1f),
                 )
                 Text(
-                    text = swipeLabel ?: if (hasMedia) {
-                        "${formatControllerDuration(position)} / ${formatControllerDuration(totalDuration)}"
-                    } else "0:00 / 0:00",
+                    text = playbackTimeLabel,
                     style = MaterialTheme.typography.labelSmall,
                     color = if (swipeLabel != null) {
                         accentPalette.onQuietContainer
@@ -832,7 +849,7 @@ private fun CollapsedProgressController(
     }
 }
 
-private fun formatControllerDuration(millis: Long): String {
+internal fun formatPlaybackDuration(millis: Long): String {
     val totalSeconds = millis.coerceAtLeast(0L) / 1000L
     val minutes = totalSeconds / 60L
     val seconds = totalSeconds % 60L

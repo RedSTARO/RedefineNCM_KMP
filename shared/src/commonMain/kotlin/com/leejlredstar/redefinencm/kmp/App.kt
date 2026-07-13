@@ -88,6 +88,7 @@ import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOverlayCoordinator
 import com.leejlredstar.redefinencm.kmp.ui.component.CommentBottomSheet
 import com.leejlredstar.redefinencm.kmp.ui.component.QueueBottomSheet
+import com.leejlredstar.redefinencm.kmp.ui.component.formatPlaybackDuration
 import com.leejlredstar.redefinencm.kmp.ui.screen.DownloadManagementScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.LoginScreen
@@ -653,7 +654,7 @@ private fun DesktopNowPlayingStrip(
                         )
                         Text(
                             text = if (hasMedia) {
-                                "${formatDesktopPlayerDuration(displayedPosition)} / ${formatDesktopPlayerDuration(totalDuration)}"
+                                "${formatPlaybackDuration(displayedPosition)} / ${formatPlaybackDuration(totalDuration)}"
                             } else {
                                 "0:00 / 0:00"
                             },
@@ -864,13 +865,6 @@ private fun desktopSecondaryButtonColors(accentPalette: ContentAccentPalette) =
         disabledContainerColor = accentPalette.quietContainer.copy(alpha = 0.44f),
         disabledContentColor = accentPalette.onQuietContainer.copy(alpha = 0.38f),
     )
-
-private fun formatDesktopPlayerDuration(millis: Long): String {
-    val totalSeconds = millis.coerceAtLeast(0L) / 1000L
-    val minutes = totalSeconds / 60L
-    val seconds = totalSeconds % 60L
-    return "$minutes:${seconds.toString().padStart(2, '0')}"
-}
 
 private fun pageTransition(initial: RootDest, target: RootDest): ContentTransform =
     when {

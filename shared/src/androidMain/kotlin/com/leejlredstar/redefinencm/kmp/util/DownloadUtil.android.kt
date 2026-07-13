@@ -10,7 +10,8 @@ import org.koin.mp.KoinPlatform
 import java.io.File
 import java.io.FileNotFoundException
 
-private const val DOWNLOAD_SUBDIR = "RedefineNCM"
+internal const val DOWNLOAD_SUBDIR = "RedefineNCM"
+internal val DOWNLOAD_RELATIVE_PATH = "${Environment.DIRECTORY_DOWNLOADS}/$DOWNLOAD_SUBDIR/"
 
 /**
  * Android-specific: scan the RedefineNCM download folder and return all downloaded songs.
@@ -110,7 +111,7 @@ private fun queryMediaCollection(
     val selectionArgs = buildList {
         add(targetSongId?.let { "$it.%" } ?: "%.%")
         if (canFilterRelativePath) {
-            add(downloadRelativePath())
+            add(DOWNLOAD_RELATIVE_PATH)
         }
     }.toTypedArray()
 
@@ -253,13 +254,9 @@ private fun songIdFromFileName(fileName: String, targetSongId: Long?): Long? {
     return if (targetSongId == null || songId == targetSongId) songId else null
 }
 
-private fun downloadRelativePath(): String =
-    "${Environment.DIRECTORY_DOWNLOADS}/$DOWNLOAD_SUBDIR/"
-
 private fun isRedefineDownloadPath(path: String): Boolean {
     val normalized = path.replace('\\', '/')
-    val relativePath = downloadRelativePath()
-    return normalized == relativePath ||
-        normalized.endsWith("/$relativePath") ||
+    return normalized == DOWNLOAD_RELATIVE_PATH ||
+        normalized.endsWith("/$DOWNLOAD_RELATIVE_PATH") ||
         normalized.contains("/${Environment.DIRECTORY_DOWNLOADS}/$DOWNLOAD_SUBDIR/")
 }

@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.ui.theme
 
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -42,11 +43,19 @@ data class ContentAccentPalette(
 @Composable
 fun contentAccentPalette(source: Color): ContentAccentPalette {
     val scheme = MaterialTheme.colorScheme
+    return remember(source, scheme) { buildContentAccentPalette(source, scheme) }
+}
+
+private fun buildContentAccentPalette(
+    source: Color,
+    scheme: ColorScheme,
+): ContentAccentPalette {
     val isDark = scheme.surface.luminance() < 0.5f
     val accent = normalizeAccent(source, isDark)
+    val accentLuminance = accent.luminance()
     val buttonAccent = when {
-        accent.luminance() > 0.62f -> lerp(accent, Color.Black, 0.30f)
-        accent.luminance() < 0.16f -> lerp(accent, Color.White, 0.18f)
+        accentLuminance > 0.62f -> lerp(accent, Color.Black, 0.30f)
+        accentLuminance < 0.16f -> lerp(accent, Color.White, 0.18f)
         else -> accent
     }
     val container = if (isDark) {

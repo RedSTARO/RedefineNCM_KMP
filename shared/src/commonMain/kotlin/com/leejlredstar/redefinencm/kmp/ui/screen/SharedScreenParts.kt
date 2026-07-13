@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
 import com.leejlredstar.redefinencm.kmp.data.api.dto.UserPlaylistEach
+import com.leejlredstar.redefinencm.kmp.data.toPlayerMediaInfo
 import com.leejlredstar.redefinencm.kmp.download.DownloadTaskStatus
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
@@ -61,16 +62,7 @@ import org.koin.compose.koinInject
 /** Map an API song DTO to the player's [MediaInfo] (placeholder URI resolved at play time). */
 fun SongDetailSongs.toMediaInfo(
     sourceId: String = "",
-): MediaInfo = MediaInfo(
-    id = id.toString(),
-    title = name,
-    artist = ar.joinToString(", ") { it.name },
-    albumTitle = al.name,
-    artworkUri = al.picUrl,
-    placeholderUri = "redefinencm://playbackPlaceHolder?id=$id",
-    duration = dt,
-    sourceId = sourceId,
-)
+): MediaInfo = toPlayerMediaInfo(sourceId)
 
 /** Connected-list song row: index + artwork + title/artist. Reused by Home/Search/Playlist. */
 @Composable

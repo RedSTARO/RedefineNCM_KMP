@@ -1,13 +1,11 @@
 package com.leejlredstar.redefinencm.kmp.di
 
-import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
 import com.leejlredstar.redefinencm.kmp.data.db.DatabaseDriverFactory
 import com.leejlredstar.redefinencm.kmp.player.ExoPlayerPlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.recognition.AndroidMicrophoneRecorder
 import com.leejlredstar.redefinencm.kmp.recognition.MicrophoneRecorder
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
-import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import org.koin.android.ext.koin.androidContext
@@ -15,15 +13,7 @@ import org.koin.dsl.module
 
 actual fun platformModule() = module {
     // Ktor HttpClient (OkHttp engine) configured with base URL + realIP + cookie from settings.
-    single<HttpClient> {
-        val settings = get<PlatformSettings>()
-        HttpClientFactory.create(
-            baseUrl = settings.getString(SettingKeys.SERVER, "https://ncm.tryagain.icu/"),
-            realIP = "192.168.1.1",
-            cookieProvider = { settings.getString(SettingKeys.COOKIE, "") },
-            engineFactory = OkHttp,
-        )
-    }
+    single<HttpClient> { createNcmHttpClient(get(), OkHttp) }
 
     // PlatformSettings backed by DataStore (needs the app Context provided via androidContext()).
     single { PlatformSettings(get()) }

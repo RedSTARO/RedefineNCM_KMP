@@ -49,15 +49,12 @@ internal fun encodeSettingsBackup(
 )
 
 /** Parses [json] and writes values into [settings]. Returns false on any parse error. */
-fun applySettingsBackup(json: String, settings: PlatformSettings): Boolean = try {
+fun applySettingsBackup(json: String, settings: PlatformSettings): Boolean =
     applySettingsBackup(
         json = json,
         setString = settings::setString,
         setBoolean = settings::setBoolean,
     )
-} catch (_: Exception) {
-    false
-}
 
 internal fun applySettingsBackup(
     json: String,
