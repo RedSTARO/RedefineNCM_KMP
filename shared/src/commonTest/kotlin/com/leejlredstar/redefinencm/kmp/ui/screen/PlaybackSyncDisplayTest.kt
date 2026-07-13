@@ -14,6 +14,44 @@ import kotlin.test.assertTrue
 
 class PlaybackSyncDisplayTest {
     @Test
+    fun recentPlayIsShownAtStartAndLaterScrobbleTakesPriority() {
+        val recentPlay = status(
+            kind = PlaybackReportingKind.RECENT_PLAY,
+            phase = PlaybackReportingPhase.ACCEPTED,
+            endpoint = PlaybackReportEndpoint.WEBLOG_STARTPLAY,
+        )
+        val started = assertNotNull(
+            playbackSyncDisplay(
+                PlaybackReportingState(
+                    recentPlay = recentPlay,
+                    relay = status(
+                        kind = PlaybackReportingKind.RELAY,
+                        phase = PlaybackReportingPhase.ACCEPTED,
+                        endpoint = PlaybackReportEndpoint.RELAY,
+                    ),
+                ),
+            ),
+        )
+        val halfPlayed = assertNotNull(
+            playbackSyncDisplay(
+                PlaybackReportingState(
+                    recentPlay = recentPlay,
+                    scrobble = status(
+                        phase = PlaybackReportingPhase.ACCEPTED,
+                        endpoint = PlaybackReportEndpoint.SCROBBLE_V1,
+                    ),
+                ),
+            ),
+        )
+
+        assertContains(started.title, "最近播放")
+        assertContains(started.message, "最近播放 已被服务器接收")
+        assertContains(started.message, "跨端进度")
+        assertContains(halfPlayed.title, "播放记录")
+        assertContains(halfPlayed.message, "NCBL 上报")
+    }
+
+    @Test
     fun verifiedScrobbleShowsAccountEvidenceAndRelayBoundary() {
         val display = assertNotNull(
             playbackSyncDisplay(

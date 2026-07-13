@@ -132,6 +132,61 @@ class RepositoryPlaybackReportingTest {
     }
 
     @Test
+    fun playbackStartPostsOnlyStartplayWithBoundCredentialAndSongFallback() = runBlocking {
+        var method = ""
+        var path = ""
+        var requestBody = ""
+        var cookieHeader: String? = null
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
+            createContext("/") { exchange ->
+                method = exchange.requestMethod
+                path = exchange.requestURI.path
+                requestBody = exchange.requestBody.use { it.readBytes().decodeToString() }
+                cookieHeader = exchange.requestHeaders.getFirst("Cookie")
+                val body = """{"code":200,"data":"success"}""".encodeToByteArray()
+                exchange.responseHeaders.add("Content-Type", "application/json")
+                exchange.sendResponseHeaders(200, body.size.toLong())
+                exchange.responseBody.use { it.write(body) }
+            }
+            start()
+        }
+        val client = HttpClientFactory.create(
+            baseUrl = "http://127.0.0.1:${server.address.port}",
+            realIP = "127.0.0.1",
+            cookieProvider = { "" },
+            engineFactory = OkHttp,
+        )
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        AppDatabase.Schema.create(driver)
+        val repository = Repository(NCMApi(client), AppDatabase(driver))
+
+        try {
+            val result = assertIs<PlaybackReportResult.Accepted>(
+                repository.submitPlaybackStart(
+                    id = 42,
+                    sourceId = null,
+                    credentialCookie = "MUSIC_U=session-snapshot; os=pc",
+                ),
+            )
+
+            assertEquals(PlaybackReportEndpoint.WEBLOG_STARTPLAY, result.endpoint)
+            assertEquals("POST", method)
+            assertEquals("/weblog", path)
+            assertTrue(requestBody.contains("\\\"action\\\":\\\"startplay\\\""))
+            assertTrue(requestBody.contains("\\\"content\\\":\\\"id=42\\\""))
+            assertFalse(requestBody.contains("\\\"action\\\":\\\"play\\\""))
+            val capturedCookie = checkNotNull(cookieHeader)
+            assertTrue(capturedCookie.contains("MUSIC_U=session-snapshot"))
+            assertTrue(capturedCookie.contains("os=osx"))
+            assertFalse(capturedCookie.contains("os=pc"))
+        } finally {
+            driver.close()
+            client.close()
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun cookieTransportUsesFreshProviderAndPreservesExplicitCookie() = runBlocking {
         val captured = ConcurrentLinkedQueue<Pair<String?, String>>()
         var providedCookie = "MUSIC_U=first+token=="

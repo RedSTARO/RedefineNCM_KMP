@@ -53,11 +53,15 @@ MIT 许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 登录后真正开始播放时，共用协调器会为每次选曲建立独立会话：
 
+- 稳定进入 `PLAYING` 后立即通过 `POST /weblog` 发送一次 `startplay`，让该曲进入账号的
+  “最近播放”；暂停/恢复、拖动和 shuffle 不会重复发送；
 - `/relay/play/state/submit` 在开始、暂停/模式变化、结束以及播放中每 30 秒提交进度；
 - `/scrobble/v1` 在有效播放进度达到歌曲时长一半后至多尝试一次，拖动、缓冲、卡住和
   系统休眠时间不计入；
-- 播放记录只通过 `/scrobble/v1` 上报；HTML 404 会直接报告接口不支持，不再改走其他接口；
+- `startplay` 只负责最近播放，半程听歌记账只通过 `/scrobble/v1`；任一接口的 HTML 404
+  都会直接报告接口不支持，不会互相回退；
 - 歌单播放会携带 `sourceid=歌单 ID`，`source` 使用后端默认值 `list`；
+- 没有歌单来源的首页推荐、搜索或识曲结果使用歌曲 ID 作为 `startplay` 来源兜底；
 - Web 和原生端都把请求绑定到会话建立时的 Cookie 快照，换号后的旧请求不会借用新账号凭证；
 - 上报结果不再丢弃：页面会区分发送中、服务器接收、账号侧确认、回读未反映、拒绝、接口不支持
   和传输失败，并保留 HTTP/body code 及有界响应详情；
@@ -67,8 +71,9 @@ MIT 许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
   服务端最终没有异步入账。
 
 2026-07-13 局域网后端升级到 `4.36.2` 后，路由探测确认 `/scrobble/v1` 和
-`/relay/play/state/submit` 均已注册。升级后的 `/scrobble/v1` 尚未完成一次真实账号侧入账复验；
-客户端会继续通过上述有界回读给出实际结果，不把路由存在等同于账号侧记账成功。
+`/relay/play/state/submit` 均已注册。当前上游源码也实现了 `/weblog`；相同的
+`startplay` 请求形状曾作为旧后端两段式链路的第一步受控验证成功，但未曾单独隔离
+验证，升级后的单次 `startplay` + 半程 NCBL 链路也尚未完成真实账号侧复验。
 
 当前服务已有 relay submit，但没有拉取当前 `progress/sessionId/playMode` 的接口；所以这里只能
 提交远端状态，无法实现官方客户端级别的

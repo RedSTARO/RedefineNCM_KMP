@@ -316,6 +316,15 @@ data class ScrobbleV1Response(
     val details: JsonElement? = null,
 )
 
+@Serializable
+data class WeblogResponse(
+    val code: Int = 0,
+    val data: JsonElement? = null,
+    val details: JsonElement? = null,
+    val msg: String? = null,
+    val message: String? = null,
+)
+
 /** `/relay/play/state/submit` forwards an upstream response whose `data` schema is not fixed. */
 @Serializable
 data class PlayStateSubmitResponse(

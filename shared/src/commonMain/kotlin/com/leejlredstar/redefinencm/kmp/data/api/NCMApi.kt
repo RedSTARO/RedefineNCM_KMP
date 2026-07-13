@@ -6,7 +6,11 @@ import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 private val playSessionIdPattern = Regex("^[A-Z0-9]{12}$")
 private val responseJson = Json {
@@ -55,6 +59,34 @@ private suspend inline fun <reified T> HttpResponse.toNcmHttpResponse(): NcmHttp
         else -> NcmResponseBodyKind.OTHER
     }
     return NcmHttpResponse(status.value, decoded, kind, responseContentType)
+}
+
+@Serializable
+private data class WeblogRequest(val data: WeblogRequestData)
+
+@Serializable
+private data class WeblogRequestData(val logs: String)
+
+internal fun startPlaybackWeblogLogs(songId: Long, sourceId: Long): String {
+    require(songId > 0) { "songId must be positive" }
+    require(sourceId > 0) { "sourceId must be positive" }
+    return buildJsonArray {
+        add(
+            buildJsonObject {
+                put("action", "startplay")
+                put(
+                    "json",
+                    buildJsonObject {
+                        put("id", songId)
+                        put("type", "song")
+                        put("mainsite", "1")
+                        put("mainsiteWeb", "1")
+                        put("content", "id=$sourceId")
+                    },
+                )
+            },
+        )
+    }.toString()
 }
 
 internal fun intelligenceListQueryParameters(
@@ -238,6 +270,16 @@ class NCMApi(private val client: HttpClient) {
         }.body()
 
     // ── Playback reporting ──
+
+    suspend fun submitPlaybackStart(
+        id: Long,
+        sourceId: Long,
+        credentialCookie: String,
+    ): NcmHttpResponse<WeblogResponse> = client.post("/weblog") {
+        appendCredentialCookie(credentialCookie)
+        contentType(ContentType.Application.Json)
+        setBody(WeblogRequest(WeblogRequestData(startPlaybackWeblogLogs(id, sourceId))))
+    }.toNcmHttpResponse()
 
     suspend fun scrobbleV1(
         id: Long,

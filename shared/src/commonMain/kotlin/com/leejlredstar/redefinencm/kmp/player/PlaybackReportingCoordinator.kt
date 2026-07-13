@@ -137,6 +137,7 @@ class PlaybackReportingCoordinator(
 
             when (action) {
                 is PlaybackReportingAction.SubmitPlayState -> dispatchRelay(action)
+                is PlaybackReportingAction.StartPlayback -> dispatchPlaybackStart(action)
                 is PlaybackReportingAction.Scrobble -> dispatchScrobble(action)
             }
         } catch (cancelled: CancellationException) {
@@ -172,6 +173,25 @@ class PlaybackReportingCoordinator(
             progressSeconds = action.progressSeconds,
             playMode = action.playMode,
             type = "song",
+            credentialCookie = action.credentialCookie,
+        )
+        updateStatus(result.toStatus(action))
+    }
+
+    private suspend fun dispatchPlaybackStart(action: PlaybackReportingAction.StartPlayback) {
+        updateStatus(
+            PlaybackReportingStatus(
+                kind = PlaybackReportingKind.RECENT_PLAY,
+                songId = action.songId,
+                credentialKey = action.credentialKey,
+                reportingGeneration = action.reportingGeneration,
+                phase = PlaybackReportingPhase.SENDING,
+                endpoint = PlaybackReportEndpoint.WEBLOG_STARTPLAY,
+            ),
+        )
+        val result = repository.submitPlaybackStart(
+            id = action.songId,
+            sourceId = action.sourceId,
             credentialCookie = action.credentialCookie,
         )
         updateStatus(result.toStatus(action))
@@ -325,12 +345,14 @@ class PlaybackReportingCoordinator(
 private val PlaybackReportingAction.kind: PlaybackReportingKind
     get() = when (this) {
         is PlaybackReportingAction.SubmitPlayState -> PlaybackReportingKind.RELAY
+        is PlaybackReportingAction.StartPlayback -> PlaybackReportingKind.RECENT_PLAY
         is PlaybackReportingAction.Scrobble -> PlaybackReportingKind.SCROBBLE
     }
 
 private val PlaybackReportingAction.songId: Long
     get() = when (this) {
         is PlaybackReportingAction.SubmitPlayState -> this.songId
+        is PlaybackReportingAction.StartPlayback -> this.songId
         is PlaybackReportingAction.Scrobble -> this.songId
     }
 
@@ -379,6 +401,7 @@ private fun PlaybackReportResult.toStatus(
         httpStatus = httpStatus,
         message = when (endpoint) {
             PlaybackReportEndpoint.RELAY -> "当前服务器未部署 relay 播放进度接口"
+            PlaybackReportEndpoint.WEBLOG_STARTPLAY -> "当前服务器不支持最近播放上报"
             else -> "当前服务器不支持播放记录上报"
         },
     )
@@ -449,9 +472,10 @@ internal class PlaybackReportingDispatcher(
 
     fun enqueue(action: PlaybackReportingAction) {
         // Relay is current-state telemetry: under a 60-second timeout, preserve only the most
-        // recent pending states. Scrobble is already one-shot and must not be evicted before send.
+        // recent pending states. One-shot account actions must not be evicted before send.
         when (action) {
             is PlaybackReportingAction.SubmitPlayState -> relayQueue.trySend(action)
+            is PlaybackReportingAction.StartPlayback,
             is PlaybackReportingAction.Scrobble -> scope.launch { report(action) }
         }
     }
@@ -473,6 +497,14 @@ internal sealed interface PlaybackReportingAction {
         val sessionId: String,
         val progressSeconds: Long,
         val playMode: String,
+        override val reportingGeneration: Long = 0L,
+    ) : PlaybackReportingAction
+
+    data class StartPlayback(
+        override val credentialKey: Long,
+        override val credentialCookie: String,
+        val songId: Long,
+        val sourceId: String?,
         override val reportingGeneration: Long = 0L,
     ) : PlaybackReportingAction
 
@@ -609,6 +641,7 @@ internal class PlaybackReportingReducer(
             )
             active = session
             pendingOccurrence = null
+            session.schedulePlaybackStart(actions)
             session.scheduleRelay(actions, now)
         } else if (session != null) {
             val wasPlaying = session.wasPlaying
@@ -627,6 +660,18 @@ internal class PlaybackReportingReducer(
         }
 
         return actions
+    }
+
+    private fun ActivePlaybackReportingSession.schedulePlaybackStart(
+        actions: MutableList<PlaybackReportingAction>,
+    ) {
+        actions += PlaybackReportingAction.StartPlayback(
+            credentialKey = credentialKey,
+            credentialCookie = credentialCookie,
+            songId = songId,
+            sourceId = media.sourceId.trim().takeIf(String::isNotEmpty),
+            reportingGeneration = reportingGeneration,
+        )
     }
 
     private fun ActivePlaybackReportingSession.scheduleScrobbleIfEligible(

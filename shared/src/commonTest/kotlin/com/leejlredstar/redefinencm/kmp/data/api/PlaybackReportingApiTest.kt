@@ -15,6 +15,24 @@ class PlaybackReportingApiTest {
     }
 
     @Test
+    fun startPlaybackWeblogContainsOnlyTheRecentPlayAction() {
+        assertEquals(
+            """[{"action":"startplay","json":{"id":518066366,"type":"song","mainsite":"1","mainsiteWeb":"1","content":"id=36780169"}}]""",
+            startPlaybackWeblogLogs(songId = 518_066_366, sourceId = 36_780_169),
+        )
+    }
+
+    @Test
+    fun startPlaybackWeblogRejectsInvalidIds() {
+        assertFailsWith<IllegalArgumentException> {
+            startPlaybackWeblogLogs(songId = 0, sourceId = 1)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            startPlaybackWeblogLogs(songId = 1, sourceId = 0)
+        }
+    }
+
+    @Test
     fun scrobbleQueryMapsEveryDocumentedParameter() {
         val parameters = scrobbleV1QueryParameters(
             id = 518_066_366,

@@ -5,6 +5,7 @@ import com.leejlredstar.redefinencm.kmp.data.api.dto.UserLevelResponse
 import com.leejlredstar.redefinencm.kmp.data.api.dto.UserRecordResponse
 
 enum class PlaybackReportEndpoint {
+    WEBLOG_STARTPLAY,
     SCROBBLE_V1,
     RELAY,
 }

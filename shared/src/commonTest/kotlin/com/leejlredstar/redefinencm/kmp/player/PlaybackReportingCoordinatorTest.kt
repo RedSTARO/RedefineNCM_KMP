@@ -21,6 +21,41 @@ class PlaybackReportingCoordinatorTest {
     )
 
     @Test
+    fun startPlaybackIsScheduledOnceWhenSelectionActuallyStarts() {
+        val reducer = reducer()
+
+        val selected = reducer.observe(
+            observation(isPlaying = false, state = PlayerState.BUFFERING),
+            nowMillis = 0L,
+            signal = PlaybackReportingSignal.OCCURRENCE,
+        )
+        val stillBuffering = reducer.observe(
+            observation(isPlaying = false, state = PlayerState.BUFFERING),
+            nowMillis = 10_000L,
+            signal = PlaybackReportingSignal.TICK,
+        )
+        val started = reducer.observe(
+            observation(),
+            nowMillis = 10_250L,
+            signal = PlaybackReportingSignal.STATE,
+        )
+        val paused = reducer.observe(
+            observation(isPlaying = false, state = PlayerState.PAUSED),
+            nowMillis = 11_000L,
+        )
+        val resumed = reducer.observe(observation(), nowMillis = 12_000L)
+
+        assertTrue(selected.isEmpty())
+        assertTrue(stillBuffering.isEmpty())
+        val start = started.filterIsInstance<PlaybackReportingAction.StartPlayback>().single()
+        assertEquals(518_066_366L, start.songId)
+        assertEquals("36780169", start.sourceId)
+        assertEquals(1L, start.reportingGeneration)
+        assertTrue(paused.none { it is PlaybackReportingAction.StartPlayback })
+        assertTrue(resumed.none { it is PlaybackReportingAction.StartPlayback })
+    }
+
+    @Test
     fun scrobblesOnceAfterHalfOfActualListeningAndIgnoresSeekDistance() {
         val reducer = reducer()
 
@@ -181,14 +216,18 @@ class PlaybackReportingCoordinatorTest {
         )
 
         val firstSession = first.filterIsInstance<PlaybackReportingAction.SubmitPlayState>().single()
+        val firstStart = first.filterIsInstance<PlaybackReportingAction.StartPlayback>().single()
         val secondRelays = second.filterIsInstance<PlaybackReportingAction.SubmitPlayState>()
+        val secondStarts = second.filterIsInstance<PlaybackReportingAction.StartPlayback>()
         assertEquals("SESSION00001", firstSession.sessionId)
         assertEquals(1L, firstSession.reportingGeneration)
+        assertEquals(1L, firstStart.reportingGeneration)
         // The old session's final payload is unchanged (progress 0), so it is deduplicated.
         assertTrue(boundary.isEmpty())
         assertTrue(stale.isEmpty())
         assertEquals(listOf("SESSION00002"), secondRelays.map { it.sessionId })
         assertEquals(listOf(2L), secondRelays.map { it.reportingGeneration })
+        assertEquals(listOf(2L), secondStarts.map { it.reportingGeneration })
     }
 
     @Test
@@ -390,9 +429,10 @@ class PlaybackReportingCoordinatorTest {
     )
 
     @Test
-    fun stalledRelayDoesNotBlockIndependentScrobbleDispatch() = runTest {
+    fun stalledRelayDoesNotBlockIndependentAccountActions() = runTest {
         val relayStarted = CompletableDeferred<Unit>()
         val releaseRelay = CompletableDeferred<Unit>()
+        val startReceived = CompletableDeferred<Unit>()
         val scrobbleReceived = CompletableDeferred<Unit>()
         val dispatcher = PlaybackReportingDispatcher(
             scope = backgroundScope,
@@ -402,6 +442,7 @@ class PlaybackReportingCoordinatorTest {
                         relayStarted.complete(Unit)
                         releaseRelay.await()
                     }
+                    is PlaybackReportingAction.StartPlayback -> startReceived.complete(Unit)
                     is PlaybackReportingAction.Scrobble -> scrobbleReceived.complete(Unit)
                 }
             },
@@ -422,6 +463,14 @@ class PlaybackReportingCoordinatorTest {
         assertTrue(relayStarted.isCompleted)
 
         dispatcher.enqueue(
+            PlaybackReportingAction.StartPlayback(
+                credentialKey = 1L,
+                credentialCookie = credentialCookie,
+                songId = 42L,
+                sourceId = null,
+            ),
+        )
+        dispatcher.enqueue(
             PlaybackReportingAction.Scrobble(
                 credentialKey = 1L,
                 credentialCookie = credentialCookie,
@@ -437,6 +486,7 @@ class PlaybackReportingCoordinatorTest {
         )
         runCurrent()
 
+        assertTrue(startReceived.isCompleted)
         assertTrue(scrobbleReceived.isCompleted)
         releaseRelay.complete(Unit)
         dispatcher.close()

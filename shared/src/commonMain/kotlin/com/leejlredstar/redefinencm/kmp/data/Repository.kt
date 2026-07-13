@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.data
 
+import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.data.api.NcmHttpResponse
 import com.leejlredstar.redefinencm.kmp.data.api.NcmResponseBodyKind
@@ -436,6 +437,42 @@ class Repository(
 
     // ── Playback reporting ──
 
+    suspend fun submitPlaybackStart(
+        id: Long,
+        sourceId: String? = null,
+        credentialCookie: String? = null,
+    ): PlaybackReportResult {
+        if (id <= 0L) {
+            return PlaybackReportResult.Rejected(
+                endpoint = PlaybackReportEndpoint.WEBLOG_STARTPLAY,
+                details = PlaybackReportDetails(message = "songId must be positive"),
+            )
+        }
+        val cleanedCredential = HttpClientFactory.cleanCookie(credentialCookie.orEmpty())
+        if (cleanedCredential.isEmpty()) {
+            return PlaybackReportResult.Rejected(
+                endpoint = PlaybackReportEndpoint.WEBLOG_STARTPLAY,
+                details = PlaybackReportDetails(message = "credential cookie is required"),
+            )
+        }
+        val resolvedSourceId = sourceId
+            ?.trim()
+            ?.toLongOrNull()
+            ?.takeIf { it > 0L }
+            ?: id
+        val response = safeApiCall {
+            api.submitPlaybackStart(
+                id = id,
+                sourceId = resolvedSourceId,
+                credentialCookie = weblogCredentialCookie(cleanedCredential),
+            )
+        } ?: return PlaybackReportResult.TransportFailure(
+            endpoint = PlaybackReportEndpoint.WEBLOG_STARTPLAY,
+            reason = PlaybackReportFailureReason.REQUEST_FAILED,
+        )
+        return response.toWeblogStartResult()
+    }
+
     suspend fun scrobbleV1(
         id: Long,
         timeSeconds: Long,
@@ -565,6 +602,57 @@ private enum class EndpointCapability {
 
 private const val MAX_REPORT_TEXT_LENGTH = 1_024
 private const val MAX_REPORT_DETAILS_LENGTH = 4_096
+
+internal fun weblogCredentialCookie(rawCredential: String): String {
+    val cleaned = HttpClientFactory.cleanCookie(rawCredential)
+    require(cleaned.isNotEmpty()) { "credential cookie must not be empty" }
+    var osWritten = false
+    val parts = cleaned.split(';').mapNotNull { rawPart ->
+        val part = rawPart.trim()
+        val name = part.substringBefore('=', missingDelimiterValue = "").trim()
+        if (!name.equals("os", ignoreCase = true)) {
+            part.takeIf(String::isNotEmpty)
+        } else if (!osWritten) {
+            osWritten = true
+            "os=osx"
+        } else {
+            null
+        }
+    }.toMutableList()
+    if (!osWritten) parts += "os=osx"
+    return parts.joinToString("; ")
+}
+
+private fun NcmHttpResponse<WeblogResponse>.toWeblogStartResult(): PlaybackReportResult {
+    if (isHtmlNotFound) {
+        return PlaybackReportResult.Unsupported(
+            endpoint = PlaybackReportEndpoint.WEBLOG_STARTPLAY,
+            htmlResponse = bodyKind == NcmResponseBodyKind.HTML,
+        )
+    }
+    val response = body
+    if (response == null) return invalidResponseResult(PlaybackReportEndpoint.WEBLOG_STARTPLAY)
+    val details = reportDetails(
+        data = response.data,
+        message = response.msg ?: response.message,
+        details = response.details,
+    )
+    return if (statusCode in 200..299 && response.code == 200) {
+        PlaybackReportResult.Accepted(
+            endpoint = PlaybackReportEndpoint.WEBLOG_STARTPLAY,
+            httpStatus = statusCode,
+            serverCode = response.code,
+            details = details,
+        )
+    } else {
+        PlaybackReportResult.Rejected(
+            endpoint = PlaybackReportEndpoint.WEBLOG_STARTPLAY,
+            httpStatus = statusCode,
+            serverCode = response.code,
+            details = details,
+        )
+    }
+}
 
 private fun NcmHttpResponse<ScrobbleV1Response>.toScrobbleResult(): PlaybackReportResult {
     if (isHtmlNotFound) {
