@@ -74,24 +74,30 @@ internal data class PlaybackSyncDisplay(
 )
 
 internal fun playbackSyncDisplay(state: PlaybackReportingState): PlaybackSyncDisplay? {
-    val primary = listOfNotNull(state.scrobble, state.relay)
+    val primary = listOfNotNull(state.scrobble, state.recentPlay, state.relay)
         .maxWithOrNull(
             compareBy<PlaybackReportingStatus> { it.reportingGeneration }
-                .thenBy { if (it.kind == PlaybackReportingKind.SCROBBLE) 1 else 0 },
+                .thenBy {
+                    when (it.kind) {
+                        PlaybackReportingKind.RELAY -> 0
+                        PlaybackReportingKind.RECENT_PLAY -> 1
+                        PlaybackReportingKind.SCROBBLE -> 2
+                    }
+                },
         )
         ?: return null
     val relaySuffix = state.relay
         ?.takeIf {
-            primary.kind == PlaybackReportingKind.SCROBBLE &&
+            primary.kind != PlaybackReportingKind.RELAY &&
                 it.reportingGeneration == primary.reportingGeneration
         }
         ?.let { relay -> "\n${relaySummary(relay)}" }
         .orEmpty()
     return PlaybackSyncDisplay(
-        title = if (primary.kind == PlaybackReportingKind.SCROBBLE) {
-            "播放记录同步"
-        } else {
-            "跨端进度提交"
+        title = when (primary.kind) {
+            PlaybackReportingKind.SCROBBLE -> "播放记录同步"
+            PlaybackReportingKind.RECENT_PLAY -> "最近播放同步"
+            PlaybackReportingKind.RELAY -> "跨端进度提交"
         },
         message = statusSummary(primary) + relaySuffix,
         isError = primary.phase in setOf(
@@ -105,6 +111,7 @@ internal fun playbackSyncDisplay(state: PlaybackReportingState): PlaybackSyncDis
 
 private fun statusSummary(status: PlaybackReportingStatus): String {
     val endpoint = when (status.endpoint) {
+        PlaybackReportEndpoint.WEBLOG_STARTPLAY -> "最近播放"
         PlaybackReportEndpoint.SCROBBLE_V1 -> "NCBL 上报"
         PlaybackReportEndpoint.RELAY -> "relay"
         null -> "上报"

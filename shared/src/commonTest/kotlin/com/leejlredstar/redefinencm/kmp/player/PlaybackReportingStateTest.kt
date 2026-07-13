@@ -51,7 +51,7 @@ class PlaybackReportingStateTest {
     }
 
     @Test
-    fun credentialFilterCannotMixRelayAndScrobbleAcrossAccounts() {
+    fun credentialFilterCannotMixReportingKindsAcrossAccounts() {
         val state = PlaybackReportingState(
             relay = status(
                 kind = PlaybackReportingKind.RELAY,
@@ -64,14 +64,22 @@ class PlaybackReportingStateTest {
                 generation = 2L,
                 phase = PlaybackReportingPhase.ACCOUNT_VERIFIED,
             ),
+            recentPlay = status(
+                kind = PlaybackReportingKind.RECENT_PLAY,
+                credentialKey = 1L,
+                generation = 3L,
+                phase = PlaybackReportingPhase.ACCEPTED,
+            ),
         )
 
         val accountOne = state.forCredential(1L)
         val accountTwo = state.forCredential(2L)
 
         assertEquals(1L, accountOne.relay?.credentialKey)
+        assertEquals(1L, accountOne.recentPlay?.credentialKey)
         assertNull(accountOne.scrobble)
         assertNull(accountTwo.relay)
+        assertNull(accountTwo.recentPlay)
         assertEquals(2L, accountTwo.scrobble?.credentialKey)
         assertEquals(PlaybackReportingState(), state.forCredential(null))
     }

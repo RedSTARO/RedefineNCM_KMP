@@ -7,6 +7,7 @@ import com.leejlredstar.redefinencm.kmp.data.api.dto.UserLevelResponse
 
 enum class PlaybackReportingKind {
     RELAY,
+    RECENT_PLAY,
     SCROBBLE,
 }
 
@@ -39,6 +40,7 @@ data class PlaybackReportingStatus(
 
 data class PlaybackReportingState(
     val relay: PlaybackReportingStatus? = null,
+    val recentPlay: PlaybackReportingStatus? = null,
     val scrobble: PlaybackReportingStatus? = null,
 )
 
@@ -47,6 +49,7 @@ internal fun PlaybackReportingState.withStatus(
 ): PlaybackReportingState {
     val previous = when (status.kind) {
         PlaybackReportingKind.RELAY -> relay
+        PlaybackReportingKind.RECENT_PLAY -> recentPlay
         PlaybackReportingKind.SCROBBLE -> scrobble
     }
     if (previous != null && previous.reportingGeneration > status.reportingGeneration) {
@@ -54,6 +57,7 @@ internal fun PlaybackReportingState.withStatus(
     }
     return when (status.kind) {
         PlaybackReportingKind.RELAY -> copy(relay = status)
+        PlaybackReportingKind.RECENT_PLAY -> copy(recentPlay = status)
         PlaybackReportingKind.SCROBBLE -> copy(scrobble = status)
     }
 }
@@ -65,6 +69,7 @@ internal fun PlaybackReportingState.forCredential(
 } else {
     PlaybackReportingState(
         relay = relay?.takeIf { it.credentialKey == credentialKey },
+        recentPlay = recentPlay?.takeIf { it.credentialKey == credentialKey },
         scrobble = scrobble?.takeIf { it.credentialKey == credentialKey },
     )
 }

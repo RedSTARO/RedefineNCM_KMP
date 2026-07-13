@@ -307,10 +307,17 @@ For each actually playing selection, the coordinator generates one 12-character 
 alphanumeric relay session ID and calls `/relay/play/state/submit` at start, on changed
 pause/mode/final state, and every 30 seconds while playing. `playMode` is `random` under shuffle
 and otherwise `list_loop`; `type` is `song`. Relay has a bounded latest-state queue, while each
-one-shot scrobble dispatches independently, so a 60-second relay timeout cannot block the
-half-play report or create an unbounded telemetry queue. Structured relay results remain visible;
+one-shot account action dispatches independently, so a 60-second relay timeout cannot block
+recent-play or half-play reporting or create an unbounded telemetry queue. Structured relay results remain visible;
 an unmistakable HTML route 404 is cached as unsupported, while JSON 404 and other server bodies
 remain server rejections rather than permanently disabling the route.
+
+As soon as a selection is stably and actually `PLAYING`, the coordinator sends one `startplay`
+action through `POST /weblog` so it enters the account's recent plays. Pause/resume, seek and
+shuffle changes do not repeat it; a new `playbackOccurrence` does. Playlist `sourceId` is used when
+it is a positive integer, otherwise the song ID is the source fallback. Only this action-bound
+Cookie snapshot derives `os=osx`; settings are never rewritten. This is a dedicated start event,
+not a fallback from `/scrobble/v1`, and a failed or ambiguous request is not retried.
 
 `/scrobble/v1` is attempted at most once per playback session after verified position progress
 reaches half of the known whole-second duration; unknown duration uses 30 seconds. Position
@@ -318,8 +325,9 @@ progress is bounded by monotonic elapsed time so seeks, buffering, stalled playb
 sleep do not manufacture listening time. A failed or ambiguous scrobble is not retried because
 the backend can partially accept PLV before PLD fails and exposes no idempotency key. Scrobble uses
 only `/scrobble/v1`; an HTML route 404 is reported as unsupported and does not trigger another
-reporting endpoint. Playlist items carry and persist `sourceId`; `source` remains the backend
-default `list`.
+reporting endpoint. The upstream route also emits PLV before PLD, so it may advance the same song's
+recent-play timestamp again at half-play; current backend behavior still needs a real-account
+verification. Playlist items carry and persist `sourceId`; `source` remains the backend default `list`.
 
 Reporting actions bind the cleaned Cookie snapshot from session creation, then re-check the current
 account before dispatch and after every readback. Status is credential-scoped and carries a monotonic
@@ -676,12 +684,15 @@ feature gap; platform integrations use target-specific actuals:
       **Verification boundary:** these checks do not exercise live microphone capture on real
       Android, iOS, Desktop, or Web devices. iOS remains source-only here because Windows has no
       Xcode.
-- [x] **Playback record reporting + account readback — IMPLEMENTED, ROUTE-VERIFIED** (2026-07-13).
+- [x] **Playback record reporting + account readback — IMPLEMENTED; START ROUTE NOT LIVE-VERIFIED** (2026-07-13).
       The configured backend was upgraded to `4.36.2`; route probes confirm `/scrobble/v1` and
-      `/relay/play/state/submit` are registered. Scrobble now uses `/scrobble/v1` exclusively.
+      `/relay/play/state/submit` are registered. Upstream source implements `/weblog`; stable
+      playback now sends its dedicated `startplay` action immediately, while half-play accounting
+      uses `/scrobble/v1` exclusively. The same startplay request shape previously succeeded as the
+      first stage of a controlled two-stage old-backend check, but was not isolated there.
       Structured result state, bounded account readback, credential/generation isolation, SQLDelight
       level-cache refresh, and current-account UI refresh are covered by common/JVM tests. A direct
-      real-account accounting check against the upgraded `/scrobble/v1` route is still pending.
+      real-account check of the combined startplay + NCBL behavior on the upgraded backend is still pending.
 - [ ] **Precise inbound playback roaming remains externally gated** (2026-07-13). The deployed relay
       route supports submit, but no pull/get contract is available, and record/recent endpoints omit
       progress, session ID, play mode, revision, and remote queue state. Exact two-way progress/queue
