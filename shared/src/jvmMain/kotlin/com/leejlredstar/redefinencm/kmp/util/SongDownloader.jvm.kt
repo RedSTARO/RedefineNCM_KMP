@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.util
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -13,9 +14,12 @@ import kotlin.coroutines.coroutineContext
  * JVM/Desktop actual：由 common 下载队列调度，这里只负责流式写入文件。
  */
 actual object SongDownloader {
+    actual fun discardPartial(songId: Long) = Unit
+
     actual suspend fun download(
         item: DownloadRequestItem,
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
+        onReadyToPublish: () -> Boolean,
     ): DownloadedSongFile = withContext(Dispatchers.IO) {
         require(item.url.isNotBlank()) { "下载地址为空" }
 
@@ -25,6 +29,7 @@ actual object SongDownloader {
         val extension = extensionFromUrl(item.url)
         val target = File(dir, "${item.id}.$extension")
         if (target.exists()) {
+            if (!onReadyToPublish()) throw CancellationException("下载发布已取消")
             return@withContext DownloadedSongFile(fileName = target.name, uri = target.toURI().toString())
         }
 
@@ -40,6 +45,7 @@ actual object SongDownloader {
                     copyWithProgress(input, output, totalBytes, onProgress)
                 }
             }
+            if (!onReadyToPublish()) throw CancellationException("下载发布已取消")
             if (!partFile.renameTo(target)) error("无法保存下载文件")
             DownloadedSongFile(fileName = target.name, uri = target.toURI().toString())
         } catch (t: Throwable) {

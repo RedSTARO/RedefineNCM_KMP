@@ -3,6 +3,8 @@ package com.leejlredstar.redefinencm.kmp.download
 import com.leejlredstar.redefinencm.kmp.util.IosBackgroundDownloadCoordinator
 
 actual object DownloadServiceController {
+    actual fun supportsPersistentDownloadQueue(): Boolean = false
+
     actual fun ensureRunning() {
         IosBackgroundDownloadCoordinator.ensureStarted()
     }

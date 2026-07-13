@@ -111,6 +111,41 @@ class DatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun versionThreeDatabaseAddsDownloadQueueWithoutLosingExistingData() {
+        val directory = Files.createTempDirectory("redefinencm-db-download-queue-migration-")
+        val databaseFile = directory.resolve("legacy.db").toFile()
+        val jdbcUrl = "jdbc:sqlite:${databaseFile.absolutePath}"
+
+        DriverManager.getConnection(jdbcUrl).use { connection ->
+            connection.createStatement().use { statement ->
+                statement.execute("CREATE TABLE CachedUserDetail (uid INTEGER NOT NULL PRIMARY KEY, json TEXT NOT NULL)")
+                statement.execute("CREATE TABLE PlayerStatus (id INTEGER NOT NULL PRIMARY KEY, json TEXT NOT NULL)")
+                statement.execute("INSERT INTO CachedUserDetail(uid, json) VALUES (42, '{\"name\":\"kept\"}')")
+                statement.execute("INSERT INTO PlayerStatus(id, json) VALUES (1, '{\"positionMs\":1234}')")
+                statement.execute("PRAGMA user_version = 3")
+            }
+        }
+
+        val driver = openJvmDatabase(databaseFile)
+        try {
+            val database = AppDatabase(driver)
+            assertEquals("{\"name\":\"kept\"}", database.cachedUserDetailQueries.selectByUid(42).executeAsOne())
+            assertEquals("{\"positionMs\":1234}", database.playerStatusQueries.select().executeAsOne())
+
+            database.downloadQueueQueries.upsert("[{\"id\":7,\"status\":\"Queued\"}]")
+            assertEquals(
+                "[{\"id\":7,\"status\":\"Queued\"}]",
+                database.downloadQueueQueries.select().executeAsOne(),
+            )
+            assertEquals(AppDatabase.Schema.version, readUserVersion(jdbcUrl))
+        } finally {
+            driver.close()
+            databaseFile.toPath().deleteIfExists()
+            directory.deleteIfExists()
+        }
+    }
+
     private fun readUserVersion(jdbcUrl: String): Long =
         DriverManager.getConnection(jdbcUrl).use { connection ->
             connection.createStatement().use { statement ->

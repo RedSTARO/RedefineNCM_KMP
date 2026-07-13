@@ -6,6 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class SongDownloadManagerTest {
@@ -55,6 +56,56 @@ class SongDownloadManagerTest {
         assertTrue(activeDownloadJobForTask(execution, 1000L) === firstJob)
         assertNull(activeDownloadJobForTask(execution, 1001L))
         assertNull(activeDownloadJobForTask(execution = null, taskId = 1000L))
+    }
+
+    @Test
+    fun destructiveOperationBlocksRetryAndWorkerSelection() {
+        val queued = SongDownloadTask(
+            id = 1001L,
+            title = "Song",
+            artist = "Artist",
+            artworkUri = "",
+            status = DownloadTaskStatus.Queued,
+        )
+
+        assertFalse(canReactivateDownloadTask(queued.id, setOf(queued.id)))
+        assertNull(nextQueuedDownloadTask(listOf(queued), setOf(queued.id)))
+        assertEquals(queued, nextQueuedDownloadTask(listOf(queued), emptySet()))
+    }
+
+    @Test
+    fun cancelledTerminalTaskStillExposesActiveJobForCleanup() {
+        val job = Job()
+        val task = SongDownloadTask(
+            id = 1002L,
+            title = "Song",
+            artist = "Artist",
+            artworkUri = "",
+            status = DownloadTaskStatus.Cancelled,
+        )
+        val execution = ActiveDownloadExecution(taskId = task.id, job = job)
+
+        assertTrue(task.isTerminal)
+        assertSame(job, activeDownloadJobForTasks(execution, setOf(task.id)))
+    }
+
+    @Test
+    fun publishClaimCannotBeInvalidatedByPauseOrCancel() {
+        val publishing = SongDownloadTask(
+            id = 1003L,
+            title = "Song",
+            artist = "Artist",
+            artworkUri = "",
+            status = DownloadTaskStatus.SavingLyrics,
+        )
+
+        assertFalse(canPauseDownloadTask(publishing))
+        assertFalse(canCancelDownloadTask(publishing))
+        assertTrue(
+            canCancelDownloadTask(
+                publishing.copy(status = DownloadTaskStatus.Downloading),
+            )
+        )
     }
 
     @Test

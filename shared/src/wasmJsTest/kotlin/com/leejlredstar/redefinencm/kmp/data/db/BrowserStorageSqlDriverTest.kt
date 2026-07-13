@@ -23,6 +23,7 @@ class BrowserStorageSqlDriverTest {
             cachedUserLevelQueries.upsert(42L, "{\"level\":7}")
             cachedRecommendSongsQueries.upsert("{\"songs\":[]}")
             playerStatusQueries.upsert("{\"index\":0}")
+            downloadQueueQueries.upsert("{\"tasks\":[]}")
         }
         firstDriver.close()
 
@@ -44,6 +45,10 @@ class BrowserStorageSqlDriverTest {
             assertEquals(
                 "{\"index\":0}",
                 database.playerStatusQueries.select().executeAsOne(),
+            )
+            assertEquals(
+                "{\"tasks\":[]}",
+                database.downloadQueueQueries.select().executeAsOne(),
             )
         } finally {
             secondDriver.close()

@@ -13,18 +13,21 @@ import com.leejlredstar.redefinencm.kmp.util.SongDownloader
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
 import com.leejlredstar.redefinencm.kmp.util.deleteDownloadedSongFile
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -164,12 +167,44 @@ class SongDownloadManager(
     private val activeExecution = MutableStateFlow<ActiveDownloadExecution?>(null)
     private val workerStartMutex = Mutex()
     private val syncMutex = Mutex()
+    private val persistenceMutex = Mutex()
     private var localLibrarySyncJob: Job? = null
     private val executionSequence = MutableStateFlow(0L)
+    private val restoreCompleted = CompletableDeferred<Unit>()
+    private val persistenceRequests = Channel<Unit>(Channel.CONFLATED)
+    private val _persistenceError = MutableStateFlow<String?>(null)
+    private val destructiveTaskIds = MutableStateFlow<Set<Long>>(emptySet())
+    private val persistentDownloadQueueSupported =
+        DownloadServiceController.supportsPersistentDownloadQueue()
+
+    val persistenceError: StateFlow<String?> = _persistenceError.asStateFlow()
+    internal val destructiveTaskIdsInProgress: StateFlow<Set<Long>> =
+        destructiveTaskIds.asStateFlow()
+
+    init {
+        if (persistentDownloadQueueSupported) {
+            scope.launch { restorePersistedQueue() }
+            scope.launch {
+                restoreCompleted.await()
+                _tasks.drop(1).collect {
+                    persistenceRequests.trySend(Unit)
+                }
+            }
+            scope.launch {
+                restoreCompleted.await()
+                for (ignored in persistenceRequests) {
+                    delay(PERSISTENCE_INTERVAL_MS)
+                    persistCurrentQueue()
+                }
+            }
+        } else {
+            restoreCompleted.complete(Unit)
+        }
+    }
 
     fun enqueuePlaylist(playlistId: Long) {
-        DownloadServiceController.ensureRunning()
         scope.launch {
+            restoreCompleted.await()
             val songs = repo.getPlaylistTrackAllOnce(playlistId)?.songs.orEmpty()
             enqueueResolvedSongs(songs, playlistId)
         }
@@ -177,19 +212,25 @@ class SongDownloadManager(
 
     fun enqueueSongs(songs: List<SongDetailSongs>, playlistId: Long? = null) {
         if (songs.isEmpty()) return
-        DownloadServiceController.ensureRunning()
-        scope.launch { enqueueResolvedSongs(songs, playlistId) }
+        scope.launch {
+            restoreCompleted.await()
+            enqueueResolvedSongs(songs, playlistId)
+        }
     }
 
     private suspend fun enqueueResolvedSongs(songs: List<SongDetailSongs>, playlistId: Long? = null) {
-        syncMutex.withLock {
+        val enqueued = syncMutex.withLock {
+            val acceptedSongs = songs.filter { song ->
+                canReactivateDownloadTask(song.id, destructiveTaskIds.value)
+            }
+            if (acceptedSongs.isEmpty()) return@withLock false
             val localFiles = when (val scan = DownloadedSongsCache.refreshSnapshots()) {
                 is DownloadScanResult.Success -> scan.snapshots.associateBy { it.id }
                 is DownloadScanResult.Failure -> DownloadedSongsCache.snapshot()
             }
-            val newTasks = songs.map { it.toDownloadTask(playlistId, localFiles) }
+            val newTasks = acceptedSongs.map { it.toDownloadTask(playlistId, localFiles) }
             _tasks.update { current ->
-                val songDetails = songs.associateBy { it.id }
+                val songDetails = acceptedSongs.associateBy { it.id }
                 mergeDownloadTasksForEnqueue(
                     current = current,
                     incoming = newTasks,
@@ -197,27 +238,28 @@ class SongDownloadManager(
                     songDetails = songDetails,
                 )
             }
+            true
         }
-        DownloadServiceController.ensureRunning()
+        if (!enqueued) return
+        if (!persistCurrentQueue()) {
+            failQueuedTasks("无法保存下载队列，下载未启动")
+            return
+        }
         ensureWorker()
     }
 
     fun pause(taskId: Long) {
-        val invalidatedGeneration = nextExecutionGeneration()
-        updateTask(taskId) { task ->
-            if (task.isActive) {
-                task.copy(
-                    status = DownloadTaskStatus.Paused,
-                    executionGeneration = invalidatedGeneration,
-                )
-            } else {
-                task
-            }
+        val affectedIds = invalidateTasksForControl(DownloadTaskStatus.Paused) { task ->
+            task.id == taskId && canPauseDownloadTask(task)
         }
-        cancelActiveTask(taskId)
+        if (taskId in affectedIds) {
+            cancelActiveTask(taskId)
+            persistStructuralChange()
+        }
     }
 
     fun resume(taskId: Long) {
+        if (!canReactivateDownloadTask(taskId, destructiveTaskIds.value)) return
         updateTask(taskId) { task ->
             if (task.status == DownloadTaskStatus.Paused) {
                 task.copy(status = DownloadTaskStatus.Queued, errorMessage = null)
@@ -225,11 +267,11 @@ class SongDownloadManager(
                 task
             }
         }
-        DownloadServiceController.ensureRunning()
         ensureWorker()
     }
 
     fun retry(taskId: Long) {
+        if (!canReactivateDownloadTask(taskId, destructiveTaskIds.value)) return
         updateTask(taskId) { task ->
             if (
                 task.status == DownloadTaskStatus.Failed ||
@@ -250,144 +292,189 @@ class SongDownloadManager(
                 task
             }
         }
-        DownloadServiceController.ensureRunning()
         ensureWorker()
     }
 
     fun cancel(taskId: Long) {
-        val invalidatedGeneration = nextExecutionGeneration()
-        updateTask(taskId) { task ->
-            if (task.isTerminal) {
-                task
-            } else {
-                task.copy(
-                    status = DownloadTaskStatus.Cancelled,
-                    executionGeneration = invalidatedGeneration,
-                )
-            }
+        val affectedIds = invalidateTasksForControl(DownloadTaskStatus.Cancelled) { task ->
+            task.id == taskId && canCancelDownloadTask(task)
         }
-        cancelActiveTask(taskId)
+        if (taskId in affectedIds) {
+            cancelActiveTask(taskId)
+            persistStructuralChange()
+        }
     }
 
     fun remove(taskId: Long) {
-        cancelActiveTask(taskId)
-        _tasks.update { tasks -> tasks.filterNot { it.id == taskId } }
+        if (_tasks.value.none { it.id == taskId && it.isTerminal }) return
+        val acquiredIds = beginDestructiveOperation(setOf(taskId))
+        if (acquiredIds.isEmpty()) return
+        val cancelledExecution = cancelActiveTask(taskId)
+        scope.launch {
+            try {
+                restoreCompleted.await()
+                cancelledExecution?.join()
+                syncMutex.withLock {
+                    if (!discardPartialOrRecordFailure(taskId)) return@withLock
+                    _tasks.update { tasks -> tasks.filterNot { it.id == taskId } }
+                }
+                persistCurrentQueue()
+            } finally {
+                finishDestructiveOperation(acquiredIds)
+            }
+        }
     }
 
     fun deleteDownloadedSong(taskId: Long) {
-        val invalidatedGeneration = nextExecutionGeneration()
-        updateTask(taskId) { task ->
-            if (task.isActive) {
-                task.copy(
-                    status = DownloadTaskStatus.Cancelled,
-                    executionGeneration = invalidatedGeneration,
-                )
-            } else {
-                task
+        if (_tasks.value.none {
+                it.id == taskId && it.status == DownloadTaskStatus.Completed
             }
-        }
+        ) return
+        val acquiredIds = beginDestructiveOperation(setOf(taskId))
+        if (acquiredIds.isEmpty()) return
         val cancelledExecution = cancelActiveTask(taskId)
         scope.launch {
-            syncMutex.withLock {
-                cancelledExecution?.join()
-                val deleted = deleteDownloadedSongFile(taskId)
-                if (deleted) DownloadedSongsCache.remove(taskId)
-                // Always rescan. A platform delete may remove one duplicate while another provider
-                // row/file remains; trusting a Boolean OR would falsely report the song as gone.
-                val localFiles = when (val scanResult = DownloadedSongsCache.refreshSnapshots()) {
-                    is DownloadScanResult.Failure -> {
-                        updateTask(taskId) { task ->
-                            task.copy(errorMessage = scanResult.message.ifBlank { "无法确认本地文件状态" })
+            try {
+                syncMutex.withLock {
+                    cancelledExecution?.join()
+                    if (!discardPartialOrRecordFailure(taskId)) return@withLock
+                    val deleted = deleteDownloadedSongFile(taskId)
+                    if (deleted) DownloadedSongsCache.remove(taskId)
+                    // Always rescan. A platform delete may remove one duplicate while another provider
+                    // row/file remains; trusting a Boolean OR would falsely report the song as gone.
+                    val localFiles = when (val scanResult = DownloadedSongsCache.refreshSnapshots()) {
+                        is DownloadScanResult.Failure -> {
+                            updateTask(taskId) { task ->
+                                task.copy(errorMessage = scanResult.message.ifBlank { "无法确认本地文件状态" })
+                            }
+                            return@withLock
                         }
-                        return@withLock
+                        is DownloadScanResult.Success -> scanResult.snapshots.associateBy { it.id }
                     }
-                    is DownloadScanResult.Success -> scanResult.snapshots.associateBy { it.id }
-                }
-                _tasks.update { tasks ->
-                    tasks.map { task ->
-                        when {
-                            task.id != taskId -> syncDownloadTaskWithLocalLibrary(
-                                task = task,
-                                snapshot = localFiles[task.id],
-                                songDetail = null,
-                            )
-                            task.id !in localFiles -> markDownloadTaskDeleted(
-                                task = task,
-                                message = if (deleted) "已删除本地歌曲" else "本地文件已删除",
-                            )
-                            else -> task.copy(
-                                // The file is still present, so keep the truthful state and leave
-                                // the destructive action available for another attempt.
-                                status = DownloadTaskStatus.Completed,
-                                fileName = localFiles[taskId]?.fileName ?: task.fileName,
-                                errorMessage = "删除本地歌曲失败",
-                            )
+                    _tasks.update { tasks ->
+                        tasks.map { task ->
+                            when {
+                                task.id != taskId -> syncDownloadTaskWithLocalLibrary(
+                                    task = task,
+                                    snapshot = localFiles[task.id],
+                                    songDetail = null,
+                                )
+                                task.id !in localFiles -> markDownloadTaskDeleted(
+                                    task = task,
+                                    message = if (deleted) "已删除本地歌曲" else "本地文件已删除",
+                                )
+                                else -> task.copy(
+                                    // The file is still present, so keep the truthful state and leave
+                                    // the destructive action available for another attempt.
+                                    status = DownloadTaskStatus.Completed,
+                                    fileName = localFiles[taskId]?.fileName ?: task.fileName,
+                                    errorMessage = "删除本地歌曲失败",
+                                )
+                            }
                         }
                     }
                 }
+                persistCurrentQueue()
+            } finally {
+                finishDestructiveOperation(acquiredIds)
             }
         }
     }
 
     fun pauseAll() {
-        val invalidatedGeneration = nextExecutionGeneration()
-        _tasks.update { tasks ->
-            tasks.map { task ->
-                if (task.isActive) {
-                    task.copy(
-                        status = DownloadTaskStatus.Paused,
-                        executionGeneration = invalidatedGeneration,
-                    )
-                } else {
-                    task
-                }
-            }
+        val affectedIds = invalidateTasksForControl(DownloadTaskStatus.Paused) { task ->
+            canPauseDownloadTask(task)
         }
-        activeExecution.value?.job?.cancel()
+        if (affectedIds.isNotEmpty()) {
+            cancelActiveExecutionForTasks(affectedIds)
+            persistStructuralChange()
+        }
     }
 
     fun resumeAll() {
+        val blockedIds = destructiveTaskIds.value
         _tasks.update { tasks ->
             tasks.map { task ->
-                if (task.status == DownloadTaskStatus.Paused) {
+                if (
+                    task.status == DownloadTaskStatus.Paused &&
+                    canReactivateDownloadTask(task.id, blockedIds)
+                ) {
                     task.copy(status = DownloadTaskStatus.Queued, errorMessage = null)
                 } else {
                     task
                 }
             }
         }
-        DownloadServiceController.ensureRunning()
         ensureWorker()
     }
 
     fun cancelAll() {
-        val invalidatedGeneration = nextExecutionGeneration()
-        _tasks.update { tasks ->
-            tasks.map { task ->
-                if (task.isTerminal) {
-                    task
-                } else {
-                    task.copy(
-                        status = DownloadTaskStatus.Cancelled,
-                        executionGeneration = invalidatedGeneration,
-                    )
-                }
-            }
+        val affectedIds = invalidateTasksForControl(DownloadTaskStatus.Cancelled) { task ->
+            canCancelDownloadTask(task)
         }
-        activeExecution.value?.job?.cancel()
+        if (affectedIds.isNotEmpty()) {
+            cancelActiveExecutionForTasks(affectedIds)
+            persistStructuralChange()
+        }
     }
 
     fun clearFinished() {
-        _tasks.update { tasks -> tasks.filterNot { it.isTerminal } }
+        val candidateIds = _tasks.value
+            .filter { it.isTerminal }
+            .mapTo(mutableSetOf()) { it.id }
+        val acquiredIds = beginDestructiveOperation(candidateIds)
+        if (acquiredIds.isEmpty()) return
+        val cancelledExecution = cancelActiveExecutionForTasks(acquiredIds)
+        scope.launch {
+            try {
+                restoreCompleted.await()
+                cancelledExecution?.join()
+                syncMutex.withLock {
+                    val removableIds = _tasks.value
+                        .filter { it.id in acquiredIds && it.isTerminal }
+                        .filter { discardPartialOrRecordFailure(it.id) }
+                        .mapTo(mutableSetOf()) { it.id }
+                    _tasks.update { tasks -> tasks.filterNot { it.id in removableIds } }
+                }
+                persistCurrentQueue()
+            } finally {
+                finishDestructiveOperation(acquiredIds)
+            }
+        }
     }
 
     fun clearCompleted() {
-        _tasks.update { tasks -> tasks.filterNot { it.status == DownloadTaskStatus.Completed } }
+        val candidateIds = _tasks.value
+            .filter { it.status == DownloadTaskStatus.Completed }
+            .mapTo(mutableSetOf()) { it.id }
+        val acquiredIds = beginDestructiveOperation(candidateIds)
+        if (acquiredIds.isEmpty()) return
+        val cancelledExecution = cancelActiveExecutionForTasks(acquiredIds)
+        scope.launch {
+            try {
+                restoreCompleted.await()
+                cancelledExecution?.join()
+                syncMutex.withLock {
+                    val removableIds = _tasks.value
+                        .filter {
+                            it.id in acquiredIds &&
+                                it.status == DownloadTaskStatus.Completed
+                        }
+                        .filter { discardPartialOrRecordFailure(it.id) }
+                        .mapTo(mutableSetOf()) { it.id }
+                    _tasks.update { tasks -> tasks.filterNot { it.id in removableIds } }
+                }
+                persistCurrentQueue()
+            } finally {
+                finishDestructiveOperation(acquiredIds)
+            }
+        }
     }
 
     fun syncWithLocalLibrary() {
         if (localLibrarySyncJob?.isActive == true) return
         localLibrarySyncJob = scope.launch {
+            restoreCompleted.await()
             _localLibrarySyncState.value = LocalLibrarySyncState.Syncing
             try {
                 val failureMessage = syncMutex.withLock {
@@ -408,8 +495,63 @@ class SongDownloadManager(
         }
     }
 
-    fun onCleared() {
-        scope.cancel()
+    suspend fun awaitRestored() {
+        restoreCompleted.await()
+    }
+
+    /** Forces the latest Android queue snapshot to durable storage before its service stops. */
+    internal suspend fun flushPersistentDownloadQueue(): Boolean {
+        restoreCompleted.await()
+        return persistCurrentQueue()
+    }
+
+    private suspend fun restorePersistedQueue() {
+        try {
+            val restored = repo.getDownloadQueue().fold(
+                onSuccess = { queue -> queue?.toDownloadTasks().orEmpty() },
+                onFailure = { failure ->
+                    _persistenceError.value = failure.message ?: "无法恢复下载队列"
+                    emptyList()
+                },
+            )
+            _tasks.value = recoverPersistedDownloadTasks(restored)
+        } catch (cancelled: CancellationException) {
+            restoreCompleted.completeExceptionally(cancelled)
+            throw cancelled
+        } catch (failure: Throwable) {
+            _tasks.value = emptyList()
+            _persistenceError.value = failure.message ?: "无法恢复下载队列"
+        } finally {
+            if (!restoreCompleted.isCompleted) restoreCompleted.complete(Unit)
+        }
+
+        if (_tasks.value.any { it.status == DownloadTaskStatus.Queued }) {
+            ensureWorker()
+        }
+    }
+
+    private suspend fun persistCurrentQueue(): Boolean {
+        if (!persistentDownloadQueueSupported) return true
+        return persistenceMutex.withLock {
+            repo.saveDownloadQueue(_tasks.value.toPersistedDownloadQueue()).fold(
+                onSuccess = {
+                    _persistenceError.value = null
+                    true
+                },
+                onFailure = { failure ->
+                    _persistenceError.value = failure.message ?: "无法保存下载队列"
+                    false
+                },
+            )
+        }
+    }
+
+    private fun persistStructuralChange() {
+        if (!persistentDownloadQueueSupported) return
+        scope.launch {
+            restoreCompleted.await()
+            persistCurrentQueue()
+        }
     }
 
     private suspend fun reconcileWithLocalLibrary(): String? {
@@ -438,17 +580,39 @@ class SongDownloadManager(
     }
 
     private fun ensureWorker() {
-        DownloadServiceController.ensureRunning()
         scope.launch {
+            restoreCompleted.await()
             workerStartMutex.withLock {
                 // A cancelled Job remains here until invokeOnCompletion runs after all cleanup.
                 // Do not open a new worker slot merely because isActive already became false.
                 if (!canStartDownloadWorker(workerJob)) return@withLock
+                if (nextQueuedDownloadTask(_tasks.value, destructiveTaskIds.value) == null) {
+                    return@withLock
+                }
+                if (!persistCurrentQueue()) {
+                    failQueuedTasks("无法保存下载队列，下载未启动")
+                    return@withLock
+                }
+                val serviceStartFailure = runCatching {
+                    DownloadServiceController.ensureRunning()
+                }.exceptionOrNull()
+                if (serviceStartFailure != null) {
+                    failQueuedTasks(
+                        serviceStartFailure.message?.let { "无法启动后台下载服务：$it" }
+                            ?: "无法启动后台下载服务",
+                    )
+                    return@withLock
+                }
                 val job = scope.launch(start = CoroutineStart.LAZY) {
                     while (true) {
-                        val next = _tasks.value
-                            .firstOrNull { it.status == DownloadTaskStatus.Queued }
+                        val next = nextQueuedDownloadTask(_tasks.value, destructiveTaskIds.value)
                             ?: break
+                        // A running worker can observe tasks appended while it was downloading.
+                        // Persist the latest ordered queue before it claims each next item.
+                        if (!persistCurrentQueue()) {
+                            failQueuedTasks("无法保存下载队列，后续下载已停止")
+                            break
+                        }
                         val taskJob = scope.launch(start = CoroutineStart.LAZY) {
                             runTask(next.id)
                         }
@@ -467,7 +631,7 @@ class SongDownloadManager(
                     scope.launch {
                         val shouldRestart = workerStartMutex.withLock {
                             if (workerJob === job) workerJob = null
-                            _tasks.value.any { task -> task.status == DownloadTaskStatus.Queued }
+                            nextQueuedDownloadTask(_tasks.value, destructiveTaskIds.value) != null
                         }
                         if (shouldRestart) ensureWorker()
                     }
@@ -477,16 +641,35 @@ class SongDownloadManager(
         }
     }
 
+    private fun failQueuedTasks(message: String) {
+        _tasks.update { tasks ->
+            tasks.map { task ->
+                if (task.status == DownloadTaskStatus.Queued) {
+                    task.copy(status = DownloadTaskStatus.Failed, errorMessage = message)
+                } else {
+                    task
+                }
+            }
+        }
+    }
+
     private fun cancelActiveTask(taskId: Long): Job? =
         activeDownloadJobForTask(activeExecution.value, taskId)?.also { it.cancel() }
+
+    private fun cancelActiveExecutionForTasks(taskIds: Set<Long>): Job? =
+        activeDownloadJobForTasks(activeExecution.value, taskIds)?.also { it.cancel() }
 
     private suspend fun runTask(taskId: Long) {
         val claimed = claimQueuedTask(taskId) ?: return
         val task = claimed.task
         val generation = claimed.generation
         try {
-            val quality = settings.getStringAsync(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name)
+            // An interrupted task must keep the quality that produced its partial file.
+            // Retry explicitly clears requestedQuality, allowing a later user choice to apply.
+            val quality = task.requestedQuality
+                ?: settings.getStringAsync(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name)
             val requestedQuality = normalizeQualityLevel(quality)
+                ?: SoundQuality.STANDARD.name.lowercase()
             if (
                 !transitionTask(taskId, generation, DownloadTaskStatus.Resolving) {
                     it.copy(
@@ -496,7 +679,17 @@ class SongDownloadManager(
                     )
                 }
             ) return
-            val urlData = repo.getSongUrls(listOf(taskId), quality).firstOrNull { it.id == taskId }
+            if (!persistCurrentQueue()) {
+                transitionTask(taskId, generation, DownloadTaskStatus.Resolving) {
+                    it.copy(
+                        status = DownloadTaskStatus.Failed,
+                        errorMessage = "无法保存下载音质，下载未启动",
+                    )
+                }
+                return
+            }
+            val urlData = repo.getSongUrls(listOf(taskId), requestedQuality)
+                .firstOrNull { it.id == taskId }
             currentCoroutineContext().ensureActive()
             val url = urlData?.url.orEmpty()
             if (url.isBlank()) {
@@ -513,6 +706,8 @@ class SongDownloadManager(
             val actualQuality = normalizeQualityLevel(urlData?.level)
             val request = DownloadRequestItem(
                 id = task.id,
+                resumeKey = requestedQuality,
+                representationKey = actualQuality ?: requestedQuality,
                 title = task.title,
                 artist = task.artist,
                 artworkUri = task.artworkUri,
@@ -532,22 +727,31 @@ class SongDownloadManager(
                     )
                 }
             ) return
-            val downloadedFile = SongDownloader.download(request) { downloaded, total ->
-                updateOwnedTask(taskId, generation) { current ->
-                    if (current.status != DownloadTaskStatus.Downloading) current
-                    else current.copy(
-                        progressBytes = downloaded,
-                        totalBytes = total ?: current.totalBytes,
-                    )
-                }
-            }
-            currentCoroutineContext().ensureActive()
+            val downloadedFile = SongDownloader.download(
+                item = request,
+                onProgress = { downloaded, total ->
+                    updateOwnedTask(taskId, generation) { current ->
+                        if (current.status != DownloadTaskStatus.Downloading) current
+                        else current.copy(
+                            progressBytes = downloaded,
+                            totalBytes = total ?: current.totalBytes,
+                        )
+                    }
+                },
+                onReadyToPublish = {
+                    transitionTask(taskId, generation, DownloadTaskStatus.Downloading) {
+                        it.copy(
+                            status = DownloadTaskStatus.SavingLyrics,
+                            actualQuality = actualQuality,
+                            lyricStatus = DownloadLyricStatus.Saving,
+                            errorMessage = null,
+                        )
+                    }
+                },
+            )
             if (
-                !transitionTask(taskId, generation, DownloadTaskStatus.Downloading) {
+                !transitionTask(taskId, generation, DownloadTaskStatus.SavingLyrics) {
                     it.copy(
-                        status = DownloadTaskStatus.SavingLyrics,
-                        actualQuality = actualQuality,
-                        lyricStatus = DownloadLyricStatus.Saving,
                         fileName = downloadedFile.fileName,
                         errorMessage = null,
                     )
@@ -609,6 +813,61 @@ class SongDownloadManager(
         _tasks.update { tasks -> tasks.map { task -> if (task.id == taskId) transform(task) else task } }
     }
 
+    private fun discardPartialOrRecordFailure(taskId: Long): Boolean {
+        val failure = runCatching { SongDownloader.discardPartial(taskId) }.exceptionOrNull()
+            ?: return true
+        updateTask(taskId) { task ->
+            task.copy(
+                errorMessage = failure.message
+                    ?.takeIf(String::isNotBlank)
+                    ?.let { "无法清理断点文件：$it" }
+                    ?: "无法清理断点文件",
+            )
+        }
+        return false
+    }
+
+    private fun beginDestructiveOperation(requestedIds: Set<Long>): Set<Long> {
+        while (true) {
+            val current = destructiveTaskIds.value
+            val acquired = requestedIds - current
+            if (acquired.isEmpty()) return emptySet()
+            if (destructiveTaskIds.compareAndSet(current, current + acquired)) return acquired
+        }
+    }
+
+    private fun finishDestructiveOperation(acquiredIds: Set<Long>) {
+        destructiveTaskIds.update { current -> current - acquiredIds }
+        if (nextQueuedDownloadTask(_tasks.value, destructiveTaskIds.value) != null) {
+            ensureWorker()
+        }
+    }
+
+    private fun invalidateTasksForControl(
+        targetStatus: DownloadTaskStatus,
+        canInvalidate: (SongDownloadTask) -> Boolean,
+    ): Set<Long> {
+        val generation = nextExecutionGeneration()
+        while (true) {
+            val current = _tasks.value
+            val affectedIds = current
+                .filter(canInvalidate)
+                .mapTo(mutableSetOf()) { it.id }
+            if (affectedIds.isEmpty()) return emptySet()
+            val updated = current.map { task ->
+                if (task.id in affectedIds) {
+                    task.copy(
+                        status = targetStatus,
+                        executionGeneration = generation,
+                    )
+                } else {
+                    task
+                }
+            }
+            if (_tasks.compareAndSet(current, updated)) return affectedIds
+        }
+    }
+
     private data class ClaimedDownloadTask(
         val task: SongDownloadTask,
         val generation: Long,
@@ -622,6 +881,7 @@ class SongDownloadManager(
             val index = current.indexOfFirst { it.id == taskId }
             if (index < 0) return null
             val task = current[index]
+            if (!canReactivateDownloadTask(taskId, destructiveTaskIds.value)) return null
             if (task.status != DownloadTaskStatus.Queued) return null
             val updated = current.toMutableList().apply {
                 this[index] = task.copy(
@@ -698,6 +958,43 @@ class SongDownloadManager(
 
 internal fun canStartDownloadWorker(existingWorker: Job?): Boolean = existingWorker == null
 
+internal fun canPauseDownloadTask(task: SongDownloadTask): Boolean =
+    task.status == DownloadTaskStatus.Queued ||
+        task.status == DownloadTaskStatus.Resolving ||
+        task.status == DownloadTaskStatus.Downloading
+
+internal fun canCancelDownloadTask(task: SongDownloadTask): Boolean =
+    canPauseDownloadTask(task) || task.status == DownloadTaskStatus.Paused
+
+internal fun canReactivateDownloadTask(
+    taskId: Long,
+    destructiveTaskIds: Set<Long>,
+): Boolean = taskId !in destructiveTaskIds
+
+internal fun nextQueuedDownloadTask(
+    tasks: List<SongDownloadTask>,
+    destructiveTaskIds: Set<Long>,
+): SongDownloadTask? = tasks.firstOrNull { task ->
+    task.status == DownloadTaskStatus.Queued &&
+        canReactivateDownloadTask(task.id, destructiveTaskIds)
+}
+
+internal fun recoverPersistedDownloadTasks(
+    tasks: List<SongDownloadTask>,
+): List<SongDownloadTask> =
+    tasks.map { task ->
+        if (task.isActive) {
+            task.copy(
+                status = DownloadTaskStatus.Queued,
+                lyricStatus = DownloadLyricStatus.NotStarted,
+                errorMessage = null,
+                executionGeneration = 0L,
+            )
+        } else {
+            task.copy(executionGeneration = 0L)
+        }
+    }
+
 internal data class ActiveDownloadExecution(
     val taskId: Long,
     val job: Job,
@@ -707,6 +1004,11 @@ internal fun activeDownloadJobForTask(
     execution: ActiveDownloadExecution?,
     taskId: Long,
 ): Job? = execution?.takeIf { it.taskId == taskId }?.job
+
+internal fun activeDownloadJobForTasks(
+    execution: ActiveDownloadExecution?,
+    taskIds: Set<Long>,
+): Job? = execution?.takeIf { it.taskId in taskIds }?.job
 
 internal fun canOwnedDownloadTaskTransition(
     task: SongDownloadTask,
@@ -870,3 +1172,5 @@ private fun SongDetailSongs.downloadDisplayTitle(): String =
 
 private fun SongDetailSongs.downloadDisplayArtist(): String =
     ar.joinToString(" / ") { it.name }.ifBlank { "未知艺术家" }
+
+private const val PERSISTENCE_INTERVAL_MS = 500L

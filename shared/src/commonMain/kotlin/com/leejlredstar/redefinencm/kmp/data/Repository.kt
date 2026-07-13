@@ -7,6 +7,7 @@ import com.leejlredstar.redefinencm.kmp.data.api.NcmResponseBodyKind
 import com.leejlredstar.redefinencm.kmp.data.api.dto.*
 import com.leejlredstar.redefinencm.kmp.data.api.safeApiCall
 import com.leejlredstar.redefinencm.kmp.data.db.AppDatabase
+import com.leejlredstar.redefinencm.kmp.download.PersistedDownloadQueue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -591,6 +592,17 @@ class Repository(
 
     suspend fun savePlayerStatus(status: PlayerStatus): Result<Unit> = runCatching {
         db.playerStatusQueries.upsert(json.encodeToString(status))
+    }
+
+    // ── Download queue（Android 跨进程恢复；音频半成品由平台下载器保管）──
+
+    internal suspend fun getDownloadQueue(): Result<PersistedDownloadQueue?> = runCatching {
+        db.downloadQueueQueries.select().executeAsOneOrNull()
+            ?.let { json.decodeFromString<PersistedDownloadQueue>(it) }
+    }
+
+    internal suspend fun saveDownloadQueue(queue: PersistedDownloadQueue): Result<Unit> = runCatching {
+        db.downloadQueueQueries.upsert(json.encodeToString(queue))
     }
 }
 

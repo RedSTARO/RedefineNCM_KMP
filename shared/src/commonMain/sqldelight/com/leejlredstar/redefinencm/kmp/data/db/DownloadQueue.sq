@@ -1,0 +1,13 @@
+CREATE TABLE IF NOT EXISTS DownloadQueue (
+  singleton INTEGER NOT NULL PRIMARY KEY DEFAULT 0,
+  json TEXT NOT NULL
+);
+
+upsert:
+INSERT OR REPLACE INTO DownloadQueue(singleton, json) VALUES (0, :json);
+
+select:
+SELECT json FROM DownloadQueue WHERE singleton = 0;
+
+clear:
+DELETE FROM DownloadQueue;

@@ -109,6 +109,7 @@ fun DownloadManagementScreen(
     val tasks by downloadManager.tasks.collectAsState()
     val summary by downloadManager.summary.collectAsState()
     val localLibrarySyncState by downloadManager.localLibrarySyncState.collectAsState()
+    val persistenceError by downloadManager.persistenceError.collectAsState()
     var filter by remember { mutableStateOf(DownloadFilter.All) }
     var pendingDestructiveAction by remember { mutableStateOf<DownloadDestructiveAction?>(null) }
     val representativeTask = remember(tasks) {
@@ -189,6 +190,18 @@ fun DownloadManagementScreen(
                         accentPalette = palette,
                         actionLabel = "重试",
                         onAction = downloadManager::syncWithLocalLibrary,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
+            }
+            persistenceError?.let { message ->
+                item(key = "download-persistence-error") {
+                    ExpressiveStatePanel(
+                        title = "下载队列保存失败",
+                        message = message,
+                        icon = AppIcons.Download,
+                        tone = ExpressiveStateTone.Error,
+                        accentPalette = palette,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
@@ -664,11 +677,11 @@ private fun DownloadActions(
         when (status) {
             DownloadTaskStatus.Queued,
             DownloadTaskStatus.Resolving,
-            DownloadTaskStatus.Downloading,
-            DownloadTaskStatus.SavingLyrics -> {
+            DownloadTaskStatus.Downloading -> {
                 SmallDownloadAction(AppIcons.Pause, "暂停", accentPalette, onPause)
                 SmallDownloadAction(AppIcons.Clear, "取消", accentPalette, onCancel)
             }
+            DownloadTaskStatus.SavingLyrics -> Unit
             DownloadTaskStatus.Paused -> {
                 SmallDownloadAction(AppIcons.PlayArrow, "继续", accentPalette, onResume)
                 SmallDownloadAction(AppIcons.Clear, "取消", accentPalette, onCancel)
