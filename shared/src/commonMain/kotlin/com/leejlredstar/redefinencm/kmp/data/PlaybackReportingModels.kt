@@ -6,13 +6,7 @@ import com.leejlredstar.redefinencm.kmp.data.api.dto.UserRecordResponse
 
 enum class PlaybackReportEndpoint {
     SCROBBLE_V1,
-    WEBLOG,
     RELAY,
-}
-
-enum class PlaybackReportRejectionReason {
-    SERVER_REJECTED,
-    INVALID_INPUT,
 }
 
 enum class PlaybackReportFailureReason {
@@ -25,8 +19,6 @@ data class PlaybackReportDetails(
     val data: String? = null,
     val message: String? = null,
     val serverDetails: String? = null,
-    val startplayCode: Int? = null,
-    val playCode: Int? = null,
 )
 
 sealed interface PlaybackReportResult {
@@ -44,7 +36,6 @@ sealed interface PlaybackReportResult {
         override val endpoint: PlaybackReportEndpoint,
         override val httpStatus: Int? = null,
         val serverCode: Int? = null,
-        val reason: PlaybackReportRejectionReason = PlaybackReportRejectionReason.SERVER_REJECTED,
         val details: PlaybackReportDetails = PlaybackReportDetails(),
     ) : PlaybackReportResult
 

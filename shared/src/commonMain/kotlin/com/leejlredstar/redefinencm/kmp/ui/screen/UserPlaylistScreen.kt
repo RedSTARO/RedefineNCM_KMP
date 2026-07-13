@@ -106,7 +106,6 @@ internal fun playbackSyncDisplay(state: PlaybackReportingState): PlaybackSyncDis
 private fun statusSummary(status: PlaybackReportingStatus): String {
     val endpoint = when (status.endpoint) {
         PlaybackReportEndpoint.SCROBBLE_V1 -> "NCBL 上报"
-        PlaybackReportEndpoint.WEBLOG -> "兼容上报"
         PlaybackReportEndpoint.RELAY -> "relay"
         null -> "上报"
     }

@@ -325,15 +325,6 @@ data class PlayStateSubmitResponse(
     val message: String? = null,
 )
 
-@Serializable
-data class WeblogResponse(
-    val code: Int = 0,
-    val data: JsonElement? = null,
-    val details: JsonElement? = null,
-    val msg: String? = null,
-    val message: String? = null,
-)
-
 // ── Search ──
 
 @Serializable

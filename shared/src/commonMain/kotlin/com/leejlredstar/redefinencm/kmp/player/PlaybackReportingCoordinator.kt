@@ -3,7 +3,6 @@ package com.leejlredstar.redefinencm.kmp.player
 import com.leejlredstar.redefinencm.kmp.data.PlaybackAccountComparison
 import com.leejlredstar.redefinencm.kmp.data.PlaybackAccountSnapshot
 import com.leejlredstar.redefinencm.kmp.data.PlaybackReportEndpoint
-import com.leejlredstar.redefinencm.kmp.data.PlaybackReportRejectionReason
 import com.leejlredstar.redefinencm.kmp.data.PlaybackReportResult
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.comparePlaybackAccountSnapshots
@@ -368,12 +367,7 @@ private fun PlaybackReportResult.toStatus(
         httpStatus = httpStatus,
         serverCode = serverCode,
         details = details,
-        message = when (reason) {
-            PlaybackReportRejectionReason.INVALID_INPUT ->
-                "当前旧版服务器仅能同步带有效歌单来源的播放记录"
-            PlaybackReportRejectionReason.SERVER_REJECTED ->
-                details.message ?: "服务器拒绝了播放上报"
-        },
+        message = details.message ?: "服务器拒绝了播放上报",
     )
     is PlaybackReportResult.Unsupported -> PlaybackReportingStatus(
         kind = action.kind,
