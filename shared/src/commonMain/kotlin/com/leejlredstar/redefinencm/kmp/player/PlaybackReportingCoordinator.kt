@@ -1,11 +1,18 @@
 package com.leejlredstar.redefinencm.kmp.player
 
+import com.leejlredstar.redefinencm.kmp.data.PlaybackAccountComparison
+import com.leejlredstar.redefinencm.kmp.data.PlaybackAccountSnapshot
+import com.leejlredstar.redefinencm.kmp.data.PlaybackReportEndpoint
+import com.leejlredstar.redefinencm.kmp.data.PlaybackReportRejectionReason
+import com.leejlredstar.redefinencm.kmp.data.PlaybackReportResult
 import com.leejlredstar.redefinencm.kmp.data.Repository
+import com.leejlredstar.redefinencm.kmp.data.comparePlaybackAccountSnapshots
 import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
 import com.leejlredstar.redefinencm.kmp.util.cookieFingerprint
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -15,11 +22,17 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.random.Random
 import kotlin.time.TimeSource
 
@@ -31,6 +44,10 @@ private const val PLAYBACK_SESSION_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456
 private const val POSITION_ADVANCE_TOLERANCE_MILLIS = 1_500L
 private const val SELECTION_STABILIZATION_MILLIS = 250L
 private const val RELAY_QUEUE_CAPACITY = 2
+private const val FIRST_ACCOUNT_READBACK_DELAY_MILLIS = 3_000L
+private const val SECOND_ACCOUNT_READBACK_DELAY_MILLIS = 7_000L
+private const val ACCOUNT_BASELINE_TIMEOUT_MILLIS = 3_000L
+private const val ACCOUNT_READBACK_TIMEOUT_MILLIS = 15_000L
 
 /**
  * Process-wide playback reporting pipeline.
@@ -50,6 +67,10 @@ class PlaybackReportingCoordinator(
         sessionIdGenerator = ::generatePlaybackSessionId,
     )
     private val dispatcher = PlaybackReportingDispatcher(scope, ::dispatch)
+    private val _reportingState = MutableStateFlow(PlaybackReportingState())
+    val reportingState: StateFlow<PlaybackReportingState> = _reportingState.asStateFlow()
+    private val verificationEventQueue = PlaybackVerificationEventQueue()
+    val verificationEvents: Flow<PlaybackAccountVerificationEvent> = verificationEventQueue.events
 
     init {
         scope.launch {
@@ -108,36 +129,275 @@ class PlaybackReportingCoordinator(
     }
 
     private suspend fun dispatch(action: PlaybackReportingAction) {
-        settings.awaitLoaded()
-        val currentCookie = HttpClientFactory.cleanCookie(
-            settings.getStringAsync(SettingKeys.COOKIE, ""),
-        )
-        val currentCredentialKey = playbackCredentialKey(currentCookie)
-        if (currentCredentialKey != action.credentialKey) return
+        try {
+            settings.awaitLoaded()
+            if (!isCurrentCredential(action)) {
+                updateStatus(accountChangedStatus(action))
+                return
+            }
 
-        when (action) {
-            is PlaybackReportingAction.SubmitPlayState -> repository.submitPlayState(
-                id = action.songId,
-                sessionId = action.sessionId,
-                progressSeconds = action.progressSeconds,
-                playMode = action.playMode,
-                type = "song",
-                credentialCookie = action.credentialCookie,
-            )
-            is PlaybackReportingAction.Scrobble -> repository.scrobbleV1(
-                id = action.songId,
-                timeSeconds = action.playedSeconds,
-                sourceId = action.sourceId,
-                source = action.source,
-                name = action.name,
-                artist = action.artist,
-                bitrate = null,
-                level = action.level,
-                totalSeconds = action.totalSeconds,
-                credentialCookie = action.credentialCookie,
+            when (action) {
+                is PlaybackReportingAction.SubmitPlayState -> dispatchRelay(action)
+                is PlaybackReportingAction.Scrobble -> dispatchScrobble(action)
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            updateStatus(
+                PlaybackReportingStatus(
+                    kind = action.kind,
+                    songId = action.songId,
+                    credentialKey = action.credentialKey,
+                    reportingGeneration = action.reportingGeneration,
+                    phase = PlaybackReportingPhase.TRANSPORT_FAILURE,
+                    message = "上报处理失败",
+                ),
             )
         }
     }
+
+    private suspend fun dispatchRelay(action: PlaybackReportingAction.SubmitPlayState) {
+        updateStatus(
+            PlaybackReportingStatus(
+                kind = PlaybackReportingKind.RELAY,
+                songId = action.songId,
+                credentialKey = action.credentialKey,
+                reportingGeneration = action.reportingGeneration,
+                phase = PlaybackReportingPhase.SENDING,
+                endpoint = PlaybackReportEndpoint.RELAY,
+            ),
+        )
+        val result = repository.submitPlayState(
+            id = action.songId,
+            sessionId = action.sessionId,
+            progressSeconds = action.progressSeconds,
+            playMode = action.playMode,
+            type = "song",
+            credentialCookie = action.credentialCookie,
+        )
+        updateStatus(result.toStatus(action))
+    }
+
+    private suspend fun dispatchScrobble(action: PlaybackReportingAction.Scrobble) {
+        updateStatus(
+            PlaybackReportingStatus(
+                kind = PlaybackReportingKind.SCROBBLE,
+                songId = action.songId,
+                credentialKey = action.credentialKey,
+                reportingGeneration = action.reportingGeneration,
+                phase = PlaybackReportingPhase.SENDING,
+            ),
+        )
+        val uid = settings.getLongAsync(SettingKeys.UID, 0L).takeIf { it > 0L }
+        val before = uid?.let {
+            withTimeoutOrNull(ACCOUNT_BASELINE_TIMEOUT_MILLIS) {
+                accountSnapshotOrNull(it, action.credentialCookie)
+            }
+        }
+        if (!isCurrentCredential(action, uid)) {
+            updateStatus(accountChangedStatus(action))
+            return
+        }
+        val result = repository.scrobbleV1(
+            id = action.songId,
+            timeSeconds = action.playedSeconds,
+            sourceId = action.sourceId,
+            source = action.source,
+            name = action.name,
+            artist = action.artist,
+            bitrate = null,
+            level = action.level,
+            totalSeconds = action.totalSeconds,
+            credentialCookie = action.credentialCookie,
+        )
+        val acceptedStatus = result.toStatus(action)
+        updateStatus(acceptedStatus)
+        if (result !is PlaybackReportResult.Accepted || uid == null) {
+            return
+        }
+        if (!isCurrentCredential(action, uid)) {
+            updateStatus(accountChangedStatus(action))
+            return
+        }
+
+        updateStatus(acceptedStatus.copy(phase = PlaybackReportingPhase.VERIFYING))
+        verifyScrobbleReadback(action, uid, before)
+    }
+
+    private suspend fun verifyScrobbleReadback(
+        action: PlaybackReportingAction.Scrobble,
+        uid: Long,
+        before: PlaybackAccountSnapshot?,
+    ) {
+        var comparison: PlaybackAccountComparison? = null
+        var latestSnapshot: PlaybackAccountSnapshot? = null
+        for (readbackDelay in listOf(
+            FIRST_ACCOUNT_READBACK_DELAY_MILLIS,
+            SECOND_ACCOUNT_READBACK_DELAY_MILLIS,
+        )) {
+            delay(readbackDelay)
+            if (!isCurrentCredential(action, uid)) {
+                updateStatus(accountChangedStatus(action))
+                return
+            }
+            val snapshot = accountSnapshotOrNull(uid, action.credentialCookie)
+            if (!isCurrentCredential(action, uid)) {
+                updateStatus(accountChangedStatus(action))
+                return
+            }
+            if (snapshot != null) {
+                latestSnapshot = snapshot
+                comparison = comparePlaybackAccountSnapshots(
+                    before = before ?: PlaybackAccountSnapshot(uid, null, null, null),
+                    after = snapshot,
+                    songId = action.songId,
+                )
+                if (comparison.accountEffectObserved) break
+            }
+        }
+
+        val verifiedComparison = comparison ?: PlaybackAccountComparison(
+            sameAccount = true,
+            recordAppeared = false,
+            recordPlayCountDelta = null,
+            recordScoreDelta = null,
+            recentBecameLatest = false,
+            recentPlayTimeAdvanced = false,
+            levelPlayCountDelta = null,
+            accountEffectObserved = false,
+        )
+        if (!isCurrentCredential(action, uid)) {
+            updateStatus(accountChangedStatus(action))
+            return
+        }
+        verificationEventQueue.emit(
+            PlaybackAccountVerificationEvent(
+                uid = uid,
+                credentialKey = action.credentialKey,
+                reportingGeneration = action.reportingGeneration,
+                songId = action.songId,
+                userLevel = latestSnapshot?.userLevel,
+                comparison = verifiedComparison,
+            ),
+        )
+        val current = _reportingState.value.scrobble
+        if (current?.reportingGeneration != action.reportingGeneration) return
+        updateStatus(
+            current.copy(
+                phase = if (verifiedComparison.accountEffectObserved) {
+                    PlaybackReportingPhase.ACCOUNT_VERIFIED
+                } else {
+                    PlaybackReportingPhase.NOT_REFLECTED
+                },
+                accountComparison = verifiedComparison,
+            ),
+        )
+    }
+
+    private suspend fun accountSnapshotOrNull(
+        uid: Long,
+        credentialCookie: String,
+    ): PlaybackAccountSnapshot? = withTimeoutOrNull(ACCOUNT_READBACK_TIMEOUT_MILLIS) {
+        try {
+            repository.getPlaybackAccountSnapshot(uid, credentialCookie = credentialCookie)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private suspend fun isCurrentCredential(
+        action: PlaybackReportingAction,
+        uid: Long? = null,
+    ): Boolean {
+        val currentCookie = HttpClientFactory.cleanCookie(
+            settings.getStringAsync(SettingKeys.COOKIE, ""),
+        )
+        return playbackCredentialKey(currentCookie) == action.credentialKey &&
+            (uid == null || settings.getLongAsync(SettingKeys.UID, 0L) == uid)
+    }
+
+    private fun updateStatus(status: PlaybackReportingStatus) {
+        _reportingState.update { current -> current.withStatus(status) }
+    }
+}
+
+private val PlaybackReportingAction.kind: PlaybackReportingKind
+    get() = when (this) {
+        is PlaybackReportingAction.SubmitPlayState -> PlaybackReportingKind.RELAY
+        is PlaybackReportingAction.Scrobble -> PlaybackReportingKind.SCROBBLE
+    }
+
+private val PlaybackReportingAction.songId: Long
+    get() = when (this) {
+        is PlaybackReportingAction.SubmitPlayState -> this.songId
+        is PlaybackReportingAction.Scrobble -> this.songId
+    }
+
+private fun accountChangedStatus(action: PlaybackReportingAction): PlaybackReportingStatus =
+    PlaybackReportingStatus(
+        kind = action.kind,
+        songId = action.songId,
+        credentialKey = action.credentialKey,
+        reportingGeneration = action.reportingGeneration,
+        phase = PlaybackReportingPhase.ACCOUNT_CHANGED,
+    )
+
+private fun PlaybackReportResult.toStatus(
+    action: PlaybackReportingAction,
+): PlaybackReportingStatus = when (this) {
+    is PlaybackReportResult.Accepted -> PlaybackReportingStatus(
+        kind = action.kind,
+        songId = action.songId,
+        credentialKey = action.credentialKey,
+        reportingGeneration = action.reportingGeneration,
+        phase = PlaybackReportingPhase.ACCEPTED,
+        endpoint = endpoint,
+        httpStatus = httpStatus,
+        serverCode = serverCode,
+        details = details,
+    )
+    is PlaybackReportResult.Rejected -> PlaybackReportingStatus(
+        kind = action.kind,
+        songId = action.songId,
+        credentialKey = action.credentialKey,
+        reportingGeneration = action.reportingGeneration,
+        phase = PlaybackReportingPhase.REJECTED,
+        endpoint = endpoint,
+        httpStatus = httpStatus,
+        serverCode = serverCode,
+        details = details,
+        message = when (reason) {
+            PlaybackReportRejectionReason.INVALID_INPUT ->
+                "当前旧版服务器仅能同步带有效歌单来源的播放记录"
+            PlaybackReportRejectionReason.SERVER_REJECTED ->
+                details.message ?: "服务器拒绝了播放上报"
+        },
+    )
+    is PlaybackReportResult.Unsupported -> PlaybackReportingStatus(
+        kind = action.kind,
+        songId = action.songId,
+        credentialKey = action.credentialKey,
+        reportingGeneration = action.reportingGeneration,
+        phase = PlaybackReportingPhase.UNSUPPORTED,
+        endpoint = endpoint,
+        httpStatus = httpStatus,
+        message = when (endpoint) {
+            PlaybackReportEndpoint.RELAY -> "当前服务器未部署 relay 播放进度接口"
+            else -> "当前服务器不支持播放记录上报"
+        },
+    )
+    is PlaybackReportResult.TransportFailure -> PlaybackReportingStatus(
+        kind = action.kind,
+        songId = action.songId,
+        credentialKey = action.credentialKey,
+        reportingGeneration = action.reportingGeneration,
+        phase = PlaybackReportingPhase.TRANSPORT_FAILURE,
+        endpoint = endpoint,
+        httpStatus = httpStatus,
+        message = "播放上报请求失败",
+    )
 }
 
 internal data class PlaybackReportingObservation(
@@ -162,6 +422,18 @@ internal enum class PlaybackReportingSignal {
     DURATION,
     SHUFFLE,
     TICK,
+}
+
+/** Ordered single-consumer queue: account verification events must never evict newer results. */
+internal class PlaybackVerificationEventQueue(
+    capacity: Int = Channel.BUFFERED,
+) {
+    private val channel = Channel<PlaybackAccountVerificationEvent>(capacity)
+    val events: Flow<PlaybackAccountVerificationEvent> = channel.receiveAsFlow()
+
+    suspend fun emit(event: PlaybackAccountVerificationEvent) {
+        channel.send(event)
+    }
 }
 
 internal class PlaybackReportingDispatcher(
@@ -198,6 +470,7 @@ internal class PlaybackReportingDispatcher(
 internal sealed interface PlaybackReportingAction {
     val credentialKey: Long
     val credentialCookie: String
+    val reportingGeneration: Long
 
     data class SubmitPlayState(
         override val credentialKey: Long,
@@ -206,6 +479,7 @@ internal sealed interface PlaybackReportingAction {
         val sessionId: String,
         val progressSeconds: Long,
         val playMode: String,
+        override val reportingGeneration: Long = 0L,
     ) : PlaybackReportingAction
 
     data class Scrobble(
@@ -219,6 +493,7 @@ internal sealed interface PlaybackReportingAction {
         val artist: String?,
         val level: String,
         val totalSeconds: Long?,
+        override val reportingGeneration: Long = 0L,
     ) : PlaybackReportingAction
 }
 
@@ -229,6 +504,7 @@ internal class PlaybackReportingReducer(
         UNKNOWN_DURATION_SCROBBLE_THRESHOLD_MILLIS,
 ) {
     private var active: ActivePlaybackReportingSession? = null
+    private var nextReportingGeneration: Long = 0L
     private var pendingOccurrence: Long? = null
     private var pendingSinceMs: Long = 0L
 
@@ -335,6 +611,7 @@ internal class PlaybackReportingReducer(
                 wasPlaying = true,
                 accountingPositionMs = initialPosition,
                 accountingObservedAtMs = now,
+                reportingGeneration = ++nextReportingGeneration,
             )
             active = session
             pendingOccurrence = null
@@ -385,6 +662,7 @@ internal class PlaybackReportingReducer(
             artist = media.artist.trim().takeIf(String::isNotEmpty),
             level = qualityLevel,
             totalSeconds = totalSeconds,
+            reportingGeneration = reportingGeneration,
         )
     }
 
@@ -406,6 +684,7 @@ internal class PlaybackReportingReducer(
             sessionId = sessionId,
             progressSeconds = progressSeconds,
             playMode = playMode,
+            reportingGeneration = reportingGeneration,
         )
         lastRelayProgressSeconds = progressSeconds
         lastRelayPlayMode = playMode
@@ -427,6 +706,7 @@ private class ActivePlaybackReportingSession(
     var wasPlaying: Boolean,
     var accountingPositionMs: Long,
     var accountingObservedAtMs: Long,
+    val reportingGeneration: Long,
 ) {
     var listenedMs: Long = 0L
     var scrobbleAttempted: Boolean = false

@@ -3,10 +3,16 @@ package com.leejlredstar.redefinencm.kmp.viewmodel
 import com.leejlredstar.redefinencm.kmp.data.PersistedMediaItem
 import com.leejlredstar.redefinencm.kmp.data.PlayerStatus
 import com.leejlredstar.redefinencm.kmp.data.Repository
+import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
 import com.leejlredstar.redefinencm.kmp.data.api.dto.*
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
+import com.leejlredstar.redefinencm.kmp.player.PlaybackAccountVerificationEvent
+import com.leejlredstar.redefinencm.kmp.player.PlaybackReportingCoordinator
+import com.leejlredstar.redefinencm.kmp.player.PlaybackReportingState
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.player.forCredential
+import com.leejlredstar.redefinencm.kmp.player.playbackCredentialKey
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.cookieFingerprint
@@ -27,6 +33,15 @@ internal fun isCachedAccountIdentityValid(
 ): Boolean =
     cookie.isNotBlank() && uid != 0L && fingerprint == accountCookieFingerprint(cookie)
 
+internal fun shouldApplyPlaybackVerification(
+    currentUid: Long,
+    currentCredentialKey: Long?,
+    lastAppliedGeneration: Long?,
+    event: PlaybackAccountVerificationEvent,
+): Boolean = currentUid == event.uid &&
+    currentCredentialKey == event.credentialKey &&
+    (lastAppliedGeneration ?: Long.MIN_VALUE) < event.reportingGeneration
+
 /**
  * Ported from the original Android MainViewModel.
  * KMP-compatible: uses PlatformPlayer instead of MediaController,
@@ -37,8 +52,11 @@ class MainViewModel(
     private val settings: PlatformSettings,
     private val player: PlatformPlayer,
     private val downloadManager: SongDownloadManager,
+    private val playbackReportingCoordinator: PlaybackReportingCoordinator,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val accountCredentialKey = MutableStateFlow<Long?>(null)
+    private val lastAppliedPlaybackVerification = mutableMapOf<Long, Long>()
     private var lastSavedPlayerStatus: PlayerStatus? = null
     private val playerStatusSaveMutex = Mutex()
     val playerStatusSaveError = MutableStateFlow<String?>(null)
@@ -60,6 +78,12 @@ class MainViewModel(
     val userDetailFromCache = MutableStateFlow(false)
     val userLevelFromCache = MutableStateFlow(false)
     val userPlaylistsFromCache = MutableStateFlow(false)
+    val playbackReportingState: StateFlow<PlaybackReportingState> = combine(
+        playbackReportingCoordinator.reportingState,
+        accountCredentialKey,
+    ) { state, credentialKey ->
+        state.forCredential(credentialKey)
+    }.stateIn(scope, SharingStarted.Eagerly, PlaybackReportingState())
     private val accountGeneration = MutableStateFlow(0L)
     private var accountJob: Job? = null
 
@@ -106,7 +130,31 @@ class MainViewModel(
         restorePlayerStatus()
         downloadManager.syncWithLocalLibrary()
         initPlayerStatusAutosave()
+        observePlaybackVerification()
         checkAppUpdate()
+    }
+
+    private fun observePlaybackVerification() {
+        scope.launch {
+            playbackReportingCoordinator.verificationEvents.collect { event ->
+                if (
+                    !shouldApplyPlaybackVerification(
+                        currentUid = _uid.value,
+                        currentCredentialKey = accountCredentialKey.value,
+                        lastAppliedGeneration = lastAppliedPlaybackVerification[event.credentialKey],
+                        event = event,
+                    )
+                ) {
+                    return@collect
+                }
+                lastAppliedPlaybackVerification[event.credentialKey] = event.reportingGeneration
+                event.userLevel?.let { refreshedLevel ->
+                    userLevel.value = refreshedLevel
+                    userLevelFromCache.value = false
+                    userLevelLoadError.value = null
+                }
+            }
+        }
     }
 
     /** checkUpdate 设置开启时，比较 GitHub 最新 release tag 与本地版本，不同则提示。 */
@@ -241,6 +289,7 @@ class MainViewModel(
         cancelIntelligenceRequest()
         val generation = accountGeneration.updateAndGet { it + 1L }
         accountJob?.cancel()
+        if (clearPersistedAccount) accountCredentialKey.value = null
         accountLoading.value = true
         accountLoadError.value = null
         userDetailLoadError.value = null
@@ -266,6 +315,9 @@ class MainViewModel(
             try {
                 settings.awaitLoaded()
                 val cookie = settings.getStringAsync(SettingKeys.COOKIE, "")
+                val credentialKey = playbackCredentialKey(HttpClientFactory.cleanCookie(cookie))
+                if (accountGeneration.value != generation) return@launch
+                accountCredentialKey.value = credentialKey
                 if (clearPersistedAccount) {
                     settings.setLong(SettingKeys.UID, 0L)
                     settings.setLong(SettingKeys.UID_COOKIE_FINGERPRINT, 0L)
@@ -280,6 +332,7 @@ class MainViewModel(
                 ensureActive()
                 if (accountGeneration.value != generation) return@launch
                 if (resolvedUid == 0L) {
+                    accountCredentialKey.value = null
                     settings.setLong(SettingKeys.UID, 0L)
                     settings.setLong(SettingKeys.UID_COOKIE_FINGERPRINT, 0L)
                     settings.flush()
@@ -399,6 +452,7 @@ class MainViewModel(
                 throw e
             } catch (failure: Exception) {
                 if (accountGeneration.value == generation) {
+                    accountCredentialKey.value = null
                     _uid.value = 0L
                     userDetail.value = null
                     userLevel.value = null

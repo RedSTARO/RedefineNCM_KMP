@@ -15,12 +15,39 @@ import io.ktor.client.request.parameter
 import kotlinx.coroutines.runBlocking
 import java.net.InetSocketAddress
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class RepositoryPlaybackReportingTest {
+    @Test
+    fun htmlNotFoundResponseRetainsHttpMetadata() = runBlocking {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
+            createContext("/") { exchange ->
+                val body = "<!doctype html><html><body>Not Found</body></html>".encodeToByteArray()
+                exchange.responseHeaders.add("Content-Type", "text/html; charset=utf-8")
+                exchange.sendResponseHeaders(404, body.size.toLong())
+                exchange.responseBody.use { it.write(body) }
+            }
+            start()
+        }
+        val client = testHttpClient(server.address.port)
+
+        try {
+            val response = NCMApi(client).scrobbleV1(id = 42, timeSeconds = 30)
+
+            assertEquals(404, response.statusCode)
+            assertTrue(response.isHtmlNotFound)
+            assertEquals(null, response.body)
+        } finally {
+            client.close()
+            server.stop(0)
+        }
+    }
+
     @Test
     fun reportingCredentialSnapshotOverridesDynamicQueryCookie() = runBlocking {
         var rawQuery = ""
@@ -51,7 +78,8 @@ class RepositoryPlaybackReportingTest {
                 credentialCookie = "MUSIC_U=session+snapshot==",
             )
 
-            assertEquals(200, response.code)
+            assertEquals(200, response.statusCode)
+            assertEquals(200, response.body?.code)
             val cookieValues = rawQuery.split('&')
                 .filter(String::isNotBlank)
                 .map { part -> part.substringBefore('=') to part.substringAfter('=', "") }
@@ -181,7 +209,7 @@ class RepositoryPlaybackReportingTest {
         val repository = Repository(NCMApi(client), AppDatabase(driver))
 
         try {
-            assertTrue(
+            assertIs<PlaybackReportResult.Accepted>(
                 repository.scrobbleV1(
                     id = 518_066_366,
                     timeSeconds = 291,
@@ -194,8 +222,8 @@ class RepositoryPlaybackReportingTest {
                     totalSeconds = 300,
                 ),
             )
-            assertFalse(repository.scrobbleV1(id = 42, timeSeconds = 30))
-            assertTrue(
+            assertIs<PlaybackReportResult.Rejected>(repository.scrobbleV1(id = 42, timeSeconds = 30))
+            assertIs<PlaybackReportResult.Accepted>(
                 repository.submitPlayState(
                     id = 518_066_366,
                     sessionId = "AB12CD34EF56",
@@ -203,7 +231,7 @@ class RepositoryPlaybackReportingTest {
                     playMode = "list_loop",
                 ),
             )
-            assertFalse(
+            assertIs<PlaybackReportResult.Rejected>(
                 repository.submitPlayState(
                     id = 518_066_366,
                     sessionId = "AB12CD34EF56",
@@ -242,6 +270,173 @@ class RepositoryPlaybackReportingTest {
                 ),
                 captured[2].query,
             )
+        } finally {
+            driver.close()
+            client.close()
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun scrobble404FallsBackToWeblogAndCachesUnsupportedCapability() = runBlocking {
+        val v1Requests = AtomicInteger()
+        val weblogBodies = ConcurrentLinkedQueue<String>()
+        val weblogCookies = ConcurrentLinkedQueue<String?>()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
+            createContext("/") { exchange ->
+                when (exchange.requestURI.path) {
+                    "/scrobble/v1" -> {
+                        v1Requests.incrementAndGet()
+                        val body = "<!doctype html><html>Not Found</html>".encodeToByteArray()
+                        exchange.responseHeaders.add("Content-Type", "text/html")
+                        exchange.sendResponseHeaders(404, body.size.toLong())
+                        exchange.responseBody.use { it.write(body) }
+                    }
+                    "/weblog" -> {
+                        weblogBodies += exchange.requestBody.use { it.readBytes().decodeToString() }
+                        weblogCookies += exchange.requestHeaders.getFirst("Cookie")
+                        val body = """{"code":200}""".encodeToByteArray()
+                        exchange.responseHeaders.add("Content-Type", "application/json")
+                        exchange.sendResponseHeaders(200, body.size.toLong())
+                        exchange.responseBody.use { it.write(body) }
+                    }
+                    else -> error("Unexpected path ${exchange.requestURI.path}")
+                }
+            }
+            start()
+        }
+        val client = HttpClientFactory.create(
+            baseUrl = "http://127.0.0.1:${server.address.port}",
+            realIP = "127.0.0.1",
+            cookieProvider = { "" },
+            engineFactory = OkHttp,
+        )
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        AppDatabase.Schema.create(driver)
+        val repository = Repository(NCMApi(client), AppDatabase(driver))
+
+        try {
+            repeat(2) {
+                val result = repository.scrobbleV1(
+                    id = 518_066_366,
+                    timeSeconds = 100,
+                    sourceId = "36780169",
+                    credentialCookie = "MUSIC_U=session-snapshot; os=pc",
+                )
+                assertEquals(PlaybackReportEndpoint.WEBLOG, assertIs<PlaybackReportResult.Accepted>(result).endpoint)
+            }
+            val invalidFallback = assertIs<PlaybackReportResult.Rejected>(
+                repository.scrobbleV1(
+                    id = 42,
+                    timeSeconds = 30,
+                    credentialCookie = "MUSIC_U=session-snapshot",
+                ),
+            )
+
+            assertEquals(1, v1Requests.get())
+            assertEquals(4, weblogBodies.size)
+            assertEquals(PlaybackReportRejectionReason.INVALID_INPUT, invalidFallback.reason)
+            assertTrue(weblogBodies.elementAt(0).contains("\\\"action\\\":\\\"startplay\\\""))
+            assertTrue(weblogBodies.elementAt(1).contains("\\\"action\\\":\\\"play\\\""))
+            assertTrue(weblogCookies.all { cookie ->
+                cookie?.contains("MUSIC_U=session-snapshot") == true &&
+                    cookie.contains("os=osx") &&
+                    !cookie.contains("os=pc")
+            })
+        } finally {
+            driver.close()
+            client.close()
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun relay404IsCachedWithoutRetryingTheUnsupportedEndpoint() = runBlocking {
+        val requests = AtomicInteger()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
+            createContext("/") { exchange ->
+                requests.incrementAndGet()
+                val body = "<!doctype html><html>Not Found</html>".encodeToByteArray()
+                exchange.responseHeaders.add("Content-Type", "text/html")
+                exchange.sendResponseHeaders(404, body.size.toLong())
+                exchange.responseBody.use { it.write(body) }
+            }
+            start()
+        }
+        val client = testHttpClient(server.address.port)
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        AppDatabase.Schema.create(driver)
+        val repository = Repository(NCMApi(client), AppDatabase(driver))
+
+        try {
+            repeat(2) {
+                assertIs<PlaybackReportResult.Unsupported>(
+                    repository.submitPlayState(
+                        id = 42,
+                        sessionId = "AB12CD34EF56",
+                        progressSeconds = 30,
+                        playMode = "list_loop",
+                        credentialCookie = "MUSIC_U=session-snapshot",
+                    ),
+                )
+            }
+            assertEquals(1, requests.get())
+        } finally {
+            driver.close()
+            client.close()
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun json404IsRejectedWithoutCachingRouteAsUnsupportedOrFallingBack() = runBlocking {
+        val scrobbleRequests = AtomicInteger()
+        val relayRequests = AtomicInteger()
+        val weblogRequests = AtomicInteger()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
+            createContext("/") { exchange ->
+                when (exchange.requestURI.path) {
+                    "/scrobble/v1" -> scrobbleRequests.incrementAndGet()
+                    "/relay/play/state/submit" -> relayRequests.incrementAndGet()
+                    "/weblog" -> weblogRequests.incrementAndGet()
+                    else -> error("Unexpected path ${exchange.requestURI.path}")
+                }
+                val body = """{"code":404,"msg":"resource not found"}""".encodeToByteArray()
+                exchange.responseHeaders.add("Content-Type", "application/json")
+                exchange.sendResponseHeaders(404, body.size.toLong())
+                exchange.responseBody.use { it.write(body) }
+            }
+            start()
+        }
+        val client = testHttpClient(server.address.port)
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        AppDatabase.Schema.create(driver)
+        val repository = Repository(NCMApi(client), AppDatabase(driver))
+
+        try {
+            repeat(2) {
+                assertIs<PlaybackReportResult.Rejected>(
+                    repository.scrobbleV1(
+                        id = 42,
+                        timeSeconds = 30,
+                        sourceId = "7",
+                        credentialCookie = "MUSIC_U=session-snapshot",
+                    ),
+                )
+                assertIs<PlaybackReportResult.Rejected>(
+                    repository.submitPlayState(
+                        id = 42,
+                        sessionId = "AB12CD34EF56",
+                        progressSeconds = 30,
+                        playMode = "list_loop",
+                        credentialCookie = "MUSIC_U=session-snapshot",
+                    ),
+                )
+            }
+
+            assertEquals(2, scrobbleRequests.get())
+            assertEquals(2, relayRequests.get())
+            assertEquals(0, weblogRequests.get())
         } finally {
             driver.close()
             client.close()

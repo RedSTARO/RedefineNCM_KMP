@@ -41,11 +41,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.leejlredstar.redefinencm.kmp.data.PlaybackReportEndpoint
 import com.leejlredstar.redefinencm.kmp.data.api.dto.UserLevelResponse
+import com.leejlredstar.redefinencm.kmp.player.PlaybackReportingKind
+import com.leejlredstar.redefinencm.kmp.player.PlaybackReportingPhase
+import com.leejlredstar.redefinencm.kmp.player.PlaybackReportingState
+import com.leejlredstar.redefinencm.kmp.player.PlaybackReportingStatus
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveCacheHint
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
@@ -61,6 +66,106 @@ internal data class UserLevelDisplay(
     val progressLabel: String,
     val progress: Float,
 )
+
+internal data class PlaybackSyncDisplay(
+    val title: String,
+    val message: String,
+    val isError: Boolean,
+)
+
+internal fun playbackSyncDisplay(state: PlaybackReportingState): PlaybackSyncDisplay? {
+    val primary = listOfNotNull(state.scrobble, state.relay)
+        .maxWithOrNull(
+            compareBy<PlaybackReportingStatus> { it.reportingGeneration }
+                .thenBy { if (it.kind == PlaybackReportingKind.SCROBBLE) 1 else 0 },
+        )
+        ?: return null
+    val relaySuffix = state.relay
+        ?.takeIf {
+            primary.kind == PlaybackReportingKind.SCROBBLE &&
+                it.reportingGeneration == primary.reportingGeneration
+        }
+        ?.let { relay -> "\n${relaySummary(relay)}" }
+        .orEmpty()
+    return PlaybackSyncDisplay(
+        title = if (primary.kind == PlaybackReportingKind.SCROBBLE) {
+            "播放记录同步"
+        } else {
+            "跨端进度提交"
+        },
+        message = statusSummary(primary) + relaySuffix,
+        isError = primary.phase in setOf(
+            PlaybackReportingPhase.REJECTED,
+            PlaybackReportingPhase.UNSUPPORTED,
+            PlaybackReportingPhase.TRANSPORT_FAILURE,
+            PlaybackReportingPhase.NOT_REFLECTED,
+        ),
+    )
+}
+
+private fun statusSummary(status: PlaybackReportingStatus): String {
+    val endpoint = when (status.endpoint) {
+        PlaybackReportEndpoint.SCROBBLE_V1 -> "NCBL 上报"
+        PlaybackReportEndpoint.WEBLOG -> "兼容上报"
+        PlaybackReportEndpoint.RELAY -> "relay"
+        null -> "上报"
+    }
+    val diagnostic = buildList {
+        status.httpStatus?.let { add("HTTP $it") }
+        status.serverCode?.let { add("code $it") }
+    }.takeIf { it.isNotEmpty() }?.joinToString(prefix = "（", postfix = "）").orEmpty()
+    return when (status.phase) {
+        PlaybackReportingPhase.SENDING -> "$endpoint 正在发送。"
+        PlaybackReportingPhase.ACCEPTED -> "$endpoint 已被服务器接收$diagnostic。"
+        PlaybackReportingPhase.VERIFYING -> "$endpoint 已接收，正在回读账号记录与等级。"
+        PlaybackReportingPhase.ACCOUNT_VERIFIED -> {
+            val comparison = status.accountComparison
+            val changed = buildList {
+                if (
+                    comparison?.recordAppeared == true ||
+                    (comparison?.recordPlayCountDelta ?: 0L) > 0L
+                ) {
+                    add("周听歌记录")
+                }
+                if (
+                    comparison?.recentBecameLatest == true ||
+                    comparison?.recentPlayTimeAdvanced == true
+                ) {
+                    add("最近播放")
+                }
+                if ((comparison?.levelPlayCountDelta ?: 0L) > 0L) add("等级听歌数")
+            }.ifEmpty { listOf("账号记录") }.joinToString("、")
+            "$endpoint 已由账号侧确认：$changed 已更新。"
+        }
+        PlaybackReportingPhase.NOT_REFLECTED ->
+            "$endpoint 返回成功，但回读窗口内没有确认到账号记录变化$diagnostic。"
+        PlaybackReportingPhase.REJECTED -> statusMessage(
+            status.message ?: "$endpoint 被服务器拒绝",
+            diagnostic,
+        )
+        PlaybackReportingPhase.UNSUPPORTED -> statusMessage(
+            status.message ?: "当前服务器不支持 $endpoint",
+            diagnostic,
+        )
+        PlaybackReportingPhase.TRANSPORT_FAILURE -> statusMessage(
+            status.message ?: "$endpoint 请求失败",
+            diagnostic,
+        )
+        PlaybackReportingPhase.ACCOUNT_CHANGED -> "账号已切换，本次结果已丢弃。"
+    }
+}
+
+private fun statusMessage(message: String, diagnostic: String): String =
+    "${message.trimEnd('。')}$diagnostic。"
+
+private fun relaySummary(status: PlaybackReportingStatus): String = when (status.phase) {
+    PlaybackReportingPhase.ACCEPTED -> "跨端进度：服务器已接收。"
+    PlaybackReportingPhase.UNSUPPORTED -> "跨端进度：当前服务器未部署 relay。"
+    PlaybackReportingPhase.REJECTED -> "跨端进度：服务器拒绝。"
+    PlaybackReportingPhase.TRANSPORT_FAILURE -> "跨端进度：请求失败。"
+    PlaybackReportingPhase.ACCOUNT_CHANGED -> "跨端进度：因账号切换已丢弃。"
+    else -> "跨端进度：${statusSummary(status)}"
+}
 
 internal fun isFavoritePlaylist(
     specialType: Int,
@@ -120,6 +225,7 @@ fun UserPlaylistScreen(
     val userDetailFromCache by viewModel.userDetailFromCache.collectAsState()
     val userLevelFromCache by viewModel.userLevelFromCache.collectAsState()
     val userPlaylistsFromCache by viewModel.userPlaylistsFromCache.collectAsState()
+    val playbackReportingState by viewModel.playbackReportingState.collectAsState()
     val uid by viewModel.uid.collectAsState()
     var lastIntelligencePlaylistId by remember { mutableStateOf<Long?>(null) }
     val hasCachedContent =
@@ -127,6 +233,7 @@ fun UserPlaylistScreen(
             (userLevelFromCache && userLevel?.data != null) ||
             userPlaylistsFromCache
     val hasAccountContent = userDetail != null || playlistsLoaded
+    val playbackSyncStatusDisplay = playbackSyncDisplay(playbackReportingState)
     val defaultAccentColor = MaterialTheme.colorScheme.primaryContainer
     var rawAccentColor by remember(
         userDetail?.profile?.backgroundUrl,
@@ -166,6 +273,21 @@ fun UserPlaylistScreen(
                 item(key = "account-cache-hint") {
                     ExpressiveCacheHint(
                         isRefreshing = accountLoading,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                }
+            }
+            playbackSyncStatusDisplay?.let { display ->
+                item(key = "playback-sync-status") {
+                    ExpressiveStatePanel(
+                        title = display.title,
+                        message = display.message,
+                        tone = if (display.isError) {
+                            ExpressiveStateTone.Error
+                        } else {
+                            ExpressiveStateTone.Neutral
+                        },
+                        accentPalette = accentPalette,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     )
                 }

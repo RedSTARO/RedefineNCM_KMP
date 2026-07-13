@@ -74,7 +74,7 @@ val sharedModule = module {
     factory { LoginViewModel(get(), get(), get()) }
     // Single —— 与原版单 Activity 共享一个 MainViewModel 一致：各屏共享搜索/歌单/推荐状态，
     // init 中的 UID 解析与播放状态恢复只执行一次。
-    single { MainViewModel(get(), get(), get(), get()) }
+    single { MainViewModel(get(), get(), get(), get(), get()) }
     // Single — the now-playing state is inherently global (only one song plays at a time).
     // The full-screen player and compact playback controls inject this same instance.
     single { NowPlayingViewModel(get(), get()) }

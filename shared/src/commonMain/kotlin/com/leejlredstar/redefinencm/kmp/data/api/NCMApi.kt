@@ -4,9 +4,119 @@ import com.leejlredstar.redefinencm.kmp.data.api.dto.*
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
+import io.ktor.client.statement.*
 import io.ktor.http.*
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 private val playSessionIdPattern = Regex("^[A-Z0-9]{12}$")
+private val responseJson = Json {
+    ignoreUnknownKeys = true
+    isLenient = true
+    coerceInputValues = true
+}
+
+enum class NcmResponseBodyKind {
+    JSON,
+    HTML,
+    EMPTY,
+    MALFORMED_JSON,
+    OTHER,
+}
+
+data class NcmHttpResponse<out T>(
+    val statusCode: Int,
+    val body: T?,
+    val bodyKind: NcmResponseBodyKind,
+    val contentType: String?,
+) {
+    val isHtmlNotFound: Boolean
+        get() = statusCode == HttpStatusCode.NotFound.value && bodyKind == NcmResponseBodyKind.HTML
+}
+
+private suspend inline fun <reified T> HttpResponse.toNcmHttpResponse(): NcmHttpResponse<T> {
+    val responseText = bodyAsText()
+    val trimmed = responseText.trimStart()
+    val responseContentType = contentType()?.toString()
+    val looksLikeHtml = responseContentType?.startsWith("text/html", ignoreCase = true) == true ||
+        trimmed.startsWith("<!doctype html", ignoreCase = true) ||
+        trimmed.startsWith("<html", ignoreCase = true)
+    if (responseText.isBlank()) {
+        return NcmHttpResponse(status.value, null, NcmResponseBodyKind.EMPTY, responseContentType)
+    }
+    if (looksLikeHtml) {
+        return NcmHttpResponse(status.value, null, NcmResponseBodyKind.HTML, responseContentType)
+    }
+
+    val decoded = runCatching { responseJson.decodeFromString<T>(responseText) }.getOrNull()
+    val kind = when {
+        decoded != null -> NcmResponseBodyKind.JSON
+        responseContentType?.startsWith("application/json", ignoreCase = true) == true ||
+            trimmed.startsWith("{") || trimmed.startsWith("[") -> NcmResponseBodyKind.MALFORMED_JSON
+        else -> NcmResponseBodyKind.OTHER
+    }
+    return NcmHttpResponse(status.value, decoded, kind, responseContentType)
+}
+
+@Serializable
+private data class WeblogRequest(val data: WeblogRequestData)
+
+@Serializable
+private data class WeblogRequestData(val logs: String)
+
+internal fun startplayWeblogLogs(songId: Long, sourceId: Long): String {
+    require(songId > 0) { "songId must be positive" }
+    require(sourceId > 0) { "sourceId must be positive" }
+    return buildJsonArray {
+        add(
+            buildJsonObject {
+                put("action", "startplay")
+                put(
+                    "json",
+                    buildJsonObject {
+                        put("id", songId)
+                        put("type", "song")
+                        put("mainsite", "1")
+                        put("mainsiteWeb", "1")
+                        put("content", "id=$sourceId")
+                    },
+                )
+            },
+        )
+    }.toString()
+}
+
+internal fun playWeblogLogs(songId: Long, sourceId: Long, timeSeconds: Long): String {
+    require(songId > 0) { "songId must be positive" }
+    require(sourceId > 0) { "sourceId must be positive" }
+    require(timeSeconds > 0) { "timeSeconds must be positive" }
+    return buildJsonArray {
+        add(
+            buildJsonObject {
+                put("action", "play")
+                put(
+                    "json",
+                    buildJsonObject {
+                        put("download", 0)
+                        put("end", "playend")
+                        put("id", songId)
+                        put("sourceId", sourceId)
+                        put("time", timeSeconds)
+                        put("type", "song")
+                        put("wifi", 0)
+                        put("source", "list")
+                        put("mainsite", "1")
+                        put("mainsiteWeb", "1")
+                        put("content", "id=$sourceId")
+                    },
+                )
+            },
+        )
+    }.toString()
+}
 
 internal fun intelligenceListQueryParameters(
     id: Long,
@@ -99,8 +209,29 @@ class NCMApi(private val client: HttpClient) {
     suspend fun userDetail(uid: Long): UserDetail =
         client.get("/user/detail") { parameter("uid", uid) }.body()
 
-    suspend fun userLevel(): UserLevelResponse =
-        client.get("/user/level").body()
+    suspend fun userLevel(credentialCookie: String? = null): UserLevelResponse =
+        client.get("/user/level") { appendCredentialCookie(credentialCookie) }.body()
+
+    suspend fun userRecord(
+        uid: Long,
+        type: Int = 1,
+        credentialCookie: String? = null,
+    ): UserRecordResponse = client.get("/user/record") {
+        require(uid > 0) { "uid must be positive" }
+        require(type == 0 || type == 1) { "type must be 0 or 1" }
+        parameter("uid", uid)
+        parameter("type", type)
+        appendCredentialCookie(credentialCookie)
+    }.body()
+
+    suspend fun recentSongs(
+        limit: Int = 100,
+        credentialCookie: String? = null,
+    ): RecentSongsResponse = client.get("/record/recent/song") {
+        require(limit > 0) { "limit must be positive" }
+        parameter("limit", limit)
+        appendCredentialCookie(credentialCookie)
+    }.body()
 
     // ── Login ──
 
@@ -180,7 +311,7 @@ class NCMApi(private val client: HttpClient) {
         level: String? = null,
         totalSeconds: Long? = null,
         credentialCookie: String? = null,
-    ): ScrobbleV1Response = client.get("/scrobble/v1") {
+    ): NcmHttpResponse<ScrobbleV1Response> = client.get("/scrobble/v1") {
         appendQueryParameters(
             scrobbleV1QueryParameters(
                 id = id,
@@ -195,7 +326,14 @@ class NCMApi(private val client: HttpClient) {
             ),
         )
         appendCredentialCookie(credentialCookie)
-    }.body()
+    }.toNcmHttpResponse()
+
+    suspend fun weblog(logs: String, credentialCookie: String): NcmHttpResponse<WeblogResponse> =
+        client.post("/weblog") {
+            appendCredentialCookie(credentialCookie)
+            contentType(ContentType.Application.Json)
+            setBody(WeblogRequest(WeblogRequestData(logs)))
+        }.toNcmHttpResponse()
 
     suspend fun submitPlayState(
         id: Long,
@@ -204,7 +342,7 @@ class NCMApi(private val client: HttpClient) {
         playMode: String,
         type: String = "song",
         credentialCookie: String? = null,
-    ): PlayStateSubmitResponse = client.get("/relay/play/state/submit") {
+    ): NcmHttpResponse<PlayStateSubmitResponse> = client.get("/relay/play/state/submit") {
         appendQueryParameters(
             submitPlayStateQueryParameters(
                 id = id,
@@ -215,7 +353,7 @@ class NCMApi(private val client: HttpClient) {
             ),
         )
         appendCredentialCookie(credentialCookie)
-    }.body()
+    }.toNcmHttpResponse()
 
     // ── Search ──
 
