@@ -9,6 +9,7 @@ import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
+import com.leejlredstar.redefinencm.kmp.util.cookieFingerprint
 import com.leejlredstar.redefinencm.kmp.util.currentReleaseVersion
 import com.leejlredstar.redefinencm.kmp.util.fetchLatestReleaseTag
 import com.leejlredstar.redefinencm.kmp.util.isNewerReleaseVersion
@@ -17,14 +18,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-internal fun accountCookieFingerprint(cookie: String): Long {
-    var hash = -3750763034362895579L // FNV-1a 64-bit offset basis represented as a signed Long.
-    cookie.forEach { character ->
-        hash = hash xor character.code.toLong()
-        hash *= 1099511628211L
-    }
-    return hash
-}
+internal fun accountCookieFingerprint(cookie: String): Long = cookieFingerprint(cookie)
 
 internal fun isCachedAccountIdentityValid(
     cookie: String,

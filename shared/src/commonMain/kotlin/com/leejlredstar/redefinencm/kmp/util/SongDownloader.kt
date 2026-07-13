@@ -15,6 +15,13 @@ data class DownloadedSongFile(
     val uri: String?,
 )
 
+internal fun extensionFromUrl(url: String): String =
+    url.substringBefore('?')
+        .substringAfterLast('/')
+        .substringAfterLast('.', "mp3")
+        .ifBlank { "mp3" }
+        .take(12)
+
 /**
  * 平台文件写入器。不要在 actual 中再调用 Android 系统 DownloadManager。
  *

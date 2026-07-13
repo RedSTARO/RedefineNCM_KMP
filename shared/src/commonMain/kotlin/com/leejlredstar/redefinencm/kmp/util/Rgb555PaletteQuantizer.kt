@@ -40,21 +40,30 @@ internal fun rgb555ThemeColor(
     }
     if (counts.isEmpty()) return null
 
-    val maxPopulation = counts.values.maxOrNull()?.toFloat() ?: return null
-    val swatches = counts.entries
-        .sortedWith(
-            compareByDescending<Map.Entry<Int, Int>> { it.value }
-                .thenBy { it.key },
-        )
+    val sortedEntries = counts.entries.sortedWith(
+        compareByDescending<Map.Entry<Int, Int>> { it.value }
+            .thenBy { it.key },
+    )
+    val maxPopulation = sortedEntries.first().value.toFloat()
+    val swatches = sortedEntries
         .take(64)
         .map { (quantized, population) ->
             val red = ((quantized ushr 10) and 0x1F) * 255 / 31
             val green = ((quantized ushr 5) and 0x1F) * 255 / 31
             val blue = (quantized and 0x1F) * 255 / 31
+            val redFloat = red / 255f
+            val greenFloat = green / 255f
+            val blueFloat = blue / 255f
+            val maxColor = max(redFloat, max(greenFloat, blueFloat))
+            val minColor = min(redFloat, min(greenFloat, blueFloat))
+            val delta = maxColor - minColor
+            val luminance = (maxColor + minColor) / 2f
+            val saturation = if (delta == 0f) 0f else delta / (1f - abs(2f * luminance - 1f))
             Rgb555Swatch(
                 rgb = (red shl 16) or (green shl 8) or blue,
                 population = population,
-                hsl = rgbToHsl(red, green, blue),
+                saturation = saturation.coerceIn(0f, 1f),
+                luminance = luminance,
             )
         }
 
@@ -62,8 +71,8 @@ internal fun rgb555ThemeColor(
         var best: Rgb555Swatch? = null
         var bestScore = 0f
         for (swatch in swatches) {
-            val saturation = swatch.hsl[1]
-            val luminance = swatch.hsl[2]
+            val saturation = swatch.saturation
+            val luminance = swatch.luminance
             if (
                 saturation !in saturationMin..saturationMax ||
                 luminance !in 0.3f..0.7f
@@ -93,27 +102,6 @@ internal fun rgb555ThemeColor(
 private data class Rgb555Swatch(
     val rgb: Int,
     val population: Int,
-    val hsl: FloatArray,
+    val saturation: Float,
+    val luminance: Float,
 )
-
-private fun rgbToHsl(red: Int, green: Int, blue: Int): FloatArray {
-    val redFloat = red / 255f
-    val greenFloat = green / 255f
-    val blueFloat = blue / 255f
-    val maxColor = max(redFloat, max(greenFloat, blueFloat))
-    val minColor = min(redFloat, min(greenFloat, blueFloat))
-    val delta = maxColor - minColor
-    val luminance = (maxColor + minColor) / 2f
-    val saturation = if (delta == 0f) 0f else delta / (1f - abs(2f * luminance - 1f))
-    val hue = when {
-        delta == 0f -> 0f
-        maxColor == redFloat -> 60f * (((greenFloat - blueFloat) / delta) % 6f)
-        maxColor == greenFloat -> 60f * (((blueFloat - redFloat) / delta) + 2f)
-        else -> 60f * (((redFloat - greenFloat) / delta) + 4f)
-    }
-    return floatArrayOf(
-        if (hue < 0f) hue + 360f else hue,
-        saturation.coerceIn(0f, 1f),
-        luminance,
-    )
-}

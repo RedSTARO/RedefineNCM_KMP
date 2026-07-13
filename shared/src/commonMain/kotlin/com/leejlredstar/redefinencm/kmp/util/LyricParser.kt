@@ -30,7 +30,7 @@ object LyricParser {
     fun parse(lyric: String): LinkedHashMap<Long?, String?> {
         val lyricPair = LinkedHashMap<Long?, String?>()
 
-        lyric.lines().forEach { line ->
+        lyric.lineSequence().forEach { line ->
             if (line.isBlank()) return@forEach
 
             val matchWord = regexWord.find(line)
@@ -132,7 +132,7 @@ object LyricParser {
         return ((minutes * 60 + seconds) * 1000).toLong()
     }
 
-    private fun formatLrcTimestamp(timeMs: Long): String {
+    internal fun formatLrcTimestamp(timeMs: Long): String {
         val safe = timeMs.coerceAtLeast(0L)
         val totalSeconds = safe / 1000L
         val minutes = totalSeconds / 60L

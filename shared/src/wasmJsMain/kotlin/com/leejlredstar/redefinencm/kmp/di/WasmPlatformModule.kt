@@ -7,7 +7,6 @@ import com.leejlredstar.redefinencm.kmp.player.WebPlatformPlayer
 import com.leejlredstar.redefinencm.kmp.recognition.MicrophoneRecorder
 import com.leejlredstar.redefinencm.kmp.recognition.WasmMicrophoneRecorder
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
-import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.js.Js
 import org.koin.dsl.module
@@ -16,11 +15,8 @@ actual fun platformModule() = module {
     // The Fetch API forbids a user-defined Cookie header. NCM API accepts the same cookie value
     // as a query parameter, so Web uses that transport and disables URL logging in the factory.
     single<HttpClient> {
-        val settings = get<PlatformSettings>()
-        HttpClientFactory.create(
-            baseUrl = settings.getString(SettingKeys.SERVER, "https://ncm.tryagain.icu/"),
-            realIP = "192.168.1.1",
-            cookieProvider = { settings.getString(SettingKeys.COOKIE, "") },
+        createNcmHttpClient(
+            settings = get(),
             engineFactory = Js,
             cookieTransport = HttpClientFactory.CookieTransport.QUERY_PARAMETER,
         )

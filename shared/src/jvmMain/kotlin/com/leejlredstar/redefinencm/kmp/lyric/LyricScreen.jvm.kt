@@ -3,8 +3,6 @@ package com.leejlredstar.redefinencm.kmp.lyric
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -15,18 +13,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOverlayCoordinator
 import com.leejlredstar.redefinencm.kmp.ui.screen.FullLyricScreen
-import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
-import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
@@ -207,47 +198,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             modifier = Modifier.fillMaxSize(),
         )
 
-        val statePalette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
-        when (val state = lyricUiState) {
-            is LyricUiState.Idle -> ExpressiveStatePanel(
-                title = "还没有播放音乐",
-                message = "选择一首歌曲后，歌词会显示在这里。",
-                icon = AppIcons.GraphicEq,
-                accentPalette = statePalette,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(horizontal = 32.dp),
-            )
-            is LyricUiState.Loading -> ExpressiveLoadingState(
-                label = "正在加载歌词…",
-                accentColor = statePalette.accent,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(horizontal = 32.dp),
-            )
-            is LyricUiState.Empty -> ExpressiveStatePanel(
-                title = "暂无歌词",
-                message = "这首歌曲暂时没有可用歌词。",
-                icon = AppIcons.GraphicEq,
-                accentPalette = statePalette,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(horizontal = 32.dp),
-            )
-            is LyricUiState.Error -> ExpressiveStatePanel(
-                title = "歌词加载失败",
-                message = state.message,
-                icon = AppIcons.Refresh,
-                tone = ExpressiveStateTone.Error,
-                accentPalette = statePalette,
-                actionLabel = "重试",
-                onAction = viewModel::retryLyrics,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(horizontal = 32.dp),
-            )
-            is LyricUiState.Content -> Unit
-        }
+        LyricStateOverlay(lyricUiState, viewModel::retryLyrics)
 
         AutoHideMiniPlayerController(
             modifier = Modifier.fillMaxSize(),
@@ -604,7 +555,7 @@ internal fun parseAmllSeekRequest(req: String?): Pair<Long, String?> {
             }
         }
 
-    Regex("""seekTo:(-?\d+):([^,\]\s]+)""")
+    SEEK_COMMAND_PATTERN
         .find(text)
         ?.let { match ->
             val time = match.groupValues[1].toLongOrNull()?.coerceAtLeast(0L) ?: 0L
@@ -612,9 +563,9 @@ internal fun parseAmllSeekRequest(req: String?): Pair<Long, String?> {
             return time to mediaId
         }
 
-    val timeText = Regex("""-?\d+""").find(text)?.value
+    val timeText = INTEGER_PATTERN.find(text)?.value
     val time = timeText?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L
-    val mediaId = Regex(""""([^"\\]*(?:\\.[^"\\]*)*)"""")
+    val mediaId = QUOTED_STRING_PATTERN
         .findAll(text)
         .map { it.groupValues[1].replace("\\\"", "\"").replace("\\\\", "\\") }
         .firstOrNull { it.isNotBlank() && it != timeText }
@@ -625,6 +576,10 @@ private fun kotlinx.serialization.json.JsonElement.asStringOrNull(): String? =
     (this as? JsonPrimitive)
         ?.contentOrNull
         ?.takeIf { it.isNotBlank() }
+
+private val SEEK_COMMAND_PATTERN = Regex("""seekTo:(-?\d+):([^,\]\s]+)""")
+private val INTEGER_PATTERN = Regex("""-?\d+""")
+private val QUOTED_STRING_PATTERN = Regex(""""([^"\\]*(?:\\.[^"\\]*)*)"""")
 
 private fun kotlinx.serialization.json.JsonElement.asLongOrNull(): Long? =
     (this as? JsonPrimitive)

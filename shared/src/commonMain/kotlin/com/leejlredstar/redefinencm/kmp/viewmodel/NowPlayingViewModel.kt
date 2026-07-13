@@ -150,17 +150,35 @@ class NowPlayingViewModel(
             ) { progress, map, media, playing, loadedLyricMediaId ->
                 val (position, duration) = progress
                 val lyricsBelongToMedia = media != null && media.id == loadedLyricMediaId
-                val index = if (lyricsBelongToMedia) {
-                    computeLyricIndex(position, map).coerceAtLeast(0)
-                } else {
-                    0
+                var index = -1
+                var currentLyric: String? = null
+                var nextLyric: String? = null
+                if (lyricsBelongToMedia) {
+                    var candidateIndex = 0
+                    val iterator = map.entries.iterator()
+                    while (iterator.hasNext()) {
+                        val (time, lyric) = iterator.next()
+                        if (time != null && position >= time) {
+                            index = candidateIndex
+                            currentLyric = lyric
+                            candidateIndex += 1
+                        } else {
+                            if (index < 0) {
+                                index = 0
+                                currentLyric = lyric
+                                nextLyric = if (iterator.hasNext()) iterator.next().value else null
+                            } else {
+                                nextLyric = lyric
+                            }
+                            break
+                        }
+                    }
                 }
-                val values = if (lyricsBelongToMedia) map.values.toList() else emptyList()
                 LyricNotificationPayload(
-                    index = index,
+                    index = index.coerceAtLeast(0),
                     media = media,
-                    currentLyric = values.getOrNull(index),
-                    nextLyric = values.getOrNull(index + 1),
+                    currentLyric = currentLyric,
+                    nextLyric = nextLyric,
                     isPlaying = playing,
                     positionMs = (position.coerceAtLeast(0L) / 1_000L) * 1_000L,
                     durationMs = duration,
@@ -184,20 +202,6 @@ class NowPlayingViewModel(
                 }
             }
         }
-    }
-
-    private fun computeLyricIndex(positionMs: Long, map: LinkedHashMap<Long?, String?>): Int {
-        var index = -1
-        var currentIndex = 0
-        for ((time, _) in map) {
-            if (time != null && positionMs >= time) {
-                index = currentIndex
-            } else {
-                break
-            }
-            currentIndex++
-        }
-        return index
     }
 
     private var lyricFetchJob: Job? = null

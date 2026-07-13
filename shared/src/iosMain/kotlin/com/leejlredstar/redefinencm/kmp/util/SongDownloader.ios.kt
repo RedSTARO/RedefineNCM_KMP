@@ -28,10 +28,3 @@ actual object SongDownloader {
         return IosBackgroundDownloadCoordinator.download(url, fileName, onProgress)
     }
 }
-
-private fun extensionFromUrl(url: String): String =
-    url.substringBefore('?')
-        .substringAfterLast('/')
-        .substringAfterLast('.', "mp3")
-        .ifBlank { "mp3" }
-        .take(12)

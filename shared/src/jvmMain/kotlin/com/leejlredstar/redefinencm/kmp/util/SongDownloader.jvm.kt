@@ -22,11 +22,7 @@ actual object SongDownloader {
         val dir = jvmDownloadDirectory()
         if (!dir.exists() && !dir.mkdirs()) error("无法创建下载目录")
 
-        val extension = item.url.substringBefore('?')
-            .substringAfterLast('/')
-            .substringAfterLast('.', "mp3")
-            .ifBlank { "mp3" }
-            .take(12)
+        val extension = extensionFromUrl(item.url)
         val target = File(dir, "${item.id}.$extension")
         if (target.exists()) {
             return@withContext DownloadedSongFile(fileName = target.name, uri = target.toURI().toString())

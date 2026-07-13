@@ -3,17 +3,13 @@ package com.leejlredstar.redefinencm.kmp.data
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.data.db.AppDatabase
+import com.leejlredstar.redefinencm.kmp.test.CapturedRequest
+import com.leejlredstar.redefinencm.kmp.test.parseQuery
+import com.leejlredstar.redefinencm.kmp.test.testHttpClient
 import com.sun.net.httpserver.HttpServer
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.plugins.defaultRequest
-import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.Json
 import java.net.InetSocketAddress
-import java.net.URLDecoder
-import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
@@ -110,14 +106,7 @@ class RepositoryIntelligenceListTest {
             }
             start()
         }
-        val client = HttpClient(OkHttp) {
-            install(ContentNegotiation) {
-                json(Json { ignoreUnknownKeys = true; isLenient = true })
-            }
-            defaultRequest {
-                url("http://127.0.0.1:${server.address.port}")
-            }
-        }
+        val client = testHttpClient(server.address.port)
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         AppDatabase.Schema.create(driver)
         return Fixture(
@@ -145,22 +134,4 @@ class RepositoryIntelligenceListTest {
         }
     }
 
-    private fun parseQuery(rawQuery: String): Map<String, String> = rawQuery
-        .split('&')
-        .filter(String::isNotBlank)
-        .associate { part ->
-            val separator = part.indexOf('=')
-            val name = if (separator >= 0) part.substring(0, separator) else part
-            val value = if (separator >= 0) part.substring(separator + 1) else ""
-            decode(name) to decode(value)
-        }
-
-    private fun decode(value: String): String =
-        URLDecoder.decode(value, StandardCharsets.UTF_8)
-
-    private data class CapturedRequest(
-        val method: String,
-        val path: String,
-        val query: Map<String, String>,
-    )
 }

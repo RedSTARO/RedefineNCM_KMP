@@ -335,7 +335,7 @@ private fun canGoNext(state: MprisState): Boolean =
 private fun canGoPrevious(state: MprisState): Boolean = state.queue.currentIndex > 0
 
 private fun mprisTrackPath(mediaId: String): String {
-    val component = mediaId.replace(Regex("[^A-Za-z0-9_]"), "_").ifBlank { "unknown" }
+    val component = mediaId.replace(MPRIS_TRACK_PATH_COMPONENT, "_").ifBlank { "unknown" }
     return "/com/leejlredstar/redefinencm/track/$component"
 }
 
@@ -347,3 +347,4 @@ internal const val MPRIS_OBJECT_PATH = "/org/mpris/MediaPlayer2"
 internal const val MPRIS_ROOT_INTERFACE = "org.mpris.MediaPlayer2"
 internal const val MPRIS_PLAYER_INTERFACE = "org.mpris.MediaPlayer2.Player"
 private const val MICROSECONDS_PER_MILLISECOND = 1_000L
+private val MPRIS_TRACK_PATH_COMPONENT = Regex("[^A-Za-z0-9_]")

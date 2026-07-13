@@ -68,7 +68,8 @@ class PlayQueue<T> private constructor(
     }
 
     private fun shuffledOrder(rng: Random): List<Int> {
-        val rest = items.indices.filter { it != currentIndex }.shuffled(rng)
+        val rest = items.indices.filterTo(mutableListOf()) { it != currentIndex }
+        rest.shuffle(rng)
         return buildList {
             if (currentIndex in items.indices) add(currentIndex)
             addAll(rest)

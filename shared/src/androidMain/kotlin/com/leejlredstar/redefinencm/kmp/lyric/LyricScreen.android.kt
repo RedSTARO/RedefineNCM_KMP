@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -44,17 +43,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
+import com.leejlredstar.redefinencm.kmp.util.LyricParser
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
-import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import org.json.JSONObject
 import org.koin.compose.koinInject
-import kotlin.math.absoluteValue
 
 /**
  * Android actual: AMLL lyric engine in the system WebView.
@@ -310,47 +305,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             }
         }
 
-        val statePalette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
-        when (val state = lyricUiState) {
-            is LyricUiState.Idle -> ExpressiveStatePanel(
-                title = "还没有播放音乐",
-                message = "选择一首歌曲后，歌词会显示在这里。",
-                icon = AppIcons.GraphicEq,
-                accentPalette = statePalette,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(horizontal = 32.dp),
-            )
-            is LyricUiState.Loading -> ExpressiveLoadingState(
-                label = "正在加载歌词…",
-                accentColor = statePalette.accent,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(horizontal = 32.dp),
-            )
-            is LyricUiState.Empty -> ExpressiveStatePanel(
-                title = "暂无歌词",
-                message = "这首歌曲暂时没有可用歌词。",
-                icon = AppIcons.GraphicEq,
-                accentPalette = statePalette,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(horizontal = 32.dp),
-            )
-            is LyricUiState.Error -> ExpressiveStatePanel(
-                title = "歌词加载失败",
-                message = state.message,
-                icon = AppIcons.Refresh,
-                tone = ExpressiveStateTone.Error,
-                accentPalette = statePalette,
-                actionLabel = "重试",
-                onAction = viewModel::retryLyrics,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(horizontal = 32.dp),
-            )
-            else -> Unit
-        }
+        LyricStateOverlay(lyricUiState, viewModel::retryLyrics)
 
         AutoHideMiniPlayerController(
             modifier = Modifier.fillMaxSize(),
@@ -401,15 +356,6 @@ private fun LinkedHashMap<Long?, String?>.toLrcFallback(): String =
     entries
         .mapNotNull { (time, text) ->
             val line = text?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            "${formatLrcTimestamp(time ?: 0L)}$line"
+            "${LyricParser.formatLrcTimestamp(time ?: 0L)}$line"
         }
         .joinToString("\n")
-
-private fun formatLrcTimestamp(timeMs: Long): String {
-    val safe = timeMs.coerceAtLeast(0L)
-    val totalSeconds = safe / 1000L
-    val minutes = totalSeconds / 60L
-    val seconds = totalSeconds % 60L
-    val centiseconds = (safe % 1000L / 10L).absoluteValue
-    return "[${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}]"
-}

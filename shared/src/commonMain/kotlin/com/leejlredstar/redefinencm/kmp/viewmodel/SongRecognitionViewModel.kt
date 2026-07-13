@@ -4,7 +4,7 @@ import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.dto.AudioMatch
 import com.leejlredstar.redefinencm.kmp.data.api.dto.AudioMatchSong
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
-import com.leejlredstar.redefinencm.kmp.player.MediaInfo
+import com.leejlredstar.redefinencm.kmp.data.toPlayerMediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.recognition.AudioFingerprint
 import com.leejlredstar.redefinencm.kmp.recognition.CapturedPcm
@@ -72,15 +72,19 @@ internal fun classifyAudioMatch(response: AudioMatch?): AudioMatchOutcome {
         return AudioMatchOutcome.Error("识曲服务返回了未知状态（type=${data.type}）")
     }
 
-    val matches = data.result.orEmpty()
-        .map { result ->
-            RecognizedSongMatch(
-                startTimeMs = result.startTime,
-                song = result.song.toSongDetailSongs(),
-            )
+    val seenSongIds = mutableSetOf<Long>()
+    val matches = buildList {
+        data.result.orEmpty().forEach { result ->
+            if (result.song.id != 0L && seenSongIds.add(result.song.id)) {
+                add(
+                    RecognizedSongMatch(
+                        startTimeMs = result.startTime,
+                        song = result.song.toSongDetailSongs(),
+                    ),
+                )
+            }
         }
-        .filter { it.song.id != 0L }
-        .distinctBy { it.song.id }
+    }
     return if (matches.isEmpty()) {
         AudioMatchOutcome.Error("识曲服务未返回匹配结果")
     } else {
@@ -95,16 +99,6 @@ internal fun AudioMatchSong.toSongDetailSongs(): SongDetailSongs = SongDetailSon
     al = album,
     dt = duration,
     mv = mvid,
-)
-
-internal fun SongDetailSongs.toRecognitionMediaInfo(): MediaInfo = MediaInfo(
-    id = id.toString(),
-    title = name,
-    artist = ar.joinToString(", ") { it.name },
-    albumTitle = al.name,
-    artworkUri = al.picUrl,
-    placeholderUri = "redefinencm://playbackPlaceHolder?id=$id",
-    duration = dt,
 )
 
 class SongRecognitionViewModel internal constructor(
@@ -161,13 +155,13 @@ class SongRecognitionViewModel internal constructor(
 
     fun play(match: RecognizedSongMatch) {
         if (closed) return
-        player.setQueue(listOf(match.song.toRecognitionMediaInfo()), 0)
+        player.setQueue(listOf(match.song.toPlayerMediaInfo()), 0)
         player.play()
     }
 
     fun addToQueue(match: RecognizedSongMatch) {
         if (closed) return
-        player.addToQueue(match.song.toRecognitionMediaInfo())
+        player.addToQueue(match.song.toPlayerMediaInfo())
     }
 
     fun close() {

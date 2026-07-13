@@ -3,15 +3,10 @@ package com.leejlredstar.redefinencm.kmp.data
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.data.db.AppDatabase
+import com.leejlredstar.redefinencm.kmp.test.testHttpClient
 import com.sun.net.httpserver.HttpServer
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.plugins.defaultRequest
-import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.Json
 import java.net.InetSocketAddress
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
@@ -28,7 +23,7 @@ class RepositoryUserLevelTest {
             response = levelResponse(userId = 42, progress = 0.75, nowPlayCount = 75),
             requestCount = requestCount,
         )
-        val client = testClient(server.address.port)
+        val client = testHttpClient(server.address.port)
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         AppDatabase.Schema.create(driver)
         val database = AppDatabase(driver)
@@ -65,7 +60,7 @@ class RepositoryUserLevelTest {
             response = levelResponse(userId = 99, progress = 0.9, nowPlayCount = 90),
             requestCount = requestCount,
         )
-        val client = testClient(server.address.port)
+        val client = testHttpClient(server.address.port)
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         AppDatabase.Schema.create(driver)
         val database = AppDatabase(driver)
@@ -94,7 +89,7 @@ class RepositoryUserLevelTest {
             response = """{"code":301,"message":null,"msg":"需要登录"}""",
             requestCount = requestCount,
         )
-        val client = testClient(server.address.port)
+        val client = testHttpClient(server.address.port)
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         AppDatabase.Schema.create(driver)
         val database = AppDatabase(driver)
@@ -118,7 +113,7 @@ class RepositoryUserLevelTest {
             response = """{"code":301,"msg":"需要登录"}""",
             requestCount = requestCount,
         )
-        val client = testClient(server.address.port)
+        val client = testHttpClient(server.address.port)
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         AppDatabase.Schema.create(driver)
         val repository = Repository(NCMApi(client), AppDatabase(driver))
@@ -145,15 +140,6 @@ class RepositoryUserLevelTest {
             }
             start()
         }
-
-    private fun testClient(port: Int): HttpClient = HttpClient(OkHttp) {
-        install(ContentNegotiation) {
-            json(Json { ignoreUnknownKeys = true; isLenient = true })
-        }
-        defaultRequest {
-            url("http://127.0.0.1:$port")
-        }
-    }
 
     private fun levelResponse(userId: Long, progress: Double, nowPlayCount: Long): String =
         """

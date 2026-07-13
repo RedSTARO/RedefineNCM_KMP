@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.viewmodel
 
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
+import com.leejlredstar.redefinencm.kmp.data.toPlayerMediaInfo
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import kotlin.random.Random
@@ -33,21 +34,10 @@ internal fun buildIntelligenceQueue(
     return buildList {
         songInfos.forEach { song ->
             if (song == null || song.id <= 0L || !seenIds.add(song.id)) return@forEach
-            add(song.toIntelligenceMediaInfo(playlistId))
+            add(song.toPlayerMediaInfo(playlistId.toString()))
         }
     }
 }
-
-private fun SongDetailSongs.toIntelligenceMediaInfo(playlistId: Long): MediaInfo = MediaInfo(
-    id = id.toString(),
-    title = name,
-    artist = ar.joinToString(", ") { it.name },
-    albumTitle = al.name,
-    artworkUri = al.picUrl,
-    placeholderUri = "redefinencm://playbackPlaceHolder?id=$id",
-    duration = dt,
-    sourceId = playlistId.toString(),
-)
 
 internal fun replaceQueueWithIntelligenceList(
     player: PlatformPlayer,

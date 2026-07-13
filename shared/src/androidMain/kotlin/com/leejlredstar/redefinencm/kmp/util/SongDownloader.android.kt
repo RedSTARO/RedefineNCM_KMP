@@ -15,8 +15,6 @@ import java.io.OutputStream
 import java.net.URI
 import kotlin.coroutines.coroutineContext
 
-private const val DOWNLOAD_SUBDIR = "RedefineNCM"
-
 /**
  * Android actual：应用内流式下载，不再使用系统 DownloadManager。
  * Android 10+ 通过 MediaStore 写入 Downloads/RedefineNCM/，旧系统写公共下载目录。
@@ -54,7 +52,7 @@ private suspend fun writeViaMediaStore(
     val values = ContentValues().apply {
         put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
         put(MediaStore.MediaColumns.MIME_TYPE, mimeTypeFromFileName(fileName))
-        put(MediaStore.MediaColumns.RELATIVE_PATH, downloadRelativePath())
+        put(MediaStore.MediaColumns.RELATIVE_PATH, DOWNLOAD_RELATIVE_PATH)
         put(MediaStore.MediaColumns.IS_PENDING, 1)
     }
     val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
@@ -135,13 +133,6 @@ private suspend fun copyWithProgress(
     output.flush()
 }
 
-private fun extensionFromUrl(url: String): String =
-    url.substringBefore('?')
-        .substringAfterLast('/')
-        .substringAfterLast('.', "mp3")
-        .ifBlank { "mp3" }
-        .take(12)
-
 private fun mimeTypeFromFileName(fileName: String): String = when (fileName.substringAfterLast('.').lowercase()) {
     "flac" -> "audio/flac"
     "m4a" -> "audio/mp4"
@@ -149,6 +140,3 @@ private fun mimeTypeFromFileName(fileName: String): String = when (fileName.subs
     "wav" -> "audio/wav"
     else -> "audio/mpeg"
 }
-
-private fun downloadRelativePath(): String =
-    "${Environment.DIRECTORY_DOWNLOADS}/$DOWNLOAD_SUBDIR/"

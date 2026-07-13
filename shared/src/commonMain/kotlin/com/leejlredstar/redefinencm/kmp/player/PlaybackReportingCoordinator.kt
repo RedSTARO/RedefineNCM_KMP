@@ -5,6 +5,7 @@ import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
+import com.leejlredstar.redefinencm.kmp.util.cookieFingerprint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -503,15 +504,8 @@ internal fun normalizePlaybackQuality(raw: String): String =
         ?.lowercase()
         ?: SoundQuality.EXHIGH.name.lowercase()
 
-internal fun playbackCredentialKey(cookie: String): Long? {
-    if (cookie.isBlank()) return null
-    var hash = -3750763034362895579L
-    cookie.forEach { character ->
-        hash = hash xor character.code.toLong()
-        hash *= 1099511628211L
-    }
-    return hash
-}
+internal fun playbackCredentialKey(cookie: String): Long? =
+    if (cookie.isBlank()) null else cookieFingerprint(cookie)
 
 internal fun generatePlaybackSessionId(random: Random = Random.Default): String =
     buildString(PLAYBACK_SESSION_ID_LENGTH) {

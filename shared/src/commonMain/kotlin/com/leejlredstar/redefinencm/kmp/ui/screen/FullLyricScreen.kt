@@ -6,14 +6,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -340,10 +338,17 @@ private fun findWordLine(
     lines: List<LyricParser.WordLine>,
 ): LyricParser.WordLine? {
     if (timestamp == null || lines.isEmpty()) return null
-    return lines.firstOrNull { it.startTimeMs == timestamp }
-        ?: lines
-            .minByOrNull { kotlin.math.abs(it.startTimeMs - timestamp) }
-            ?.takeIf { kotlin.math.abs(it.startTimeMs - timestamp) <= 150L }
+    var nearest: LyricParser.WordLine? = null
+    var nearestDistance = Long.MAX_VALUE
+    lines.forEach { line ->
+        val distance = kotlin.math.abs(line.startTimeMs - timestamp)
+        if (distance == 0L) return line
+        if (distance < nearestDistance) {
+            nearest = line
+            nearestDistance = distance
+        }
+    }
+    return nearest?.takeIf { nearestDistance <= 150L }
 }
 
 @Composable

@@ -106,18 +106,19 @@ internal object FingerprintExtractor {
             }
         }
 
-        return candidates
-            .filterNot { peak ->
-                hasGreaterInNeighborhood(
-                    matrix = featureMatrix,
-                    frequency = peak.frequencyBin,
-                    time = peak.timeFrame,
-                    frequencyRadius = FINAL_FREQUENCY_RADIUS,
-                    timeRadius = FINAL_TIME_RADIUS,
-                )
-            }
-            .map { peak -> peak.copy(frequencyBin = peak.frequencyBin + LOW_BIN) }
-            .sortedWith(compareBy(FingerprintPeak::timeFrame, FingerprintPeak::frequencyBin))
+        val peaks = ArrayList<FingerprintPeak>()
+        for (peak in candidates) {
+            if (hasGreaterInNeighborhood(
+                matrix = featureMatrix,
+                frequency = peak.frequencyBin,
+                time = peak.timeFrame,
+                frequencyRadius = FINAL_FREQUENCY_RADIUS,
+                timeRadius = FINAL_TIME_RADIUS,
+            )) continue
+            peaks += peak.copy(frequencyBin = peak.frequencyBin + LOW_BIN)
+        }
+        peaks.sortWith(compareBy(FingerprintPeak::timeFrame, FingerprintPeak::frequencyBin))
+        return peaks
     }
 
     private fun buildFeatureMatrix(samples: FloatArray): Array<FloatArray> {
@@ -434,12 +435,25 @@ private class Aes128(key: ByteArray) {
     }
 
     private fun shiftRows(state: IntArray) {
-        val original = state.copyOf()
-        for (row in 0 until 4) {
-            for (column in 0 until 4) {
-                state[row + 4 * column] = original[row + 4 * ((column + row) % 4)]
-            }
-        }
+        val rowOneFirst = state[1]
+        state[1] = state[5]
+        state[5] = state[9]
+        state[9] = state[13]
+        state[13] = rowOneFirst
+
+        val rowTwoFirst = state[2]
+        val rowTwoSecond = state[6]
+        state[2] = state[10]
+        state[6] = state[14]
+        state[10] = rowTwoFirst
+        state[14] = rowTwoSecond
+
+        val rowThreeFirst = state[3]
+        val rowThreeLast = state[15]
+        state[15] = state[11]
+        state[11] = state[7]
+        state[7] = rowThreeFirst
+        state[3] = rowThreeLast
     }
 
     private fun mixColumns(state: IntArray) {

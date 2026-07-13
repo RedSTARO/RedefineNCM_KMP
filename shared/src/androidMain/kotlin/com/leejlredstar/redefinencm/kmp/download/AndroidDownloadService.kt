@@ -1,19 +1,17 @@
 package com.leejlredstar.redefinencm.kmp.download
 
-import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
+import com.leejlredstar.redefinencm.kmp.util.canPostNotifications
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,10 +49,10 @@ class AndroidDownloadService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // startForegroundService 的 5 秒门限不能等待磁盘；先发不依赖设置的空状态通知，
         // 设置快照就绪后再解析 manager 和执行命令。
-        promoteToForeground(emptyList())
+        promoteToForeground(analyzeDownloadTasks(emptyList()))
         serviceScope.launch {
             KoinPlatform.getKoin().get<PlatformSettings>().awaitLoaded()
-            promoteToForeground(downloadManager.tasks.value)
+            promoteToForeground(analyzeDownloadTasks(downloadManager.tasks.value))
             when (intent?.action) {
                 ACTION_PAUSE_ALL -> downloadManager.pauseAll()
                 ACTION_RESUME_ALL -> downloadManager.resumeAll()
@@ -83,18 +81,18 @@ class AndroidDownloadService : Service() {
 
         hasSeenTasks = true
         emptyStopJob?.cancel()
-        val hasActiveTask = tasks.any { it.isActive }
-        if (hasActiveTask) {
-            promoteToForeground(tasks)
+        val statistics = analyzeDownloadTasks(tasks)
+        if (statistics.firstActiveTask != null) {
+            promoteToForeground(statistics)
         } else {
-            postRegularNotification(tasks)
+            postRegularNotification(statistics)
             detachForeground()
             stopSelf()
         }
     }
 
-    private fun promoteToForeground(tasks: List<SongDownloadTask>) {
-        val notification = buildNotification(tasks, foreground = true)
+    private fun promoteToForeground(statistics: DownloadTaskStatistics) {
+        val notification = buildNotification(statistics, foreground = true)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 NOTIFICATION_ID,
@@ -107,27 +105,22 @@ class AndroidDownloadService : Service() {
         isForeground = true
     }
 
-    private fun postRegularNotification(tasks: List<SongDownloadTask>) {
-        if (!canPostNotifications()) return
+    private fun postRegularNotification(statistics: DownloadTaskStatistics) {
+        if (!canPostNotifications(this)) return
         runCatching {
             NotificationManagerCompat.from(this).notify(
                 NOTIFICATION_ID,
-                buildNotification(tasks, foreground = false),
+                buildNotification(statistics, foreground = false),
             )
         }
     }
 
     private fun buildNotification(
-        tasks: List<SongDownloadTask>,
+        statistics: DownloadTaskStatistics,
         foreground: Boolean,
     ): Notification {
-        val activeTask = tasks.firstOrNull { it.isActive }
-        val total = tasks.size
-        val completed = tasks.count { it.status == DownloadTaskStatus.Completed }
-        val failed = tasks.count {
-            it.status == DownloadTaskStatus.Failed || it.status == DownloadTaskStatus.Cancelled
-        }
-        val paused = tasks.count { it.status == DownloadTaskStatus.Paused }
+        val activeTask = statistics.firstActiveTask
+        val (total, _, completed, failed, _, paused) = statistics.summary
         val title = when {
             activeTask != null -> "正在下载：${activeTask.title}"
             paused > 0 -> "下载已暂停"
@@ -177,7 +170,7 @@ class AndroidDownloadService : Service() {
                 servicePendingIntent(ACTION_RESUME_ALL, requestCode = 2),
             )
         }
-        if (tasks.any { it.isActive || it.status == DownloadTaskStatus.Paused }) {
+        if (statistics.summary.active > 0 || paused > 0) {
             builder.addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
                 "取消",
@@ -275,14 +268,6 @@ class AndroidDownloadService : Service() {
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
         notificationManager.createNotificationChannel(channel)
-    }
-
-    private fun canPostNotifications(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
-        return ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.POST_NOTIFICATIONS,
-        ) == PackageManager.PERMISSION_GRANTED
     }
 
     private data class Progress(
