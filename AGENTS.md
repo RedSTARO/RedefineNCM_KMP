@@ -588,9 +588,10 @@ feature gap; platform integrations use target-specific actuals:
 - **Player-status persistence**: `PlayerStatus.sq` + `Repository.get/savePlayerStatus` +
   `PlatformPlayer.restoreQueue` (no autoplay) + save on `MainActivity.onPause`.
 - **Download manager**: `SongDownloadManager` owns the common queue/state model. The Downloads
-  page remains as an internal route (pause/resume/cancel/retry/clear/delete local files), but
-  the common tab/sidebar entry is removed; on Android, `AndroidDownloadService` runs downloads as
-  a foreground data-sync service and its notification is the entry point into that page. It stores
+  page remains as an internal route (pause/resume/cancel/retry/clear/delete local files). The
+  common tab/sidebar entry is removed; Desktop alone exposes the route as a tool in its modal wide
+  navigation rail, while Android keeps the `AndroidDownloadService` foreground notification as its
+  entry point. The service stores
   the actual downloaded quality from
   `/song/url/v1`'s returned `level` and prefetches/caches lyrics in SQLDelight after the audio file
   is written. The ordered queue is persisted in SQLDelight before Android starts the foreground
@@ -612,7 +613,10 @@ feature gap; platform integrations use target-specific actuals:
   JVM Skia sampling / iOS stub) wired into MiniNowPlayingBar (with luminance-adaptive content
   color + spring animation), PlaylistDetail hero, and the full-screen player fallback.
 - **Search shared-element transition** (pill → bar) via `SharedTransitionLayout` in HomeScreen.
-- **Responsive nav**: NavigationRail on ≥600dp; no-cookie startup routes to Login.
+- **Responsive nav**: non-Desktop targets use NavigationRail on ≥600dp. Desktop keeps a collapsed
+  modal wide navigation rail at every supported window size; expansion overlays content instead of
+  resizing it, so the AMLL native WebView surface is not moved per animation frame. No-cookie startup
+  routes to Login.
 - **Settings**: server availability check (`/inner/version/`); the legacy-persisted
   `adaptOriginalAndroidLyric` value now controls the optional Android Live Update notification
   and Desktop floating-lyrics window (default off, immediate enable/disable); iOS Live Activity

@@ -104,6 +104,7 @@ private sealed interface DownloadDestructiveAction {
 @Composable
 fun DownloadManagementScreen(
     scaffoldPadding: PaddingValues,
+    onBack: (() -> Unit)? = null,
     downloadManager: SongDownloadManager = koinInject(),
 ) {
     val tasks by downloadManager.tasks.collectAsState()
@@ -171,6 +172,7 @@ fun DownloadManagementScreen(
                     },
                     localLibrarySyncState = localLibrarySyncState,
                     onSyncLocalLibrary = downloadManager::syncWithLocalLibrary,
+                    onBack = onBack,
                 )
             }
             item {
@@ -277,6 +279,7 @@ private fun DownloadHero(
     onClearFinished: () -> Unit,
     localLibrarySyncState: LocalLibrarySyncState,
     onSyncLocalLibrary: () -> Unit,
+    onBack: (() -> Unit)?,
 ) {
     val extractAccent = rememberThemeColorExtractor(
         requestKey = representativeTask?.artworkUri,
@@ -300,6 +303,17 @@ private fun DownloadHero(
             horizontalArrangement = Arrangement.spacedBy(18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            onBack?.let {
+                FilledTonalIconButton(
+                    onClick = it,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = accentPalette.quietContainer,
+                        contentColor = accentPalette.onQuietContainer,
+                    ),
+                ) {
+                    Icon(AppIcons.ArrowBack, contentDescription = "返回")
+                }
+            }
             Surface(
                 modifier = Modifier.size(112.dp),
                 shape = MaterialTheme.shapes.extraLarge,

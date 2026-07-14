@@ -17,6 +17,7 @@ import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.graphics.Color
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOverlayCoordinator
+import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOwner
 import com.leejlredstar.redefinencm.kmp.ui.screen.FullLyricScreen
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
@@ -88,7 +89,8 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val showRomanLyric = remember {
         settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)
     }
-    val externalOverlayActive by NativeSurfaceOverlayCoordinator.externalOverlayActive.collectAsState()
+    val activeOverlaySources by NativeSurfaceOverlayCoordinator.activeSources.collectAsState()
+    val externalOverlayActive = activeOverlaySources.isNotEmpty()
     var controlsRevealRequest by remember { mutableIntStateOf(0) }
     var inPageOverlayActive by remember { mutableStateOf(false) }
     val lyricStateOverlayActive = lyricUiState !is LyricUiState.Content
@@ -103,11 +105,13 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         WebviewSession(
             readyFlow = engineReadyFlow,
             errorFlow = engineErrorFlow,
+            initiallyVisible = nativeSurfaceVisible,
             onLineClicked = { timeMs, mediaId -> viewModel.onLyricLineClick(mediaId, timeMs) },
             onBack = onBack,
             onControlsRequested = { controlsRevealRequest++ },
         )
     }
+    var nativeSurfaceOwner by remember(session) { mutableStateOf<NativeSurfaceOwner?>(null) }
 
     // Canvas 拿到原生句柄（displayable + 有尺寸）后，在专用线程启动 webview 事件循环
     LaunchedEffect(session) {
@@ -119,9 +123,13 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         if (engineReady) session.installControlsRevealHook()
     }
 
-    LaunchedEffect(nativeSurfaceVisible) {
+    LaunchedEffect(nativeSurfaceVisible, nativeSurfaceOwner) {
         canvas.isVisible = nativeSurfaceVisible
-        session.setNativeWindowVisible(nativeSurfaceVisible)
+        val nativeWindowUpdated = session.setNativeWindowVisible(nativeSurfaceVisible)
+        val owner = nativeSurfaceOwner
+        if (owner != null && nativeWindowUpdated) {
+            NativeSurfaceOverlayCoordinator.reportNativeSurfaceVisible(owner, nativeSurfaceVisible)
+        }
     }
 
     LaunchedEffect(engineReady, lyricMediaId) {
@@ -182,7 +190,11 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     }
 
     DisposableEffect(session) {
+        val owner = NativeSurfaceOverlayCoordinator.attachNativeSurface(nativeSurfaceVisible)
+        nativeSurfaceOwner = owner
         onDispose {
+            session.setNativeWindowVisible(false)
+            NativeSurfaceOverlayCoordinator.detachNativeSurface(owner)
             session.stop()
         }
     }
@@ -217,6 +229,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
 private class WebviewSession(
     private val readyFlow: MutableStateFlow<Boolean>,
     private val errorFlow: MutableStateFlow<String?>,
+    initiallyVisible: Boolean,
     private val onLineClicked: (Long, String?) -> Unit,
     private val onBack: () -> Unit,
     private val onControlsRequested: () -> Unit,
@@ -228,6 +241,8 @@ private class WebviewSession(
     private val jobsLock = Any()
     private val jobs = ArrayDeque<String>()
     private val latestEval = AtomicReference<String?>(null)
+    private val desiredNativeWindowVisible = AtomicBoolean(initiallyVisible)
+    private val nativeVisibilityLock = Any()
     private val callbackScope = MainScope()
     @Volatile private var childWindow: com.sun.jna.Pointer? = null
 
@@ -292,7 +307,6 @@ private class WebviewSession(
 
                 val childHwnd = native.webview_get_window(webview)
                     ?: error("webview_get_window returned null")
-                childWindow = childHwnd
                 reparentIntoCanvas(childHwnd, canvasHwnd, width, height)
                 println("AMLL[wv2] webview window $childHwnd reparented into canvas $canvasHwnd (${width}x$height)")
 
@@ -328,7 +342,9 @@ private class WebviewSession(
             } finally {
                 resizeListener?.let(canvas::removeComponentListener)
                 readyFlow.value = false
-                childWindow = null
+                synchronized(nativeVisibilityLock) {
+                    childWindow = null
+                }
                 synchronized(jobsLock) { jobs.clear() }
                 latestEval.set(null)
                 if (webview != 0L) {
@@ -355,7 +371,7 @@ private class WebviewSession(
         parent: com.sun.jna.Pointer,
         width: Int,
         height: Int,
-    ) {
+    ) = synchronized(nativeVisibilityLock) {
         val u32 = com.sun.jna.platform.win32.User32.INSTANCE
         val childH = com.sun.jna.platform.win32.WinDef.HWND(child)
         val parentH = com.sun.jna.platform.win32.WinDef.HWND(parent)
@@ -363,17 +379,14 @@ private class WebviewSession(
         val gwlExStyle = -20
         val gwlStyle = com.sun.jna.platform.win32.WinUser.GWL_STYLE
         val swHide = 0
-        val swShowna = 8
         val swpNoZOrder = 0x0004
         val swpNoActivate = 0x0010
         val swpFrameChanged = 0x0020
-        val swpShowWindow = 0x0040
         val wsChild = 0x40000000L
-        val wsVisible = 0x10000000L
         val wsClipChildren = 0x02000000L
         val wsClipSiblings = 0x04000000L
         val wsExToolWindow = 0x00000080L
-        val childStyle = wsChild or wsVisible or wsClipChildren or wsClipSiblings
+        val childStyle = wsChild or wsClipChildren or wsClipSiblings
 
         u32.ShowWindow(childH, swHide)
         u32.SetWindowLongPtr(
@@ -399,10 +412,13 @@ private class WebviewSession(
             0,
             width,
             height,
-            swpNoZOrder or swpNoActivate or swpFrameChanged or swpShowWindow,
+            swpNoZOrder or swpNoActivate or swpFrameChanged,
         )
         u32.MoveWindow(childH, 0, 0, width, height, true)
-        u32.ShowWindow(childH, swShowna)
+        if (!applyNativeWindowVisibilityLocked(child, desiredNativeWindowVisible.get())) {
+            error("WebView2 host window visibility did not reach the requested state")
+        }
+        childWindow = child
     }
 
     fun eval(js: String) {
@@ -445,15 +461,25 @@ private class WebviewSession(
         )
     }
 
-    fun setNativeWindowVisible(visible: Boolean) {
-        val child = childWindow ?: return
-        val cmd = if (visible) 8 else 0
-        runCatching {
-            com.sun.jna.platform.win32.User32.INSTANCE.ShowWindow(
-                com.sun.jna.platform.win32.WinDef.HWND(child),
-                cmd,
-            )
+    fun setNativeWindowVisible(visible: Boolean): Boolean {
+        desiredNativeWindowVisible.set(visible)
+        return synchronized(nativeVisibilityLock) {
+            val child = childWindow ?: return@synchronized true
+            applyNativeWindowVisibilityLocked(child, desiredNativeWindowVisible.get())
         }
+    }
+
+    private fun applyNativeWindowVisibilityLocked(
+        child: com.sun.jna.Pointer,
+        visible: Boolean,
+    ): Boolean {
+        val cmd = if (visible) 8 else 0
+        return runCatching {
+            val user32 = com.sun.jna.platform.win32.User32.INSTANCE
+            val hwnd = com.sun.jna.platform.win32.WinDef.HWND(child)
+            user32.ShowWindow(hwnd, cmd)
+            user32.IsWindowVisible(hwnd) == visible
+        }.getOrDefault(false)
     }
 
     fun stop() {
