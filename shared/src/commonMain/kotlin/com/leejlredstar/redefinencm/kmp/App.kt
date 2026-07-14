@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -41,6 +42,7 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalWideNavigationRail
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -54,14 +56,22 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.WideNavigationRailDefaults
+import androidx.compose.material3.WideNavigationRailItem
+import androidx.compose.material3.WideNavigationRailItemDefaults
+import androidx.compose.material3.WideNavigationRailState
+import androidx.compose.material3.WideNavigationRailValue
+import androidx.compose.material3.rememberWideNavigationRailState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -72,10 +82,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -86,6 +94,7 @@ import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackSeekBar
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
 import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOverlayCoordinator
+import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOverlaySource
 import com.leejlredstar.redefinencm.kmp.ui.component.CommentBottomSheet
 import com.leejlredstar.redefinencm.kmp.ui.component.QueueBottomSheet
 import com.leejlredstar.redefinencm.kmp.ui.component.formatPlaybackDuration
@@ -105,6 +114,7 @@ import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 private sealed interface TabDest {
@@ -202,7 +212,7 @@ private sealed interface RootDest {
 /**
  * Root composable shared across Android / iOS / Desktop / Web. 3-tab nav (Recommend / My /
  * Settings) with a push stack for Login, FullLyric, Downloads, and PlaylistDetail. 窄屏用底部 NavigationBar，
- * 宽屏（≥600dp）用侧边 NavigationRail（原版 WindowWidthSizeClass 响应式布局）。
+ * 非 Desktop 宽屏（≥600dp）用 NavigationRail；Desktop 使用常驻折叠、覆盖展开的模态宽侧栏。
  * Koin must already be started before this is called.
  */
 @Composable
@@ -242,6 +252,7 @@ private fun AppContent(
             )
             val chromePalette = contentAccentPalette(chromeAccent)
             val platform = remember { getPlatform() }
+            val desktopRailState = rememberWideNavigationRailState()
 
             var currentTab by rememberSaveable(stateSaver = tabDestSaver) {
                 mutableStateOf<TabDest>(TabDest.Home)
@@ -299,9 +310,9 @@ private fun AppContent(
 
             Box(Modifier.fillMaxSize()) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
-                    // Desktop chrome must follow the available window, not only the target.
-                    // A compact desktop window uses the same adaptive rail/bar patterns as mobile.
-                    val useDesktopLayout = platform.isDesktop && maxWidth >= 900.dp && maxHeight >= 720.dp
+                    // Keep the collapsed Desktop rail in the layout at every supported window size.
+                    // Its modal expansion overlays content, so AMLL's native HWND is never resized.
+                    val showDesktopFullPlayer = maxWidth >= 900.dp && maxHeight >= 900.dp
                     val isWide = maxWidth >= 600.dp
                     val showMiniPlayer = currentMedia != null && pushedStack.lastOrNull().let {
                         it !is PushedDest.FullLyric
@@ -309,6 +320,8 @@ private fun AppContent(
                     val rootDest = pushedStack.lastOrNull()
                         ?.let { RootDest.Pushed(it, pushedStack.size) }
                         ?: RootDest.Tab(currentTab)
+                    val desktopRailExpanded = platform.isDesktop &&
+                        desktopRailState.targetValue == WideNavigationRailValue.Expanded
 
                     Scaffold(
                         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -316,7 +329,7 @@ private fun AppContent(
                         floatingActionButtonPosition = FabPosition.End,
                         bottomBar = {
                             AnimatedVisibility(
-                                visible = showTabs && !isWide && !useDesktopLayout,
+                                visible = showTabs && !isWide && !platform.isDesktop,
                                 enter = bottomNavEnterTransition(),
                                 exit = bottomNavExitTransition(),
                             ) {
@@ -344,7 +357,7 @@ private fun AppContent(
                         },
                         floatingActionButton = {
                             AnimatedVisibility(
-                                visible = showMiniPlayer && !useDesktopLayout,
+                                visible = showMiniPlayer && !desktopRailExpanded,
                                 enter = miniPlayerEnterTransition(),
                                 exit = miniPlayerExitTransition(),
                             ) {
@@ -356,16 +369,28 @@ private fun AppContent(
                         },
                     ) { innerPadding ->
                         Row(Modifier.fillMaxSize()) {
-                            if (useDesktopLayout) {
-                                DesktopSidebar(
+                            if (platform.isDesktop) {
+                                DesktopExpandableSidebar(
+                                    state = desktopRailState,
                                     tabs = tabs,
-                                    currentTab = currentTab,
+                                    selectedTab = if (
+                                        rootDest is RootDest.Pushed &&
+                                        rootDest.dest is PushedDest.Downloads
+                                    ) {
+                                        null
+                                    } else {
+                                        currentTab
+                                    },
+                                    downloadsSelected = rootDest is RootDest.Pushed &&
+                                        rootDest.dest is PushedDest.Downloads,
                                     accentPalette = chromePalette,
                                     player = player,
+                                    showFullPlayer = showDesktopFullPlayer,
                                     onSelectTab = {
                                         pushedStack.clear()
                                         currentTab = it
                                     },
+                                    onOpenDownloads = ::openDownloads,
                                     onChromeAccent = { rawChromeAccent = it },
                                     onOpenNowPlaying = ::openFullLyric,
                                 )
@@ -415,6 +440,7 @@ private fun AppContent(
                                             is PushedDest.FullLyric -> WebViewLyricScreen(onBack = ::back)
                                             is PushedDest.Downloads -> DownloadManagementScreen(
                                                 scaffoldPadding = innerPadding,
+                                                onBack = if (platform.isDesktop) ::back else null,
                                             )
                                             is PushedDest.SongRecognition -> SongRecognitionScreen(
                                                 onBack = ::back,
@@ -450,95 +476,181 @@ private fun AppContent(
 }
 
 @Composable
-private fun DesktopSidebar(
+private fun DesktopExpandableSidebar(
+    state: WideNavigationRailState,
     tabs: List<NavigationItem>,
-    currentTab: TabDest,
+    selectedTab: TabDest?,
+    downloadsSelected: Boolean,
     accentPalette: ContentAccentPalette,
     player: PlatformPlayer,
+    showFullPlayer: Boolean,
     onSelectTab: (TabDest) -> Unit,
+    onOpenDownloads: () -> Unit,
     onChromeAccent: (Color) -> Unit,
     onOpenNowPlaying: () -> Unit,
 ) {
-    Surface(
-        color = accentPalette.quietContainer,
-        modifier = Modifier.width(276.dp).fillMaxSize(),
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Column(Modifier.padding(horizontal = 8.dp, vertical = 10.dp)) {
-                Text(
-                    text = "RedefineNCM",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = accentPalette.onQuietContainer,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = "Desktop",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = accentPalette.secondaryOnQuietContainer,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-            tabs.forEach { item ->
-                DesktopNavItem(
-                    label = item.label,
-                    icon = item.icon,
-                    selected = currentTab == item.dest,
-                    accentPalette = accentPalette,
-                    onClick = { onSelectTab(item.dest) },
-                )
-            }
-            Spacer(Modifier.weight(1f))
-            DesktopNowPlayingStrip(
-                player = player,
-                accentPalette = accentPalette,
-                onAccentColor = onChromeAccent,
-                onOpenNowPlaying = onOpenNowPlaying,
+    val scope = rememberCoroutineScope()
+    val railExpanded = state.targetValue == WideNavigationRailValue.Expanded
+    val expansionSettled = railExpanded &&
+        !state.isAnimating &&
+        state.currentValue == state.targetValue
+    val modalExpansionActive = state.isAnimating ||
+        state.currentValue == WideNavigationRailValue.Expanded ||
+        state.targetValue == WideNavigationRailValue.Expanded
+    var preExpandRequested by remember { mutableStateOf(false) }
+    var showExpandedPlayerContent by remember { mutableStateOf(false) }
+    val nativeOverlayRequired = preExpandRequested || modalExpansionActive
+    val itemColors = WideNavigationRailItemDefaults.colors(
+        selectedIconColor = accentPalette.onContainer,
+        selectedTextColor = accentPalette.onContainer,
+        selectedIndicatorColor = accentPalette.container,
+        unselectedIconColor = accentPalette.secondaryOnQuietContainer,
+        unselectedTextColor = accentPalette.secondaryOnQuietContainer,
+    )
+
+    SideEffect {
+        NativeSurfaceOverlayCoordinator.setActive(
+            NativeSurfaceOverlaySource.DesktopNavigationRail,
+            nativeOverlayRequired,
+        )
+    }
+    LaunchedEffect(showFullPlayer, expansionSettled, modalExpansionActive) {
+        when {
+            !showFullPlayer || !modalExpansionActive -> showExpandedPlayerContent = false
+            expansionSettled -> showExpandedPlayerContent = true
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            NativeSurfaceOverlayCoordinator.setActive(
+                NativeSurfaceOverlaySource.DesktopNavigationRail,
+                false,
             )
         }
     }
-}
 
-@Composable
-private fun DesktopNavItem(
-    label: String,
-    icon: ImageVector,
-    selected: Boolean,
-    accentPalette: ContentAccentPalette,
-    onClick: () -> Unit,
-) {
-    Surface(
-        onClick = onClick,
-        shape = MaterialTheme.shapes.large,
-        color = if (selected) accentPalette.container else Color.Transparent,
-        contentColor = if (selected) accentPalette.onContainer else accentPalette.onQuietContainer,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(52.dp)
-            .semantics {
-                role = Role.Tab
-                this.selected = selected
-            },
+    fun collapseAfter(action: () -> Unit) {
+        action()
+        scope.launch { state.collapse() }
+    }
+
+    ModalWideNavigationRail(
+        state = state,
+        colors = WideNavigationRailDefaults.colors(
+            containerColor = accentPalette.quietContainer,
+            contentColor = accentPalette.onQuietContainer,
+            modalContainerColor = accentPalette.quietContainer,
+            modalScrimColor = MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f),
+            modalContentColor = accentPalette.onQuietContainer,
+        ),
     ) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        Column(
+            modifier = Modifier.fillMaxHeight(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FilledTonalIconButton(
+                    onClick = {
+                        if (railExpanded) {
+                            scope.launch { state.collapse() }
+                        } else if (!preExpandRequested) {
+                            preExpandRequested = true
+                            scope.launch {
+                                try {
+                                    if (
+                                        NativeSurfaceOverlayCoordinator.awaitOverlayReady(
+                                            NativeSurfaceOverlaySource.DesktopNavigationRail,
+                                        )
+                                    ) {
+                                        state.expand()
+                                    }
+                                } finally {
+                                    preExpandRequested = false
+                                }
+                            }
+                        }
+                    },
+                    enabled = !preExpandRequested,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = accentPalette.container,
+                        contentColor = accentPalette.onContainer,
+                    ),
+                    modifier = Modifier.semantics {
+                        stateDescription = if (railExpanded) "侧栏已展开" else "侧栏已收起"
+                    },
+                ) {
+                    Icon(
+                        imageVector = AppIcons.Menu,
+                        contentDescription = if (railExpanded) "收起侧栏" else "展开侧栏",
+                    )
+                }
+                if (modalExpansionActive) {
+                    Spacer(Modifier.width(14.dp))
+                    Column {
+                        Text(
+                            text = "RedefineNCM",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = accentPalette.onQuietContainer,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = "Desktop",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = accentPalette.secondaryOnQuietContainer,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+            tabs.forEach { item ->
+                WideNavigationRailItem(
+                    selected = selectedTab == item.dest,
+                    onClick = { collapseAfter { onSelectTab(item.dest) } },
+                    icon = { Icon(item.icon, contentDescription = null) },
+                    label = { Text(item.label) },
+                    railExpanded = railExpanded,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = itemColors,
+                )
+            }
+            if (modalExpansionActive) {
+                Text(
+                    text = "工具",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = accentPalette.secondaryOnQuietContainer,
+                    modifier = Modifier.padding(start = 24.dp, top = 8.dp),
+                )
+                WideNavigationRailItem(
+                    selected = downloadsSelected,
+                    onClick = { collapseAfter(onOpenDownloads) },
+                    icon = { Icon(AppIcons.Download, contentDescription = null) },
+                    label = { Text("下载管理") },
+                    railExpanded = railExpanded,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = itemColors,
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            if (showFullPlayer && modalExpansionActive) {
+                Box(
+                    modifier = Modifier.width(320.dp).padding(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    if (showExpandedPlayerContent) {
+                        DesktopNowPlayingStrip(
+                            player = player,
+                            accentPalette = accentPalette,
+                            onAccentColor = onChromeAccent,
+                            onOpenNowPlaying = { collapseAfter(onOpenNowPlaying) },
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -592,11 +704,17 @@ private fun DesktopNowPlayingStrip(
         if (showComments) viewModel.getComments()
     }
     LaunchedEffect(showQueue, showComments) {
-        NativeSurfaceOverlayCoordinator.setExternalOverlayActive(showQueue || showComments)
+        NativeSurfaceOverlayCoordinator.setActive(
+            NativeSurfaceOverlaySource.DesktopPlayerSheet,
+            showQueue || showComments,
+        )
     }
     DisposableEffect(Unit) {
         onDispose {
-            NativeSurfaceOverlayCoordinator.setExternalOverlayActive(false)
+            NativeSurfaceOverlayCoordinator.setActive(
+                NativeSurfaceOverlaySource.DesktopPlayerSheet,
+                false,
+            )
         }
     }
 

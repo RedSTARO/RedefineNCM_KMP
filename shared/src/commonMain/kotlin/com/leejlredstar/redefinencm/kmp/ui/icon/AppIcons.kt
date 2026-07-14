@@ -15,6 +15,9 @@ import androidx.compose.ui.unit.dp
  * viewBox 为 `0 -960 960 960`，故用 group(translationY = 960f) 平移到正坐标系。
  */
 object AppIcons {
+    val Menu: ImageVector by lazy {
+        symbol("Menu", "M120-240v-80h720v80H120Zm0-200v-80h720v80H120Zm0-200v-80h720v80H120Z")
+    }
     val Home: ImageVector by lazy {
         symbol("Home", "M160-120v-480l320-240 320 240v480H560v-280H400v280H160Z")
     }
