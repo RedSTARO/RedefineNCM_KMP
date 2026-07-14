@@ -96,8 +96,8 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         !externalOverlayActive &&
         !lyricStateOverlayActive
 
-    // 资产解包很快（3 个小文件拷贝），首帧前同步执行即可
-    val assetsDir = remember { extractAmllAssets() }
+    // 只在进程内首次打开时解包；反复开关页面不再同步重写约 440 KiB 资产。
+    val assetsDir = remember { extractedAmllAssets }
     val canvas = remember { Canvas().apply { background = AwtColor.BLACK } }
     val session = remember(viewModel) {
         WebviewSession(
@@ -308,6 +308,11 @@ private class WebviewSession(
                 }
                 canvas.addComponentListener(resizeListener)
 
+                if (stopped.get()) {
+                    setNativeWindowVisible(false)
+                    return@thread
+                }
+
                 native.webview_bind(webview, "amllReady", bindCallback, 0)
                 native.webview_bind(webview, "amllSeek", seekCallback, 0)
                 native.webview_bind(webview, "amllBack", backCallback, 0)
@@ -454,14 +459,15 @@ private class WebviewSession(
     fun stop() {
         if (!stopped.compareAndSet(false, true)) return
         readyFlow.value = false
+        // 原生子窗口不受 Compose 的离场绘制约束；先隐藏，避免销毁期间盖住新页面。
+        setNativeWindowVisible(false)
         synchronized(jobsLock) { jobs.clear() }
         latestEval.set(null)
         val w = handle.get()
         if (w != 0L) runCatching { WebviewJna.N.webview_terminate(w) }
         callbackScope.cancel()
-        eventThread.get()?.takeIf { it !== Thread.currentThread() }?.let { worker ->
-            runCatching { worker.join(STOP_JOIN_TIMEOUT_MS) }
-        }
+        // webview_terminate 会唤醒事件循环；finally 在专用线程完成 destroy。
+        // DisposableEffect 运行在 Compose/AWT UI 线程，不能在这里 join。
     }
 
     /**
@@ -520,7 +526,6 @@ private class WebviewSession(
 
     private companion object {
         const val MAX_PENDING_EVALS = 64
-        const val STOP_JOIN_TIMEOUT_MS = 1_500L
     }
 }
 
@@ -595,6 +600,10 @@ private fun Canvas.physicalHeight(): Int =
     (height * (graphicsConfiguration?.defaultTransform?.scaleY ?: 1.0)).toInt()
 
 /** Extract the bundled AMLL assets to a temp dir so the WebView can load them over file://. */
+private val extractedAmllAssets: File by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+    extractAmllAssets()
+}
+
 private fun extractAmllAssets(): File {
     val dir = File(System.getProperty("java.io.tmpdir"), "redefinencm-amll").apply { mkdirs() }
     for (name in listOf("player.html", "bundle.js", "style.css")) {
