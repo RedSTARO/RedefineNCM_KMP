@@ -1,6 +1,7 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 val appBaseVersion = rootProject.extra["redefineNcmBaseVersion"] as String
+val appMsiPackageVersion = rootProject.extra["redefineNcmMsiPackageVersion"] as String
 
 plugins {
     alias(libs.plugins.kotlinJvm)
@@ -46,6 +47,7 @@ compose.desktop {
             vendor = "RedSTAR"
 
             windows {
+                msiPackageVersion = appMsiPackageVersion
                 menu = true
                 menuGroup = "RedSTAR"
                 shortcut = true

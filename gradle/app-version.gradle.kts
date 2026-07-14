@@ -19,6 +19,9 @@ abstract class PrintAppVersionTask : DefaultTask() {
     @get:Input
     abstract val versionCode: Property<Int>
 
+    @get:Input
+    abstract val msiPackageVersion: Property<String>
+
     @TaskAction
     fun printVersion() {
         println("versionName=${versionName.get()}")
@@ -26,6 +29,7 @@ abstract class PrintAppVersionTask : DefaultTask() {
         println("baseVersion=${baseVersion.get()}")
         println("commitHash=${commitHash.get()}")
         println("versionCode=${versionCode.get()}")
+        println("msiPackageVersion=${msiPackageVersion.get()}")
     }
 }
 
@@ -80,6 +84,25 @@ val appVersionCode = versionInput("REDEFINE_NCM_VERSION_CODE", "rev-list", "--co
     .toIntOrNull()
     ?.takeIf { it > 0 }
     ?: throw GradleException("REDEFINE_NCM_VERSION_CODE must be a positive integer.")
+val appBaseVersionComponents = appBaseVersion.split('.')
+val appSemanticMajor = appBaseVersionComponents[0].toIntOrNull()
+    ?: throw GradleException("MSI major version must be an integer, got '${appBaseVersionComponents[0]}'.")
+val appMsiMinor = appBaseVersionComponents[1].toIntOrNull()
+    ?: throw GradleException("MSI minor version must be an integer, got '${appBaseVersionComponents[1]}'.")
+val appSemanticPatch = appBaseVersionComponents[2].toLongOrNull()
+    ?: throw GradleException("MSI patch version must be an integer, got '${appBaseVersionComponents[2]}'.")
+// Reserve MSI major version 1 for the historical pre-Git-versioning installer line.
+val appMsiMajor = appSemanticMajor + 1
+val appMsiBuild = appVersionCode.toLong() + appSemanticPatch
+if (appSemanticMajor !in 0..254 || appMsiMinor !in 0..255 || appMsiBuild !in 1L..65_535L) {
+    throw GradleException(
+        "MSI version components are out of range: major=$appMsiMajor, " +
+            "minor=$appMsiMinor, build=$appMsiBuild (expected 1..255, 0..255, 1..65535).",
+    )
+}
+// MSI supports only MAJOR.MINOR.BUILD. Commit count makes every CI artifact upgradeable, while
+// adding PATCH also advances a tag created on an already-packaged commit.
+val appMsiPackageVersion = "$appMsiMajor.$appMsiMinor.$appMsiBuild"
 val appVersionName = "$appBaseTag.$appCommitHash"
 
 allprojects {
@@ -91,6 +114,7 @@ rootProject.extra["redefineNcmBaseVersion"] = appBaseVersion
 rootProject.extra["redefineNcmCommitHash"] = appCommitHash
 rootProject.extra["redefineNcmVersionCode"] = appVersionCode
 rootProject.extra["redefineNcmVersionName"] = appVersionName
+rootProject.extra["redefineNcmMsiPackageVersion"] = appMsiPackageVersion
 
 tasks.register<PrintAppVersionTask>("printAppVersion") {
     group = "versioning"
@@ -101,4 +125,5 @@ tasks.register<PrintAppVersionTask>("printAppVersion") {
     baseVersion.set(appBaseVersion)
     commitHash.set(appCommitHash)
     versionCode.set(appVersionCode)
+    msiPackageVersion.set(appMsiPackageVersion)
 }

@@ -148,8 +148,8 @@ separate, verified upgrade pass; see [Dependency management](#dependency-managem
 ### Application versioning
 
 App version metadata is Git-derived from `gradle/app-version.gradle.kts`. The required base
-tag format is `v<major>.<minor>.<patch>`; the current base tag is `v0.0.1`. Full app version
-names are `baseTag.shortCommitHash`, e.g. `v0.0.1.cf6cea74`. Build numbers are
+tag format is `v<major>.<minor>.<patch>`; the current base tag is `v0.0.2`. Full app version
+names are `baseTag.shortCommitHash`, e.g. `v0.0.2.cf6cea74`. Build numbers are
 `git rev-list --count HEAD`.
 
 Platform mapping:
@@ -157,8 +157,12 @@ Platform mapping:
 - Android: `versionName = full app version`, `versionCode = commit count`.
 - Shared runtime: generated common `BuildInfo` exposes base tag, semantic base version,
   commit hash, commit-count build number, and full app version.
-- Desktop native distributions: `packageVersion = base semantic version` (without `v`), because
-  native packagers require numeric package versions; runtime code still uses full `BuildInfo`.
+- Desktop DMG/DEB distributions: `packageVersion = base semantic version` (without `v`).
+- Windows MSI: `msiPackageVersion = <base major + 1>.<base minor>.<commit count + base patch>`
+  while the stable `upgradeUuid` remains unchanged. The major-version offset is the installer
+  epoch above the historical `1.0.0` package. MSI has only three numeric components, so the
+  commit count makes every CI artifact upgradeable and adding the patch also advances a tag made
+  on an already-packaged commit. Runtime code still uses the full `BuildInfo` version.
 - iOS app + LyricWidget: `CFBundleShortVersionString = base semantic version`,
   `CFBundleVersion = commit count`, and `RedefineNCMVersionName = full app version`. Xcode build
   phases run `iosApp/Scripts/stamp-version.sh` to stamp the built product from the same Git data.
