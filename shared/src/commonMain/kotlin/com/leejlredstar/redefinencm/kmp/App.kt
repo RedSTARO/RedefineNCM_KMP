@@ -399,7 +399,13 @@ private fun AppContent(
                             Column(Modifier.weight(1f).fillMaxSize()) {
                                 AnimatedContent(
                                     targetState = rootDest,
-                                    transitionSpec = { pageTransition(initialState, targetState) },
+                                    transitionSpec = {
+                                        pageTransition(
+                                            initial = initialState,
+                                            target = targetState,
+                                            disableFullLyricMotion = platform.isDesktop,
+                                        )
+                                    },
                                     modifier = Modifier.weight(1f).fillMaxSize(),
                                     label = "AppPageTransition",
                                 ) { target ->
@@ -867,8 +873,16 @@ private fun desktopSecondaryButtonColors(accentPalette: ContentAccentPalette) =
         disabledContentColor = accentPalette.onQuietContainer.copy(alpha = 0.38f),
     )
 
-private fun pageTransition(initial: RootDest, target: RootDest): ContentTransform =
+private fun pageTransition(
+    initial: RootDest,
+    target: RootDest,
+    disableFullLyricMotion: Boolean,
+): ContentTransform =
     when {
+        // Desktop AMLL is a native child HWND hosted by SwingPanel. It cannot follow Compose
+        // transforms or clipping, so animating it produces a half-height native surface.
+        disableFullLyricMotion && isFullLyricSheetTransition(initial, target) ->
+            EnterTransition.None togetherWith ExitTransition.None
         isFullLyricSheetTransition(initial, target) -> sheetTransition(showingSheet = isFullLyric(target))
         initial is RootDest.Tab && target is RootDest.Tab -> {
             val forward = tabIndex(target.tab) > tabIndex(initial.tab)
