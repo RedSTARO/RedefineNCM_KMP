@@ -217,6 +217,7 @@ fun FullLyricScreen(
                 showSongWikiDetails = true
                 viewModel.getSongWikiSummary()
             },
+            tint = accentPalette.onQuietContainer,
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .statusBarsPadding()

@@ -2,7 +2,6 @@ package com.leejlredstar.redefinencm.kmp.ui.component
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -11,18 +10,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,11 +35,16 @@ fun SongWikiDetailsButton(
     enabled: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    tint: Color = LocalContentColor.current,
 ) {
     IconButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier,
+        colors = IconButtonDefaults.iconButtonColors(
+            contentColor = tint,
+            disabledContentColor = tint.copy(alpha = 0.38f),
+        ),
     ) {
         Icon(
             imageVector = AppIcons.MoreVert,
@@ -103,14 +108,10 @@ fun SongWikiDetailsSheet(
 
 @Composable
 private fun SongWikiLoadingContent() {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
-        Text("正在加载音乐百科…")
-    }
+    ExpressiveLoadingState(
+        label = "正在加载音乐百科…",
+        accentColor = MaterialTheme.colorScheme.primary,
+    )
 }
 
 @Composable
