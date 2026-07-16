@@ -59,7 +59,7 @@ import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
 import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsButton
-import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsDialog
+import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsSheet
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.util.LyricParser
@@ -350,7 +350,7 @@ fun FullLyricScreen(
         AutoHideMiniPlayerController(modifier = Modifier.fillMaxSize())
     }
 
-    SongWikiDetailsDialog(
+    SongWikiDetailsSheet(
         visible = showSongWikiDetails,
         songTitle = metadata?.title,
         state = songWikiUiState,

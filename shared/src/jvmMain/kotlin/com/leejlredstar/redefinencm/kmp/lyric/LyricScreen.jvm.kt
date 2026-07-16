@@ -18,7 +18,7 @@ import androidx.compose.ui.graphics.Color
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOverlayCoordinator
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOwner
-import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsDialog
+import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsSheet
 import com.leejlredstar.redefinencm.kmp.ui.screen.FullLyricScreen
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
@@ -103,6 +103,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val lyricStateOverlayActive = lyricUiState !is LyricUiState.Content
     val nativeSurfaceVisible = !inPageOverlayActive &&
         !externalOverlayActive &&
+        !showSongWikiDetails &&
         !lyricStateOverlayActive
 
     // 只在进程内首次打开时解包；反复开关页面不再同步重写约 440 KiB 资产。
@@ -250,7 +251,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         )
     }
 
-    SongWikiDetailsDialog(
+    SongWikiDetailsSheet(
         visible = showSongWikiDetails,
         songTitle = metadata?.title,
         state = songWikiUiState,
