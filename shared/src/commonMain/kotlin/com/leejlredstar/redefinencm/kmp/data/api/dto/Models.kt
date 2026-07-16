@@ -285,6 +285,33 @@ data class SongWikiSummaryResponse(
     val msg: String? = null,
 )
 
+/** `/song/dynamic/cover` returns a video resource, not an image URL. */
+@Serializable
+data class SongDynamicCoverResponse(
+    val code: Int = 0,
+    val data: SongDynamicCoverData? = null,
+    val message: String? = null,
+    val msg: String? = null,
+)
+
+@Serializable
+data class SongDynamicCoverData(
+    val videoPlayUrl: String? = null,
+    // Some compatible backends expose one of these older aliases.
+    val videoUrl: String? = null,
+    val url: String? = null,
+)
+
+fun SongDynamicCoverResponse.resolvedVideoUrl(): String? = sequenceOf(
+    data?.videoPlayUrl,
+    data?.videoUrl,
+    data?.url,
+).mapNotNull { it?.trim()?.takeIf(String::isNotEmpty) }
+    .firstOrNull { candidate ->
+        candidate.startsWith("https://", ignoreCase = true) ||
+            candidate.startsWith("http://", ignoreCase = true)
+    }
+
 @Serializable
 data class SongWikiSummaryData(
     val blocks: List<SongWikiBlock>? = null,

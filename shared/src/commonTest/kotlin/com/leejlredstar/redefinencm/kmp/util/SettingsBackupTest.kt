@@ -67,4 +67,25 @@ class SettingsBackupTest {
         )
         assertTrue(writtenBooleans[SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE] == true)
     }
+
+    @Test
+    fun dynamicCoverPreferenceRoundTripsAndDefaultsToOriginalCover() {
+        val defaultWrites = mutableMapOf<String, Boolean>()
+        assertTrue(
+            applySettingsBackup(
+                json = "{}",
+                setString = { _, _ -> },
+                setBoolean = { key, value -> defaultWrites[key] = value },
+            ),
+        )
+        assertFalse(defaultWrites.getValue(SettingKeys.USE_DYNAMIC_COVER))
+
+        val exported = encodeSettingsBackup(
+            getString = { _, default -> default },
+            getBoolean = { key, default ->
+                if (key == SettingKeys.USE_DYNAMIC_COVER) true else default
+            },
+        )
+        assertTrue(exported.contains("\"useDynamicCover\":true"))
+    }
 }

@@ -54,6 +54,8 @@ import kotlinx.serialization.json.Json
 import org.json.JSONObject
 import org.koin.compose.koinInject
 
+actual val supportsDynamicNowPlayingCover: Boolean = true
+
 /**
  * Android actual: AMLL lyric engine in the system WebView.
  *
@@ -76,6 +78,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
+    val dynamicCoverUrl by viewModel.dynamicCoverUrl.collectAsState()
     val songWikiUiState by viewModel.songWikiUiState.collectAsState()
 
     val context = LocalContext.current
@@ -272,6 +275,15 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         if (!engineReady) return@LaunchedEffect
         val art = metadata?.artworkUri?.takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
         webView.evaluateJavascript("AmllBridge.setBackground(${JSONObject.quote(art)});", null)
+    }
+
+    LaunchedEffect(engineReady, dynamicCoverUrl) {
+        if (!engineReady) return@LaunchedEffect
+        val command = dynamicCoverUrl
+            ?.takeIf(String::isNotBlank)
+            ?.let { "AmllPage.setDynamicCover(${JSONObject.quote(it)});" }
+            ?: "AmllPage.clearDynamicCover();"
+        webView.evaluateJavascript("if (globalThis.AmllPage) $command", null)
     }
 
     LaunchedEffect(engineReady, songWikiUiState) {

@@ -19,6 +19,7 @@ object SettingKeys {
     const val ENABLE_EXTRA_LYRIC_SURFACE = "adaptOriginalAndroidLyric"
     const val SHOW_TRANSLATED_LYRIC = "showTranslatedLyric"
     const val SHOW_ROMAN_LYRIC = "showRomanLyric"
+    const val USE_DYNAMIC_COVER = "useDynamicCover"
     const val PLAYER_VOLUME = "playerVolume"
 }
 

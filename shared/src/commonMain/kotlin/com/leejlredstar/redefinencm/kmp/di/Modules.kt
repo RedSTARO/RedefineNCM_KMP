@@ -77,7 +77,7 @@ val sharedModule = module {
     single { MainViewModel(get(), get(), get(), get(), get()) }
     // Single — the now-playing state is inherently global (only one song plays at a time).
     // The full-screen player and compact playback controls inject this same instance.
-    single { NowPlayingViewModel(get(), get(), get()) }
+    single { NowPlayingViewModel(get(), get(), get(), get()) }
     // Factory — recording and cancellation are scoped to one pushed recognition page.
     factory { SongRecognitionViewModel(get(), get(), get()) }
 }

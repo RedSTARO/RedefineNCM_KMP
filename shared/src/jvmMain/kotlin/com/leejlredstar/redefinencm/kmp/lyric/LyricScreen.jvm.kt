@@ -47,6 +47,9 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
 import java.awt.Color as AwtColor
 
+actual val supportsDynamicNowPlayingCover: Boolean
+    get() = desktopEmbeddedWebViewSupported()
+
 /**
  * Desktop (JVM) actual: AMLL lyric engine in the **system WebView**
  * (Windows = WebView2 / Edge Chromium)，通过 [WebviewJna]（直传 HWND 的精简绑定）
@@ -76,6 +79,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
+    val dynamicCoverUrl by viewModel.dynamicCoverUrl.collectAsState()
     val songWikiUiState by viewModel.songWikiUiState.collectAsState()
 
     val engineReadyFlow = remember { MutableStateFlow(false) }
@@ -189,8 +193,16 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     LaunchedEffect(engineReady, metadata?.artworkUri) {
         if (!engineReady) return@LaunchedEffect
         val art = metadata?.artworkUri?.takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
-        val safe = art.replace("\\", "\\\\").replace("'", "\\'")
-        session.eval("AmllBridge.setBackground('$safe');")
+        session.eval("AmllBridge.setBackground('${art.escapeJsSingleQuoted()}');")
+    }
+
+    LaunchedEffect(engineReady, dynamicCoverUrl) {
+        if (!engineReady) return@LaunchedEffect
+        val command = dynamicCoverUrl
+            ?.takeIf(String::isNotBlank)
+            ?.let { "AmllPage.setDynamicCover('${it.escapeJsSingleQuoted()}');" }
+            ?: "AmllPage.clearDynamicCover();"
+        session.eval("if (globalThis.AmllPage) $command")
     }
 
     LaunchedEffect(engineReady, songWikiUiState) {

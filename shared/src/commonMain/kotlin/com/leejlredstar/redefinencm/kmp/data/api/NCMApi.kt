@@ -276,6 +276,13 @@ class NCMApi(private val client: HttpClient) {
         }.body()
     }
 
+    suspend fun songDynamicCover(id: Long): SongDynamicCoverResponse {
+        require(id > 0) { "id must be positive" }
+        return client.get("/song/dynamic/cover") {
+            parameter("id", id)
+        }.body()
+    }
+
     suspend fun audioMatch(durationSeconds: Int, audioFingerprint: String): AudioMatch =
         client.post("/audio/match") {
             parameter("duration", durationSeconds)

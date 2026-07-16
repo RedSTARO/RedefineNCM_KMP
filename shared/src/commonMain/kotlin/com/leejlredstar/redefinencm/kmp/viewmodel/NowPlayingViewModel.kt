@@ -4,10 +4,13 @@ import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.SongWikiSummary
 import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusic
 import com.leejlredstar.redefinencm.kmp.data.api.dto.Lyric
+import com.leejlredstar.redefinencm.kmp.lyric.supportsDynamicNowPlayingCover
 import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
 import com.leejlredstar.redefinencm.kmp.player.*
 import com.leejlredstar.redefinencm.kmp.smtc.MediaControlsIntegrator
 import com.leejlredstar.redefinencm.kmp.util.LyricParser
+import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
+import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
@@ -44,6 +47,7 @@ class NowPlayingViewModel(
     private val repo: Repository,
     private val player: PlatformPlayer,
     private val mainViewModel: MainViewModel,
+    private val settings: PlatformSettings,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -83,10 +87,16 @@ class NowPlayingViewModel(
     // ── Favorite ──
     val favoriteUiState = MutableStateFlow(FavoriteUiState())
 
+    // ── Artwork ──
+    val useDynamicCover = MutableStateFlow(false)
+    val dynamicCoverUrl = MutableStateFlow<String?>(null)
+
     init {
         initPlayerSync()
         initLyricSync()
         initFavoriteSync()
+        initDynamicCoverPreference()
+        initDynamicCoverSync()
     }
 
     private fun initPlayerSync() {
@@ -259,6 +269,52 @@ class NowPlayingViewModel(
                     }
                 }
         }
+    }
+
+    private fun initDynamicCoverPreference() {
+        scope.launch {
+            try {
+                settings.awaitLoaded()
+                setUseDynamicCover(
+                    settings.getBooleanAsync(SettingKeys.USE_DYNAMIC_COVER, false),
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                setUseDynamicCover(false)
+            }
+        }
+    }
+
+    private fun initDynamicCoverSync() {
+        scope.launch {
+            combine(
+                player.currentMedia,
+                mainViewModel.uid,
+                useDynamicCover,
+            ) { media, uid, enabled -> Triple(media?.id, uid, enabled) }
+                .distinctUntilChanged()
+                .collectLatest { (mediaId, uid, enabled) ->
+                    dynamicCoverUrl.value = null
+                    val songId = mediaId?.toLongOrNull()?.takeIf { it > 0 }
+                    if (!enabled || uid <= 0 || songId == null) return@collectLatest
+
+                    val url = withContext(Dispatchers.Default) {
+                        repo.getSongDynamicCoverUrl(songId)
+                    }
+                    if (
+                        useDynamicCover.value &&
+                        mainViewModel.uid.value == uid &&
+                        player.currentMedia.value?.id == mediaId
+                    ) {
+                        dynamicCoverUrl.value = url
+                    }
+                }
+        }
+    }
+
+    fun setUseDynamicCover(enabled: Boolean) {
+        useDynamicCover.value = enabled && supportsDynamicNowPlayingCover
     }
 
     private var lyricFetchJob: Job? = null
