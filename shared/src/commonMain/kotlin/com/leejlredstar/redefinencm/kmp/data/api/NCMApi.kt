@@ -380,6 +380,17 @@ class NCMApi(private val client: HttpClient) {
     suspend fun likelist(uid: Long): LikeList =
         client.post("/likelist") { parameter("uid", uid) }.body()
 
+    suspend fun songLikeCheck(ids: List<Long>): SongLikeCheck {
+        require(ids.isNotEmpty()) { "ids must not be empty" }
+        require(ids.all { it > 0 }) { "ids must contain only positive values" }
+        return client.get("/song/like/check") {
+            parameter(
+                "ids",
+                ids.distinct().joinToString(separator = ",", prefix = "[", postfix = "]"),
+            )
+        }.body()
+    }
+
     // ── Comment ──
 
     suspend fun commentMusic(id: Long): CommentMusic =

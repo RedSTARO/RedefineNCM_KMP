@@ -502,6 +502,14 @@ data class LikeList(
     val ids: List<Long> = emptyList(),
 )
 
+@Serializable
+data class SongLikeCheck(
+    val code: Int = 0,
+    val ids: List<Long> = emptyList(),
+    val message: String? = null,
+    val msg: String? = null,
+)
+
 // ── Comments ──
 
 @Serializable
