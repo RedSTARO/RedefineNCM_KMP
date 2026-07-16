@@ -43,14 +43,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
+import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsDialog
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.LyricParser
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
-import com.leejlredstar.redefinencm.kmp.viewmodel.SongWikiUiState
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import org.json.JSONObject
 import org.koin.compose.koinInject
 
@@ -84,6 +82,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     var engineReady by remember { mutableStateOf(false) }
     var rendererGeneration by remember { mutableIntStateOf(0) }
+    var showSongWikiDetails by remember { mutableStateOf(false) }
     val lyricForWeb = remember(rawLyric, lyricMap, lyricUiState) {
         if (lyricUiState is LyricUiState.Content) {
             rawLyric.takeIf { it.isNotBlank() } ?: lyricMap.toLrcFallback()
@@ -189,7 +188,14 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
                         }
                     },
                     onSongWikiRequested = {
-                        post { viewModel.getSongWikiSummary() }
+                        post {
+                            evaluateJavascript(
+                                "if (globalThis.AmllPage) AmllPage.resetSongWiki();",
+                                null,
+                            )
+                            showSongWikiDetails = true
+                            viewModel.getSongWikiSummary()
+                        }
                     },
                 ),
                 "AmllCallback",
@@ -286,20 +292,14 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         webView.evaluateJavascript("if (globalThis.AmllPage) $command", null)
     }
 
-    LaunchedEffect(engineReady, songWikiUiState) {
-        if (!engineReady) return@LaunchedEffect
-        val command = when (val state = songWikiUiState) {
-            is SongWikiUiState.Idle -> "AmllPage.resetSongWiki();"
-            is SongWikiUiState.Loading -> "AmllPage.setSongWikiLoading();"
-            is SongWikiUiState.Content -> {
-                val payload = songWikiJson.encodeToString(state.summary)
-                "AmllPage.setSongWikiSummary(${JSONObject.quote(payload)});"
-            }
-            is SongWikiUiState.Empty -> "AmllPage.setSongWikiEmpty();"
-            is SongWikiUiState.Error ->
-                "AmllPage.setSongWikiError(${JSONObject.quote(state.message)});"
+    LaunchedEffect(metadata?.id) {
+        showSongWikiDetails = false
+        if (engineReady) {
+            webView.evaluateJavascript(
+                "if (globalThis.AmllPage) AmllPage.resetSongWiki();",
+                null,
+            )
         }
-        webView.evaluateJavascript("if (globalThis.AmllPage) $command", null)
     }
 
     Box(
@@ -346,6 +346,20 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             modifier = Modifier.fillMaxSize(),
         )
     }
+
+    SongWikiDetailsDialog(
+        visible = showSongWikiDetails,
+        songTitle = metadata?.title,
+        state = songWikiUiState,
+        onDismiss = {
+            showSongWikiDetails = false
+            webView.evaluateJavascript(
+                "if (globalThis.AmllPage) AmllPage.resetSongWiki();",
+                null,
+            )
+        },
+        onRetry = viewModel::getSongWikiSummary,
+    )
 }
 
 private class AmllCallback(
@@ -364,8 +378,6 @@ private class AmllCallback(
     @JavascriptInterface
     fun onSongWikiRequested() = onSongWikiRequested.invoke()
 }
-
-private val songWikiJson = Json { encodeDefaults = true }
 
 private fun WebView.showAmllStatus(message: String) {
     evaluateJavascript(

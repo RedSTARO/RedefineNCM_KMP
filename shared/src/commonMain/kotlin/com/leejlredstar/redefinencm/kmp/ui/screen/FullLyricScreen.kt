@@ -58,6 +58,8 @@ import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerControlle
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
+import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsButton
+import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsDialog
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.util.LyricParser
@@ -87,6 +89,8 @@ fun FullLyricScreen(
     val wordLyricLines by viewModel.wordLyricLines.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
+    val songWikiUiState by viewModel.songWikiUiState.collectAsState()
+    var showSongWikiDetails by remember { mutableStateOf(false) }
 
     val defaultHeroColor = MaterialTheme.colorScheme.primaryContainer
     var themeColor by remember(metadata?.artworkUri, defaultHeroColor) {
@@ -104,6 +108,10 @@ fun FullLyricScreen(
     var resumeJob by remember { mutableStateOf<Job?>(null) }
     var programmaticScroll by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(metadata?.id) {
+        showSongWikiDetails = false
+    }
 
     // Auto-centre current line
     LaunchedEffect(lyricIndex, isUserScrolling) {
@@ -202,6 +210,18 @@ fun FullLyricScreen(
                 )
             }
         }
+
+        SongWikiDetailsButton(
+            enabled = metadata != null,
+            onClick = {
+                showSongWikiDetails = true
+                viewModel.getSongWikiSummary()
+            },
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(8.dp),
+        )
 
         // ── Scrollable lyric list ──
         LazyColumn(
@@ -329,6 +349,14 @@ fun FullLyricScreen(
 
         AutoHideMiniPlayerController(modifier = Modifier.fillMaxSize())
     }
+
+    SongWikiDetailsDialog(
+        visible = showSongWikiDetails,
+        songTitle = metadata?.title,
+        state = songWikiUiState,
+        onDismiss = { showSongWikiDetails = false },
+        onRetry = viewModel::getSongWikiSummary,
+    )
 }
 
 // ── Helpers ──
