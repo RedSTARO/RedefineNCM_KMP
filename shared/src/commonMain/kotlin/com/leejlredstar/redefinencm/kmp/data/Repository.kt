@@ -601,6 +601,24 @@ class Repository(
             .orEmpty()
     }
 
+    /** Returns null when login is unavailable or the check request is rejected. */
+    suspend fun checkLikedSongIds(songIds: List<Long>): Set<Long>? {
+        require(songIds.isNotEmpty()) { "songIds must not be empty" }
+        require(songIds.all { it > 0 }) { "songIds must contain only positive values" }
+        val requestedIds = songIds.distinct().toSet()
+        return safeApiCall { api.songLikeCheck(requestedIds.toList()) }
+            ?.takeIf { it.code == API_SUCCESS_CODE }
+            ?.ids
+            ?.asSequence()
+            ?.filter { it in requestedIds }
+            ?.toSet()
+    }
+
+    suspend fun isSongLiked(songId: Long): Boolean? {
+        require(songId > 0) { "songId must be positive" }
+        return checkLikedSongIds(listOf(songId))?.contains(songId)
+    }
+
     // ── Player status（播放状态持久化，对应原版 Room playerStatus 表）──
 
     suspend fun getPlayerStatus(): Result<PlayerStatus?> = runCatching {

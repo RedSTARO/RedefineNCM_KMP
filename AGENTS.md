@@ -318,6 +318,12 @@ passes only the `SONG_PLAY_ABOUT_TAB_SONG_BASIC` display fields back to the page
 and playlist blocks are excluded. Requests and rendered state are media-ID scoped, and changing
 tracks must close the dialog and prevent a late response from replacing the new track's state.
 
+Now-playing favorite controls query `/song/like/check` with the current song ID only after the
+current account UID is available. A successful response containing that ID renders the filled
+heart/accent state; an absent ID, logged-out state, failed check, track change, or account change
+renders the outlined state. A successful existing `/like` action promotes the same current-song
+state to liked immediately. Late checks and actions must be scoped to both media ID and account UID.
+
 ### Playback reporting contract
 
 `PlaybackReportingCoordinator` is an eager process-wide common singleton. Platform players do

@@ -111,6 +111,7 @@ fun AutoHideMiniPlayerController(
     val commentsLoading by viewModel.commentsLoading.collectAsState()
     val commentsLoadError by viewModel.commentsLoadError.collectAsState()
     val commentsFromCache by viewModel.commentsFromCache.collectAsState()
+    val favoriteState by viewModel.favoriteUiState.collectAsState()
 
     var visible by remember { mutableStateOf(initialExpanded) }
     var revealRequest by remember { mutableIntStateOf(0) }
@@ -118,6 +119,7 @@ fun AutoHideMiniPlayerController(
     var showComments by remember { mutableStateOf(false) }
 
     val hasMedia = media != null
+    val isFavorite = favoriteState.mediaId == media?.id && favoriteState.isLiked
     val totalDuration = duration
         .takeIf { it > 0L }
         ?: media?.duration?.takeIf { it > 0L }
@@ -185,6 +187,7 @@ fun AutoHideMiniPlayerController(
                     totalDuration = totalDuration,
                     progress = progress,
                     shuffleEnabled = shuffleEnabled,
+                    isFavorite = isFavorite,
                     accentPalette = accentPalette,
                     onArtworkLoaded = extractAccent,
                     onReveal = ::reveal,
@@ -308,6 +311,7 @@ private fun FullLyricControlConsole(
     totalDuration: Long,
     progress: Float,
     shuffleEnabled: Boolean,
+    isFavorite: Boolean,
     accentPalette: ContentAccentPalette,
     onArtworkLoaded: (coil3.Image) -> Unit,
     onReveal: () -> Unit,
@@ -362,11 +366,22 @@ private fun FullLyricControlConsole(
                     modifier = Modifier.weight(1f),
                     shape = CircleShape,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = accentPalette.container.copy(alpha = 0.72f),
-                        contentColor = accentPalette.onContainer,
+                        containerColor = if (isFavorite) {
+                            accentPalette.accent
+                        } else {
+                            accentPalette.container.copy(alpha = 0.72f)
+                        },
+                        contentColor = if (isFavorite) {
+                            accentPalette.onAccent
+                        } else {
+                            accentPalette.onContainer
+                        },
                     ),
                 ) {
-                    Icon(AppIcons.FavoriteBorder, contentDescription = "收藏")
+                    Icon(
+                        imageVector = if (isFavorite) AppIcons.Favorite else AppIcons.FavoriteBorder,
+                        contentDescription = if (isFavorite) "已收藏" else "收藏",
+                    )
                 }
                 FilledTonalIconButton(
                     onClick = onQueue,

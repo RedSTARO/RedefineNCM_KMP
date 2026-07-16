@@ -27,6 +27,11 @@ sealed interface SongWikiUiState {
     data class Error(val mediaId: String, val message: String) : SongWikiUiState
 }
 
+data class FavoriteUiState(
+    val mediaId: String? = null,
+    val isLiked: Boolean = false,
+)
+
 /**
  * Ported from the original Android NowPlayingViewModel.
  *
@@ -38,6 +43,7 @@ sealed interface SongWikiUiState {
 class NowPlayingViewModel(
     private val repo: Repository,
     private val player: PlatformPlayer,
+    private val mainViewModel: MainViewModel,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -74,9 +80,13 @@ class NowPlayingViewModel(
     // ── Song wiki ──
     val songWikiUiState = MutableStateFlow<SongWikiUiState>(SongWikiUiState.Idle)
 
+    // ── Favorite ──
+    val favoriteUiState = MutableStateFlow(FavoriteUiState())
+
     init {
         initPlayerSync()
         initLyricSync()
+        initFavoriteSync()
     }
 
     private fun initPlayerSync() {
@@ -220,10 +230,43 @@ class NowPlayingViewModel(
         }
     }
 
+    private fun initFavoriteSync() {
+        scope.launch {
+            combine(player.currentMedia, mainViewModel.uid) { media, uid -> media?.id to uid }
+                .distinctUntilChanged()
+                .collectLatest { (mediaId, uid) ->
+                    favoriteActionJob?.cancel()
+                    val requestGeneration = ++favoriteStatusGeneration
+                    val songId = mediaId?.toLongOrNull()?.takeIf { it > 0 }
+                    if (songId == null || uid <= 0) {
+                        favoriteUiState.value = FavoriteUiState()
+                        return@collectLatest
+                    }
+
+                    favoriteUiState.value = FavoriteUiState(mediaId = mediaId)
+                    val isLiked = withContext(Dispatchers.Default) {
+                        repo.isSongLiked(songId)
+                    }
+                    if (
+                        requestGeneration == favoriteStatusGeneration &&
+                        player.currentMedia.value?.id == mediaId &&
+                        mainViewModel.uid.value == uid
+                    ) {
+                        favoriteUiState.value = FavoriteUiState(
+                            mediaId = mediaId,
+                            isLiked = isLiked == true,
+                        )
+                    }
+                }
+        }
+    }
+
     private var lyricFetchJob: Job? = null
     private var commentsFetchJob: Job? = null
     private var songWikiFetchJob: Job? = null
     private var songWikiRequestGeneration = 0L
+    private var favoriteActionJob: Job? = null
+    private var favoriteStatusGeneration = 0L
 
     private fun fetchLyrics(mediaId: String) {
         lyricFetchJob?.cancel()
@@ -479,9 +522,25 @@ class NowPlayingViewModel(
     // ── Playback actions ──
 
     fun onFavClick() {
-        scope.launch {
-            val mediaId = currentMedia.value?.id?.toLongOrNull()
-            repo.like(mediaId)
+        val uid = mainViewModel.uid.value.takeIf { it > 0 } ?: return
+        val mediaId = player.currentMedia.value?.id ?: return
+        val songId = mediaId.toLongOrNull()?.takeIf { it > 0 } ?: return
+        if (favoriteUiState.value.let { it.mediaId == mediaId && it.isLiked }) return
+        if (favoriteActionJob?.isActive == true) return
+
+        favoriteActionJob = scope.launch {
+            val liked = withContext(Dispatchers.Default) { repo.like(songId) } != null
+            if (
+                liked &&
+                player.currentMedia.value?.id == mediaId &&
+                mainViewModel.uid.value == uid
+            ) {
+                favoriteStatusGeneration += 1
+                favoriteUiState.value = FavoriteUiState(
+                    mediaId = mediaId,
+                    isLiked = true,
+                )
+            }
         }
     }
 
@@ -512,6 +571,7 @@ class NowPlayingViewModel(
     fun onCleared() {
         commentsFetchJob?.cancel()
         songWikiFetchJob?.cancel()
+        favoriteActionJob?.cancel()
         scope.cancel()
     }
 

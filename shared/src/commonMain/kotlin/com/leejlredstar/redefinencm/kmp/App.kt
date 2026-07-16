@@ -676,9 +676,11 @@ private fun DesktopNowPlayingStrip(
     val commentsLoading by viewModel.commentsLoading.collectAsState()
     val commentsLoadError by viewModel.commentsLoadError.collectAsState()
     val commentsFromCache by viewModel.commentsFromCache.collectAsState()
+    val favoriteState by viewModel.favoriteUiState.collectAsState()
     val artwork = media?.artworkUri.orEmpty()
     val extractAccent = rememberThemeColorExtractor(artwork) { onAccentColor(it) }
     val hasMedia = media != null
+    val isFavorite = favoriteState.mediaId == media?.id && favoriteState.isLiked
     val safePosition = position.coerceAtLeast(0L)
     val totalDuration = duration
         .takeIf { it > 0L }
@@ -940,9 +942,21 @@ private fun DesktopNowPlayingStrip(
                         enabled = hasMedia,
                         modifier = Modifier.weight(1f),
                         shape = CircleShape,
-                        colors = desktopSecondaryButtonColors(accentPalette),
+                        colors = if (isFavorite) {
+                            IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = accentPalette.accent,
+                                contentColor = accentPalette.onAccent,
+                                disabledContainerColor = accentPalette.quietContainer.copy(alpha = 0.44f),
+                                disabledContentColor = accentPalette.onQuietContainer.copy(alpha = 0.38f),
+                            )
+                        } else {
+                            desktopSecondaryButtonColors(accentPalette)
+                        },
                     ) {
-                        Icon(AppIcons.FavoriteBorder, contentDescription = "收藏")
+                        Icon(
+                            imageVector = if (isFavorite) AppIcons.Favorite else AppIcons.FavoriteBorder,
+                            contentDescription = if (isFavorite) "已收藏" else "收藏",
+                        )
                     }
                     FilledTonalIconButton(
                         onClick = { showComments = true },
