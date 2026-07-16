@@ -18,19 +18,18 @@ import androidx.compose.ui.graphics.Color
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOverlayCoordinator
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOwner
+import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsDialog
 import com.leejlredstar.redefinencm.kmp.ui.screen.FullLyricScreen
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
-import com.leejlredstar.redefinencm.kmp.viewmodel.SongWikiUiState
 import com.sun.jna.Native
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -100,6 +99,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val externalOverlayActive = activeOverlaySources.isNotEmpty()
     var controlsRevealRequest by remember { mutableIntStateOf(0) }
     var inPageOverlayActive by remember { mutableStateOf(false) }
+    var showSongWikiDetails by remember { mutableStateOf(false) }
     val lyricStateOverlayActive = lyricUiState !is LyricUiState.Content
     val nativeSurfaceVisible = !inPageOverlayActive &&
         !externalOverlayActive &&
@@ -116,7 +116,10 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             onLineClicked = { timeMs, mediaId -> viewModel.onLyricLineClick(mediaId, timeMs) },
             onBack = onBack,
             onControlsRequested = { controlsRevealRequest++ },
-            onSongWikiRequested = viewModel::getSongWikiSummary,
+            onSongWikiRequested = {
+                showSongWikiDetails = true
+                viewModel.getSongWikiSummary()
+            },
         )
     }
     var nativeSurfaceOwner by remember(session) { mutableStateOf<NativeSurfaceOwner?>(null) }
@@ -205,20 +208,14 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         session.eval("if (globalThis.AmllPage) $command")
     }
 
-    LaunchedEffect(engineReady, songWikiUiState) {
-        if (!engineReady) return@LaunchedEffect
-        val command = when (val state = songWikiUiState) {
-            is SongWikiUiState.Idle -> "AmllPage.resetSongWiki();"
-            is SongWikiUiState.Loading -> "AmllPage.setSongWikiLoading();"
-            is SongWikiUiState.Content -> {
-                val payload = songWikiJson.encodeToString(state.summary).escapeJsSingleQuoted()
-                "AmllPage.setSongWikiSummary('$payload');"
-            }
-            is SongWikiUiState.Empty -> "AmllPage.setSongWikiEmpty();"
-            is SongWikiUiState.Error ->
-                "AmllPage.setSongWikiError('${state.message.escapeJsSingleQuoted()}');"
+    LaunchedEffect(engineReady, showSongWikiDetails) {
+        if (engineReady) {
+            session.eval("if (globalThis.AmllPage) AmllPage.resetSongWiki();")
         }
-        session.eval("if (globalThis.AmllPage) $command")
+    }
+
+    LaunchedEffect(metadata?.id) {
+        showSongWikiDetails = false
     }
 
     DisposableEffect(session) {
@@ -252,6 +249,14 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             onOverlayVisibilityChanged = { inPageOverlayActive = it },
         )
     }
+
+    SongWikiDetailsDialog(
+        visible = showSongWikiDetails,
+        songTitle = metadata?.title,
+        state = songWikiUiState,
+        onDismiss = { showSongWikiDetails = false },
+        onRetry = viewModel::getSongWikiSummary,
+    )
 }
 
 /**
@@ -668,8 +673,6 @@ private fun Canvas.physicalHeight(): Int =
 private val extractedAmllAssets: File by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
     extractAmllAssets()
 }
-
-private val songWikiJson = Json { encodeDefaults = true }
 
 private fun extractAmllAssets(): File {
     val dir = File(System.getProperty("java.io.tmpdir"), "redefinencm-amll").apply { mkdirs() }
