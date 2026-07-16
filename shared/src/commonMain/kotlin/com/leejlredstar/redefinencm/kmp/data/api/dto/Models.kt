@@ -149,6 +149,14 @@ data class Dailysignin(
     val code: Int = 0,
 )
 
+@Serializable
+data class VipGrowthPointResponse(
+    val code: Int = 0,
+    val data: JsonElement? = null,
+    val message: String? = null,
+    val msg: String? = null,
+)
+
 // ── Playlist ──
 
 @Serializable

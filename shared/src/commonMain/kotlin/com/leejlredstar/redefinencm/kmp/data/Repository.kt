@@ -74,6 +74,15 @@ class Repository(
     suspend fun getUserAccount(): UserAccount? =
         safeApiCall { api.userAccount() }?.takeIf { it.code == API_SUCCESS_CODE }
 
+    /** Process-start action: claim every completed VIP task reward once for the logged-in account. */
+    suspend fun claimAllVipGrowthPoints(
+        credentialCookie: String,
+    ): VipGrowthPointResponse? {
+        require(credentialCookie.isNotBlank()) { "credentialCookie must not be blank" }
+        return safeApiCall { api.vipGrowthPointGetAll(credentialCookie) }
+            ?.takeIf { it.code == API_SUCCESS_CODE }
+    }
+
     fun getUserDetail(uid: Long): Flow<CacheThenNetworkData<UserDetail>> = cacheThenNetworkFlow(
         readCache = {
             runCatching {

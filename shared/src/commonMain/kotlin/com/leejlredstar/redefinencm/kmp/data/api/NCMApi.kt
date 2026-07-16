@@ -228,6 +228,12 @@ class NCMApi(private val client: HttpClient) {
     suspend fun dailysignin(type: Int): Dailysignin =
         client.get("/daily_signin") { parameter("type", type) }.body()
 
+    suspend fun vipGrowthPointGetAll(
+        credentialCookie: String? = null,
+    ): VipGrowthPointResponse = client.get("/vip/growthpoint/getall") {
+        appendCredentialCookie(credentialCookie)
+    }.body()
+
     // ── Playlist ──
 
     suspend fun userPlaylist(uid: Long): UserPlaylist =
