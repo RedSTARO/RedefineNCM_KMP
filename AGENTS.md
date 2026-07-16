@@ -281,6 +281,13 @@ RedefineNCM_KMP/
 - The package is `com.leejlredstar.redefinencm.kmp` (the original Android app used
   `com.redstar.redefinencm`). All new KMP code goes under the new package.
 
+## Logged-in startup actions
+
+On a process start that resolves an already logged-in account, the app calls
+`/vip/growthpoint/getall` once to claim all completed VIP task rewards. This action uses the
+startup credential snapshot, runs independently from account-page loading, is not repeated by
+account-data retries or an in-process login, and is cancelled if the account is cleared or switched.
+
 ---
 
 ## How playback & lyrics work (ported contract)

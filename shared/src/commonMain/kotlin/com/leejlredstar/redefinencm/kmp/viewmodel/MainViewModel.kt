@@ -78,6 +78,8 @@ class MainViewModel(
     val userPlaylistsFromCache = MutableStateFlow(false)
     private val accountGeneration = MutableStateFlow(0L)
     private var accountJob: Job? = null
+    private var startupVipGrowthClaimAttempted = false
+    private var startupVipGrowthClaimJob: Job? = null
 
     // ── Intelligence playback ──
     val intelligenceLoadingPlaylistId = MutableStateFlow<Long?>(null)
@@ -118,7 +120,10 @@ class MainViewModel(
     val updateMessage = MutableStateFlow<String?>(null)
 
     init {
-        loadAccount(clearPersistedAccount = false)
+        loadAccount(
+            clearPersistedAccount = false,
+            claimVipGrowthPointsOnSuccess = true,
+        )
         restorePlayerStatus()
         downloadManager.syncWithLocalLibrary()
         initPlayerStatusAutosave()
@@ -277,11 +282,18 @@ class MainViewModel(
     }
 
     /** Login/account changes invalidate all work started for the previous credential. */
-    private fun loadAccount(clearPersistedAccount: Boolean) {
+    private fun loadAccount(
+        clearPersistedAccount: Boolean,
+        claimVipGrowthPointsOnSuccess: Boolean = false,
+    ) {
         cancelIntelligenceRequest()
         val generation = accountGeneration.updateAndGet { it + 1L }
         accountJob?.cancel()
-        if (clearPersistedAccount) accountCredentialKey.value = null
+        if (clearPersistedAccount) {
+            accountCredentialKey.value = null
+            startupVipGrowthClaimJob?.cancel()
+            startupVipGrowthClaimJob = null
+        }
         accountLoading.value = true
         accountLoadError.value = null
         userDetailLoadError.value = null
@@ -307,7 +319,8 @@ class MainViewModel(
             try {
                 settings.awaitLoaded()
                 val cookie = settings.getStringAsync(SettingKeys.COOKIE, "")
-                val credentialKey = playbackCredentialKey(HttpClientFactory.cleanCookie(cookie))
+                val credentialCookie = HttpClientFactory.cleanCookie(cookie)
+                val credentialKey = playbackCredentialKey(credentialCookie)
                 if (accountGeneration.value != generation) return@launch
                 accountCredentialKey.value = credentialKey
                 if (clearPersistedAccount) {
@@ -339,6 +352,9 @@ class MainViewModel(
                 ensureActive()
                 if (accountGeneration.value != generation) return@launch
                 _uid.value = resolvedUid
+                if (claimVipGrowthPointsOnSuccess) {
+                    scheduleStartupVipGrowthClaim(credentialCookie)
+                }
 
                 coroutineScope {
                     launch {
@@ -468,6 +484,14 @@ class MainViewModel(
                     accountLoading.value = false
                 }
             }
+        }
+    }
+
+    private fun scheduleStartupVipGrowthClaim(credentialCookie: String) {
+        if (startupVipGrowthClaimAttempted || credentialCookie.isBlank()) return
+        startupVipGrowthClaimAttempted = true
+        startupVipGrowthClaimJob = scope.launch(Dispatchers.Default) {
+            repo.claimAllVipGrowthPoints(credentialCookie)
         }
     }
 
