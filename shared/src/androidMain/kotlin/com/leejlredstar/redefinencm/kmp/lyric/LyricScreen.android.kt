@@ -17,9 +17,12 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
@@ -308,35 +311,35 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             )
         }
 
-        IconButton(
-            onClick = onBack,
+        Row(
             modifier = Modifier
-                .align(Alignment.TopStart)
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(8.dp),
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Surface(shape = CircleShape, color = Color.White.copy(alpha = 0.15f)) {
-                Icon(
-                    AppIcons.ArrowBack,
-                    contentDescription = "返回",
-                    tint = Color.White,
-                    modifier = Modifier.padding(10.dp),
-                )
+            IconButton(onClick = onBack) {
+                Surface(shape = CircleShape, color = Color.White.copy(alpha = 0.15f)) {
+                    Icon(
+                        AppIcons.ArrowBack,
+                        contentDescription = "返回",
+                        tint = Color.White,
+                        modifier = Modifier.padding(10.dp),
+                    )
+                }
             }
-        }
 
-        SongWikiDetailsButton(
-            enabled = metadata != null,
-            onClick = {
-                showSongWikiDetails = true
-                viewModel.getSongWikiSummary()
-            },
-            tint = Color.White,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .statusBarsPadding()
-                .padding(8.dp),
-        )
+            SongWikiDetailsButton(
+                enabled = metadata != null,
+                onClick = {
+                    showSongWikiDetails = true
+                    viewModel.getSongWikiSummary()
+                },
+                tint = Color.White,
+            )
+        }
 
         LyricStateOverlay(lyricUiState, viewModel::retryLyrics)
 
