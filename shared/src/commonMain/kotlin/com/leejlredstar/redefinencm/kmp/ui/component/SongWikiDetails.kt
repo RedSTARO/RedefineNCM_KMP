@@ -47,9 +47,9 @@ fun SongWikiDetailsButton(
         ),
     ) {
         Icon(
-            imageVector = AppIcons.MoreVert,
+            imageVector = AppIcons.Info,
             contentDescription = "详细信息",
-            modifier = Modifier.size(26.dp),
+            modifier = Modifier.size(24.dp),
         )
     }
 }

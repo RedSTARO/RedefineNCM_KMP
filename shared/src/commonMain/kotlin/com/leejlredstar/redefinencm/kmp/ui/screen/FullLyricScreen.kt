@@ -4,8 +4,10 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -190,39 +192,38 @@ fun FullLyricScreen(
                 ),
         )
 
-        // ── Back button ──
-        IconButton(
-            onClick = onBack,
+        Row(
             modifier = Modifier
-                .align(Alignment.TopStart)
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(8.dp),
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Surface(
-                shape = CircleShape,
-                color = accentPalette.quietContainer.copy(alpha = 0.70f),
-                contentColor = accentPalette.onQuietContainer,
-            ) {
-                Icon(
-                    AppIcons.ArrowBack,
-                    contentDescription = "返回",
-                    modifier = Modifier.padding(10.dp),
-                )
+            IconButton(onClick = onBack) {
+                Surface(
+                    shape = CircleShape,
+                    color = accentPalette.quietContainer.copy(alpha = 0.70f),
+                    contentColor = accentPalette.onQuietContainer,
+                ) {
+                    Icon(
+                        AppIcons.ArrowBack,
+                        contentDescription = "返回",
+                        modifier = Modifier.padding(10.dp),
+                    )
+                }
             }
-        }
 
-        SongWikiDetailsButton(
-            enabled = metadata != null,
-            onClick = {
-                showSongWikiDetails = true
-                viewModel.getSongWikiSummary()
-            },
-            tint = accentPalette.onQuietContainer,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .statusBarsPadding()
-                .padding(8.dp),
-        )
+            SongWikiDetailsButton(
+                enabled = metadata != null,
+                onClick = {
+                    showSongWikiDetails = true
+                    viewModel.getSongWikiSummary()
+                },
+                tint = accentPalette.onQuietContainer,
+            )
+        }
 
         // ── Scrollable lyric list ──
         LazyColumn(
