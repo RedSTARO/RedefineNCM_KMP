@@ -23,12 +23,14 @@ import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
+import com.leejlredstar.redefinencm.kmp.viewmodel.SongWikiUiState
 import com.sun.jna.Native
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -74,6 +76,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
+    val songWikiUiState by viewModel.songWikiUiState.collectAsState()
 
     val engineReadyFlow = remember { MutableStateFlow(false) }
     val engineReady by engineReadyFlow.collectAsState()
@@ -109,6 +112,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             onLineClicked = { timeMs, mediaId -> viewModel.onLyricLineClick(mediaId, timeMs) },
             onBack = onBack,
             onControlsRequested = { controlsRevealRequest++ },
+            onSongWikiRequested = viewModel::getSongWikiSummary,
         )
     }
     var nativeSurfaceOwner by remember(session) { mutableStateOf<NativeSurfaceOwner?>(null) }
@@ -189,6 +193,22 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         session.eval("AmllBridge.setBackground('$safe');")
     }
 
+    LaunchedEffect(engineReady, songWikiUiState) {
+        if (!engineReady) return@LaunchedEffect
+        val command = when (val state = songWikiUiState) {
+            is SongWikiUiState.Idle -> "AmllPage.resetSongWiki();"
+            is SongWikiUiState.Loading -> "AmllPage.setSongWikiLoading();"
+            is SongWikiUiState.Content -> {
+                val payload = songWikiJson.encodeToString(state.summary).escapeJsSingleQuoted()
+                "AmllPage.setSongWikiSummary('$payload');"
+            }
+            is SongWikiUiState.Empty -> "AmllPage.setSongWikiEmpty();"
+            is SongWikiUiState.Error ->
+                "AmllPage.setSongWikiError('${state.message.escapeJsSingleQuoted()}');"
+        }
+        session.eval("if (globalThis.AmllPage) $command")
+    }
+
     DisposableEffect(session) {
         val owner = NativeSurfaceOverlayCoordinator.attachNativeSurface(nativeSurfaceVisible)
         nativeSurfaceOwner = owner
@@ -233,6 +253,7 @@ private class WebviewSession(
     private val onLineClicked: (Long, String?) -> Unit,
     private val onBack: () -> Unit,
     private val onControlsRequested: () -> Unit,
+    private val onSongWikiRequested: () -> Unit,
 ) {
     private val handle = AtomicLong(0)
     private val started = AtomicBoolean(false)
@@ -268,6 +289,7 @@ private class WebviewSession(
     }
     private val backCallback = hostCallback("back") { onBack() }
     private val controlsCallback = hostCallback("controls") { onControlsRequested() }
+    private val songWikiCallback = hostCallback("song wiki") { onSongWikiRequested() }
     private val dispatchCallback = object : WebviewJna.DispatchCallback {
         override fun callback(w: Long, arg: Long) {
             while (true) {
@@ -331,6 +353,7 @@ private class WebviewSession(
                 native.webview_bind(webview, "amllSeek", seekCallback, 0)
                 native.webview_bind(webview, "amllBack", backCallback, 0)
                 native.webview_bind(webview, "amllControls", controlsCallback, 0)
+                native.webview_bind(webview, "amllSongWikiRequested", songWikiCallback, 0)
                 native.webview_navigate(webview, url)
                 if (stopped.get()) native.webview_terminate(webview)
                 native.webview_run(webview)
@@ -449,7 +472,11 @@ private class WebviewSession(
             """
             if (!globalThis.__redefineControlsRevealBound) {
               globalThis.__redefineControlsRevealBound = true;
-              const revealRedefineControls = () => {
+              const revealRedefineControls = (event) => {
+                const target = event && event.target;
+                const wikiOverlay = document.getElementById('wiki-overlay');
+                if ((target && target.closest && target.closest('#wiki-info, #wiki-overlay')) ||
+                    (wikiOverlay && !wikiOverlay.hidden)) return;
                 try {
                   if (typeof globalThis.amllControls === 'function') globalThis.amllControls();
                 } catch (_) {}
@@ -629,6 +656,8 @@ private fun Canvas.physicalHeight(): Int =
 private val extractedAmllAssets: File by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
     extractAmllAssets()
 }
+
+private val songWikiJson = Json { encodeDefaults = true }
 
 private fun extractAmllAssets(): File {
     val dir = File(System.getProperty("java.io.tmpdir"), "redefinencm-amll").apply { mkdirs() }

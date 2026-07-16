@@ -269,6 +269,13 @@ class NCMApi(private val client: HttpClient) {
             parameter("ids", ids.joinToString(","))
         }.body()
 
+    suspend fun songWikiSummary(id: Long): SongWikiSummaryResponse {
+        require(id > 0) { "id must be positive" }
+        return client.get("/song/wiki/summary") {
+            parameter("id", id)
+        }.body()
+    }
+
     suspend fun audioMatch(durationSeconds: Int, audioFingerprint: String): AudioMatch =
         client.post("/audio/match") {
             parameter("duration", durationSeconds)

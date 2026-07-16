@@ -276,6 +276,74 @@ data class SongAlbum(
     val picUrl: String = "",
 )
 
+/** Minimal DTO surface used from the deliberately broad `/song/wiki/summary` response. */
+@Serializable
+data class SongWikiSummaryResponse(
+    val code: Int = 0,
+    val data: SongWikiSummaryData? = null,
+    val message: String? = null,
+    val msg: String? = null,
+)
+
+@Serializable
+data class SongWikiSummaryData(
+    val blocks: List<SongWikiBlock>? = null,
+)
+
+@Serializable
+data class SongWikiBlock(
+    val showType: String? = null,
+    val uiElement: SongWikiUiElement? = null,
+    val creatives: List<SongWikiCreative>? = null,
+)
+
+@Serializable
+data class SongWikiCreative(
+    val creativeType: String? = null,
+    val uiElement: SongWikiUiElement? = null,
+    val resources: List<SongWikiResource>? = null,
+)
+
+@Serializable
+data class SongWikiResource(
+    val resourceType: String? = null,
+    val uiElement: SongWikiUiElement? = null,
+)
+
+@Serializable
+data class SongWikiUiElement(
+    val mainTitle: SongWikiTitle? = null,
+    val textLinks: List<SongWikiTextLink>? = null,
+    val descriptions: List<SongWikiDescription>? = null,
+    val buttons: List<SongWikiButton>? = null,
+    val images: List<SongWikiImage>? = null,
+)
+
+@Serializable
+data class SongWikiTitle(
+    val title: String? = null,
+)
+
+@Serializable
+data class SongWikiTextLink(
+    val text: String? = null,
+)
+
+@Serializable
+data class SongWikiDescription(
+    val description: String? = null,
+)
+
+@Serializable
+data class SongWikiButton(
+    val text: String? = null,
+)
+
+@Serializable
+data class SongWikiImage(
+    val title: String? = null,
+)
+
 // ── Audio recognition ──
 
 @Serializable
