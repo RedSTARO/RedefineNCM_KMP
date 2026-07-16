@@ -19,6 +19,7 @@ data class SettingsBackupData(
     val adaptOriginalAndroidLyric: Boolean = false,
     val showTranslatedLyric: Boolean = false,
     val showRomanLyric: Boolean = false,
+    val useDynamicCover: Boolean = false,
 )
 
 private val backupJson = Json { ignoreUnknownKeys = true; coerceInputValues = true }
@@ -45,6 +46,7 @@ internal fun encodeSettingsBackup(
         adaptOriginalAndroidLyric = getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false),
         showTranslatedLyric = getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false),
         showRomanLyric = getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false),
+        useDynamicCover = getBoolean(SettingKeys.USE_DYNAMIC_COVER, false),
     )
 )
 
@@ -72,6 +74,7 @@ internal fun applySettingsBackup(
     setBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, data.adaptOriginalAndroidLyric)
     setBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, data.showTranslatedLyric)
     setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, data.showRomanLyric)
+    setBoolean(SettingKeys.USE_DYNAMIC_COVER, data.useDynamicCover)
     true
 } catch (_: Exception) {
     false

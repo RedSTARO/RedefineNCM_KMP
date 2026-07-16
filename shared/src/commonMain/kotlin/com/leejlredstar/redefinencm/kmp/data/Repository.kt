@@ -374,6 +374,13 @@ class Repository(
             ?.toSongWikiSummary()
     }
 
+    suspend fun getSongDynamicCoverUrl(id: Long): String? {
+        require(id > 0) { "id must be positive" }
+        return safeApiCall { api.songDynamicCover(id) }
+            ?.takeIf { it.code == API_SUCCESS_CODE }
+            ?.resolvedVideoUrl()
+    }
+
     // ── Lyric ──
 
     fun getLyric(id: Long): Flow<Lyric?> = flow {

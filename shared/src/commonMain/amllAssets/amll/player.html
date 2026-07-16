@@ -30,6 +30,18 @@
     z-index: 0;
     transition: background-image 0.4s ease;
   }
+  #dynamic-bg {
+    position: absolute; inset: -8%;
+    width: 116%; height: 116%;
+    object-fit: cover;
+    filter: blur(48px) brightness(0.55) saturate(1.3);
+    transform: scale(1.1);
+    opacity: 0;
+    z-index: 0;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+  }
+  #dynamic-bg.visible { opacity: 1; }
   #bg-scrim {
     position: fixed; inset: 0;
     background: linear-gradient(90deg, rgba(0,0,0,0.62), rgba(0,0,0,0.56));
@@ -49,6 +61,12 @@
   }
   html[data-platform="android"] #bg {
     inset: -5%;
+    filter: blur(24px) brightness(0.46) saturate(1.15);
+    transform: scale(1.06);
+  }
+  html[data-platform="android"] #dynamic-bg {
+    inset: -5%;
+    width: 110%; height: 110%;
     filter: blur(24px) brightness(0.46) saturate(1.15);
     transform: scale(1.06);
   }
@@ -353,6 +371,7 @@
 </head>
 <body>
 <div id="bg" aria-hidden="true"></div>
+<video id="dynamic-bg" aria-hidden="true" muted autoplay loop playsinline preload="auto"></video>
 <div id="bg-scrim" aria-hidden="true"></div>
 <div id="loading" role="status" aria-live="polite">正在加载歌词组件…</div>
 <div id="amll-root" role="region" aria-label="歌词"></div>
@@ -424,8 +443,8 @@ function applyViewportSize() {
     el.style.height = heightPx;
     el.style.minHeight = heightPx;
   });
-  const bg = document.getElementById("bg");
-  if (bg) {
+  [document.getElementById("bg"), document.getElementById("dynamic-bg")].forEach(function (bg) {
+    if (!bg) return;
     const overscanX = Math.ceil(width * 0.1);
     const overscanY = Math.ceil(height * 0.1);
     bg.style.position = "fixed";
@@ -436,7 +455,7 @@ function applyViewportSize() {
     bg.style.width = width + overscanX * 2 + "px";
     bg.style.height = height + overscanY * 2 + "px";
     bg.style.minHeight = height + overscanY * 2 + "px";
-  }
+  });
 }
 
 let songWikiState = { kind: "idle" };
@@ -584,6 +603,46 @@ function initSongWikiControls() {
   });
 }
 
+function clearDynamicCover() {
+  const video = document.getElementById("dynamic-bg");
+  if (!video) return;
+  video.classList.remove("visible");
+  video.dataset.source = "";
+  video.onloadeddata = null;
+  video.onerror = null;
+  video.pause();
+  video.removeAttribute("src");
+  video.load();
+}
+
+function setDynamicCover(url) {
+  const source = String(url || "").trim();
+  if (!/^https?:\/\//i.test(source)) {
+    clearDynamicCover();
+    return;
+  }
+  const video = document.getElementById("dynamic-bg");
+  if (!video) return;
+  if (video.dataset.source === source) return;
+  clearDynamicCover();
+  video.dataset.source = source;
+  video.onloadeddata = function () {
+    if (video.dataset.source !== source) return;
+    const playback = video.play();
+    if (playback && typeof playback.catch === "function") {
+      playback.catch(function () {
+        if (video.dataset.source === source) video.classList.remove("visible");
+      });
+    }
+    video.classList.add("visible");
+  };
+  video.onerror = function () {
+    if (video.dataset.source === source) clearDynamicCover();
+  };
+  video.src = source;
+  video.load();
+}
+
 globalThis.AmllPage = {
   setStatus,
   showError,
@@ -594,6 +653,8 @@ globalThis.AmllPage = {
   setSongWikiSummary,
   setSongWikiEmpty,
   setSongWikiError,
+  setDynamicCover,
+  clearDynamicCover,
 };
 applyViewportSize();
 requestAnimationFrame(applyViewportSize);

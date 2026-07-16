@@ -63,6 +63,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
+import com.leejlredstar.redefinencm.kmp.lyric.supportsDynamicNowPlayingCover
 import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
@@ -81,6 +82,7 @@ import com.leejlredstar.redefinencm.kmp.util.encodeSettingsBackup
 import com.leejlredstar.redefinencm.kmp.util.rememberExportFileLauncher
 import com.leejlredstar.redefinencm.kmp.util.rememberImportFileLauncher
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
+import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -93,6 +95,7 @@ fun SettingsScreen(
     settings: PlatformSettings = koinInject(),
     api: NCMApi = koinInject(),
     mainViewModel: MainViewModel = koinInject(),
+    nowPlayingViewModel: NowPlayingViewModel = koinInject(),
 ) {
     var cookie by remember(settings) { mutableStateOf("") }
     var server by remember(settings) { mutableStateOf("") }
@@ -105,6 +108,7 @@ fun SettingsScreen(
     var extraLyricSurfaceEnabled by remember(settings) { mutableStateOf(false) }
     var showTranslatedLyric by remember(settings) { mutableStateOf(false) }
     var showRomanLyric by remember(settings) { mutableStateOf(false) }
+    var useDynamicCover by remember(settings) { mutableStateOf(false) }
     var importStatus by remember { mutableStateOf<String?>(null) }
     var serverCheckStatus by remember { mutableStateOf<String?>(null) }
     var settingsLoaded by remember(settings) { mutableStateOf(false) }
@@ -127,6 +131,8 @@ fun SettingsScreen(
         LyricNotificationController.setOptionalSurfaceEnabled(extraLyricSurfaceEnabled)
         showTranslatedLyric = settings.getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
         showRomanLyric = settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)
+        useDynamicCover = settings.getBoolean(SettingKeys.USE_DYNAMIC_COVER, false)
+        nowPlayingViewModel.setUseDynamicCover(useDynamicCover)
     }
 
     fun flushSettings(
@@ -176,6 +182,8 @@ fun SettingsScreen(
             LyricNotificationController.setOptionalSurfaceEnabled(extraLyricSurfaceEnabled)
             showTranslatedLyric = settings.getBooleanAsync(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
             showRomanLyric = settings.getBooleanAsync(SettingKeys.SHOW_ROMAN_LYRIC, false)
+            useDynamicCover = settings.getBooleanAsync(SettingKeys.USE_DYNAMIC_COVER, false)
+            nowPlayingViewModel.setUseDynamicCover(useDynamicCover)
             settingsLoaded = true
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -367,25 +375,41 @@ fun SettingsScreen(
                 )
 
                 ExpressiveSectionTitle("播放", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
-                SettingsDropdown(onlineQuality, "在线播放音质", SoundQuality.entries, settingsPalette, index = 0, count = 5) { v ->
+                val playbackSettingCount = if (supportsDynamicNowPlayingCover) 6 else 5
+                SettingsDropdown(onlineQuality, "在线播放音质", SoundQuality.entries, settingsPalette, index = 0, count = playbackSettingCount) { v ->
                     onlineQuality = v.name
                     persistSettings({ settings.setString(SettingKeys.ONLINE_PLAY_QUALITY, v.name) })
                 }
-                SettingsDropdown(dlQuality, "下载音质", SoundQuality.entries, settingsPalette, index = 1, count = 5) { v ->
+                SettingsDropdown(dlQuality, "下载音质", SoundQuality.entries, settingsPalette, index = 1, count = playbackSettingCount) { v ->
                     dlQuality = v.name
                     persistSettings({ settings.setString(SettingKeys.DOWNLOAD_QUALITY, v.name) })
                 }
-                SettingsSwitch(replacePlaylist, "点击单曲时替换播放队列", settingsPalette, index = 2, count = 5) { v ->
+                SettingsSwitch(replacePlaylist, "点击单曲时替换播放队列", settingsPalette, index = 2, count = playbackSettingCount) { v ->
                     replacePlaylist = v
                     persistSettings({ settings.setBoolean(SettingKeys.REPLACE_PLAYLIST, v) })
                 }
-                SettingsSwitch(searchPrediction, "搜索联想", settingsPalette, index = 3, count = 5) { v ->
+                SettingsSwitch(searchPrediction, "搜索联想", settingsPalette, index = 3, count = playbackSettingCount) { v ->
                     searchPrediction = v
                     persistSettings({ settings.setBoolean(SettingKeys.SEARCH_PREDICTION, v) })
                 }
-                SettingsSwitch(showDownloadStatus, "显示下载状态", settingsPalette, index = 4, count = 5) { v ->
+                SettingsSwitch(showDownloadStatus, "显示下载状态", settingsPalette, index = 4, count = playbackSettingCount) { v ->
                     showDownloadStatus = v
                     persistSettings({ settings.setBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, v) })
+                }
+                if (supportsDynamicNowPlayingCover) {
+                    SettingsSwitch(
+                        useDynamicCover,
+                        "播放页使用歌曲动态封面",
+                        settingsPalette,
+                        index = 5,
+                        count = playbackSettingCount,
+                    ) { enabled ->
+                        useDynamicCover = enabled
+                        persistSettings(
+                            write = { settings.setBoolean(SettingKeys.USE_DYNAMIC_COVER, enabled) },
+                            onWritten = { nowPlayingViewModel.setUseDynamicCover(enabled) },
+                        )
+                    }
                 }
 
                 ExpressiveSectionTitle("歌词", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
