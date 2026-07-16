@@ -9,9 +9,7 @@ import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlaybackAccountVerificationEvent
 import com.leejlredstar.redefinencm.kmp.player.PlaybackReportingCoordinator
-import com.leejlredstar.redefinencm.kmp.player.PlaybackReportingState
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
-import com.leejlredstar.redefinencm.kmp.player.forCredential
 import com.leejlredstar.redefinencm.kmp.player.playbackCredentialKey
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
@@ -78,12 +76,6 @@ class MainViewModel(
     val userDetailFromCache = MutableStateFlow(false)
     val userLevelFromCache = MutableStateFlow(false)
     val userPlaylistsFromCache = MutableStateFlow(false)
-    val playbackReportingState: StateFlow<PlaybackReportingState> = combine(
-        playbackReportingCoordinator.reportingState,
-        accountCredentialKey,
-    ) { state, credentialKey ->
-        state.forCredential(credentialKey)
-    }.stateIn(scope, SharingStarted.Eagerly, PlaybackReportingState())
     private val accountGeneration = MutableStateFlow(0L)
     private var accountJob: Job? = null
 

@@ -98,6 +98,10 @@ via the `PlayerStatus` table. Schema version 4 includes formal `1.sqm`, `2.sqm`,
 for the playlist detail/tracks, comment, player-status, user-level, and download-queue tables; platform drivers must use
 `AppDatabase.Schema` migrations rather than ad-hoc `onOpen` table creation.
 
+The Home/user-playlist profile hero follows the same cache-then-network contract: cached user
+detail and level data render immediately in the status surface below the avatar, remain visible
+while the network refresh runs, and are replaced only by a valid network response.
+
 ### D4 — Notification / now-playing surfaces are one common contract, four platform actuals
 
 `commonMain` owns the contract; each platform renders it natively:
@@ -313,7 +317,8 @@ alphanumeric relay session ID and calls `/relay/play/state/submit` at start, on 
 pause/mode/final state, and every 30 seconds while playing. `playMode` is `random` under shuffle
 and otherwise `list_loop`; `type` is `song`. Relay has a bounded latest-state queue, while each
 one-shot account action dispatches independently, so a 60-second relay timeout cannot block
-recent-play or half-play reporting or create an unbounded telemetry queue. Structured relay results remain visible;
+recent-play or half-play reporting or create an unbounded telemetry queue. Structured relay results remain available
+to coordinator diagnostics but are not rendered on the Home/user-playlist page;
 an unmistakable HTML route 404 is cached as unsupported, while JSON 404 and other server bodies
 remain server rejections rather than permanently disabling the route.
 
