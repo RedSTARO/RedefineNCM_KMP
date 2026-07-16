@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
+import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsButton
 import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsSheet
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
@@ -187,16 +188,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
                             viewModel.onLyricLineClick(mediaId, timeMs)
                         }
                     },
-                    onSongWikiRequested = {
-                        post {
-                            evaluateJavascript(
-                                "if (globalThis.AmllPage) AmllPage.resetSongWiki();",
-                                null,
-                            )
-                            showSongWikiDetails = true
-                            viewModel.getSongWikiSummary()
-                        }
-                    },
                 ),
                 "AmllCallback",
             )
@@ -294,12 +285,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
 
     LaunchedEffect(metadata?.id) {
         showSongWikiDetails = false
-        if (engineReady) {
-            webView.evaluateJavascript(
-                "if (globalThis.AmllPage) AmllPage.resetSongWiki();",
-                null,
-            )
-        }
     }
 
     Box(
@@ -340,6 +325,19 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             }
         }
 
+        SongWikiDetailsButton(
+            enabled = metadata != null,
+            onClick = {
+                showSongWikiDetails = true
+                viewModel.getSongWikiSummary()
+            },
+            tint = Color.White,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(8.dp),
+        )
+
         LyricStateOverlay(lyricUiState, viewModel::retryLyrics)
 
         AutoHideMiniPlayerController(
@@ -351,13 +349,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         visible = showSongWikiDetails,
         songTitle = metadata?.title,
         state = songWikiUiState,
-        onDismiss = {
-            showSongWikiDetails = false
-            webView.evaluateJavascript(
-                "if (globalThis.AmllPage) AmllPage.resetSongWiki();",
-                null,
-            )
-        },
+        onDismiss = { showSongWikiDetails = false },
         onRetry = viewModel::getSongWikiSummary,
     )
 }
@@ -365,7 +357,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
 private class AmllCallback(
     private val onReady: () -> Unit,
     private val onLineClicked: (Long, String?) -> Unit,
-    private val onSongWikiRequested: () -> Unit,
 ) {
     @JavascriptInterface
     fun onReady() = onReady.invoke()
@@ -374,9 +365,6 @@ private class AmllCallback(
     fun onLyricLineClicked(timeMs: Long, mediaId: String?) {
         onLineClicked(timeMs, mediaId)
     }
-
-    @JavascriptInterface
-    fun onSongWikiRequested() = onSongWikiRequested.invoke()
 }
 
 private fun WebView.showAmllStatus(message: String) {
