@@ -43,7 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
-import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsDialog
+import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsSheet
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.LyricParser
@@ -347,7 +347,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         )
     }
 
-    SongWikiDetailsDialog(
+    SongWikiDetailsSheet(
         visible = showSongWikiDetails,
         songTitle = metadata?.title,
         state = songWikiUiState,

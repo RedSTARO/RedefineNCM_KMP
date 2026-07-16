@@ -3,17 +3,20 @@ package com.leejlredstar.redefinencm.kmp.ui.component
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,36 +36,22 @@ fun SongWikiDetailsButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    IconButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier,
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.86f),
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        tonalElevation = 0.dp,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = AppIcons.Info,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
-            Text(
-                text = "详细信息",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-            )
-        }
+        Icon(
+            imageVector = AppIcons.MoreVert,
+            contentDescription = "详细信息",
+            modifier = Modifier.size(26.dp),
+        )
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SongWikiDetailsDialog(
+fun SongWikiDetailsSheet(
     visible: Boolean,
     songTitle: String?,
     state: SongWikiUiState,
@@ -71,47 +60,45 @@ fun SongWikiDetailsDialog(
 ) {
     if (!visible) return
 
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        icon = {
-            Icon(
-                imageVector = AppIcons.Info,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-            )
-        },
-        title = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("音乐百科 - 简要信息")
-                songTitle?.takeIf(String::isNotBlank)?.let { title ->
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(horizontal = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = "音乐百科",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.ExtraBold,
+                )
+                Text(
+                    text = songTitle?.takeIf(String::isNotBlank) ?: "当前歌曲",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Spacer(Modifier.height(20.dp))
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                when (state) {
+                    is SongWikiUiState.Idle,
+                    is SongWikiUiState.Loading -> SongWikiLoadingContent()
+                    is SongWikiUiState.Empty -> SongWikiMessageContent("暂无音乐百科简要信息")
+                    is SongWikiUiState.Error -> SongWikiErrorContent(
+                        message = state.message,
+                        onRetry = onRetry,
                     )
+                    is SongWikiUiState.Content -> SongWikiSectionList(state.summary.sections)
                 }
             }
-        },
-        text = {
-            when (state) {
-                is SongWikiUiState.Idle,
-                is SongWikiUiState.Loading -> SongWikiLoadingContent()
-                is SongWikiUiState.Empty -> SongWikiMessageContent("暂无音乐百科简要信息")
-                is SongWikiUiState.Error -> SongWikiErrorContent(
-                    message = state.message,
-                    onRetry = onRetry,
-                )
-                is SongWikiUiState.Content -> SongWikiSectionList(state.summary.sections)
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("关闭")
-            }
-        },
-    )
+            Spacer(Modifier.height(28.dp))
+        }
+    }
 }
 
 @Composable
