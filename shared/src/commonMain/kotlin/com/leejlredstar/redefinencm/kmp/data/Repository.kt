@@ -365,6 +365,15 @@ class Repository(
         },
     )
 
+    // ── Song wiki ──
+
+    suspend fun getSongWikiSummary(id: Long): SongWikiSummary? {
+        require(id > 0) { "id must be positive" }
+        return safeApiCall { api.songWikiSummary(id) }
+            ?.takeIf { it.code == API_SUCCESS_CODE }
+            ?.toSongWikiSummary()
+    }
+
     // ── Lyric ──
 
     fun getLyric(id: Long): Flow<Lyric?> = flow {

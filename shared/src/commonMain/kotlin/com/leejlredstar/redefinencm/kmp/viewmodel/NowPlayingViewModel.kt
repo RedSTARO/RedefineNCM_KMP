@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.viewmodel
 
 import com.leejlredstar.redefinencm.kmp.data.Repository
+import com.leejlredstar.redefinencm.kmp.data.SongWikiSummary
 import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusic
 import com.leejlredstar.redefinencm.kmp.data.api.dto.Lyric
 import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
@@ -16,6 +17,14 @@ sealed interface LyricUiState {
     data object Empty : LyricUiState
     data class Content(val lineCount: Int) : LyricUiState
     data class Error(val message: String) : LyricUiState
+}
+
+sealed interface SongWikiUiState {
+    data object Idle : SongWikiUiState
+    data class Loading(val mediaId: String) : SongWikiUiState
+    data class Content(val mediaId: String, val summary: SongWikiSummary) : SongWikiUiState
+    data class Empty(val mediaId: String) : SongWikiUiState
+    data class Error(val mediaId: String, val message: String) : SongWikiUiState
 }
 
 /**
@@ -62,6 +71,9 @@ class NowPlayingViewModel(
     val commentsLoadError = MutableStateFlow<String?>(null)
     val commentsFromCache = MutableStateFlow(false)
 
+    // ── Song wiki ──
+    val songWikiUiState = MutableStateFlow<SongWikiUiState>(SongWikiUiState.Idle)
+
     init {
         initPlayerSync()
         initLyricSync()
@@ -94,6 +106,10 @@ class NowPlayingViewModel(
         scope.launch {
             player.currentMedia.collect { media ->
                 currentMedia.value = media
+                songWikiFetchJob?.cancel()
+                songWikiFetchJob = null
+                songWikiRequestGeneration += 1
+                songWikiUiState.value = SongWikiUiState.Idle
                 commentsFetchJob?.cancel()
                 comments.value = null
                 commentsLoading.value = false
@@ -206,6 +222,8 @@ class NowPlayingViewModel(
 
     private var lyricFetchJob: Job? = null
     private var commentsFetchJob: Job? = null
+    private var songWikiFetchJob: Job? = null
+    private var songWikiRequestGeneration = 0L
 
     private fun fetchLyrics(mediaId: String) {
         lyricFetchJob?.cancel()
@@ -398,6 +416,66 @@ class NowPlayingViewModel(
         }
     }
 
+    fun getSongWikiSummary() {
+        val mediaId = currentMedia.value?.id
+        if (mediaId == null) {
+            songWikiFetchJob?.cancel()
+            songWikiRequestGeneration += 1
+            songWikiUiState.value = SongWikiUiState.Error(
+                mediaId = "",
+                message = "当前没有正在播放的歌曲",
+            )
+            return
+        }
+        when (val state = songWikiUiState.value) {
+            is SongWikiUiState.Loading -> if (state.mediaId == mediaId) return
+            is SongWikiUiState.Content -> if (state.mediaId == mediaId) return
+            is SongWikiUiState.Empty -> if (state.mediaId == mediaId) return
+            else -> Unit
+        }
+        songWikiFetchJob?.cancel()
+        val requestGeneration = ++songWikiRequestGeneration
+        val id = mediaId.toLongOrNull()?.takeIf { it > 0 }
+        if (id == null) {
+            songWikiUiState.value = SongWikiUiState.Error(
+                mediaId = mediaId,
+                message = "歌曲标识无效，无法加载音乐百科",
+            )
+            return
+        }
+
+        songWikiUiState.value = SongWikiUiState.Loading(mediaId)
+        songWikiFetchJob = scope.launch(Dispatchers.Default) {
+            try {
+                val summary = repo.getSongWikiSummary(id)
+                if (
+                    currentMedia.value?.id != mediaId ||
+                    requestGeneration != songWikiRequestGeneration
+                ) return@launch
+                songWikiUiState.value = when {
+                    summary == null -> SongWikiUiState.Error(
+                        mediaId = mediaId,
+                        message = "音乐百科加载失败，请检查网络后重试",
+                    )
+                    summary.sections.isEmpty() -> SongWikiUiState.Empty(mediaId)
+                    else -> SongWikiUiState.Content(mediaId, summary)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (failure: Exception) {
+                if (
+                    currentMedia.value?.id == mediaId &&
+                    requestGeneration == songWikiRequestGeneration
+                ) {
+                    songWikiUiState.value = SongWikiUiState.Error(
+                        mediaId = mediaId,
+                        message = failure.message ?: "音乐百科加载失败",
+                    )
+                }
+            }
+        }
+    }
+
     // ── Playback actions ──
 
     fun onFavClick() {
@@ -433,6 +511,7 @@ class NowPlayingViewModel(
 
     fun onCleared() {
         commentsFetchJob?.cancel()
+        songWikiFetchJob?.cancel()
         scope.cancel()
     }
 

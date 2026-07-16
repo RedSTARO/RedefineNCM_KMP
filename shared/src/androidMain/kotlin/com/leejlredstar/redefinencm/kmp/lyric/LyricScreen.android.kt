@@ -48,6 +48,9 @@ import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.LyricParser
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
+import com.leejlredstar.redefinencm.kmp.viewmodel.SongWikiUiState
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.json.JSONObject
 import org.koin.compose.koinInject
 
@@ -73,6 +76,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
+    val songWikiUiState by viewModel.songWikiUiState.collectAsState()
 
     val context = LocalContext.current
     var engineReady by remember { mutableStateOf(false) }
@@ -181,6 +185,9 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
                             viewModel.onLyricLineClick(mediaId, timeMs)
                         }
                     },
+                    onSongWikiRequested = {
+                        post { viewModel.getSongWikiSummary() }
+                    },
                 ),
                 "AmllCallback",
             )
@@ -267,6 +274,22 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         webView.evaluateJavascript("AmllBridge.setBackground(${JSONObject.quote(art)});", null)
     }
 
+    LaunchedEffect(engineReady, songWikiUiState) {
+        if (!engineReady) return@LaunchedEffect
+        val command = when (val state = songWikiUiState) {
+            is SongWikiUiState.Idle -> "AmllPage.resetSongWiki();"
+            is SongWikiUiState.Loading -> "AmllPage.setSongWikiLoading();"
+            is SongWikiUiState.Content -> {
+                val payload = songWikiJson.encodeToString(state.summary)
+                "AmllPage.setSongWikiSummary(${JSONObject.quote(payload)});"
+            }
+            is SongWikiUiState.Empty -> "AmllPage.setSongWikiEmpty();"
+            is SongWikiUiState.Error ->
+                "AmllPage.setSongWikiError(${JSONObject.quote(state.message)});"
+        }
+        webView.evaluateJavascript("if (globalThis.AmllPage) $command", null)
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -316,6 +339,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
 private class AmllCallback(
     private val onReady: () -> Unit,
     private val onLineClicked: (Long, String?) -> Unit,
+    private val onSongWikiRequested: () -> Unit,
 ) {
     @JavascriptInterface
     fun onReady() = onReady.invoke()
@@ -324,7 +348,12 @@ private class AmllCallback(
     fun onLyricLineClicked(timeMs: Long, mediaId: String?) {
         onLineClicked(timeMs, mediaId)
     }
+
+    @JavascriptInterface
+    fun onSongWikiRequested() = onSongWikiRequested.invoke()
 }
+
+private val songWikiJson = Json { encodeDefaults = true }
 
 private fun WebView.showAmllStatus(message: String) {
     evaluateJavascript(

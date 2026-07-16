@@ -311,6 +311,13 @@ Desktop playback strip, and OS/deep-link now-playing requests must open this rou
 The former common `NowPlayingScreen` has been removed and must not be restored as a parallel
 player page.
 
+The shared AMLL `player.html` owns the top-right song-details affordance and its in-page
+“音乐百科 - 简要信息” dialog, so Android WebView and Windows WebView2 remain behaviorally
+aligned. The host requests `/song/wiki/summary` through `Repository` for the current song and
+passes only the `SONG_PLAY_ABOUT_TAB_SONG_BASIC` display fields back to the page; recommendation
+and playlist blocks are excluded. Requests and rendered state are media-ID scoped, and changing
+tracks must close the dialog and prevent a late response from replacing the new track's state.
+
 ### Playback reporting contract
 
 `PlaybackReportingCoordinator` is an eager process-wide common singleton. Platform players do

@@ -193,6 +193,162 @@
     font-size: 32px;
     line-height: 1;
   }
+  [hidden] { display: none !important; }
+  #wiki-info {
+    position: fixed;
+    top: calc(18px + env(safe-area-inset-top, 0px));
+    right: calc(18px + env(safe-area-inset-right, 0px));
+    z-index: 40;
+    height: 44px;
+    padding: 0 16px 0 10px;
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: rgba(255,255,255,0.96);
+    background: rgba(24,25,25,0.74);
+    box-shadow: 0 10px 28px rgba(0,0,0,0.24);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    font: 600 14px/1 "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+    cursor: pointer;
+  }
+  #wiki-info:hover { background: rgba(50,51,51,0.82); }
+  #wiki-info:focus-visible,
+  #wiki-close:focus-visible,
+  .wiki-retry:focus-visible {
+    outline: 3px solid rgba(255,255,255,0.92);
+    outline-offset: 2px;
+  }
+  .wiki-info-icon {
+    width: 24px;
+    height: 24px;
+    border: 2px solid currentColor;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    font: 700 16px/1 Georgia, serif;
+  }
+  #wiki-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: grid;
+    place-items: center;
+    padding:
+      calc(18px + env(safe-area-inset-top, 0px))
+      calc(18px + env(safe-area-inset-right, 0px))
+      calc(18px + env(safe-area-inset-bottom, 0px))
+      calc(18px + env(safe-area-inset-left, 0px));
+    background: rgba(0,0,0,0.58);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  #wiki-dialog {
+    width: min(580px, 100%);
+    max-height: min(82vh, 760px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    color: rgba(255,255,255,0.94);
+    background: rgba(27,28,29,0.96);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 28px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.48);
+  }
+  .wiki-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 24px 24px 16px;
+  }
+  .wiki-header h2 { font-size: 22px; line-height: 1.25; }
+  .wiki-header p {
+    margin-top: 6px;
+    color: rgba(255,255,255,0.60);
+    font-size: 13px;
+  }
+  #wiki-close {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    border: 0;
+    border-radius: 999px;
+    color: rgba(255,255,255,0.92);
+    background: rgba(255,255,255,0.10);
+    font-size: 25px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  #wiki-content {
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 0 24px 24px;
+  }
+  .wiki-status {
+    min-height: 132px;
+    display: grid;
+    place-items: center;
+    gap: 14px;
+    color: rgba(255,255,255,0.72);
+    text-align: center;
+    line-height: 1.55;
+  }
+  .wiki-spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid rgba(255,255,255,0.18);
+    border-top-color: rgba(255,255,255,0.88);
+    border-radius: 50%;
+    animation: wiki-spin 0.8s linear infinite;
+  }
+  @keyframes wiki-spin { to { transform: rotate(360deg); } }
+  .wiki-retry {
+    border: 0;
+    border-radius: 999px;
+    padding: 10px 18px;
+    color: #171717;
+    background: rgba(255,255,255,0.92);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .wiki-section {
+    padding: 17px 0;
+    border-top: 1px solid rgba(255,255,255,0.10);
+  }
+  .wiki-section:first-child { border-top: 0; }
+  .wiki-section h3 {
+    margin-bottom: 10px;
+    color: rgba(255,255,255,0.66);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .wiki-values { display: flex; flex-wrap: wrap; gap: 8px; }
+  .wiki-value {
+    padding: 7px 11px;
+    border-radius: 999px;
+    color: rgba(255,255,255,0.92);
+    background: rgba(255,255,255,0.10);
+    font-size: 14px;
+    line-height: 1.35;
+  }
+  .wiki-description {
+    color: rgba(255,255,255,0.84);
+    font-size: 14px;
+    line-height: 1.75;
+    white-space: pre-wrap;
+  }
+  .wiki-values + .wiki-description { margin-top: 12px; }
+  @media (max-width: 520px) {
+    #wiki-info { right: 12px; }
+    #wiki-dialog { border-radius: 24px; }
+    .wiki-header { padding: 20px 20px 14px; }
+    #wiki-content { padding: 0 20px 20px; }
+  }
 </style>
 </head>
 <body>
@@ -201,6 +357,22 @@
 <div id="loading" role="status" aria-live="polite">正在加载歌词组件…</div>
 <div id="amll-root" role="region" aria-label="歌词"></div>
 <button id="desktop-back" class="desktop-control" type="button" aria-label="返回">‹</button>
+<button id="wiki-info" type="button" aria-haspopup="dialog" aria-controls="wiki-overlay">
+  <span class="wiki-info-icon" aria-hidden="true">i</span>
+  <span>详细信息</span>
+</button>
+<div id="wiki-overlay" hidden>
+  <section id="wiki-dialog" role="dialog" aria-modal="true" aria-labelledby="wiki-title">
+    <header class="wiki-header">
+      <div>
+        <h2 id="wiki-title">音乐百科 - 简要信息</h2>
+        <p>当前歌曲</p>
+      </div>
+      <button id="wiki-close" type="button" aria-label="关闭详细信息">×</button>
+    </header>
+    <div id="wiki-content" aria-live="polite"></div>
+  </section>
+</div>
 
 <script>
 // Surface any failure on-screen (and to the host console) so a blank panel becomes a
@@ -266,7 +438,163 @@ function applyViewportSize() {
     bg.style.minHeight = height + overscanY * 2 + "px";
   }
 }
-globalThis.AmllPage = { setStatus, showError, hideLoading, applyViewportSize };
+
+let songWikiState = { kind: "idle" };
+let songWikiReturnFocus = null;
+
+function createWikiElement(tagName, className, text) {
+  const element = document.createElement(tagName);
+  if (className) element.className = className;
+  if (text != null) element.textContent = String(text);
+  return element;
+}
+
+function renderSongWiki() {
+  const content = document.getElementById("wiki-content");
+  if (!content) return;
+  content.replaceChildren();
+
+  if (songWikiState.kind === "loading" || songWikiState.kind === "idle") {
+    const status = createWikiElement("div", "wiki-status");
+    status.appendChild(createWikiElement("span", "wiki-spinner"));
+    status.appendChild(createWikiElement("span", "", "正在加载音乐百科…"));
+    content.appendChild(status);
+    return;
+  }
+  if (songWikiState.kind === "error") {
+    const status = createWikiElement("div", "wiki-status");
+    status.appendChild(createWikiElement("span", "", songWikiState.message || "音乐百科加载失败"));
+    const retry = createWikiElement("button", "wiki-retry", "重试");
+    retry.type = "button";
+    retry.addEventListener("click", requestSongWiki);
+    status.appendChild(retry);
+    content.appendChild(status);
+    return;
+  }
+  if (songWikiState.kind === "empty") {
+    content.appendChild(createWikiElement("div", "wiki-status", "暂无音乐百科简要信息"));
+    return;
+  }
+
+  const sections = Array.isArray(songWikiState.summary && songWikiState.summary.sections)
+    ? songWikiState.summary.sections
+    : [];
+  sections.forEach(function (section) {
+    if (!section || !String(section.title || "").trim()) return;
+    const item = createWikiElement("section", "wiki-section");
+    item.appendChild(createWikiElement("h3", "", String(section.title).trim()));
+    const values = Array.isArray(section.values)
+      ? section.values.map(String).map((value) => value.trim()).filter(Boolean)
+      : [];
+    if (values.length) {
+      const valueList = createWikiElement("div", "wiki-values");
+      values.forEach((value) => valueList.appendChild(createWikiElement("span", "wiki-value", value)));
+      item.appendChild(valueList);
+    }
+    const description = String(section.description || "").trim();
+    if (description) item.appendChild(createWikiElement("p", "wiki-description", description));
+    content.appendChild(item);
+  });
+  if (!content.childElementCount) {
+    content.appendChild(createWikiElement("div", "wiki-status", "暂无音乐百科简要信息"));
+  }
+}
+
+function requestSongWiki() {
+  songWikiState = { kind: "loading" };
+  renderSongWiki();
+  if (globalThis.AmllCallback && globalThis.AmllCallback.onSongWikiRequested) {
+    globalThis.AmllCallback.onSongWikiRequested();
+  } else if (typeof globalThis.amllSongWikiRequested === "function") {
+    globalThis.amllSongWikiRequested();
+  } else {
+    setSongWikiError("无法连接应用数据服务");
+  }
+}
+
+function openSongWiki() {
+  const overlay = document.getElementById("wiki-overlay");
+  if (!overlay) return;
+  songWikiReturnFocus = document.activeElement;
+  overlay.hidden = false;
+  renderSongWiki();
+  document.getElementById("wiki-close")?.focus();
+  if (songWikiState.kind === "idle") requestSongWiki();
+}
+
+function closeSongWiki(restoreFocus = true) {
+  const overlay = document.getElementById("wiki-overlay");
+  if (!overlay || overlay.hidden) return;
+  overlay.hidden = true;
+  if (restoreFocus && songWikiReturnFocus && typeof songWikiReturnFocus.focus === "function") {
+    songWikiReturnFocus.focus();
+  }
+}
+
+function resetSongWiki() {
+  songWikiState = { kind: "idle" };
+  closeSongWiki(false);
+  renderSongWiki();
+}
+
+function setSongWikiLoading() {
+  songWikiState = { kind: "loading" };
+  renderSongWiki();
+}
+
+function setSongWikiSummary(payload) {
+  let summary = payload;
+  if (typeof summary === "string") {
+    try { summary = JSON.parse(summary); } catch (_) { summary = null; }
+  }
+  if (!summary || !Array.isArray(summary.sections) || !summary.sections.length) {
+    setSongWikiEmpty();
+    return;
+  }
+  songWikiState = { kind: "content", summary };
+  renderSongWiki();
+}
+
+function setSongWikiEmpty() {
+  songWikiState = { kind: "empty" };
+  renderSongWiki();
+}
+
+function setSongWikiError(message) {
+  songWikiState = { kind: "error", message: String(message || "音乐百科加载失败") };
+  renderSongWiki();
+}
+
+function initSongWikiControls() {
+  document.getElementById("wiki-info")?.addEventListener("click", function (event) {
+    event.stopPropagation();
+    openSongWiki();
+  });
+  document.getElementById("wiki-close")?.addEventListener("click", function () {
+    closeSongWiki();
+  });
+  document.getElementById("wiki-overlay")?.addEventListener("click", function (event) {
+    if (event.target === event.currentTarget) closeSongWiki();
+  });
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && !document.getElementById("wiki-overlay")?.hidden) {
+      closeSongWiki();
+      event.preventDefault();
+    }
+  });
+}
+
+globalThis.AmllPage = {
+  setStatus,
+  showError,
+  hideLoading,
+  applyViewportSize,
+  resetSongWiki,
+  setSongWikiLoading,
+  setSongWikiSummary,
+  setSongWikiEmpty,
+  setSongWikiError,
+};
 applyViewportSize();
 requestAnimationFrame(applyViewportSize);
 window.addEventListener("resize", applyViewportSize);
@@ -277,7 +605,10 @@ window.addEventListener("error", function (e) {
 window.addEventListener("unhandledrejection", function (e) {
   showError("promise rejected: " + ((e.reason && e.reason.message) || e.reason));
 });
-window.addEventListener("DOMContentLoaded", initDesktopControls);
+window.addEventListener("DOMContentLoaded", function () {
+  initDesktopControls();
+  initSongWikiControls();
+});
 
 let currentLyricLines = [];
 let currentLyricMediaId = "";
