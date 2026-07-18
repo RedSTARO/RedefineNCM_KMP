@@ -203,12 +203,13 @@ jobs:
           cache: gradle
 
       - name: Build .msi installer
-        run: ./gradlew :shared:jvmTest :desktopApp:packageMsi
+        run: ./gradlew :shared:jvmTest :desktopApp:packageReleaseMsi
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: desktop-windows-msi
-          path: desktopApp/build/compose/binaries/main/msi/*.msi
+          path: desktopApp/build/compose/binaries/main-release/msi/*.msi
+          if-no-files-found: error
 
   # ─── Desktop · macOS + iOS framework ────────────────────────────────────────
   build-desktop-macos:
