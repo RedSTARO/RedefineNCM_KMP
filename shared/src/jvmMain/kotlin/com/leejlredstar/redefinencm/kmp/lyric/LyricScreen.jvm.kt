@@ -12,9 +12,12 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.layout
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOverlayCoordinator
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOwner
@@ -45,6 +48,8 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
 import java.awt.Color as AwtColor
+
+private const val AMLL_READY_TIMEOUT_MILLIS = 10_000L
 
 actual val supportsDynamicNowPlayingCover: Boolean
     get() = desktopEmbeddedWebViewSupported()
@@ -101,7 +106,8 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     var inPageOverlayActive by remember { mutableStateOf(false) }
     var showSongWikiDetails by remember { mutableStateOf(false) }
     val lyricStateOverlayActive = lyricUiState !is LyricUiState.Content
-    val nativeSurfaceVisible = !inPageOverlayActive &&
+    val nativeSurfaceVisible = engineReady &&
+        !inPageOverlayActive &&
         !externalOverlayActive &&
         !showSongWikiDetails &&
         !lyricStateOverlayActive
@@ -129,6 +135,10 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     LaunchedEffect(session) {
         while (!canvas.isDisplayable || canvas.width <= 0 || canvas.height <= 0) delay(30)
         session.start(canvas, "${fileUrl(File(assetsDir, "player.html"))}?platform=desktop")
+        delay(AMLL_READY_TIMEOUT_MILLIS)
+        if (!engineReadyFlow.value && engineErrorFlow.value == null) {
+            engineErrorFlow.value = "AMLL 页面初始化超时"
+        }
     }
 
     LaunchedEffect(engineReady) {
@@ -136,8 +146,18 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     }
 
     LaunchedEffect(nativeSurfaceVisible, nativeSurfaceOwner) {
-        canvas.isVisible = nativeSurfaceVisible
-        val nativeWindowUpdated = session.setNativeWindowVisible(nativeSurfaceVisible)
+        val nativeWindowUpdated = if (nativeSurfaceVisible) {
+            canvas.isVisible = true
+            while (!canvas.isShowing || canvas.width <= 0 || canvas.height <= 0) delay(16)
+            session.resizeNativeWindow(canvas)
+            session.setNativeWindowVisible(true)
+        } else {
+            val hidden = session.setNativeWindowVisible(false)
+            canvas.isVisible = false
+            // 等 Compose 完成一次布局，让 SwingInteropViewGroup 的 clip 也变空。
+            withFrameNanos { }
+            hidden
+        }
         val owner = nativeSurfaceOwner
         if (owner != null && nativeWindowUpdated) {
             NativeSurfaceOverlayCoordinator.reportNativeSurfaceVisible(owner, nativeSurfaceVisible)
@@ -232,15 +252,25 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .clipToBounds()
             .background(Color.Black),
     ) {
         SwingPanel(
+            background = Color.Black,
             factory = { canvas },
-            update = { it.isVisible = nativeSurfaceVisible },
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .placeOffscreenWhenHidden(nativeSurfaceVisible),
         )
 
-        LyricStateOverlay(lyricUiState, viewModel::retryLyrics)
+        LyricStateOverlay(
+            state = if (!engineReady && lyricUiState is LyricUiState.Content) {
+                LyricUiState.Loading
+            } else {
+                lyricUiState
+            },
+            onRetry = viewModel::retryLyrics,
+        )
 
         AutoHideMiniPlayerController(
             modifier = Modifier.fillMaxSize(),
@@ -514,6 +544,20 @@ private class WebviewSession(
         }
     }
 
+    fun resizeNativeWindow(canvas: Canvas): Boolean = synchronized(nativeVisibilityLock) {
+        val child = childWindow ?: return@synchronized false
+        runCatching {
+            com.sun.jna.platform.win32.User32.INSTANCE.MoveWindow(
+                com.sun.jna.platform.win32.WinDef.HWND(child),
+                0,
+                0,
+                canvas.physicalWidth(),
+                canvas.physicalHeight(),
+                true,
+            )
+        }.getOrDefault(false)
+    }
+
     private fun applyNativeWindowVisibilityLocked(
         child: com.sun.jna.Pointer,
         visible: Boolean,
@@ -544,44 +588,62 @@ private class WebviewSession(
     /**
      * 取 Canvas 的原生 HWND。webview 的 win32 实现会先 IsWindow 校验，无效则按
      * HWND* 解引用（老语义兼容）——所以绝不能把无效句柄传下去（会 access violation）。
-     * JAWT（getComponentPointer）在 Compose SwingPanel 的层次里可能返回非窗口句柄，
-     * 此时回退：从顶层窗口 EnumChildWindows 找 AWT Canvas 的原生子窗口（类名 SunAwt*）。
+     * JAWT（getComponentPointer）在 Compose SwingPanel 的层次里可能返回非窗口句柄。
+     * 回退枚举时必须同时匹配 Canvas 类名与物理尺寸；取第一个 SunAwt 子窗口可能会
+     * 错把 WebView2 挂到 Compose 自己的根 Canvas，继而覆盖整个应用。
      */
     private fun resolveCanvasHwnd(canvas: Canvas): com.sun.jna.Pointer? {
         val u32 = com.sun.jna.platform.win32.User32.INSTANCE
 
-        fun isRealWindow(p: com.sun.jna.Pointer?): Boolean {
-            if (p == null) return false
+        fun inspectWindow(pointer: com.sun.jna.Pointer?): CanvasWindowCandidate<com.sun.jna.Pointer>? {
+            if (pointer == null) return null
+            val hwnd = com.sun.jna.platform.win32.WinDef.HWND(pointer)
             val buf = CharArray(64)
-            return u32.GetClassName(com.sun.jna.platform.win32.WinDef.HWND(p), buf, 64) > 0
+            val length = u32.GetClassName(hwnd, buf, buf.size)
+            if (length <= 0) return null
+            val rect = com.sun.jna.platform.win32.WinDef.RECT()
+            if (!u32.GetWindowRect(hwnd, rect)) return null
+            return CanvasWindowCandidate(
+                handle = pointer,
+                className = String(buf, 0, length),
+                width = rect.right - rect.left,
+                height = rect.bottom - rect.top,
+            )
         }
 
+        val expectedWidth = canvas.physicalWidth()
+        val expectedHeight = canvas.physicalHeight()
+
         val direct = runCatching { Native.getComponentPointer(canvas) }.getOrNull()
-        if (isRealWindow(direct)) {
+        val directMatch = selectCanvasWindowCandidate(
+            inspectWindow(direct)?.let(::listOf).orEmpty(),
+            expectedWidth,
+            expectedHeight,
+        )
+        if (directMatch != null) {
             println("AMLL[wv2] canvas hwnd via JAWT: $direct")
-            return direct
+            return directMatch
         }
-        println("AMLL[wv2] JAWT gave invalid handle ($direct); enumerating child windows…")
+        println("AMLL[wv2] JAWT did not identify the AMLL canvas ($direct); enumerating exact-size child windows…")
 
         val window = javax.swing.SwingUtilities.getWindowAncestor(canvas) ?: return null
         val top = runCatching { Native.getComponentPointer(window) }.getOrNull() ?: return null
-        if (!isRealWindow(top)) return null
+        if (inspectWindow(top) == null) return null
 
-        var found: com.sun.jna.Pointer? = null
+        val candidates = mutableListOf<CanvasWindowCandidate<com.sun.jna.Pointer>>()
         u32.EnumChildWindows(
             com.sun.jna.platform.win32.WinDef.HWND(top),
             { child, _ ->
-                val buf = CharArray(64)
-                val n = u32.GetClassName(child, buf, 64)
-                val cls = String(buf, 0, n.coerceAtLeast(0))
-                if (cls.startsWith("SunAwt")) {
-                    found = child.pointer
-                    false
-                } else true
+                inspectWindow(child.pointer)?.let(candidates::add)
+                true
             },
             null,
         )
-        println("AMLL[wv2] canvas hwnd via EnumChildWindows: $found")
+        val found = selectCanvasWindowCandidate(candidates, expectedWidth, expectedHeight)
+        println(
+            "AMLL[wv2] canvas hwnd via exact EnumChildWindows match: $found " +
+                "(expected=${expectedWidth}x$expectedHeight, candidates=${candidates.size})",
+        )
         return found
     }
 
@@ -599,6 +661,36 @@ private class WebviewSession(
         const val MAX_PENDING_EVALS = 64
     }
 }
+
+internal data class CanvasWindowCandidate<T>(
+    val handle: T,
+    val className: String,
+    val width: Int,
+    val height: Int,
+)
+
+internal fun <T> selectCanvasWindowCandidate(
+    candidates: List<CanvasWindowCandidate<T>>,
+    expectedWidth: Int,
+    expectedHeight: Int,
+    tolerance: Int = 2,
+): T? = candidates
+    .filter { candidate ->
+        candidate.className.startsWith("SunAwt") &&
+            candidate.className.contains("Canvas", ignoreCase = true) &&
+            kotlin.math.abs(candidate.width - expectedWidth) <= tolerance &&
+            kotlin.math.abs(candidate.height - expectedHeight) <= tolerance
+    }
+    .singleOrNull()
+    ?.handle
+
+private fun Modifier.placeOffscreenWhenHidden(visible: Boolean): Modifier =
+    layout { measurable, constraints ->
+        val placeable = measurable.measure(constraints)
+        layout(placeable.width, placeable.height) {
+            placeable.place(if (visible) 0 else -placeable.width, 0)
+        }
+    }
 
 private val amllSeekJson = Json {
     ignoreUnknownKeys = true
