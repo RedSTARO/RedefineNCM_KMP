@@ -29,6 +29,16 @@ compose.desktop {
     application {
         mainClass = "com.leejlredstar.redefinencm.kmp.MainKt"
 
+        buildTypes.release.proguard {
+            // Release packaging is the Desktop/JVM equivalent of the Android R8 pipeline:
+            // remove unreachable bytecode, run ProGuard's optimizer, obfuscate symbols, and
+            // merge the processed inputs into one compact application JAR.
+            optimize.set(true)
+            obfuscate.set(true)
+            joinOutputJars.set(true)
+            configurationFiles.from(project.file("compose-desktop.pro"))
+        }
+
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             // jdeps output for Compose/JNA/SQLDelight/dbus-java. Keep the packaged runtime able
