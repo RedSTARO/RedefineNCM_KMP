@@ -10,8 +10,10 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
@@ -38,6 +40,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowScope
 import java.awt.Toolkit
@@ -68,55 +71,74 @@ internal fun WindowScope.Win10WindowChrome(
             ?: 500L
     }
     val doubleClickSlopPx = with(LocalDensity.current) { 8.dp.toPx() }
-    Row(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .height(32.dp),
-        verticalAlignment = Alignment.Top,
     ) {
-        WindowDraggableArea(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .onPointerEvent(PointerEventType.Press) { event ->
-                    if (event.button != PointerButton.Primary) return@onPointerEvent
-                    val change = event.changes.firstOrNull() ?: return@onPointerEvent
-                    val pressMillis = change.uptimeMillis
-                    val pressPosition = change.position
-                    val elapsed = pressMillis - lastPrimaryPressMillis
-                    val distance = lastPrimaryPressPosition
-                        ?.let { previous -> (pressPosition - previous).getDistance() }
-                        ?: Float.POSITIVE_INFINITY
-                    if (
-                        elapsed in 1L..doubleClickIntervalMillis &&
-                        distance <= doubleClickSlopPx
-                    ) {
-                        lastPrimaryPressMillis = Long.MIN_VALUE
-                        lastPrimaryPressPosition = null
-                        onToggleMaximize()
-                        event.changes.forEach { it.consume() }
-                    } else {
-                        lastPrimaryPressMillis = pressMillis
-                        lastPrimaryPressPosition = pressPosition
-                    }
-                },
-        ) {}
-        Row(Modifier.fillMaxHeight()) {
-            Win10CaptionButton(
-                kind = CaptionButtonKind.Minimize,
-                isMaximized = isMaximized,
-                onClick = onMinimize,
-            )
-            Win10CaptionButton(
-                kind = CaptionButtonKind.Maximize,
-                isMaximized = isMaximized,
-                onClick = onToggleMaximize,
-            )
-            Win10CaptionButton(
-                kind = CaptionButtonKind.Close,
-                isMaximized = isMaximized,
-                onClick = onClose,
-            )
+        val showMinimize = maxWidth >= 184.dp
+        val showMaximize = maxWidth >= 112.dp
+        val captionButtonWidth = when {
+            showMinimize -> 46.dp
+            showMaximize -> 40.dp
+            else -> minOf(40.dp, maxWidth * 0.45f)
+        }
+
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.Top,
+        ) {
+            WindowDraggableArea(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .onPointerEvent(PointerEventType.Press) { event ->
+                        if (event.button != PointerButton.Primary) return@onPointerEvent
+                        val change = event.changes.firstOrNull() ?: return@onPointerEvent
+                        val pressMillis = change.uptimeMillis
+                        val pressPosition = change.position
+                        val elapsed = pressMillis - lastPrimaryPressMillis
+                        val distance = lastPrimaryPressPosition
+                            ?.let { previous -> (pressPosition - previous).getDistance() }
+                            ?: Float.POSITIVE_INFINITY
+                        if (
+                            elapsed in 1L..doubleClickIntervalMillis &&
+                            distance <= doubleClickSlopPx
+                        ) {
+                            lastPrimaryPressMillis = Long.MIN_VALUE
+                            lastPrimaryPressPosition = null
+                            onToggleMaximize()
+                            event.changes.forEach { it.consume() }
+                        } else {
+                            lastPrimaryPressMillis = pressMillis
+                            lastPrimaryPressPosition = pressPosition
+                        }
+                    },
+            ) {}
+            Row(Modifier.fillMaxHeight()) {
+                if (showMinimize) {
+                    Win10CaptionButton(
+                        kind = CaptionButtonKind.Minimize,
+                        isMaximized = isMaximized,
+                        width = captionButtonWidth,
+                        onClick = onMinimize,
+                    )
+                }
+                if (showMaximize) {
+                    Win10CaptionButton(
+                        kind = CaptionButtonKind.Maximize,
+                        isMaximized = isMaximized,
+                        width = captionButtonWidth,
+                        onClick = onToggleMaximize,
+                    )
+                }
+                Win10CaptionButton(
+                    kind = CaptionButtonKind.Close,
+                    isMaximized = isMaximized,
+                    width = captionButtonWidth,
+                    onClick = onClose,
+                )
+            }
         }
     }
 }
@@ -125,6 +147,7 @@ internal fun WindowScope.Win10WindowChrome(
 private fun Win10CaptionButton(
     kind: CaptionButtonKind,
     isMaximized: Boolean,
+    width: Dp,
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -155,7 +178,7 @@ private fun Win10CaptionButton(
 
     Box(
         modifier = Modifier
-            .width(46.dp)
+            .width(width)
             .fillMaxHeight()
             .background(backgroundColor, RectangleShape)
             .hoverable(interactionSource)

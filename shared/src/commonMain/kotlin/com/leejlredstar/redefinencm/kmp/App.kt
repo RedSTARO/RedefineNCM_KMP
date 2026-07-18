@@ -33,7 +33,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FilledIconButton
@@ -86,6 +88,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.lyric.WebViewLyricScreen
@@ -199,6 +202,18 @@ private data class NavigationItem(
     val dest: TabDest,
 )
 
+internal enum class DesktopLayoutMode {
+    Compact,
+    Rail,
+    RailWithPlayer,
+}
+
+internal fun desktopLayoutMode(width: Dp, height: Dp): DesktopLayoutMode = when {
+    width < 600.dp || height < 480.dp -> DesktopLayoutMode.Compact
+    width >= 900.dp && height >= 900.dp -> DesktopLayoutMode.RailWithPlayer
+    else -> DesktopLayoutMode.Rail
+}
+
 private sealed interface RootDest {
     val stackDepth: Int
 
@@ -212,7 +227,8 @@ private sealed interface RootDest {
 /**
  * Root composable shared across Android / iOS / Desktop / Web. 3-tab nav (Recommend / My /
  * Settings) with a push stack for Login, FullLyric, Downloads, and PlaylistDetail. 窄屏用底部 NavigationBar，
- * 非 Desktop 宽屏（≥600dp）用 NavigationRail；Desktop 使用常驻折叠、覆盖展开的模态宽侧栏。
+ * 非 Desktop 宽屏（≥600dp）用 NavigationRail；Desktop 紧凑窗口用底栏，中大窗口使用
+ * 常驻折叠、覆盖展开的模态宽侧栏。
  * Koin must already be started before this is called.
  */
 @Composable
@@ -310,18 +326,25 @@ private fun AppContent(
 
             Box(Modifier.fillMaxSize()) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
-                    // Keep the collapsed Desktop rail in the layout at every supported window size.
-                    // Its modal expansion overlays content, so AMLL's native HWND is never resized.
-                    val showDesktopFullPlayer = maxWidth >= 900.dp && maxHeight >= 900.dp
+                    val desktopMode = desktopLayoutMode(maxWidth, maxHeight)
+                    val desktopCompact = platform.isDesktop && desktopMode == DesktopLayoutMode.Compact
+                    val showDesktopRail = platform.isDesktop && !desktopCompact
+                    val showDesktopFullPlayer = desktopMode == DesktopLayoutMode.RailWithPlayer
                     val isWide = maxWidth >= 600.dp
-                    val showMiniPlayer = currentMedia != null && pushedStack.lastOrNull().let {
-                        it !is PushedDest.FullLyric
-                    }
+                    val showMiniPlayer = maxWidth >= 160.dp &&
+                        maxHeight >= 200.dp &&
+                        currentMedia != null &&
+                        pushedStack.lastOrNull().let { it !is PushedDest.FullLyric }
                     val rootDest = pushedStack.lastOrNull()
                         ?.let { RootDest.Pushed(it, pushedStack.size) }
                         ?: RootDest.Tab(currentTab)
                     val desktopRailExpanded = platform.isDesktop &&
+                        showDesktopRail &&
                         desktopRailState.targetValue == WideNavigationRailValue.Expanded
+
+                    LaunchedEffect(desktopCompact) {
+                        if (desktopCompact) desktopRailState.collapse()
+                    }
 
                     Scaffold(
                         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -329,7 +352,7 @@ private fun AppContent(
                         floatingActionButtonPosition = FabPosition.End,
                         bottomBar = {
                             AnimatedVisibility(
-                                visible = showTabs && !isWide && !platform.isDesktop,
+                                visible = showTabs && if (platform.isDesktop) desktopCompact else !isWide,
                                 enter = bottomNavEnterTransition(),
                                 exit = bottomNavExitTransition(),
                             ) {
@@ -343,6 +366,21 @@ private fun AppContent(
                                             onClick = { currentTab = item.dest },
                                             icon = { Icon(item.icon, contentDescription = null) },
                                             label = { Text(item.label) },
+                                            colors = NavigationBarItemDefaults.colors(
+                                                indicatorColor = chromePalette.container,
+                                                selectedIconColor = chromePalette.onContainer,
+                                                selectedTextColor = chromePalette.onQuietContainer,
+                                                unselectedIconColor = chromePalette.secondaryOnQuietContainer,
+                                                unselectedTextColor = chromePalette.secondaryOnQuietContainer,
+                                            ),
+                                        )
+                                    }
+                                    if (desktopCompact) {
+                                        NavigationBarItem(
+                                            selected = false,
+                                            onClick = ::openDownloads,
+                                            icon = { Icon(AppIcons.Download, contentDescription = null) },
+                                            label = { Text("下载") },
                                             colors = NavigationBarItemDefaults.colors(
                                                 indicatorColor = chromePalette.container,
                                                 selectedIconColor = chromePalette.onContainer,
@@ -369,7 +407,7 @@ private fun AppContent(
                         },
                     ) { innerPadding ->
                         Row(Modifier.fillMaxSize()) {
-                            if (platform.isDesktop) {
+                            if (showDesktopRail) {
                                 DesktopExpandableSidebar(
                                     state = desktopRailState,
                                     tabs = tabs,
@@ -394,7 +432,7 @@ private fun AppContent(
                                     onChromeAccent = { rawChromeAccent = it },
                                     onOpenNowPlaying = ::openFullLyric,
                                 )
-                            } else if (isWide) {
+                            } else if (!platform.isDesktop && isWide) {
                                 AnimatedVisibility(
                                     visible = showTabs,
                                     enter = railEnterTransition(),
@@ -544,99 +582,102 @@ private fun DesktopExpandableSidebar(
             modalContentColor = accentPalette.onQuietContainer,
         ),
     ) {
-        Column(
-            modifier = Modifier.fillMaxHeight(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
+        Column(modifier = Modifier.fillMaxHeight()) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                FilledTonalIconButton(
-                    onClick = {
-                        if (railExpanded) {
-                            scope.launch { state.collapse() }
-                        } else if (!preExpandRequested) {
-                            preExpandRequested = true
-                            scope.launch {
-                                try {
-                                    if (
-                                        NativeSurfaceOverlayCoordinator.awaitOverlayReady(
-                                            NativeSurfaceOverlaySource.DesktopNavigationRail,
-                                        )
-                                    ) {
-                                        state.expand()
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FilledTonalIconButton(
+                        onClick = {
+                            if (railExpanded) {
+                                scope.launch { state.collapse() }
+                            } else if (!preExpandRequested) {
+                                preExpandRequested = true
+                                scope.launch {
+                                    try {
+                                        if (
+                                            NativeSurfaceOverlayCoordinator.awaitOverlayReady(
+                                                NativeSurfaceOverlaySource.DesktopNavigationRail,
+                                            )
+                                        ) {
+                                            state.expand()
+                                        }
+                                    } finally {
+                                        preExpandRequested = false
                                     }
-                                } finally {
-                                    preExpandRequested = false
                                 }
                             }
+                        },
+                        enabled = !preExpandRequested,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = accentPalette.container,
+                            contentColor = accentPalette.onContainer,
+                        ),
+                        modifier = Modifier.semantics {
+                            stateDescription = if (railExpanded) "侧栏已展开" else "侧栏已收起"
+                        },
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.Menu,
+                            contentDescription = if (railExpanded) "收起侧栏" else "展开侧栏",
+                        )
+                    }
+                    if (modalExpansionActive) {
+                        Spacer(Modifier.width(14.dp))
+                        Column {
+                            Text(
+                                text = "RedefineNCM",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = accentPalette.onQuietContainer,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = "Desktop",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = accentPalette.secondaryOnQuietContainer,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
-                    },
-                    enabled = !preExpandRequested,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = accentPalette.container,
-                        contentColor = accentPalette.onContainer,
-                    ),
-                    modifier = Modifier.semantics {
-                        stateDescription = if (railExpanded) "侧栏已展开" else "侧栏已收起"
-                    },
-                ) {
-                    Icon(
-                        imageVector = AppIcons.Menu,
-                        contentDescription = if (railExpanded) "收起侧栏" else "展开侧栏",
+                    }
+                }
+                tabs.forEach { item ->
+                    WideNavigationRailItem(
+                        selected = selectedTab == item.dest,
+                        onClick = { collapseAfter { onSelectTab(item.dest) } },
+                        icon = { Icon(item.icon, contentDescription = null) },
+                        label = { Text(item.label) },
+                        railExpanded = railExpanded,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = itemColors,
                     )
                 }
                 if (modalExpansionActive) {
-                    Spacer(Modifier.width(14.dp))
-                    Column {
-                        Text(
-                            text = "RedefineNCM",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = accentPalette.onQuietContainer,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = "Desktop",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = accentPalette.secondaryOnQuietContainer,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                    Text(
+                        text = "工具",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = accentPalette.secondaryOnQuietContainer,
+                        modifier = Modifier.padding(start = 24.dp, top = 8.dp),
+                    )
+                    WideNavigationRailItem(
+                        selected = downloadsSelected,
+                        onClick = { collapseAfter(onOpenDownloads) },
+                        icon = { Icon(AppIcons.Download, contentDescription = null) },
+                        label = { Text("下载管理") },
+                        railExpanded = railExpanded,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = itemColors,
+                    )
                 }
             }
-            tabs.forEach { item ->
-                WideNavigationRailItem(
-                    selected = selectedTab == item.dest,
-                    onClick = { collapseAfter { onSelectTab(item.dest) } },
-                    icon = { Icon(item.icon, contentDescription = null) },
-                    label = { Text(item.label) },
-                    railExpanded = railExpanded,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = itemColors,
-                )
-            }
-            if (modalExpansionActive) {
-                Text(
-                    text = "工具",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = accentPalette.secondaryOnQuietContainer,
-                    modifier = Modifier.padding(start = 24.dp, top = 8.dp),
-                )
-                WideNavigationRailItem(
-                    selected = downloadsSelected,
-                    onClick = { collapseAfter(onOpenDownloads) },
-                    icon = { Icon(AppIcons.Download, contentDescription = null) },
-                    label = { Text("下载管理") },
-                    railExpanded = railExpanded,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = itemColors,
-                )
-            }
-            Spacer(Modifier.weight(1f))
             if (showFullPlayer && modalExpansionActive) {
                 Box(
                     modifier = Modifier.width(320.dp).padding(horizontal = 12.dp, vertical = 8.dp),
