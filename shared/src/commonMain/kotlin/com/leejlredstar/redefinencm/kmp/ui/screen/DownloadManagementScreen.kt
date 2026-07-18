@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -285,7 +286,7 @@ private fun DownloadHero(
         requestKey = representativeTask?.artworkUri,
         onAccentColor = onAccentColor,
     )
-    Column(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .background(
@@ -296,162 +297,182 @@ private fun DownloadHero(
                         Color.Transparent,
                     ),
                 ),
-            )
-            .padding(horizontal = 24.dp, vertical = 24.dp),
+            ),
     ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(18.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        val compact = maxWidth < 520.dp
+        val showArtwork = maxWidth >= 360.dp
+        val contentPadding = if (compact) 16.dp else 24.dp
+        val artworkSize = if (compact) 72.dp else 112.dp
+        val headerSpacing = if (compact) 12.dp else 18.dp
+
+        Column(
+            modifier = Modifier.padding(horizontal = contentPadding, vertical = contentPadding),
         ) {
-            onBack?.let {
-                FilledTonalIconButton(
-                    onClick = it,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = accentPalette.quietContainer,
-                        contentColor = accentPalette.onQuietContainer,
-                    ),
-                ) {
-                    Icon(AppIcons.ArrowBack, contentDescription = "返回")
-                }
-            }
-            Surface(
-                modifier = Modifier.size(112.dp),
-                shape = MaterialTheme.shapes.extraLarge,
-                color = accentPalette.container,
-                contentColor = accentPalette.onContainer,
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(headerSpacing),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Icon(
-                        AppIcons.Download,
-                        contentDescription = null,
-                        modifier = Modifier.size(36.dp),
-                    )
-                    if (!representativeTask?.artworkUri.isNullOrBlank()) {
-                        AsyncImage(
-                            model = representativeTask.artworkUri,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                            onSuccess = { state -> extractAccent(state.result.image) },
-                        )
+                onBack?.let {
+                    FilledTonalIconButton(
+                        onClick = it,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = accentPalette.quietContainer,
+                            contentColor = accentPalette.onQuietContainer,
+                        ),
+                    ) {
+                        Icon(AppIcons.ArrowBack, contentDescription = "返回")
                     }
                 }
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = "下载管理",
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = accentPalette.onPageMiddle,
-                )
-                Text(
-                    text = "队列、进度和失败项都在这里处理",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = accentPalette.secondaryOnPageMiddle,
-                )
-                representativeTask?.let { task ->
+                if (showArtwork) {
+                    Surface(
+                        modifier = Modifier.size(artworkSize),
+                        shape = MaterialTheme.shapes.extraLarge,
+                        color = accentPalette.container,
+                        contentColor = accentPalette.onContainer,
+                    ) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(
+                                AppIcons.Download,
+                                contentDescription = null,
+                                modifier = Modifier.size(if (compact) 28.dp else 36.dp),
+                            )
+                            if (!representativeTask?.artworkUri.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = representativeTask.artworkUri,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                    onSuccess = { state -> extractAccent(state.result.image) },
+                                )
+                            }
+                        }
+                    }
+                }
+                Column(Modifier.weight(1f)) {
                     Text(
-                        text = if (task.isActive) "正在处理 · ${task.title}" else "最近任务 · ${task.title}",
-                        style = MaterialTheme.typography.labelLarge,
+                        text = "下载管理",
+                        style = if (compact) {
+                            MaterialTheme.typography.headlineMedium
+                        } else {
+                            MaterialTheme.typography.displaySmall
+                        },
+                        fontWeight = FontWeight.ExtraBold,
                         color = accentPalette.onPageMiddle,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 8.dp),
                     )
-                }
-            }
-        }
-        Spacer(Modifier.height(20.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            item { DownloadStatPill("全部", summary.total, accentPalette) }
-            item { DownloadStatPill("进行中", summary.active, accentPalette) }
-            item { DownloadStatPill("完成", summary.completed, accentPalette) }
-            item { DownloadStatPill("已删除", summary.deleted, accentPalette) }
-            item { DownloadStatPill("失败", summary.failed, accentPalette) }
-        }
-        Spacer(Modifier.height(16.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            item {
-                Button(
-                    onClick = onPauseAll,
-                    enabled = summary.active > 0,
-                    modifier = Modifier.height(48.dp),
-                    shape = CircleShape,
-                    contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = accentPalette.accent,
-                        contentColor = accentPalette.onAccent,
-                    ),
-                ) {
-                    Icon(AppIcons.Pause, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("暂停")
-                }
-            }
-            item {
-                Button(
-                    onClick = onResumeAll,
-                    enabled = summary.paused > 0,
-                    modifier = Modifier.height(48.dp),
-                    shape = CircleShape,
-                    contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = accentPalette.container,
-                        contentColor = accentPalette.onContainer,
-                    ),
-                ) {
-                    Icon(AppIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("继续")
-                }
-            }
-            item {
-                FilledTonalIconButton(
-                    onClick = onSyncLocalLibrary,
-                    enabled = localLibrarySyncState !is LocalLibrarySyncState.Syncing,
-                    modifier = Modifier.size(48.dp),
-                    shape = MaterialTheme.shapes.large,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = accentPalette.quietContainer,
-                        contentColor = accentPalette.onQuietContainer,
-                    ),
-                ) {
-                    if (localLibrarySyncState is LocalLibrarySyncState.Syncing) {
-                        LoadingIndicator(
-                            color = accentPalette.onQuietContainer,
-                            modifier = Modifier.size(24.dp),
+                    Text(
+                        text = "队列、进度和失败项都在这里处理",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = accentPalette.secondaryOnPageMiddle,
+                        maxLines = if (compact) 2 else 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    representativeTask?.let { task ->
+                        Text(
+                            text = if (task.isActive) "正在处理 · ${task.title}" else "最近任务 · ${task.title}",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = accentPalette.onPageMiddle,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 8.dp),
                         )
-                    } else {
-                        Icon(AppIcons.Refresh, contentDescription = "同步本地库")
                     }
                 }
             }
-            item {
-                FilledTonalIconButton(
-                    onClick = onCancelAll,
-                    enabled = summary.active > 0 || summary.paused > 0,
-                    modifier = Modifier.size(48.dp),
-                    shape = MaterialTheme.shapes.large,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = accentPalette.quietContainer,
-                        contentColor = accentPalette.onQuietContainer,
-                    ),
-                ) {
-                    Icon(AppIcons.Clear, contentDescription = "取消全部")
-                }
+            Spacer(Modifier.height(20.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                item { DownloadStatPill("全部", summary.total, accentPalette) }
+                item { DownloadStatPill("进行中", summary.active, accentPalette) }
+                item { DownloadStatPill("完成", summary.completed, accentPalette) }
+                item { DownloadStatPill("已删除", summary.deleted, accentPalette) }
+                item { DownloadStatPill("失败", summary.failed, accentPalette) }
             }
-            item {
-                FilledTonalIconButton(
-                    onClick = onClearFinished,
-                    enabled = summary.completed > 0 || summary.failed > 0,
-                    modifier = Modifier.size(48.dp),
-                    shape = MaterialTheme.shapes.large,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = accentPalette.quietContainer,
-                        contentColor = accentPalette.onQuietContainer,
-                    ),
-                ) {
-                    Icon(AppIcons.Delete, contentDescription = "清理已结束")
+            Spacer(Modifier.height(16.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                item {
+                    Button(
+                        onClick = onPauseAll,
+                        enabled = summary.active > 0,
+                        modifier = Modifier.height(48.dp),
+                        shape = CircleShape,
+                        contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = accentPalette.accent,
+                            contentColor = accentPalette.onAccent,
+                        ),
+                    ) {
+                        Icon(AppIcons.Pause, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("暂停")
+                    }
+                }
+                item {
+                    Button(
+                        onClick = onResumeAll,
+                        enabled = summary.paused > 0,
+                        modifier = Modifier.height(48.dp),
+                        shape = CircleShape,
+                        contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = accentPalette.container,
+                            contentColor = accentPalette.onContainer,
+                        ),
+                    ) {
+                        Icon(AppIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("继续")
+                    }
+                }
+                item {
+                    FilledTonalIconButton(
+                        onClick = onSyncLocalLibrary,
+                        enabled = localLibrarySyncState !is LocalLibrarySyncState.Syncing,
+                        modifier = Modifier.size(48.dp),
+                        shape = MaterialTheme.shapes.large,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = accentPalette.quietContainer,
+                            contentColor = accentPalette.onQuietContainer,
+                        ),
+                    ) {
+                        if (localLibrarySyncState is LocalLibrarySyncState.Syncing) {
+                            LoadingIndicator(
+                                color = accentPalette.onQuietContainer,
+                                modifier = Modifier.size(24.dp),
+                            )
+                        } else {
+                            Icon(AppIcons.Refresh, contentDescription = "同步本地库")
+                        }
+                    }
+                }
+                item {
+                    FilledTonalIconButton(
+                        onClick = onCancelAll,
+                        enabled = summary.active > 0 || summary.paused > 0,
+                        modifier = Modifier.size(48.dp),
+                        shape = MaterialTheme.shapes.large,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = accentPalette.quietContainer,
+                            contentColor = accentPalette.onQuietContainer,
+                        ),
+                    ) {
+                        Icon(AppIcons.Clear, contentDescription = "取消全部")
+                    }
+                }
+                item {
+                    FilledTonalIconButton(
+                        onClick = onClearFinished,
+                        enabled = summary.completed > 0 || summary.failed > 0,
+                        modifier = Modifier.size(48.dp),
+                        shape = MaterialTheme.shapes.large,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = accentPalette.quietContainer,
+                            contentColor = accentPalette.onQuietContainer,
+                        ),
+                    ) {
+                        Icon(AppIcons.Delete, contentDescription = "清理已结束")
+                    }
                 }
             }
         }
@@ -529,67 +550,137 @@ private fun DownloadTaskRow(
         contentColor = accentPalette.onQuietContainer,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 1.5.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            AsyncImage(
-                model = task.artworkUri,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.size(56.dp).clip(MaterialTheme.shapes.large),
-            )
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = task.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val compact = maxWidth < 520.dp
+            val showArtwork = !compact || maxWidth >= 300.dp
+
+            if (compact) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (showArtwork) {
+                            DownloadTaskArtwork(task, 48.dp)
+                            Spacer(Modifier.width(12.dp))
+                        }
+                        DownloadTaskDetails(
+                            task = task,
+                            accentPalette = accentPalette,
+                            showStatus = false,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        item { DownloadStatusPill(task.status) }
+                        item {
+                            DownloadActions(
+                                status = task.status,
+                                accentPalette = accentPalette,
+                                horizontal = true,
+                                onPause = onPause,
+                                onResume = onResume,
+                                onCancel = onCancel,
+                                onRetry = onRetry,
+                                onRemove = onRemove,
+                                onDeleteSong = onDeleteSong,
+                            )
+                        }
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    DownloadTaskArtwork(task, 56.dp)
+                    Spacer(Modifier.width(14.dp))
+                    DownloadTaskDetails(
+                        task = task,
+                        accentPalette = accentPalette,
+                        showStatus = true,
                         modifier = Modifier.weight(1f),
                     )
-                    Spacer(Modifier.width(8.dp))
-                    DownloadStatusPill(task.status)
-                }
-                Text(
-                    text = task.artist,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = accentPalette.secondaryOnQuietContainer,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(8.dp))
-                if (task.status == DownloadTaskStatus.Downloading && task.totalBytes == null) {
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape),
-                        color = accentPalette.accent,
-                        trackColor = accentPalette.onQuietContainer.copy(alpha = 0.12f),
-                    )
-                } else {
-                    LinearProgressIndicator(
-                        progress = { task.progressFraction },
-                        modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape),
-                        color = progressColor(task.status, accentPalette),
-                        trackColor = accentPalette.onQuietContainer.copy(alpha = 0.12f),
+                    Spacer(Modifier.width(12.dp))
+                    DownloadActions(
+                        status = task.status,
+                        accentPalette = accentPalette,
+                        onPause = onPause,
+                        onResume = onResume,
+                        onCancel = onCancel,
+                        onRetry = onRetry,
+                        onRemove = onRemove,
+                        onDeleteSong = onDeleteSong,
                     )
                 }
-                Spacer(Modifier.height(8.dp))
-                DownloadInfoBadges(task, accentPalette)
             }
-            Spacer(Modifier.width(12.dp))
-            DownloadActions(
-                status = task.status,
-                accentPalette = accentPalette,
-                onPause = onPause,
-                onResume = onResume,
-                onCancel = onCancel,
-                onRetry = onRetry,
-                onRemove = onRemove,
-                onDeleteSong = onDeleteSong,
+        }
+    }
+}
+
+@Composable
+private fun DownloadTaskArtwork(task: SongDownloadTask, size: androidx.compose.ui.unit.Dp) {
+    AsyncImage(
+        model = task.artworkUri,
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier.size(size).clip(MaterialTheme.shapes.large),
+    )
+}
+
+@Composable
+private fun DownloadTaskDetails(
+    task: SongDownloadTask,
+    accentPalette: ContentAccentPalette,
+    showStatus: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = task.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (showStatus) {
+                Spacer(Modifier.width(8.dp))
+                DownloadStatusPill(task.status)
+            }
+        }
+        Text(
+            text = task.artist,
+            style = MaterialTheme.typography.bodyMedium,
+            color = accentPalette.secondaryOnQuietContainer,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(Modifier.height(8.dp))
+        if (task.status == DownloadTaskStatus.Downloading && task.totalBytes == null) {
+            LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape),
+                color = accentPalette.accent,
+                trackColor = accentPalette.onQuietContainer.copy(alpha = 0.12f),
+            )
+        } else {
+            LinearProgressIndicator(
+                progress = { task.progressFraction },
+                modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape),
+                color = progressColor(task.status, accentPalette),
+                trackColor = accentPalette.onQuietContainer.copy(alpha = 0.12f),
             )
         }
+        Spacer(Modifier.height(8.dp))
+        DownloadInfoBadges(task, accentPalette)
     }
 }
 
@@ -680,6 +771,7 @@ private fun DownloadStatusPill(status: DownloadTaskStatus) {
 private fun DownloadActions(
     status: DownloadTaskStatus,
     accentPalette: ContentAccentPalette,
+    horizontal: Boolean = false,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onCancel: () -> Unit,
@@ -687,7 +779,7 @@ private fun DownloadActions(
     onRemove: () -> Unit,
     onDeleteSong: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    val content: @Composable () -> Unit = {
         when (status) {
             DownloadTaskStatus.Queued,
             DownloadTaskStatus.Resolving,
@@ -711,6 +803,11 @@ private fun DownloadActions(
                 SmallDownloadAction(AppIcons.Clear, "移除任务", accentPalette, onRemove)
             }
         }
+    }
+    if (horizontal) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), content = { content() })
+    } else {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp), content = { content() })
     }
 }
 

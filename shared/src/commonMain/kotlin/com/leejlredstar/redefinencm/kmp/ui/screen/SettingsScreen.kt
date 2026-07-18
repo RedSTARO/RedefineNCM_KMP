@@ -287,7 +287,7 @@ fun SettingsScreen(
                     },
                 )
                 // 原版 ServerItem：调 /inner/version/ 校验服务器可用性并显示版本
-                SettingsButton("检查服务器 ($server)", settingsPalette, index = 1, count = 2) {
+                SettingsButton("检查服务器", settingsPalette, index = 1, count = 2) {
                     val checkedServer = normalizeServerInput(server)
                     val checkGeneration = ++serverCheckGeneration
                     if (checkedServer.isEmpty()) {

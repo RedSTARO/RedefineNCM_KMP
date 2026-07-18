@@ -19,6 +19,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -76,6 +77,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
@@ -167,13 +169,16 @@ fun AutoHideMiniPlayerController(
         if (showComments) viewModel.getComments()
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val layoutMode = fullLyricControlLayoutMode(maxWidth, maxHeight)
+        val bottomPadding = if (layoutMode == FullLyricControlLayoutMode.Micro) 0.dp else 8.dp
+
         AnimatedContent(
             targetState = visible,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 8.dp),
+                .padding(bottom = bottomPadding),
             contentAlignment = Alignment.BottomCenter,
             transitionSpec = { fullLyricControllerTransform(expanding = targetState) },
             label = "FullLyricControllerTransform",
@@ -225,6 +230,9 @@ fun AutoHideMiniPlayerController(
                         reveal()
                         viewModel.onShuffleClick(!shuffleEnabled)
                     },
+                    layoutMode = layoutMode,
+                    availableWidth = maxWidth,
+                    availableHeight = maxHeight,
                 )
             } else if (showCollapsedWhenHidden) {
                 CollapsedProgressController(
@@ -239,6 +247,7 @@ fun AutoHideMiniPlayerController(
                     onTogglePlayPause = { if (hasMedia) player.togglePlayPause() },
                     onPrevious = { if (hasMedia) player.seekToPrevious() },
                     onNext = { if (hasMedia) player.seekToNext() },
+                    layoutMode = layoutMode,
                 )
             }
         }
@@ -269,6 +278,18 @@ fun AutoHideMiniPlayerController(
             )
         }
     }
+}
+
+private enum class FullLyricControlLayoutMode {
+    Expanded,
+    Compact,
+    Micro,
+}
+
+private fun fullLyricControlLayoutMode(width: Dp, height: Dp): FullLyricControlLayoutMode = when {
+    width < 280.dp || height < 96.dp -> FullLyricControlLayoutMode.Micro
+    width < 520.dp || height < 300.dp -> FullLyricControlLayoutMode.Compact
+    else -> FullLyricControlLayoutMode.Expanded
 }
 
 private fun fullLyricControllerTransform(expanding: Boolean): ContentTransform {
@@ -324,7 +345,28 @@ private fun FullLyricControlConsole(
     onQueue: () -> Unit,
     onComments: () -> Unit,
     onShuffle: () -> Unit,
+    layoutMode: FullLyricControlLayoutMode,
+    availableWidth: Dp,
+    availableHeight: Dp,
 ) {
+    if (layoutMode != FullLyricControlLayoutMode.Expanded) {
+        CompactPlaybackConsole(
+            media = media,
+            hasMedia = hasMedia,
+            isPlaying = isPlaying,
+            accentPalette = accentPalette,
+            onCollapse = onCollapse,
+            onPrevious = onPrevious,
+            onPlayPause = onPlayPause,
+            onNext = onNext,
+            onQueue = onQueue,
+            layoutMode = layoutMode,
+            availableWidth = availableWidth,
+            availableHeight = availableHeight,
+        )
+        return
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -428,6 +470,128 @@ private fun FullLyricControlConsole(
 }
 
 @Composable
+private fun CompactPlaybackConsole(
+    media: MediaInfo?,
+    hasMedia: Boolean,
+    isPlaying: Boolean,
+    accentPalette: ContentAccentPalette,
+    onCollapse: () -> Unit,
+    onPrevious: () -> Unit,
+    onPlayPause: () -> Unit,
+    onNext: () -> Unit,
+    onQueue: () -> Unit,
+    layoutMode: FullLyricControlLayoutMode,
+    availableWidth: Dp,
+    availableHeight: Dp,
+) {
+    val isMicro = layoutMode == FullLyricControlLayoutMode.Micro
+    val horizontalPadding = if (isMicro) 4.dp else 8.dp
+    val consoleHeight = if (isMicro) {
+        minOf(48.dp, availableHeight.coerceAtLeast(0.dp))
+    } else {
+        64.dp
+    }
+    val controlSize = if (isMicro) {
+        minOf(
+            40.dp,
+            consoleHeight,
+            ((availableWidth - 12.dp) / 2f).coerceAtLeast(0.dp),
+        )
+    } else {
+        48.dp
+    }
+    val showTitle = availableWidth >= 150.dp
+    val showPreviousAndNext = !isMicro && availableWidth >= 320.dp
+    val showQueue = !isMicro && availableWidth >= 430.dp
+
+    Surface(
+        modifier = Modifier
+            .padding(horizontal = horizontalPadding)
+            .widthIn(max = 620.dp)
+            .fillMaxWidth()
+            .height(consoleHeight),
+        shape = CircleShape,
+        color = accentPalette.container.copy(alpha = 0.90f),
+        contentColor = accentPalette.onContainer,
+        tonalElevation = 0.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = if (isMicro) 2.dp else 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(
+                onClick = onCollapse,
+                modifier = Modifier.size(controlSize),
+            ) {
+                Icon(AppIcons.ArrowBack, contentDescription = "收起播放控制")
+            }
+
+            if (showTitle) {
+                Text(
+                    text = media?.title?.takeIf { it.isNotBlank() } ?: "未播放",
+                    style = if (isMicro) {
+                        MaterialTheme.typography.labelMedium
+                    } else {
+                        MaterialTheme.typography.titleSmall
+                    },
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = if (isMicro) 2.dp else 8.dp),
+                )
+            } else {
+                Spacer(Modifier.weight(1f))
+            }
+
+            if (showQueue) {
+                IconButton(
+                    onClick = onQueue,
+                    modifier = Modifier.size(controlSize),
+                ) {
+                    Icon(AppIcons.QueueMusic, contentDescription = "播放队列")
+                }
+            }
+            if (showPreviousAndNext) {
+                IconButton(
+                    onClick = onPrevious,
+                    enabled = hasMedia,
+                    modifier = Modifier.size(controlSize),
+                ) {
+                    Icon(AppIcons.KeyboardArrowLeft, contentDescription = "上一首")
+                }
+            }
+            FilledIconButton(
+                onClick = onPlayPause,
+                enabled = hasMedia,
+                modifier = Modifier.size(controlSize),
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = accentPalette.onContainer.copy(alpha = 0.18f),
+                    contentColor = accentPalette.onContainer,
+                    disabledContainerColor = accentPalette.onContainer.copy(alpha = 0.08f),
+                    disabledContentColor = accentPalette.onContainer.copy(alpha = 0.42f),
+                ),
+            ) {
+                Icon(
+                    imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
+                    contentDescription = if (isPlaying) "暂停" else "播放",
+                )
+            }
+            if (showPreviousAndNext) {
+                IconButton(
+                    onClick = onNext,
+                    enabled = hasMedia,
+                    modifier = Modifier.size(controlSize),
+                ) {
+                    Icon(AppIcons.KeyboardArrowRight, contentDescription = "下一首")
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun ExpandedPlaybackCard(
     media: MediaInfo?,
     hasMedia: Boolean,
@@ -509,28 +673,40 @@ private fun ExpandedPlaybackCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.Center,
             ) {
-                Column(
+                Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(
-                            onClickLabel = "收起播放控制",
-                            onClick = onCollapse,
-                        ),
+                        .fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = media?.title?.takeIf { it.isNotBlank() } ?: "未播放",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = media?.artist?.takeIf { it.isNotBlank() } ?: "选择歌曲开始播放",
-                        style = MaterialTheme.typography.labelMedium,
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(
+                                onClickLabel = "收起播放控制",
+                                onClick = onCollapse,
+                            ),
+                    ) {
+                        Text(
+                            text = media?.title?.takeIf { it.isNotBlank() } ?: "未播放",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = media?.artist?.takeIf { it.isNotBlank() } ?: "选择歌曲开始播放",
+                            style = MaterialTheme.typography.labelMedium,
                             color = accentPalette.secondaryOnContainer,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    IconButton(
+                        onClick = onCollapse,
+                        modifier = Modifier.size(40.dp),
+                    ) {
+                        Icon(AppIcons.ArrowBack, contentDescription = "收起播放控制")
+                    }
                 }
                 PlaybackSeekBar(
                     value = sliderValue.coerceIn(0f, 1f),
@@ -691,6 +867,7 @@ private fun CollapsedProgressController(
     onTogglePlayPause: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
+    layoutMode: FullLyricControlLayoutMode,
 ) {
     val dragThresholdPx = with(LocalDensity.current) { 56.dp.toPx() }
     var dragOffsetPx by remember { mutableStateOf(0f) }
@@ -721,12 +898,22 @@ private fun CollapsedProgressController(
         label = "collapsedControllerSwipeAlpha",
     )
 
+    val isMicro = layoutMode == FullLyricControlLayoutMode.Micro
+    val horizontalPadding = when (layoutMode) {
+        FullLyricControlLayoutMode.Expanded -> 24.dp
+        FullLyricControlLayoutMode.Compact -> 12.dp
+        FullLyricControlLayoutMode.Micro -> 4.dp
+    }
+    val widthFraction = if (layoutMode == FullLyricControlLayoutMode.Expanded) 0.72f else 1f
+
     Surface(
         modifier = Modifier
-            .padding(horizontal = 24.dp)
-            .widthIn(min = 220.dp, max = 420.dp)
-            .fillMaxWidth(0.72f)
-            .heightIn(min = ExpressiveLayout.MinimumTouchTarget)
+            .padding(horizontal = horizontalPadding)
+            .widthIn(max = 420.dp)
+            .fillMaxWidth(widthFraction)
+            .then(
+                if (isMicro) Modifier else Modifier.heightIn(min = ExpressiveLayout.MinimumTouchTarget),
+            )
             .graphicsLayer {
                 translationX = animatedOffset
                 scaleX = animatedScale
@@ -812,7 +999,12 @@ private fun CollapsedProgressController(
         contentColor = accentPalette.onQuietContainer,
         tonalElevation = 0.dp,
     ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp)) {
+        Column(
+            modifier = Modifier.padding(
+                horizontal = if (isMicro) 8.dp else 16.dp,
+                vertical = if (isMicro) 5.dp else 9.dp,
+            ),
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -838,22 +1030,24 @@ private fun CollapsedProgressController(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                Text(
-                    text = playbackTimeLabel,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (swipeLabel != null) {
-                        accentPalette.onQuietContainer
-                    } else {
-                        accentPalette.secondaryOnQuietContainer
-                    },
-                    modifier = Modifier.padding(start = 10.dp),
-                    maxLines = 1,
-                )
+                if (!isMicro) {
+                    Text(
+                        text = playbackTimeLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (swipeLabel != null) {
+                            accentPalette.onQuietContainer
+                        } else {
+                            accentPalette.secondaryOnQuietContainer
+                        },
+                        modifier = Modifier.padding(start = 10.dp),
+                        maxLines = 1,
+                    )
+                }
             }
             LinearProgressIndicator(
                 progress = { progress },
                 modifier = Modifier
-                    .padding(top = 6.dp)
+                    .padding(top = if (isMicro) 3.dp else 6.dp)
                     .fillMaxWidth()
                     .height(4.dp)
                     .clip(CircleShape),

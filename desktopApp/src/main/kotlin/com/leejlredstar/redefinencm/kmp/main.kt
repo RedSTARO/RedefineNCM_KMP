@@ -7,6 +7,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -42,13 +43,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.ApplicationScope
@@ -71,7 +72,6 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import org.koin.core.context.GlobalContext
-import java.awt.Dimension
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
@@ -100,14 +100,6 @@ fun main() {
             DisposableEffect(window, mediaControls) {
                 mediaControls.start(window)
                 onDispose { mediaControls.stop() }
-            }
-
-            val density = LocalDensity.current
-            LaunchedEffect(window, density) {
-                window.minimumSize = Dimension(
-                    with(density) { 720.dp.roundToPx() },
-                    with(density) { 520.dp.roundToPx() },
-                )
             }
 
             val toggleMaximize = {
@@ -154,15 +146,15 @@ fun main() {
 @Composable
 private fun ApplicationScope.FloatingLyricWindow() {
     val visible by LyricNotificationController.isWindowVisible.collectAsState()
+    val windowState = rememberWindowState(
+        size = DpSize(760.dp, 224.dp),
+        position = WindowPosition(Alignment.BottomCenter),
+    )
     if (!visible) return
 
     val data by LyricNotificationController.floatingLyricData.collectAsState()
     val player = remember { GlobalContext.get().get<PlatformPlayer>() }
     var alwaysOnTop by remember { mutableStateOf(true) }
-    val windowState = rememberWindowState(
-        size = DpSize(760.dp, 224.dp),
-        position = WindowPosition(Alignment.BottomCenter),
-    )
 
     Window(
         onCloseRequest = { LyricNotificationController.hide() },
@@ -173,13 +165,6 @@ private fun ApplicationScope.FloatingLyricWindow() {
         alwaysOnTop = alwaysOnTop,
         resizable = true,
     ) {
-        val density = LocalDensity.current
-        LaunchedEffect(window, density) {
-            window.minimumSize = Dimension(
-                with(density) { 620.dp.roundToPx() },
-                with(density) { 208.dp.roundToPx() },
-            )
-        }
         RedefineNCMTheme {
             WindowDraggableArea {
                 FloatingLyricContent(
@@ -251,13 +236,33 @@ private fun FloatingLyricContent(
         }
     } ?: 0f
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .padding(8.dp)
             .semantics { paneTitle = "桌面歌词" },
         contentAlignment = Alignment.Center,
     ) {
+        val layout = when {
+            maxWidth < 360.dp || maxHeight < 180.dp -> FloatingLyricLayout.Minimal
+            maxWidth < 680.dp || maxHeight < 216.dp -> FloatingLyricLayout.Compact
+            else -> FloatingLyricLayout.Expanded
+        }
+        val isExpanded = layout == FloatingLyricLayout.Expanded
+        val controlSize = if (isExpanded) 48.dp else 40.dp
+        val horizontalSpacing = if (isExpanded) 16.dp else 10.dp
+        val contentPadding = if (isExpanded) 12.dp else 10.dp
+        val showMinimalPlay = maxWidth >= 96.dp && maxHeight >= 48.dp
+        val minimalControlSize = minOf(
+            36.dp,
+            (maxHeight - 12.dp).coerceAtLeast(0.dp),
+            if (showMinimalPlay) {
+                ((maxWidth - 20.dp) / 2f).coerceAtLeast(0.dp)
+            } else {
+                (maxWidth - 16.dp).coerceAtLeast(0.dp)
+            },
+        )
+
         Surface(
             shape = MaterialTheme.shapes.extraLarge,
             color = Color.Transparent,
@@ -265,164 +270,235 @@ private fun FloatingLyricContent(
             shadowElevation = 8.dp,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Row(
-                modifier = Modifier
-                    .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(
-                                animatedContainer.copy(alpha = 0.96f),
-                                animatedQuietContainer.copy(alpha = 0.92f),
+            if (layout == FloatingLyricLayout.Minimal) {
+                Row(
+                    modifier = Modifier
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(
+                                    animatedContainer.copy(alpha = 0.96f),
+                                    animatedQuietContainer.copy(alpha = 0.92f),
+                                ),
                             ),
-                        ),
-                    )
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                FloatingArtwork(
-                    artworkUri = data?.artworkUri.orEmpty(),
-                    title = data?.title.orEmpty(),
-                    containerColor = animatedQuietContainer,
-                    contentColor = animatedContent,
-                    onArtworkLoaded = extractAccent,
-                )
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                        )
+                        .padding(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            imageVector = if (data?.isPlaying == true) AppIcons.GraphicEq else AppIcons.Pause,
-                            contentDescription = null,
-                            tint = animatedSecondaryContent,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Text(
-                            text = data?.title?.ifBlank { "RedefineNCM" } ?: "RedefineNCM",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = animatedContent,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
-                        )
-                        data?.artist?.takeIf { it.isNotBlank() }?.let { artist ->
+                    Box(modifier = Modifier.weight(1f)) {
+                        Crossfade(
+                            targetState = data?.currentLyric?.ifBlank { data.title }.orEmpty(),
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMediumLow,
+                            ),
+                            label = "minimal current lyric",
+                        ) { lyric ->
                             Text(
-                                text = artist,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = animatedSecondaryContent,
+                                text = lyric.ifBlank { "暂无歌词" },
+                                style = MaterialTheme.typography.titleMedium,
+                                color = animatedContent,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.widthIn(max = 160.dp),
-                            )
-                        }
-                        FilledTonalIconButton(
-                            onClick = onClose,
-                            modifier = Modifier.size(48.dp),
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = animatedContent.copy(alpha = 0.12f),
-                                contentColor = animatedContent,
-                            ),
-                        ) {
-                            Icon(
-                                imageVector = AppIcons.Clear,
-                                contentDescription = "关闭桌面歌词",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .semantics { liveRegion = LiveRegionMode.Polite },
                             )
                         }
                     }
-
-                    Crossfade(
-                        targetState = data?.currentLyric?.ifBlank { data.title }.orEmpty(),
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMediumLow,
-                        ),
-                        label = "current lyric",
-                    ) { lyric ->
-                        Text(
-                            text = lyric.ifBlank { "暂无歌词" },
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = animatedContent,
-                            textAlign = TextAlign.Start,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .semantics { liveRegion = LiveRegionMode.Polite },
-                        )
-                    }
-                    Text(
-                        text = data?.nextLyric?.ifBlank { "下一句歌词将在这里显示" }
-                            ?: "下一句歌词将在这里显示",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = animatedSecondaryContent,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        LinearProgressIndicator(
-                            progress = { progress },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(4.dp)
-                                .clip(CircleShape),
-                            color = animatedAccent,
-                            trackColor = animatedContent.copy(alpha = 0.18f),
-                        )
-                        FilterChip(
-                            selected = alwaysOnTop,
-                            onClick = onToggleAlwaysOnTop,
-                            label = { Text("置顶") },
-                            leadingIcon = if (alwaysOnTop) {
-                                {
-                                    Icon(
-                                        imageVector = AppIcons.Check,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                }
-                            } else {
-                                null
-                            },
-                            modifier = Modifier.height(48.dp),
-                            colors = FilterChipDefaults.filterChipColors(
-                                containerColor = animatedContent.copy(alpha = 0.08f),
-                                labelColor = animatedContent,
-                                iconColor = animatedContent,
-                                selectedContainerColor = animatedAccent,
-                                selectedLabelColor = animatedOnAccent,
-                                selectedLeadingIconColor = animatedOnAccent,
-                            ),
-                        )
-                        PlaybackIconButton(
-                            icon = AppIcons.KeyboardArrowLeft,
-                            description = "上一首",
-                            containerColor = animatedContent.copy(alpha = 0.10f),
-                            contentColor = animatedContent,
-                            onClick = onPrevious,
-                        )
+                    if (showMinimalPlay) {
                         PlaybackIconButton(
                             icon = if (data?.isPlaying == true) AppIcons.Pause else AppIcons.PlayArrow,
                             description = if (data?.isPlaying == true) "暂停" else "播放",
                             containerColor = animatedAccent,
                             contentColor = animatedOnAccent,
+                            size = minimalControlSize,
                             onClick = onTogglePlayPause,
                         )
-                        PlaybackIconButton(
-                            icon = AppIcons.KeyboardArrowRight,
-                            description = "下一首",
-                            containerColor = animatedContent.copy(alpha = 0.10f),
+                    }
+                    FilledTonalIconButton(
+                        onClick = onClose,
+                        modifier = Modifier.size(minimalControlSize),
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = animatedContent.copy(alpha = 0.12f),
                             contentColor = animatedContent,
-                            onClick = onNext,
+                        ),
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.Clear,
+                            contentDescription = "关闭桌面歌词",
                         )
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(
+                                    animatedContainer.copy(alpha = 0.96f),
+                                    animatedQuietContainer.copy(alpha = 0.92f),
+                                ),
+                            ),
+                        )
+                        .padding(contentPadding),
+                    horizontalArrangement = Arrangement.spacedBy(horizontalSpacing),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (isExpanded) {
+                        FloatingArtwork(
+                            artworkUri = data?.artworkUri.orEmpty(),
+                            title = data?.title.orEmpty(),
+                            containerColor = animatedQuietContainer,
+                            contentColor = animatedContent,
+                            onArtworkLoaded = extractAccent,
+                        )
+                    }
+
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = if (data?.isPlaying == true) AppIcons.GraphicEq else AppIcons.Pause,
+                                contentDescription = null,
+                                tint = animatedSecondaryContent,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Text(
+                                text = data?.title?.ifBlank { "RedefineNCM" } ?: "RedefineNCM",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = animatedContent,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (isExpanded) {
+                                data?.artist?.takeIf { it.isNotBlank() }?.let { artist ->
+                                    Text(
+                                        text = artist,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = animatedSecondaryContent,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.widthIn(max = 160.dp),
+                                    )
+                                }
+                            }
+                            FilledTonalIconButton(
+                                onClick = onClose,
+                                modifier = Modifier.size(controlSize),
+                                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                    containerColor = animatedContent.copy(alpha = 0.12f),
+                                    contentColor = animatedContent,
+                                ),
+                            ) {
+                                Icon(
+                                    imageVector = AppIcons.Clear,
+                                    contentDescription = "关闭桌面歌词",
+                                )
+                            }
+                        }
+
+                        Crossfade(
+                            targetState = data?.currentLyric?.ifBlank { data.title }.orEmpty(),
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMediumLow,
+                            ),
+                            label = "current lyric",
+                        ) { lyric ->
+                            Text(
+                                text = lyric.ifBlank { "暂无歌词" },
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = animatedContent,
+                                textAlign = TextAlign.Start,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .semantics { liveRegion = LiveRegionMode.Polite },
+                            )
+                        }
+                        Text(
+                            text = data?.nextLyric?.ifBlank { "下一句歌词将在这里显示" }
+                                ?: "下一句歌词将在这里显示",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = animatedSecondaryContent,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            LinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(4.dp)
+                                    .clip(CircleShape),
+                                color = animatedAccent,
+                                trackColor = animatedContent.copy(alpha = 0.18f),
+                            )
+                            if (isExpanded) {
+                                FilterChip(
+                                    selected = alwaysOnTop,
+                                    onClick = onToggleAlwaysOnTop,
+                                    label = { Text("置顶") },
+                                    leadingIcon = if (alwaysOnTop) {
+                                        {
+                                            Icon(
+                                                imageVector = AppIcons.Check,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp),
+                                            )
+                                        }
+                                    } else {
+                                        null
+                                    },
+                                    modifier = Modifier.height(controlSize),
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        containerColor = animatedContent.copy(alpha = 0.08f),
+                                        labelColor = animatedContent,
+                                        iconColor = animatedContent,
+                                        selectedContainerColor = animatedAccent,
+                                        selectedLabelColor = animatedOnAccent,
+                                        selectedLeadingIconColor = animatedOnAccent,
+                                    ),
+                                )
+                            }
+                            PlaybackIconButton(
+                                icon = AppIcons.KeyboardArrowLeft,
+                                description = "上一首",
+                                containerColor = animatedContent.copy(alpha = 0.10f),
+                                contentColor = animatedContent,
+                                size = controlSize,
+                                onClick = onPrevious,
+                            )
+                            PlaybackIconButton(
+                                icon = if (data?.isPlaying == true) AppIcons.Pause else AppIcons.PlayArrow,
+                                description = if (data?.isPlaying == true) "暂停" else "播放",
+                                containerColor = animatedAccent,
+                                contentColor = animatedOnAccent,
+                                size = controlSize,
+                                onClick = onTogglePlayPause,
+                            )
+                            PlaybackIconButton(
+                                icon = AppIcons.KeyboardArrowRight,
+                                description = "下一首",
+                                containerColor = animatedContent.copy(alpha = 0.10f),
+                                contentColor = animatedContent,
+                                size = controlSize,
+                                onClick = onNext,
+                            )
+                        }
                     }
                 }
             }
@@ -473,11 +549,12 @@ private fun PlaybackIconButton(
     description: String,
     containerColor: Color,
     contentColor: Color,
+    size: Dp = 48.dp,
     onClick: () -> Unit,
 ) {
     FilledTonalIconButton(
         onClick = onClick,
-        modifier = Modifier.size(48.dp),
+        modifier = Modifier.size(size),
         shape = CircleShape,
         colors = IconButtonDefaults.filledTonalIconButtonColors(
             containerColor = containerColor,
@@ -489,4 +566,10 @@ private fun PlaybackIconButton(
             contentDescription = description,
         )
     }
+}
+
+private enum class FloatingLyricLayout {
+    Expanded,
+    Compact,
+    Minimal,
 }
