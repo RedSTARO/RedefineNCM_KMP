@@ -156,20 +156,28 @@ tag format is `v<major>.<minor>.<patch>`; the current base tag is `v0.0.2`. Full
 names are `baseTag.shortCommitHash`, e.g. `v0.0.2.cf6cea74`. Build numbers are
 `git rev-list --count HEAD`.
 
+The full `tag.hash` value is the **only product version**. Every runtime and every CI artifact
+uses it. Native installer fields that reject letters or additional components are numeric
+transport metadata derived from the same Git revision; they must never be presented as a second
+product version.
+
 Platform mapping:
 
 - Android: `versionName = full app version`, `versionCode = commit count`.
-- Shared runtime: generated common `BuildInfo` exposes base tag, semantic base version,
-  commit hash, commit-count build number, and full app version.
-- Desktop DMG/DEB distributions: `packageVersion = base semantic version` (without `v`).
-- Windows MSI: `msiPackageVersion = <base major + 1>.<base minor>.<commit count + base patch>`
-  while the stable `upgradeUuid` remains unchanged. The major-version offset is the installer
-  epoch above the historical `1.0.0` package. MSI has only three numeric components, so the
-  commit count makes every CI artifact upgradeable and adding the patch also advances a tag made
-  on an already-packaged commit. Runtime code still uses the full `BuildInfo` version.
+- Shared runtime (Android/iOS/Desktop/Web): generated common `BuildInfo.VERSION_NAME` is the full
+  product version. It also exposes the tag components, build number, and native package adapter;
+  the standard Web distribution additionally carries the same data in its generated `version.json`.
+- Desktop DMG/MSI/DEB: CI artifact filenames use the full product version. Their internal
+  `packageVersion` / `msiPackageVersion` use
+  `<base major + 1>.<base minor>.<commit count + base patch>`. The positive major fixes the macOS
+  `CFBundleVersion` constraint and reserves package major 1 above the historical `1.0.0` installer;
+  the stable Windows `upgradeUuid` remains unchanged.
 - iOS app + LyricWidget: `CFBundleShortVersionString = base semantic version`,
-  `CFBundleVersion = commit count`, and `RedefineNCMVersionName = full app version`. Xcode build
-  phases run `iosApp/Scripts/stamp-version.sh` to stamp the built product from the same Git data.
+  `CFBundleVersion = commit count`, and `RedefineNCMVersionName = full product version`. Xcode build
+  phases run `iosApp/Scripts/stamp-version.sh`; CI passes the same version inputs resolved once by
+  Gradle, and the script fails if the supplied full version differs from `tag.hash`.
+- CI resolves the version once in the test job, passes the same tag/hash/build inputs to every
+  platform job, and names APK/DEB/MSI/DMG/Web artifacts with the full product version.
 
 > **Convergence status (goal #4):** Kotlin is now `2.4.0` in BOTH repos (converged + verified).
 > **AGP stays at `9.0.1` here** while the original is `9.2.0`: bumping the KMP repo to AGP 9.2.0

@@ -1,7 +1,7 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
-val appBaseVersion = rootProject.extra["redefineNcmBaseVersion"] as String
-val appMsiPackageVersion = rootProject.extra["redefineNcmMsiPackageVersion"] as String
+val appVersionName = rootProject.extra["redefineNcmVersionName"] as String
+val appNativePackageVersion = rootProject.extra["redefineNcmNativePackageVersion"] as String
 
 plugins {
     alias(libs.plugins.kotlinJvm)
@@ -52,12 +52,12 @@ compose.desktop {
                 "jdk.unsupported",
             )
             packageName = "RedefineNCM"
-            packageVersion = appBaseVersion
+            packageVersion = appNativePackageVersion
             description = "A third-party NetEase Cloud Music client"
             vendor = "RedSTAR"
 
             windows {
-                msiPackageVersion = appMsiPackageVersion
+                msiPackageVersion = appNativePackageVersion
                 menu = true
                 menuGroup = "RedSTAR"
                 shortcut = true
@@ -69,6 +69,8 @@ compose.desktop {
                 packageName = "RedefineNCM"
                 infoPlist {
                     extraKeysRawXml = """
+                        <key>RedefineNCMVersionName</key>
+                        <string>$appVersionName</string>
                         <key>NSMicrophoneUsageDescription</key>
                         <string>用于听歌识曲时采集环境中的音乐</string>
                     """.trimIndent()

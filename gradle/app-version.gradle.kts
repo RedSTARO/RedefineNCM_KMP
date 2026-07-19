@@ -20,7 +20,7 @@ abstract class PrintAppVersionTask : DefaultTask() {
     abstract val versionCode: Property<Int>
 
     @get:Input
-    abstract val msiPackageVersion: Property<String>
+    abstract val nativePackageVersion: Property<String>
 
     @TaskAction
     fun printVersion() {
@@ -29,12 +29,12 @@ abstract class PrintAppVersionTask : DefaultTask() {
         println("baseVersion=${baseVersion.get()}")
         println("commitHash=${commitHash.get()}")
         println("versionCode=${versionCode.get()}")
-        println("msiPackageVersion=${msiPackageVersion.get()}")
+        println("nativePackageVersion=${nativePackageVersion.get()}")
     }
 }
 
 val semverTagPattern = Regex("""v\d+\.\d+\.\d+""")
-val versionLabelPattern = Regex("""[A-Za-z0-9][A-Za-z0-9._-]*""")
+val commitHashPattern = Regex("""[0-9a-f]{8}""")
 
 fun gitOutputOrNull(vararg args: String): String? = runCatching {
     providers.exec {
@@ -61,6 +61,21 @@ fun versionInput(environmentName: String, vararg gitArgs: String): String {
         )
 }
 
+val gitVersionEnvironmentNames = listOf(
+    "REDEFINE_NCM_BASE_TAG",
+    "REDEFINE_NCM_COMMIT_HASH",
+    "REDEFINE_NCM_VERSION_CODE",
+)
+val suppliedGitVersionInputs = gitVersionEnvironmentNames.filter { environmentName ->
+    providers.environmentVariable(environmentName).orNull?.trim().isNullOrEmpty().not()
+}
+if (suppliedGitVersionInputs.isNotEmpty() && suppliedGitVersionInputs.size != gitVersionEnvironmentNames.size) {
+    val missingInputs = gitVersionEnvironmentNames - suppliedGitVersionInputs.toSet()
+    throw GradleException(
+        "Git version overrides must be supplied together; missing ${missingInputs.joinToString()}.",
+    )
+}
+
 val appBaseTag = versionInput(
     "REDEFINE_NCM_BASE_TAG",
     "describe",
@@ -75,9 +90,9 @@ if (!semverTagPattern.matches(appBaseTag)) {
 
 val appBaseVersion = appBaseTag.removePrefix("v")
 val appCommitHash = versionInput("REDEFINE_NCM_COMMIT_HASH", "rev-parse", "--short=8", "HEAD")
-if (!versionLabelPattern.matches(appCommitHash)) {
+if (!commitHashPattern.matches(appCommitHash)) {
     throw GradleException(
-        "App commit label may contain only letters, digits, '.', '_' and '-', got '$appCommitHash'.",
+        "App commit hash must contain exactly 8 lowercase hexadecimal characters, got '$appCommitHash'.",
     )
 }
 val appVersionCode = versionInput("REDEFINE_NCM_VERSION_CODE", "rev-list", "--count", "HEAD")
@@ -86,24 +101,36 @@ val appVersionCode = versionInput("REDEFINE_NCM_VERSION_CODE", "rev-list", "--co
     ?: throw GradleException("REDEFINE_NCM_VERSION_CODE must be a positive integer.")
 val appBaseVersionComponents = appBaseVersion.split('.')
 val appSemanticMajor = appBaseVersionComponents[0].toIntOrNull()
-    ?: throw GradleException("MSI major version must be an integer, got '${appBaseVersionComponents[0]}'.")
-val appMsiMinor = appBaseVersionComponents[1].toIntOrNull()
-    ?: throw GradleException("MSI minor version must be an integer, got '${appBaseVersionComponents[1]}'.")
+    ?: throw GradleException("Native package major version must be an integer, got '${appBaseVersionComponents[0]}'.")
+val appPackageMinor = appBaseVersionComponents[1].toIntOrNull()
+    ?: throw GradleException("Native package minor version must be an integer, got '${appBaseVersionComponents[1]}'.")
 val appSemanticPatch = appBaseVersionComponents[2].toLongOrNull()
-    ?: throw GradleException("MSI patch version must be an integer, got '${appBaseVersionComponents[2]}'.")
-// Reserve MSI major version 1 for the historical pre-Git-versioning installer line.
-val appMsiMajor = appSemanticMajor + 1
-val appMsiBuild = appVersionCode.toLong() + appSemanticPatch
-if (appSemanticMajor !in 0..254 || appMsiMinor !in 0..255 || appMsiBuild !in 1L..65_535L) {
+    ?: throw GradleException("Native package patch version must be an integer, got '${appBaseVersionComponents[2]}'.")
+// Native package managers cannot represent the canonical tag.hash product version. Reserve
+// package major 1 for the historical pre-Git-versioning installer line, then derive one numeric
+// adapter from the same Git revision for DMG, MSI and DEB upgrade ordering.
+val appPackageMajor = appSemanticMajor + 1
+val appPackageBuild = appVersionCode.toLong() + appSemanticPatch
+if (appSemanticMajor !in 0..254 || appPackageMinor !in 0..255 || appPackageBuild !in 1L..65_535L) {
     throw GradleException(
-        "MSI version components are out of range: major=$appMsiMajor, " +
-            "minor=$appMsiMinor, build=$appMsiBuild (expected 1..255, 0..255, 1..65535).",
+        "Native package version cannot be represented by Windows Installer: major=$appPackageMajor, " +
+            "minor=$appPackageMinor, build=$appPackageBuild (expected 1..255, 0..255, 1..65535).",
     )
 }
-// MSI supports only MAJOR.MINOR.BUILD. Commit count makes every CI artifact upgradeable, while
-// adding PATCH also advances a tag created on an already-packaged commit.
-val appMsiPackageVersion = "$appMsiMajor.$appMsiMinor.$appMsiBuild"
+// Commit count makes every CI package upgradeable, while adding PATCH also advances a tag created
+// on an already-packaged commit.
+val appNativePackageVersion = "$appPackageMajor.$appPackageMinor.$appPackageBuild"
 val appVersionName = "$appBaseTag.$appCommitHash"
+providers.environmentVariable("REDEFINE_NCM_VERSION_NAME").orNull
+    ?.trim()
+    ?.takeIf(String::isNotEmpty)
+    ?.let { suppliedVersionName ->
+        if (suppliedVersionName != appVersionName) {
+            throw GradleException(
+                "REDEFINE_NCM_VERSION_NAME '$suppliedVersionName' does not match derived version '$appVersionName'.",
+            )
+        }
+    }
 
 allprojects {
     version = appVersionName
@@ -114,7 +141,7 @@ rootProject.extra["redefineNcmBaseVersion"] = appBaseVersion
 rootProject.extra["redefineNcmCommitHash"] = appCommitHash
 rootProject.extra["redefineNcmVersionCode"] = appVersionCode
 rootProject.extra["redefineNcmVersionName"] = appVersionName
-rootProject.extra["redefineNcmMsiPackageVersion"] = appMsiPackageVersion
+rootProject.extra["redefineNcmNativePackageVersion"] = appNativePackageVersion
 
 tasks.register<PrintAppVersionTask>("printAppVersion") {
     group = "versioning"
@@ -125,5 +152,5 @@ tasks.register<PrintAppVersionTask>("printAppVersion") {
     baseVersion.set(appBaseVersion)
     commitHash.set(appCommitHash)
     versionCode.set(appVersionCode)
-    msiPackageVersion.set(appMsiPackageVersion)
+    nativePackageVersion.set(appNativePackageVersion)
 }
