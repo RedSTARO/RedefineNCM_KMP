@@ -23,6 +23,9 @@ abstract class GenerateAppBuildInfoTask : DefaultTask() {
     @get:Input
     abstract val appVersionName: Property<String>
 
+    @get:Input
+    abstract val appNativePackageVersion: Property<String>
+
     @get:OutputDirectory
     abstract val outputDirectory: DirectoryProperty
 
@@ -41,6 +44,44 @@ abstract class GenerateAppBuildInfoTask : DefaultTask() {
                 const val COMMIT_HASH: String = "${appCommitHash.get()}"
                 const val VERSION_CODE: Int = ${appVersionCode.get()}
                 const val VERSION_NAME: String = "${appVersionName.get()}"
+                const val NATIVE_PACKAGE_VERSION: String = "${appNativePackageVersion.get()}"
+            }
+            """.trimIndent() + "\n"
+        )
+    }
+}
+
+abstract class GenerateWebVersionManifestTask : DefaultTask() {
+    @get:Input
+    abstract val appBaseTag: Property<String>
+
+    @get:Input
+    abstract val appCommitHash: Property<String>
+
+    @get:Input
+    abstract val appVersionCode: Property<Int>
+
+    @get:Input
+    abstract val appVersionName: Property<String>
+
+    @get:Input
+    abstract val appNativePackageVersion: Property<String>
+
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    @TaskAction
+    fun generate() {
+        val outputDir = outputDirectory.get().asFile
+        outputDir.mkdirs()
+        outputDir.resolve("version.json").writeText(
+            """
+            {
+              "version": "${appVersionName.get()}",
+              "tag": "${appBaseTag.get()}",
+              "hash": "${appCommitHash.get()}",
+              "build": ${appVersionCode.get()},
+              "nativePackageVersion": "${appNativePackageVersion.get()}"
             }
             """.trimIndent() + "\n"
         )
@@ -52,7 +93,9 @@ val resolvedAppBaseVersion = rootProject.extra["redefineNcmBaseVersion"] as Stri
 val resolvedAppCommitHash = rootProject.extra["redefineNcmCommitHash"] as String
 val resolvedAppVersionCode = rootProject.extra["redefineNcmVersionCode"] as Int
 val resolvedAppVersionName = rootProject.extra["redefineNcmVersionName"] as String
+val resolvedAppNativePackageVersion = rootProject.extra["redefineNcmNativePackageVersion"] as String
 val generatedBuildInfoDir = layout.buildDirectory.dir("generated/redefinencmVersion/commonMain/kotlin")
+val generatedWebVersionResourcesDir = layout.buildDirectory.dir("generated/redefinencmVersion/wasmJsMain/resources")
 
 val generateAppBuildInfo by tasks.registering(GenerateAppBuildInfoTask::class) {
     group = "versioning"
@@ -63,7 +106,20 @@ val generateAppBuildInfo by tasks.registering(GenerateAppBuildInfoTask::class) {
     appCommitHash.set(resolvedAppCommitHash)
     appVersionCode.set(resolvedAppVersionCode)
     appVersionName.set(resolvedAppVersionName)
+    appNativePackageVersion.set(resolvedAppNativePackageVersion)
     outputDirectory.set(generatedBuildInfoDir)
+}
+
+val generateWebVersionManifest by tasks.registering(GenerateWebVersionManifestTask::class) {
+    group = "versioning"
+    description = "Generates the Web distribution version manifest from the canonical app version."
+
+    appBaseTag.set(resolvedAppBaseTag)
+    appCommitHash.set(resolvedAppCommitHash)
+    appVersionCode.set(resolvedAppVersionCode)
+    appVersionName.set(resolvedAppVersionName)
+    appNativePackageVersion.set(resolvedAppNativePackageVersion)
+    outputDirectory.set(generatedWebVersionResourcesDir)
 }
 
 plugins {
@@ -195,6 +251,7 @@ kotlin {
         wasmJsMain {
             // AMLL 静态资源与 Android/Desktop 使用同一份源文件，避免 Web 打包出旧副本。
             resources.srcDir("src/commonMain/amllAssets")
+            resources.srcDir(generateWebVersionManifest)
             dependencies {
                 implementation(libs.kotlinx.browser)
                 implementation(libs.ktor.client.js)

@@ -3,6 +3,7 @@ TEAM_ID=
 PRODUCT_NAME=RedefineNCM_KMP
 PRODUCT_BUNDLE_IDENTIFIER=com.leejlredstar.redefinencm.kmp.RedefineNCM_KMP$(TEAM_ID)
 
-APP_VERSION_NAME=v0.0.1.local
+// Build-phase placeholders. Scripts/stamp-version.sh replaces all built-product values from Git.
+APP_VERSION_NAME=v0.0.0.unstamped
 CURRENT_PROJECT_VERSION=1
-MARKETING_VERSION=0.0.1
+MARKETING_VERSION=0.0.0

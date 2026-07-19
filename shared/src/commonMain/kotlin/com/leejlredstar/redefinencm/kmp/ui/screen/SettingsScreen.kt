@@ -74,6 +74,7 @@ import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
+import com.leejlredstar.redefinencm.kmp.util.BuildInfo
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
@@ -446,6 +447,14 @@ fun SettingsScreen(
                     persistSettings({ settings.setBoolean(SettingKeys.CHECK_UPDATE, v) })
                 }
 
+                ExpressiveSectionTitle("应用", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
+                SettingsValue(
+                    label = "版本",
+                    value = BuildInfo.VERSION_NAME,
+                    supportingText = "Build ${BuildInfo.VERSION_CODE}",
+                    accentPalette = settingsPalette,
+                )
+
                 ExpressiveSectionTitle("备份", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
                 SettingsButton("导出设置", settingsPalette, index = 0, count = 2) { launchExport(encodeSettingsBackup(settings)) }
                 SettingsButton("导入设置", settingsPalette, index = 1, count = 2) {
@@ -614,6 +623,37 @@ private fun SettingsTextField(
 private fun normalizeServerInput(raw: String): String {
     val trimmed = raw.trim()
     return if (trimmed.isEmpty()) "" else "${trimmed.trimEnd('/')}/"
+}
+
+@Composable
+private fun SettingsValue(
+    label: String,
+    value: String,
+    supportingText: String,
+    accentPalette: ContentAccentPalette,
+) {
+    Surface(
+        shape = connectedListItemShape(index = 0, count = 1),
+        color = accentPalette.quietContainer,
+        contentColor = accentPalette.onQuietContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 1.5.dp),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = accentPalette.secondaryOnQuietContainer,
+            )
+            Text(text = value, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = supportingText,
+                style = MaterialTheme.typography.bodySmall,
+                color = accentPalette.secondaryOnQuietContainer,
+            )
+        }
+    }
 }
 
 @Composable
