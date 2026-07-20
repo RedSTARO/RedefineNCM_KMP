@@ -6,6 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class DesktopFloatingWindowControllerTest {
@@ -63,6 +64,28 @@ class DesktopFloatingWindowControllerTest {
 
         publish(title = "Second", lyric = "next track")
         assertTrue(LyricNotificationController.isWindowVisible.value)
+    }
+
+    @Test
+    fun positionUpdatesDoNotRepublishWindowContent() {
+        LyricNotificationController.setOptionalSurfaceEnabled(true)
+        publish(title = "First", lyric = "line one")
+        val content = LyricNotificationController.floatingLyricData.value
+
+        LyricNotificationController.updateLyric(
+            title = "First",
+            artist = "Artist",
+            currentLyric = "line one",
+            nextLyric = "Next",
+            artworkUri = "https://example.test/First.jpg",
+            isPlaying = true,
+            positionMs = 42_000L,
+            durationMs = 120_000L,
+        )
+
+        assertSame(content, LyricNotificationController.floatingLyricData.value)
+        assertEquals(42_000L, LyricNotificationController.playbackProgress.value.positionMs)
+        assertEquals(0.35f, LyricNotificationController.playbackProgress.value.fraction)
     }
 
     private fun publish(title: String, lyric: String) {

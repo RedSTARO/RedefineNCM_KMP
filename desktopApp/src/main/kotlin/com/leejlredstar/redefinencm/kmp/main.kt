@@ -228,14 +228,6 @@ private fun FloatingLyricContent(
         animationSpec = expressiveSpring,
         label = "floating lyric on accent",
     )
-    val progress = data?.let { lyric ->
-        if (lyric.durationMs > 0L) {
-            (lyric.positionMs.toFloat() / lyric.durationMs.toFloat()).coerceIn(0f, 1f)
-        } else {
-            0f
-        }
-    } ?: 0f
-
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
@@ -438,8 +430,7 @@ private fun FloatingLyricContent(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            LinearProgressIndicator(
-                                progress = { progress },
+                            FloatingLyricProgressIndicator(
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(4.dp)
@@ -566,6 +557,21 @@ private fun PlaybackIconButton(
             contentDescription = description,
         )
     }
+}
+
+@Composable
+private fun FloatingLyricProgressIndicator(
+    modifier: Modifier,
+    color: Color,
+    trackColor: Color,
+) {
+    val progress by LyricNotificationController.playbackProgress.collectAsState()
+    LinearProgressIndicator(
+        progress = { progress.fraction },
+        modifier = modifier,
+        color = color,
+        trackColor = trackColor,
+    )
 }
 
 private enum class FloatingLyricLayout {
