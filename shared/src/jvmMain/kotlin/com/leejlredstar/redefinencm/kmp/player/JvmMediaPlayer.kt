@@ -141,6 +141,7 @@ class JvmMediaPlayer(
 
     private fun currentQueueModel(): PlayQueue<MediaInfo> = currentQueueClaim().model
 
+    @Synchronized
     private fun startPolling() {
         stopPolling()
         pollJob = scope.launch {
@@ -154,9 +155,16 @@ class JvmMediaPlayer(
         }
     }
 
+    @Synchronized
     private fun stopPolling() {
         pollJob?.cancel()
         pollJob = null
+    }
+
+    private fun stopPollingIfCurrent(generation: Long) {
+        synchronized(playbackLock) {
+            if (generation == playbackGeneration) stopPolling()
+        }
     }
 
     private fun isPlaybackCurrent(generation: Long): Boolean =
@@ -378,6 +386,7 @@ class JvmMediaPlayer(
                 System.err.println("JvmMediaPlayer failed to open audio stream: ${e.javaClass.simpleName}: ${e.message}")
                 _state.value = PlayerState.ERROR
                 _isPlaying.value = false
+                stopPollingIfCurrent(generation)
             }
         } finally {
             try {
@@ -405,6 +414,7 @@ class JvmMediaPlayer(
         }
 
         if (completedNaturally && isPlaybackCurrent(generation)) {
+            stopPollingIfCurrent(generation)
             synchronized(queueOperationLock) {
                 if (!isPlaybackCurrent(generation)) return@synchronized
                 _isPlaying.value = false
@@ -547,6 +557,7 @@ class JvmMediaPlayer(
                 currentLine.stop()
                 _isPlaying.value = false
                 _state.value = PlayerState.PAUSED
+                stopPolling()
                 true
             } else {
                 false
