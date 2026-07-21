@@ -3,6 +3,7 @@ package com.leejlredstar.redefinencm.kmp.ui.component
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withTimeoutOrNull
@@ -10,6 +11,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 enum class NativeSurfaceOverlaySource {
     DesktopNavigationRail,
     DesktopPlayerSheet,
+    AppSnackbar,
 }
 
 class NativeSurfaceOwner internal constructor()
@@ -59,10 +61,11 @@ object NativeSurfaceOverlayCoordinator {
 
     suspend fun awaitOverlayReady(
         source: NativeSurfaceOverlaySource,
-        timeoutMillis: Long = 1_000L,
+        timeoutMillis: Long = 2_000L,
     ): Boolean = withTimeoutOrNull(timeoutMillis) {
-        activeSources.first { source in it }
-        nativeSurfaceState.first { state -> state.surfaces.values.none { it } }
+        combine(activeSources, nativeSurfaceState) { sources, state ->
+            source in sources && state.surfaces.values.none { it }
+        }.first { ready -> ready }
         true
     } ?: false
 }

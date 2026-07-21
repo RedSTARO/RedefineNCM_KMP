@@ -18,6 +18,7 @@ import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOverlayCoordinator
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOwner
@@ -33,6 +34,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -50,6 +52,7 @@ import kotlin.concurrent.thread
 import java.awt.Color as AwtColor
 
 private const val AMLL_READY_TIMEOUT_MILLIS = 10_000L
+private const val NATIVE_HOST_LAYOUT_TIMEOUT_MILLIS = 1_000L
 
 actual val supportsDynamicNowPlayingCover: Boolean
     get() = desktopEmbeddedWebViewSupported()
@@ -129,12 +132,16 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             },
         )
     }
+    var nativeHostBootstrapComplete by remember(session) { mutableStateOf(false) }
+    val nativeHostVisible = !nativeHostBootstrapComplete || nativeSurfaceVisible
     var nativeSurfaceOwner by remember(session) { mutableStateOf<NativeSurfaceOwner?>(null) }
 
     // Canvas 拿到原生句柄（displayable + 有尺寸）后，在专用线程启动 webview 事件循环
     LaunchedEffect(session) {
         while (!canvas.isDisplayable || canvas.width <= 0 || canvas.height <= 0) delay(30)
         session.start(canvas, "${fileUrl(File(assetsDir, "player.html"))}?platform=desktop")
+        // start() 已同步取得 Canvas HWND；之后宿主可在 WebView2 后台初始化时安全折叠。
+        nativeHostBootstrapComplete = true
         delay(AMLL_READY_TIMEOUT_MILLIS)
         if (!engineReadyFlow.value && engineErrorFlow.value == null) {
             engineErrorFlow.value = "AMLL 页面初始化超时"
@@ -145,22 +152,29 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         if (engineReady) session.installControlsRevealHook()
     }
 
-    LaunchedEffect(nativeSurfaceVisible, nativeSurfaceOwner) {
+    LaunchedEffect(nativeSurfaceVisible, nativeHostVisible, nativeSurfaceOwner) {
         val nativeWindowUpdated = if (nativeSurfaceVisible) {
             canvas.isVisible = true
-            while (!canvas.isShowing || canvas.width <= 0 || canvas.height <= 0) delay(16)
-            session.resizeNativeWindow(canvas)
-            session.setNativeWindowVisible(true)
+            awaitNativeHostLayout(canvas, visible = true) &&
+                session.resizeNativeWindow(canvas) &&
+                session.setNativeWindowVisible(true)
         } else {
             val hidden = session.setNativeWindowVisible(false)
-            canvas.isVisible = false
-            // 等 Compose 完成一次布局，让 SwingInteropViewGroup 的 clip 也变空。
-            withFrameNanos { }
-            hidden
+            // 初始化前保留一次有尺寸的 Canvas 以取得稳定 HWND；之后连同 Swing 宿主一起折叠。
+            canvas.isVisible = nativeHostVisible
+            val hostUpdated = awaitNativeHostLayout(canvas, visible = nativeHostVisible)
+            hidden && hostUpdated
         }
         val owner = nativeSurfaceOwner
         if (owner != null && nativeWindowUpdated) {
-            NativeSurfaceOverlayCoordinator.reportNativeSurfaceVisible(owner, nativeSurfaceVisible)
+            NativeSurfaceOverlayCoordinator.reportNativeSurfaceVisible(owner, nativeHostVisible)
+        }
+        if (nativeHostBootstrapComplete && !nativeWindowUpdated && engineErrorFlow.value == null) {
+            engineErrorFlow.value = if (nativeSurfaceVisible) {
+                "AMLL 原生窗口恢复超时"
+            } else {
+                "AMLL 原生窗口隐藏超时"
+            }
         }
     }
 
@@ -240,7 +254,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     }
 
     DisposableEffect(session) {
-        val owner = NativeSurfaceOverlayCoordinator.attachNativeSurface(nativeSurfaceVisible)
+        val owner = NativeSurfaceOverlayCoordinator.attachNativeSurface(nativeHostVisible)
         nativeSurfaceOwner = owner
         onDispose {
             session.setNativeWindowVisible(false)
@@ -259,8 +273,8 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             background = Color.Black,
             factory = { canvas },
             modifier = Modifier
-                .fillMaxSize()
-                .placeOffscreenWhenHidden(nativeSurfaceVisible),
+                .collapseNativeHostWhenHidden(nativeHostVisible)
+                .fillMaxSize(),
         )
 
         LyricStateOverlay(
@@ -382,12 +396,7 @@ private class WebviewSession(
 
                 resizeListener = object : java.awt.event.ComponentAdapter() {
                     override fun componentResized(e: java.awt.event.ComponentEvent) {
-                        runCatching {
-                            com.sun.jna.platform.win32.User32.INSTANCE.MoveWindow(
-                                com.sun.jna.platform.win32.WinDef.HWND(childHwnd),
-                                0, 0, canvas.physicalWidth(), canvas.physicalHeight(), true,
-                            )
-                        }
+                        resizeNativeWindow(canvas)
                     }
                 }
                 canvas.addComponentListener(resizeListener)
@@ -684,13 +693,38 @@ internal fun <T> selectCanvasWindowCandidate(
     .singleOrNull()
     ?.handle
 
-private fun Modifier.placeOffscreenWhenHidden(visible: Boolean): Modifier =
+private fun Modifier.collapseNativeHostWhenHidden(visible: Boolean): Modifier =
     layout { measurable, constraints ->
-        val placeable = measurable.measure(constraints)
-        layout(placeable.width, placeable.height) {
-            placeable.place(if (visible) 0 else -placeable.width, 0)
+        val measuredConstraints = if (visible) constraints else Constraints.fixed(0, 0)
+        val placeable = measurable.measure(measuredConstraints)
+        val width = if (visible) placeable.width else 0
+        val height = if (visible) placeable.height else 0
+        layout(width, height) {
+            // 仍放置同一个 SwingPanel，避免移除 Canvas peer 时连带销毁其 WebView2 子 HWND。
+            placeable.place(0, 0)
         }
     }
+
+private suspend fun awaitNativeHostLayout(canvas: Canvas, visible: Boolean): Boolean =
+    withTimeoutOrNull(NATIVE_HOST_LAYOUT_TIMEOUT_MILLIS) {
+        var settled = false
+        while (!settled) {
+            withFrameNanos { }
+            val host = canvas.parent
+            settled = if (visible) {
+                host != null &&
+                    host.isShowing &&
+                    host.width > 0 &&
+                    host.height > 0 &&
+                    canvas.isShowing &&
+                    canvas.width > 0 &&
+                    canvas.height > 0
+            } else {
+                host == null || !host.isShowing || host.width <= 0 || host.height <= 0
+            }
+        }
+        true
+    } ?: false
 
 private val amllSeekJson = Json {
     ignoreUnknownKeys = true

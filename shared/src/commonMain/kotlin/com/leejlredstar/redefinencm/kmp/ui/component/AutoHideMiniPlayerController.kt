@@ -161,8 +161,11 @@ fun AutoHideMiniPlayerController(
 
     val drawsController = visible || showCollapsedWhenHidden
     val overlayActive = drawsController || showQueue || showComments
-    LaunchedEffect(overlayActive) {
+    DisposableEffect(overlayActive) {
         onOverlayVisibilityChanged(overlayActive)
+        onDispose {
+            if (overlayActive) onOverlayVisibilityChanged(false)
+        }
     }
 
     LaunchedEffect(showComments, media?.id) {

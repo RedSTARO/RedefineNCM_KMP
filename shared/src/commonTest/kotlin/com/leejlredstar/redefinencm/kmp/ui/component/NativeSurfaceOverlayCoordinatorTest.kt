@@ -78,6 +78,30 @@ class NativeSurfaceOverlayCoordinatorTest {
     }
 
     @Test
+    fun overlayReadinessDoesNotOutliveItsSource() = runTest {
+        val source = NativeSurfaceOverlaySource.DesktopNavigationRail
+        val owner = NativeSurfaceOverlayCoordinator.attachNativeSurface(initiallyVisible = true)
+        try {
+            NativeSurfaceOverlayCoordinator.setActive(source, true)
+            val ready = async {
+                NativeSurfaceOverlayCoordinator.awaitOverlayReady(
+                    source = source,
+                    timeoutMillis = 1L,
+                )
+            }
+            yield()
+
+            NativeSurfaceOverlayCoordinator.setActive(source, false)
+            NativeSurfaceOverlayCoordinator.reportNativeSurfaceVisible(owner, false)
+
+            assertFalse(ready.await())
+        } finally {
+            NativeSurfaceOverlayCoordinator.detachNativeSurface(owner)
+            NativeSurfaceOverlayCoordinator.setActive(source, false)
+        }
+    }
+
+    @Test
     fun staleOwnerCannotDetachCurrentNativeSurface() = runTest {
         val source = NativeSurfaceOverlaySource.DesktopNavigationRail
         val staleOwner = NativeSurfaceOverlayCoordinator.attachNativeSurface(initiallyVisible = false)
