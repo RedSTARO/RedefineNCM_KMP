@@ -98,6 +98,7 @@ fun AutoHideMiniPlayerController(
     showCollapsedWhenHidden: Boolean = true,
     externalRevealRequest: Int = 0,
     onOverlayVisibilityChanged: (Boolean) -> Unit = {},
+    onSheetVisibilityChanged: (Boolean) -> Unit = {},
     viewModel: NowPlayingViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
 ) {
@@ -160,11 +161,18 @@ fun AutoHideMiniPlayerController(
     }
 
     val drawsController = visible || showCollapsedWhenHidden
-    val overlayActive = drawsController || showQueue || showComments
+    val sheetVisible = showQueue || showComments
+    val overlayActive = drawsController || sheetVisible
     DisposableEffect(overlayActive) {
         onOverlayVisibilityChanged(overlayActive)
         onDispose {
             if (overlayActive) onOverlayVisibilityChanged(false)
+        }
+    }
+    DisposableEffect(sheetVisible) {
+        onSheetVisibilityChanged(sheetVisible)
+        onDispose {
+            if (sheetVisible) onSheetVisibilityChanged(false)
         }
     }
 

@@ -3,6 +3,8 @@ package com.leejlredstar.redefinencm.kmp.lyric
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -18,16 +20,21 @@ import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
-import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOverlayCoordinator
-import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOwner
-import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsSheet
+import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayPlacement
+import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayWindow
 import com.leejlredstar.redefinencm.kmp.ui.screen.FullLyricScreen
+import com.leejlredstar.redefinencm.kmp.util.BackHandler
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
+import com.leejlredstar.redefinencm.kmp.viewmodel.SongWikiUiState
 import com.sun.jna.Native
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
@@ -35,6 +42,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -88,6 +96,10 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val metadata by viewModel.currentMedia.collectAsState()
     val dynamicCoverUrl by viewModel.dynamicCoverUrl.collectAsState()
     val songWikiUiState by viewModel.songWikiUiState.collectAsState()
+    val windowSize = LocalWindowInfo.current.containerSize
+    val density = LocalDensity.current
+    val overlayWidth = with(density) { windowSize.width.toDp() }
+    val overlayHeight = with(density) { windowSize.height.toDp() }
 
     val engineReadyFlow = remember { MutableStateFlow(false) }
     val engineReady by engineReadyFlow.collectAsState()
@@ -103,17 +115,16 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val showRomanLyric = remember {
         settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)
     }
-    val activeOverlaySources by NativeSurfaceOverlayCoordinator.activeSources.collectAsState()
-    val externalOverlayActive = activeOverlaySources.isNotEmpty()
+    var controlsVisible by remember { mutableStateOf(false) }
+    var controlsSheetVisible by remember { mutableStateOf(false) }
     var controlsRevealRequest by remember { mutableIntStateOf(0) }
-    var inPageOverlayActive by remember { mutableStateOf(false) }
-    var showSongWikiDetails by remember { mutableStateOf(false) }
-    val lyricStateOverlayActive = lyricUiState !is LyricUiState.Content
-    val nativeSurfaceVisible = engineReady &&
-        !inPageOverlayActive &&
-        !externalOverlayActive &&
-        !showSongWikiDetails &&
-        !lyricStateOverlayActive
+    var songWikiSyncRequest by remember { mutableIntStateOf(0) }
+    val lyricOverlayState = if (!engineReady && lyricUiState is LyricUiState.Content) {
+        LyricUiState.Loading
+    } else {
+        lyricUiState
+    }
+    val nativeSurfaceVisible = engineReady
 
     // 只在进程内首次打开时解包；反复开关页面不再同步重写约 440 KiB 资产。
     val assetsDir = remember { extractedAmllAssets }
@@ -125,16 +136,18 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             initiallyVisible = nativeSurfaceVisible,
             onLineClicked = { timeMs, mediaId -> viewModel.onLyricLineClick(mediaId, timeMs) },
             onBack = onBack,
-            onControlsRequested = { controlsRevealRequest++ },
+            onControlsRequested = {
+                controlsRevealRequest += 1
+                controlsVisible = true
+            },
             onSongWikiRequested = {
-                showSongWikiDetails = true
                 viewModel.getSongWikiSummary()
+                songWikiSyncRequest += 1
             },
         )
     }
     var nativeHostBootstrapComplete by remember(session) { mutableStateOf(false) }
     val nativeHostVisible = !nativeHostBootstrapComplete || nativeSurfaceVisible
-    var nativeSurfaceOwner by remember(session) { mutableStateOf<NativeSurfaceOwner?>(null) }
 
     // Canvas 拿到原生句柄（displayable + 有尺寸）后，在专用线程启动 webview 事件循环
     LaunchedEffect(session) {
@@ -152,7 +165,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         if (engineReady) session.installControlsRevealHook()
     }
 
-    LaunchedEffect(nativeSurfaceVisible, nativeHostVisible, nativeSurfaceOwner) {
+    LaunchedEffect(nativeSurfaceVisible, nativeHostVisible) {
         val nativeWindowUpdated = if (nativeSurfaceVisible) {
             canvas.isVisible = true
             awaitNativeHostLayout(canvas, visible = true) &&
@@ -164,10 +177,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             canvas.isVisible = nativeHostVisible
             val hostUpdated = awaitNativeHostLayout(canvas, visible = nativeHostVisible)
             hidden && hostUpdated
-        }
-        val owner = nativeSurfaceOwner
-        if (owner != null && nativeWindowUpdated) {
-            NativeSurfaceOverlayCoordinator.reportNativeSurfaceVisible(owner, nativeHostVisible)
         }
         if (nativeHostBootstrapComplete && !nativeWindowUpdated && engineErrorFlow.value == null) {
             engineErrorFlow.value = if (nativeSurfaceVisible) {
@@ -243,24 +252,45 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         session.eval("if (globalThis.AmllPage) $command")
     }
 
-    LaunchedEffect(engineReady, showSongWikiDetails) {
-        if (engineReady) {
-            session.eval("if (globalThis.AmllPage) AmllPage.resetSongWiki();")
+    LaunchedEffect(engineReady, metadata?.id, songWikiUiState, songWikiSyncRequest) {
+        if (!engineReady) return@LaunchedEffect
+        val currentMediaId = metadata?.id
+        val command = when (val state = songWikiUiState) {
+            SongWikiUiState.Idle -> "AmllPage.resetSongWiki();"
+            is SongWikiUiState.Loading -> if (state.mediaId == currentMediaId) {
+                "AmllPage.setSongWikiLoading();"
+            } else {
+                "AmllPage.resetSongWiki();"
+            }
+            is SongWikiUiState.Content -> if (state.mediaId == currentMediaId) {
+                val payload = Json.encodeToString(state.summary).escapeJsSingleQuoted()
+                "AmllPage.setSongWikiSummary('$payload');"
+            } else {
+                "AmllPage.resetSongWiki();"
+            }
+            is SongWikiUiState.Empty -> if (state.mediaId == currentMediaId) {
+                "AmllPage.setSongWikiEmpty();"
+            } else {
+                "AmllPage.resetSongWiki();"
+            }
+            is SongWikiUiState.Error -> if (state.mediaId == currentMediaId) {
+                "AmllPage.setSongWikiError('${state.message.escapeJsSingleQuoted()}');"
+            } else {
+                "AmllPage.resetSongWiki();"
+            }
         }
-    }
-
-    LaunchedEffect(metadata?.id) {
-        showSongWikiDetails = false
+        session.eval("if (globalThis.AmllPage) $command")
     }
 
     DisposableEffect(session) {
-        val owner = NativeSurfaceOverlayCoordinator.attachNativeSurface(nativeHostVisible)
-        nativeSurfaceOwner = owner
         onDispose {
             session.setNativeWindowVisible(false)
-            NativeSurfaceOverlayCoordinator.detachNativeSurface(owner)
             session.stop()
         }
+    }
+
+    BackHandler(enabled = controlsVisible) {
+        controlsVisible = false
     }
 
     Box(
@@ -276,32 +306,95 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
                 .collapseNativeHostWhenHidden(nativeHostVisible)
                 .fillMaxSize(),
         )
-
-        LyricStateOverlay(
-            state = if (!engineReady && lyricUiState is LyricUiState.Content) {
-                LyricUiState.Loading
-            } else {
-                lyricUiState
-            },
-            onRetry = viewModel::retryLyrics,
-        )
-
-        AutoHideMiniPlayerController(
-            modifier = Modifier.fillMaxSize(),
-            initialExpanded = false,
-            showCollapsedWhenHidden = false,
-            externalRevealRequest = controlsRevealRequest,
-            onOverlayVisibilityChanged = { inPageOverlayActive = it },
-        )
     }
 
-    SongWikiDetailsSheet(
-        visible = showSongWikiDetails,
-        songTitle = metadata?.title,
-        state = songWikiUiState,
-        onDismiss = { showSongWikiDetails = false },
-        onRetry = viewModel::getSongWikiSummary,
+    DesktopLyricStateWindow(
+        state = lyricOverlayState,
+        width = (overlayWidth - 32.dp).coerceAtLeast(1.dp).coerceAtMost(560.dp),
+        height = (overlayHeight - 32.dp).coerceAtLeast(1.dp).coerceAtMost(360.dp),
+        onBack = onBack,
+        onRetry = viewModel::retryLyrics,
     )
+
+    DesktopLyricControlsWindow(
+        visible = controlsVisible && lyricOverlayState is LyricUiState.Content,
+        revealRequest = controlsRevealRequest,
+        width = (overlayWidth - 32.dp).coerceAtLeast(0.dp).coerceAtMost(
+            if (controlsSheetVisible) 840.dp else 652.dp,
+        ),
+        height = (overlayHeight - 16.dp).coerceAtLeast(0.dp).coerceAtMost(
+            if (controlsSheetVisible) 680.dp else 320.dp,
+        ),
+        onDismiss = { controlsVisible = false },
+        onSheetVisibilityChanged = { controlsSheetVisible = it },
+    )
+}
+
+@Composable
+private fun DesktopLyricStateWindow(
+    state: LyricUiState,
+    width: Dp,
+    height: Dp,
+    onBack: () -> Unit,
+    onRetry: () -> Unit,
+) {
+    DesktopOverlayWindow(
+        visible = state !is LyricUiState.Content,
+        title = "歌词状态",
+        width = width,
+        height = height,
+        placement = DesktopOverlayPlacement.Center,
+        focusable = true,
+        onCloseRequest = onBack,
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            Box(Modifier.fillMaxSize()) {
+                LyricStateOverlay(
+                    state = state,
+                    onRetry = onRetry,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DesktopLyricControlsWindow(
+    visible: Boolean,
+    revealRequest: Int,
+    width: Dp,
+    height: Dp,
+    onDismiss: () -> Unit,
+    onSheetVisibilityChanged: (Boolean) -> Unit,
+) {
+    DesktopOverlayWindow(
+        visible = visible,
+        title = "播放控制",
+        width = width,
+        height = height,
+        placement = DesktopOverlayPlacement.BottomCenter,
+        focusable = true,
+        onCloseRequest = onDismiss,
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            AutoHideMiniPlayerController(
+                modifier = Modifier.fillMaxSize(),
+                initialExpanded = true,
+                showCollapsedWhenHidden = false,
+                externalRevealRequest = revealRequest,
+                onOverlayVisibilityChanged = { overlayVisible ->
+                    if (!overlayVisible) onDismiss()
+                },
+                onSheetVisibilityChanged = onSheetVisibilityChanged,
+            )
+        }
+    }
 }
 
 /**
