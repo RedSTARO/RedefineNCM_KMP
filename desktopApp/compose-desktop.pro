@@ -7,6 +7,12 @@
 -dontwarn org.bouncycastle.jsse.**
 -dontwarn org.openjsse.**
 
+# ProGuard 7.7.0's return-type specialization can produce invalid bytecode for Kotlin facade
+# methods such as Okio's Source.buffer(): it narrows the descriptor to RealBufferedSource but
+# leaves the BufferedSource checkcast in place. Disable only that optimizer and retain every
+# other shrinking, optimization, and obfuscation pass.
+-optimizations !method/specialization/returntype,*
+
 # JNA and dbus-java inspect generic signatures, annotations, nested classes, interface methods,
 # callbacks, and Structure field names at runtime.
 -keepattributes Signature,Exceptions,InnerClasses,EnclosingMethod,*Annotation*
