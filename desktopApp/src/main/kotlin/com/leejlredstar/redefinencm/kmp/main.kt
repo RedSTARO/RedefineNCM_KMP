@@ -65,6 +65,7 @@ import com.leejlredstar.redefinencm.kmp.notification.FloatingLyricData
 import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.smtc.DesktopMediaControls
+import com.leejlredstar.redefinencm.kmp.ui.component.ProvideDesktopOverlayOwner
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
@@ -75,6 +76,11 @@ import org.koin.core.context.GlobalContext
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
+    if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
+        // WebView2 is a native child HWND. Put Dialog/Popup scenes on Swing's popup layer before
+        // Compose initializes so they can stay above it without a second transparent D3D window.
+        System.setProperty("compose.layers.type", "COMPONENT")
+    }
     // AMLL 歌词页现在跑在系统 WebView（Windows=WebView2）里，见 LyricScreen.jvm.kt。
     // 历史教训（勿回退）：JavaFX WebKit 需要 prism.maxvram 调大才不白屏，且无 GPU 合成，
     // 字体/布局/动画均残缺；prism.order=sw 会打满 CPU 饿死网络协程。
@@ -83,34 +89,39 @@ fun main() {
     LyricNotificationController.setOptionalSurfaceEnabled(
         settings.getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false),
     )
-    application {
-        val mainWindowState = rememberWindowState(
-            size = DpSize(1280.dp, 820.dp),
-            position = WindowPosition(Alignment.Center),
-        )
-        Window(
-            onCloseRequest = ::exitApplication,
-            state = mainWindowState,
-            title = "RedefineNCM",
-            decoration = WindowDecoration.Undecorated(),
-            resizable = true,
-        ) {
-            val player = remember { GlobalContext.get().get<PlatformPlayer>() }
-            val mediaControls = remember(player) { DesktopMediaControls(player) }
-            DisposableEffect(window, mediaControls) {
-                mediaControls.start(window)
-                onDispose { mediaControls.stop() }
-            }
+    launchDesktopApplication()
+}
 
-            val toggleMaximize = {
-                mainWindowState.placement = if (
-                    mainWindowState.placement == WindowPlacement.Maximized
-                ) {
-                    WindowPlacement.Floating
-                } else {
-                    WindowPlacement.Maximized
-                }
+@OptIn(ExperimentalComposeUiApi::class)
+private fun launchDesktopApplication() = application {
+    val mainWindowState = rememberWindowState(
+        size = DpSize(1280.dp, 820.dp),
+        position = WindowPosition(Alignment.Center),
+    )
+    Window(
+        onCloseRequest = ::exitApplication,
+        state = mainWindowState,
+        title = "RedefineNCM",
+        decoration = WindowDecoration.Undecorated(),
+        resizable = true,
+    ) {
+        val player = remember { GlobalContext.get().get<PlatformPlayer>() }
+        val mediaControls = remember(player) { DesktopMediaControls(player) }
+        DisposableEffect(window, mediaControls) {
+            mediaControls.start(window)
+            onDispose { mediaControls.stop() }
+        }
+
+        val toggleMaximize = {
+            mainWindowState.placement = if (
+                mainWindowState.placement == WindowPlacement.Maximized
+            ) {
+                WindowPlacement.Floating
+            } else {
+                WindowPlacement.Maximized
             }
+        }
+        ProvideDesktopOverlayOwner(window) {
             RedefineNCMTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -134,13 +145,13 @@ fun main() {
                 }
             }
         }
-
-        // Desktop floating-lyrics window (goal #2: the desktop equivalent of the Android
-        // notification / iOS Live Activity). It is a second, frameless, always-on-top window
-        // driven entirely by the shared LyricNotificationController (JVM actual): the playback
-        // pipeline calls updateLyric(...) + show(), and this window mirrors that state.
-        FloatingLyricWindow()
     }
+
+    // Desktop floating-lyrics window (goal #2: the desktop equivalent of the Android
+    // notification / iOS Live Activity). It is a second, frameless, always-on-top window
+    // driven entirely by the shared LyricNotificationController (JVM actual): the playback
+    // pipeline calls updateLyric(...) + show(), and this window mirrors that state.
+    FloatingLyricWindow()
 }
 
 @Composable

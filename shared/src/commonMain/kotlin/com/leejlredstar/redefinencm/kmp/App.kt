@@ -63,11 +63,10 @@ import androidx.compose.material3.WideNavigationRailItem
 import androidx.compose.material3.WideNavigationRailItemDefaults
 import androidx.compose.material3.WideNavigationRailState
 import androidx.compose.material3.WideNavigationRailValue
+import androidx.compose.material3.WideNavigationRail
 import androidx.compose.material3.rememberWideNavigationRailState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -89,15 +88,17 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.lyric.WebViewLyricScreen
+import com.leejlredstar.redefinencm.kmp.lyric.supportsDynamicNowPlayingCover
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayPlacement
+import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayWindow
 import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackSeekBar
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
 import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
-import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOverlayCoordinator
-import com.leejlredstar.redefinencm.kmp.ui.component.NativeSurfaceOverlaySource
 import com.leejlredstar.redefinencm.kmp.ui.component.CommentBottomSheet
 import com.leejlredstar.redefinencm.kmp.ui.component.QueueBottomSheet
 import com.leejlredstar.redefinencm.kmp.ui.component.formatPlaybackDuration
@@ -307,23 +308,15 @@ private fun AppContent(
 
             // 启动更新检查提示（原版 SplashActivity Toast）
             val snackbarHostState = remember { SnackbarHostState() }
+            var desktopSnackbarVisible by remember { mutableStateOf(false) }
             val updateMessage by mainViewModel.updateMessage.collectAsState()
             LaunchedEffect(updateMessage) {
                 val message = updateMessage ?: return@LaunchedEffect
-                NativeSurfaceOverlayCoordinator.setActive(
-                    NativeSurfaceOverlaySource.AppSnackbar,
-                    true,
-                )
+                desktopSnackbarVisible = true
                 try {
-                    NativeSurfaceOverlayCoordinator.awaitOverlayReady(
-                        NativeSurfaceOverlaySource.AppSnackbar,
-                    )
                     snackbarHostState.showSnackbar(message)
                 } finally {
-                    NativeSurfaceOverlayCoordinator.setActive(
-                        NativeSurfaceOverlaySource.AppSnackbar,
-                        false,
-                    )
+                    desktopSnackbarVisible = false
                 }
                 // 若新的消息取消了本协程，执行不到这里，不会误消费新值。
                 mainViewModel.consumeUpdateMessage()
@@ -340,6 +333,8 @@ private fun AppContent(
 
             Box(Modifier.fillMaxSize()) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
+                    val appContentWidth = maxWidth
+                    val appContentHeight = maxHeight
                     val desktopMode = desktopLayoutMode(maxWidth, maxHeight)
                     val desktopCompact = platform.isDesktop && desktopMode == DesktopLayoutMode.Compact
                     val showDesktopRail = platform.isDesktop && !desktopCompact
@@ -355,14 +350,15 @@ private fun AppContent(
                     val desktopRailExpanded = platform.isDesktop &&
                         showDesktopRail &&
                         desktopRailState.targetValue == WideNavigationRailValue.Expanded
-
                     LaunchedEffect(desktopCompact) {
                         if (desktopCompact) desktopRailState.collapse()
                     }
 
                     Scaffold(
                         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-                        snackbarHost = { SnackbarHost(snackbarHostState) },
+                        snackbarHost = {
+                            if (!platform.isDesktop) SnackbarHost(snackbarHostState)
+                        },
                         floatingActionButtonPosition = FabPosition.End,
                         bottomBar = {
                             AnimatedVisibility(
@@ -438,6 +434,18 @@ private fun AppContent(
                                     accentPalette = chromePalette,
                                     player = player,
                                     showFullPlayer = showDesktopFullPlayer,
+                                    nativeOverlaySize = if (
+                                        supportsDynamicNowPlayingCover &&
+                                        rootDest is RootDest.Pushed &&
+                                        rootDest.dest is PushedDest.FullLyric
+                                    ) {
+                                        DpSize(
+                                            width = appContentWidth.coerceAtMost(360.dp),
+                                            height = appContentHeight,
+                                        )
+                                    } else {
+                                        null
+                                    },
                                     onSelectTab = {
                                         pushedStack.clear()
                                         currentTab = it
@@ -523,6 +531,26 @@ private fun AppContent(
                             }
                         }
                     }
+
+                    if (platform.isDesktop && desktopSnackbarVisible) {
+                        DesktopOverlayWindow(
+                            visible = true,
+                            title = "RedefineNCM 通知",
+                            width = (appContentWidth - 32.dp).coerceAtLeast(0.dp).coerceAtMost(560.dp),
+                            height = appContentHeight.coerceAtMost(96.dp),
+                            placement = DesktopOverlayPlacement.BottomCenter,
+                            focusable = false,
+                            onCloseRequest = {},
+                        ) {
+                            Surface(
+                                modifier = Modifier.fillMaxSize(),
+                                color = MaterialTheme.colorScheme.surface,
+                            ) {
+                                SnackbarHost(snackbarHostState)
+                            }
+                        }
+                    }
+
                 }
             }
 }
@@ -536,12 +564,15 @@ private fun DesktopExpandableSidebar(
     accentPalette: ContentAccentPalette,
     player: PlatformPlayer,
     showFullPlayer: Boolean,
+    nativeOverlaySize: DpSize?,
     onSelectTab: (TabDest) -> Unit,
     onOpenDownloads: () -> Unit,
     onChromeAccent: (Color) -> Unit,
     onOpenNowPlaying: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val collapsedDisplayState = rememberWideNavigationRailState()
+    val useNativeOverlay = nativeOverlaySize != null
     val railExpanded = state.targetValue == WideNavigationRailValue.Expanded
     val expansionSettled = railExpanded &&
         !state.isAnimating &&
@@ -549,9 +580,157 @@ private fun DesktopExpandableSidebar(
     val modalExpansionActive = state.isAnimating ||
         state.currentValue == WideNavigationRailValue.Expanded ||
         state.targetValue == WideNavigationRailValue.Expanded
-    var preExpandRequested by remember { mutableStateOf(false) }
     var showExpandedPlayerContent by remember { mutableStateOf(false) }
-    val nativeOverlayRequired = preExpandRequested || modalExpansionActive
+    val railColors = WideNavigationRailDefaults.colors(
+        containerColor = accentPalette.quietContainer,
+        contentColor = accentPalette.onQuietContainer,
+        modalContainerColor = accentPalette.quietContainer,
+        modalScrimColor = MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f),
+        modalContentColor = accentPalette.onQuietContainer,
+    )
+
+    LaunchedEffect(showFullPlayer, expansionSettled, modalExpansionActive) {
+        when {
+            !showFullPlayer || !modalExpansionActive -> showExpandedPlayerContent = false
+            expansionSettled -> showExpandedPlayerContent = true
+        }
+    }
+    LaunchedEffect(useNativeOverlay) {
+        if (!useNativeOverlay && state.targetValue == WideNavigationRailValue.Expanded) {
+            state.snapTo(WideNavigationRailValue.Collapsed)
+        }
+    }
+
+    fun collapseAfter(action: () -> Unit) {
+        if (useNativeOverlay) {
+            scope.launch {
+                state.snapTo(WideNavigationRailValue.Collapsed)
+                action()
+            }
+        } else {
+            action()
+            scope.launch { state.collapse() }
+        }
+    }
+    fun toggleRail() {
+        scope.launch {
+            val target = if (railExpanded) {
+                WideNavigationRailValue.Collapsed
+            } else {
+                WideNavigationRailValue.Expanded
+            }
+            if (useNativeOverlay) {
+                state.snapTo(target)
+            } else if (target == WideNavigationRailValue.Expanded) {
+                state.expand()
+            } else {
+                state.collapse()
+            }
+        }
+    }
+
+    val overlaySize = nativeOverlaySize
+    if (overlaySize != null) {
+        WideNavigationRail(
+            state = collapsedDisplayState,
+            colors = railColors,
+        ) {
+            DesktopSidebarContent(
+                railExpanded = false,
+                expandedContentVisible = false,
+                tabs = tabs,
+                selectedTab = selectedTab,
+                downloadsSelected = downloadsSelected,
+                accentPalette = accentPalette,
+                player = player,
+                showFullPlayer = false,
+                showExpandedPlayerContent = false,
+                onToggle = ::toggleRail,
+                onSelectTab = { collapseAfter { onSelectTab(it) } },
+                onOpenDownloads = { collapseAfter(onOpenDownloads) },
+                onChromeAccent = onChromeAccent,
+                onOpenNowPlaying = { collapseAfter(onOpenNowPlaying) },
+            )
+        }
+
+        DesktopOverlayWindow(
+            visible = modalExpansionActive,
+            title = "RedefineNCM 导航",
+            width = overlaySize.width,
+            height = overlaySize.height,
+            placement = DesktopOverlayPlacement.TopStart,
+            topOffset = 32.dp,
+            focusable = true,
+            modal = true,
+            onCloseRequest = {
+                scope.launch { state.snapTo(WideNavigationRailValue.Collapsed) }
+            },
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = accentPalette.quietContainer,
+                contentColor = accentPalette.onQuietContainer,
+            ) {
+                DesktopSidebarContent(
+                    railExpanded = true,
+                    expandedContentVisible = true,
+                    tabs = tabs,
+                    selectedTab = selectedTab,
+                    downloadsSelected = downloadsSelected,
+                    accentPalette = accentPalette,
+                    player = player,
+                    showFullPlayer = showFullPlayer,
+                    showExpandedPlayerContent = showExpandedPlayerContent,
+                    onToggle = ::toggleRail,
+                    onSelectTab = { collapseAfter { onSelectTab(it) } },
+                    onOpenDownloads = { collapseAfter(onOpenDownloads) },
+                    onChromeAccent = onChromeAccent,
+                    onOpenNowPlaying = { collapseAfter(onOpenNowPlaying) },
+                )
+            }
+        }
+    } else {
+        ModalWideNavigationRail(
+            state = state,
+            colors = railColors,
+        ) {
+            DesktopSidebarContent(
+                railExpanded = railExpanded,
+                expandedContentVisible = modalExpansionActive,
+                tabs = tabs,
+                selectedTab = selectedTab,
+                downloadsSelected = downloadsSelected,
+                accentPalette = accentPalette,
+                player = player,
+                showFullPlayer = showFullPlayer,
+                showExpandedPlayerContent = showExpandedPlayerContent,
+                onToggle = ::toggleRail,
+                onSelectTab = { collapseAfter { onSelectTab(it) } },
+                onOpenDownloads = { collapseAfter(onOpenDownloads) },
+                onChromeAccent = onChromeAccent,
+                onOpenNowPlaying = { collapseAfter(onOpenNowPlaying) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun DesktopSidebarContent(
+    railExpanded: Boolean,
+    expandedContentVisible: Boolean,
+    tabs: List<NavigationItem>,
+    selectedTab: TabDest?,
+    downloadsSelected: Boolean,
+    accentPalette: ContentAccentPalette,
+    player: PlatformPlayer,
+    showFullPlayer: Boolean,
+    showExpandedPlayerContent: Boolean,
+    onToggle: () -> Unit,
+    onSelectTab: (TabDest) -> Unit,
+    onOpenDownloads: () -> Unit,
+    onChromeAccent: (Color) -> Unit,
+    onOpenNowPlaying: () -> Unit,
+) {
     val itemColors = WideNavigationRailItemDefaults.colors(
         selectedIconColor = accentPalette.onContainer,
         selectedTextColor = accentPalette.onContainer,
@@ -560,150 +739,93 @@ private fun DesktopExpandableSidebar(
         unselectedTextColor = accentPalette.secondaryOnQuietContainer,
     )
 
-    SideEffect {
-        NativeSurfaceOverlayCoordinator.setActive(
-            NativeSurfaceOverlaySource.DesktopNavigationRail,
-            nativeOverlayRequired,
-        )
-    }
-    LaunchedEffect(showFullPlayer, expansionSettled, modalExpansionActive) {
-        when {
-            !showFullPlayer || !modalExpansionActive -> showExpandedPlayerContent = false
-            expansionSettled -> showExpandedPlayerContent = true
-        }
-    }
-    DisposableEffect(Unit) {
-        onDispose {
-            NativeSurfaceOverlayCoordinator.setActive(
-                NativeSurfaceOverlaySource.DesktopNavigationRail,
-                false,
-            )
-        }
-    }
-
-    fun collapseAfter(action: () -> Unit) {
-        action()
-        scope.launch { state.collapse() }
-    }
-
-    ModalWideNavigationRail(
-        state = state,
-        colors = WideNavigationRailDefaults.colors(
-            containerColor = accentPalette.quietContainer,
-            contentColor = accentPalette.onQuietContainer,
-            modalContainerColor = accentPalette.quietContainer,
-            modalScrimColor = MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f),
-            modalContentColor = accentPalette.onQuietContainer,
-        ),
-    ) {
-        Column(modifier = Modifier.fillMaxHeight()) {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+    Column(modifier = Modifier.fillMaxHeight()) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                FilledTonalIconButton(
+                    onClick = onToggle,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = accentPalette.container,
+                        contentColor = accentPalette.onContainer,
+                    ),
+                    modifier = Modifier.semantics {
+                        stateDescription = if (railExpanded) "侧栏已展开" else "侧栏已收起"
+                    },
                 ) {
-                    FilledTonalIconButton(
-                        onClick = {
-                            if (railExpanded) {
-                                scope.launch { state.collapse() }
-                            } else if (!preExpandRequested) {
-                                preExpandRequested = true
-                                scope.launch {
-                                    try {
-                                        if (
-                                            NativeSurfaceOverlayCoordinator.awaitOverlayReady(
-                                                NativeSurfaceOverlaySource.DesktopNavigationRail,
-                                            )
-                                        ) {
-                                            state.expand()
-                                        }
-                                    } finally {
-                                        preExpandRequested = false
-                                    }
-                                }
-                            }
-                        },
-                        enabled = !preExpandRequested,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = accentPalette.container,
-                            contentColor = accentPalette.onContainer,
-                        ),
-                        modifier = Modifier.semantics {
-                            stateDescription = if (railExpanded) "侧栏已展开" else "侧栏已收起"
-                        },
-                    ) {
-                        Icon(
-                            imageVector = AppIcons.Menu,
-                            contentDescription = if (railExpanded) "收起侧栏" else "展开侧栏",
+                    Icon(
+                        imageVector = AppIcons.Menu,
+                        contentDescription = if (railExpanded) "收起侧栏" else "展开侧栏",
+                    )
+                }
+                if (expandedContentVisible) {
+                    Spacer(Modifier.width(14.dp))
+                    Column {
+                        Text(
+                            text = "RedefineNCM",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = accentPalette.onQuietContainer,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = "Desktop",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = accentPalette.secondaryOnQuietContainer,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    if (modalExpansionActive) {
-                        Spacer(Modifier.width(14.dp))
-                        Column {
-                            Text(
-                                text = "RedefineNCM",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = accentPalette.onQuietContainer,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                text = "Desktop",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = accentPalette.secondaryOnQuietContainer,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                }
-                tabs.forEach { item ->
-                    WideNavigationRailItem(
-                        selected = selectedTab == item.dest,
-                        onClick = { collapseAfter { onSelectTab(item.dest) } },
-                        icon = { Icon(item.icon, contentDescription = null) },
-                        label = { Text(item.label) },
-                        railExpanded = railExpanded,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = itemColors,
-                    )
-                }
-                if (modalExpansionActive) {
-                    Text(
-                        text = "工具",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = accentPalette.secondaryOnQuietContainer,
-                        modifier = Modifier.padding(start = 24.dp, top = 8.dp),
-                    )
-                    WideNavigationRailItem(
-                        selected = downloadsSelected,
-                        onClick = { collapseAfter(onOpenDownloads) },
-                        icon = { Icon(AppIcons.Download, contentDescription = null) },
-                        label = { Text("下载管理") },
-                        railExpanded = railExpanded,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = itemColors,
-                    )
                 }
             }
-            if (showFullPlayer && modalExpansionActive) {
-                Box(
-                    modifier = Modifier.width(320.dp).padding(horizontal = 12.dp, vertical = 8.dp),
-                ) {
-                    if (showExpandedPlayerContent) {
-                        DesktopNowPlayingStrip(
-                            player = player,
-                            accentPalette = accentPalette,
-                            onAccentColor = onChromeAccent,
-                            onOpenNowPlaying = { collapseAfter(onOpenNowPlaying) },
-                        )
-                    }
+            tabs.forEach { item ->
+                WideNavigationRailItem(
+                    selected = selectedTab == item.dest,
+                    onClick = { onSelectTab(item.dest) },
+                    icon = { Icon(item.icon, contentDescription = null) },
+                    label = { Text(item.label) },
+                    railExpanded = railExpanded,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = itemColors,
+                )
+            }
+            if (expandedContentVisible) {
+                Text(
+                    text = "工具",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = accentPalette.secondaryOnQuietContainer,
+                    modifier = Modifier.padding(start = 24.dp, top = 8.dp),
+                )
+                WideNavigationRailItem(
+                    selected = downloadsSelected,
+                    onClick = onOpenDownloads,
+                    icon = { Icon(AppIcons.Download, contentDescription = null) },
+                    label = { Text("下载管理") },
+                    railExpanded = railExpanded,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = itemColors,
+                )
+            }
+        }
+        if (showFullPlayer && expandedContentVisible) {
+            Box(
+                modifier = Modifier.width(320.dp).padding(horizontal = 12.dp, vertical = 8.dp),
+            ) {
+                if (showExpandedPlayerContent) {
+                    DesktopNowPlayingStrip(
+                        player = player,
+                        accentPalette = accentPalette,
+                        onAccentColor = onChromeAccent,
+                        onOpenNowPlaying = onOpenNowPlaying,
+                    )
                 }
             }
         }
@@ -760,22 +882,6 @@ private fun DesktopNowPlayingStrip(
     LaunchedEffect(showComments, media?.id) {
         if (showComments) viewModel.getComments()
     }
-    val desktopPlayerOverlayActive = showQueue || showComments
-    DisposableEffect(desktopPlayerOverlayActive) {
-        NativeSurfaceOverlayCoordinator.setActive(
-            NativeSurfaceOverlaySource.DesktopPlayerSheet,
-            desktopPlayerOverlayActive,
-        )
-        onDispose {
-            if (desktopPlayerOverlayActive) {
-                NativeSurfaceOverlayCoordinator.setActive(
-                    NativeSurfaceOverlaySource.DesktopPlayerSheet,
-                    false,
-                )
-            }
-        }
-    }
-
     Box(Modifier.fillMaxWidth()) {
         Surface(
             shape = MaterialTheme.shapes.extraLarge,
