@@ -13,6 +13,7 @@ internal actual fun DesktopOverlayWindow(
     topOffset: Dp,
     focusable: Boolean,
     modal: Boolean,
+    transparent: Boolean,
     onCloseRequest: () -> Unit,
     content: @Composable () -> Unit,
 ) {
