@@ -309,10 +309,24 @@ private fun AppContent(
             val snackbarHostState = remember { SnackbarHostState() }
             val updateMessage by mainViewModel.updateMessage.collectAsState()
             LaunchedEffect(updateMessage) {
-                updateMessage?.let {
-                    snackbarHostState.showSnackbar(it)
-                    mainViewModel.consumeUpdateMessage()
+                val message = updateMessage ?: return@LaunchedEffect
+                NativeSurfaceOverlayCoordinator.setActive(
+                    NativeSurfaceOverlaySource.AppSnackbar,
+                    true,
+                )
+                try {
+                    NativeSurfaceOverlayCoordinator.awaitOverlayReady(
+                        NativeSurfaceOverlaySource.AppSnackbar,
+                    )
+                    snackbarHostState.showSnackbar(message)
+                } finally {
+                    NativeSurfaceOverlayCoordinator.setActive(
+                        NativeSurfaceOverlaySource.AppSnackbar,
+                        false,
+                    )
                 }
+                // 若新的消息取消了本协程，执行不到这里，不会误消费新值。
+                mainViewModel.consumeUpdateMessage()
             }
 
             val showTabs = pushedStack.isEmpty()
@@ -746,18 +760,19 @@ private fun DesktopNowPlayingStrip(
     LaunchedEffect(showComments, media?.id) {
         if (showComments) viewModel.getComments()
     }
-    LaunchedEffect(showQueue, showComments) {
+    val desktopPlayerOverlayActive = showQueue || showComments
+    DisposableEffect(desktopPlayerOverlayActive) {
         NativeSurfaceOverlayCoordinator.setActive(
             NativeSurfaceOverlaySource.DesktopPlayerSheet,
-            showQueue || showComments,
+            desktopPlayerOverlayActive,
         )
-    }
-    DisposableEffect(Unit) {
         onDispose {
-            NativeSurfaceOverlayCoordinator.setActive(
-                NativeSurfaceOverlaySource.DesktopPlayerSheet,
-                false,
-            )
+            if (desktopPlayerOverlayActive) {
+                NativeSurfaceOverlayCoordinator.setActive(
+                    NativeSurfaceOverlaySource.DesktopPlayerSheet,
+                    false,
+                )
+            }
         }
     }
 
