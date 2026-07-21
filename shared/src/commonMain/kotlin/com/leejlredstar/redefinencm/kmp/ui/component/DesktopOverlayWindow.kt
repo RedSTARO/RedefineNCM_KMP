@@ -27,6 +27,7 @@ internal expect fun DesktopOverlayWindow(
     topOffset: Dp = 0.dp,
     focusable: Boolean = true,
     modal: Boolean = false,
+    transparent: Boolean = false,
     onCloseRequest: () -> Unit,
     content: @Composable () -> Unit,
 )

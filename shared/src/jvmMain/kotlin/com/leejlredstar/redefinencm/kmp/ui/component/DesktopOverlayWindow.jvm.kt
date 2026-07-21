@@ -49,6 +49,7 @@ internal actual fun DesktopOverlayWindow(
     topOffset: Dp,
     focusable: Boolean,
     modal: Boolean,
+    transparent: Boolean,
     onCloseRequest: () -> Unit,
     content: @Composable () -> Unit,
 ) {
@@ -66,7 +67,7 @@ internal actual fun DesktopOverlayWindow(
         visible = true,
         title = title,
         decoration = WindowDecoration.Undecorated(),
-        transparent = false,
+        transparent = transparent,
         resizable = false,
         enabled = true,
         focusable = focusable,
@@ -86,7 +87,7 @@ internal actual fun DesktopOverlayWindow(
         },
     ) {
         val overlayWindow = window
-        DisposableEffect(owner, overlayWindow, width, height, placement, topOffset) {
+        DisposableEffect(owner, overlayWindow, width, height, placement, topOffset, transparent) {
             var disposed = false
             val requestedWidth = width.value.roundToInt().coerceAtLeast(1)
             val requestedHeight = height.value.roundToInt().coerceAtLeast(1)
@@ -157,7 +158,7 @@ internal actual fun DesktopOverlayWindow(
             owner.addComponentListener(ownerListener)
             overlayWindow.addComponentListener(overlayListener)
             if (owner is Frame) owner.addWindowStateListener(ownerStateListener)
-            overlayWindow.background = AwtColor.BLACK
+            if (!transparent) overlayWindow.background = AwtColor.BLACK
             javax.swing.SwingUtilities.invokeLater(::alignToOwner)
 
             onDispose {

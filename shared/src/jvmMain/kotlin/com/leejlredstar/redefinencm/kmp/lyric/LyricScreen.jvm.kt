@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
 import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayPlacement
@@ -61,6 +62,11 @@ import java.awt.Color as AwtColor
 
 private const val AMLL_READY_TIMEOUT_MILLIS = 10_000L
 private const val NATIVE_HOST_LAYOUT_TIMEOUT_MILLIS = 1_000L
+private const val CONTROLS_COLLAPSE_ANIMATION_MILLIS = 320L
+
+private val ExpandedControlsWindowSize = DpSize(652.dp, 320.dp)
+private val CollapsedControlsWindowSize = DpSize(468.dp, 64.dp)
+private val ControlsSheetWindowSize = DpSize(840.dp, 680.dp)
 
 actual val supportsDynamicNowPlayingCover: Boolean
     get() = desktopEmbeddedWebViewSupported()
@@ -115,7 +121,9 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val showRomanLyric = remember {
         settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)
     }
-    var controlsVisible by remember { mutableStateOf(false) }
+    var controlsVisible by remember { mutableStateOf(true) }
+    var controlsExpanded by remember { mutableStateOf(true) }
+    var controlsWindowExpanded by remember { mutableStateOf(true) }
     var controlsSheetVisible by remember { mutableStateOf(false) }
     var controlsRevealRequest by remember { mutableIntStateOf(0) }
     var songWikiSyncRequest by remember { mutableIntStateOf(0) }
@@ -137,6 +145,8 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             onLineClicked = { timeMs, mediaId -> viewModel.onLyricLineClick(mediaId, timeMs) },
             onBack = onBack,
             onControlsRequested = {
+                controlsWindowExpanded = true
+                controlsExpanded = true
                 controlsRevealRequest += 1
                 controlsVisible = true
             },
@@ -163,6 +173,21 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
 
     LaunchedEffect(engineReady) {
         if (engineReady) session.installControlsRevealHook()
+    }
+
+    LaunchedEffect(controlsVisible, controlsExpanded, controlsSheetVisible) {
+        when {
+            !controlsVisible || controlsSheetVisible || controlsExpanded -> {
+                controlsWindowExpanded = true
+            }
+
+            else -> {
+                delay(CONTROLS_COLLAPSE_ANIMATION_MILLIS)
+                if (!controlsExpanded && !controlsSheetVisible) {
+                    controlsWindowExpanded = false
+                }
+            }
+        }
     }
 
     LaunchedEffect(nativeSurfaceVisible, nativeHostVisible) {
@@ -289,8 +314,15 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         }
     }
 
-    BackHandler(enabled = controlsVisible) {
+    fun dismissControls() {
         controlsVisible = false
+        controlsExpanded = true
+        controlsWindowExpanded = true
+        controlsSheetVisible = false
+    }
+
+    BackHandler(enabled = controlsVisible) {
+        dismissControls()
     }
 
     Box(
@@ -316,17 +348,40 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         onRetry = viewModel::retryLyrics,
     )
 
+    val controlsWindowSize = desktopLyricControlsWindowSize(
+        availableWidth = overlayWidth,
+        availableHeight = overlayHeight,
+        expanded = controlsWindowExpanded,
+        sheetVisible = controlsSheetVisible,
+    )
     DesktopLyricControlsWindow(
         visible = controlsVisible && lyricOverlayState is LyricUiState.Content,
         revealRequest = controlsRevealRequest,
-        width = (overlayWidth - 32.dp).coerceAtLeast(0.dp).coerceAtMost(
-            if (controlsSheetVisible) 840.dp else 652.dp,
-        ),
-        height = (overlayHeight - 16.dp).coerceAtLeast(0.dp).coerceAtMost(
-            if (controlsSheetVisible) 680.dp else 320.dp,
-        ),
-        onDismiss = { controlsVisible = false },
+        width = controlsWindowSize.width,
+        height = controlsWindowSize.height,
+        onDismiss = ::dismissControls,
         onSheetVisibilityChanged = { controlsSheetVisible = it },
+        onExpandedChanged = { expanded ->
+            controlsExpanded = expanded
+            if (expanded) controlsWindowExpanded = true
+        },
+    )
+}
+
+internal fun desktopLyricControlsWindowSize(
+    availableWidth: Dp,
+    availableHeight: Dp,
+    expanded: Boolean,
+    sheetVisible: Boolean,
+): DpSize {
+    val target = when {
+        sheetVisible -> ControlsSheetWindowSize
+        expanded -> ExpandedControlsWindowSize
+        else -> CollapsedControlsWindowSize
+    }
+    return DpSize(
+        width = (availableWidth - 32.dp).coerceAtLeast(0.dp).coerceAtMost(target.width),
+        height = (availableHeight - 16.dp).coerceAtLeast(0.dp).coerceAtMost(target.height),
     )
 }
 
@@ -369,6 +424,7 @@ private fun DesktopLyricControlsWindow(
     height: Dp,
     onDismiss: () -> Unit,
     onSheetVisibilityChanged: (Boolean) -> Unit,
+    onExpandedChanged: (Boolean) -> Unit,
 ) {
     DesktopOverlayWindow(
         visible = visible,
@@ -377,23 +433,20 @@ private fun DesktopLyricControlsWindow(
         height = height,
         placement = DesktopOverlayPlacement.BottomCenter,
         focusable = true,
+        transparent = true,
         onCloseRequest = onDismiss,
     ) {
-        Surface(
+        AutoHideMiniPlayerController(
             modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.surface,
-        ) {
-            AutoHideMiniPlayerController(
-                modifier = Modifier.fillMaxSize(),
-                initialExpanded = true,
-                showCollapsedWhenHidden = false,
-                externalRevealRequest = revealRequest,
-                onOverlayVisibilityChanged = { overlayVisible ->
-                    if (!overlayVisible) onDismiss()
-                },
-                onSheetVisibilityChanged = onSheetVisibilityChanged,
-            )
-        }
+            initialExpanded = true,
+            showCollapsedWhenHidden = true,
+            externalRevealRequest = revealRequest,
+            onOverlayVisibilityChanged = { overlayVisible ->
+                if (!overlayVisible) onDismiss()
+            },
+            onSheetVisibilityChanged = onSheetVisibilityChanged,
+            onExpandedChanged = onExpandedChanged,
+        )
     }
 }
 
