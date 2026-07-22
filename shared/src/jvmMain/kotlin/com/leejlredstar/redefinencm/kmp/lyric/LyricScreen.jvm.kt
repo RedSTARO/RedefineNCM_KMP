@@ -100,7 +100,8 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
-    val dynamicCoverUrl by viewModel.dynamicCoverUrl.collectAsState()
+    val dynamicCoverUiState by viewModel.dynamicCoverUiState.collectAsState()
+    val dynamicCoverUrl = dynamicCoverUiState.urlFor(metadata?.id)
     val songWikiUiState by viewModel.songWikiUiState.collectAsState()
     val windowSize = LocalWindowInfo.current.containerSize
     val density = LocalDensity.current
@@ -150,9 +151,11 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
                 controlsRevealRequest += 1
                 controlsVisible = true
             },
-            onSongWikiRequested = {
-                viewModel.getSongWikiSummary()
-                songWikiSyncRequest += 1
+            onSongWikiRequested = { requestedMediaId ->
+                if (requestedMediaId == viewModel.currentMedia.value?.id) {
+                    viewModel.getSongWikiSummary()
+                    songWikiSyncRequest += 1
+                }
             },
         )
     }
@@ -260,21 +263,24 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         session.evalLatest("AmllBridge.setTime($currentPosition);")
     }
 
-    // Set the blurred album-art background for the current track (full-res:
-    // WebView2 的 GPU 合成下全屏 CSS blur 是免费的).
-    LaunchedEffect(engineReady, metadata?.artworkUri) {
+    // Push current display metadata atomically before the optional dynamic cover. This lets the
+    // page reject a delayed video command that belongs to the previous media item.
+    LaunchedEffect(engineReady, metadata, dynamicCoverUrl) {
         if (!engineReady) return@LaunchedEffect
-        val art = metadata?.artworkUri?.takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
-        session.eval("AmllBridge.setBackground('${art.escapeJsSingleQuoted()}');")
-    }
-
-    LaunchedEffect(engineReady, dynamicCoverUrl) {
-        if (!engineReady) return@LaunchedEffect
-        val command = dynamicCoverUrl
+        val mediaId = metadata?.id.orEmpty()
+        val details = Json.encodeToString(metadata.toAmllSongDetails()).escapeJsSingleQuoted()
+        val dynamicCoverCommand = dynamicCoverUrl
             ?.takeIf(String::isNotBlank)
-            ?.let { "AmllPage.setDynamicCover('${it.escapeJsSingleQuoted()}');" }
-            ?: "AmllPage.clearDynamicCover();"
-        session.eval("if (globalThis.AmllPage) $command")
+            ?.let {
+                "AmllPage.setDynamicCover('${it.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}');"
+            }
+            ?: "AmllPage.clearDynamicCover('${mediaId.escapeJsSingleQuoted()}');"
+        session.eval(
+            "if (globalThis.AmllPage) { " +
+                "AmllPage.setSongDetails('$details'); " +
+                dynamicCoverCommand +
+                " }",
+        )
     }
 
     LaunchedEffect(engineReady, metadata?.id, songWikiUiState, songWikiSyncRequest) {
@@ -283,23 +289,25 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         val command = when (val state = songWikiUiState) {
             SongWikiUiState.Idle -> "AmllPage.resetSongWiki();"
             is SongWikiUiState.Loading -> if (state.mediaId == currentMediaId) {
-                "AmllPage.setSongWikiLoading();"
+                "AmllPage.setSongWikiLoading('${state.mediaId.escapeJsSingleQuoted()}');"
             } else {
                 "AmllPage.resetSongWiki();"
             }
             is SongWikiUiState.Content -> if (state.mediaId == currentMediaId) {
                 val payload = Json.encodeToString(state.summary).escapeJsSingleQuoted()
-                "AmllPage.setSongWikiSummary('$payload');"
+                "AmllPage.setSongWikiSummary('$payload', '${state.mediaId.escapeJsSingleQuoted()}');"
             } else {
                 "AmllPage.resetSongWiki();"
             }
             is SongWikiUiState.Empty -> if (state.mediaId == currentMediaId) {
-                "AmllPage.setSongWikiEmpty();"
+                "AmllPage.setSongWikiEmpty('${state.mediaId.escapeJsSingleQuoted()}');"
             } else {
                 "AmllPage.resetSongWiki();"
             }
             is SongWikiUiState.Error -> if (state.mediaId == currentMediaId) {
-                "AmllPage.setSongWikiError('${state.message.escapeJsSingleQuoted()}');"
+                "AmllPage.setSongWikiError(" +
+                    "'${state.message.escapeJsSingleQuoted()}', " +
+                    "'${state.mediaId.escapeJsSingleQuoted()}');"
             } else {
                 "AmllPage.resetSongWiki();"
             }
@@ -461,7 +469,7 @@ private class WebviewSession(
     private val onLineClicked: (Long, String?) -> Unit,
     private val onBack: () -> Unit,
     private val onControlsRequested: () -> Unit,
-    private val onSongWikiRequested: () -> Unit,
+    private val onSongWikiRequested: (String?) -> Unit,
 ) {
     private val handle = AtomicLong(0)
     private val started = AtomicBoolean(false)
@@ -497,7 +505,9 @@ private class WebviewSession(
     }
     private val backCallback = hostCallback("back") { onBack() }
     private val controlsCallback = hostCallback("controls") { onControlsRequested() }
-    private val songWikiCallback = hostCallback("song wiki") { onSongWikiRequested() }
+    private val songWikiCallback = hostCallback("song wiki") { request ->
+        onSongWikiRequested(parseAmllMediaIdRequest(request))
+    }
     private val dispatchCallback = object : WebviewJna.DispatchCallback {
         override fun callback(w: Long, arg: Long) {
             while (true) {
@@ -802,11 +812,11 @@ private class WebviewSession(
         return found
     }
 
-    private fun hostCallback(name: String, action: () -> Unit) = object : WebviewJna.BindCallback {
+    private fun hostCallback(name: String, action: (String?) -> Unit) = object : WebviewJna.BindCallback {
         override fun callback(seq: Long, req: String?, arg: Long) {
             callbackScope.launch {
                 println("AMLL[wv2] host action $name")
-                action()
+                action(req)
             }
             runCatching { WebviewJna.N.webview_return(handle.get(), seq, 0, "null") }
         }
@@ -918,6 +928,30 @@ internal fun parseAmllSeekRequest(req: String?): Pair<Long, String?> {
         .map { it.groupValues[1].replace("\\\"", "\"").replace("\\\\", "\\") }
         .firstOrNull { it.isNotBlank() && it != timeText }
     return time to mediaId
+}
+
+internal fun parseAmllMediaIdRequest(req: String?): String? {
+    val text = req.orEmpty().trim()
+    if (text.isEmpty()) return null
+
+    runCatching { amllSeekJson.parseToJsonElement(text) }
+        .getOrNull()
+        ?.let { element ->
+            return when (element) {
+                is JsonArray -> element.getOrNull(0)?.asStringOrNull()
+                is JsonObject -> listOf("mediaId", "songId", "id")
+                    .firstNotNullOfOrNull { key -> element[key]?.asStringOrNull() }
+                else -> element.asStringOrNull()
+            }
+        }
+
+    return QUOTED_STRING_PATTERN
+        .find(text)
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.replace("\\\"", "\"")
+        ?.replace("\\\\", "\\")
+        ?.takeIf(String::isNotBlank)
 }
 
 private fun kotlinx.serialization.json.JsonElement.asStringOrNull(): String? =

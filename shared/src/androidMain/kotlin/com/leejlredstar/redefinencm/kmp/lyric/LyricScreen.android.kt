@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.util.Log
+import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.ConsoleMessage
@@ -16,9 +17,13 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.annotation.OptIn
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -28,6 +33,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -40,12 +46,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
 import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsButton
 import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsSheet
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
@@ -53,6 +71,8 @@ import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.LyricParser
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.json.JSONObject
 import org.koin.compose.koinInject
 
@@ -80,7 +100,8 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
-    val dynamicCoverUrl by viewModel.dynamicCoverUrl.collectAsState()
+    val dynamicCoverUiState by viewModel.dynamicCoverUiState.collectAsState()
+    val dynamicCoverUrl = dynamicCoverUiState.urlFor(metadata?.id)
     val songWikiUiState by viewModel.songWikiUiState.collectAsState()
 
     val context = LocalContext.current
@@ -271,19 +292,24 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         webView.evaluateJavascript("AmllBridge.setTime($currentPosition);", null)
     }
 
-    LaunchedEffect(engineReady, metadata?.artworkUri) {
+    LaunchedEffect(engineReady, metadata, dynamicCoverUrl, showSongWikiDetails) {
         if (!engineReady) return@LaunchedEffect
-        val art = metadata?.artworkUri?.takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
-        webView.evaluateJavascript("AmllBridge.setBackground(${JSONObject.quote(art)});", null)
-    }
-
-    LaunchedEffect(engineReady, dynamicCoverUrl) {
-        if (!engineReady) return@LaunchedEffect
-        val command = dynamicCoverUrl
+        val mediaId = metadata?.id.orEmpty()
+        val details = Json.encodeToString(metadata.toAmllSongDetails())
+        val dynamicCoverCommand = dynamicCoverUrl
             ?.takeIf(String::isNotBlank)
-            ?.let { "AmllPage.setDynamicCover(${JSONObject.quote(it)});" }
-            ?: "AmllPage.clearDynamicCover();"
-        webView.evaluateJavascript("if (globalThis.AmllPage) $command", null)
+            ?.let {
+                "AmllPage.setDynamicCover(${JSONObject.quote(it)}, ${JSONObject.quote(mediaId)});"
+            }
+            ?: "AmllPage.clearDynamicCover(${JSONObject.quote(mediaId)});"
+        webView.evaluateJavascript(
+            "if (globalThis.AmllPage) { " +
+                "AmllPage.setSongDetails(${JSONObject.quote(details)}); " +
+                dynamicCoverCommand +
+                " AmllPage.setDynamicBackgroundSuppressed($showSongWikiDetails);" +
+                " }",
+            null,
+        )
     }
 
     LaunchedEffect(metadata?.id) {
@@ -351,10 +377,93 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     SongWikiDetailsSheet(
         visible = showSongWikiDetails,
         songTitle = metadata?.title,
+        songArtist = metadata?.artist,
+        albumTitle = metadata?.albumTitle,
+        artworkUri = metadata?.artworkUri,
+        artworkOverlay = dynamicCoverUrl
+            ?.takeIf(String::isNotBlank)
+            ?.let { videoUrl ->
+                { AndroidDynamicCoverArtwork(videoUrl) }
+            },
         state = songWikiUiState,
         onDismiss = { showSongWikiDetails = false },
         onRetry = viewModel::getSongWikiSummary,
     )
+}
+
+@OptIn(UnstableApi::class)
+@Composable
+private fun BoxScope.AndroidDynamicCoverArtwork(videoUrl: String) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val textureView = remember(context) { TextureView(context) }
+    var firstFrameRendered by remember(videoUrl) { mutableStateOf(false) }
+    val player = remember(videoUrl) {
+        ExoPlayer.Builder(context).build().apply {
+            repeatMode = Player.REPEAT_MODE_ONE
+            volume = 0f
+            videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
+            trackSelectionParameters = trackSelectionParameters
+                .buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
+                .build()
+            setMediaItem(MediaItem.fromUri(videoUrl))
+        }
+    }
+    DisposableEffect(player, lifecycleOwner) {
+        val listener = object : Player.Listener {
+            override fun onRenderedFirstFrame() {
+                firstFrameRendered = true
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                firstFrameRendered = false
+            }
+        }
+        val lifecycleObserver = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> player.playWhenReady = true
+                Lifecycle.Event.ON_STOP -> player.playWhenReady = false
+                else -> Unit
+            }
+        }
+        player.addListener(listener)
+        lifecycleOwner.lifecycle.addObserver(lifecycleObserver)
+        player.setVideoTextureView(textureView)
+        player.playWhenReady = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+        player.prepare()
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
+            player.removeListener(listener)
+            player.clearVideoTextureView(textureView)
+            player.release()
+        }
+    }
+
+    val videoAlpha by animateFloatAsState(
+        targetValue = if (firstFrameRendered) 1f else 0f,
+        animationSpec = tween(ExpressiveMotion.StandardMillis),
+        label = "song-details-dynamic-cover",
+    )
+    AndroidView(
+        factory = { textureView },
+        modifier = Modifier.matchParentSize().alpha(videoAlpha),
+    )
+    if (firstFrameRendered) {
+        Surface(
+            modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
+            shape = CircleShape,
+            color = androidx.compose.material3.MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f),
+            contentColor = androidx.compose.material3.MaterialTheme.colorScheme.onPrimaryContainer,
+        ) {
+            Text(
+                text = "动态封面",
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
 }
 
 private class AmllCallback(

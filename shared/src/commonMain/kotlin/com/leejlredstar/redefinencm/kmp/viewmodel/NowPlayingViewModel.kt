@@ -35,6 +35,13 @@ data class FavoriteUiState(
     val isLiked: Boolean = false,
 )
 
+data class DynamicCoverUiState(
+    val mediaId: String? = null,
+    val url: String? = null,
+) {
+    fun urlFor(mediaId: String?): String? = url?.takeIf { this.mediaId == mediaId }
+}
+
 /**
  * Ported from the original Android NowPlayingViewModel.
  *
@@ -89,7 +96,7 @@ class NowPlayingViewModel(
 
     // ── Artwork ──
     val useDynamicCover = MutableStateFlow(false)
-    val dynamicCoverUrl = MutableStateFlow<String?>(null)
+    val dynamicCoverUiState = MutableStateFlow(DynamicCoverUiState())
 
     init {
         initPlayerSync()
@@ -295,7 +302,7 @@ class NowPlayingViewModel(
             ) { media, uid, enabled -> Triple(media?.id, uid, enabled) }
                 .distinctUntilChanged()
                 .collectLatest { (mediaId, uid, enabled) ->
-                    dynamicCoverUrl.value = null
+                    dynamicCoverUiState.value = DynamicCoverUiState(mediaId = mediaId)
                     val songId = mediaId?.toLongOrNull()?.takeIf { it > 0 }
                     if (!enabled || uid <= 0 || songId == null) return@collectLatest
 
@@ -307,7 +314,10 @@ class NowPlayingViewModel(
                         mainViewModel.uid.value == uid &&
                         player.currentMedia.value?.id == mediaId
                     ) {
-                        dynamicCoverUrl.value = url
+                        dynamicCoverUiState.value = DynamicCoverUiState(
+                            mediaId = mediaId,
+                            url = url,
+                        )
                     }
                 }
         }
