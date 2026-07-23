@@ -250,6 +250,7 @@
   #wiki-info:hover { background: rgba(255,255,255,0.12); }
   #wiki-info:active { transform: scale(0.90); }
   #wiki-info:disabled { opacity: 0.38; cursor: default; transform: none; }
+  html[data-platform="android"] #wiki-info { display: none; }
   #wiki-info:focus-visible,
   #wiki-close:focus-visible,
   .wiki-retry:focus-visible {
@@ -770,7 +771,6 @@ let songWikiState = { kind: "idle", mediaId: "" };
 let songWikiReturnFocus = null;
 let songWikiCloseTimer = 0;
 let songWikiOpenGeneration = 0;
-let songWikiVisibilityNotified = false;
 let dynamicBackgroundSuppressed = false;
 
 function createWikiElement(tagName, className, text) {
@@ -989,16 +989,6 @@ function setSongWikiBackgroundInert(inert) {
   });
 }
 
-function notifySongWikiVisibilityChanged(visible) {
-  const nextVisibility = Boolean(visible);
-  if (songWikiVisibilityNotified === nextVisibility) return;
-  songWikiVisibilityNotified = nextVisibility;
-  const callback = globalThis.AmllCallback;
-  if (callback && typeof callback.onSongWikiVisibilityChanged === "function") {
-    callback.onSongWikiVisibilityChanged(nextVisibility);
-  }
-}
-
 function openSongWiki() {
   const overlay = document.getElementById("wiki-overlay");
   if (!overlay || !songDetailsState.mediaId) return;
@@ -1009,7 +999,6 @@ function openSongWiki() {
   }
   songWikiReturnFocus = document.activeElement;
   overlay.hidden = false;
-  notifySongWikiVisibilityChanged(true);
   document.getElementById("wiki-info")?.setAttribute("aria-expanded", "true");
   setSongWikiBackgroundInert(true);
   renderSongWiki();
@@ -1031,7 +1020,6 @@ function closeSongWiki(restoreFocus = true) {
     songWikiCloseTimer = 0;
   }
   overlay.classList.remove("open");
-  notifySongWikiVisibilityChanged(false);
   document.getElementById("wiki-info")?.setAttribute("aria-expanded", "false");
   setSongWikiBackgroundInert(false);
   pauseWikiDynamicCover();
@@ -1261,8 +1249,7 @@ function setDynamicCover(url, mediaId) {
   const backgroundVideo = document.getElementById("dynamic-bg");
   const detailVideo = document.getElementById("wiki-cover-video");
   if (!backgroundVideo) return;
-  const platform = document.documentElement.dataset.platform;
-  const usesHtmlSongWiki = platform === "desktop" || platform === "android";
+  const usesHtmlSongWiki = document.documentElement.dataset.platform === "desktop";
   if (
     backgroundVideo.dataset.source === source &&
     (!usesHtmlSongWiki || detailVideo?.dataset.source === source)
