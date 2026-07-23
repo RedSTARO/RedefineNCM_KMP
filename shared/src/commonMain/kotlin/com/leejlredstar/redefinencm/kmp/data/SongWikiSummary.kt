@@ -23,6 +23,7 @@ data class SongWikiSection(
 internal fun SongWikiSummaryResponse.toSongWikiSummary(): SongWikiSummary {
     val basicBlock = data?.blocks.orEmpty().firstOrNull { block ->
         block.showType == SONG_BASIC_BLOCK_TYPE ||
+            block.showType.isNullOrBlank() &&
             block.uiElement?.mainTitle?.title == SONG_BASIC_BLOCK_TITLE
     }
     val sections = basicBlock?.creatives.orEmpty().mapNotNull { creative ->

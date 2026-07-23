@@ -84,7 +84,7 @@ class RepositorySongWikiSummaryTest {
                 "blocks": [
                   {
                     "showType": "LIST_SONG",
-                    "uiElement": {"mainTitle": {"title": "相似歌曲"}},
+                    "uiElement": {"mainTitle": {"title": "音乐百科"}},
                     "creatives": [
                       {"uiElement": {"mainTitle": {"title": "不能展示"}}}
                     ]
