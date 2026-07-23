@@ -29,6 +29,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -71,6 +73,7 @@ fun SongWikiDetailsSheet(
     songArtist: String? = null,
     albumTitle: String? = null,
     artworkUri: String? = null,
+    durationMs: Long? = null,
     artworkOverlay: (@Composable BoxScope.() -> Unit)? = null,
 ) {
     if (!visible) return
@@ -89,12 +92,15 @@ fun SongWikiDetailsSheet(
                 songArtist = songArtist,
                 albumTitle = albumTitle,
                 artworkUri = artworkUri,
+                durationMs = durationMs,
                 artworkOverlay = artworkOverlay,
             )
 
             Text(
                 text = "歌曲档案",
-                modifier = Modifier.padding(start = 24.dp, top = 24.dp, bottom = 10.dp),
+                modifier = Modifier
+                    .padding(start = 24.dp, top = 24.dp, bottom = 10.dp)
+                    .semantics { heading() },
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -134,6 +140,7 @@ private fun SongWikiHero(
     songArtist: String?,
     albumTitle: String?,
     artworkUri: String?,
+    durationMs: Long?,
     artworkOverlay: (@Composable BoxScope.() -> Unit)?,
 ) {
     val artworkShape = MaterialTheme.shapes.extraLarge
@@ -185,32 +192,61 @@ private fun SongWikiHero(
                 Spacer(Modifier.height(3.dp))
                 Text(
                     text = songTitle?.takeIf(String::isNotBlank) ?: "当前歌曲",
+                    modifier = Modifier.semantics { heading() },
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.ExtraBold,
-                    maxLines = 2,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
                 songArtist?.takeIf(String::isNotBlank)?.let { artist ->
-                    Text(
-                        text = artist,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    SongWikiMetadataLine("作者", artist)
                 }
                 albumTitle?.takeIf(String::isNotBlank)?.let { album ->
-                    Text(
-                        text = album,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    SongWikiMetadataLine("专辑", album)
+                }
+                durationMs?.takeIf { it > 0 }?.let { duration ->
+                    SongWikiMetadataLine("时长", formatSongDuration(duration))
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SongWikiMetadataLine(
+    label: String,
+    value: String,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = value,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+private fun formatSongDuration(durationMs: Long): String {
+    val totalSeconds = durationMs.coerceAtLeast(0) / 1_000
+    val hours = totalSeconds / 3_600
+    val minutes = (totalSeconds % 3_600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) {
+        "$hours:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}"
+    } else {
+        "$minutes:${seconds.toString().padStart(2, '0')}"
     }
 }
 
@@ -236,6 +272,7 @@ private fun SongWikiSectionList(sections: List<SongWikiSection>) {
                 ) {
                     Text(
                         text = section.title,
+                        modifier = Modifier.semantics { heading() },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )

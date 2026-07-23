@@ -358,6 +358,7 @@ fun FullLyricScreen(
         songArtist = metadata?.artist,
         albumTitle = metadata?.albumTitle,
         artworkUri = metadata?.artworkUri,
+        durationMs = metadata?.duration,
         state = songWikiUiState,
         onDismiss = { showSongWikiDetails = false },
         onRetry = viewModel::getSongWikiSummary,

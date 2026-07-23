@@ -250,7 +250,6 @@
   #wiki-info:hover { background: rgba(255,255,255,0.12); }
   #wiki-info:active { transform: scale(0.90); }
   #wiki-info:disabled { opacity: 0.38; cursor: default; transform: none; }
-  html[data-platform="android"] #wiki-info { display: none; }
   #wiki-info:focus-visible,
   #wiki-close:focus-visible,
   .wiki-retry:focus-visible {
@@ -369,6 +368,17 @@
     letter-spacing: .02em;
   }
   .wiki-heading { min-width: 0; }
+  .wiki-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
   .wiki-kicker {
     margin-bottom: 8px;
     color: var(--wiki-primary);
@@ -377,30 +387,48 @@
     letter-spacing: .08em;
   }
   .wiki-heading h2 {
+    display: -webkit-box;
     overflow: hidden;
     color: var(--wiki-on-surface);
     font-size: clamp(25px, 4vw, 36px);
     font-weight: 800;
     line-height: 1.08;
     letter-spacing: -.025em;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
-  .wiki-song-artist,
-  .wiki-song-album {
-    overflow: hidden;
+  .wiki-metadata {
+    margin-top: 14px;
+    display: grid;
+    gap: 1.5px;
+  }
+  .wiki-metadata-item {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    padding: 8px 12px;
+    background: var(--wiki-surface-container-highest);
+    overflow-wrap: anywhere;
+  }
+  .wiki-metadata-item:first-child { border-radius: 18px 18px 6px 6px; }
+  .wiki-metadata-item:last-child { border-radius: 6px 6px 18px 18px; }
+  .wiki-metadata-item:only-child { border-radius: 18px; }
+  .wiki-metadata-item dt {
+    color: var(--wiki-primary);
+    font-size: 12px;
+    font-weight: 750;
+    line-height: 1.55;
+  }
+  .wiki-metadata-item dd {
+    min-width: 0;
+    margin: 0;
     color: var(--wiki-on-surface-variant);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .wiki-song-artist {
-    margin-top: 10px;
-    font-size: 15px;
-    font-weight: 600;
-  }
-  .wiki-song-album {
-    margin-top: 5px;
     font-size: 13px;
+    font-weight: 600;
+    line-height: 1.5;
   }
   #wiki-close {
     align-self: start;
@@ -584,15 +612,19 @@
       border-color: rgba(128,216,197,0.35);
       border-top-color: var(--wiki-primary);
     }
+    #wiki-cover-video,
+    #wiki-cover-badge { display: none !important; }
   }
   @media (prefers-contrast: more) {
     #wiki-dialog,
+    .wiki-metadata-item,
     .wiki-section,
     .wiki-status { border: 1px solid var(--wiki-outline); }
   }
   @media (forced-colors: active) {
     #wiki-overlay { background: rgba(0,0,0,.72); backdrop-filter: none; }
     #wiki-dialog,
+    .wiki-metadata-item,
     .wiki-section,
     .wiki-status,
     #wiki-close,
@@ -613,13 +645,13 @@
 <div id="loading" role="status" aria-live="polite">正在加载歌词组件…</div>
 <div id="amll-root" role="region" aria-label="歌词"></div>
 <button id="desktop-back" class="desktop-control" type="button" aria-label="返回">‹</button>
-<button id="wiki-info" type="button" aria-label="详细信息" aria-haspopup="dialog" aria-controls="wiki-dialog" aria-expanded="false" disabled>
+<button id="wiki-info" type="button" aria-label="查看歌曲详细信息" aria-haspopup="dialog" aria-controls="wiki-dialog" aria-expanded="false" disabled>
   <svg class="wiki-info-icon" viewBox="0 -960 960 960" aria-hidden="true">
     <path d="M440-280h80v-240h-80v240Zm40-320q17 0 28.5-11.5T520-640q0-17-11.5-28.5T480-680q-17 0-28.5 11.5T440-640q0 17 11.5 28.5T480-600Zm0 520q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Z" />
   </svg>
 </button>
 <div id="wiki-overlay" hidden>
-  <section id="wiki-dialog" role="dialog" aria-modal="true" aria-labelledby="wiki-title" aria-describedby="wiki-song-artist">
+  <section id="wiki-dialog" role="dialog" aria-modal="true" aria-labelledby="wiki-dialog-label wiki-title" aria-describedby="wiki-song-metadata">
     <header class="wiki-hero">
       <div class="wiki-artwork">
         <div class="wiki-artwork-placeholder" aria-hidden="true">
@@ -632,12 +664,24 @@
         <span id="wiki-cover-badge" hidden>动态封面</span>
       </div>
       <div class="wiki-heading">
-        <p class="wiki-kicker">音乐百科 · 简要信息</p>
+        <p id="wiki-dialog-label" class="wiki-kicker">歌曲详细信息 · 音乐百科</p>
         <h2 id="wiki-title">当前歌曲</h2>
-        <p id="wiki-song-artist" class="wiki-song-artist">歌曲信息</p>
-        <p id="wiki-song-album" class="wiki-song-album" hidden></p>
+        <dl id="wiki-song-metadata" class="wiki-metadata">
+          <div class="wiki-metadata-item">
+            <dt>作者</dt>
+            <dd id="wiki-song-artist">未知作者</dd>
+          </div>
+          <div class="wiki-metadata-item">
+            <dt>专辑</dt>
+            <dd id="wiki-song-album">未知专辑</dd>
+          </div>
+          <div class="wiki-metadata-item">
+            <dt>时长</dt>
+            <dd id="wiki-song-duration">未知时长</dd>
+          </div>
+        </dl>
       </div>
-      <button id="wiki-close" type="button" aria-label="关闭详细信息">
+      <button id="wiki-close" type="button" aria-label="关闭歌曲详细信息">
         <svg class="wiki-close-icon" viewBox="0 -960 960 960" aria-hidden="true">
           <path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z" />
         </svg>
@@ -645,6 +689,7 @@
     </header>
     <p class="wiki-content-label">歌曲档案</p>
     <div id="wiki-content"></div>
+    <p id="wiki-status-announcer" class="wiki-visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>
   </section>
 </div>
 
@@ -718,12 +763,14 @@ let songDetailsState = {
   title: "",
   artist: "",
   albumTitle: "",
+  durationMs: 0,
   artworkUri: "",
 };
 let songWikiState = { kind: "idle", mediaId: "" };
 let songWikiReturnFocus = null;
 let songWikiCloseTimer = 0;
 let songWikiOpenGeneration = 0;
+let songWikiVisibilityNotified = false;
 let dynamicBackgroundSuppressed = false;
 
 function createWikiElement(tagName, className, text) {
@@ -739,13 +786,27 @@ function parseSongDetailsPayload(payload) {
     try { details = JSON.parse(details); } catch (_) { details = null; }
   }
   if (!details || typeof details !== "object") details = {};
+  const durationMs = Number(details.durationMs);
   return {
     mediaId: normalizeMediaId(details.mediaId),
     title: String(details.title || "").trim(),
     artist: String(details.artist || "").trim(),
     albumTitle: String(details.albumTitle || "").trim(),
+    durationMs: Number.isFinite(durationMs) && durationMs > 0 ? Math.round(durationMs) : 0,
     artworkUri: String(details.artworkUri || "").trim(),
   };
+}
+
+function formatDurationMs(durationMs) {
+  if (!Number.isFinite(durationMs) || durationMs <= 0) return "";
+  const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
 function setWikiText(id, value, fallback = "") {
@@ -778,8 +839,9 @@ function setSongDetails(payload) {
     focusTarget?.focus();
   }
   setWikiText("wiki-title", next.title, "当前歌曲");
-  setWikiText("wiki-song-artist", next.artist, "歌曲信息");
-  setWikiText("wiki-song-album", next.albumTitle);
+  setWikiText("wiki-song-artist", next.artist, "未知作者");
+  setWikiText("wiki-song-album", next.albumTitle, "未知专辑");
+  setWikiText("wiki-song-duration", formatDurationMs(next.durationMs), "未知时长");
 
   const image = document.getElementById("wiki-cover-image");
   if (!image) return;
@@ -819,11 +881,17 @@ function createWikiStatePanel(kind, title, message) {
   return status;
 }
 
+function announceSongWikiStatus(message) {
+  const announcer = document.getElementById("wiki-status-announcer");
+  if (announcer) announcer.textContent = String(message || "");
+}
+
 function renderSongWiki() {
   const content = document.getElementById("wiki-content");
   if (!content) return;
   content.replaceChildren();
   content.removeAttribute("aria-busy");
+  announceSongWikiStatus("");
 
   if (songWikiState.kind === "loading" || songWikiState.kind === "idle") {
     const status = createWikiElement("div", "wiki-status");
@@ -866,6 +934,7 @@ function renderSongWiki() {
   const sections = Array.isArray(songWikiState.summary && songWikiState.summary.sections)
     ? songWikiState.summary.sections
     : [];
+  let renderedSectionCount = 0;
   sections.forEach(function (section) {
     if (!section || !String(section.title || "").trim()) return;
     const item = createWikiElement("section", "wiki-section");
@@ -881,6 +950,7 @@ function renderSongWiki() {
     const description = String(section.description || "").trim();
     if (description) item.appendChild(createWikiElement("p", "wiki-description", description));
     content.appendChild(item);
+    renderedSectionCount += 1;
   });
   if (!content.childElementCount) {
     const status = createWikiStatePanel(
@@ -889,6 +959,9 @@ function renderSongWiki() {
       "这首歌曲暂未提供音乐百科内容",
     );
     content.appendChild(status);
+    announceSongWikiStatus("歌曲详细信息加载完成，暂无音乐百科内容");
+  } else {
+    announceSongWikiStatus(`歌曲详细信息加载完成，共 ${renderedSectionCount} 项`);
   }
 }
 
@@ -916,6 +989,16 @@ function setSongWikiBackgroundInert(inert) {
   });
 }
 
+function notifySongWikiVisibilityChanged(visible) {
+  const nextVisibility = Boolean(visible);
+  if (songWikiVisibilityNotified === nextVisibility) return;
+  songWikiVisibilityNotified = nextVisibility;
+  const callback = globalThis.AmllCallback;
+  if (callback && typeof callback.onSongWikiVisibilityChanged === "function") {
+    callback.onSongWikiVisibilityChanged(nextVisibility);
+  }
+}
+
 function openSongWiki() {
   const overlay = document.getElementById("wiki-overlay");
   if (!overlay || !songDetailsState.mediaId) return;
@@ -926,6 +1009,7 @@ function openSongWiki() {
   }
   songWikiReturnFocus = document.activeElement;
   overlay.hidden = false;
+  notifySongWikiVisibilityChanged(true);
   document.getElementById("wiki-info")?.setAttribute("aria-expanded", "true");
   setSongWikiBackgroundInert(true);
   renderSongWiki();
@@ -947,6 +1031,7 @@ function closeSongWiki(restoreFocus = true) {
     songWikiCloseTimer = 0;
   }
   overlay.classList.remove("open");
+  notifySongWikiVisibilityChanged(false);
   document.getElementById("wiki-info")?.setAttribute("aria-expanded", "false");
   setSongWikiBackgroundInert(false);
   pauseWikiDynamicCover();
@@ -954,8 +1039,7 @@ function closeSongWiki(restoreFocus = true) {
     overlay.hidden = true;
     songWikiCloseTimer = 0;
   };
-  const reduceMotion = typeof globalThis.matchMedia === "function" &&
-    globalThis.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reduceMotion = prefersReducedMotion();
   if (reduceMotion) finishClose();
   else songWikiCloseTimer = setTimeout(finishClose, 180);
   if (restoreFocus && songWikiReturnFocus && typeof songWikiReturnFocus.focus === "function") {
@@ -1045,6 +1129,30 @@ function initSongWikiControls() {
       }
     }
   });
+  if (typeof globalThis.matchMedia === "function") {
+    const preference = globalThis.matchMedia("(prefers-reduced-motion: reduce)");
+    const applyPreference = function () {
+      if (preference.matches) {
+        showStaticWikiCover();
+        if (isSongWikiOpen()) document.getElementById("dynamic-bg")?.pause();
+      } else if (isSongWikiOpen()) {
+        const detailVideo = document.getElementById("wiki-cover-video");
+        if (detailVideo?.dataset.source) playWikiDynamicCover();
+        else playDynamicBackground();
+      }
+    };
+    if (typeof preference.addEventListener === "function") {
+      preference.addEventListener("change", applyPreference);
+    } else if (typeof preference.addListener === "function") {
+      preference.addListener(applyPreference);
+    }
+    applyPreference();
+  }
+}
+
+function prefersReducedMotion() {
+  return typeof globalThis.matchMedia === "function" &&
+    globalThis.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 function resetDynamicVideo(video) {
@@ -1102,8 +1210,23 @@ function setDynamicBackgroundSuppressed(suppressed) {
   else playDynamicBackground();
 }
 
+function showStaticWikiCover() {
+  const video = document.getElementById("wiki-cover-video");
+  if (video) {
+    video.pause();
+    video.classList.remove("visible");
+  }
+  const badge = document.getElementById("wiki-cover-badge");
+  if (badge) badge.hidden = true;
+}
+
 function playWikiDynamicCover() {
   const video = document.getElementById("wiki-cover-video");
+  if (prefersReducedMotion()) {
+    showStaticWikiCover();
+    document.getElementById("dynamic-bg")?.pause();
+    return;
+  }
   if (!video || !video.dataset.source) return;
   const source = video.dataset.source;
   const playback = video.play();
@@ -1124,13 +1247,7 @@ function playWikiDynamicCover() {
 }
 
 function pauseWikiDynamicCover() {
-  const video = document.getElementById("wiki-cover-video");
-  if (video) {
-    video.pause();
-    video.classList.remove("visible");
-  }
-  const badge = document.getElementById("wiki-cover-badge");
-  if (badge) badge.hidden = true;
+  showStaticWikiCover();
   playDynamicBackground();
 }
 
@@ -1144,7 +1261,8 @@ function setDynamicCover(url, mediaId) {
   const backgroundVideo = document.getElementById("dynamic-bg");
   const detailVideo = document.getElementById("wiki-cover-video");
   if (!backgroundVideo) return;
-  const usesHtmlSongWiki = document.documentElement.dataset.platform === "desktop";
+  const platform = document.documentElement.dataset.platform;
+  const usesHtmlSongWiki = platform === "desktop" || platform === "android";
   if (
     backgroundVideo.dataset.source === source &&
     (!usesHtmlSongWiki || detailVideo?.dataset.source === source)

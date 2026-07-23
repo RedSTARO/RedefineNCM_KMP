@@ -26,9 +26,11 @@ class AmllSongDetailsTest {
         assertEquals("Artist", payload.artist)
         assertEquals("Album", payload.albumTitle)
         assertEquals("https://example.test/cover.jpg", payload.artworkUri)
+        assertEquals(123_000, payload.durationMs)
 
         val encoded = Json.encodeToString(payload)
         assertTrue(encoded.contains("Song 'title'"))
+        assertTrue(encoded.contains("\"durationMs\":123000"))
         assertTrue(!encoded.contains("placeholderUri"))
         assertTrue(!encoded.contains("sourceId"))
     }
@@ -36,5 +38,17 @@ class AmllSongDetailsTest {
     @Test
     fun nullMediaClearsEveryPreviouslyRenderedField() {
         assertEquals(AmllSongDetails(), null.toAmllSongDetails())
+    }
+
+    @Test
+    fun negativeDurationIsNotExposedToTheDetailsPage() {
+        val payload = MediaInfo(
+            id = "1",
+            title = "Song",
+            artist = "Artist",
+            duration = -1,
+        ).toAmllSongDetails()
+
+        assertEquals(0, payload.durationMs)
     }
 }
