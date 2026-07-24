@@ -1209,7 +1209,7 @@ private fun sheetTransition(showingSheet: Boolean): ContentTransform =
         (
             slideInVertically(
                 animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
-                initialOffsetY = { it / 2 },
+                initialOffsetY = { it },
             ) + pageFadeIn()
             ) togetherWith (
             fadeOut(animationSpec = tween(ExpressiveMotion.ShortMillis, easing = LinearOutSlowInEasing)) +
@@ -1233,7 +1233,7 @@ private fun sheetTransition(showingSheet: Boolean): ContentTransform =
             ) togetherWith (
             slideOutVertically(
                 animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
-                targetOffsetY = { it / 2 },
+                targetOffsetY = { it },
             ) + fadeOut(
                 animationSpec = tween(ExpressiveMotion.QuickMillis, easing = LinearOutSlowInEasing),
             )

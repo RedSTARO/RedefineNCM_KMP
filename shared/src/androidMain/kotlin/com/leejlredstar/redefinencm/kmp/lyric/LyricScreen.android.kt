@@ -349,8 +349,8 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             IconButton(onClick = onBack) {
                 Surface(shape = CircleShape, color = Color.White.copy(alpha = 0.15f)) {
                     Icon(
-                        AppIcons.ArrowBack,
-                        contentDescription = "返回",
+                        AppIcons.KeyboardArrowDown,
+                        contentDescription = "收起播放页",
                         tint = Color.White,
                         modifier = Modifier.padding(10.dp),
                     )

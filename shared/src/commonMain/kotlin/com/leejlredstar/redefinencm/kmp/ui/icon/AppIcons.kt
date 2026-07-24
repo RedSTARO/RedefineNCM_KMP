@@ -54,6 +54,9 @@ object AppIcons {
     val KeyboardArrowLeft: ImageVector by lazy {
         symbol("KeyboardArrowLeft", "M560-240 320-480l240-240 56 56-184 184 184 184-56 56Z", autoMirror = true)
     }
+    val KeyboardArrowDown: ImageVector by lazy {
+        symbol("KeyboardArrowDown", "M480-344 240-584l56-56 184 184 184-184 56 56-240 240Z")
+    }
     val KeyboardArrowRight: ImageVector by lazy {
         symbol("KeyboardArrowRight", "M504-480 320-664l56-56 240 240-240 240-56-56 184-184Z", autoMirror = true)
     }
