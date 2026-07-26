@@ -3,6 +3,7 @@ package com.leejlredstar.redefinencm.kmp.ui.component
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -13,8 +14,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,12 +31,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.leejlredstar.redefinencm.kmp.data.SongWikiSection
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.viewmodel.SongWikiUiState
@@ -80,8 +88,10 @@ fun SongWikiDetailsSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface,
+        scrimColor = Color.Black.copy(alpha = 0.64f),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -143,69 +153,106 @@ private fun SongWikiHero(
     durationMs: Long?,
     artworkOverlay: (@Composable BoxScope.() -> Unit)?,
 ) {
-    val artworkShape = MaterialTheme.shapes.extraLarge
+    val colorScheme = MaterialTheme.colorScheme
+    val heroShape = MaterialTheme.shapes.extraLarge
     Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.fillMaxWidth(),
+        shape = heroShape,
+        color = Color.Transparent,
+        contentColor = colorScheme.onSurface,
         tonalElevation = 0.dp,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(18.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .songWikiHeroBackground(
+                    primary = colorScheme.primary,
+                    surfaceContainer = colorScheme.surfaceContainer,
+                    surfaceContainerHighest = colorScheme.surfaceContainerHighest,
+                ),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(120.dp)
-                    .clip(artworkShape),
-                contentAlignment = Alignment.Center,
+            val compactLayout = maxWidth <= 600.dp
+            val artworkSize = if (compactLayout) 108.dp else 144.dp
+            val artworkShape = RoundedCornerShape(if (compactLayout) 26.dp else 32.dp)
+            val heroPadding = if (compactLayout) 20.dp else 24.dp
+            val heroGap = if (compactLayout) 18.dp else 24.dp
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(heroPadding),
+                horizontalArrangement = Arrangement.spacedBy(heroGap),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                ExpressiveArtwork(
-                    model = artworkUri,
-                    contentDescription = songTitle
-                        ?.takeIf(String::isNotBlank)
-                        ?.let { "$it 的专辑封面" },
-                    modifier = Modifier.fillMaxSize(),
-                    shape = artworkShape,
-                )
-                artworkOverlay?.invoke(this)
-            }
+                Box(
+                    modifier = Modifier
+                        .size(artworkSize)
+                        .shadow(
+                            elevation = 10.dp,
+                            shape = artworkShape,
+                            clip = false,
+                        )
+                        .clip(artworkShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    ExpressiveArtwork(
+                        model = artworkUri,
+                        contentDescription = songTitle
+                            ?.takeIf(String::isNotBlank)
+                            ?.let { "$it 的专辑封面" },
+                        modifier = Modifier.fillMaxSize(),
+                        shape = artworkShape,
+                    )
+                    artworkOverlay?.invoke(this)
+                }
 
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(5.dp),
-            ) {
-                Surface(
-                    shape = MaterialTheme.shapes.extraLarge,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
                     Text(
                         text = "音乐百科 · 简要信息",
-                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp,
+                        color = colorScheme.primary,
                     )
-                }
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    text = songTitle?.takeIf(String::isNotBlank) ?: "当前歌曲",
-                    modifier = Modifier.semantics { heading() },
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.ExtraBold,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                songArtist?.takeIf(String::isNotBlank)?.let { artist ->
-                    SongWikiMetadataLine("作者", artist)
-                }
-                albumTitle?.takeIf(String::isNotBlank)?.let { album ->
-                    SongWikiMetadataLine("专辑", album)
-                }
-                durationMs?.takeIf { it > 0 }?.let { duration ->
-                    SongWikiMetadataLine("时长", formatSongDuration(duration))
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        text = songTitle?.takeIf(String::isNotBlank) ?: "当前歌曲",
+                        modifier = Modifier.semantics { heading() },
+                        style = if (compactLayout) {
+                            MaterialTheme.typography.headlineSmall
+                        } else {
+                            MaterialTheme.typography.headlineLarge
+                        },
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+
+                    val metadata = buildList {
+                        songArtist?.takeIf(String::isNotBlank)?.let { add("作者" to it) }
+                        albumTitle?.takeIf(String::isNotBlank)?.let { add("专辑" to it) }
+                        durationMs
+                            ?.takeIf { it > 0 }
+                            ?.let { add("时长" to formatSongDuration(it)) }
+                    }
+                    if (metadata.isNotEmpty()) {
+                        Spacer(Modifier.height(3.dp))
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(
+                                ExpressiveLayout.ConnectedItemGap,
+                            ),
+                        ) {
+                            metadata.forEachIndexed { index, (label, value) ->
+                                SongWikiMetadataLine(
+                                    label = label,
+                                    value = value,
+                                    index = index,
+                                    count = metadata.size,
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -216,25 +263,64 @@ private fun SongWikiHero(
 private fun SongWikiMetadataLine(
     label: String,
     value: String,
+    index: Int,
+    count: Int,
 ) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.Top,
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = connectedListItemShape(index, count),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        tonalElevation = 0.dp,
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Text(
-            text = value,
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Text(
+                text = label,
+                modifier = Modifier.width(42.dp),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                text = value,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/**
+ * Mirrors the layered `.wiki-hero` background in the shared AMLL player page.
+ * The color roles intentionally map to the same values as the AMLL dark palette while
+ * continuing to respect light and dynamic Material color schemes on native surfaces.
+ */
+private fun Modifier.songWikiHeroBackground(
+    primary: Color,
+    surfaceContainer: Color,
+    surfaceContainerHighest: Color,
+): Modifier = drawWithCache {
+    val linearGradient = Brush.linearGradient(
+        colors = listOf(surfaceContainerHighest, surfaceContainer),
+        start = Offset.Zero,
+        end = Offset(size.width, size.height),
+    )
+    val radialGradient = Brush.radialGradient(
+        colors = listOf(primary.copy(alpha = 0.20f), Color.Transparent),
+        center = Offset(size.width * 0.18f, size.height * 0.12f),
+        radius = size.maxDimension * 0.56f,
+    )
+    onDrawBehind {
+        drawRect(linearGradient)
+        drawRect(radialGradient)
     }
 }
 
