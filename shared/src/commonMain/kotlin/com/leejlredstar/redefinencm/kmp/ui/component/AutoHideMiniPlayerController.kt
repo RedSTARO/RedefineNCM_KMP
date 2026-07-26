@@ -94,6 +94,8 @@ fun AutoHideMiniPlayerController(
     modifier: Modifier = Modifier,
     initialExpanded: Boolean = true,
     showCollapsedWhenHidden: Boolean = true,
+    collapsedHostFillsWidth: Boolean = false,
+    autoHideDelayMillis: Long = 3_600L,
     externalRevealRequest: Int = 0,
     onOverlayVisibilityChanged: (Boolean) -> Unit = {},
     onSheetVisibilityChanged: (Boolean) -> Unit = {},
@@ -164,9 +166,9 @@ fun AutoHideMiniPlayerController(
         if (externalRevealRequest > 0) reveal()
     }
 
-    LaunchedEffect(visible, revealRequest, showQueue, showComments) {
+    LaunchedEffect(visible, revealRequest, showQueue, showComments, autoHideDelayMillis) {
         if (!visible || showQueue || showComments) return@LaunchedEffect
-        delay(3_600)
+        delay(autoHideDelayMillis.coerceAtLeast(0L))
         if (!showQueue && !showComments) collapse()
     }
 
@@ -262,6 +264,7 @@ fun AutoHideMiniPlayerController(
                     onTogglePlayPause = { if (hasMedia) player.togglePlayPause() },
                     onPrevious = { if (hasMedia) player.seekToPrevious() },
                     onNext = { if (hasMedia) player.seekToNext() },
+                    fillHostWidth = collapsedHostFillsWidth,
                 )
             }
         }
@@ -714,6 +717,7 @@ private fun CollapsedProgressController(
     onTogglePlayPause: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
+    fillHostWidth: Boolean,
 ) {
     val dragThresholdPx = with(LocalDensity.current) { 56.dp.toPx() }
     var dragOffsetPx by remember { mutableStateOf(0f) }
@@ -743,12 +747,19 @@ private fun CollapsedProgressController(
         animationSpec = tween(ExpressiveMotion.FastMillis, easing = LinearOutSlowInEasing),
         label = "collapsedControllerSwipeAlpha",
     )
-
-    Surface(
-        modifier = Modifier
+    val widthModifier = if (fillHostWidth) {
+        Modifier
+            .padding(horizontal = 8.dp)
+            .fillMaxWidth()
+    } else {
+        Modifier
             .padding(horizontal = 24.dp)
             .widthIn(min = 220.dp, max = 420.dp)
             .fillMaxWidth(0.72f)
+    }
+
+    Surface(
+        modifier = widthModifier
             .heightIn(min = ExpressiveLayout.MinimumTouchTarget)
             .graphicsLayer {
                 translationX = animatedOffset
