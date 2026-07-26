@@ -307,10 +307,39 @@ account-data retries or an in-process login, and is cancelled if the account is 
    — they expire and are fetched fresh per session.
 3. `NowPlayingViewModel` mirrors `PlatformPlayer`'s `StateFlow`s (state, position, duration,
    currentMedia, queue, currentIndex, shuffleEnabled) to the UI.
-4. Lyric pipeline: `PlatformPlayer.position` → `LyricBus` → `LyricParser` matches the parsed
-   LRC `LinkedHashMap<Long?, String?>` → current index → UI scroll **and**
+4. Lyric pipeline: `PlatformPlayer.currentMedia` → `LyricResolver` applies the persisted source
+   policy → common timed lines → `PlatformPlayer.position` matches the current line → UI scroll **and**
    `LyricNotificationController.updateLyric(...)` (notification / Dynamic Island / floating
    window).
+
+### Lyric source contract
+
+The persisted source policy has four stable values: AMLL TTML first with backend fallback
+(default), backend first with TTML fallback, TTML only, and backend only. `TTML_ONLY` and
+`BACKEND_ONLY` must never read or request the other source. A source counts as found only when it
+parses to a non-empty primary timed line list; translation/romanization alone is not a hit. Missing
+settings use the documented TTML-first default, while an unrecognized persisted wire value fails
+closed to backend-only.
+
+AMLL TTML lookup uses the current positive NCM song ID: exact
+`amll-ttml-db.stevexmh.net/ncm/<id>` first, then the Bikonoo exact-ID search result with an
+NCM-ID membership check. Do not automatically apply fuzzy title matches. The Bikonoo search API is
+unversioned, so failure or schema drift must fall through according to the selected policy.
+
+Public AMLL DB traffic uses a dedicated Ktor client with no NCM Cookie, `realIP`, timestamp or NCM
+base URL. Do not reuse the authenticated NCM `HttpClient`. Lookup is bounded so a third-party
+timeout cannot indefinitely delay the backend fallback: response bodies are byte-bounded, each
+network hop has a timeout, and the complete lookup has a 12-second ceiling. The backend provider
+keeps the pre-existing four-attempt retry only when its cache/network flow emits no value; an
+explicit no-lyric response is not retried. Track changes and source changes cancel the previous
+work; writes back to `NowPlayingViewModel` are scoped to both media ID and request generation.
+
+`CachedLyric.json` is a versioned bundle that can hold the NCM backend DTO and AMLL TTML
+independently while lazily reading the previous raw-`Lyric` JSON shape. Keep those two entries
+independent when changing cache code. A valid external TTML entry is fresh for 24 hours; an expired
+entry remains displayable while a bounded refresh runs. Android and supported Windows feed original
+TTML into the official AMLL `parseTTML`; common `TtmlLyricParser` supplies shared Compose,
+notification and other platform surfaces.
 
 The only full-screen playback route is `WebViewLyricScreen`: Android and supported Windows
 Desktop hosts render AMLL, while other JVM platforms, iOS, and Web use `FullLyricScreen` as
@@ -440,15 +469,15 @@ to drive `PlayQueue` when the real players land.
 
 As of the 2026-06-11 build-fix pass, `libs.versions.toml` + `shared/build.gradle.kts` declare
 exactly what the source imports — verified by grepping every third-party `import` in
-`shared/src`. Versions are the verified June-2026 latest **compatible with the existing
-Kotlin 2.3.21 pairing** (the toolchain bump to 2.4.0/AGP 9.2.0 was deliberately NOT bundled
-in — see Goal #4).
+`shared/src`. The table records the current declarations; claims that any version is still the
+latest require the live verification pass described under Goal #4.
 
 | Area | Library (version) | Where |
 |---|---|---|
 | HTTP | Ktor `3.5.0`: client-core, content-negotiation, logging, serialization-kotlinx-json | commonMain |
-| HTTP engines | okhttp (androidMain), darwin (iosMain), cio (jvmMain) | per-platform |
+| HTTP engines | okhttp (androidMain + jvmMain), darwin (iosMain), JS (wasmJsMain) | per-platform |
 | Serialization | `kotlinx-serialization-json 1.11.0` + `kotlin.plugin.serialization` (@kotlin) | commonMain / plugins |
+| XML | xmlutil core `0.91.3` (streaming TTML validation/common fallback parsing) | commonMain |
 | Concurrency | `kotlinx-coroutines-core 1.11.0` | commonMain |
 | DI | Koin `4.2.1`: koin-core, koin-compose | commonMain |
 | Images | Coil `3.5.0`: coil-compose (group `io.coil-kt.coil3`) | commonMain |
@@ -476,9 +505,9 @@ This is its own task and **must not be done from memory**:
    notes (use WebSearch/WebFetch). Do not assert "latest" without checking — versions in this
    file may already be post-cutoff for any given agent.
 2. Respect the coupling rules above (Kotlin ↔ CMP ↔ Compose Compiler; AGP ↔ Kotlin).
-3. **Converge shared versions across both repos** (Kotlin, coroutines, serialization, AGP).
-   At minimum bring this repo up to the original's Kotlin `2.4.0` / AGP `9.2.0`, then apply
-   whatever newer verified set both repos can share.
+3. **Keep shared versions converged across both repos** (Kotlin, coroutines, serialization, AGP
+   where compatible). Kotlin `2.4.0` is already converged. AGP parity remains deferred by the
+   empirically recorded KMP build failures above; do not force it merely for version equality.
 4. Validate in a **real toolchain** (Android SDK + JDK 17 + macOS/Xcode for iOS). A bump that
    only "looks right" here is unverified.
 
@@ -653,7 +682,11 @@ feature gap; platform integrations use target-specific actuals:
 - **Settings**: server availability check (`/inner/version/`); the legacy-persisted
   `adaptOriginalAndroidLyric` value now controls the optional Android Live Update notification
   and Desktop floating-lyrics window (default off, immediate enable/disable); iOS Live Activity
-  and Web lyrics remain independent. The live-update notification uses the lyric as its title.
+  and Web lyrics remain independent. The lyric-source dropdown persists the four-state TTML/backend
+  policy and discloses the third-party ID lookup. A source change applies to the current process
+  immediately after the settings write so backend-only cancels an in-flight external lookup;
+  durable-write failure rolls the process snapshot and current-song load back. The live-update
+  notification uses the lyric as its title.
 - **Update check on launch** (checkUpdate setting → GitHub releases/latest → Snackbar).
 - Skipped intentionally: `HiddenTestActivity`, `serverMocker` (dev tools), `dailysignin`
   (declared but never called in the original either).

@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.di
 
 import com.leejlredstar.redefinencm.kmp.data.db.DatabaseDriverFactory
+import com.leejlredstar.redefinencm.kmp.data.api.ExternalHttpClientFactory
 import com.leejlredstar.redefinencm.kmp.player.JvmMediaPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.recognition.JvmMicrophoneRecorder
@@ -14,6 +15,7 @@ actual fun platformModule() = module {
     // Ktor HttpClient (OkHttp engine) configured with base URL + realIP + cookie from settings.
     // OkHttp（而非 CIO）：服务器 DNS 含黑洞 A 记录时自动回退下一个 IP。
     single<HttpClient> { createNcmHttpClient(get(), OkHttp) }
+    single { ExternalHttpClientFactory.create(OkHttp) }
 
     // PlatformSettings backed by java.util.prefs
     single { PlatformSettings() }

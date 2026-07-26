@@ -64,6 +64,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.lyric.supportsDynamicNowPlayingCover
+import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
 import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
@@ -85,6 +86,7 @@ import com.leejlredstar.redefinencm.kmp.util.rememberImportFileLauncher
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -109,6 +111,9 @@ fun SettingsScreen(
     var extraLyricSurfaceEnabled by remember(settings) { mutableStateOf(false) }
     var showTranslatedLyric by remember(settings) { mutableStateOf(false) }
     var showRomanLyric by remember(settings) { mutableStateOf(false) }
+    var lyricSourceMode by remember(settings) {
+        mutableStateOf(LyricSourceMode.DEFAULT.wireValue)
+    }
     var useDynamicCover by remember(settings) { mutableStateOf(false) }
     var importStatus by remember { mutableStateOf<String?>(null) }
     var serverCheckStatus by remember { mutableStateOf<String?>(null) }
@@ -116,6 +121,8 @@ fun SettingsScreen(
     var settingsLoadError by remember(settings) { mutableStateOf<String?>(null) }
     var settingsLoadRequest by remember(settings) { mutableIntStateOf(0) }
     var serverCheckGeneration by remember { mutableIntStateOf(0) }
+    var lyricSourceWriteGeneration by remember { mutableIntStateOf(0) }
+    var lyricDisplayWriteGeneration by remember { mutableIntStateOf(0) }
     var showImportConfirmation by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -132,6 +139,19 @@ fun SettingsScreen(
         LyricNotificationController.setOptionalSurfaceEnabled(extraLyricSurfaceEnabled)
         showTranslatedLyric = settings.getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
         showRomanLyric = settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)
+        lyricSourceMode = LyricSourceMode.fromStoredWireValue(
+            settings.getString(
+                SettingKeys.LYRIC_SOURCE_MODE,
+                LyricSourceMode.DEFAULT.wireValue,
+            ),
+        ).wireValue
+        nowPlayingViewModel.setLyricDisplayOptions(
+            showTranslation = showTranslatedLyric,
+            showRomanization = showRomanLyric,
+        )
+        nowPlayingViewModel.setLyricSourceMode(
+            LyricSourceMode.fromStoredWireValue(lyricSourceMode),
+        )
         useDynamicCover = settings.getBoolean(SettingKeys.USE_DYNAMIC_COVER, false)
         nowPlayingViewModel.setUseDynamicCover(useDynamicCover)
     }
@@ -140,7 +160,9 @@ fun SettingsScreen(
         onPersisted: () -> Unit = {},
         onFailure: () -> Unit = ::reloadSettingsSnapshot,
     ) {
-        scope.launch {
+        // Start undispatched so Android enqueues its DataStore barrier before another UI write
+        // can overtake it and make an older flush consume a newer write failure.
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
             runCatching { settings.flush() }
                 .onSuccess { onPersisted() }
                 .onFailure { error ->
@@ -183,6 +205,19 @@ fun SettingsScreen(
             LyricNotificationController.setOptionalSurfaceEnabled(extraLyricSurfaceEnabled)
             showTranslatedLyric = settings.getBooleanAsync(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
             showRomanLyric = settings.getBooleanAsync(SettingKeys.SHOW_ROMAN_LYRIC, false)
+            lyricSourceMode = LyricSourceMode.fromStoredWireValue(
+                settings.getStringAsync(
+                    SettingKeys.LYRIC_SOURCE_MODE,
+                    LyricSourceMode.DEFAULT.wireValue,
+                ),
+            ).wireValue
+            nowPlayingViewModel.setLyricDisplayOptions(
+                showTranslation = showTranslatedLyric,
+                showRomanization = showRomanLyric,
+            )
+            nowPlayingViewModel.setLyricSourceMode(
+                LyricSourceMode.fromStoredWireValue(lyricSourceMode),
+            )
             useDynamicCover = settings.getBooleanAsync(SettingKeys.USE_DYNAMIC_COVER, false)
             nowPlayingViewModel.setUseDynamicCover(useDynamicCover)
             settingsLoaded = true
@@ -196,6 +231,11 @@ fun SettingsScreen(
     val launchImport = rememberImportFileLauncher { json ->
         scope.launch {
             if (applySettingsBackup(json, settings)) {
+                lyricSourceWriteGeneration += 1
+                lyricDisplayWriteGeneration += 1
+                // Apply privacy-sensitive source changes from the process snapshot immediately.
+                // Android rolls that snapshot back before flush() reports a failed durable write.
+                reloadSettingsSnapshot()
                 val persisted = runCatching { settings.flush() }
                 if (persisted.isFailure) {
                     reloadSettingsSnapshot()
@@ -205,6 +245,11 @@ fun SettingsScreen(
                 reloadSettingsSnapshot()
                 importStatus = "✓ 导入成功"
             } else {
+                lyricSourceWriteGeneration += 1
+                lyricDisplayWriteGeneration += 1
+                // A platform write can fail after earlier backup fields were already applied.
+                // Re-read the process snapshot so a partial source change is never left latent.
+                reloadSettingsSnapshot()
                 importStatus = "✗ 导入失败，请检查文件格式"
             }
         }
@@ -414,13 +459,38 @@ fun SettingsScreen(
                 }
 
                 ExpressiveSectionTitle("歌词", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
-                val lyricSettingCount = if (LyricNotificationController.supportsOptionalSurfaceControl) 3 else 2
+                val lyricSettingCount =
+                    if (LyricNotificationController.supportsOptionalSurfaceControl) 4 else 3
+                LyricSourceDropdown(
+                    selectedWireValue = lyricSourceMode,
+                    accentPalette = settingsPalette,
+                    index = 0,
+                    count = lyricSettingCount,
+                ) { mode ->
+                    val writeGeneration = ++lyricSourceWriteGeneration
+                    lyricSourceMode = mode.wireValue
+                    persistSettings(
+                        write = {
+                            settings.setString(SettingKeys.LYRIC_SOURCE_MODE, mode.wireValue)
+                        },
+                        onWritten = {
+                            if (writeGeneration == lyricSourceWriteGeneration) {
+                                nowPlayingViewModel.setLyricSourceMode(mode)
+                            }
+                        },
+                        onFailure = {
+                            if (writeGeneration == lyricSourceWriteGeneration) {
+                                reloadSettingsSnapshot()
+                            }
+                        },
+                    )
+                }
                 if (LyricNotificationController.supportsOptionalSurfaceControl) {
                     SettingsSwitch(
                         extraLyricSurfaceEnabled,
                         LyricNotificationController.optionalSurfaceSettingLabel,
                         settingsPalette,
-                        index = 0,
+                        index = 1,
                         count = lyricSettingCount,
                     ) { enabled ->
                         extraLyricSurfaceEnabled = enabled
@@ -432,13 +502,49 @@ fun SettingsScreen(
                         )
                     }
                 }
-                SettingsSwitch(showTranslatedLyric, "显示翻译歌词", settingsPalette, index = if (lyricSettingCount == 3) 1 else 0, count = lyricSettingCount) { v ->
+                SettingsSwitch(
+                    showTranslatedLyric,
+                    "显示翻译歌词",
+                    settingsPalette,
+                    index = lyricSettingCount - 2,
+                    count = lyricSettingCount,
+                ) { v ->
+                    val writeGeneration = ++lyricDisplayWriteGeneration
                     showTranslatedLyric = v
-                    persistSettings({ settings.setBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, v) })
+                    persistSettings(
+                        write = {
+                            settings.setBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, v)
+                        },
+                        onPersisted = {
+                            if (writeGeneration == lyricDisplayWriteGeneration) {
+                                nowPlayingViewModel.setLyricDisplayOptions(
+                                    showTranslation = v,
+                                    showRomanization = showRomanLyric,
+                                )
+                            }
+                        },
+                    )
                 }
-                SettingsSwitch(showRomanLyric, "显示五十音 / 罗马音歌词", settingsPalette, index = lyricSettingCount - 1, count = lyricSettingCount) { v ->
+                SettingsSwitch(
+                    showRomanLyric,
+                    "显示五十音 / 罗马音歌词",
+                    settingsPalette,
+                    index = lyricSettingCount - 1,
+                    count = lyricSettingCount,
+                ) { v ->
+                    val writeGeneration = ++lyricDisplayWriteGeneration
                     showRomanLyric = v
-                    persistSettings({ settings.setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, v) })
+                    persistSettings(
+                        write = { settings.setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, v) },
+                        onPersisted = {
+                            if (writeGeneration == lyricDisplayWriteGeneration) {
+                                nowPlayingViewModel.setLyricDisplayOptions(
+                                    showTranslation = showTranslatedLyric,
+                                    showRomanization = v,
+                                )
+                            }
+                        },
+                    )
                 }
 
                 ExpressiveSectionTitle("通用", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
@@ -749,6 +855,68 @@ private fun SettingsDropdown(
                 DropdownMenuItem(
                     text = { Text(opt.toString()) },
                     onClick = { expanded = false; onUpdate(opt) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LyricSourceDropdown(
+    selectedWireValue: String,
+    accentPalette: ContentAccentPalette,
+    index: Int,
+    count: Int,
+    onUpdate: (LyricSourceMode) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val current = LyricSourceMode.fromWireValue(selectedWireValue)
+    Surface(
+        onClick = { expanded = true },
+        shape = connectedListItemShape(index, count),
+        color = accentPalette.quietContainer,
+        contentColor = accentPalette.onQuietContainer,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 1.5.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "歌词来源",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = accentPalette.secondaryOnQuietContainer,
+                )
+                Text(text = current.displayName, style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = "AMLL TTML 会按网易云歌曲 ID 请求第三方 AMLL DB；不会发送网易云 Cookie。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = accentPalette.secondaryOnQuietContainer,
+                )
+                Text(
+                    text = "AMLL 渲染与解析组件：AGPL-3.0-only；许可证全文随应用资源提供。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = accentPalette.secondaryOnQuietContainer,
+                )
+            }
+            Icon(
+                AppIcons.ArrowDropDown,
+                contentDescription = null,
+                tint = accentPalette.accent,
+                modifier = Modifier.padding(12.dp),
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            LyricSourceMode.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.displayName) },
+                    onClick = {
+                        expanded = false
+                        onUpdate(option)
+                    },
                 )
             }
         }

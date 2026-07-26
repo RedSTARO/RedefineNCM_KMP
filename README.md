@@ -41,6 +41,40 @@ Web 生产文件输出到 `shared/build/dist/wasmJs/productionExecutable/`，可
 ./gradlew :shared:wasmJsBrowserTest
 ```
 
+## 歌词来源与 AMLL
+
+设置页可选择四种歌词策略：
+
+- AMLL TTML 优先，现有后端回退（默认）；
+- 现有后端优先，AMLL TTML 回退；
+- 仅 AMLL TTML；
+- 仅现有后端。
+
+AMLL TTML 按当前网易云歌曲 ID 精确查询
+[`amll-dev/amll-ttml-db`](https://github.com/amll-dev/amll-ttml-db)，不自动套用模糊标题
+结果。该请求使用独立无凭证客户端，只发送歌曲 ID，不会把网易云 Cookie、`realIP` 或后端
+地址发给第三方。Android 与受支持的 Windows WebView2 使用上游 AMLL 官方 `parseTTML`
+渲染；iOS、Web 和其他桌面平台使用公共 Kotlin TTML 解析结果。
+
+项目内嵌的 AMLL 资产固定使用 `@applemusic-like-lyrics/core 0.5.2` 与
+`@applemusic-like-lyrics/lyric 1.0.2`。更新桥接入口后必须重新生成提交产物：
+
+```sh
+cd androidApp/amll-builder
+npm ci
+npm test
+npm run build
+```
+
+CI 会运行官方解析器冒烟测试，重新构建并检查 `bundle.js`、`style.css` 与提交内容完全一致，
+同时校验应用内许可证资源与仓库声明一致。
+
+AMLL 包声明为 `AGPL-3.0-only`；完整文本和上游版本/源码定位见
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。仓库当前没有项目级 `LICENSE`，因此发布
+二进制前仍需由项目权利人明确兼容的项目许可及 Corresponding Source 范围；本次集成不替
+项目权利人作该许可决定。AMLL bundle 还包含 MIT、BSD、ISC、Zlib 等传递依赖，生成文件
+保留了 esbuild 能识别的法律注释，但当前三份应用内文本不构成完整的发布许可审计。
+
 ## 听歌识曲
 
 首页“音乐工具”提供听歌识曲入口。Android、iOS、Desktop/JVM 和 Web 的录音链路均以

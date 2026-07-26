@@ -33,8 +33,6 @@ import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayWindowShape
 import com.leejlredstar.redefinencm.kmp.ui.screen.FullLyricScreen
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
 import com.leejlredstar.redefinencm.kmp.util.LyricParser
-import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
-import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
 import com.leejlredstar.redefinencm.kmp.viewmodel.SongWikiUiState
@@ -99,9 +97,9 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     }
 
     val viewModel: NowPlayingViewModel = koinInject()
-    val settings: PlatformSettings = koinInject()
     val rawLyric by viewModel.rawLyric.collectAsState()
     val rawWordLyric by viewModel.rawWordLyric.collectAsState()
+    val rawTtmlLyric by viewModel.rawTtmlLyric.collectAsState()
     val rawTranslatedLyric by viewModel.rawTranslatedLyric.collectAsState()
     val rawRomanLyric by viewModel.rawRomanLyric.collectAsState()
     val lyricMap by viewModel.lyricMap.collectAsState()
@@ -112,6 +110,8 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val dynamicCoverUiState by viewModel.dynamicCoverUiState.collectAsState()
     val dynamicCoverUrl = dynamicCoverUiState.urlFor(metadata?.id)
     val songWikiUiState by viewModel.songWikiUiState.collectAsState()
+    val showTranslatedLyric by viewModel.showTranslatedLyric.collectAsState()
+    val showRomanLyric by viewModel.showRomanLyric.collectAsState()
     val windowSize = LocalWindowInfo.current.containerSize
     val density = LocalDensity.current
     val overlayWidth = with(density) { windowSize.width.toDp() }
@@ -124,12 +124,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     if (engineError != null) {
         FullLyricScreen(onBack = onBack)
         return
-    }
-    val showTranslatedLyric = remember {
-        settings.getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
-    }
-    val showRomanLyric = remember {
-        settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)
     }
     val lyricForWeb = remember(rawLyric, lyricMap, lyricUiState) {
         desktopAmllLyricPayload(
@@ -253,10 +247,13 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     LaunchedEffect(
         engineReady,
         lyricMediaId,
+        rawTtmlLyric,
         rawWordLyric,
         lyricForWeb,
         rawTranslatedLyric,
         rawRomanLyric,
+        showTranslatedLyric,
+        showRomanLyric,
         lyricUiState,
     ) {
         if (!engineReady) return@LaunchedEffect
@@ -271,7 +268,12 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             showTranslatedLyric = showTranslatedLyric,
             showRomanLyric = showRomanLyric,
         )
-        if (rawWordLyric.isNotBlank()) {
+        if (rawTtmlLyric.isNotBlank()) {
+            println("AMLL[wv2] feeding TTML media=$mediaId, len=${rawTtmlLyric.length}")
+            session.eval(
+                "AmllBridge.loadTtmlLyrics('${rawTtmlLyric.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}', $lyricOptions, '${lyricForWeb.escapeJsSingleQuoted()}'); AmllBridge.setTime($currentPosition);",
+            )
+        } else if (rawWordLyric.isNotBlank()) {
             println("AMLL[wv2] feeding word lyrics media=$mediaId, len=${rawWordLyric.length}")
             session.eval(
                 "AmllBridge.loadWordLyrics('${rawWordLyric.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}', $lyricOptions); AmllBridge.setTime($currentPosition);",

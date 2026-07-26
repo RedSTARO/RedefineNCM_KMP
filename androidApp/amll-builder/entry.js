@@ -3,7 +3,7 @@
  * Exports a global API that the Android WebView bridge can call.
  */
 import { LyricPlayer } from "@applemusic-like-lyrics/core";
-import { parseLrc } from "@applemusic-like-lyrics/lyric";
+import { parseLrc, parseTTML } from "@applemusic-like-lyrics/lyric";
 
 function normalizeYrcWordStart(lineStart, lineDuration, wordStart) {
   if (wordStart < lineStart && wordStart <= lineDuration) return lineStart + wordStart;
@@ -60,6 +60,7 @@ function parseYrc(yrcText) {
 globalThis.AmllBridge = {
   LyricPlayer,
   parseLrc,
+  parseTTML,
   parseYrc,
   player: null,
 
@@ -111,6 +112,19 @@ globalThis.AmllBridge = {
     this.player.setLyricLines(parsed.length ? parsed : parseLrc(yrcText));
     globalThis.AmllPage?.hideLoading?.();
     if (globalThis.__amllDebug) globalThis.__amllDebug.lines = parsed.length;
+  },
+
+  /**
+   * Load AMLL TTML lyrics with the official parser shipped by the lyric package.
+   * @param {string} ttmlText Raw TTML XML
+   */
+  loadTtmlLyrics(ttmlText) {
+    if (!this.player) return;
+    const parsed = parseTTML(ttmlText);
+    const lines = Array.isArray(parsed?.lines) ? parsed.lines : [];
+    this.player.setLyricLines(lines);
+    globalThis.AmllPage?.hideLoading?.();
+    if (globalThis.__amllDebug) globalThis.__amllDebug.lines = lines.length;
   },
 
   /**

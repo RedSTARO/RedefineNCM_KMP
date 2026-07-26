@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.di
 
 import com.leejlredstar.redefinencm.kmp.data.db.DatabaseDriverFactory
+import com.leejlredstar.redefinencm.kmp.data.api.ExternalHttpClientFactory
 import com.leejlredstar.redefinencm.kmp.player.ExoPlayerPlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.recognition.AndroidMicrophoneRecorder
@@ -14,6 +15,7 @@ import org.koin.dsl.module
 actual fun platformModule() = module {
     // Ktor HttpClient (OkHttp engine) configured with base URL + realIP + cookie from settings.
     single<HttpClient> { createNcmHttpClient(get(), OkHttp) }
+    single { ExternalHttpClientFactory.create(OkHttp) }
 
     // PlatformSettings backed by DataStore (needs the app Context provided via androidContext()).
     single { PlatformSettings(get()) }

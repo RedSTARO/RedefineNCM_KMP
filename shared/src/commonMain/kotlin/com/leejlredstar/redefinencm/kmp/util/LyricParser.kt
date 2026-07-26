@@ -10,12 +10,17 @@ object LyricParser {
         val startTimeMs: Long,
         val endTimeMs: Long,
         val text: String,
+        val romanWord: String = "",
     )
 
     data class WordLine(
         val startTimeMs: Long,
         val endTimeMs: Long,
         val words: List<Word>,
+        val translatedLyric: String = "",
+        val romanLyric: String = "",
+        val isBackground: Boolean = false,
+        val isDuet: Boolean = false,
     ) {
         val text: String
             get() = words.joinToString(separator = "") { it.text }
@@ -63,16 +68,25 @@ object LyricParser {
 
     fun toLineLyricMap(lines: List<WordLine>): LinkedHashMap<Long?, String?> {
         val map = LinkedHashMap<Long?, String?>()
-        lines.forEach { line ->
-            map[line.startTimeMs] = line.text
-        }
+        lines.sortedWith(compareBy<WordLine> { it.startTimeMs }.thenBy { it.isBackground })
+            .forEach { line ->
+                val text = if (line.isBackground) "（${line.text}）" else line.text
+                val current = map[line.startTimeMs]
+                map[line.startTimeMs] = if (current.isNullOrBlank()) {
+                    text
+                } else {
+                    "$current\n$text"
+                }
+            }
         return map
     }
 
     fun toLrcText(lines: List<WordLine>): String {
-        return lines.joinToString(separator = "\n") { line ->
-            "${formatLrcTimestamp(line.startTimeMs)}${line.text}"
-        }
+        return lines.sortedWith(compareBy<WordLine> { it.startTimeMs }.thenBy { it.isBackground })
+            .joinToString(separator = "\n") { line ->
+                val text = if (line.isBackground) "（${line.text}）" else line.text
+                "${formatLrcTimestamp(line.startTimeMs)}$text"
+            }
     }
 
     private fun parseYrcLine(line: String): WordLine? {

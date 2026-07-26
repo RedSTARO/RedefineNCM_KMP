@@ -214,6 +214,8 @@ kotlin {
             implementation(libs.coil.network.ktor3)
             // SQLDelight runtime
             implementation(libs.sqldelight.runtime)
+            // Common TTML parsing for iOS/Web/non-WebView desktop fallbacks and lyric surfaces.
+            implementation(libs.xmlutil.core)
         }
         commonMain {
             kotlin.srcDir(generateAppBuildInfo)
@@ -248,6 +250,9 @@ kotlin {
                 implementation(libs.dbus.java.core)
                 runtimeOnly(libs.dbus.java.native.unixsocket)
             }
+        }
+        jvmTest.dependencies {
+            implementation(libs.ktor.client.mock)
         }
         wasmJsMain {
             // AMLL 静态资源与 Android/Desktop 使用同一份源文件，避免 Web 打包出旧副本。
