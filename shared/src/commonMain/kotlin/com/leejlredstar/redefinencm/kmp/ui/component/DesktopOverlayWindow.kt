@@ -10,6 +10,12 @@ internal enum class DesktopOverlayPlacement {
     BottomCenter,
 }
 
+internal enum class DesktopOverlayWindowShape {
+    Rectangle,
+    ExpandedPlaybackControls,
+    CollapsedPlaybackControls,
+}
+
 /**
  * A bounded desktop overlay that is hosted outside the main Compose scene.
  *
@@ -28,6 +34,7 @@ internal expect fun DesktopOverlayWindow(
     focusable: Boolean = true,
     modal: Boolean = false,
     transparent: Boolean = false,
+    windowShape: DesktopOverlayWindowShape = DesktopOverlayWindowShape.Rectangle,
     onCloseRequest: () -> Unit,
     content: @Composable () -> Unit,
 )

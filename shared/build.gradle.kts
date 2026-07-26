@@ -243,6 +243,7 @@ kotlin {
                 implementation(libs.webview.java)
                 // Windows SMTC and macOS now-playing bindings call native APIs through JNA.
                 implementation(libs.jna)
+                implementation(libs.jna.platform)
                 // Linux desktop transport controls: a real MPRIS service on the session D-Bus.
                 implementation(libs.dbus.java.core)
                 runtimeOnly(libs.dbus.java.native.unixsocket)
