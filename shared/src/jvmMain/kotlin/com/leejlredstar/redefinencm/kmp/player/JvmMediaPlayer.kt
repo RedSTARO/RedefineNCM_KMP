@@ -40,6 +40,7 @@ class JvmMediaPlayer(
 
         // Check for a locally-downloaded offline file first. Skip unsupported lossless files:
         // this backend is Java Sound + mp3spi, not a general FFmpeg-style decoder.
+        DownloadedSongsCache.ensureInitialized()
         DownloadedSongsCache.snapshot()[id]?.uri?.takeIf(::isJvmPlayableAudioUri)?.let { uri ->
             return@StreamUrlResolver uri
         }

@@ -72,6 +72,96 @@ class LyricResolverTest {
     }
 
     @Test
+    fun matchingLocalSourceShortCircuitsItsUpstreamProvider() = runTest {
+        val providerCalls = mutableListOf<LyricSource>()
+        val localCalls = mutableListOf<LyricSource>()
+        val localDocument = found(LyricSource.NCM_BACKEND).document
+        val resolver = LyricResolver(
+            providers = listOf(
+                fakeProvider(
+                    LyricSource.NCM_BACKEND,
+                    providerCalls,
+                    found(LyricSource.NCM_BACKEND),
+                ),
+            ),
+            localLyricLoader = { _, source ->
+                localCalls += source
+                localDocument.takeIf { source == LyricSource.NCM_BACKEND }
+            },
+        )
+
+        val result = resolver.resolveLatest(
+            LyricQuery(songId = 1),
+            LyricSourceMode.BACKEND_ONLY,
+            preferLocal = true,
+        )
+
+        assertEquals(listOf(LyricSource.NCM_BACKEND), localCalls)
+        assertEquals(emptyList(), providerCalls)
+        assertEquals(
+            LyricSource.NCM_BACKEND,
+            assertIs<LyricResolution.Found>(result).document.source,
+        )
+    }
+
+    @Test
+    fun onlyModeDoesNotReadLocalLyricsFromTheOtherSource() = runTest {
+        val localCalls = mutableListOf<LyricSource>()
+        val resolver = LyricResolver(
+            providers = listOf(
+                object : LyricSourceProvider {
+                    override val source = LyricSource.AMLL_TTML
+                    override fun load(query: LyricQuery) =
+                        flowOf(LyricProviderResult.NoMatch)
+                },
+            ),
+            localLyricLoader = { _, source ->
+                localCalls += source
+                found(LyricSource.NCM_BACKEND).document
+                    .takeIf { source == LyricSource.NCM_BACKEND }
+            },
+        )
+
+        val result = resolver.resolveLatest(
+            LyricQuery(songId = 1),
+            LyricSourceMode.TTML_ONLY,
+            preferLocal = true,
+        )
+
+        assertEquals(listOf(LyricSource.AMLL_TTML), localCalls)
+        assertIs<LyricResolution.Empty>(result)
+    }
+
+    @Test
+    fun upstreamRefreshDoesNotReadExistingLocalSidecar() = runTest {
+        var localRead = false
+        val providerCalls = mutableListOf<LyricSource>()
+        val resolver = LyricResolver(
+            providers = listOf(
+                fakeProvider(
+                    LyricSource.NCM_BACKEND,
+                    providerCalls,
+                    found(LyricSource.NCM_BACKEND),
+                ),
+            ),
+            localLyricLoader = { _, _ ->
+                localRead = true
+                found(LyricSource.NCM_BACKEND).document
+            },
+        )
+
+        val result = resolver.resolveLatest(
+            LyricQuery(songId = 1),
+            LyricSourceMode.BACKEND_ONLY,
+            preferLocal = false,
+        )
+
+        assertEquals(false, localRead)
+        assertEquals(listOf(LyricSource.NCM_BACKEND), providerCalls)
+        assertIs<LyricResolution.Found>(result)
+    }
+
+    @Test
     fun transientFailureIsReportedWhenNoFallbackFindsLyrics() = runTest {
         val resolver = LyricResolver(
             listOf(

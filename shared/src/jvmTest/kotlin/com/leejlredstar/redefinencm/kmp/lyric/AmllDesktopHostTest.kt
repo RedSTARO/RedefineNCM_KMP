@@ -6,6 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class AmllDesktopHostTest {
@@ -65,6 +66,46 @@ class AmllDesktopHostTest {
             )
         } finally {
             root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun bridgesOnlyOwnedArtworkSidecarsToDataUris() {
+        val downloadDirectory = Files.createTempDirectory("amll-artwork-test").toFile()
+        val outsideDirectory = Files.createTempDirectory("amll-artwork-outside").toFile()
+        try {
+            val artwork = downloadDirectory.resolve("42.cover.png").apply {
+                writeBytes(byteArrayOf(1, 2, 3, 4))
+            }
+            val outside = outsideDirectory.resolve("42.cover.png").apply {
+                writeBytes(byteArrayOf(1, 2, 3, 4))
+            }
+
+            assertEquals(
+                "data:image/png;base64,AQIDBA==",
+                desktopLocalArtworkDataUri(
+                    songId = 42L,
+                    uriText = artwork.toURI().toString(),
+                    downloadDirectory = downloadDirectory,
+                ),
+            )
+            assertNull(
+                desktopLocalArtworkDataUri(
+                    songId = 43L,
+                    uriText = artwork.toURI().toString(),
+                    downloadDirectory = downloadDirectory,
+                ),
+            )
+            assertNull(
+                desktopLocalArtworkDataUri(
+                    songId = 42L,
+                    uriText = outside.toURI().toString(),
+                    downloadDirectory = downloadDirectory,
+                ),
+            )
+        } finally {
+            downloadDirectory.deleteRecursively()
+            outsideDirectory.deleteRecursively()
         }
     }
 

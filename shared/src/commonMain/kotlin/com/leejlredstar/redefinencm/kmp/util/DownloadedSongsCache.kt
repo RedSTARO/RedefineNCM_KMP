@@ -3,6 +3,8 @@ package com.leejlredstar.redefinencm.kmp.util
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * In-memory cache of downloaded songs to avoid repeated file-system scans.
@@ -16,11 +18,13 @@ object DownloadedSongsCache {
     private data class CacheState(
         val snapshots: Map<Long, DownloadedSongSnapshot> = emptyMap(),
         val revision: Long = 0L,
+        val hasSuccessfulScan: Boolean = false,
     )
 
     // MutableStateFlow.update performs an atomic read-modify-write. A volatile Map alone did not:
     // concurrent scan/upsert/remove operations could overwrite one another with stale copies.
     private val cacheState = MutableStateFlow(CacheState())
+    private val initialScanMutex = Mutex()
 
     private val _version = MutableStateFlow(0)
     val version: StateFlow<Int> = _version
@@ -30,6 +34,23 @@ object DownloadedSongsCache {
     }
 
     fun snapshot(): Map<Long, DownloadedSongSnapshot> = cacheState.value.snapshots
+
+    /**
+     * Performs one successful startup scan before local-first playback makes a network decision.
+     * Failed scans remain retryable; an in-process upsert alone is not treated as a full scan.
+     */
+    suspend fun ensureInitialized(): DownloadScanResult {
+        if (cacheState.value.hasSuccessfulScan) {
+            return DownloadScanResult.Success(cacheState.value.snapshots.values.toList())
+        }
+        return initialScanMutex.withLock {
+            if (cacheState.value.hasSuccessfulScan) {
+                DownloadScanResult.Success(cacheState.value.snapshots.values.toList())
+            } else {
+                refreshSnapshots()
+            }
+        }
+    }
 
     suspend fun refreshSnapshots(): DownloadScanResult {
         val revisionAtStart = cacheState.value.revision
@@ -51,6 +72,7 @@ object DownloadedSongsCache {
                         current.copy(
                             snapshots = scanned,
                             revision = current.revision + 1,
+                            hasSuccessfulScan = true,
                         )
                     }
                 }

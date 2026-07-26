@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.download
 
+import com.leejlredstar.redefinencm.kmp.util.LocalLyricFormat
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -21,6 +22,10 @@ class PersistedDownloadQueueTest {
                 requestedQuality = "lossless",
                 actualQuality = "exhigh",
                 lyricStatus = DownloadLyricStatus.Saving,
+                artworkStatus = DownloadArtworkStatus.Saved,
+                lyricFormat = LocalLyricFormat.YRC,
+                lyricFileName = "2002.lyric.yrc",
+                artworkFileName = "2002.cover.jpg",
                 progressBytes = 4_096L,
                 totalBytes = 16_384L,
                 fileName = "2002.flac.part",
@@ -54,6 +59,35 @@ class PersistedDownloadQueueTest {
             tasks.map { it.copy(executionGeneration = 0L) },
             restored,
         )
+    }
+
+    @Test
+    fun versionOneQueueDefaultsNewLocalAssetFields() {
+        val legacyJson = """
+            {
+              "version": 1,
+              "tasks": [
+                {
+                  "id": 1,
+                  "title": "Legacy",
+                  "artist": "Artist",
+                  "artworkUri": "https://example.test/legacy.jpg",
+                  "status": "Completed",
+                  "lyricStatus": "Saved",
+                  "fileName": "1.mp3"
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val restored = Json.decodeFromString<PersistedDownloadQueue>(legacyJson)
+            .toDownloadTasks()
+            .single()
+
+        assertEquals(DownloadArtworkStatus.NotStarted, restored.artworkStatus)
+        assertEquals(null, restored.lyricFormat)
+        assertEquals(null, restored.lyricFileName)
+        assertEquals(null, restored.artworkFileName)
     }
 
     @Test

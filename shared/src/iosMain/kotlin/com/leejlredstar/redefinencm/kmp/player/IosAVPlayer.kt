@@ -3,6 +3,7 @@
 package com.leejlredstar.redefinencm.kmp.player
 
 import com.leejlredstar.redefinencm.kmp.data.Repository
+import com.leejlredstar.redefinencm.kmp.download.LocalMediaAssets
 import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
@@ -22,6 +23,8 @@ import platform.AVFoundation.*
 import platform.CoreMedia.CMTimeGetSeconds
 import platform.CoreMedia.CMTimeMake
 import platform.Foundation.NSNotificationCenter
+import platform.Foundation.NSData
+import platform.Foundation.NSFileManager
 import platform.Foundation.NSOperationQueue
 import platform.Foundation.NSURL
 import platform.Foundation.NSURLSession
@@ -35,12 +38,14 @@ import platform.darwin.NSObjectProtocol
 class IosAVPlayer(
     private val repo: Repository,
     private val settings: PlatformSettings,
+    private val localMediaAssets: LocalMediaAssets,
 ) : PlatformPlayer {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val avPlayer = AVPlayer()
     private val resolver = StreamUrlResolver { mediaId ->
         val id = mediaId.toLong()
+        DownloadedSongsCache.ensureInitialized()
         DownloadedSongsCache.snapshot()[id]?.uri?.let { return@StreamUrlResolver it }
         val qualityName = settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.EXHIGH.name)
         val quality = runCatching { SoundQuality.valueOf(qualityName) }
@@ -83,8 +88,10 @@ class IosAVPlayer(
     private var playbackEndObserver: NSObjectProtocol? = null
     private val remoteCommandTargets = mutableListOf<Pair<MPRemoteCommand, Any>>()
     private var artworkTask: NSURLSessionDataTask? = null
+    private var artworkResolveJob: Job? = null
     private var artworkGeneration = 0L
     private var artworkMediaId: String? = null
+    private var artworkRequestKey: String? = null
     private var artworkUri: String? = null
     private var nowPlayingArtwork: MPMediaItemArtwork? = null
 
@@ -478,38 +485,77 @@ class IosAVPlayer(
     }
 
     private fun ensureNowPlayingArtwork(media: MediaInfo) {
-        val requestedUri = media.artworkUri.trim().takeIf { it.isNotEmpty() }
-        if (artworkMediaId == media.id && artworkUri == requestedUri) return
+        val remoteUri = media.artworkUri.trim().takeIf { it.isNotEmpty() }
+        if (artworkMediaId == media.id && artworkRequestKey == remoteUri) return
 
+        artworkResolveJob?.cancel()
+        artworkResolveJob = null
         artworkTask?.cancel()
         artworkTask = null
         artworkGeneration += 1L
         val generation = artworkGeneration
         artworkMediaId = media.id
-        artworkUri = requestedUri
+        artworkRequestKey = remoteUri
+        artworkUri = null
         nowPlayingArtwork = null
-        val url = requestedUri?.let(NSURL::URLWithString) ?: return
-
-        artworkTask = NSURLSession.sharedSession.dataTaskWithURL(url) { data, _, error ->
-            if (error != null || data == null) return@dataTaskWithURL
-            val image = UIImage.imageWithData(data) ?: return@dataTaskWithURL
-            scope.launch {
-                if (generation != artworkGeneration ||
-                    _currentMedia.value?.id != media.id ||
-                    artworkUri != requestedUri
-                ) return@launch
-                nowPlayingArtwork = MPMediaItemArtwork(image)
-                artworkTask = null
-                updateNowPlayingInfo()
+        artworkResolveJob = scope.launch {
+            DownloadedSongsCache.ensureInitialized()
+            val localUri = media.id.toLongOrNull()
+                ?.takeIf { DownloadedSongsCache.isDownloaded(it) }
+                ?.let { songId ->
+                    runCatching { localMediaAssets.resolveArtworkUri(songId) }.getOrNull()
+                }
+            val requestedUri = localUri?.takeIf(String::isNotBlank) ?: remoteUri
+            if (
+                generation != artworkGeneration ||
+                _currentMedia.value?.id != media.id
+            ) {
+                localUri?.let(localMediaAssets::releaseArtworkUri)
+                return@launch
             }
-        }.also { it.resume() }
+            artworkResolveJob = null
+            artworkUri = requestedUri
+            val url = requestedUri?.let(NSURL::URLWithString) ?: return@launch
+            if (url.fileURL) {
+                val path = url.path ?: return@launch
+                val data = NSFileManager.defaultManager.contentsAtPath(path) ?: return@launch
+                applyNowPlayingArtwork(data, generation, media.id, requestedUri)
+            } else {
+                artworkTask = NSURLSession.sharedSession.dataTaskWithURL(url) { data, _, error ->
+                    if (error != null || data == null) return@dataTaskWithURL
+                    scope.launch {
+                        applyNowPlayingArtwork(data, generation, media.id, requestedUri)
+                    }
+                }.also { it.resume() }
+            }
+        }
+    }
+
+    private fun applyNowPlayingArtwork(
+        data: NSData,
+        generation: Long,
+        mediaId: String,
+        requestedUri: String,
+    ) {
+        val image = UIImage.imageWithData(data) ?: return
+        if (
+            generation != artworkGeneration ||
+            _currentMedia.value?.id != mediaId ||
+            artworkUri != requestedUri
+        ) return
+        nowPlayingArtwork = MPMediaItemArtwork(image)
+        artworkTask = null
+        updateNowPlayingInfo()
     }
 
     private fun clearNowPlayingInfo() {
         artworkGeneration += 1L
+        artworkResolveJob?.cancel()
+        artworkResolveJob = null
         artworkTask?.cancel()
         artworkTask = null
         artworkMediaId = null
+        artworkRequestKey = null
         artworkUri = null
         nowPlayingArtwork = null
         MPNowPlayingInfoCenter.defaultCenter().nowPlayingInfo = null

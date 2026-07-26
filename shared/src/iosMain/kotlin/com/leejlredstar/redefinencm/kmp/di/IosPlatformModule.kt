@@ -24,7 +24,7 @@ actual fun platformModule() = module {
     single { DatabaseDriverFactory() }
 
     // Real AVPlayer-backed audio playback, overriding the shared InMemoryPlatformPlayer.
-    single<PlatformPlayer> { IosAVPlayer(get(), get()) }
+    single<PlatformPlayer> { IosAVPlayer(get(), get(), get()) }
 
     // AVAudioEngine 麦克风输入；结束后恢复 AVPlayer 使用的 Playback 会话。
     single<MicrophoneRecorder> { IosMicrophoneRecorder() }

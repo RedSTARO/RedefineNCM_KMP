@@ -31,7 +31,7 @@ actual fun platformModule() = module {
     single { DatabaseDriverFactory() }
 
     // Real browser audio output; overrides the common in-memory reference player.
-    single<PlatformPlayer> { WebPlatformPlayer(get(), get()) }
+    single<PlatformPlayer> { WebPlatformPlayer(get(), get(), get()) }
 
     // 浏览器 getUserMedia 输入；只在 HTTPS 或 localhost 安全上下文工作。
     single<MicrophoneRecorder> { WasmMicrophoneRecorder() }

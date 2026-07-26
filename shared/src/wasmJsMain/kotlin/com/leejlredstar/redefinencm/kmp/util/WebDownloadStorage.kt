@@ -245,7 +245,9 @@ private fun scanWebDownloads(
             const files = [];
             for await (const [name, handle] of directory.entries()) {
                 if (handle.kind !== "file" || name.endsWith(".part")) continue;
-                const match = /^(\d+)\./.exec(name);
+                // Audio files use exactly `<songId>.<extension>`. Lyric/artwork sidecars add a
+                // second name segment and must never become fake downloaded-song rows.
+                const match = /^(\d+)\.[^.]+$/.exec(name);
                 if (!match) continue;
                 const file = await handle.getFile();
                 files.push({

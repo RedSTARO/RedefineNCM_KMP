@@ -26,7 +26,7 @@ actual fun platformModule() = module {
     // ExoPlayer-backed PlatformPlayer — overrides the InMemoryPlatformPlayer in sharedModule.
     // Must be resolved on the main thread (ExoPlayer requirement); Koin singleton lives for the
     // app lifetime. PlaybackService wraps the same ExoPlayer instance in a MediaSession.
-    single<PlatformPlayer> { ExoPlayerPlatformPlayer(androidContext(), get(), get()) }
+    single<PlatformPlayer> { ExoPlayerPlatformPlayer(androidContext(), get(), get(), get()) }
 
     // 前台听歌识曲使用的原始 PCM 麦克风输入。
     single<MicrophoneRecorder> { AndroidMicrophoneRecorder(androidContext()) }

@@ -43,12 +43,12 @@ actual object SongDownloader {
         val requestedExtension = extensionFromUrl(item.url)
         val partialFile = partialDownloadFile(context, item)
 
-        findDownloadedSongUri(item.id)?.let { existingUri ->
+        findDownloadedSongSnapshot(item.id)?.let { existing ->
             if (!onReadyToPublish()) throw CancellationException("下载发布已取消")
             deletePartialDownloads(context, item.id)
             return@withContext DownloadedSongFile(
-                fileName = "${item.id}.$requestedExtension",
-                uri = existingUri,
+                fileName = existing.fileName,
+                uri = existing.uri,
             )
         }
 

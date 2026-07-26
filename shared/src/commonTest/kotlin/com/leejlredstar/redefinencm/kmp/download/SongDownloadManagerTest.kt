@@ -1,6 +1,8 @@
 package com.leejlredstar.redefinencm.kmp.download
 
 import com.leejlredstar.redefinencm.kmp.util.DownloadedSongSnapshot
+import com.leejlredstar.redefinencm.kmp.util.LocalLyricFormat
+import com.leejlredstar.redefinencm.kmp.util.LocalMediaAssetSnapshot
 import kotlinx.coroutines.Job
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -157,6 +159,54 @@ class SongDownloadManagerTest {
         assertEquals("1002.m4a", task.fileName)
         assertEquals(4096L, task.progressBytes)
         assertEquals(4096L, task.totalBytes)
+    }
+
+    @Test
+    fun localLibrarySyncUsesSidecarsAsTheAssetStatusSourceOfTruth() {
+        val audio = DownloadedSongSnapshot(
+            id = 1004,
+            fileName = "1004.mp3",
+            uri = "file:///downloads/1004.mp3",
+        )
+        val stalePersistedTask = SongDownloadTask(
+            id = 1004,
+            title = "Song",
+            artist = "Artist",
+            artworkUri = "remote.jpg",
+            status = DownloadTaskStatus.Completed,
+            lyricStatus = DownloadLyricStatus.Saved,
+            artworkStatus = DownloadArtworkStatus.Saved,
+            lyricFormat = LocalLyricFormat.TTML,
+            lyricFileName = "1004.lyric.ttml",
+            artworkFileName = "1004.cover.jpg",
+            fileName = audio.fileName,
+        )
+
+        val withoutSidecars = reconcileDownloadTasksWithLocalLibrary(
+            tasks = listOf(stalePersistedTask),
+            localFiles = mapOf(audio.id to audio),
+            localAssets = mapOf(audio.id to LocalMediaAssetSnapshot()),
+        ).single()
+        assertEquals(DownloadLyricStatus.NotStarted, withoutSidecars.lyricStatus)
+        assertEquals(DownloadArtworkStatus.NotStarted, withoutSidecars.artworkStatus)
+        assertNull(withoutSidecars.lyricFormat)
+        assertNull(withoutSidecars.lyricFileName)
+        assertNull(withoutSidecars.artworkFileName)
+
+        val importedWithSidecars = reconcileDownloadTasksWithLocalLibrary(
+            tasks = emptyList(),
+            localFiles = mapOf(audio.id to audio),
+            localAssets = mapOf(
+                audio.id to LocalMediaAssetSnapshot(
+                    lyricFormat = LocalLyricFormat.YRC,
+                    lyricFileName = "1004.lyric.yrc",
+                    artworkFileName = "1004.cover.webp",
+                )
+            ),
+        ).single()
+        assertEquals(DownloadLyricStatus.Saved, importedWithSidecars.lyricStatus)
+        assertEquals(DownloadArtworkStatus.Saved, importedWithSidecars.artworkStatus)
+        assertEquals(LocalLyricFormat.YRC, importedWithSidecars.lyricFormat)
     }
 
     @Test

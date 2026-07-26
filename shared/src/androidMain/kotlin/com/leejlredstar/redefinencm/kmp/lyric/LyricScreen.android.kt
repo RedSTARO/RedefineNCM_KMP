@@ -3,6 +3,11 @@ package com.leejlredstar.redefinencm.kmp.lyric
 import android.annotation.SuppressLint
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
+import android.net.Uri
+import android.os.Environment
+import android.provider.OpenableColumns
+import android.provider.MediaStore
+import android.util.Base64
 import android.util.Log
 import android.view.TextureView
 import android.view.View
@@ -67,12 +72,19 @@ import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
 import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsButton
 import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsSheet
 import com.leejlredstar.redefinencm.kmp.util.LyricParser
+import com.leejlredstar.redefinencm.kmp.util.DOWNLOAD_RELATIVE_PATH
+import com.leejlredstar.redefinencm.kmp.util.DOWNLOAD_SUBDIR
+import com.leejlredstar.redefinencm.kmp.util.isLocalArtworkSidecarFileName
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.koin.compose.koinInject
+import java.io.ByteArrayOutputStream
+import java.io.File
 
 actual val supportsDynamicNowPlayingCover: Boolean = true
 
@@ -98,6 +110,8 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
+    val localArtworkActive by viewModel.localArtworkActive.collectAsState()
+    val remoteArtworkUri by viewModel.remoteArtworkUri.collectAsState()
     val dynamicCoverUiState by viewModel.dynamicCoverUiState.collectAsState()
     val dynamicCoverUrl = dynamicCoverUiState.urlFor(metadata?.id)
     val songWikiUiState by viewModel.songWikiUiState.collectAsState()
@@ -108,6 +122,34 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     var engineReady by remember { mutableStateOf(false) }
     var rendererGeneration by remember { mutableIntStateOf(0) }
     var showSongWikiDetails by remember { mutableStateOf(false) }
+    var localAmllArtwork by remember { mutableStateOf<Pair<String, String>?>(null) }
+    val amllArtworkUri = metadata?.let { media ->
+        if (!localArtworkActive) {
+            media.artworkUri
+        } else {
+            localAmllArtwork
+                ?.takeIf { (mediaId, _) -> mediaId == media.id }
+                ?.second
+                ?: remoteArtworkUri
+        }
+    }.orEmpty()
+    LaunchedEffect(metadata?.id, metadata?.artworkUri, localArtworkActive, remoteArtworkUri) {
+        val media = metadata
+        if (media == null || !localArtworkActive) {
+            localAmllArtwork = null
+            return@LaunchedEffect
+        }
+        val dataUri = withContext(Dispatchers.IO) {
+            localArtworkDataUri(
+                context = context,
+                songId = media.id.toLongOrNull(),
+                uriText = media.artworkUri,
+            )
+        }
+        if (metadata?.id == media.id && localArtworkActive) {
+            localAmllArtwork = media.id to (dataUri ?: remoteArtworkUri)
+        }
+    }
     val lyricForWeb = remember(rawLyric, lyricMap, lyricUiState) {
         if (lyricUiState is LyricUiState.Content) {
             rawLyric.takeIf { it.isNotBlank() } ?: lyricMap.toLrcFallback()
@@ -294,10 +336,12 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         webView.evaluateJavascript("AmllBridge.setTime($currentPosition);", null)
     }
 
-    LaunchedEffect(engineReady, metadata, dynamicCoverUrl, showSongWikiDetails) {
+    LaunchedEffect(engineReady, metadata, amllArtworkUri, dynamicCoverUrl) {
         if (!engineReady) return@LaunchedEffect
         val mediaId = metadata?.id.orEmpty()
-        val details = Json.encodeToString(metadata.toAmllSongDetails())
+        val details = Json.encodeToString(
+            metadata.toAmllSongDetails().copy(artworkUri = amllArtworkUri),
+        )
         val dynamicCoverCommand = dynamicCoverUrl
             ?.takeIf(String::isNotBlank)
             ?.let {
@@ -308,6 +352,15 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             "if (globalThis.AmllPage) { " +
                 "AmllPage.setSongDetails(${JSONObject.quote(details)}); " +
                 dynamicCoverCommand +
+                " }",
+            null,
+        )
+    }
+
+    LaunchedEffect(engineReady, showSongWikiDetails) {
+        if (!engineReady) return@LaunchedEffect
+        webView.evaluateJavascript(
+            "if (globalThis.AmllPage) {" +
                 " AmllPage.setDynamicBackgroundSuppressed($showSongWikiDetails);" +
                 " }",
             null,
@@ -496,6 +549,93 @@ private fun WebView.showAmllError(message: String) {
     )
 }
 
+private fun localArtworkDataUri(
+    context: android.content.Context,
+    songId: Long?,
+    uriText: String,
+): String? = try {
+    localArtworkDataUriOrNull(context, songId, uriText)
+} catch (_: Exception) {
+    null
+}
+
+private fun localArtworkDataUriOrNull(
+    context: android.content.Context,
+    songId: Long?,
+    uriText: String,
+): String? {
+    val id = songId?.takeIf { it > 0L } ?: return null
+    val uri = runCatching { Uri.parse(uriText) }.getOrNull() ?: return null
+    val fileName = when (uri.scheme?.lowercase()) {
+        "content" -> {
+            if (
+                uri.authority != MediaStore.AUTHORITY ||
+                uri.pathSegments.getOrNull(1) != "downloads"
+            ) return null
+            context.contentResolver.query(
+                uri,
+                arrayOf(
+                    OpenableColumns.DISPLAY_NAME,
+                    MediaStore.MediaColumns.RELATIVE_PATH,
+                ),
+                null,
+                null,
+                null,
+            )?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                val pathIndex = cursor.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
+                if (
+                    nameIndex >= 0 &&
+                    pathIndex >= 0 &&
+                    cursor.moveToFirst() &&
+                    cursor.getString(pathIndex) == DOWNLOAD_RELATIVE_PATH
+                ) {
+                    cursor.getString(nameIndex)
+                } else {
+                    null
+                }
+            }
+        }
+        "file" -> {
+            val file = uri.path?.let(::File)?.canonicalFile ?: return null
+            val expectedDirectory = Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_DOWNLOADS + "/$DOWNLOAD_SUBDIR",
+            ).canonicalFile
+            if (file.parentFile != expectedDirectory || !file.isFile) return null
+            file.name
+        }
+        else -> null
+    } ?: return null
+    if (!isLocalArtworkSidecarFileName(id, fileName)) return null
+    val mimeType = webArtworkMimeType(fileName) ?: return null
+    val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(DEFAULT_AMLL_ARTWORK_BUFFER_BYTES)
+        var total = 0
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            total += read
+            if (total > MAX_AMLL_ARTWORK_BYTES) return null
+            output.write(buffer, 0, read)
+        }
+        output.toByteArray()
+    }?.takeIf { it.isNotEmpty() } ?: return null
+    return "data:$mimeType;base64,${Base64.encodeToString(bytes, Base64.NO_WRAP)}"
+}
+
+private fun webArtworkMimeType(fileName: String): String? =
+    when (fileName.substringAfterLast('.', "").lowercase()) {
+        "jpg", "jpeg" -> "image/jpeg"
+        "png" -> "image/png"
+        "gif" -> "image/gif"
+        "webp" -> "image/webp"
+        "bmp" -> "image/bmp"
+        "avif" -> "image/avif"
+        // HEIC/HEIF support is not consistent across Android System WebView versions.
+        else -> null
+    }
+
 private fun buildLyricOptionsJson(
     translatedLyric: String,
     romanLyric: String,
@@ -515,3 +655,8 @@ private fun LinkedHashMap<Long?, String?>.toLrcFallback(): String =
             "${LyricParser.formatLrcTimestamp(time ?: 0L)}$line"
         }
         .joinToString("\n")
+
+// Keep the WebView bridge far below the durable 16 MiB download cap: Base64 plus JSON/JS
+// escaping creates several in-memory copies. Larger local covers fall back to the remote URI.
+private const val MAX_AMLL_ARTWORK_BYTES = 4 * 1024 * 1024
+private const val DEFAULT_AMLL_ARTWORK_BUFFER_BYTES = 16 * 1024

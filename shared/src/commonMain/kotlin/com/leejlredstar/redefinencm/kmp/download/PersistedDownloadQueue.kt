@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.download
 
+import com.leejlredstar.redefinencm.kmp.util.LocalLyricFormat
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -19,6 +20,10 @@ internal data class PersistedDownloadTask(
     val requestedQuality: String? = null,
     val actualQuality: String? = null,
     val lyricStatus: String,
+    val artworkStatus: String = "NotStarted",
+    val lyricFormat: String? = null,
+    val lyricFileName: String? = null,
+    val artworkFileName: String? = null,
     val progressBytes: Long = 0,
     val totalBytes: Long? = null,
     val fileName: String? = null,
@@ -38,6 +43,10 @@ internal fun List<SongDownloadTask>.toPersistedDownloadQueue(): PersistedDownloa
                 requestedQuality = task.requestedQuality,
                 actualQuality = task.actualQuality,
                 lyricStatus = task.lyricStatus.name,
+                artworkStatus = task.artworkStatus.name,
+                lyricFormat = task.lyricFormat?.name,
+                lyricFileName = task.lyricFileName,
+                artworkFileName = task.artworkFileName,
                 progressBytes = task.progressBytes,
                 totalBytes = task.totalBytes,
                 fileName = task.fileName,
@@ -47,7 +56,7 @@ internal fun List<SongDownloadTask>.toPersistedDownloadQueue(): PersistedDownloa
     )
 
 internal fun PersistedDownloadQueue.toDownloadTasks(): List<SongDownloadTask> {
-    require(version == CURRENT_DOWNLOAD_QUEUE_VERSION) {
+    require(version in 1..CURRENT_DOWNLOAD_QUEUE_VERSION) {
         "Unsupported download queue version: $version"
     }
     return tasks.map { task ->
@@ -61,6 +70,12 @@ internal fun PersistedDownloadQueue.toDownloadTasks(): List<SongDownloadTask> {
             requestedQuality = task.requestedQuality,
             actualQuality = task.actualQuality,
             lyricStatus = DownloadLyricStatus.valueOf(task.lyricStatus),
+            artworkStatus = runCatching { DownloadArtworkStatus.valueOf(task.artworkStatus) }
+                .getOrDefault(DownloadArtworkStatus.NotStarted),
+            lyricFormat = task.lyricFormat
+                ?.let { stored -> runCatching { LocalLyricFormat.valueOf(stored) }.getOrNull() },
+            lyricFileName = task.lyricFileName,
+            artworkFileName = task.artworkFileName,
             progressBytes = task.progressBytes.coerceAtLeast(0L),
             totalBytes = task.totalBytes?.takeIf { it > 0L },
             fileName = task.fileName,
@@ -70,4 +85,4 @@ internal fun PersistedDownloadQueue.toDownloadTasks(): List<SongDownloadTask> {
     }
 }
 
-private const val CURRENT_DOWNLOAD_QUEUE_VERSION = 1
+private const val CURRENT_DOWNLOAD_QUEUE_VERSION = 2
