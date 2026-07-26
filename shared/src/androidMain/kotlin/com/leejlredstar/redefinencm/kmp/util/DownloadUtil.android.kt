@@ -32,8 +32,11 @@ actual suspend fun scanDownloadedSongs(): DownloadScanResult =
     )
 
 fun findDownloadedSongUri(songId: Long): String? =
+    findDownloadedSongSnapshot(songId)?.uri
+
+internal fun findDownloadedSongSnapshot(songId: Long): DownloadedSongSnapshot? =
     runCatching {
-        scanDownloadedSongFiles(targetSongId = songId, validateMediaRows = true)[songId]?.uri
+        scanDownloadedSongFiles(targetSongId = songId, validateMediaRows = true)[songId]
     }.getOrNull()
 
 private fun scanDownloadedSongFiles(

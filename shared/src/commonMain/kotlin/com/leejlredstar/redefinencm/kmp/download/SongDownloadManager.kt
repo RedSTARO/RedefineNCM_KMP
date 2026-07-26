@@ -1,15 +1,17 @@
 package com.leejlredstar.redefinencm.kmp.download
 
-import com.leejlredstar.redefinencm.kmp.data.LyricCacheStatus
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
 import com.leejlredstar.redefinencm.kmp.lyric.LyricQuery
+import com.leejlredstar.redefinencm.kmp.lyric.LyricResolution
 import com.leejlredstar.redefinencm.kmp.lyric.LyricResolver
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
 import com.leejlredstar.redefinencm.kmp.util.DownloadRequestItem
 import com.leejlredstar.redefinencm.kmp.util.DownloadScanResult
 import com.leejlredstar.redefinencm.kmp.util.DownloadedSongSnapshot
 import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
+import com.leejlredstar.redefinencm.kmp.util.LocalLyricFormat
+import com.leejlredstar.redefinencm.kmp.util.LocalMediaAssetSnapshot
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SongDownloader
@@ -22,6 +24,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -36,8 +40,11 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlin.concurrent.Volatile
 
 enum class DownloadTaskStatus {
@@ -60,6 +67,14 @@ enum class DownloadLyricStatus {
     Failed,
 }
 
+enum class DownloadArtworkStatus {
+    NotStarted,
+    Saving,
+    Saved,
+    NoArtwork,
+    Failed,
+}
+
 data class SongDownloadTask(
     val id: Long,
     val title: String,
@@ -70,6 +85,10 @@ data class SongDownloadTask(
     val requestedQuality: String? = null,
     val actualQuality: String? = null,
     val lyricStatus: DownloadLyricStatus = DownloadLyricStatus.NotStarted,
+    val artworkStatus: DownloadArtworkStatus = DownloadArtworkStatus.NotStarted,
+    val lyricFormat: LocalLyricFormat? = null,
+    val lyricFileName: String? = null,
+    val artworkFileName: String? = null,
     val progressBytes: Long = 0,
     val totalBytes: Long? = null,
     val fileName: String? = null,
@@ -155,6 +174,7 @@ class SongDownloadManager(
     private val repo: Repository,
     private val settings: PlatformSettings,
     private val lyricResolver: LyricResolver,
+    private val localMediaAssets: LocalMediaAssets,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _tasks = MutableStateFlow<List<SongDownloadTask>>(emptyList())
@@ -172,6 +192,9 @@ class SongDownloadManager(
     private val workerStartMutex = Mutex()
     private val syncMutex = Mutex()
     private val persistenceMutex = Mutex()
+    private val assetJobsMutex = Mutex()
+    private val assetJobs = mutableMapOf<Long, Job>()
+    private val assetSaveSemaphore = Semaphore(MAX_CONCURRENT_ASSET_SAVES)
     private var localLibrarySyncJob: Job? = null
     private val executionSequence = MutableStateFlow(0L)
     private val restoreCompleted = CompletableDeferred<Unit>()
@@ -232,7 +255,18 @@ class SongDownloadManager(
                 is DownloadScanResult.Success -> scan.snapshots.associateBy { it.id }
                 is DownloadScanResult.Failure -> DownloadedSongsCache.snapshot()
             }
-            val newTasks = acceptedSongs.map { it.toDownloadTask(playlistId, localFiles) }
+            val localAssets = supervisorScope {
+                acceptedSongs.mapNotNull { song ->
+                    if (song.id !in localFiles) return@mapNotNull null
+                    async {
+                        song.id to runCatching { localMediaAssets.inspect(song.id) }
+                            .getOrDefault(LocalMediaAssetSnapshot())
+                    }
+                }.awaitAll().toMap()
+            }
+            val newTasks = acceptedSongs.map {
+                it.toDownloadTask(playlistId, localFiles, localAssets)
+            }
             _tasks.update { current ->
                 val songDetails = acceptedSongs.associateBy { it.id }
                 mergeDownloadTasksForEnqueue(
@@ -240,6 +274,7 @@ class SongDownloadManager(
                     incoming = newTasks,
                     localFiles = localFiles,
                     songDetails = songDetails,
+                    localAssets = localAssets,
                 )
             }
             true
@@ -289,6 +324,10 @@ class SongDownloadManager(
                     requestedQuality = null,
                     actualQuality = null,
                     lyricStatus = DownloadLyricStatus.NotStarted,
+                    artworkStatus = DownloadArtworkStatus.NotStarted,
+                    lyricFormat = null,
+                    lyricFileName = null,
+                    artworkFileName = null,
                     fileName = null,
                     errorMessage = null,
                 )
@@ -297,6 +336,117 @@ class SongDownloadManager(
             }
         }
         ensureWorker()
+    }
+
+    /** Saves or refreshes only the lyric sidecars for an already downloaded song. */
+    fun saveLyrics(taskId: Long) {
+        startAssetBackfill(taskId, saveLyrics = true, saveArtwork = false)
+    }
+
+    /** Saves or refreshes only the artwork sidecar for an already downloaded song. */
+    fun saveArtwork(taskId: Long) {
+        startAssetBackfill(taskId, saveLyrics = false, saveArtwork = true)
+    }
+
+    private fun startAssetBackfill(
+        taskId: Long,
+        saveLyrics: Boolean,
+        saveArtwork: Boolean,
+    ) {
+        if (!saveLyrics && !saveArtwork) return
+        if (!canReactivateDownloadTask(taskId, destructiveTaskIds.value)) return
+        scope.launch {
+            restoreCompleted.await()
+            assetJobsMutex.withLock {
+                if (assetJobs[taskId]?.isActive == true) return@withLock
+                val task = _tasks.value.firstOrNull {
+                    it.id == taskId && it.status == DownloadTaskStatus.Completed
+                } ?: return@withLock
+                val job = scope.launch(start = CoroutineStart.LAZY) {
+                    backfillLocalAssets(task, saveLyrics, saveArtwork)
+                }
+                assetJobs[taskId] = job
+                job.invokeOnCompletion {
+                    scope.launch {
+                        assetJobsMutex.withLock {
+                            if (assetJobs[taskId] === job) assetJobs.remove(taskId)
+                        }
+                    }
+                }
+                job.start()
+            }
+        }
+    }
+
+    private suspend fun backfillLocalAssets(
+        originalTask: SongDownloadTask,
+        saveLyrics: Boolean,
+        saveArtwork: Boolean,
+    ) {
+        val taskId = originalTask.id
+        if (!canReactivateDownloadTask(taskId, destructiveTaskIds.value)) return
+        val localAudio = DownloadedSongsCache.snapshot()[taskId]
+            ?: when (val scan = DownloadedSongsCache.refreshSnapshots()) {
+                is DownloadScanResult.Success -> scan.snapshots.firstOrNull { it.id == taskId }
+                is DownloadScanResult.Failure -> null
+            }
+            ?: return
+
+        var task = originalTask
+        if (task.artworkUri.isBlank() || task.title.startsWith("本地歌曲 ")) {
+            repo.getSongDetails(listOf(taskId)).firstOrNull { it.id == taskId }?.let { detail ->
+                task = task.copy(
+                    title = detail.downloadDisplayTitle(),
+                    artist = detail.downloadDisplayArtist(),
+                    artworkUri = detail.al.picUrl,
+                )
+                val enriched = task
+                updateTask(taskId) { current ->
+                    if (current.status == DownloadTaskStatus.Completed) {
+                        current.copy(
+                            title = enriched.title,
+                            artist = enriched.artist,
+                            artworkUri = enriched.artworkUri,
+                        )
+                    } else {
+                        current
+                    }
+                }
+            }
+        }
+
+        updateTask(taskId) { current ->
+            if (current.status != DownloadTaskStatus.Completed) {
+                current
+            } else {
+                current.copy(
+                    fileName = localAudio.fileName,
+                    lyricStatus = if (saveLyrics) {
+                        DownloadLyricStatus.Saving
+                    } else {
+                        current.lyricStatus
+                    },
+                    artworkStatus = if (saveArtwork) {
+                        DownloadArtworkStatus.Saving
+                    } else {
+                        current.artworkStatus
+                    },
+                    errorMessage = null,
+                )
+            }
+        }
+
+        val results = saveSelectedLocalAssets(task, saveLyrics, saveArtwork)
+        currentCoroutineContext().ensureActive()
+        if (!canReactivateDownloadTask(taskId, destructiveTaskIds.value)) return
+        updateTask(taskId) { current ->
+            if (current.status != DownloadTaskStatus.Completed || current.fileName != localAudio.fileName) {
+                current
+            } else {
+                current.withLocalAssetResults(results)
+            }
+        }
+        persistCurrentQueue()
     }
 
     fun cancel(taskId: Long) {
@@ -331,7 +481,9 @@ class SongDownloadManager(
 
     fun deleteDownloadedSong(taskId: Long) {
         if (_tasks.value.none {
-                it.id == taskId && it.status == DownloadTaskStatus.Completed
+                it.id == taskId &&
+                    (it.status == DownloadTaskStatus.Completed ||
+                        it.status == DownloadTaskStatus.Deleted)
             }
         ) return
         val acquiredIds = beginDestructiveOperation(setOf(taskId))
@@ -339,10 +491,17 @@ class SongDownloadManager(
         val cancelledExecution = cancelActiveTask(taskId)
         scope.launch {
             try {
+                val cancelledAssetJob = assetJobsMutex.withLock {
+                    assetJobs.remove(taskId)?.also(Job::cancel)
+                }
+                cancelledAssetJob?.join()
                 syncMutex.withLock {
                     cancelledExecution?.join()
                     if (!discardPartialOrRecordFailure(taskId)) return@withLock
                     val deleted = deleteDownloadedSongFile(taskId)
+                    val assetDeleteResult = runCatching { localMediaAssets.delete(taskId) }
+                    val deletedAssets = assetDeleteResult.getOrDefault(false)
+                    val assetDeleteFailure = assetDeleteResult.exceptionOrNull()
                     if (deleted) DownloadedSongsCache.remove(taskId)
                     // Always rescan. A platform delete may remove one duplicate while another provider
                     // row/file remains; trusting a Boolean OR would falsely report the song as gone.
@@ -363,15 +522,47 @@ class SongDownloadManager(
                                     snapshot = localFiles[task.id],
                                     songDetail = null,
                                 )
-                                task.id !in localFiles -> markDownloadTaskDeleted(
-                                    task = task,
-                                    message = if (deleted) "已删除本地歌曲" else "本地文件已删除",
-                                )
+                                task.id !in localFiles -> if (assetDeleteFailure == null) {
+                                    markDownloadTaskDeleted(
+                                        task = task,
+                                        message = if (deleted || deletedAssets) {
+                                            "已删除本地歌曲"
+                                        } else {
+                                            "本地文件已删除"
+                                        },
+                                    )
+                                } else {
+                                    task.copy(
+                                        status = DownloadTaskStatus.Deleted,
+                                        requestedQuality = null,
+                                        actualQuality = null,
+                                        progressBytes = 0,
+                                        totalBytes = null,
+                                        fileName = null,
+                                        errorMessage = assetDeleteFailure.message
+                                            ?.takeIf(String::isNotBlank)
+                                            ?.let { "音频已删除，但歌词或封面清理失败：$it" }
+                                            ?: "音频已删除，但歌词或封面清理失败",
+                                    )
+                                }
                                 else -> task.copy(
                                     // The file is still present, so keep the truthful state and leave
                                     // the destructive action available for another attempt.
                                     status = DownloadTaskStatus.Completed,
                                     fileName = localFiles[taskId]?.fileName ?: task.fileName,
+                                    lyricStatus = if (assetDeleteFailure == null) {
+                                        DownloadLyricStatus.NotStarted
+                                    } else {
+                                        task.lyricStatus
+                                    },
+                                    artworkStatus = if (assetDeleteFailure == null) {
+                                        DownloadArtworkStatus.NotStarted
+                                    } else {
+                                        task.artworkStatus
+                                    },
+                                    lyricFormat = if (assetDeleteFailure == null) null else task.lyricFormat,
+                                    lyricFileName = if (assetDeleteFailure == null) null else task.lyricFileName,
+                                    artworkFileName = if (assetDeleteFailure == null) null else task.artworkFileName,
                                     errorMessage = "删除本地歌曲失败",
                                 )
                             }
@@ -573,11 +764,20 @@ class SongDownloadManager(
         } else {
             repo.getSongDetails(localOnlyIds).associateBy { it.id }
         }
+        val localAssets = supervisorScope {
+            localFiles.keys.map { songId ->
+                async {
+                    songId to runCatching { localMediaAssets.inspect(songId) }
+                        .getOrDefault(LocalMediaAssetSnapshot())
+                }
+            }.awaitAll().toMap()
+        }
         _tasks.update { tasks ->
             reconcileDownloadTasksWithLocalLibrary(
                 tasks = tasks,
                 localFiles = localFiles,
                 songDetails = localOnlyDetails,
+                localAssets = localAssets,
             )
         }
         return null
@@ -679,6 +879,7 @@ class SongDownloadManager(
                     it.copy(
                         requestedQuality = requestedQuality,
                         lyricStatus = DownloadLyricStatus.NotStarted,
+                        artworkStatus = DownloadArtworkStatus.NotStarted,
                         errorMessage = null,
                     )
                 }
@@ -727,6 +928,7 @@ class SongDownloadManager(
                         progressBytes = 0,
                         totalBytes = totalBytes,
                         lyricStatus = DownloadLyricStatus.NotStarted,
+                        artworkStatus = DownloadArtworkStatus.NotStarted,
                         errorMessage = null,
                     )
                 }
@@ -748,6 +950,7 @@ class SongDownloadManager(
                             status = DownloadTaskStatus.SavingLyrics,
                             actualQuality = actualQuality,
                             lyricStatus = DownloadLyricStatus.Saving,
+                            artworkStatus = DownloadArtworkStatus.Saving,
                             errorMessage = null,
                         )
                     }
@@ -761,41 +964,8 @@ class SongDownloadManager(
                     )
                 }
             ) return
-            val lyricMode = LyricSourceMode.fromStoredWireValue(
-                settings.getStringAsync(
-                    SettingKeys.LYRIC_SOURCE_MODE,
-                    LyricSourceMode.DEFAULT.wireValue,
-                ),
-            )
-            val lyricStatus = when (
-                lyricResolver.cache(
-                    query = LyricQuery(
-                        songId = task.id,
-                        title = task.title,
-                        artist = task.artist,
-                    ),
-                    mode = lyricMode,
-                )
-            ) {
-                LyricCacheStatus.Saved -> DownloadLyricStatus.Saved
-                LyricCacheStatus.NoLyric -> DownloadLyricStatus.NoLyric
-                LyricCacheStatus.Failed -> DownloadLyricStatus.Failed
-            }
-            currentCoroutineContext().ensureActive()
-            if (
-                !transitionTask(taskId, generation, DownloadTaskStatus.SavingLyrics) {
-                    it.copy(
-                        status = DownloadTaskStatus.Completed,
-                        requestedQuality = requestedQuality,
-                        actualQuality = actualQuality,
-                        lyricStatus = lyricStatus,
-                        progressBytes = it.totalBytes ?: it.progressBytes,
-                        totalBytes = it.totalBytes ?: it.progressBytes.takeIf { bytes -> bytes > 0L },
-                        fileName = downloadedFile.fileName,
-                        errorMessage = null,
-                    )
-                }
-            ) return
+            // The audio is already atomically published. Make it available to every local-first
+            // player immediately; lyric/artwork requests are best-effort and may take longer.
             DownloadedSongsCache.upsert(
                 DownloadedSongSnapshot(
                     id = taskId,
@@ -808,6 +978,25 @@ class SongDownloadManager(
                     lastModifiedEpochMillis = null,
                 )
             )
+            val assetResults = saveSelectedLocalAssets(
+                task = task,
+                saveLyrics = true,
+                saveArtwork = true,
+            )
+            currentCoroutineContext().ensureActive()
+            if (
+                !transitionTask(taskId, generation, DownloadTaskStatus.SavingLyrics) {
+                    it.copy(
+                        status = DownloadTaskStatus.Completed,
+                        requestedQuality = requestedQuality,
+                        actualQuality = actualQuality,
+                        progressBytes = it.totalBytes ?: it.progressBytes,
+                        totalBytes = it.totalBytes ?: it.progressBytes.takeIf { bytes -> bytes > 0L },
+                        fileName = downloadedFile.fileName,
+                        errorMessage = null,
+                    ).withLocalAssetResults(assetResults)
+                }
+            ) return
         } catch (e: CancellationException) {
             val status = _tasks.value.firstOrNull { it.id == taskId }?.status
             if (status != DownloadTaskStatus.Paused && status != DownloadTaskStatus.Cancelled) {
@@ -825,6 +1014,95 @@ class SongDownloadManager(
                     )
                 }
             }
+        }
+    }
+
+    private suspend fun saveSelectedLocalAssets(
+        task: SongDownloadTask,
+        saveLyrics: Boolean,
+        saveArtwork: Boolean,
+    ): LocalAssetSaveResults = assetSaveSemaphore.withPermit {
+        supervisorScope {
+            val lyric = if (saveLyrics) {
+                async { saveLyricAsset(task) }
+            } else {
+                null
+            }
+            val artwork = if (saveArtwork) {
+                async { saveArtworkAsset(task) }
+            } else {
+                null
+            }
+            LocalAssetSaveResults(
+                lyric = lyric?.await(),
+                artwork = artwork?.await(),
+            )
+        }
+    }
+
+    private suspend fun saveLyricAsset(task: SongDownloadTask): LocalLyricAssetResult {
+        return try {
+            val mode = LyricSourceMode.fromStoredWireValue(
+                settings.getStringAsync(
+                    SettingKeys.LYRIC_SOURCE_MODE,
+                    LyricSourceMode.DEFAULT.wireValue,
+                ),
+            )
+            when (
+                val resolution = lyricResolver.resolveLatest(
+                    query = LyricQuery(
+                        songId = task.id,
+                        title = task.title,
+                        artist = task.artist,
+                    ),
+                    mode = mode,
+                    // A save/refresh operation must resolve the currently selected upstream source
+                    // instead of reading back the file it is meant to create.
+                    preferLocal = false,
+                )
+            ) {
+                is LyricResolution.Found -> {
+                    val snapshot = localMediaAssets.saveLyrics(task.id, resolution.document)
+                    LocalLyricAssetResult(
+                        status = DownloadLyricStatus.Saved,
+                        format = snapshot.lyricFormat,
+                        fileName = snapshot.lyricFileName,
+                    )
+                }
+                LyricResolution.Empty -> LocalLyricAssetResult(DownloadLyricStatus.NoLyric)
+                is LyricResolution.Error -> LocalLyricAssetResult(
+                    status = DownloadLyricStatus.Failed,
+                    errorMessage = resolution.message,
+                )
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            LocalLyricAssetResult(
+                status = DownloadLyricStatus.Failed,
+                errorMessage = failure.message?.takeIf(String::isNotBlank) ?: "歌词保存失败",
+            )
+        }
+    }
+
+    private suspend fun saveArtworkAsset(task: SongDownloadTask): LocalArtworkAssetResult {
+        if (task.artworkUri.isBlank()) {
+            return LocalArtworkAssetResult(DownloadArtworkStatus.NoArtwork)
+        }
+        return try {
+            val fileName = localMediaAssets.saveArtwork(task.id, task.artworkUri)
+                ?: return LocalArtworkAssetResult(DownloadArtworkStatus.NoArtwork)
+            LocalArtworkAssetResult(
+                status = DownloadArtworkStatus.Saved,
+                fileName = fileName,
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            LocalArtworkAssetResult(
+                status = DownloadArtworkStatus.Failed,
+                errorMessage = failure.message?.takeIf(String::isNotBlank) ?: "封面保存失败",
+            )
         }
     }
 
@@ -906,6 +1184,7 @@ class SongDownloadManager(
                 this[index] = task.copy(
                     status = DownloadTaskStatus.Resolving,
                     lyricStatus = DownloadLyricStatus.NotStarted,
+                    artworkStatus = DownloadArtworkStatus.NotStarted,
                     errorMessage = null,
                     executionGeneration = generation,
                 )
@@ -955,8 +1234,10 @@ class SongDownloadManager(
     private fun SongDetailSongs.toDownloadTask(
         playlistId: Long?,
         localFiles: Map<Long, DownloadedSongSnapshot>,
+        localAssets: Map<Long, LocalMediaAssetSnapshot>,
     ): SongDownloadTask {
         val localFile = localFiles[id]
+        val localAsset = localAssets[id]
         val downloaded = localFile != null
         val localSize = localFile?.sizeBytes
         return SongDownloadTask(
@@ -966,7 +1247,19 @@ class SongDownloadManager(
             artworkUri = al.picUrl,
             playlistId = playlistId,
             status = if (downloaded) DownloadTaskStatus.Completed else DownloadTaskStatus.Queued,
-            lyricStatus = DownloadLyricStatus.NotStarted,
+            lyricStatus = if (localAsset?.lyricFormat != null) {
+                DownloadLyricStatus.Saved
+            } else {
+                DownloadLyricStatus.NotStarted
+            },
+            artworkStatus = if (localAsset?.artworkFileName != null) {
+                DownloadArtworkStatus.Saved
+            } else {
+                DownloadArtworkStatus.NotStarted
+            },
+            lyricFormat = localAsset?.lyricFormat,
+            lyricFileName = localAsset?.lyricFileName,
+            artworkFileName = localAsset?.artworkFileName,
             progressBytes = if (downloaded) localSize ?: 1 else 0,
             totalBytes = if (downloaded) localSize ?: 1 else null,
             fileName = localFile?.fileName,
@@ -974,6 +1267,41 @@ class SongDownloadManager(
     }
 
 }
+
+private data class LocalLyricAssetResult(
+    val status: DownloadLyricStatus,
+    val format: LocalLyricFormat? = null,
+    val fileName: String? = null,
+    val errorMessage: String? = null,
+)
+
+private data class LocalArtworkAssetResult(
+    val status: DownloadArtworkStatus,
+    val fileName: String? = null,
+    val errorMessage: String? = null,
+)
+
+private data class LocalAssetSaveResults(
+    val lyric: LocalLyricAssetResult? = null,
+    val artwork: LocalArtworkAssetResult? = null,
+) {
+    val errorMessage: String?
+        get() = listOfNotNull(
+            lyric?.errorMessage?.takeIf(String::isNotBlank),
+            artwork?.errorMessage?.takeIf(String::isNotBlank),
+        ).joinToString("；").ifBlank { null }
+}
+
+private fun SongDownloadTask.withLocalAssetResults(
+    results: LocalAssetSaveResults,
+): SongDownloadTask = copy(
+    lyricStatus = results.lyric?.status ?: lyricStatus,
+    artworkStatus = results.artwork?.status ?: artworkStatus,
+    lyricFormat = results.lyric?.format ?: lyricFormat,
+    lyricFileName = results.lyric?.fileName ?: lyricFileName,
+    artworkFileName = results.artwork?.fileName ?: artworkFileName,
+    errorMessage = results.errorMessage,
+)
 
 internal fun canStartDownloadWorker(existingWorker: Job?): Boolean = existingWorker == null
 
@@ -1006,6 +1334,7 @@ internal fun recoverPersistedDownloadTasks(
             task.copy(
                 status = DownloadTaskStatus.Queued,
                 lyricStatus = DownloadLyricStatus.NotStarted,
+                artworkStatus = DownloadArtworkStatus.NotStarted,
                 errorMessage = null,
                 executionGeneration = 0L,
             )
@@ -1040,6 +1369,7 @@ internal fun reconcileDownloadTasksWithLocalLibrary(
     tasks: List<SongDownloadTask>,
     localFiles: Map<Long, DownloadedSongSnapshot>,
     songDetails: Map<Long, SongDetailSongs> = emptyMap(),
+    localAssets: Map<Long, LocalMediaAssetSnapshot> = emptyMap(),
 ): List<SongDownloadTask> {
     val merged = linkedMapOf<Long, SongDownloadTask>()
     tasks.forEach { task ->
@@ -1047,6 +1377,7 @@ internal fun reconcileDownloadTasksWithLocalLibrary(
             task = task,
             snapshot = localFiles[task.id],
             songDetail = songDetails[task.id],
+            assetSnapshot = localAssets[task.id],
         )
     }
     localFiles.values
@@ -1056,7 +1387,11 @@ internal fun reconcileDownloadTasksWithLocalLibrary(
                 .thenBy { it.id }
         )
         .forEach { snapshot ->
-            merged[snapshot.id] = importedDownloadTask(snapshot, songDetails[snapshot.id])
+            merged[snapshot.id] = importedDownloadTask(
+                snapshot = snapshot,
+                songDetail = songDetails[snapshot.id],
+                assetSnapshot = localAssets[snapshot.id],
+            )
         }
     return merged.values.toList()
 }
@@ -1066,12 +1401,14 @@ internal fun mergeDownloadTasksForEnqueue(
     incoming: List<SongDownloadTask>,
     localFiles: Map<Long, DownloadedSongSnapshot>,
     songDetails: Map<Long, SongDetailSongs> = emptyMap(),
+    localAssets: Map<Long, LocalMediaAssetSnapshot> = emptyMap(),
 ): List<SongDownloadTask> {
     val syncedCurrent = current.map { task ->
         syncDownloadTaskWithLocalLibrary(
             task = task,
             snapshot = localFiles[task.id],
             songDetail = songDetails[task.id],
+            assetSnapshot = localAssets[task.id],
         )
     }
     val merged = syncedCurrent.associateBy { it.id }.toMutableMap()
@@ -1093,6 +1430,11 @@ internal fun mergeDownloadTasksForEnqueue(
                     progressBytes = task.progressBytes,
                     totalBytes = task.totalBytes,
                     fileName = task.fileName,
+                    lyricStatus = task.lyricStatus,
+                    artworkStatus = task.artworkStatus,
+                    lyricFormat = task.lyricFormat,
+                    lyricFileName = task.lyricFileName,
+                    artworkFileName = task.artworkFileName,
                     errorMessage = null,
                 )
             }
@@ -1108,6 +1450,7 @@ private fun syncDownloadTaskWithLocalLibrary(
     task: SongDownloadTask,
     snapshot: DownloadedSongSnapshot?,
     songDetail: SongDetailSongs?,
+    assetSnapshot: LocalMediaAssetSnapshot? = null,
 ): SongDownloadTask {
     val existsOnDisk = snapshot != null
     return when {
@@ -1123,6 +1466,19 @@ private fun syncDownloadTaskWithLocalLibrary(
                 progressBytes = localSize ?: task.progressBytes.takeIf { it > 0L } ?: 1,
                 totalBytes = localSize ?: task.totalBytes ?: 1,
                 fileName = snapshot.fileName,
+                lyricStatus = task.syncedLyricStatus(assetSnapshot),
+                artworkStatus = task.syncedArtworkStatus(assetSnapshot),
+                lyricFormat = if (assetSnapshot == null) task.lyricFormat else assetSnapshot.lyricFormat,
+                lyricFileName = if (assetSnapshot == null) {
+                    task.lyricFileName
+                } else {
+                    assetSnapshot.lyricFileName
+                },
+                artworkFileName = if (assetSnapshot == null) {
+                    task.artworkFileName
+                } else {
+                    assetSnapshot.artworkFileName
+                },
                 errorMessage = null,
             )
         }
@@ -1138,11 +1494,35 @@ private fun markDownloadTaskDeleted(
     requestedQuality = null,
     actualQuality = null,
     lyricStatus = DownloadLyricStatus.NotStarted,
+    artworkStatus = DownloadArtworkStatus.NotStarted,
+    lyricFormat = null,
+    lyricFileName = null,
+    artworkFileName = null,
     progressBytes = 0,
     totalBytes = null,
     fileName = null,
     errorMessage = message,
 )
+
+private fun SongDownloadTask.syncedLyricStatus(
+    assetSnapshot: LocalMediaAssetSnapshot?,
+): DownloadLyricStatus = when {
+    assetSnapshot == null -> lyricStatus
+    assetSnapshot.lyricFormat != null -> DownloadLyricStatus.Saved
+    lyricStatus == DownloadLyricStatus.Saved || lyricStatus == DownloadLyricStatus.Saving ->
+        DownloadLyricStatus.NotStarted
+    else -> lyricStatus
+}
+
+private fun SongDownloadTask.syncedArtworkStatus(
+    assetSnapshot: LocalMediaAssetSnapshot?,
+): DownloadArtworkStatus = when {
+    assetSnapshot == null -> artworkStatus
+    assetSnapshot.artworkFileName != null -> DownloadArtworkStatus.Saved
+    artworkStatus == DownloadArtworkStatus.Saved || artworkStatus == DownloadArtworkStatus.Saving ->
+        DownloadArtworkStatus.NotStarted
+    else -> artworkStatus
+}
 
 private fun SongDownloadTask.canRequeueForDownload(): Boolean =
     status == DownloadTaskStatus.Failed ||
@@ -1161,6 +1541,10 @@ private fun SongDownloadTask.requeueFromDownload(incoming: SongDownloadTask): So
         requestedQuality = null,
         actualQuality = null,
         lyricStatus = DownloadLyricStatus.NotStarted,
+        artworkStatus = DownloadArtworkStatus.NotStarted,
+        lyricFormat = null,
+        lyricFileName = null,
+        artworkFileName = null,
         progressBytes = 0,
         totalBytes = null,
         fileName = null,
@@ -1170,6 +1554,7 @@ private fun SongDownloadTask.requeueFromDownload(incoming: SongDownloadTask): So
 private fun importedDownloadTask(
     snapshot: DownloadedSongSnapshot,
     songDetail: SongDetailSongs?,
+    assetSnapshot: LocalMediaAssetSnapshot? = null,
 ): SongDownloadTask {
     val size = snapshot.sizeBytes
     return SongDownloadTask(
@@ -1178,7 +1563,19 @@ private fun importedDownloadTask(
         artist = songDetail?.downloadDisplayArtist() ?: "本地文件",
         artworkUri = songDetail?.al?.picUrl.orEmpty(),
         status = DownloadTaskStatus.Completed,
-        lyricStatus = DownloadLyricStatus.NotStarted,
+        lyricStatus = if (assetSnapshot?.lyricFormat != null) {
+            DownloadLyricStatus.Saved
+        } else {
+            DownloadLyricStatus.NotStarted
+        },
+        artworkStatus = if (assetSnapshot?.artworkFileName != null) {
+            DownloadArtworkStatus.Saved
+        } else {
+            DownloadArtworkStatus.NotStarted
+        },
+        lyricFormat = assetSnapshot?.lyricFormat,
+        lyricFileName = assetSnapshot?.lyricFileName,
+        artworkFileName = assetSnapshot?.artworkFileName,
         progressBytes = size ?: 1,
         totalBytes = size ?: 1,
         fileName = snapshot.fileName,
@@ -1193,3 +1590,4 @@ private fun SongDetailSongs.downloadDisplayArtist(): String =
     ar.joinToString(" / ") { it.name }.ifBlank { "未知艺术家" }
 
 private const val PERSISTENCE_INTERVAL_MS = 500L
+private const val MAX_CONCURRENT_ASSET_SAVES = 2

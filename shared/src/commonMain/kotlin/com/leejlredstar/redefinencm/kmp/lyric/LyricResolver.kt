@@ -6,6 +6,7 @@ import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.AmlldbApi
 import com.leejlredstar.redefinencm.kmp.data.api.AmlldbTtmlResult
 import com.leejlredstar.redefinencm.kmp.data.api.dto.Lyric
+import com.leejlredstar.redefinencm.kmp.download.LocalMediaAssets
 import com.leejlredstar.redefinencm.kmp.util.LyricParser
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -55,22 +56,42 @@ interface LyricSourceProvider {
 
 class LyricResolver(
     private val providers: List<LyricSourceProvider>,
+    private val localLyricLoader: (suspend (LyricQuery, LyricSource) -> LyricDocument?)? = null,
 ) {
-    constructor(repository: Repository, amlldbApi: AmlldbApi) : this(
+    constructor(
+        repository: Repository,
+        amlldbApi: AmlldbApi,
+        localMediaAssets: LocalMediaAssets,
+    ) : this(
         listOf(
             TtmlLyricProvider(repository, amlldbApi),
             BackendLyricProvider(repository),
         ),
+        localMediaAssets::loadLyrics,
     )
 
     fun resolve(
         query: LyricQuery,
         mode: LyricSourceMode,
+        preferLocal: Boolean = false,
     ): Flow<LyricResolution> = flow {
         require(query.songId > 0) { "songId must be positive" }
         val failures = mutableListOf<String>()
 
         for (source in mode.sourceOrder) {
+            if (preferLocal) {
+                val localDocument = try {
+                    localLyricLoader?.invoke(query, source)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    null
+                }
+                if (localDocument != null) {
+                    emit(LyricResolution.Found(localDocument))
+                    return@flow
+                }
+            }
             val provider = providers.firstOrNull { it.source == source }
             if (provider == null) {
                 failures += "$source provider is unavailable"
@@ -118,6 +139,19 @@ class LyricResolver(
             }
         }
         return status
+    }
+
+    /** Collects the complete provider flow and returns its latest durable candidate. */
+    suspend fun resolveLatest(
+        query: LyricQuery,
+        mode: LyricSourceMode,
+        preferLocal: Boolean = false,
+    ): LyricResolution {
+        var latest: LyricResolution = LyricResolution.Empty
+        resolve(query, mode, preferLocal).collect { resolution ->
+            latest = resolution
+        }
+        return latest
     }
 }
 
@@ -267,7 +301,7 @@ internal fun List<LyricParser.WordLine>.hasPrimaryTimedLine(): Boolean =
             line.endTimeMs >= line.startTimeMs
     }
 
-private fun ttmlDocument(
+internal fun ttmlDocument(
     ttml: String,
     lines: List<LyricParser.WordLine>,
     providerItemId: String,
@@ -283,16 +317,44 @@ private fun ttmlDocument(
     endpoint = endpoint,
 )
 
-private fun Lyric.toDocument(query: LyricQuery): LyricDocument? {
-    val lrcText = lrc?.lyric?.takeIf(String::isNotBlank)
-    val yrcText = yrc?.lyric?.takeIf(String::isNotBlank)
-    val translatedText = tlyric?.lyric?.takeIf(String::isNotBlank).orEmpty()
-    val romanText = romalrc?.lyric?.takeIf(String::isNotBlank).orEmpty()
+private fun Lyric.toDocument(query: LyricQuery): LyricDocument? =
+    backendLyricDocument(
+        query = query,
+        lrcText = lrc?.lyric.orEmpty(),
+        yrcText = yrc?.lyric.orEmpty(),
+        translatedText = tlyric?.lyric.orEmpty(),
+        romanText = romalrc?.lyric.orEmpty(),
+    )
 
-    val wordLines = yrcText
+internal fun localTtmlDocument(ttml: String): LyricDocument? {
+    val lines = runCatching { TtmlLyricParser.parse(ttml) }.getOrNull()
+        ?.takeIf { it.hasPrimaryTimedLine() }
+        ?: return null
+    return ttmlDocument(
+        ttml = ttml,
+        lines = lines,
+        providerItemId = "",
+        endpoint = "local-sidecar",
+    )
+}
+
+internal fun backendLyricDocument(
+    query: LyricQuery,
+    lrcText: String,
+    yrcText: String,
+    translatedText: String,
+    romanText: String,
+    endpoint: String = "configured-ncm-backend",
+): LyricDocument? {
+    val normalizedLrcText = lrcText.takeIf(String::isNotBlank)
+    val normalizedYrcText = yrcText.takeIf(String::isNotBlank)
+    val normalizedTranslatedText = translatedText.takeIf(String::isNotBlank).orEmpty()
+    val normalizedRomanText = romanText.takeIf(String::isNotBlank).orEmpty()
+
+    val wordLines = normalizedYrcText
         ?.let { runCatching { LyricParser.parseYrc(it) }.getOrDefault(emptyList()) }
         .orEmpty()
-    val parsedLrcLines = lrcText
+    val parsedLrcLines = normalizedLrcText
         ?.let { runCatching { LyricParser.parse(it) }.getOrDefault(linkedMapOf()) }
         .orEmpty()
         .entries
@@ -327,18 +389,18 @@ private fun Lyric.toDocument(query: LyricQuery): LyricDocument? {
     if (baseLines.isEmpty()) return null
 
     val lines = baseLines.attachSupplements(
-        translations = translatedText,
-        romanizations = romanText,
+        translations = normalizedTranslatedText,
+        romanizations = normalizedRomanText,
     )
     return LyricDocument(
         source = LyricSource.NCM_BACKEND,
         lines = lines,
-        rawLineLyric = lrcText ?: LyricParser.toLrcText(lines),
-        rawWordLyric = yrcText.orEmpty(),
-        rawTranslatedLyric = translatedText,
-        rawRomanLyric = romanText,
+        rawLineLyric = normalizedLrcText ?: LyricParser.toLrcText(lines),
+        rawWordLyric = normalizedYrcText.orEmpty(),
+        rawTranslatedLyric = normalizedTranslatedText,
+        rawRomanLyric = normalizedRomanText,
         providerItemId = query.songId.toString(),
-        endpoint = "configured-ncm-backend",
+        endpoint = endpoint,
     )
 }
 

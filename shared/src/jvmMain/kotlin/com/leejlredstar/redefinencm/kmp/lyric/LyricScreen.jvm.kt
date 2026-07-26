@@ -33,15 +33,19 @@ import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayWindowShape
 import com.leejlredstar.redefinencm.kmp.ui.screen.FullLyricScreen
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
 import com.leejlredstar.redefinencm.kmp.util.LyricParser
+import com.leejlredstar.redefinencm.kmp.util.isLocalArtworkSidecarFileName
+import com.leejlredstar.redefinencm.kmp.util.jvmDownloadDirectory
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
 import com.leejlredstar.redefinencm.kmp.viewmodel.SongWikiUiState
 import com.sun.jna.Native
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -52,6 +56,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.longOrNull
 import org.koin.compose.koinInject
 import java.awt.Canvas
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.file.AtomicMoveNotSupportedException
@@ -59,6 +64,7 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.ArrayDeque
+import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -107,6 +113,8 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
+    val localArtworkActive by viewModel.localArtworkActive.collectAsState()
+    val remoteArtworkUri by viewModel.remoteArtworkUri.collectAsState()
     val dynamicCoverUiState by viewModel.dynamicCoverUiState.collectAsState()
     val dynamicCoverUrl = dynamicCoverUiState.urlFor(metadata?.id)
     val songWikiUiState by viewModel.songWikiUiState.collectAsState()
@@ -131,6 +139,33 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             lyricMap = lyricMap,
             lyricUiState = lyricUiState,
         )
+    }
+    var localAmllArtwork by remember { mutableStateOf<Pair<String, String>?>(null) }
+    val amllArtworkUri = metadata?.let { media ->
+        if (!localArtworkActive) {
+            media.artworkUri
+        } else {
+            localAmllArtwork
+                ?.takeIf { (mediaId, _) -> mediaId == media.id }
+                ?.second
+                ?: remoteArtworkUri
+        }
+    }.orEmpty()
+    LaunchedEffect(metadata?.id, metadata?.artworkUri, localArtworkActive, remoteArtworkUri) {
+        val media = metadata
+        if (media == null || !localArtworkActive) {
+            localAmllArtwork = null
+            return@LaunchedEffect
+        }
+        val dataUri = withContext(Dispatchers.IO) {
+            desktopLocalArtworkDataUri(
+                songId = media.id.toLongOrNull(),
+                uriText = media.artworkUri,
+            )
+        }
+        if (metadata?.id == media.id && localArtworkActive) {
+            localAmllArtwork = media.id to (dataUri ?: remoteArtworkUri)
+        }
     }
     var controlsVisible by remember { mutableStateOf(true) }
     var controlsExpanded by remember { mutableStateOf(true) }
@@ -294,10 +329,12 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
 
     // Push current display metadata atomically before the optional dynamic cover. This lets the
     // page reject a delayed video command that belongs to the previous media item.
-    LaunchedEffect(engineReady, metadata, dynamicCoverUrl) {
+    LaunchedEffect(engineReady, metadata, amllArtworkUri, dynamicCoverUrl) {
         if (!engineReady) return@LaunchedEffect
         val mediaId = metadata?.id.orEmpty()
-        val details = Json.encodeToString(metadata.toAmllSongDetails()).escapeJsSingleQuoted()
+        val details = Json.encodeToString(
+            metadata.toAmllSongDetails().copy(artworkUri = amllArtworkUri),
+        ).escapeJsSingleQuoted()
         val dynamicCoverCommand = dynamicCoverUrl
             ?.takeIf(String::isNotBlank)
             ?.let {
@@ -1140,6 +1177,56 @@ private fun LinkedHashMap<Long?, String?>.toLrcFallback(): String =
         }
         .joinToString("\n")
 
+internal fun desktopLocalArtworkDataUri(
+    songId: Long?,
+    uriText: String,
+    downloadDirectory: File = jvmDownloadDirectory(),
+): String? {
+    val id = songId?.takeIf { it > 0L } ?: return null
+    val file = runCatching { File(java.net.URI(uriText)) }.getOrNull() ?: return null
+    val canonicalFile = runCatching { file.canonicalFile }.getOrNull() ?: return null
+    val canonicalDirectory = runCatching { downloadDirectory.canonicalFile }.getOrNull()
+        ?: return null
+    if (
+        canonicalFile.parentFile != canonicalDirectory ||
+        !canonicalFile.isFile ||
+        !isLocalArtworkSidecarFileName(id, canonicalFile.name) ||
+        canonicalFile.length() !in 1..MAX_AMLL_ARTWORK_BYTES.toLong()
+    ) return null
+    val mimeType = desktopWebArtworkMimeType(canonicalFile.name) ?: return null
+    val bytes = runCatching { canonicalFile.readBytesAtMost(MAX_AMLL_ARTWORK_BYTES) }
+        .getOrNull()
+        ?.takeIf(ByteArray::isNotEmpty)
+        ?: return null
+    return "data:$mimeType;base64,${Base64.getEncoder().encodeToString(bytes)}"
+}
+
+private fun File.readBytesAtMost(maxBytes: Int): ByteArray? = inputStream().use { input ->
+    val output = ByteArrayOutputStream()
+    val buffer = ByteArray(DEFAULT_AMLL_ARTWORK_BUFFER_BYTES)
+    var total = 0
+    while (true) {
+        val read = input.read(buffer)
+        if (read < 0) break
+        total += read
+        if (total > maxBytes) return null
+        output.write(buffer, 0, read)
+    }
+    output.toByteArray()
+}
+
+private fun desktopWebArtworkMimeType(fileName: String): String? =
+    when (fileName.substringAfterLast('.', "").lowercase()) {
+        "jpg", "jpeg" -> "image/jpeg"
+        "png" -> "image/png"
+        "gif" -> "image/gif"
+        "webp" -> "image/webp"
+        "bmp" -> "image/bmp"
+        "avif" -> "image/avif"
+        // WebView2 support for HEIC/HEIF depends on optional host codecs; use remote fallback.
+        else -> null
+    }
+
 /** Normalize to the three-slash `file:///` form (Windows toURI() gives one slash). */
 private fun fileUrl(file: File): String {
     val raw = file.toURI().toString()
@@ -1162,6 +1249,11 @@ private fun buildLyricOptionsJs(
         "romanLyric:'${romanLyric.escapeJsSingleQuoted()}'," +
         "showTranslation:$showTranslatedLyric," +
         "showRoman:$showRomanLyric}"
+
+// Base64 and JavaScript serialization create multiple copies; larger durable covers use the
+// remote fallback instead of inflating the embedded browser process.
+private const val MAX_AMLL_ARTWORK_BYTES = 4 * 1024 * 1024
+private const val DEFAULT_AMLL_ARTWORK_BUFFER_BYTES = 16 * 1024
 
 internal fun desktopEmbeddedWebViewSupported(
     osName: String = System.getProperty("os.name").orEmpty(),

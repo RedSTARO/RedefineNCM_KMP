@@ -341,6 +341,39 @@ entry remains displayable while a bounded refresh runs. Android and supported Wi
 TTML into the official AMLL `parseTTML`; common `TtmlLyricParser` supplies shared Compose,
 notification and other platform surfaces.
 
+### Downloaded media sidecar contract
+
+Downloaded audio remains `<songId>.<extension>`. Lyrics and artwork live beside it as
+multi-segment sidecars so no platform audio scanner can mistake them for songs:
+
+- AMLL source: `<id>.lyric.ttml` stores the upstream TTML verbatim.
+- Backend source: YRC is `<id>.lyric.yrc`; line LRC is `<id>.lyric.lrc`, or
+  `<id>.lyric.line.lrc` when YRC is the primary format; translations and romanizations are
+  `<id>.lyric.translation.lrc` and `<id>.lyric.romanization.lrc`.
+- App-downloaded artwork is `<id>.cover.<detected-extension>` and keeps the validated upstream
+  bytes.
+
+Derived TTML line text must never be persisted as if it were an original backend LRC. Local
+playback applies the same four-state source policy as network playback: within each selected
+source, a valid local sidecar is preferred only when the song audio is locally present; an
+opposite-source sidecar cannot bypass `TTML_ONLY` or `BACKEND_ONLY`. A damaged or unparseable
+sidecar falls through to the selected online provider.
+
+Audio publication is the download success boundary. As soon as audio is published it enters
+`DownloadedSongsCache`; lyric and artwork saves run independently and may fail without rolling
+back or marking the audio failed. Completed/download-imported rows expose separate lyric and
+artwork backfill actions. Queue status is reconciled against actual sidecars rather than the
+SQLDelight lyric cache. Deleting a downloaded song also deletes its sidecars.
+
+Platform storage uses Android MediaStore `content:` URIs, Android legacy/JVM/iOS `file:` URIs,
+and Web OPFS keys resolved to temporary `blob:` URLs. Runtime URIs are never persisted in
+`PlayerStatus` or the download queue, and Web blob URLs must be revoked when no longer active.
+AMLL hosts must bridge app-managed, path-validated local artwork through a controlled
+resource/data path; they must not assume a file page can read arbitrary `content:` or
+cross-directory `file:` URLs.
+Pending/backup files stay hidden and are excluded from scans. Web audio discovery accepts only
+the single-extension audio shape and explicitly excludes `.lyric.*` and `.cover.*`.
+
 The only full-screen playback route is `WebViewLyricScreen`: Android and supported Windows
 Desktop hosts render AMLL, while other JVM platforms, iOS, and Web use `FullLyricScreen` as
 the Compose fallback. `MiniNowPlayingBar`, the
@@ -655,8 +688,10 @@ feature gap; platform integrations use target-specific actuals:
   navigation rail, while Android keeps the `AndroidDownloadService` foreground notification as its
   entry point. The service stores
   the actual downloaded quality from
-  `/song/url/v1`'s returned `level` and prefetches/caches lyrics in SQLDelight after the audio file
-  is written. The ordered queue is persisted in SQLDelight before Android starts the foreground
+  `/song/url/v1`'s returned `level`. After publishing audio, it immediately registers the local
+  snapshot, then independently saves original-format lyric and artwork sidecars; either sidecar
+  may fail without changing the successful audio result. The ordered queue is persisted in
+  SQLDelight before Android starts the foreground
   service; interrupted active states restore as queued work on the next process launch. Android
   keeps resumable partial files in app-private storage, validates HTTP byte ranges with strong ETag
   or Last-Modified `If-Range`, and publishes to MediaStore only after the complete file is present;
@@ -669,6 +704,8 @@ feature gap; platform integrations use target-specific actuals:
   platform download folder. Android writes `Downloads/RedefineNCM/` through `MediaStore` instead of
   the system `DownloadManager`; JVM writes `~/Music/RedefineNCM/`; iOS streams into
   `Documents/RedefineNCM/` and uses an NSURLSession background transfer for durable downloads.
+  Disk-only imports recover sidecar status, Completed rows can backfill lyrics or artwork without
+  redownloading audio, and local playback prefers valid same-source lyrics and local artwork.
 - **Playlist behaviors**: `replacePlaylist` setting honored on song click,
   `playlistUpdatePlaycount` reported, no auto-jump to the full-screen player (original behavior).
 - **Album-art theme color**: `themeColorFromCoilImage()` expect/actual (Android Palette /

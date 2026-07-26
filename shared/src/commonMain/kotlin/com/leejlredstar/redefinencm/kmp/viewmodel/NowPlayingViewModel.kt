@@ -3,6 +3,7 @@ package com.leejlredstar.redefinencm.kmp.viewmodel
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.SongWikiSummary
 import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusic
+import com.leejlredstar.redefinencm.kmp.download.LocalMediaAssets
 import com.leejlredstar.redefinencm.kmp.lyric.LyricQuery
 import com.leejlredstar.redefinencm.kmp.lyric.LyricResolution
 import com.leejlredstar.redefinencm.kmp.lyric.LyricResolver
@@ -14,6 +15,8 @@ import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
 import com.leejlredstar.redefinencm.kmp.player.*
 import com.leejlredstar.redefinencm.kmp.smtc.MediaControlsIntegrator
 import com.leejlredstar.redefinencm.kmp.util.LyricParser
+import com.leejlredstar.redefinencm.kmp.util.DownloadScanResult
+import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import kotlinx.coroutines.*
@@ -61,6 +64,7 @@ class NowPlayingViewModel(
     private val mainViewModel: MainViewModel,
     private val settings: PlatformSettings,
     private val lyricResolver: LyricResolver,
+    private val localMediaAssets: LocalMediaAssets,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -109,6 +113,11 @@ class NowPlayingViewModel(
     // ── Artwork ──
     val useDynamicCover = MutableStateFlow(false)
     val dynamicCoverUiState = MutableStateFlow(DynamicCoverUiState())
+    private val _localArtworkActive = MutableStateFlow(false)
+    val localArtworkActive: StateFlow<Boolean> = _localArtworkActive.asStateFlow()
+    private val _remoteArtworkUri = MutableStateFlow("")
+    val remoteArtworkUri: StateFlow<String> = _remoteArtworkUri.asStateFlow()
+    private var activeLocalArtworkUri: String? = null
 
     init {
         initLyricPreferences()
@@ -144,8 +153,11 @@ class NowPlayingViewModel(
             }
         }
         scope.launch {
-            player.currentMedia.collect { media ->
+            player.currentMedia.collectLatest { media ->
                 currentMedia.value = media
+                releaseActiveLocalArtwork()
+                _localArtworkActive.value = false
+                _remoteArtworkUri.value = media?.artworkUri.orEmpty()
                 songWikiFetchJob?.cancel()
                 songWikiFetchJob = null
                 songWikiRequestGeneration += 1
@@ -156,14 +168,46 @@ class NowPlayingViewModel(
                 commentsLoadError.value = null
                 commentsFromCache.value = false
                 if (media != null) {
+                    val songId = media.id.toLongOrNull()?.takeIf { it > 0L }
+                    val localAudioAvailable = songId != null && withContext(Dispatchers.Default) {
+                        when (DownloadedSongsCache.ensureInitialized()) {
+                            is DownloadScanResult.Success ->
+                                DownloadedSongsCache.isDownloaded(songId)
+                            is DownloadScanResult.Failure -> false
+                        }
+                    }
+                    var unresolvedLocalArtwork: String? = null
+                    if (localAudioAvailable) {
+                        unresolvedLocalArtwork = withContext(Dispatchers.Default) {
+                            runCatching {
+                                localMediaAssets.resolveArtworkUri(checkNotNull(songId))
+                            }.getOrNull()
+                        }
+                    }
+                    try {
+                        currentCoroutineContext().ensureActive()
+                    } catch (cancelled: CancellationException) {
+                        unresolvedLocalArtwork?.let(localMediaAssets::releaseArtworkUri)
+                        throw cancelled
+                    }
+                    val effectiveMedia = if (unresolvedLocalArtwork.isNullOrBlank()) {
+                        media
+                    } else {
+                        val resolvedArtwork = unresolvedLocalArtwork
+                        unresolvedLocalArtwork = null
+                        activeLocalArtworkUri = resolvedArtwork
+                        _localArtworkActive.value = true
+                        media.copy(artworkUri = resolvedArtwork)
+                    }
+                    currentMedia.value = effectiveMedia
                     MediaControlsIntegrator.updateMetadata(
-                        title = media.title,
-                        artist = media.artist,
-                        album = media.albumTitle,
-                        artworkUri = media.artworkUri,
-                        duration = media.duration,
+                        title = effectiveMedia.title,
+                        artist = effectiveMedia.artist,
+                        album = effectiveMedia.albumTitle,
+                        artworkUri = effectiveMedia.artworkUri,
+                        duration = effectiveMedia.duration,
                     )
-                    fetchLyrics(media)
+                    fetchLyrics(effectiveMedia, preferLocal = localAudioAvailable)
                 } else {
                     lyricFetchJob?.cancel()
                     clearLyrics()
@@ -345,12 +389,23 @@ class NowPlayingViewModel(
                 player.currentMedia,
                 mainViewModel.uid,
                 useDynamicCover,
-            ) { media, uid, enabled -> Triple(media?.id, uid, enabled) }
+                _localArtworkActive,
+            ) { media, uid, enabled, hasLocalArtwork ->
+                DynamicCoverRequest(media?.id, uid, enabled, hasLocalArtwork)
+            }
                 .distinctUntilChanged()
-                .collectLatest { (mediaId, uid, enabled) ->
+                .collectLatest { request ->
+                    val mediaId = request.mediaId
+                    val uid = request.uid
+                    val enabled = request.enabled
                     dynamicCoverUiState.value = DynamicCoverUiState(mediaId = mediaId)
                     val songId = mediaId?.toLongOrNull()?.takeIf { it > 0 }
-                    if (!enabled || uid <= 0 || songId == null) return@collectLatest
+                    if (
+                        !enabled ||
+                        request.hasLocalArtwork ||
+                        uid <= 0 ||
+                        songId == null
+                    ) return@collectLatest
 
                     val url = withContext(Dispatchers.Default) {
                         repo.getSongDynamicCoverUrl(songId)
@@ -381,7 +436,10 @@ class NowPlayingViewModel(
     private var favoriteActionJob: Job? = null
     private var favoriteStatusGeneration = 0L
 
-    private fun fetchLyrics(media: MediaInfo) {
+    private fun fetchLyrics(
+        media: MediaInfo,
+        preferLocal: Boolean = DownloadedSongsCache.isDownloaded(media.id.toLongOrNull() ?: -1L),
+    ) {
         lyricFetchJob?.cancel()
         val mediaId = media.id
         val requestGeneration = lyricRequestGeneration.value + 1L
@@ -406,7 +464,7 @@ class NowPlayingViewModel(
                 durationMs = media.duration,
             )
             try {
-                lyricResolver.resolve(query, mode).collect { resolution ->
+                lyricResolver.resolve(query, mode, preferLocal).collect { resolution ->
                     when (resolution) {
                         is LyricResolution.Found -> {
                             val document = resolution.document
@@ -685,7 +743,13 @@ class NowPlayingViewModel(
         commentsFetchJob?.cancel()
         songWikiFetchJob?.cancel()
         favoriteActionJob?.cancel()
+        releaseActiveLocalArtwork()
         scope.cancel()
+    }
+
+    private fun releaseActiveLocalArtwork() {
+        activeLocalArtworkUri?.let(localMediaAssets::releaseArtworkUri)
+        activeLocalArtworkUri = null
     }
 
     private data class LyricNotificationPayload(
@@ -696,5 +760,12 @@ class NowPlayingViewModel(
         val isPlaying: Boolean,
         val positionMs: Long,
         val durationMs: Long,
+    )
+
+    private data class DynamicCoverRequest(
+        val mediaId: String?,
+        val uid: Long,
+        val enabled: Boolean,
+        val hasLocalArtwork: Boolean,
     )
 }

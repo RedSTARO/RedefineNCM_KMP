@@ -55,6 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.leejlredstar.redefinencm.kmp.download.DownloadArtworkStatus
 import com.leejlredstar.redefinencm.kmp.download.DownloadQueueSummary
 import com.leejlredstar.redefinencm.kmp.download.DownloadLyricStatus
 import com.leejlredstar.redefinencm.kmp.download.DownloadTaskStatus
@@ -237,6 +238,8 @@ fun DownloadManagementScreen(
                             pendingDestructiveAction = DownloadDestructiveAction.CancelTask(task.id, task.title)
                         },
                         onRetry = { downloadManager.retry(task.id) },
+                        onSaveLyrics = { downloadManager.saveLyrics(task.id) },
+                        onSaveArtwork = { downloadManager.saveArtwork(task.id) },
                         onRemove = {
                             pendingDestructiveAction = DownloadDestructiveAction.RemoveTask(task.id, task.title)
                         },
@@ -541,6 +544,8 @@ private fun DownloadTaskRow(
     onResume: () -> Unit,
     onCancel: () -> Unit,
     onRetry: () -> Unit,
+    onSaveLyrics: () -> Unit,
+    onSaveArtwork: () -> Unit,
     onRemove: () -> Unit,
     onDeleteSong: () -> Unit,
 ) {
@@ -582,13 +587,15 @@ private fun DownloadTaskRow(
                         item { DownloadStatusPill(task.status) }
                         item {
                             DownloadActions(
-                                status = task.status,
+                                task = task,
                                 accentPalette = accentPalette,
                                 horizontal = true,
                                 onPause = onPause,
                                 onResume = onResume,
                                 onCancel = onCancel,
                                 onRetry = onRetry,
+                                onSaveLyrics = onSaveLyrics,
+                                onSaveArtwork = onSaveArtwork,
                                 onRemove = onRemove,
                                 onDeleteSong = onDeleteSong,
                             )
@@ -610,12 +617,14 @@ private fun DownloadTaskRow(
                     )
                     Spacer(Modifier.width(12.dp))
                     DownloadActions(
-                        status = task.status,
+                        task = task,
                         accentPalette = accentPalette,
                         onPause = onPause,
                         onResume = onResume,
                         onCancel = onCancel,
                         onRetry = onRetry,
+                        onSaveLyrics = onSaveLyrics,
+                        onSaveArtwork = onSaveArtwork,
                         onRemove = onRemove,
                         onDeleteSong = onDeleteSong,
                     )
@@ -769,18 +778,20 @@ private fun DownloadStatusPill(status: DownloadTaskStatus) {
 
 @Composable
 private fun DownloadActions(
-    status: DownloadTaskStatus,
+    task: SongDownloadTask,
     accentPalette: ContentAccentPalette,
     horizontal: Boolean = false,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onCancel: () -> Unit,
     onRetry: () -> Unit,
+    onSaveLyrics: () -> Unit,
+    onSaveArtwork: () -> Unit,
     onRemove: () -> Unit,
     onDeleteSong: () -> Unit,
 ) {
     val content: @Composable () -> Unit = {
-        when (status) {
+        when (task.status) {
             DownloadTaskStatus.Queued,
             DownloadTaskStatus.Resolving,
             DownloadTaskStatus.Downloading -> {
@@ -793,12 +804,49 @@ private fun DownloadActions(
                 SmallDownloadAction(AppIcons.Clear, "取消", accentPalette, onCancel)
             }
             DownloadTaskStatus.Failed,
-            DownloadTaskStatus.Cancelled,
-            DownloadTaskStatus.Deleted -> {
+            DownloadTaskStatus.Cancelled -> {
                 SmallDownloadAction(AppIcons.Refresh, "重试", accentPalette, onRetry)
                 SmallDownloadAction(AppIcons.Clear, "移除任务", accentPalette, onRemove)
             }
+            DownloadTaskStatus.Deleted -> {
+                if (task.lyricFileName != null || task.artworkFileName != null) {
+                    SmallDownloadAction(
+                        AppIcons.Delete,
+                        "再次清理歌词与封面",
+                        accentPalette,
+                        onDeleteSong,
+                        isDestructive = true,
+                    )
+                }
+                SmallDownloadAction(AppIcons.Refresh, "重新下载", accentPalette, onRetry)
+                SmallDownloadAction(AppIcons.Clear, "移除任务", accentPalette, onRemove)
+            }
             DownloadTaskStatus.Completed -> {
+                val savingLocalAsset =
+                    task.lyricStatus == DownloadLyricStatus.Saving ||
+                        task.artworkStatus == DownloadArtworkStatus.Saving
+                if (!savingLocalAsset) {
+                    SmallDownloadAction(
+                        AppIcons.GraphicEq,
+                        if (task.lyricStatus == DownloadLyricStatus.Saved) {
+                            "按当前歌词源重新保存歌词"
+                        } else {
+                            "单独保存歌词"
+                        },
+                        accentPalette,
+                        onSaveLyrics,
+                    )
+                    SmallDownloadAction(
+                        AppIcons.Download,
+                        if (task.artworkStatus == DownloadArtworkStatus.Saved) {
+                            "重新保存封面"
+                        } else {
+                            "单独保存封面"
+                        },
+                        accentPalette,
+                        onSaveArtwork,
+                    )
+                }
                 SmallDownloadAction(AppIcons.Delete, "删除歌曲", accentPalette, onDeleteSong, isDestructive = true)
                 SmallDownloadAction(AppIcons.Clear, "移除任务", accentPalette, onRemove)
             }
@@ -948,7 +996,7 @@ private fun DownloadTaskStatus.label(): String = when (this) {
     DownloadTaskStatus.Queued -> "排队"
     DownloadTaskStatus.Resolving -> "解析"
     DownloadTaskStatus.Downloading -> "下载"
-    DownloadTaskStatus.SavingLyrics -> "歌词"
+    DownloadTaskStatus.SavingLyrics -> "资源"
     DownloadTaskStatus.Paused -> "暂停"
     DownloadTaskStatus.Completed -> "完成"
     DownloadTaskStatus.Deleted -> "已删除"
@@ -967,7 +1015,8 @@ private fun SongDownloadTask.infoBadges(): List<DownloadInfoBadge> = when (statu
     DownloadTaskStatus.Completed -> buildList {
         qualityBadge(actualQuality)?.let(::add)
         add(lyricStatusBadge())
-        add(DownloadInfoBadge("已保存", DownloadInfoBadgeTone.Success))
+        add(artworkStatusBadge())
+        add(DownloadInfoBadge("音频已存", DownloadInfoBadgeTone.Success))
     }
     DownloadTaskStatus.Queued -> listOf(DownloadInfoBadge("等待", DownloadInfoBadgeTone.Neutral))
     DownloadTaskStatus.Resolving -> buildList {
@@ -977,7 +1026,7 @@ private fun SongDownloadTask.infoBadges(): List<DownloadInfoBadge> = when (statu
     DownloadTaskStatus.Paused -> listOf(DownloadInfoBadge("可继续", DownloadInfoBadgeTone.Neutral))
     DownloadTaskStatus.SavingLyrics -> buildList {
         qualityBadge(actualQuality)?.let(::add)
-        add(DownloadInfoBadge("保存歌词", DownloadInfoBadgeTone.Accent))
+        add(DownloadInfoBadge("保存歌词与封面", DownloadInfoBadgeTone.Accent))
     }
     DownloadTaskStatus.Downloading -> buildList {
         qualityBadge(actualQuality)?.let(::add)
@@ -1022,9 +1071,20 @@ private fun SongDownloadTask.qualityBadge(level: String?): DownloadInfoBadge? =
 private fun SongDownloadTask.lyricStatusBadge(): DownloadInfoBadge = when (lyricStatus) {
     DownloadLyricStatus.NotStarted -> DownloadInfoBadge("歌词待存", DownloadInfoBadgeTone.Neutral)
     DownloadLyricStatus.Saving -> DownloadInfoBadge("保存歌词", DownloadInfoBadgeTone.Accent)
-    DownloadLyricStatus.Saved -> DownloadInfoBadge("歌词已存", DownloadInfoBadgeTone.Success)
+    DownloadLyricStatus.Saved -> DownloadInfoBadge(
+        text = lyricFormat?.name?.let { "歌词已存 · $it" } ?: "歌词已存",
+        tone = DownloadInfoBadgeTone.Success,
+    )
     DownloadLyricStatus.NoLyric -> DownloadInfoBadge("无歌词", DownloadInfoBadgeTone.Neutral)
     DownloadLyricStatus.Failed -> DownloadInfoBadge("歌词失败", DownloadInfoBadgeTone.Error)
+}
+
+private fun SongDownloadTask.artworkStatusBadge(): DownloadInfoBadge = when (artworkStatus) {
+    DownloadArtworkStatus.NotStarted -> DownloadInfoBadge("封面待存", DownloadInfoBadgeTone.Neutral)
+    DownloadArtworkStatus.Saving -> DownloadInfoBadge("保存封面", DownloadInfoBadgeTone.Accent)
+    DownloadArtworkStatus.Saved -> DownloadInfoBadge("封面已存", DownloadInfoBadgeTone.Success)
+    DownloadArtworkStatus.NoArtwork -> DownloadInfoBadge("无封面", DownloadInfoBadgeTone.Neutral)
+    DownloadArtworkStatus.Failed -> DownloadInfoBadge("封面失败", DownloadInfoBadgeTone.Error)
 }
 
 private fun SongDownloadTask.progressText(): String {

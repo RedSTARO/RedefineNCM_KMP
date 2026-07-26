@@ -3,6 +3,7 @@
 package com.leejlredstar.redefinencm.kmp.player
 
 import com.leejlredstar.redefinencm.kmp.data.Repository
+import com.leejlredstar.redefinencm.kmp.download.LocalMediaAssets
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
@@ -39,6 +40,7 @@ import kotlin.JsFun
 class WebPlatformPlayer(
     private val repo: Repository,
     private val settings: PlatformSettings,
+    private val localMediaAssets: LocalMediaAssets,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
 ) : PlatformPlayer {
 
@@ -98,6 +100,7 @@ class WebPlatformPlayer(
     private var playbackGeneration = 0L
     private var loadedMediaId: String? = null
     private var activeObjectUrl: String? = null
+    private var activeArtworkObjectUrl: String? = null
     private var pendingSeekMs = 0L
     private var playRequested = false
     private var released = false
@@ -311,11 +314,17 @@ class WebPlatformPlayer(
         audio.removeAttribute("src")
         audio.load()
         revokeActiveObjectUrl()
+        revokeActiveArtworkObjectUrl()
     }
 
     private fun revokeActiveObjectUrl() {
         activeObjectUrl?.let(WebDownloadStorage::revokeObjectUrl)
         activeObjectUrl = null
+    }
+
+    private fun revokeActiveArtworkObjectUrl() {
+        activeArtworkObjectUrl?.let(localMediaAssets::releaseArtworkUri)
+        activeArtworkObjectUrl = null
     }
 
     private fun selectCurrentTrack(autoplay: Boolean, positionMs: Long = 0L) {
@@ -340,37 +349,63 @@ class WebPlatformPlayer(
     private fun resolveAndLoad(media: MediaInfo, generation: Long, startMs: Long) {
         resolveJob = scope.launch {
             var createdObjectUrl: String? = null
+            var createdArtworkUrl: String? = null
             try {
+                DownloadedSongsCache.ensureInitialized()
                 createdObjectUrl = media.id.toLongOrNull()
                     ?.let { DownloadedSongsCache.snapshot()[it]?.uri }
                     ?.let { uri -> runCatching { WebDownloadStorage.createObjectUrl(uri) }.getOrNull() }
+                if (createdObjectUrl != null) {
+                    createdArtworkUrl = media.id.toLongOrNull()
+                        ?.let { songId ->
+                            runCatching {
+                                localMediaAssets.resolveArtworkUri(songId)
+                            }.getOrNull()
+                        }
+                }
                 val streamUrl = createdObjectUrl ?: resolver.resolve(media.id)
                 if (!isPlaybackCurrent(generation, media)) {
                     createdObjectUrl?.let(WebDownloadStorage::revokeObjectUrl)
+                    createdArtworkUrl?.let(localMediaAssets::releaseArtworkUri)
                     return@launch
                 }
                 if (streamUrl.isNullOrBlank()) {
                     createdObjectUrl?.let(WebDownloadStorage::revokeObjectUrl)
+                    createdArtworkUrl?.let(localMediaAssets::releaseArtworkUri)
                     publishPlaybackError()
                     return@launch
                 }
 
                 revokeActiveObjectUrl()
                 activeObjectUrl = createdObjectUrl
+                revokeActiveArtworkObjectUrl()
+                activeArtworkObjectUrl = createdArtworkUrl
                 loadedMediaId = media.id
                 pendingSeekMs = startMs.coerceAtLeast(0L)
                 audio.src = streamUrl
                 audio.load()
+                updateWebMediaSessionMetadata(
+                    title = media.title,
+                    artist = media.artist,
+                    album = media.albumTitle,
+                    artworkUri = createdArtworkUrl ?: media.artworkUri,
+                )
                 if (!isPlaybackCurrent(generation, media)) return@launch
                 if (playRequested) requestAudioPlay(generation, media)
             } catch (cancelled: CancellationException) {
                 if (createdObjectUrl != activeObjectUrl) {
                     createdObjectUrl?.let(WebDownloadStorage::revokeObjectUrl)
                 }
+                if (createdArtworkUrl != activeArtworkObjectUrl) {
+                    createdArtworkUrl?.let(localMediaAssets::releaseArtworkUri)
+                }
                 throw cancelled
             } catch (_: Throwable) {
                 if (createdObjectUrl != activeObjectUrl) {
                     createdObjectUrl?.let(WebDownloadStorage::revokeObjectUrl)
+                }
+                if (createdArtworkUrl != activeArtworkObjectUrl) {
+                    createdArtworkUrl?.let(localMediaAssets::releaseArtworkUri)
                 }
                 if (isPlaybackCurrent(generation, media)) publishPlaybackError()
             }
@@ -611,6 +646,7 @@ class WebPlatformPlayer(
         audio.removeAttribute("src")
         audio.load()
         revokeActiveObjectUrl()
+        revokeActiveArtworkObjectUrl()
         released = true
         scope.cancel()
     }

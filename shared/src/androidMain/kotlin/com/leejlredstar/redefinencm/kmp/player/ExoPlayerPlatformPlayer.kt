@@ -13,6 +13,7 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.leejlredstar.redefinencm.kmp.data.Repository
+import com.leejlredstar.redefinencm.kmp.download.LocalMediaAssets
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
@@ -43,6 +44,7 @@ class ExoPlayerPlatformPlayer(
     context: Context,
     private val repo: Repository,
     private val settings: PlatformSettings,
+    private val localMediaAssets: LocalMediaAssets,
 ) : PlatformPlayer {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -51,7 +53,10 @@ class ExoPlayerPlatformPlayer(
         val id = mediaId.toLong()
 
         // Check for a locally-downloaded offline file first.
-        findDownloadedSongUri(id)?.let { return@StreamUrlResolver it }
+        findDownloadedSongUri(id)?.let { localAudioUri ->
+            publishLocalMediaSessionArtwork(mediaId)
+            return@StreamUrlResolver localAudioUri
+        }
 
         // Fall through to online CDN resolution.
         val qualityName = settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.EXHIGH.name)
@@ -158,6 +163,28 @@ class ExoPlayerPlatformPlayer(
             exoPlayer.playbackState == Player.STATE_ENDED -> PlayerState.ENDED
             exoPlayer.playbackState == Player.STATE_READY -> PlayerState.PAUSED
             else -> PlayerState.IDLE
+        }
+    }
+
+    private fun publishLocalMediaSessionArtwork(mediaId: String) {
+        val songId = mediaId.toLongOrNull() ?: return
+        scope.launch {
+            val localArtworkUri = kotlinx.coroutines.withContext(Dispatchers.Default) {
+                runCatching { localMediaAssets.resolveArtworkUri(songId) }.getOrNull()
+            }?.takeIf(String::isNotBlank) ?: return@launch
+            if (exoPlayer.currentMediaItem?.mediaId != mediaId) return@launch
+            val index = exoPlayer.currentMediaItemIndex
+            if (index == C.INDEX_UNSET) return@launch
+            val current = exoPlayer.getMediaItemAt(index)
+            if (current.mediaMetadata.artworkUri?.toString() == localArtworkUri) return@launch
+            val metadata = current.mediaMetadata
+                .buildUpon()
+                .setArtworkUri(Uri.parse(localArtworkUri))
+                .build()
+            exoPlayer.replaceMediaItem(
+                index,
+                current.buildUpon().setMediaMetadata(metadata).build(),
+            )
         }
     }
 
