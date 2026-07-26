@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.util
 
+import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -87,5 +88,54 @@ class SettingsBackupTest {
             },
         )
         assertTrue(exported.contains("\"useDynamicCover\":true"))
+    }
+
+    @Test
+    fun lyricSourceModeRoundTripsWithoutChangingLegacyImports() {
+        val exported = encodeSettingsBackup(
+            getString = { key, default ->
+                if (key == SettingKeys.LYRIC_SOURCE_MODE) {
+                    LyricSourceMode.BACKEND_ONLY.wireValue
+                } else {
+                    default
+                }
+            },
+            getBoolean = { _, default -> default },
+        )
+        val writtenStrings = mutableMapOf<String, String>()
+        assertTrue(
+            applySettingsBackup(
+                json = exported,
+                setString = { key, value -> writtenStrings[key] = value },
+                setBoolean = { _, _ -> },
+            ),
+        )
+        assertTrue(
+            writtenStrings[SettingKeys.LYRIC_SOURCE_MODE] ==
+                LyricSourceMode.BACKEND_ONLY.wireValue,
+        )
+
+        writtenStrings.clear()
+        assertTrue(
+            applySettingsBackup(
+                json = "{}",
+                setString = { key, value -> writtenStrings[key] = value },
+                setBoolean = { _, _ -> },
+            ),
+        )
+        assertFalse(SettingKeys.LYRIC_SOURCE_MODE in writtenStrings)
+    }
+
+    @Test
+    fun invalidLyricSourceModeIsRejectedBeforeWriting() {
+        val writes = mutableListOf<String>()
+        val applied = applySettingsBackup(
+            json = """{"server":"http://server/","lyricSourceMode":"unknown"}""",
+            setString = { key, _ -> writes += key },
+            setBoolean = { key, _ -> writes += key },
+        )
+
+        assertFalse(applied)
+        assertTrue(writes.isEmpty())
     }
 }

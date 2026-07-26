@@ -26,6 +26,22 @@ enum class LyricCacheStatus {
     Failed,
 }
 
+@Serializable
+internal data class CachedExternalTtml(
+    val content: String,
+    val providerItemId: String,
+    val endpoint: String,
+    val fetchedAtEpochMillis: Long = 0L,
+)
+
+@Serializable
+private data class CachedLyricBundle(
+    /** Required so legacy raw Lyric JSON cannot be mistaken for a bundle. */
+    val version: Int,
+    val backend: Lyric? = null,
+    val amllTtml: CachedExternalTtml? = null,
+)
+
 enum class CacheThenNetworkSource {
     CACHE,
     NETWORK,
@@ -61,11 +77,13 @@ class Repository(
     private val relayCapability = MutableStateFlow(EndpointCapability.UNKNOWN)
     private val relayCapabilityMutex = Mutex()
     private val userLevelRequestMutex = Mutex()
+    private val lyricCacheMutex = Mutex()
     private var nextUserLevelRequestGeneration = 0L
     private val latestCommittedUserLevelRequestByUid = mutableMapOf<Long, Long>()
 
     private companion object {
         const val API_SUCCESS_CODE = 200
+        const val LYRIC_CACHE_VERSION = 1
     }
 
     // ── User ──
@@ -390,9 +408,10 @@ class Repository(
 
     suspend fun cacheLyric(id: Long): LyricCacheStatus {
         return try {
-            cachedLyric(id)?.takeIf { it.hasAnyLyricText() }?.let { return LyricCacheStatus.Saved }
+            cachedLyric(id)?.takeIf { it.hasPrimaryLyricText() }
+                ?.let { return LyricCacheStatus.Saved }
             val network = fetchAndCacheLyric(id) ?: return LyricCacheStatus.Failed
-            if (network.hasAnyLyricText()) LyricCacheStatus.Saved else LyricCacheStatus.NoLyric
+            if (network.hasPrimaryLyricText()) LyricCacheStatus.Saved else LyricCacheStatus.NoLyric
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -402,31 +421,91 @@ class Repository(
     }
 
     private fun cachedLyric(id: Long): Lyric? = runCatching {
-        db.cachedLyricQueries.selectBySongId(id).executeAsOneOrNull()
-            ?.let { json.decodeFromString<Lyric>(it) }
+        cachedLyricBundle(id)?.backend
             ?.takeIf { it.code == API_SUCCESS_CODE }
     }.getOrNull()
+
+    internal fun cachedExternalTtml(id: Long): CachedExternalTtml? =
+        runCatching { cachedLyricBundle(id)?.amllTtml }.getOrNull()
+
+    internal suspend fun cacheExternalTtml(id: Long, ttml: CachedExternalTtml) {
+        lyricCacheMutex.withLock {
+            val current = cachedLyricBundle(id) ?: CachedLyricBundle(version = LYRIC_CACHE_VERSION)
+            db.cachedLyricQueries.upsert(
+                id,
+                json.encodeToString(
+                    current.copy(
+                        version = LYRIC_CACHE_VERSION,
+                        amllTtml = ttml,
+                    ),
+                ),
+            )
+        }
+    }
 
     private suspend fun fetchAndCacheLyric(id: Long): Lyric? {
         // /lyric/new 返回 yrc (逐字歌词); /lyric 不返回 yrc。优先使用 /lyric/new
         val networkNew = safeApiCall { api.lyricNew(id) }
             ?.takeIf { it.code == API_SUCCESS_CODE }
-        if (networkNew != null && networkNew.hasAnyLyricText()) {
-            db.cachedLyricQueries.upsert(id, json.encodeToString(networkNew))
+        if (networkNew != null && networkNew.hasPrimaryLyricText()) {
+            cacheBackendLyric(id, networkNew)
             return networkNew
         }
         val fallback = safeApiCall { api.lyric(id) }
             ?.takeIf { it.code == API_SUCCESS_CODE }
             ?: return null
-        db.cachedLyricQueries.upsert(id, json.encodeToString(fallback))
+        cacheBackendLyric(id, fallback)
         return fallback
     }
 
-    private fun Lyric.hasAnyLyricText(): Boolean =
+    private suspend fun cacheBackendLyric(id: Long, lyric: Lyric) {
+        lyricCacheMutex.withLock {
+            val current = cachedLyricBundle(id) ?: CachedLyricBundle(version = LYRIC_CACHE_VERSION)
+            db.cachedLyricQueries.upsert(
+                id,
+                json.encodeToString(
+                    current.copy(
+                        version = LYRIC_CACHE_VERSION,
+                        backend = lyric,
+                    ),
+                ),
+            )
+        }
+    }
+
+    internal suspend fun clearExternalTtml(id: Long) {
+        lyricCacheMutex.withLock {
+            val current = cachedLyricBundle(id) ?: return@withLock
+            if (current.amllTtml == null) return@withLock
+            db.cachedLyricQueries.upsert(
+                id,
+                json.encodeToString(
+                    current.copy(
+                        version = LYRIC_CACHE_VERSION,
+                        amllTtml = null,
+                    ),
+                ),
+            )
+        }
+    }
+
+    private fun cachedLyricBundle(id: Long): CachedLyricBundle? {
+        val raw = db.cachedLyricQueries.selectBySongId(id).executeAsOneOrNull() ?: return null
+        val bundle = runCatching { json.decodeFromString<CachedLyricBundle>(raw) }.getOrNull()
+        if (bundle?.version == LYRIC_CACHE_VERSION) return bundle
+
+        val legacy = runCatching { json.decodeFromString<Lyric>(raw) }.getOrNull()
+            ?.takeIf { it.code == API_SUCCESS_CODE }
+            ?: return null
+        return CachedLyricBundle(
+            version = LYRIC_CACHE_VERSION,
+            backend = legacy,
+        )
+    }
+
+    private fun Lyric.hasPrimaryLyricText(): Boolean =
         lrc?.lyric?.isNotBlank() == true ||
-            yrc?.lyric?.isNotBlank() == true ||
-            tlyric?.lyric?.isNotBlank() == true ||
-            romalrc?.lyric?.isNotBlank() == true
+            yrc?.lyric?.isNotBlank() == true
 
     // ── Song URL ──
 

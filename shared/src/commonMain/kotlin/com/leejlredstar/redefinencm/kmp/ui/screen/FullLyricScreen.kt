@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -89,6 +90,8 @@ fun FullLyricScreen(
     val lyricUiState by viewModel.lyricUiState.collectAsState()
     val lyricIndex by viewModel.lyricIndex.collectAsState()
     val wordLyricLines by viewModel.wordLyricLines.collectAsState()
+    val showTranslatedLyric by viewModel.showTranslatedLyric.collectAsState()
+    val showRomanLyric by viewModel.showRomanLyric.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
     val songWikiUiState by viewModel.songWikiUiState.collectAsState()
@@ -292,7 +295,11 @@ fun FullLyricScreen(
                         dist == 1 -> 17.sp
                         else -> 15.sp
                     }
-                    val wordLine = if (isCurrent) findWordLine(entry.key, wordLyricLines) else null
+                    val wordLine = findWordLine(entry.key, wordLyricLines)
+                    val supplement = wordLine?.visibleSupplement(
+                        showTranslation = showTranslatedLyric,
+                        showRomanization = showRomanLyric,
+                    ).orEmpty()
                     val seekToLine: (() -> Unit)? = entry.key?.let { timestamp ->
                         {
                             viewModel.onPositionSeekClick(timestamp)
@@ -300,7 +307,7 @@ fun FullLyricScreen(
                             isUserScrolling = false
                         }
                     }
-                    if (wordLine != null) {
+                    if (wordLine != null && isCurrent) {
                         WordLyricKaraokeLine(
                             line = wordLine,
                             positionMs = currentPosition,
@@ -308,6 +315,7 @@ fun FullLyricScreen(
                             fontSize = fontSize,
                             highlightColor = accentPalette.accent,
                             isCurrent = isCurrent,
+                            supplement = supplement,
                             onClick = seekToLine,
                         )
                     } else {
@@ -316,6 +324,7 @@ fun FullLyricScreen(
                             alpha = alpha,
                             fontSize = fontSize,
                             isCurrent = isCurrent,
+                            supplement = supplement,
                             onClick = seekToLine,
                         )
                     }
@@ -372,18 +381,19 @@ private fun findWordLine(
     lines: List<LyricParser.WordLine>,
 ): LyricParser.WordLine? {
     if (timestamp == null || lines.isEmpty()) return null
-    var nearest: LyricParser.WordLine? = null
-    var nearestDistance = Long.MAX_VALUE
-    lines.forEach { line ->
-        val distance = kotlin.math.abs(line.startTimeMs - timestamp)
-        if (distance == 0L) return line
-        if (distance < nearestDistance) {
-            nearest = line
-            nearestDistance = distance
-        }
-    }
-    return nearest?.takeIf { nearestDistance <= 150L }
+    val matches = lines.filter { kotlin.math.abs(it.startTimeMs - timestamp) <= 150L }
+    // A projected map entry may contain simultaneous lead/background/duet lines. Animating only
+    // one of those lines would hide the others while current, so keep the merged projection.
+    return matches.singleOrNull()
 }
+
+private fun LyricParser.WordLine.visibleSupplement(
+    showTranslation: Boolean,
+    showRomanization: Boolean,
+): String = buildList {
+    if (showTranslation && translatedLyric.isNotBlank()) add(translatedLyric)
+    if (showRomanization && romanLyric.isNotBlank()) add(romanLyric)
+}.joinToString("\n")
 
 @Composable
 private fun WordLyricKaraokeLine(
@@ -393,6 +403,7 @@ private fun WordLyricKaraokeLine(
     fontSize: TextUnit,
     highlightColor: Color,
     isCurrent: Boolean,
+    supplement: String,
     onClick: (() -> Unit)?,
 ) {
     val dimColor = Color(0xFFC8C8C8)
@@ -446,6 +457,7 @@ private fun WordLyricKaraokeLine(
             .padding(vertical = 3.dp),
         contentAlignment = Alignment.Center,
     ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = annotatedText,
             fontSize = fontSize,
@@ -454,6 +466,20 @@ private fun WordLyricKaraokeLine(
             softWrap = true,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
         )
+            if (supplement.isNotBlank()) {
+                Text(
+                    text = supplement,
+                    color = brightColor.copy(alpha = 0.78f),
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 24.dp, top = 2.dp, end = 24.dp),
+                )
+            }
+        }
     }
 }
 
@@ -463,6 +489,7 @@ private fun LyricKaraokeLine(
     alpha: Float,
     fontSize: TextUnit,
     isCurrent: Boolean,
+    supplement: String,
     onClick: (() -> Unit)?,
 ) {
     val lineColor = if (isCurrent) {
@@ -497,6 +524,7 @@ private fun LyricKaraokeLine(
             .padding(vertical = 3.dp),
         contentAlignment = Alignment.Center,
     ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = text,
             color = lineColor,
@@ -507,5 +535,17 @@ private fun LyricKaraokeLine(
             softWrap = true,
             overflow = TextOverflow.Ellipsis,
         )
+            if (supplement.isNotBlank()) {
+                Text(
+                    text = supplement,
+                    color = lineColor.copy(alpha = 0.78f),
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 24.dp, top = 2.dp, end = 24.dp),
+                )
+            }
+        }
     }
 }

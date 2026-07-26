@@ -66,8 +66,6 @@ import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerControlle
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
 import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsButton
 import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsSheet
-import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
-import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.LyricParser
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
@@ -90,9 +88,9 @@ actual val supportsDynamicNowPlayingCover: Boolean = true
 @Composable
 actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val viewModel: NowPlayingViewModel = koinInject()
-    val platformSettings: PlatformSettings = koinInject()
     val rawLyric by viewModel.rawLyric.collectAsState()
     val rawWordLyric by viewModel.rawWordLyric.collectAsState()
+    val rawTtmlLyric by viewModel.rawTtmlLyric.collectAsState()
     val rawTranslatedLyric by viewModel.rawTranslatedLyric.collectAsState()
     val rawRomanLyric by viewModel.rawRomanLyric.collectAsState()
     val lyricMap by viewModel.lyricMap.collectAsState()
@@ -103,6 +101,8 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val dynamicCoverUiState by viewModel.dynamicCoverUiState.collectAsState()
     val dynamicCoverUrl = dynamicCoverUiState.urlFor(metadata?.id)
     val songWikiUiState by viewModel.songWikiUiState.collectAsState()
+    val showTranslatedLyric by viewModel.showTranslatedLyric.collectAsState()
+    val showRomanLyric by viewModel.showRomanLyric.collectAsState()
 
     val context = LocalContext.current
     var engineReady by remember { mutableStateOf(false) }
@@ -115,13 +115,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             ""
         }
     }
-    val showTranslatedLyric = remember {
-        platformSettings.getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
-    }
-    val showRomanLyric = remember {
-        platformSettings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)
-    }
-
     val webView = remember(context, rendererGeneration) {
         if ((context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
             WebView.setWebContentsDebuggingEnabled(true)
@@ -246,10 +239,13 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     LaunchedEffect(
         engineReady,
         lyricMediaId,
+        rawTtmlLyric,
         rawWordLyric,
         lyricForWeb,
         rawTranslatedLyric,
         rawRomanLyric,
+        showTranslatedLyric,
+        showRomanLyric,
         lyricUiState,
     ) {
         if (!engineReady) return@LaunchedEffect
@@ -272,7 +268,13 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             showTranslatedLyric = showTranslatedLyric,
             showRomanLyric = showRomanLyric,
         )
-        if (rawWordLyric.isNotBlank()) {
+        if (rawTtmlLyric.isNotBlank()) {
+            Log.d("AMLL", "feeding TTML media=$mediaId, len=${rawTtmlLyric.length}")
+            webView.evaluateJavascript(
+                "AmllBridge.loadTtmlLyrics(${JSONObject.quote(rawTtmlLyric)}, ${JSONObject.quote(mediaId)}, $lyricOptions, ${JSONObject.quote(lyricForWeb)}); AmllBridge.setTime($currentPosition);",
+                null,
+            )
+        } else if (rawWordLyric.isNotBlank()) {
             Log.d("AMLL", "feeding word lyrics media=$mediaId, len=${rawWordLyric.length}")
             webView.evaluateJavascript(
                 "AmllBridge.loadWordLyrics(${JSONObject.quote(rawWordLyric)}, ${JSONObject.quote(mediaId)}, $lyricOptions); AmllBridge.setTime($currentPosition);",

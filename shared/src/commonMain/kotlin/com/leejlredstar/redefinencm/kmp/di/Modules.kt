@@ -1,10 +1,12 @@
 package com.leejlredstar.redefinencm.kmp.di
 
 import com.leejlredstar.redefinencm.kmp.data.Repository
+import com.leejlredstar.redefinencm.kmp.data.api.AmlldbApi
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.data.db.AppDatabase
 import com.leejlredstar.redefinencm.kmp.data.db.DatabaseDriverFactory
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
+import com.leejlredstar.redefinencm.kmp.lyric.LyricResolver
 import com.leejlredstar.redefinencm.kmp.player.InMemoryPlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlaybackReportingCoordinator
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
@@ -51,15 +53,17 @@ fun initKoin(config: KoinAppDeclaration? = null) {
 val sharedModule = module {
     // API
     single { NCMApi(get()) }
+    single { AmlldbApi(get()) }
 
     // Database — DatabaseDriverFactory is provided by platformModule()
     single { AppDatabase(get<DatabaseDriverFactory>().createDriver()) }
 
     // Repository
     single { Repository(get(), get()) }
+    single { LyricResolver(get(), get()) }
 
     // Download queue — one process-wide queue drives the manager page and row status chips.
-    single { SongDownloadManager(get(), get()) }
+    single { SongDownloadManager(get(), get(), get()) }
 
     // Player — shared in-memory default (no real audio). A platform that implements a real
     // PlatformPlayer should bind it in platformModule() and remove this default (or load with
@@ -77,7 +81,7 @@ val sharedModule = module {
     single { MainViewModel(get(), get(), get(), get(), get()) }
     // Single — the now-playing state is inherently global (only one song plays at a time).
     // The full-screen player and compact playback controls inject this same instance.
-    single { NowPlayingViewModel(get(), get(), get(), get()) }
+    single { NowPlayingViewModel(get(), get(), get(), get(), get()) }
     // Factory — recording and cancellation are scoped to one pushed recognition page.
     factory { SongRecognitionViewModel(get(), get(), get()) }
 }

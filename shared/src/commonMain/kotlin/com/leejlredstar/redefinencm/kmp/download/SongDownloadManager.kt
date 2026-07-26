@@ -3,6 +3,9 @@ package com.leejlredstar.redefinencm.kmp.download
 import com.leejlredstar.redefinencm.kmp.data.LyricCacheStatus
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
+import com.leejlredstar.redefinencm.kmp.lyric.LyricQuery
+import com.leejlredstar.redefinencm.kmp.lyric.LyricResolver
+import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
 import com.leejlredstar.redefinencm.kmp.util.DownloadRequestItem
 import com.leejlredstar.redefinencm.kmp.util.DownloadScanResult
 import com.leejlredstar.redefinencm.kmp.util.DownloadedSongSnapshot
@@ -151,6 +154,7 @@ sealed interface LocalLibrarySyncState {
 class SongDownloadManager(
     private val repo: Repository,
     private val settings: PlatformSettings,
+    private val lyricResolver: LyricResolver,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _tasks = MutableStateFlow<List<SongDownloadTask>>(emptyList())
@@ -757,7 +761,22 @@ class SongDownloadManager(
                     )
                 }
             ) return
-            val lyricStatus = when (repo.cacheLyric(taskId)) {
+            val lyricMode = LyricSourceMode.fromStoredWireValue(
+                settings.getStringAsync(
+                    SettingKeys.LYRIC_SOURCE_MODE,
+                    LyricSourceMode.DEFAULT.wireValue,
+                ),
+            )
+            val lyricStatus = when (
+                lyricResolver.cache(
+                    query = LyricQuery(
+                        songId = task.id,
+                        title = task.title,
+                        artist = task.artist,
+                    ),
+                    mode = lyricMode,
+                )
+            ) {
                 LyricCacheStatus.Saved -> DownloadLyricStatus.Saved
                 LyricCacheStatus.NoLyric -> DownloadLyricStatus.NoLyric
                 LyricCacheStatus.Failed -> DownloadLyricStatus.Failed

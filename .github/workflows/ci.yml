@@ -73,6 +73,28 @@ jobs:
         run: |
           python scripts/check_tracked_secrets.py --self-test
 
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: androidApp/amll-builder/package-lock.json
+
+      - name: Verify committed AMLL assets
+        working-directory: androidApp/amll-builder
+        run: |
+          npm ci
+          npm test
+          npm run build
+          git -C ../.. diff --exit-code -- \
+            shared/src/commonMain/amllAssets/amll/bundle.js \
+            shared/src/commonMain/amllAssets/amll/style.css
+          cmp ../../LICENSES/AGPL-3.0-only.txt \
+            ../../shared/src/commonMain/composeResources/files/licenses/AGPL-3.0-only.txt
+          cmp ../../LICENSES/Apache-2.0.txt \
+            ../../shared/src/commonMain/composeResources/files/licenses/Apache-2.0.txt
+          cmp ../../THIRD_PARTY_NOTICES.md \
+            ../../shared/src/commonMain/composeResources/files/licenses/THIRD_PARTY_NOTICES.md
+
       - name: Run tests and compile checks
         run: |
           chmod +x gradlew

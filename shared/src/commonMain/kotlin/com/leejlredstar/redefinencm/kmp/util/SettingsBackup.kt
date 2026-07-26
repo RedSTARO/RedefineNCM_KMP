@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.util
 
+import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -19,6 +20,8 @@ data class SettingsBackupData(
     val adaptOriginalAndroidLyric: Boolean = false,
     val showTranslatedLyric: Boolean = false,
     val showRomanLyric: Boolean = false,
+    /** Null keeps the current choice when importing a backup made before lyric-source support. */
+    val lyricSourceMode: String? = null,
     val useDynamicCover: Boolean = false,
 )
 
@@ -46,6 +49,9 @@ internal fun encodeSettingsBackup(
         adaptOriginalAndroidLyric = getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false),
         showTranslatedLyric = getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false),
         showRomanLyric = getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false),
+        lyricSourceMode = LyricSourceMode.fromStoredWireValue(
+            getString(SettingKeys.LYRIC_SOURCE_MODE, LyricSourceMode.DEFAULT.wireValue),
+        ).wireValue,
         useDynamicCover = getBoolean(SettingKeys.USE_DYNAMIC_COVER, false),
     )
 )
@@ -64,6 +70,9 @@ internal fun applySettingsBackup(
     setBoolean: (key: String, value: Boolean) -> Unit,
 ): Boolean = try {
     val data = backupJson.decodeFromString<SettingsBackupData>(json)
+    val lyricSourceMode = data.lyricSourceMode?.let { stored ->
+        LyricSourceMode.fromWireValueOrNull(stored) ?: return false
+    }
     if (data.server.isNotEmpty()) setString(SettingKeys.SERVER, data.server)
     setString(SettingKeys.ONLINE_PLAY_QUALITY, data.onlinePlayQuality)
     setString(SettingKeys.DOWNLOAD_QUALITY, data.downloadQuality)
@@ -74,6 +83,7 @@ internal fun applySettingsBackup(
     setBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, data.adaptOriginalAndroidLyric)
     setBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, data.showTranslatedLyric)
     setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, data.showRomanLyric)
+    lyricSourceMode?.let { setString(SettingKeys.LYRIC_SOURCE_MODE, it.wireValue) }
     setBoolean(SettingKeys.USE_DYNAMIC_COVER, data.useDynamicCover)
     true
 } catch (_: Exception) {

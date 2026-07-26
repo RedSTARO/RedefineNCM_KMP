@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.di
 
 import com.leejlredstar.redefinencm.kmp.data.db.DatabaseDriverFactory
+import com.leejlredstar.redefinencm.kmp.data.api.ExternalHttpClientFactory
 import com.leejlredstar.redefinencm.kmp.player.IosAVPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.recognition.IosMicrophoneRecorder
@@ -14,6 +15,7 @@ actual fun platformModule() = module {
     // Ktor HttpClient (Darwin engine). Cookie is read fresh per request, so QR login takes
     // effect without relaunch; only a server (base URL) change still needs a relaunch.
     single<HttpClient> { createNcmHttpClient(get(), Darwin) }
+    single { ExternalHttpClientFactory.create(Darwin) }
 
     // PlatformSettings backed by NSUserDefaults
     single { PlatformSettings() }

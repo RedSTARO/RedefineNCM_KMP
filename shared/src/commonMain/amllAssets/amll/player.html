@@ -1520,10 +1520,21 @@ function applyLyricOptions(lines, options) {
   const romans = opts.showRoman ? parseLrcSupplement(opts.romanLyric) : [];
   return (Array.isArray(lines) ? lines : []).map(function (line) {
     const next = Object.assign({}, line);
-    const translation = nearestSupplement(translations, next.startTime);
-    if (translation) next.translatedLyric = translation;
-    const roman = nearestSupplement(romans, next.startTime);
-    if (roman) next.romanLyric = roman;
+    if (opts.showTranslation) {
+      const translation = nearestSupplement(translations, next.startTime);
+      if (translation) next.translatedLyric = translation;
+    } else {
+      next.translatedLyric = "";
+    }
+    if (opts.showRoman) {
+      const roman = nearestSupplement(romans, next.startTime);
+      if (roman) next.romanLyric = roman;
+    } else {
+      next.romanLyric = "";
+      next.words = (Array.isArray(next.words) ? next.words : []).map(function (word) {
+        return Object.assign({}, word, { romanWord: "" });
+      });
+    }
     return next;
   });
 }
@@ -1553,18 +1564,41 @@ function installWordLyricSupport() {
     this.player?.setLyricLines([]);
   };
 
-  if (bridge.__redefineWordLyricWrapped) return;
-  bridge.__redefineWordLyricWrapped = true;
-  bridge.loadWordLyrics = function (yrcText, mediaId, options) {
-    if (!this.player) return;
-    const parsed = this.parseYrc ? this.parseYrc(yrcText) : [];
-    const primaryLines = parsed.length ? parsed : (this.parseLrc ? this.parseLrc(yrcText) : []);
-    const lines = applyLyricOptions(primaryLines, options);
-    setCurrentLyricLines(lines, mediaId);
-    this.player.setLyricLines(lines);
-    scheduleLyricLineTagging();
-    globalThis.AmllPage && globalThis.AmllPage.hideLoading();
-  };
+  if (!bridge.__redefineWordLyricWrapped) {
+    bridge.__redefineWordLyricWrapped = true;
+    bridge.loadWordLyrics = function (yrcText, mediaId, options) {
+      if (!this.player) return;
+      const parsed = this.parseYrc ? this.parseYrc(yrcText) : [];
+      const primaryLines = parsed.length ? parsed : (this.parseLrc ? this.parseLrc(yrcText) : []);
+      const lines = applyLyricOptions(primaryLines, options);
+      setCurrentLyricLines(lines, mediaId);
+      this.player.setLyricLines(lines);
+      scheduleLyricLineTagging();
+      globalThis.AmllPage && globalThis.AmllPage.hideLoading();
+    };
+  }
+
+  if (!bridge.__redefineTtmlLyricWrapped) {
+    bridge.__redefineTtmlLyricWrapped = true;
+    bridge.loadTtmlLyrics = function (ttmlText, mediaId, options, fallbackLrc) {
+      if (!this.player) return;
+      let primaryLines = [];
+      try {
+        const parsed = this.parseTTML ? this.parseTTML(ttmlText) : null;
+        primaryLines = Array.isArray(parsed && parsed.lines) ? parsed.lines : [];
+      } catch (error) {
+        console.error("AMLL TTML parse failed; using validated line fallback", error);
+      }
+      if (!primaryLines.length && fallbackLrc && this.parseLrc) {
+        primaryLines = this.parseLrc(fallbackLrc);
+      }
+      const lines = applyLyricOptions(primaryLines, options);
+      setCurrentLyricLines(lines, mediaId);
+      this.player.setLyricLines(lines);
+      scheduleLyricLineTagging();
+      globalThis.AmllPage && globalThis.AmllPage.hideLoading();
+    };
+  }
 }
 globalThis.installWordLyricSupport = installWordLyricSupport;
 

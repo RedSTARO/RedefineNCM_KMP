@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.di
 
 import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
+import com.leejlredstar.redefinencm.kmp.data.api.ExternalHttpClientFactory
 import com.leejlredstar.redefinencm.kmp.data.db.DatabaseDriverFactory
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.WebPlatformPlayer
@@ -21,6 +22,7 @@ actual fun platformModule() = module {
             cookieTransport = HttpClientFactory.CookieTransport.QUERY_PARAMETER,
         )
     }
+    single { ExternalHttpClientFactory.create(Js) }
 
     // PlatformSettings backed by localStorage
     single { PlatformSettings() }
