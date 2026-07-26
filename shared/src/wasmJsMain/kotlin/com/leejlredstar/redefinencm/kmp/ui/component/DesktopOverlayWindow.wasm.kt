@@ -14,6 +14,7 @@ internal actual fun DesktopOverlayWindow(
     focusable: Boolean,
     modal: Boolean,
     transparent: Boolean,
+    windowShape: DesktopOverlayWindowShape,
     onCloseRequest: () -> Unit,
     content: @Composable () -> Unit,
 ) {

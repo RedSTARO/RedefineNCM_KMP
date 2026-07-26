@@ -19,6 +19,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -96,6 +97,7 @@ fun AutoHideMiniPlayerController(
     showCollapsedWhenHidden: Boolean = true,
     collapsedHostFillsWidth: Boolean = false,
     autoHideDelayMillis: Long = 3_600L,
+    forceOpaqueSurfaces: Boolean = false,
     externalRevealRequest: Int = 0,
     onOverlayVisibilityChanged: (Boolean) -> Unit = {},
     onSheetVisibilityChanged: (Boolean) -> Unit = {},
@@ -193,6 +195,13 @@ fun AutoHideMiniPlayerController(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
+        if (forceOpaqueSurfaces && !sheetVisible) {
+            OpaquePlaybackControlsBackdrop(
+                accentPalette = accentPalette,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
         AnimatedContent(
             targetState = visible,
             modifier = Modifier
@@ -214,6 +223,7 @@ fun AutoHideMiniPlayerController(
                     shuffleEnabled = shuffleEnabled,
                     isFavorite = isFavorite,
                     accentPalette = accentPalette,
+                    forceOpaqueSurfaces = forceOpaqueSurfaces,
                     onArtworkLoaded = extractAccent,
                     onReveal = ::reveal,
                     onCollapse = ::collapse,
@@ -260,6 +270,7 @@ fun AutoHideMiniPlayerController(
                     totalDuration = totalDuration,
                     progress = progress,
                     accentPalette = accentPalette,
+                    forceOpaqueSurface = forceOpaqueSurfaces,
                     onReveal = ::reveal,
                     onTogglePlayPause = { if (hasMedia) player.togglePlayPause() },
                     onPrevious = { if (hasMedia) player.seekToPrevious() },
@@ -293,6 +304,50 @@ fun AutoHideMiniPlayerController(
                 errorMessage = commentsLoadError,
                 onRetry = viewModel::getComments,
             )
+        }
+    }
+}
+
+@Composable
+private fun OpaquePlaybackControlsBackdrop(
+    accentPalette: ContentAccentPalette,
+    modifier: Modifier = Modifier,
+) {
+    BoxWithConstraints(modifier = modifier) {
+        if (maxHeight > 100.dp) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .widthIn(max = 620.dp)
+                    .fillMaxWidth()
+                    .height(153.dp),
+                shape = MaterialTheme.shapes.extraLarge,
+                color = accentPalette.container,
+                tonalElevation = 0.dp,
+            ) {}
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .widthIn(max = 620.dp)
+                    .fillMaxWidth()
+                    .height(64.dp),
+                shape = CircleShape,
+                color = accentPalette.quietContainer,
+                tonalElevation = 0.dp,
+            ) {}
+        } else {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 8.dp, vertical = 8.dp)
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = CircleShape,
+                color = accentPalette.quietContainer,
+                tonalElevation = 0.dp,
+            ) {}
         }
     }
 }
@@ -339,6 +394,7 @@ private fun FullLyricControlConsole(
     shuffleEnabled: Boolean,
     isFavorite: Boolean,
     accentPalette: ContentAccentPalette,
+    forceOpaqueSurfaces: Boolean,
     onArtworkLoaded: (coil3.Image) -> Unit,
     onReveal: () -> Unit,
     onCollapse: () -> Unit,
@@ -363,6 +419,7 @@ private fun FullLyricControlConsole(
             totalDuration = totalDuration,
             progress = progress,
             accentPalette = accentPalette,
+            forceOpaqueSurface = forceOpaqueSurfaces,
             onArtworkLoaded = onArtworkLoaded,
             onReveal = onReveal,
             onCollapse = onCollapse,
@@ -378,7 +435,9 @@ private fun FullLyricControlConsole(
                 .fillMaxWidth()
                 .height(64.dp),
             shape = CircleShape,
-            color = accentPalette.quietContainer.copy(alpha = 0.88f),
+            color = accentPalette.quietContainer.copy(
+                alpha = if (forceOpaqueSurfaces) 1f else 0.88f,
+            ),
             contentColor = accentPalette.onQuietContainer,
             tonalElevation = 0.dp,
         ) {
@@ -462,6 +521,7 @@ private fun ExpandedPlaybackCard(
     totalDuration: Long,
     progress: Float,
     accentPalette: ContentAccentPalette,
+    forceOpaqueSurface: Boolean,
     onArtworkLoaded: (coil3.Image) -> Unit,
     onReveal: () -> Unit,
     onCollapse: () -> Unit,
@@ -485,7 +545,9 @@ private fun ExpandedPlaybackCard(
             .widthIn(max = 620.dp)
             .fillMaxWidth(),
         shape = MaterialTheme.shapes.extraLarge,
-        color = accentPalette.container.copy(alpha = 0.88f),
+        color = accentPalette.container.copy(
+            alpha = if (forceOpaqueSurface) 1f else 0.88f,
+        ),
         contentColor = accentPalette.onContainer,
         tonalElevation = 0.dp,
     ) {
@@ -713,6 +775,7 @@ private fun CollapsedProgressController(
     totalDuration: Long,
     progress: Float,
     accentPalette: ContentAccentPalette,
+    forceOpaqueSurface: Boolean,
     onReveal: () -> Unit,
     onTogglePlayPause: () -> Unit,
     onPrevious: () -> Unit,
@@ -842,7 +905,9 @@ private fun CollapsedProgressController(
                 }
             },
         shape = CircleShape,
-        color = accentPalette.quietContainer.copy(alpha = 0.78f + swipeAlpha * 0.12f),
+        color = accentPalette.quietContainer.copy(
+            alpha = if (forceOpaqueSurface) 1f else 0.78f + swipeAlpha * 0.12f,
+        ),
         contentColor = accentPalette.onQuietContainer,
         tonalElevation = 0.dp,
     ) {

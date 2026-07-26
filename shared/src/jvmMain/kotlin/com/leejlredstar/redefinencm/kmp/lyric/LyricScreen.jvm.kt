@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
 import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayPlacement
 import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayWindow
+import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayWindowShape
 import com.leejlredstar.redefinencm.kmp.ui.screen.FullLyricScreen
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
 import com.leejlredstar.redefinencm.kmp.util.LyricParser
@@ -386,6 +387,8 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         revealRequest = controlsRevealRequest,
         width = controlsWindowSize.width,
         height = controlsWindowSize.height,
+        expanded = controlsWindowExpanded,
+        sheetVisible = controlsSheetVisible,
         onDismiss = ::dismissControls,
         onSheetVisibilityChanged = { controlsSheetVisible = it },
         onExpandedChanged = { expanded ->
@@ -449,6 +452,8 @@ private fun DesktopLyricControlsWindow(
     revealRequest: Int,
     width: Dp,
     height: Dp,
+    expanded: Boolean,
+    sheetVisible: Boolean,
     onDismiss: () -> Unit,
     onSheetVisibilityChanged: (Boolean) -> Unit,
     onExpandedChanged: (Boolean) -> Unit,
@@ -464,6 +469,11 @@ private fun DesktopLyricControlsWindow(
         // layered HWND and can be composited behind the native WebView even when its input HWND is
         // above it. Keep this window opaque so the controls and their hit targets stay together.
         transparent = false,
+        windowShape = when {
+            sheetVisible -> DesktopOverlayWindowShape.Rectangle
+            expanded -> DesktopOverlayWindowShape.ExpandedPlaybackControls
+            else -> DesktopOverlayWindowShape.CollapsedPlaybackControls
+        },
         onCloseRequest = onDismiss,
     ) {
         Surface(
@@ -476,6 +486,7 @@ private fun DesktopLyricControlsWindow(
                 showCollapsedWhenHidden = true,
                 collapsedHostFillsWidth = true,
                 autoHideDelayMillis = 30_000L,
+                forceOpaqueSurfaces = true,
                 externalRevealRequest = revealRequest,
                 // The controller always renders either its expanded or collapsed surface here.
                 // Treating a composition disposal as a close request makes track-loading
