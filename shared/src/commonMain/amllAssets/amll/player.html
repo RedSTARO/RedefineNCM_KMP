@@ -1324,6 +1324,7 @@ let currentLyricLines = [];
 let currentLyricMediaId = "";
 let lyricClickSeekingInstalled = false;
 let reducedMotionPreferenceInstalled = false;
+let lyricLineTaggingScheduled = false;
 
 function normalizeMediaId(mediaId) {
   return mediaId == null ? "" : String(mediaId);
@@ -1403,9 +1404,14 @@ function tagRenderedLyricLines() {
 }
 
 function scheduleLyricLineTagging() {
+  if (lyricLineTaggingScheduled) return;
+  lyricLineTaggingScheduled = true;
   requestAnimationFrame(() => {
     tagRenderedLyricLines();
-    requestAnimationFrame(tagRenderedLyricLines);
+    requestAnimationFrame(() => {
+      tagRenderedLyricLines();
+      lyricLineTaggingScheduled = false;
+    });
   });
 }
 

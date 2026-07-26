@@ -31,6 +31,7 @@ import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayPlacement
 import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayWindow
 import com.leejlredstar.redefinencm.kmp.ui.screen.FullLyricScreen
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
+import com.leejlredstar.redefinencm.kmp.util.LyricParser
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
@@ -53,7 +54,13 @@ import kotlinx.serialization.json.longOrNull
 import org.koin.compose.koinInject
 import java.awt.Canvas
 import java.io.File
+import java.io.FileOutputStream
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
 import java.util.ArrayDeque
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
@@ -64,8 +71,8 @@ private const val AMLL_READY_TIMEOUT_MILLIS = 10_000L
 private const val NATIVE_HOST_LAYOUT_TIMEOUT_MILLIS = 1_000L
 private const val CONTROLS_COLLAPSE_ANIMATION_MILLIS = 320L
 
-private val ExpandedControlsWindowSize = DpSize(652.dp, 320.dp)
-private val CollapsedControlsWindowSize = DpSize(468.dp, 64.dp)
+private val ExpandedControlsWindowSize = DpSize(652.dp, 240.dp)
+private val CollapsedControlsWindowSize = DpSize(436.dp, 64.dp)
 private val ControlsSheetWindowSize = DpSize(840.dp, 680.dp)
 
 actual val supportsDynamicNowPlayingCover: Boolean
@@ -96,6 +103,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val rawWordLyric by viewModel.rawWordLyric.collectAsState()
     val rawTranslatedLyric by viewModel.rawTranslatedLyric.collectAsState()
     val rawRomanLyric by viewModel.rawRomanLyric.collectAsState()
+    val lyricMap by viewModel.lyricMap.collectAsState()
     val lyricUiState by viewModel.lyricUiState.collectAsState()
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
@@ -122,12 +130,27 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val showRomanLyric = remember {
         settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)
     }
+    val lyricForWeb = remember(rawLyric, lyricMap, lyricUiState) {
+        desktopAmllLyricPayload(
+            rawLyric = rawLyric,
+            lyricMap = lyricMap,
+            lyricUiState = lyricUiState,
+        )
+    }
     var controlsVisible by remember { mutableStateOf(true) }
     var controlsExpanded by remember { mutableStateOf(true) }
     var controlsWindowExpanded by remember { mutableStateOf(true) }
     var controlsSheetVisible by remember { mutableStateOf(false) }
     var controlsRevealRequest by remember { mutableIntStateOf(0) }
     var songWikiSyncRequest by remember { mutableIntStateOf(0) }
+
+    fun dismissControls() {
+        controlsVisible = false
+        controlsExpanded = true
+        controlsWindowExpanded = true
+        controlsSheetVisible = false
+    }
+
     val lyricOverlayState = if (!engineReady && lyricUiState is LyricUiState.Content) {
         LyricUiState.Loading
     } else {
@@ -153,6 +176,9 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             },
             onSongWikiRequested = { requestedMediaId ->
                 if (requestedMediaId == viewModel.currentMedia.value?.id) {
+                    // The native Compose dialog is above WebView2. Hide it before the in-page wiki
+                    // opens so it cannot cover the lower half of the WebView dialog.
+                    dismissControls()
                     viewModel.getSongWikiSummary()
                     songWikiSyncRequest += 1
                 }
@@ -227,7 +253,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         engineReady,
         lyricMediaId,
         rawWordLyric,
-        rawLyric,
+        lyricForWeb,
         rawTranslatedLyric,
         rawRomanLyric,
         lyricUiState,
@@ -244,15 +270,15 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             showTranslatedLyric = showTranslatedLyric,
             showRomanLyric = showRomanLyric,
         )
-        if (rawWordLyric.isNotEmpty()) {
+        if (rawWordLyric.isNotBlank()) {
             println("AMLL[wv2] feeding word lyrics media=$mediaId, len=${rawWordLyric.length}")
             session.eval(
                 "AmllBridge.loadWordLyrics('${rawWordLyric.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}', $lyricOptions); AmllBridge.setTime($currentPosition);",
             )
         } else {
-            println("AMLL[wv2] feeding lyrics media=$mediaId, len=${rawLyric.length}")
+            println("AMLL[wv2] feeding lyrics media=$mediaId, len=${lyricForWeb.length}")
             session.eval(
-                "AmllBridge.loadLyrics('${rawLyric.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}', $lyricOptions); AmllBridge.setTime($currentPosition);",
+                "AmllBridge.loadLyrics('${lyricForWeb.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}', $lyricOptions); AmllBridge.setTime($currentPosition);",
             )
         }
     }
@@ -320,13 +346,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             session.setNativeWindowVisible(false)
             session.stop()
         }
-    }
-
-    fun dismissControls() {
-        controlsVisible = false
-        controlsExpanded = true
-        controlsWindowExpanded = true
-        controlsSheetVisible = false
     }
 
     BackHandler(enabled = controlsVisible) {
@@ -441,20 +460,31 @@ private fun DesktopLyricControlsWindow(
         height = height,
         placement = DesktopOverlayPlacement.BottomCenter,
         focusable = true,
-        transparent = true,
+        // WebView2 renders through DirectComposition. A transparent Compose window becomes a
+        // layered HWND and can be composited behind the native WebView even when its input HWND is
+        // above it. Keep this window opaque so the controls and their hit targets stay together.
+        transparent = false,
         onCloseRequest = onDismiss,
     ) {
-        AutoHideMiniPlayerController(
+        Surface(
             modifier = Modifier.fillMaxSize(),
-            initialExpanded = true,
-            showCollapsedWhenHidden = true,
-            externalRevealRequest = revealRequest,
-            onOverlayVisibilityChanged = { overlayVisible ->
-                if (!overlayVisible) onDismiss()
-            },
-            onSheetVisibilityChanged = onSheetVisibilityChanged,
-            onExpandedChanged = onExpandedChanged,
-        )
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            AutoHideMiniPlayerController(
+                modifier = Modifier.fillMaxSize(),
+                initialExpanded = true,
+                showCollapsedWhenHidden = true,
+                collapsedHostFillsWidth = true,
+                autoHideDelayMillis = 30_000L,
+                externalRevealRequest = revealRequest,
+                // The controller always renders either its expanded or collapsed surface here.
+                // Treating a composition disposal as a close request makes track-loading
+                // transitions or host recreation permanently hide the desktop controls. Only the
+                // dialog close request and the page BackHandler dismiss them.
+                onSheetVisibilityChanged = onSheetVisibilityChanged,
+                onExpandedChanged = onExpandedChanged,
+            )
+        }
     }
 }
 
@@ -981,15 +1011,121 @@ private val extractedAmllAssets: File by lazy(LazyThreadSafetyMode.SYNCHRONIZED)
     extractAmllAssets()
 }
 
+private val AMLL_ASSET_NAMES = listOf("player.html", "bundle.js", "style.css")
+
 private fun extractAmllAssets(): File {
-    val dir = File(System.getProperty("java.io.tmpdir"), "redefinencm-amll").apply { mkdirs() }
-    for (name in listOf("player.html", "bundle.js", "style.css")) {
-        val res = object {}.javaClass.getResourceAsStream("/amll/$name")
+    val assets = AMLL_ASSET_NAMES.associateWith { name ->
+        object {}.javaClass.getResourceAsStream("/amll/$name")
+            ?.use { it.readBytes() }
             ?: error("Missing classpath resource: /amll/$name")
-        res.use { input -> File(dir, name).outputStream().use { input.copyTo(it) } }
     }
-    return dir
+    return extractAmllAssets(
+        rootDirectory = File(System.getProperty("java.io.tmpdir"), "redefinencm-amll"),
+        assets = assets,
+    )
 }
+
+/**
+ * Extracts one immutable, content-addressed AMLL asset set.
+ *
+ * The lock and staging directory prevent two desktop processes from exposing a partially written
+ * `player.html`/bundle pair. Content-addressing also prevents an older running process from reading
+ * files overwritten by a newer application version.
+ */
+internal fun extractAmllAssets(
+    rootDirectory: File,
+    assets: Map<String, ByteArray>,
+): File {
+    val orderedAssets = AMLL_ASSET_NAMES.associateWith { name ->
+        requireNotNull(assets[name]) { "Missing AMLL asset: $name" }
+    }
+    val digest = MessageDigest.getInstance("SHA-256").run {
+        orderedAssets.forEach { (name, bytes) ->
+            update(name.toByteArray(Charsets.UTF_8))
+            update(0.toByte())
+            update(bytes)
+        }
+        digest().joinToString("") { byte ->
+            (byte.toInt() and 0xff).toString(16).padStart(2, '0')
+        }
+    }
+    val targetDirectory = File(rootDirectory, "v1-$digest")
+
+    check(rootDirectory.mkdirs() || rootDirectory.isDirectory) {
+        "Cannot create AMLL extraction root: $rootDirectory"
+    }
+    FileOutputStream(File(rootDirectory, ".extract.lock"), true).channel.use { channel ->
+        channel.lock().use {
+            if (targetDirectory.matchesAmllAssets(orderedAssets)) return targetDirectory
+
+            if (targetDirectory.exists()) {
+                check(targetDirectory.deleteRecursively()) {
+                    "Cannot replace corrupt AMLL asset directory: $targetDirectory"
+                }
+            }
+
+            val stagingDirectory = File(
+                rootDirectory,
+                ".${targetDirectory.name}-${UUID.randomUUID()}.tmp",
+            )
+            check(stagingDirectory.mkdir()) {
+                "Cannot create AMLL staging directory: $stagingDirectory"
+            }
+            try {
+                orderedAssets.forEach { (name, bytes) ->
+                    File(stagingDirectory, name).outputStream().use { output ->
+                        output.write(bytes)
+                    }
+                }
+                check(stagingDirectory.matchesAmllAssets(orderedAssets)) {
+                    "AMLL staging directory failed integrity validation"
+                }
+                try {
+                    Files.move(
+                        stagingDirectory.toPath(),
+                        targetDirectory.toPath(),
+                        StandardCopyOption.ATOMIC_MOVE,
+                    )
+                } catch (_: AtomicMoveNotSupportedException) {
+                    Files.move(stagingDirectory.toPath(), targetDirectory.toPath())
+                }
+                check(targetDirectory.matchesAmllAssets(orderedAssets)) {
+                    "Extracted AMLL assets failed integrity validation"
+                }
+            } finally {
+                if (stagingDirectory.exists()) stagingDirectory.deleteRecursively()
+            }
+        }
+    }
+    return targetDirectory
+}
+
+private fun File.matchesAmllAssets(assets: Map<String, ByteArray>): Boolean =
+    isDirectory &&
+        listFiles()?.map(File::getName)?.toSet() == assets.keys &&
+        assets.all { (name, expected) ->
+            val file = File(this, name)
+            file.isFile && runCatching { file.readBytes().contentEquals(expected) }.getOrDefault(false)
+        }
+
+internal fun desktopAmllLyricPayload(
+    rawLyric: String,
+    lyricMap: LinkedHashMap<Long?, String?>,
+    lyricUiState: LyricUiState,
+): String =
+    if (lyricUiState is LyricUiState.Content) {
+        rawLyric.takeIf(String::isNotBlank) ?: lyricMap.toLrcFallback()
+    } else {
+        ""
+    }
+
+private fun LinkedHashMap<Long?, String?>.toLrcFallback(): String =
+    entries
+        .mapNotNull { (time, text) ->
+            val line = text?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+            "${LyricParser.formatLrcTimestamp(time ?: 0L)}$line"
+        }
+        .joinToString("\n")
 
 /** Normalize to the three-slash `file:///` form (Windows toURI() gives one slash). */
 private fun fileUrl(file: File): String {

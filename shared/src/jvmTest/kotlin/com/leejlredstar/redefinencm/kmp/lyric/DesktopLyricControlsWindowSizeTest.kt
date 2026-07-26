@@ -9,7 +9,7 @@ class DesktopLyricControlsWindowSizeTest {
     @Test
     fun usesAndroidControllerBoundsForExpandedAndCollapsedStates() {
         assertEquals(
-            DpSize(652.dp, 320.dp),
+            DpSize(652.dp, 240.dp),
             desktopLyricControlsWindowSize(
                 availableWidth = 1_280.dp,
                 availableHeight = 820.dp,
@@ -18,7 +18,7 @@ class DesktopLyricControlsWindowSizeTest {
             ),
         )
         assertEquals(
-            DpSize(468.dp, 64.dp),
+            DpSize(436.dp, 64.dp),
             desktopLyricControlsWindowSize(
                 availableWidth = 1_280.dp,
                 availableHeight = 820.dp,
