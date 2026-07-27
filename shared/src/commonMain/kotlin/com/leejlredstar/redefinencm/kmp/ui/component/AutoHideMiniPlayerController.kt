@@ -80,6 +80,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.lyric.LyricCapabilityLevel
+import com.leejlredstar.redefinencm.kmp.lyric.LyricSource
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
@@ -122,17 +123,22 @@ fun AutoHideMiniPlayerController(
     val favoriteState by viewModel.favoriteUiState.collectAsState()
     val lyricUiState by viewModel.lyricUiState.collectAsState()
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
+    val activeLyricSource by viewModel.activeLyricSource.collectAsState()
+    val activeLyricEndpoint by viewModel.activeLyricEndpoint.collectAsState()
 
     var visible by remember { mutableStateOf(initialExpanded) }
     var revealRequest by remember { mutableIntStateOf(0) }
     var showQueue by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
+    var showLyricDetails by remember { mutableStateOf(false) }
 
     val hasMedia = media != null
     val isFavorite = favoriteState.mediaId == media?.id && favoriteState.isLiked
     val lyricCapabilityLevel = lyricUiState.lyricCapabilityLevel.takeIf {
         hasMedia && lyricMediaId == media?.id
     }
+    val displayedLyricSource = activeLyricSource.takeIf { lyricCapabilityLevel != null }
+    val displayedLyricEndpoint = activeLyricEndpoint.takeIf { lyricCapabilityLevel != null }.orEmpty()
     val totalDuration = duration
         .takeIf { it > 0L }
         ?: media?.duration?.takeIf { it > 0L }
@@ -175,15 +181,23 @@ fun AutoHideMiniPlayerController(
         if (externalRevealRequest > 0) reveal()
     }
 
-    LaunchedEffect(visible, revealRequest, showQueue, showComments, autoHideDelayMillis) {
-        if (!visible || showQueue || showComments) return@LaunchedEffect
+    LaunchedEffect(
+        visible,
+        revealRequest,
+        showQueue,
+        showComments,
+        showLyricDetails,
+        autoHideDelayMillis,
+    ) {
+        if (!visible || showQueue || showComments || showLyricDetails) return@LaunchedEffect
         delay(autoHideDelayMillis.coerceAtLeast(0L))
-        if (!showQueue && !showComments) collapse()
+        if (!showQueue && !showComments && !showLyricDetails) collapse()
     }
 
     val drawsController = visible || showCollapsedWhenHidden
     val sheetVisible = showQueue || showComments
-    val overlayActive = drawsController || sheetVisible
+    val interactionSurfaceVisible = sheetVisible || showLyricDetails
+    val overlayActive = drawsController || interactionSurfaceVisible
     DisposableEffect(overlayActive) {
         onOverlayVisibilityChanged(overlayActive)
         onDispose {
@@ -199,6 +213,12 @@ fun AutoHideMiniPlayerController(
 
     LaunchedEffect(showComments, media?.id) {
         if (showComments) viewModel.getComments()
+    }
+    LaunchedEffect(media?.id) {
+        showLyricDetails = false
+    }
+    LaunchedEffect(lyricCapabilityLevel) {
+        if (lyricCapabilityLevel == null) showLyricDetails = false
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -230,6 +250,9 @@ fun AutoHideMiniPlayerController(
                     shuffleEnabled = shuffleEnabled,
                     isFavorite = isFavorite,
                     lyricCapabilityLevel = lyricCapabilityLevel,
+                    lyricSource = displayedLyricSource,
+                    lyricEndpoint = displayedLyricEndpoint,
+                    lyricDetailsExpanded = showLyricDetails,
                     accentPalette = accentPalette,
                     forceOpaqueSurfaces = forceOpaqueSurfaces,
                     onArtworkLoaded = extractAccent,
@@ -267,6 +290,10 @@ fun AutoHideMiniPlayerController(
                     onShuffle = {
                         reveal()
                         viewModel.onShuffleClick(!shuffleEnabled)
+                    },
+                    onLyricDetailsExpandedChange = { expanded ->
+                        if (expanded) reveal()
+                        showLyricDetails = expanded
                     },
                 )
             } else if (showCollapsedWhenHidden) {
@@ -402,6 +429,9 @@ private fun FullLyricControlConsole(
     shuffleEnabled: Boolean,
     isFavorite: Boolean,
     lyricCapabilityLevel: LyricCapabilityLevel?,
+    lyricSource: LyricSource?,
+    lyricEndpoint: String,
+    lyricDetailsExpanded: Boolean,
     accentPalette: ContentAccentPalette,
     forceOpaqueSurfaces: Boolean,
     onArtworkLoaded: (coil3.Image) -> Unit,
@@ -415,6 +445,7 @@ private fun FullLyricControlConsole(
     onQueue: () -> Unit,
     onComments: () -> Unit,
     onShuffle: () -> Unit,
+    onLyricDetailsExpandedChange: (Boolean) -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -428,6 +459,9 @@ private fun FullLyricControlConsole(
             totalDuration = totalDuration,
             progress = progress,
             lyricCapabilityLevel = lyricCapabilityLevel,
+            lyricSource = lyricSource,
+            lyricEndpoint = lyricEndpoint,
+            lyricDetailsExpanded = lyricDetailsExpanded,
             accentPalette = accentPalette,
             forceOpaqueSurface = forceOpaqueSurfaces,
             onArtworkLoaded = onArtworkLoaded,
@@ -437,6 +471,7 @@ private fun FullLyricControlConsole(
             onPrevious = onPrevious,
             onPlayPause = onPlayPause,
             onNext = onNext,
+            onLyricDetailsExpandedChange = onLyricDetailsExpandedChange,
         )
         Surface(
             modifier = Modifier
@@ -531,6 +566,9 @@ private fun ExpandedPlaybackCard(
     totalDuration: Long,
     progress: Float,
     lyricCapabilityLevel: LyricCapabilityLevel?,
+    lyricSource: LyricSource?,
+    lyricEndpoint: String,
+    lyricDetailsExpanded: Boolean,
     accentPalette: ContentAccentPalette,
     forceOpaqueSurface: Boolean,
     onArtworkLoaded: (coil3.Image) -> Unit,
@@ -540,6 +578,7 @@ private fun ExpandedPlaybackCard(
     onPrevious: () -> Unit,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
+    onLyricDetailsExpandedChange: (Boolean) -> Unit,
 ) {
     var isDragging by remember(media?.id) { mutableStateOf(false) }
     var dragValue by remember(media?.id) { mutableStateOf(progress) }
@@ -608,17 +647,17 @@ private fun ExpandedPlaybackCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.Center,
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(
-                            onClickLabel = "收起播放控制",
-                            onClick = onCollapse,
-                        ),
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(
+                                onClickLabel = "收起播放控制",
+                                onClick = onCollapse,
+                            ),
                     ) {
                         Text(
                             text = media?.title?.takeIf { it.isNotBlank() } ?: "未播放",
@@ -626,22 +665,25 @@ private fun ExpandedPlaybackCard(
                             fontWeight = FontWeight.ExtraBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
                         )
-                        lyricCapabilityLevel?.let { level ->
-                            LyricCapabilityBadge(
-                                level = level,
-                                modifier = Modifier.padding(start = 8.dp),
-                            )
-                        }
+                        Text(
+                            text = media?.artist?.takeIf { it.isNotBlank() } ?: "选择歌曲开始播放",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = accentPalette.secondaryOnContainer,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
-                    Text(
-                        text = media?.artist?.takeIf { it.isNotBlank() } ?: "选择歌曲开始播放",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = accentPalette.secondaryOnContainer,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    lyricCapabilityLevel?.let { level ->
+                        LyricCapabilityBadge(
+                            level = level,
+                            source = lyricSource,
+                            endpoint = lyricEndpoint,
+                            detailsExpanded = lyricDetailsExpanded,
+                            onDetailsExpandedChange = onLyricDetailsExpandedChange,
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
+                    }
                 }
                 PlaybackSeekBar(
                     value = sliderValue.coerceIn(0f, 1f),

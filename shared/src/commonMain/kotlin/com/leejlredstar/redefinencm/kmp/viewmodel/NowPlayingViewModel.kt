@@ -85,15 +85,17 @@ class NowPlayingViewModel(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     // ── Player state ──
-    val currentMedia = MutableStateFlow<MediaInfo?>(null)
-    val isPlaying = MutableStateFlow(false)
-    val playerState = MutableStateFlow(PlayerState.IDLE)
-    val currentPosition = MutableStateFlow(0L)
-    val songLength = MutableStateFlow(0L)
-    val shuffleStatus = MutableStateFlow(false)
+    val currentMedia = MutableStateFlow(player.currentMedia.value)
+    val playerStatusRestoreState: StateFlow<PlayerStatusRestoreState> =
+        mainViewModel.playerStatusRestoreState
+    val isPlaying = MutableStateFlow(player.isPlaying.value)
+    val playerState = MutableStateFlow(player.state.value)
+    val currentPosition = MutableStateFlow(player.position.value)
+    val songLength = MutableStateFlow(player.duration.value)
+    val shuffleStatus = MutableStateFlow(player.shuffleEnabled.value)
 
     // ── Queue ──
-    private val _queueSnapshot = MutableStateFlow(PlayerQueueSnapshot())
+    private val _queueSnapshot = MutableStateFlow(player.queueSnapshot.value)
     val queueSnapshot: StateFlow<PlayerQueueSnapshot> = _queueSnapshot.asStateFlow()
 
     // ── Lyrics ──
@@ -106,12 +108,15 @@ class NowPlayingViewModel(
     val rawRomanLyric = MutableStateFlow("")
     val wordLyricLines = MutableStateFlow<List<LyricParser.WordLine>>(emptyList())
     val activeLyricSource = MutableStateFlow<LyricSource?>(null)
+    val activeLyricEndpoint = MutableStateFlow("")
     private val lyricSourceModeGate = LyricSourceModeGate()
     val lyricSourceMode: StateFlow<LyricSourceMode> = lyricSourceModeGate.mode
     val showTranslatedLyric = MutableStateFlow(false)
     val showRomanLyric = MutableStateFlow(false)
-    val lyricMediaId = MutableStateFlow<String?>(null)
-    val lyricUiState = MutableStateFlow<LyricUiState>(LyricUiState.Idle)
+    val lyricMediaId = MutableStateFlow(player.currentMedia.value?.id)
+    val lyricUiState = MutableStateFlow<LyricUiState>(
+        if (player.currentMedia.value == null) LyricUiState.Idle else LyricUiState.Loading,
+    )
     val lyricLoadError = MutableStateFlow<String?>(null)
 
     // ── Comments ──
@@ -170,6 +175,9 @@ class NowPlayingViewModel(
         }
         scope.launch {
             player.currentMedia.collectLatest { media ->
+                // Advance before the first suspension: an A → B → A switch must reject the
+                // original A request even if its cancellation is delivered late.
+                val lyricGeneration = beginLyricRequest()
                 currentMedia.value = media
                 releaseActiveLocalArtwork()
                 _localArtworkActive.value = false
@@ -184,6 +192,7 @@ class NowPlayingViewModel(
                 commentsLoadError.value = null
                 commentsFromCache.value = false
                 if (media != null) {
+                    preparePendingLyricsForMedia(media)
                     val songId = media.id.toLongOrNull()?.takeIf { it > 0L }
                     val localAudioAvailable = songId != null && withContext(Dispatchers.Default) {
                         when (DownloadedSongsCache.ensureInitialized()) {
@@ -192,6 +201,11 @@ class NowPlayingViewModel(
                             is DownloadScanResult.Failure -> false
                         }
                     }
+                    fetchLyrics(
+                        media = media,
+                        preferLocal = localAudioAvailable,
+                        requestGeneration = lyricGeneration,
+                    )
                     var unresolvedLocalArtwork: String? = null
                     if (localAudioAvailable) {
                         unresolvedLocalArtwork = withContext(Dispatchers.Default) {
@@ -223,9 +237,7 @@ class NowPlayingViewModel(
                         artworkUri = effectiveMedia.artworkUri,
                         duration = effectiveMedia.duration,
                     )
-                    fetchLyrics(effectiveMedia, preferLocal = localAudioAvailable)
                 } else {
-                    lyricFetchJob?.cancel()
                     clearLyrics()
                     MediaControlsIntegrator.clear()
                     LyricNotificationController.clearFocus()
@@ -238,6 +250,7 @@ class NowPlayingViewModel(
         scope.launch {
             player.queueSnapshot.collect { snapshot ->
                 rebuildPlaylistFromTimeline(snapshot)
+                scheduleNextLyricPrefetch(snapshot)
             }
         }
     }
@@ -445,6 +458,7 @@ class NowPlayingViewModel(
     }
 
     private var lyricFetchJob: Job? = null
+    private var lyricPrefetchJob: Job? = null
     private val lyricRequestGeneration = MutableStateFlow(0L)
     private var commentsFetchJob: Job? = null
     private var songWikiFetchJob: Job? = null
@@ -452,85 +466,82 @@ class NowPlayingViewModel(
     private var favoriteActionJob: Job? = null
     private var favoriteStatusGeneration = 0L
 
-    private fun fetchLyrics(
-        media: MediaInfo,
-        preferLocal: Boolean = DownloadedSongsCache.isDownloaded(media.id.toLongOrNull() ?: -1L),
-    ) {
-        lyricFetchJob?.cancel()
-        val mediaId = media.id
-        val requestGeneration = lyricRequestGeneration.value + 1L
-        lyricRequestGeneration.value = requestGeneration
-        resetLyricsForMedia(mediaId)
-        // 网络必须离开 Main：桌面端 Main=Swing EDT，AMLL 软件渲染期间 EDT 饱和会把
-        // 运行其上的 Ktor 连接协程饿到超时（实测 /lyric 连环 ConnectTimeout 的根因）
-        lyricFetchJob = scope.launch(Dispatchers.Default) {
-            val mode = lyricSourceModeGate.awaitMode()
-            val id = mediaId.toLongOrNull()
-            if (id == null) {
-                applyLyricsForMedia(mediaId, requestGeneration) {
-                    applyLyricError("歌曲标识无效，无法加载歌词")
-                }
-                return@launch
-            }
-            val query = LyricQuery(
-                songId = id,
+    private fun preparePendingLyricsForMedia(media: MediaInfo) {
+        val songId = media.id.toLongOrNull()
+        val mode = lyricSourceModeGate.currentModeOrNull()
+        val preferLocal = songId != null && DownloadedSongsCache.isDownloaded(songId)
+        val query = songId?.let {
+            LyricQuery(
+                songId = it,
                 title = media.title,
                 artist = media.artist,
                 album = media.albumTitle,
                 durationMs = media.duration,
             )
+        }
+        val cachedResolution = if (query != null && mode != null) {
+            lyricResolver.cachedResolution(query, mode, preferLocal)
+        } else {
+            null
+        }
+        prepareLyricsForMedia(media.id, cachedResolution)
+    }
+
+    private fun fetchLyrics(
+        media: MediaInfo,
+        preferLocal: Boolean = DownloadedSongsCache.isDownloaded(media.id.toLongOrNull() ?: -1L),
+        requestGeneration: Long = beginLyricRequest(),
+    ) {
+        val mediaId = media.id
+        if (
+            requestGeneration != lyricRequestGeneration.value ||
+            currentMedia.value?.id != mediaId
+        ) {
+            return
+        }
+        val songId = mediaId.toLongOrNull()
+        val query = songId?.let {
+            LyricQuery(
+                songId = it,
+                title = media.title,
+                artist = media.artist,
+                album = media.albumTitle,
+                durationMs = media.duration,
+            )
+        }
+        val readyMode = lyricSourceModeGate.currentModeOrNull()
+        val initialCachedResolution = if (query != null && readyMode != null) {
+            lyricResolver.cachedResolution(query, readyMode, preferLocal)
+        } else {
+            null
+        }
+        prepareLyricsForMedia(mediaId, initialCachedResolution)
+        // 网络必须离开 Main：桌面端 Main=Swing EDT，AMLL 软件渲染期间 EDT 饱和会把
+        // 运行其上的 Ktor 连接协程饿到超时（实测 /lyric 连环 ConnectTimeout 的根因）
+        lyricFetchJob = scope.launch(Dispatchers.Default) {
+            val mode = lyricSourceModeGate.awaitMode()
+            if (songId == null) {
+                applyLyricsForMedia(mediaId, requestGeneration) {
+                    applyLyricError("歌曲标识无效，无法加载歌词")
+                }
+                return@launch
+            }
+            val resolvedQuery = checkNotNull(query)
+            var displayedResolution = initialCachedResolution
+            val cachedAfterModeLoad = lyricResolver.cachedResolution(resolvedQuery, mode, preferLocal)
+            if (cachedAfterModeLoad != null && cachedAfterModeLoad != displayedResolution) {
+                applyLyricsForMedia(mediaId, requestGeneration) {
+                    applyLyricResolution(cachedAfterModeLoad)
+                }
+                displayedResolution = cachedAfterModeLoad
+            }
             try {
-                lyricResolver.resolve(query, mode, preferLocal).collect { resolution ->
-                    when (resolution) {
-                        is LyricResolution.Found -> {
-                            val document = resolution.document
-                            val displayLyricMap = LyricParser.toLineLyricMap(document.lines)
-                            if (displayLyricMap.isEmpty()) {
-                                applyLyricsForMedia(mediaId, requestGeneration) {
-                                    applyLyricError("歌词解析失败")
-                                }
-                            } else {
-                                applyLyricsForMedia(mediaId, requestGeneration) {
-                                    lyricLoadError.value = null
-                                    rawTtmlLyric.value = document.rawTtml
-                                    rawWordLyric.value = document.rawWordLyric
-                                    wordLyricLines.value = document.lines
-                                    rawTranslatedLyric.value = document.rawTranslatedLyric
-                                    rawRomanLyric.value = document.rawRomanLyric
-                                    rawLyric.value = document.rawLineLyric
-                                    activeLyricSource.value = document.source
-                                    lyricMap.value = displayLyricMap
-                                    lyricUiState.value = LyricUiState.Content(
-                                        lineCount = displayLyricMap.size,
-                                        capabilityLevel = document.capabilityLevel,
-                                    )
-                                }
-                            }
+                lyricResolver.resolve(resolvedQuery, mode, preferLocal).collect { resolution ->
+                    if (resolution != displayedResolution) {
+                        applyLyricsForMedia(mediaId, requestGeneration) {
+                            applyLyricResolution(resolution)
                         }
-                        is LyricResolution.Untimed -> {
-                            val document = resolution.document
-                            applyLyricsForMedia(mediaId, requestGeneration) {
-                                clearLyricPayload()
-                                lyricLoadError.value = null
-                                rawLyric.value = document.rawLineLyric
-                                rawWordLyric.value = document.rawWordLyric
-                                rawTranslatedLyric.value = document.rawTranslatedLyric
-                                rawRomanLyric.value = document.rawRomanLyric
-                                activeLyricSource.value = document.source
-                                lyricUiState.value = LyricUiState.Empty(
-                                    capabilityLevel = LyricCapabilityLevel.UNSYNCED,
-                                )
-                            }
-                        }
-                        LyricResolution.Empty -> applyLyricsForMedia(mediaId, requestGeneration) {
-                            clearLyricPayload()
-                            lyricLoadError.value = null
-                            lyricUiState.value = LyricUiState.Empty()
-                        }
-                        is LyricResolution.Error ->
-                            applyLyricsForMedia(mediaId, requestGeneration) {
-                                applyLyricError(resolution.message.ifBlank { "歌词请求失败" })
-                            }
+                        displayedResolution = resolution
                     }
                 }
             } catch (cancelled: CancellationException) {
@@ -543,19 +554,109 @@ class NowPlayingViewModel(
         }
     }
 
-    private fun resetLyricsForMedia(mediaId: String) {
+    private fun beginLyricRequest(): Long {
+        lyricFetchJob?.cancel()
+        return lyricRequestGeneration.updateAndGet { it + 1L }
+    }
+
+    private fun prepareLyricsForMedia(
+        mediaId: String,
+        cachedResolution: LyricResolution?,
+    ) {
         lyricMediaId.value = mediaId
         lyricIndex.value = 0
-        rawLyric.value = ""
-        rawWordLyric.value = ""
-        rawTtmlLyric.value = ""
-        rawTranslatedLyric.value = ""
-        rawRomanLyric.value = ""
-        wordLyricLines.value = emptyList()
-        activeLyricSource.value = null
-        lyricLoadError.value = null
-        lyricMap.value = linkedMapOf()
-        lyricUiState.value = LyricUiState.Loading
+        if (cachedResolution == null) {
+            clearLyricPayload()
+            lyricLoadError.value = null
+            lyricUiState.value = LyricUiState.Loading
+        } else {
+            applyLyricResolution(cachedResolution)
+        }
+    }
+
+    private fun applyLyricResolution(resolution: LyricResolution) {
+        when (resolution) {
+            is LyricResolution.Found -> {
+                val document = resolution.document
+                val displayLyricMap = LyricParser.toLineLyricMap(document.lines)
+                if (displayLyricMap.isEmpty()) {
+                    applyLyricError("歌词解析失败")
+                } else {
+                    lyricLoadError.value = null
+                    rawTtmlLyric.value = document.rawTtml
+                    rawWordLyric.value = document.rawWordLyric
+                    wordLyricLines.value = document.lines
+                    rawTranslatedLyric.value = document.rawTranslatedLyric
+                    rawRomanLyric.value = document.rawRomanLyric
+                    rawLyric.value = document.rawLineLyric
+                    activeLyricSource.value = document.source
+                    activeLyricEndpoint.value = document.endpoint
+                    lyricMap.value = displayLyricMap
+                    lyricUiState.value = LyricUiState.Content(
+                        lineCount = displayLyricMap.size,
+                        capabilityLevel = document.capabilityLevel,
+                    )
+                }
+            }
+            is LyricResolution.Untimed -> {
+                val document = resolution.document
+                clearLyricPayload()
+                lyricLoadError.value = null
+                rawLyric.value = document.rawLineLyric
+                rawWordLyric.value = document.rawWordLyric
+                rawTranslatedLyric.value = document.rawTranslatedLyric
+                rawRomanLyric.value = document.rawRomanLyric
+                activeLyricSource.value = document.source
+                activeLyricEndpoint.value = document.endpoint
+                lyricUiState.value = LyricUiState.Empty(
+                    capabilityLevel = LyricCapabilityLevel.UNSYNCED,
+                )
+            }
+            LyricResolution.Empty -> {
+                clearLyricPayload()
+                lyricLoadError.value = null
+                lyricUiState.value = LyricUiState.Empty()
+            }
+            is LyricResolution.Error ->
+                applyLyricError(resolution.message.ifBlank { "歌词请求失败" })
+        }
+    }
+
+    private fun scheduleNextLyricPrefetch(
+        snapshot: PlayerQueueSnapshot = player.queueSnapshot.value,
+    ) {
+        lyricPrefetchJob?.cancel()
+        val candidate = nextLyricPrefetchCandidate(snapshot)
+        if (candidate == null) {
+            lyricPrefetchJob = null
+            return
+        }
+        lyricPrefetchJob = scope.launch(Dispatchers.Default) {
+            val mode = lyricSourceModeGate.awaitMode()
+            val localLibraryReady =
+                DownloadedSongsCache.ensureInitialized() is DownloadScanResult.Success
+            val songId = candidate.id.toLongOrNull()?.takeIf { it > 0L } ?: return@launch
+            val preferLocal = localLibraryReady && DownloadedSongsCache.isDownloaded(songId)
+            val query = LyricQuery(
+                songId = songId,
+                title = candidate.title,
+                artist = candidate.artist,
+                album = candidate.albumTitle,
+                durationMs = candidate.duration,
+            )
+            if (lyricResolver.cachedResolution(query, mode, preferLocal) != null) return@launch
+            try {
+                lyricResolver.resolveLatest(
+                    query = query,
+                    mode = mode,
+                    preferLocal = preferLocal,
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // Prefetch is opportunistic; foreground loading retains its normal error state.
+            }
+        }
     }
 
     private fun clearLyrics() {
@@ -568,6 +669,7 @@ class NowPlayingViewModel(
         rawRomanLyric.value = ""
         wordLyricLines.value = emptyList()
         activeLyricSource.value = null
+        activeLyricEndpoint.value = ""
         lyricLoadError.value = null
         lyricMap.value = linkedMapOf()
         lyricUiState.value = LyricUiState.Idle
@@ -581,6 +683,7 @@ class NowPlayingViewModel(
         rawRomanLyric.value = ""
         wordLyricLines.value = emptyList()
         activeLyricSource.value = null
+        activeLyricEndpoint.value = ""
         lyricMap.value = linkedMapOf()
     }
 
@@ -611,6 +714,7 @@ class NowPlayingViewModel(
     fun setLyricSourceMode(mode: LyricSourceMode) {
         if (!lyricSourceModeGate.update(mode)) return
         currentMedia.value?.let(::fetchLyrics)
+        scheduleNextLyricPrefetch()
     }
 
     fun setLyricDisplayOptions(
@@ -802,4 +906,10 @@ class NowPlayingViewModel(
         val enabled: Boolean,
         val hasLocalArtwork: Boolean,
     )
+}
+
+internal fun nextLyricPrefetchCandidate(snapshot: PlayerQueueSnapshot): MediaInfo? {
+    if (snapshot.currentIndex !in snapshot.items.indices) return null
+    val candidate = snapshot.items.getOrNull(snapshot.currentIndex + 1) ?: return null
+    return candidate.takeUnless { it.id == snapshot.currentMedia?.id }
 }

@@ -17,6 +17,8 @@ import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
 @Composable
 internal fun BoxScope.LyricStateOverlay(
     state: LyricUiState,
+    hasMedia: Boolean,
+    isPlayerRestoring: Boolean,
     onRetry: () -> Unit,
 ) {
     val statePalette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
@@ -24,13 +26,21 @@ internal fun BoxScope.LyricStateOverlay(
         .align(Alignment.Center)
         .padding(horizontal = 32.dp)
     when (state) {
-        is LyricUiState.Idle -> ExpressiveStatePanel(
-            title = "还没有播放音乐",
-            message = "选择一首歌曲后，歌词会显示在这里。",
-            icon = AppIcons.GraphicEq,
-            accentPalette = statePalette,
-            modifier = stateModifier,
-        )
+        is LyricUiState.Idle -> if (hasMedia || isPlayerRestoring) {
+            ExpressiveLoadingState(
+                label = if (hasMedia) "正在恢复歌词…" else "正在恢复播放…",
+                accentColor = statePalette.accent,
+                modifier = stateModifier,
+            )
+        } else {
+            ExpressiveStatePanel(
+                title = "还没有播放音乐",
+                message = "选择一首歌曲后，歌词会显示在这里。",
+                icon = AppIcons.GraphicEq,
+                accentPalette = statePalette,
+                modifier = stateModifier,
+            )
+        }
         is LyricUiState.Loading -> ExpressiveLoadingState(
             label = "正在加载歌词…",
             accentColor = statePalette.accent,

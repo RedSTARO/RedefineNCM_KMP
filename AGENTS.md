@@ -227,6 +227,7 @@ RedefineNCM_KMP/
 │       │   ├── di/Modules.kt            # Koin sharedModule + expect fun platformModule()
 │       │   ├── player/
 │       │   │   ├── PlatformPlayer.kt    # interface + PlayerState enum + MediaInfo + StreamUrlResolver
+│       │   │   ├── PlayerStatusRestorer.kt # eager process queue restore; media-service readiness gate
 │       │   │   └── LyricBus.kt          # Shared lyric/position event bus (MutableStateFlow)
 │       │   ├── notification/
 │       │   │   └── LyricNotificationController.kt   # expect object (lyric display surface)
@@ -305,8 +306,12 @@ account-data retries or an in-process login, and is cancelled if the account is 
 2. Each platform's `PlatformPlayer` resolves the placeholder to a real CDN stream URL at play
    time via `NCMApi.songUrlV1()` (a `StreamUrlResolver`). Stream URLs are **never persisted**
    — they expire and are fetched fresh per session.
-3. `NowPlayingViewModel` mirrors `PlatformPlayer`'s `StateFlow`s (state, position, duration,
-   currentMedia, queue, currentIndex, shuffleEnabled) to the UI.
+3. `PlayerStatusRestorer` restores the persisted queue once per process before a platform media
+   service exposes transport controls; restore publishes the current media immediately but remains
+   paused until an explicit continue command. `NowPlayingViewModel` is also process-eager and mirrors
+   `PlatformPlayer`'s current `StateFlow` snapshots (state, position, duration, currentMedia, queue,
+   currentIndex, shuffleEnabled) to the UI, so restored/background playback starts lyric resolution
+   without waiting for a screen to be composed.
 4. Lyric pipeline: `PlatformPlayer.currentMedia` → `LyricResolver` applies the persisted source
    policy → common timed lines (or an explicit untimed fallback candidate) →
    `PlatformPlayer.position` matches the current timed line → UI scroll **and**
@@ -347,6 +352,15 @@ independent when changing cache code. A valid external TTML entry is fresh for 2
 entry remains displayable while a bounded refresh runs. Android and supported Windows feed original
 TTML into the official AMLL `parseTTML`; common `TtmlLyricParser` supplies shared Compose,
 notification and other platform surfaces.
+
+`LyricResolver` additionally owns a bounded process-memory cache of successfully parsed timed or
+untimed documents. Its key includes song ID, duration, source mode, and whether downloaded local
+sidecars are preferred; it must never reuse a result across those boundaries. A matching entry is
+rendered synchronously and retained if background refresh fails, so a cache hit does not pass through
+`Loading`. Empty/error results are not retained. Once the persisted source mode is known, only the
+next item in `PlayerQueueSnapshot.items` (the actual playback order, including shuffle) is prefetched;
+source changes or queue changes cancel the old prefetch. Foreground lyric loading starts as soon as
+local-audio availability is known and does not wait for local artwork URI resolution.
 
 ### Downloaded media sidecar contract
 
@@ -391,11 +405,13 @@ must not be restored as a parallel player page.
 
 The expanded playback-control island is shared by both hosts through
 `AutoHideMiniPlayerController`. When a lyric document has been classified, its title row shows
-one visible `词` badge with four distinct Material color roles: neutral for untimed text, primary
-for ordinary line-synced LRC, secondary for successfully parsed NCM YRC, and tertiary for the AMLL
-TTML path. Loading, request errors, and a genuine no-lyric result show no badge. Capability follows
-the representation that parsed successfully; merely receiving a non-empty YRC field must not claim
-YRC support.
+one visible Material 3 tonal `词` chip with four distinct color roles: neutral for untimed text,
+primary for ordinary line-synced LRC, secondary for successfully parsed NCM YRC, and tertiary for
+the AMLL TTML path. Loading, request errors, and a genuine no-lyric result show no chip. Capability
+follows the representation that parsed successfully; merely receiving a non-empty YRC field must
+not claim YRC support. The chip is an independent click target (it must not trigger the parent
+collapse action); its Material menu reports the current capability level and resolved provider,
+including a local-sidecar marker when the document came from the downloaded lyric file.
 
 The shared AMLL `player.html` owns the top-right song-details affordance and its in-page
 “音乐百科 - 简要信息” dialog, so Android WebView and Windows WebView2 remain behaviorally

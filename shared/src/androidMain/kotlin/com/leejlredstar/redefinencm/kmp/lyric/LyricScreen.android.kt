@@ -66,6 +66,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import com.leejlredstar.redefinencm.kmp.player.PlayerStatusRestoreState
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
@@ -110,6 +111,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
+    val playerStatusRestoreState by viewModel.playerStatusRestoreState.collectAsState()
     val localArtworkActive by viewModel.localArtworkActive.collectAsState()
     val remoteArtworkUri by viewModel.remoteArtworkUri.collectAsState()
     val dynamicCoverUiState by viewModel.dynamicCoverUiState.collectAsState()
@@ -275,7 +277,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             "AmllBridge.resetTrack(${JSONObject.quote(mediaId)}); AmllBridge.setTime($position);",
             null,
         )
-        webView.showAmllStatus("正在等待歌词…")
     }
 
     LaunchedEffect(
@@ -289,13 +290,22 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         showTranslatedLyric,
         showRomanLyric,
         lyricUiState,
+        metadata?.id,
+        playerStatusRestoreState,
     ) {
         if (!engineReady) return@LaunchedEffect
         if (lyricUiState !is LyricUiState.Content) {
             Log.d("AMLL", "waiting for lyric media=$lyricMediaId")
             webView.evaluateJavascript("AmllBridge.loadLyrics('');", null)
             when (val state = lyricUiState) {
-                is LyricUiState.Idle -> webView.showAmllStatus("等待播放…")
+                is LyricUiState.Idle -> webView.showAmllStatus(
+                    when {
+                        metadata != null -> "正在恢复歌词…"
+                        playerStatusRestoreState is PlayerStatusRestoreState.Loading ->
+                            "正在恢复播放…"
+                        else -> "等待播放…"
+                    },
+                )
                 is LyricUiState.Loading -> webView.showAmllStatus("正在加载歌词…")
                 is LyricUiState.Empty -> webView.showAmllStatus(
                     if (state.capabilityLevel == LyricCapabilityLevel.UNSYNCED) {
@@ -432,7 +442,12 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             )
         }
 
-        LyricStateOverlay(lyricUiState, viewModel::retryLyrics)
+        LyricStateOverlay(
+            state = lyricUiState,
+            hasMedia = metadata != null,
+            isPlayerRestoring = playerStatusRestoreState is PlayerStatusRestoreState.Loading,
+            onRetry = viewModel::retryLyrics,
+        )
 
         AutoHideMiniPlayerController(
             modifier = Modifier.fillMaxSize(),

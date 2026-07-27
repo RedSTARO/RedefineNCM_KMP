@@ -333,9 +333,15 @@ class ExoPlayerPlatformPlayer(
 
     private fun publishImmediateQueue(items: List<MediaInfo>, startIndex: Int, positionMs: Long) {
         val safeIndex = if (items.isEmpty()) -1 else startIndex.coerceIn(0, items.lastIndex)
-        _queue.value = items
-        _currentIndex.value = safeIndex
-        _currentMedia.value = items.getOrNull(safeIndex)
+        playOrderWindowIndices = items.indices.toList()
+        publishQueueSnapshot(
+            PlayerQueueSnapshot(
+                items = items,
+                currentIndex = safeIndex,
+                currentMedia = items.getOrNull(safeIndex),
+                shuffleEnabled = _shuffleEnabled.value,
+            ),
+        )
         _position.value = positionMs.coerceAtLeast(0L)
         _duration.value = items.getOrNull(safeIndex)?.duration?.takeIf { it > 0 } ?: -1L
     }
