@@ -2,10 +2,46 @@ package com.leejlredstar.redefinencm.kmp.lyric
 
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class DesktopLyricControlsWindowSizeTest {
+    @Test
+    fun keepsControlsVisibleForTimedAndUntimedClassifiedLyrics() {
+        assertEquals(
+            true,
+            desktopLyricControlsVisible(
+                requested = true,
+                state = LyricUiState.Content(
+                    lineCount = 1,
+                    capabilityLevel = LyricCapabilityLevel.LINE_SYNCED,
+                ),
+            ),
+        )
+        assertEquals(
+            true,
+            desktopLyricControlsVisible(
+                requested = true,
+                state = LyricUiState.Empty(LyricCapabilityLevel.UNSYNCED),
+            ),
+        )
+        assertEquals(
+            false,
+            desktopLyricControlsVisible(
+                requested = true,
+                state = LyricUiState.Empty(),
+            ),
+        )
+        assertEquals(
+            false,
+            desktopLyricControlsVisible(
+                requested = false,
+                state = LyricUiState.Empty(LyricCapabilityLevel.UNSYNCED),
+            ),
+        )
+    }
+
     @Test
     fun usesAndroidControllerBoundsForExpandedAndCollapsedStates() {
         assertEquals(

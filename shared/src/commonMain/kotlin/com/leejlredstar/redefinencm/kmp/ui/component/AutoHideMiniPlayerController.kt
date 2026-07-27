@@ -79,6 +79,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.leejlredstar.redefinencm.kmp.lyric.LyricCapabilityLevel
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
@@ -86,6 +87,7 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
+import com.leejlredstar.redefinencm.kmp.viewmodel.lyricCapabilityLevel
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
 import kotlin.math.abs
@@ -118,6 +120,8 @@ fun AutoHideMiniPlayerController(
     val commentsLoadError by viewModel.commentsLoadError.collectAsState()
     val commentsFromCache by viewModel.commentsFromCache.collectAsState()
     val favoriteState by viewModel.favoriteUiState.collectAsState()
+    val lyricUiState by viewModel.lyricUiState.collectAsState()
+    val lyricMediaId by viewModel.lyricMediaId.collectAsState()
 
     var visible by remember { mutableStateOf(initialExpanded) }
     var revealRequest by remember { mutableIntStateOf(0) }
@@ -126,6 +130,9 @@ fun AutoHideMiniPlayerController(
 
     val hasMedia = media != null
     val isFavorite = favoriteState.mediaId == media?.id && favoriteState.isLiked
+    val lyricCapabilityLevel = lyricUiState.lyricCapabilityLevel.takeIf {
+        hasMedia && lyricMediaId == media?.id
+    }
     val totalDuration = duration
         .takeIf { it > 0L }
         ?: media?.duration?.takeIf { it > 0L }
@@ -222,6 +229,7 @@ fun AutoHideMiniPlayerController(
                     progress = progress,
                     shuffleEnabled = shuffleEnabled,
                     isFavorite = isFavorite,
+                    lyricCapabilityLevel = lyricCapabilityLevel,
                     accentPalette = accentPalette,
                     forceOpaqueSurfaces = forceOpaqueSurfaces,
                     onArtworkLoaded = extractAccent,
@@ -393,6 +401,7 @@ private fun FullLyricControlConsole(
     progress: Float,
     shuffleEnabled: Boolean,
     isFavorite: Boolean,
+    lyricCapabilityLevel: LyricCapabilityLevel?,
     accentPalette: ContentAccentPalette,
     forceOpaqueSurfaces: Boolean,
     onArtworkLoaded: (coil3.Image) -> Unit,
@@ -418,6 +427,7 @@ private fun FullLyricControlConsole(
             position = position,
             totalDuration = totalDuration,
             progress = progress,
+            lyricCapabilityLevel = lyricCapabilityLevel,
             accentPalette = accentPalette,
             forceOpaqueSurface = forceOpaqueSurfaces,
             onArtworkLoaded = onArtworkLoaded,
@@ -520,6 +530,7 @@ private fun ExpandedPlaybackCard(
     position: Long,
     totalDuration: Long,
     progress: Float,
+    lyricCapabilityLevel: LyricCapabilityLevel?,
     accentPalette: ContentAccentPalette,
     forceOpaqueSurface: Boolean,
     onArtworkLoaded: (coil3.Image) -> Unit,
@@ -605,13 +616,25 @@ private fun ExpandedPlaybackCard(
                             onClick = onCollapse,
                         ),
                 ) {
-                    Text(
-                        text = media?.title?.takeIf { it.isNotBlank() } ?: "未播放",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = media?.title?.takeIf { it.isNotBlank() } ?: "未播放",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        lyricCapabilityLevel?.let { level ->
+                            LyricCapabilityBadge(
+                                level = level,
+                                modifier = Modifier.padding(start = 8.dp),
+                            )
+                        }
+                    }
                     Text(
                         text = media?.artist?.takeIf { it.isNotBlank() } ?: "选择歌曲开始播放",
                         style = MaterialTheme.typography.labelMedium,

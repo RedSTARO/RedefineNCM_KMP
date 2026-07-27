@@ -308,7 +308,8 @@ account-data retries or an in-process login, and is cancelled if the account is 
 3. `NowPlayingViewModel` mirrors `PlatformPlayer`'s `StateFlow`s (state, position, duration,
    currentMedia, queue, currentIndex, shuffleEnabled) to the UI.
 4. Lyric pipeline: `PlatformPlayer.currentMedia` → `LyricResolver` applies the persisted source
-   policy → common timed lines → `PlatformPlayer.position` matches the current line → UI scroll **and**
+   policy → common timed lines (or an explicit untimed fallback candidate) →
+   `PlatformPlayer.position` matches the current timed line → UI scroll **and**
    `LyricNotificationController.updateLyric(...)` (notification / Dynamic Island / floating
    window).
 
@@ -320,6 +321,12 @@ The persisted source policy has four stable values: AMLL TTML first with backend
 parses to a non-empty primary timed line list; translation/romanization alone is not a hit. Missing
 settings use the documented TTML-first default, while an unrecognized persisted wire value fails
 closed to backend-only.
+
+Backend primary text without a usable timestamp is retained as an untimed fallback candidate, not
+reported as a timed source hit. Resolution must continue through the remaining providers allowed by
+the selected policy; a later timed result wins. Only after those providers are exhausted may the
+untimed document reach the UI or download sidecar writer. This candidate never permits an only-mode
+to access the opposite source.
 
 AMLL TTML lookup uses the current positive NCM song ID: exact
 `amll-ttml-db.stevexmh.net/ncm/<id>` first, then the Bikonoo exact-ID search result with an
@@ -374,12 +381,21 @@ cross-directory `file:` URLs.
 Pending/backup files stay hidden and are excluded from scans. Web audio discovery accepts only
 the single-extension audio shape and explicitly excludes `.lyric.*` and `.cover.*`.
 
-The only full-screen playback route is `WebViewLyricScreen`: Android and supported Windows
-Desktop hosts render AMLL, while other JVM platforms, iOS, and Web use `FullLyricScreen` as
-the Compose fallback. `MiniNowPlayingBar`, the
-Desktop playback strip, and OS/deep-link now-playing requests must open this route directly.
-The former common `NowPlayingScreen` has been removed and must not be restored as a parallel
-player page.
+Full-screen playback keeps the `WebViewLyricScreen` expect/actual architecture. Its Android and
+supported Windows Desktop actuals host the bundled AMLL `player.html`; the other JVM platforms,
+iOS, and Web actuals delegate to the Compose `FullLyricScreen` fallback. Keep this host split, and
+do not make the fallback a second navigation destination.
+`MiniNowPlayingBar`, the Desktop playback strip, and OS/deep-link now-playing requests must open
+the `WebViewLyricScreen` route directly. The former common `NowPlayingScreen` has been removed and
+must not be restored as a parallel player page.
+
+The expanded playback-control island is shared by both hosts through
+`AutoHideMiniPlayerController`. When a lyric document has been classified, its title row shows
+one visible `词` badge with four distinct Material color roles: neutral for untimed text, primary
+for ordinary line-synced LRC, secondary for successfully parsed NCM YRC, and tertiary for the AMLL
+TTML path. Loading, request errors, and a genuine no-lyric result show no badge. Capability follows
+the representation that parsed successfully; merely receiving a non-empty YRC field must not claim
+YRC support.
 
 The shared AMLL `player.html` owns the top-right song-details affordance and its in-page
 “音乐百科 - 简要信息” dialog, so Android WebView and Windows WebView2 remain behaviorally

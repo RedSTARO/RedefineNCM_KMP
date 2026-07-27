@@ -297,12 +297,19 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             when (val state = lyricUiState) {
                 is LyricUiState.Idle -> webView.showAmllStatus("等待播放…")
                 is LyricUiState.Loading -> webView.showAmllStatus("正在加载歌词…")
-                is LyricUiState.Empty -> webView.showAmllStatus("暂无歌词")
+                is LyricUiState.Empty -> webView.showAmllStatus(
+                    if (state.capabilityLevel == LyricCapabilityLevel.UNSYNCED) {
+                        "歌词无时间戳"
+                    } else {
+                        "暂无歌词"
+                    },
+                )
                 is LyricUiState.Error -> webView.showAmllError(state.message)
                 is LyricUiState.Content -> Unit
             }
             return@LaunchedEffect
         }
+        val contentState = lyricUiState as LyricUiState.Content
         val mediaId = lyricMediaId ?: return@LaunchedEffect
         val lyricOptions = buildLyricOptionsJson(
             translatedLyric = rawTranslatedLyric,
@@ -316,7 +323,10 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
                 "AmllBridge.loadTtmlLyrics(${JSONObject.quote(rawTtmlLyric)}, ${JSONObject.quote(mediaId)}, $lyricOptions, ${JSONObject.quote(lyricForWeb)}); AmllBridge.setTime($currentPosition);",
                 null,
             )
-        } else if (rawWordLyric.isNotBlank()) {
+        } else if (
+            contentState.capabilityLevel == LyricCapabilityLevel.NCM_YRC &&
+            rawWordLyric.isNotBlank()
+        ) {
             Log.d("AMLL", "feeding word lyrics media=$mediaId, len=${rawWordLyric.length}")
             webView.evaluateJavascript(
                 "AmllBridge.loadWordLyrics(${JSONObject.quote(rawWordLyric)}, ${JSONObject.quote(mediaId)}, $lyricOptions); AmllBridge.setTime($currentPosition);",

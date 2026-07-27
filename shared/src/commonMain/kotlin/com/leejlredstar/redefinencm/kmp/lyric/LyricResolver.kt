@@ -26,7 +26,9 @@ data class LyricQuery(
 
 data class LyricDocument(
     val source: LyricSource,
+    val capabilityLevel: LyricCapabilityLevel,
     val lines: List<LyricParser.WordLine>,
+    val untimedLines: List<String> = emptyList(),
     val rawTtml: String = "",
     val rawLineLyric: String = "",
     val rawWordLyric: String = "",
@@ -38,6 +40,7 @@ data class LyricDocument(
 
 sealed interface LyricProviderResult {
     data class Found(val document: LyricDocument) : LyricProviderResult
+    data class Untimed(val document: LyricDocument) : LyricProviderResult
     data object NoMatch : LyricProviderResult
     data class Unavailable(val reason: String) : LyricProviderResult
     data class Malformed(val reason: String) : LyricProviderResult
@@ -45,6 +48,7 @@ sealed interface LyricProviderResult {
 
 sealed interface LyricResolution {
     data class Found(val document: LyricDocument) : LyricResolution
+    data class Untimed(val document: LyricDocument) : LyricResolution
     data object Empty : LyricResolution
     data class Error(val message: String) : LyricResolution
 }
@@ -77,6 +81,7 @@ class LyricResolver(
     ): Flow<LyricResolution> = flow {
         require(query.songId > 0) { "songId must be positive" }
         val failures = mutableListOf<String>()
+        var untimedCandidate: LyricDocument? = null
 
         for (source in mode.sourceOrder) {
             if (preferLocal) {
@@ -88,8 +93,12 @@ class LyricResolver(
                     null
                 }
                 if (localDocument != null) {
-                    emit(LyricResolution.Found(localDocument))
-                    return@flow
+                    if (localDocument.capabilityLevel == LyricCapabilityLevel.UNSYNCED) {
+                        if (untimedCandidate == null) untimedCandidate = localDocument
+                    } else {
+                        emit(LyricResolution.Found(localDocument))
+                        return@flow
+                    }
                 }
             }
             val provider = providers.firstOrNull { it.source == source }
@@ -103,8 +112,15 @@ class LyricResolver(
                 provider.load(query).collect { result ->
                     when (result) {
                         is LyricProviderResult.Found -> {
-                            found = true
-                            emit(LyricResolution.Found(result.document))
+                            if (result.document.capabilityLevel == LyricCapabilityLevel.UNSYNCED) {
+                                if (untimedCandidate == null) untimedCandidate = result.document
+                            } else {
+                                found = true
+                                emit(LyricResolution.Found(result.document))
+                            }
+                        }
+                        is LyricProviderResult.Untimed -> {
+                            if (untimedCandidate == null) untimedCandidate = result.document
                         }
                         LyricProviderResult.NoMatch -> Unit
                         is LyricProviderResult.Malformed -> failures += result.reason
@@ -119,7 +135,10 @@ class LyricResolver(
             if (found) return@flow
         }
 
-        if (failures.isEmpty()) {
+        val fallbackDocument = untimedCandidate
+        if (fallbackDocument != null) {
+            emit(LyricResolution.Untimed(fallbackDocument))
+        } else if (failures.isEmpty()) {
             emit(LyricResolution.Empty)
         } else {
             emit(LyricResolution.Error(failures.distinct().joinToString("；")))
@@ -134,6 +153,7 @@ class LyricResolver(
         resolve(query, mode).collect { resolution ->
             status = when (resolution) {
                 is LyricResolution.Found -> LyricCacheStatus.Saved
+                is LyricResolution.Untimed -> LyricCacheStatus.Saved
                 LyricResolution.Empty -> LyricCacheStatus.NoLyric
                 is LyricResolution.Error -> LyricCacheStatus.Failed
             }
@@ -174,6 +194,8 @@ internal class BackendLyricProvider(
                     emit(
                         if (document == null) {
                             LyricProviderResult.NoMatch
+                        } else if (document.capabilityLevel == LyricCapabilityLevel.UNSYNCED) {
+                            LyricProviderResult.Untimed(document)
                         } else {
                             LyricProviderResult.Found(document)
                         },
@@ -308,6 +330,7 @@ internal fun ttmlDocument(
     endpoint: String,
 ): LyricDocument = LyricDocument(
     source = LyricSource.AMLL_TTML,
+    capabilityLevel = LyricCapabilityLevel.TTML_FULL,
     lines = lines,
     rawTtml = ttml,
     rawLineLyric = LyricParser.toLrcText(lines),
@@ -386,7 +409,24 @@ internal fun backendLyricDocument(
                 )
             }
     }
-    if (baseLines.isEmpty()) return null
+    if (baseLines.isEmpty()) {
+        val untimedLines = normalizedLrcText
+            ?.let(::extractUntimedPrimaryLines)
+            .orEmpty()
+        if (untimedLines.isEmpty()) return null
+        return LyricDocument(
+            source = LyricSource.NCM_BACKEND,
+            capabilityLevel = LyricCapabilityLevel.UNSYNCED,
+            lines = emptyList(),
+            untimedLines = untimedLines,
+            rawLineLyric = normalizedLrcText.orEmpty(),
+            rawWordLyric = normalizedYrcText.orEmpty(),
+            rawTranslatedLyric = normalizedTranslatedText,
+            rawRomanLyric = normalizedRomanText,
+            providerItemId = query.songId.toString(),
+            endpoint = endpoint,
+        )
+    }
 
     val lines = baseLines.attachSupplements(
         translations = normalizedTranslatedText,
@@ -394,6 +434,11 @@ internal fun backendLyricDocument(
     )
     return LyricDocument(
         source = LyricSource.NCM_BACKEND,
+        capabilityLevel = if (wordLines.isNotEmpty()) {
+            LyricCapabilityLevel.NCM_YRC
+        } else {
+            LyricCapabilityLevel.LINE_SYNCED
+        },
         lines = lines,
         rawLineLyric = normalizedLrcText ?: LyricParser.toLrcText(lines),
         rawWordLyric = normalizedYrcText.orEmpty(),
@@ -403,6 +448,22 @@ internal fun backendLyricDocument(
         endpoint = endpoint,
     )
 }
+
+internal fun extractUntimedPrimaryLines(text: String): List<String> =
+    text.lineSequence()
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .mapNotNull { line ->
+            val withoutTags = line.replace(LRC_BRACKET_TAG, "").trim()
+            when {
+                withoutTags.isNotEmpty() -> withoutTags
+                !line.startsWith("[") -> line
+                else -> null
+            }
+        }
+        .toList()
+
+private val LRC_BRACKET_TAG = Regex("""\[[^\]]*]""")
 
 private fun List<LyricParser.WordLine>.attachSupplements(
     translations: String,

@@ -37,8 +37,16 @@ internal fun BoxScope.LyricStateOverlay(
             modifier = stateModifier,
         )
         is LyricUiState.Empty -> ExpressiveStatePanel(
-            title = "暂无歌词",
-            message = "这首歌曲暂时没有可用歌词。",
+            title = if (state.capabilityLevel == LyricCapabilityLevel.UNSYNCED) {
+                "歌词无时间戳"
+            } else {
+                "暂无歌词"
+            },
+            message = if (state.capabilityLevel == LyricCapabilityLevel.UNSYNCED) {
+                "检测到歌词文本，但没有可用于同步的时间戳。"
+            } else {
+                "这首歌曲暂时没有可用歌词。"
+            },
             icon = AppIcons.GraphicEq,
             accentPalette = statePalette,
             modifier = stateModifier,
