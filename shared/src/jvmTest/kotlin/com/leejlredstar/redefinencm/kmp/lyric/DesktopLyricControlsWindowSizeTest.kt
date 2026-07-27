@@ -23,7 +23,10 @@ class DesktopLyricControlsWindowSizeTest {
             true,
             desktopLyricControlsVisible(
                 requested = true,
-                state = LyricUiState.Empty(LyricCapabilityLevel.UNSYNCED),
+                state = LyricUiState.Content(
+                    lineCount = 2,
+                    capabilityLevel = LyricCapabilityLevel.UNSYNCED,
+                ),
             ),
         )
         assertEquals(
@@ -37,7 +40,10 @@ class DesktopLyricControlsWindowSizeTest {
             false,
             desktopLyricControlsVisible(
                 requested = false,
-                state = LyricUiState.Empty(LyricCapabilityLevel.UNSYNCED),
+                state = LyricUiState.Content(
+                    lineCount = 2,
+                    capabilityLevel = LyricCapabilityLevel.UNSYNCED,
+                ),
             ),
         )
     }

@@ -110,6 +110,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val rawTranslatedLyric by viewModel.rawTranslatedLyric.collectAsState()
     val rawRomanLyric by viewModel.rawRomanLyric.collectAsState()
     val lyricMap by viewModel.lyricMap.collectAsState()
+    val untimedLyricLines by viewModel.untimedLyricLines.collectAsState()
     val lyricUiState by viewModel.lyricUiState.collectAsState()
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
@@ -142,6 +143,12 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             lyricUiState = lyricUiState,
         )
     }
+    val untimedLyricsForWeb = remember(untimedLyricLines) {
+        Json.encodeToString(untimedLyricLines)
+    }
+    val isUntimedContent =
+        (lyricUiState as? LyricUiState.Content)?.capabilityLevel ==
+        LyricCapabilityLevel.UNSYNCED
     var localAmllArtwork by remember { mutableStateOf<Pair<String, String>?>(null) }
     val amllArtworkUri = metadata?.let { media ->
         if (!localArtworkActive) {
@@ -287,6 +294,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         rawTtmlLyric,
         rawWordLyric,
         lyricForWeb,
+        untimedLyricsForWeb,
         rawTranslatedLyric,
         rawRomanLyric,
         showTranslatedLyric,
@@ -294,8 +302,12 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         lyricUiState,
     ) {
         if (!engineReady) return@LaunchedEffect
-        val mediaId = lyricMediaId ?: return@LaunchedEffect
         if (lyricUiState !is LyricUiState.Content) {
+            session.eval("AmllBridge.loadLyrics('');")
+            return@LaunchedEffect
+        }
+        val mediaId = lyricMediaId
+        if (mediaId == null) {
             session.eval("AmllBridge.loadLyrics('');")
             return@LaunchedEffect
         }
@@ -306,7 +318,12 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             showTranslatedLyric = showTranslatedLyric,
             showRomanLyric = showRomanLyric,
         )
-        if (rawTtmlLyric.isNotBlank()) {
+        if (contentState.capabilityLevel == LyricCapabilityLevel.UNSYNCED) {
+            println("AMLL[wv2] feeding untimed lyrics media=$mediaId, lines=${untimedLyricLines.size}")
+            session.eval(
+                "AmllBridge.loadUntimedLyrics($untimedLyricsForWeb, '${mediaId.escapeJsSingleQuoted()}'); AmllBridge.setTime(0);",
+            )
+        } else if (rawTtmlLyric.isNotBlank()) {
             println("AMLL[wv2] feeding TTML media=$mediaId, len=${rawTtmlLyric.length}")
             session.eval(
                 "AmllBridge.loadTtmlLyrics('${rawTtmlLyric.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}', $lyricOptions, '${lyricForWeb.escapeJsSingleQuoted()}'); AmllBridge.setTime($currentPosition);",
@@ -328,9 +345,10 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     }
 
     // Push playback position; the page's rAF loop animates between updates.
-    LaunchedEffect(engineReady, currentPosition) {
+    LaunchedEffect(engineReady, currentPosition, isUntimedContent) {
         if (!engineReady) return@LaunchedEffect
-        session.evalLatest("AmllBridge.setTime($currentPosition);")
+        val position = if (isUntimedContent) 0L else currentPosition
+        session.evalLatest("AmllBridge.setTime($position);")
     }
 
     // Push current display metadata atomically before the optional dynamic cover. This lets the

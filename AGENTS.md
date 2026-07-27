@@ -399,6 +399,11 @@ Full-screen playback keeps the `WebViewLyricScreen` expect/actual architecture. 
 supported Windows Desktop actuals host the bundled AMLL `player.html`; the other JVM platforms,
 iOS, and Web actuals delegate to the Compose `FullLyricScreen` fallback. Keep this host split, and
 do not make the fallback a second navigation destination.
+Untimed primary lyrics are content rather than an empty state. Android and supported Windows feed
+their normalized text lines into AMLL as a static line model: virtual times exist only inside the
+page for layout, AMLL playback time stays pinned at zero, and line clicks must not seek. Those
+virtual times must never enter caches, sidecars, capability classification, or player state.
+`FullLyricScreen` renders the same lines as a non-seeking static list on fallback targets.
 `MiniNowPlayingBar`, the Desktop playback strip, and OS/deep-link now-playing requests must open
 the `WebViewLyricScreen` route directly. The former common `NowPlayingScreen` has been removed and
 must not be restored as a parallel player page.
