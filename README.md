@@ -54,8 +54,10 @@ AMLL TTML 按当前网易云歌曲 ID 精确查询
 [`amll-dev/amll-ttml-db`](https://github.com/amll-dev/amll-ttml-db)，不自动套用模糊标题
 结果。该请求使用独立无凭证客户端，只发送歌曲 ID，不会把网易云 Cookie、`realIP` 或后端
 地址发给第三方。Android、iOS、Desktop/JVM 与 Web/WASM 都使用同一个
-`commonMain/ui/amll/NativeAmllScreen.kt` 原生 Compose 页面及公共 Kotlin TTML 解析结果；
-项目不再嵌入 WebView、HTML、JavaScript 或按平台选择备用播放器页面。
+`NowPlayingViewModel` 歌词状态与来源策略。Android 和 Windows x64 默认使用推荐的
+Legacy WebView AMLL 页面；设置中可切换到仅建议低端设备使用的
+`commonMain/ui/amll/NativeAmllScreen.kt`。iOS、Web/WASM、Windows ARM64、Linux 与
+macOS 当前没有 Legacy 宿主，会自动使用 Native Compose。
 
 原生实现按源码固定翻译 `@applemusic-like-lyrics/core 0.5.2`、
 `@applemusic-like-lyrics/lyric 1.0.2` 与 `@applemusic-like-lyrics/ttml 1.0.1`。
@@ -67,8 +69,9 @@ AMLL TTML 按当前网易云歌曲 ID 精确查询
 ./gradlew :shared:wasmJsBrowserTest
 ```
 
-CI 直接验证 TTML → 公共歌词模型 → Native Compose 渲染字段链路，并校验应用内许可证
-资源与仓库声明一致。逐文件、逐符号映射及有意的平台 API 边界见
+CI 验证 Legacy Web 资产可从锁定依赖重建，也验证 TTML → 公共歌词模型 → Native
+Compose 渲染字段链路，并校验应用内许可证资源与仓库声明一致。Native 的逐文件、
+逐符号映射及有意的平台 API 边界见
 [`docs/AMLL_NATIVE_TRANSLATION.md`](docs/AMLL_NATIVE_TRANSLATION.md)。
 
 AMLL 包声明为 `AGPL-3.0-only`；完整文本和上游版本/源码定位见

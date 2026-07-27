@@ -66,6 +66,7 @@ import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.smtc.DesktopMediaControls
 import com.leejlredstar.redefinencm.kmp.ui.component.DesktopDynamicCoverWindowLifecycle
+import com.leejlredstar.redefinencm.kmp.ui.component.ProvideDesktopOverlayOwner
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
@@ -76,6 +77,11 @@ import org.koin.core.context.GlobalContext
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
+    if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
+        // Legacy WebView2 is a native child HWND. Compose popups and dialogs must use the
+        // component layer from process start so overlay windows can remain above it.
+        System.setProperty("compose.layers.type", "COMPONENT")
+    }
     initKoin()
     val settings = GlobalContext.get().get<PlatformSettings>()
     LyricNotificationController.setOptionalSurfaceEnabled(
@@ -118,24 +124,26 @@ private fun launchDesktopApplication() = application {
                 WindowPlacement.Maximized
             }
         }
-        RedefineNCMTheme {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = MaterialTheme.colorScheme.surface,
-            ) {
-                Column(Modifier.fillMaxSize()) {
-                    Win10WindowChrome(
-                        isMaximized = mainWindowState.placement == WindowPlacement.Maximized,
-                        onMinimize = { mainWindowState.isMinimized = true },
-                        onToggleMaximize = toggleMaximize,
-                        onClose = ::exitApplication,
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                    ) {
-                        App()
+        ProvideDesktopOverlayOwner(window) {
+            RedefineNCMTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.surface,
+                ) {
+                    Column(Modifier.fillMaxSize()) {
+                        Win10WindowChrome(
+                            isMaximized = mainWindowState.placement == WindowPlacement.Maximized,
+                            onMinimize = { mainWindowState.isMinimized = true },
+                            onToggleMaximize = toggleMaximize,
+                            onClose = ::exitApplication,
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                        ) {
+                            App()
+                        }
                     }
                 }
             }

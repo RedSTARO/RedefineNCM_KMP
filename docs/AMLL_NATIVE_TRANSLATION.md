@@ -161,9 +161,10 @@
    `requestedPlay` 与平台生命周期同时为真时播放：Android 要求宿主至少 `STARTED`，
    iOS 跟随 UIApplication 前后台，Desktop 要求窗口可见且非最小化，Web 跟随
    `visibilitychange` / `pagehide` / `pageshow`；恢复生命周期不会绕过公共播放请求。
-8. **宿主通信被移除。** `@JavascriptInterface`、WebView2 bind、DOM observer 和
-   `AmllPage` 全局对象不再存在；公共 state flow、Compose 状态和直接 Kotlin 回调承担
-   同一数据流。
+8. **Native 实现不经过宿主通信。** 在 `NativeAmllScreen` 中，
+   `@JavascriptInterface`、WebView2 bind、DOM observer 和 `AmllPage` 全局对象由公共
+   state flow、Compose 状态和直接 Kotlin 回调替代。用户选择 Legacy WebView 时，旧
+   宿主桥接仍是该独立渲染器的必要组成，不属于本文件的 Kotlin 翻译映射。
 9. **响应系统设置。** 减少动态效果、hover、forced colors / high contrast 等能力由
    各平台 Compose 与 actual API 提供。Android、iOS、Web 可在运行时通知减少动态效果；
    Windows/JVM 当前在创建组合时读取系统值但不订阅后续注册表变化，macOS/Linux JVM
@@ -176,3 +177,8 @@
 [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md)，完整许可证文本见
 [`LICENSES/AGPL-3.0-only.txt`](../LICENSES/AGPL-3.0-only.txt)。Desktop 发布包会把
 完整 [`LICENSES/`](../LICENSES/) 目录与该 notice 一并写入应用资源。
+
+Android 与 Windows x64 另提供用户可选的 Legacy WebView 渲染器；其可重建源码位于
+`androidApp/amll-builder/` 和 `shared/src/commonMain/amllAssets/amll/player.html`，
+锁定依赖与完整运行时声明见
+[`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md)。

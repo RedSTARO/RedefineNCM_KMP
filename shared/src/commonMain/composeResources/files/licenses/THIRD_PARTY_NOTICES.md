@@ -1,29 +1,53 @@
 # Third-party notices
 
-## Apple Music-like Lyrics native Compose port
+## Apple Music-like Lyrics renderers
 
-The native Kotlin lyric parser, optimizer, timeline, layout, spring, interlude,
-word-mask, emphasis, reduced-motion behavior, artwork background, dynamic-cover
-presentation, and song-details surface are a platform adaptation of:
+The application ships two user-selectable AMLL renderers on Android and
+Windows x64: the recommended Legacy WebView renderer and a Native Compose
+renderer intended for lower-end devices. Platforms without the Legacy host
+always use Native Compose.
+
+Both implementations are based on:
 
 - `@applemusic-like-lyrics/core` version `0.5.2`
 - `@applemusic-like-lyrics/lyric` version `1.0.2`
 - `@applemusic-like-lyrics/ttml` version `1.0.1`
-- the AMLL host page formerly shipped in this repository
 
 Upstream project: [amll-dev/applemusic-like-lyrics](https://github.com/amll-dev/applemusic-like-lyrics)
 
 Copyright (C) the Apple Music-like Lyrics contributors.
 
-The adapted implementation is distributed under the GNU Affero General Public
-License, version 3 only (`AGPL-3.0-only`). It was modified for Kotlin
-Multiplatform and Compose Multiplatform on 2026-07-27. The source-to-Kotlin
-mapping is documented in
+### Native Compose renderer
+
+The native Kotlin lyric parser, optimizer, timeline, layout, spring, interlude,
+word-mask, emphasis, reduced-motion behavior, artwork background, dynamic-cover
+presentation, and song-details surface are a platform adaptation distributed
+under the GNU Affero General Public License, version 3 only
+(`AGPL-3.0-only`). It was modified for Kotlin Multiplatform and Compose
+Multiplatform on 2026-07-27. The source-to-Kotlin mapping is documented in
 [`docs/AMLL_NATIVE_TRANSLATION.md`](docs/AMLL_NATIVE_TRANSLATION.md). The
 bundled full license text is
 [`LICENSES/AGPL-3.0-only.txt`](LICENSES/AGPL-3.0-only.txt);
 the canonical upstream text is available at
 <https://www.gnu.org/licenses/agpl-3.0.txt>.
+
+### Legacy WebView renderer
+
+The Legacy renderer loads the repository's `player.html`, generated
+`bundle.js`, and generated `style.css` in Android System WebView or Windows
+WebView2. Preferred source and reproducible build inputs are:
+
+- `androidApp/amll-builder/package.json`
+- `androidApp/amll-builder/package-lock.json`
+- `androidApp/amll-builder/build.js`
+- `androidApp/amll-builder/entry.js`
+- `shared/src/commonMain/amllAssets/amll/player.html`
+
+Run `npm ci`, `npm test`, and `npm run build` in
+`androidApp/amll-builder` to reproduce `bundle.js`, `style.css`, and the
+generated JavaScript runtime notices. Complete notices for every non-development
+package in the locked runtime graph are shipped beside the Web assets at
+[`shared/src/commonMain/amllAssets/amll/THIRD_PARTY_LICENSES.txt`](shared/src/commonMain/amllAssets/amll/THIRD_PARTY_LICENSES.txt).
 
 Immutable upstream preferred-source revisions are
 [`fd7ec2d`](https://github.com/amll-dev/applemusic-like-lyrics/tree/fd7ec2d597daa2a66a37ca5f3214d6757ec17cfa)
@@ -31,10 +55,20 @@ for Core 0.5.2 / Lyric 1.0.2 and
 [`36e5703`](https://github.com/amll-dev/applemusic-like-lyrics/tree/36e57035a735596479abe943f78846b8d1e78afc)
 for TTML 1.0.1.
 
+The Windows host uses the native library embedded by
+`com.github.webview.webview_java:core` at commit
+`da910b62589c36961d50fa8895d79e3b3d792b78`. Its Java SDK and parent Webview
+components are MIT-licensed. The exact upstream license for that pinned commit
+is bundled at
+[`LICENSES/webview-java-da910b-LICENSE.md`](LICENSES/webview-java-da910b-LICENSE.md).
+The Gradle dependency is non-transitive; no Casterlabs Commons runtime is
+included through this coordinate.
+
 This root document is the canonical notice manifest. Canonical full license
 texts live under [`LICENSES/`](LICENSES/). Compose application resources ship
 an exact copy of this manifest plus the AGPL-3.0-only and Apache-2.0 texts;
-Desktop distributions additionally stage the complete `LICENSES/` directory.
+the Legacy Web assets ship their generated JavaScript notices; Desktop
+distributions additionally stage the complete `LICENSES/` directory.
 
 ## AMLL TTML database
 
