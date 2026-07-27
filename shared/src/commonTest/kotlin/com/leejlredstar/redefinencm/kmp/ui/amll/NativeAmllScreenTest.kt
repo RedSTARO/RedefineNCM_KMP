@@ -73,4 +73,24 @@ class NativeAmllScreenTest {
             ),
         )
     }
+
+    @Test
+    fun localArtworkFailureFallsBackOnceToTheRemoteArtwork() {
+        assertEquals(
+            "https://music.example/cover.jpg",
+            nextAmllArtworkUriAfterFailure(
+                failedUri = "file:///downloads/42.cover.heic",
+                primaryUri = "file:///downloads/42.cover.heic",
+                fallbackUri = "https://music.example/cover.jpg",
+            ),
+        )
+        assertEquals(
+            null,
+            nextAmllArtworkUriAfterFailure(
+                failedUri = "https://music.example/cover.jpg",
+                primaryUri = "file:///downloads/42.cover.heic",
+                fallbackUri = "https://music.example/cover.jpg",
+            ),
+        )
+    }
 }

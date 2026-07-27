@@ -450,36 +450,13 @@ internal fun backendLyricDocument(
         ?.let { runCatching { LyricParser.parseYrc(it) }.getOrDefault(emptyList()) }
         .orEmpty()
     val parsedLrcLines = normalizedLrcText
-        ?.let { runCatching { LyricParser.parse(it) }.getOrDefault(linkedMapOf()) }
+        ?.let { runCatching { LyricParser.parseLrcLines(it) }.getOrDefault(emptyList()) }
         .orEmpty()
-        .entries
-        .mapNotNull { (time, text) ->
-            val start = time ?: return@mapNotNull null
-            val value = text?.takeIf(String::isNotBlank) ?: return@mapNotNull null
-            start to value
-        }
+        .withBoundedFinalLrcLine(query.durationMs)
     val baseLines = if (wordLines.isNotEmpty()) {
         wordLines
     } else {
         parsedLrcLines
-            .mapIndexed { index, (start, text) ->
-                val end = parsedLrcLines
-                    .getOrNull(index + 1)
-                    ?.first
-                    ?: query.durationMs.takeIf { it > start }
-                    ?: start
-                LyricParser.WordLine(
-                    startTimeMs = start,
-                    endTimeMs = end.coerceAtLeast(start),
-                    words = listOf(
-                        LyricParser.Word(
-                            startTimeMs = start,
-                            endTimeMs = end.coerceAtLeast(start),
-                            text = text,
-                        ),
-                    ),
-                )
-            }
     }
     if (baseLines.isEmpty()) {
         val untimedLines = normalizedLrcText
@@ -536,6 +513,40 @@ internal fun extractUntimedPrimaryLines(text: String): List<String> =
         .toList()
 
 private val LRC_BRACKET_TAG = Regex("""\[[^\]]*]""")
+
+/**
+ * `parseLrcLines()` deliberately keeps duplicate timestamps and background-vocal metadata.
+ * Its final line uses [LyricParser.MAX_LRC_TIMESTAMP_MS] because plain LRC has no explicit end;
+ * when the backend supplied a usable song duration, retain the ordered lines and only replace
+ * that open-ended boundary.
+ */
+private fun List<LyricParser.WordLine>.withBoundedFinalLrcLine(
+    durationMs: Long,
+): List<LyricParser.WordLine> {
+    if (isEmpty()) return this
+    val finalLine = last()
+    if (
+        finalLine.endTimeMs != LyricParser.MAX_LRC_TIMESTAMP_MS ||
+        durationMs <= finalLine.startTimeMs
+    ) {
+        return this
+    }
+    val boundedWords = finalLine.words.mapIndexed { index, word ->
+        if (index == finalLine.words.lastIndex) {
+            word.copy(
+                endTimeMs = durationMs,
+                exactEndTimeMs = durationMs.toDouble(),
+            )
+        } else {
+            word
+        }
+    }
+    return dropLast(1) + finalLine.copy(
+        endTimeMs = durationMs,
+        words = boundedWords,
+        exactEndTimeMs = durationMs.toDouble(),
+    )
+}
 
 private fun List<LyricParser.WordLine>.attachSupplements(
     translations: String,

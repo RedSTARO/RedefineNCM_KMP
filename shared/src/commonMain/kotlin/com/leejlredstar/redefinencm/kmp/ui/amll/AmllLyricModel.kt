@@ -108,6 +108,8 @@ data class AmllLyricWord(
     val romanWord: String? = null,
     /** Carries AMLL's source flag even though the fixed host leaves obscene masking disabled. */
     val obscene: Boolean = false,
+    /** AMLL TTML's authoring-only empty-beat hint, retained losslessly through optimization. */
+    val emptyBeat: Int? = null,
     /** Timed ruby/furigana segments rendered above this word. */
     val ruby: List<AmllLyricRubySegment> = emptyList(),
     /** Exact JavaScript-number timestamps; the Long fields remain compatibility transport values. */
@@ -198,14 +200,14 @@ fun buildAmllLyricDocument(
         val translatedText = if (showTranslated) {
             findNearestSupplement(translations, source.startTimeMs)
                 ?.takeIf(String::isNotEmpty)
-                ?: source.translatedText.takeIf(String::isNotEmpty)
+                ?: source.translatedLyric.takeIf(String::isNotEmpty)
         } else {
             null
         }
         val romanText = if (showRoman) {
             findNearestSupplement(romans, source.startTimeMs)
                 ?.takeIf(String::isNotEmpty)
-                ?: source.romanText.takeIf(String::isNotEmpty)
+                ?: source.romanLyric.takeIf(String::isNotEmpty)
         } else {
             null
         }
@@ -225,6 +227,7 @@ fun buildAmllLyricDocument(
                     endTimeMs = word.endTimeMs,
                     romanWord = word.romanWord.takeIf { showRoman },
                     obscene = word.obscene,
+                    emptyBeat = word.emptyBeat,
                     ruby = word.ruby.map { ruby ->
                         AmllLyricRubySegment(
                             text = ruby.text,
@@ -416,6 +419,7 @@ private data class MutableAmllWord(
     var endTimeMs: Double,
     val romanWord: String?,
     val obscene: Boolean,
+    val emptyBeat: Int?,
     val ruby: List<AmllLyricRubySegment>,
 )
 
@@ -446,6 +450,7 @@ private data class MutableAmllLine(
                 endTimeMs = word.endTimeMs.roundToLong(),
                 romanWord = word.romanWord,
                 obscene = word.obscene,
+                emptyBeat = word.emptyBeat,
                 ruby = word.ruby,
                 exactStartTimeMs = word.startTimeMs,
                 exactEndTimeMs = word.endTimeMs,
@@ -477,6 +482,7 @@ private data class MutableAmllLine(
                     endTimeMs = word.exactEndTimeMs,
                     romanWord = word.romanWord,
                     obscene = word.obscene,
+                    emptyBeat = word.emptyBeat,
                     ruby = word.ruby,
                 )
             }.toMutableList(),

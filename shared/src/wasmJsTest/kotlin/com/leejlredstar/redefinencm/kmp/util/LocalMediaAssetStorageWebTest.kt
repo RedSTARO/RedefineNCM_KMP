@@ -1,5 +1,12 @@
 package com.leejlredstar.redefinencm.kmp.util
 
+import coil3.PlatformContext
+import coil3.network.NetworkFetcher
+import coil3.request.ErrorResult
+import coil3.request.ImageRequest
+import coil3.request.SuccessResult
+import com.leejlredstar.redefinencm.kmp.ui.image.createWebArtworkImageLoader
+import com.leejlredstar.redefinencm.kmp.ui.image.loadWebBlobArtwork
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -7,8 +14,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
+import kotlin.io.encoding.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
@@ -70,12 +79,7 @@ class LocalMediaAssetStorageWebTest {
                 songId = songId,
                 fileExtension = "png",
                 mimeType = "image/png",
-                bytes = byteArrayOf(
-                    0x89.toByte(),
-                    0x50,
-                    0x4E,
-                    0x47,
-                ),
+                bytes = OnePixelPng,
             )
             assertEquals("$songId.cover.png", artworkName)
             assertEquals(artworkName, LocalMediaAssetStorage.inspect(songId).artworkFileName)
@@ -84,7 +88,41 @@ class LocalMediaAssetStorageWebTest {
 
             val artworkUri = assertNotNull(LocalMediaAssetStorage.resolveArtworkUri(songId))
             assertTrue(artworkUri.startsWith("blob:"))
-            LocalMediaAssetStorage.releaseArtworkUri(artworkUri)
+            try {
+                val fetchedArtwork = loadWebBlobArtwork(artworkUri)
+                assertTrue(fetchedArtwork.bytes.contentEquals(OnePixelPng))
+                assertEquals("image/png", fetchedArtwork.mimeType)
+
+                val imageLoader = createWebArtworkImageLoader(PlatformContext.INSTANCE)
+                try {
+                    assertTrue(
+                        imageLoader.components.fetcherFactories.any { (factory, _) ->
+                            factory is NetworkFetcher.Factory
+                        },
+                    )
+                    assertTrue(imageLoader.components.mappers.isNotEmpty())
+                    assertTrue(imageLoader.components.keyers.isNotEmpty())
+                    assertTrue(imageLoader.components.decoderFactories.isNotEmpty())
+                    val result = imageLoader.execute(
+                        ImageRequest.Builder(PlatformContext.INSTANCE)
+                            .data(artworkUri)
+                            .build(),
+                    )
+                    val success = assertIs<SuccessResult>(
+                        result,
+                        (result as? ErrorResult)?.throwable?.toString(),
+                    )
+                    assertEquals(1, success.image.width)
+                    assertEquals(1, success.image.height)
+                } finally {
+                    imageLoader.shutdown()
+                }
+            } finally {
+                LocalMediaAssetStorage.releaseArtworkUri(artworkUri)
+            }
+            assertFails {
+                loadWebBlobArtwork(artworkUri)
+            }
 
             assertTrue(LocalMediaAssetStorage.deleteAssets(songId))
             val deleted = LocalMediaAssetStorage.inspect(songId)
@@ -147,5 +185,11 @@ class LocalMediaAssetStorageWebTest {
         job.join()
 
         assertEquals(listOf("blob:prompt-cancellation"), released)
+    }
+
+    private companion object {
+        val OnePixelPng = Base64.Default.decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+        )
     }
 }

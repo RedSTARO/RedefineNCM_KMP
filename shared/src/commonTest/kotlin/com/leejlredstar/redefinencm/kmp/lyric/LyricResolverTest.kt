@@ -463,6 +463,40 @@ class LyricResolverTest {
             resolver.resolveLatest(query, LyricSourceMode.BACKEND_ONLY),
         )
         assertNull(resolver.cachedResolution(query, LyricSourceMode.BACKEND_ONLY))
+
+    fun backendLrcKeepsSameTimestampMainAndBackgroundLinesInSourceOrder() = runTest {
+        val provider = BackendLyricProvider(
+            lyricFlow = {
+                flowOf(
+                    Lyric(
+                        lrc = LyricLrc(
+                            lyric = """
+                            [00:01.000]main
+                            [00:01.000](echo)
+                            [00:03.000]next
+                            """.trimIndent(),
+                        ),
+                    ),
+                )
+            },
+            retryDelayMillis = 0,
+        )
+
+        val results = mutableListOf<LyricProviderResult>()
+        provider.load(
+            LyricQuery(
+                songId = 1,
+                durationMs = 5_000L,
+            ),
+        ).collect(results::add)
+
+        val document = assertIs<LyricProviderResult.Found>(results.single()).document
+        assertEquals(listOf("main", "echo", "next"), document.lines.map { it.text })
+        assertEquals(listOf(false, true, false), document.lines.map { it.isBackground })
+        assertEquals(listOf(1_000L, 1_000L, 3_000L), document.lines.map { it.startTimeMs })
+        assertEquals(5_000L, document.lines.last().endTimeMs)
+        assertEquals(5_000L, document.lines.last().exactEndTimeMs.toLong())
+        assertEquals(5_000L, document.lines.last().words.last().endTimeMs)
     }
 
     private fun fakeProvider(

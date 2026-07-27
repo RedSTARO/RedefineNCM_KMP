@@ -44,6 +44,11 @@ object LyricParser {
         val text: String,
         val romanWord: String = "",
         val obscene: Boolean = false,
+        /**
+         * AMLL TTML's authoring-only empty-beat hint. Core 0.5.2 does not currently consume this
+         * field while rendering, but the native transport must not discard it during parsing.
+         */
+        val emptyBeat: Int? = null,
         val ruby: List<RubySegment> = emptyList(),
         val exactStartTimeMs: Double = startTimeMs.toDouble(),
         val exactEndTimeMs: Double = endTimeMs.toDouble(),
@@ -163,7 +168,7 @@ object LyricParser {
         toLineLyricMap(parseLrcLines(lyric))
 
     /**
-     * Kotlin translation of the custom YRC parser from `androidApp/amll-builder/entry.js`.
+     * Kotlin translation of the custom YRC parser from the former AMLL host's `entry.js`.
      */
     fun parseYrc(lyric: String): List<WordLine> {
         val lines = lyric
@@ -237,8 +242,8 @@ object LyricParser {
             startTimeMs = lineStart,
             endTimeMs = maxOf(lineStart + lineDuration, words.maxOf { it.endTimeMs }),
             words = words,
-            translatedText = "",
-            romanText = "",
+            translatedLyric = "",
+            romanLyric = "",
             isBackground = false,
             isDuet = false,
         )
