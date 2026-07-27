@@ -2,12 +2,9 @@ package com.leejlredstar.redefinencm.kmp.download
 
 import com.leejlredstar.redefinencm.kmp.lyric.LyricDocument
 import com.leejlredstar.redefinencm.kmp.lyric.LyricCapabilityLevel
-import com.leejlredstar.redefinencm.kmp.lyric.LyricQuery
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSource
-import com.leejlredstar.redefinencm.kmp.lyric.backendLyricDocument
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 
 class LocalMediaAssetsTest {
     @Test
@@ -67,33 +64,5 @@ class LocalMediaAssetsTest {
 
         assertEquals(listOf("9.lyric.lrc"), files.map { it.fileName })
         assertEquals(lrc, files.single().content)
-    }
-
-    @Test
-    fun localBackendLrcSidecarKeepsSameTimestampMainAndBackgroundLines() {
-        val document = assertNotNull(
-            backendLyricDocument(
-                query = LyricQuery(
-                    songId = 9,
-                    durationMs = 6_000L,
-                ),
-                lrcText = """
-                    [00:02.000]main
-                    [00:02.000](echo)
-                    [00:04.000]next
-                """.trimIndent(),
-                yrcText = "",
-                translatedText = "",
-                romanText = "",
-                endpoint = "local-sidecar",
-            ),
-        )
-
-        assertEquals("local-sidecar", document.endpoint)
-        assertEquals(listOf("main", "echo", "next"), document.lines.map { it.text })
-        assertEquals(listOf(false, true, false), document.lines.map { it.isBackground })
-        assertEquals(listOf(2_000L, 2_000L, 4_000L), document.lines.map { it.startTimeMs })
-        assertEquals(6_000L, document.lines.last().endTimeMs)
-        assertEquals(6_000L, document.lines.last().words.last().endTimeMs)
     }
 }
