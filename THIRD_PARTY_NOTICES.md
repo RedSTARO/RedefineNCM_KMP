@@ -3,7 +3,8 @@
 ## Apple Music-like Lyrics native Compose port
 
 The native Kotlin lyric parser, optimizer, timeline, layout, spring, interlude,
-word-mask, and emphasis implementation is a platform adaptation of:
+word-mask, emphasis, reduced-motion behavior, artwork background, dynamic-cover
+presentation, and song-details surface are a platform adaptation of:
 
 - `@applemusic-like-lyrics/core` version `0.5.2`
 - `@applemusic-like-lyrics/lyric` version `1.0.2`
@@ -30,6 +31,11 @@ for Core 0.5.2 / Lyric 1.0.2 and
 [`36e5703`](https://github.com/amll-dev/applemusic-like-lyrics/tree/36e57035a735596479abe943f78846b8d1e78afc)
 for TTML 1.0.1.
 
+This root document is the canonical notice manifest. Canonical full license
+texts live under [`LICENSES/`](LICENSES/). Compose application resources ship
+an exact copy of this manifest plus the AGPL-3.0-only and Apache-2.0 texts;
+Desktop distributions additionally stage the complete `LICENSES/` directory.
+
 ## AMLL TTML database
 
 TTML files are retrieved at runtime from
@@ -44,6 +50,93 @@ Common TTML parsing uses `io.github.pdvrieze.xmlutil:core` 0.91.3, licensed unde
 the Apache License 2.0. The full license text is in
 [`LICENSES/Apache-2.0.txt`](LICENSES/Apache-2.0.txt) and is also shipped as a common application
 resource.
+
+## Desktop MP3 playback runtime
+
+The resolved `:shared:jvmRuntimeClasspath` contains the following MP3 playback
+components. `mp3spi` is the declared Desktop/JVM dependency; JLayer and
+Tritonus Share are its transitive runtime dependencies:
+
+- `com.googlecode.soundlibs:mp3spi:1.9.5.4`
+- `com.googlecode.soundlibs:jlayer:1.0.1.4`
+- `com.googlecode.soundlibs:tritonus-share:0.3.7.4`
+
+The binary JAR manifest of each artifact declares
+`Bundle-License: http://www.opensource.org/licenses/lgpl-2.1.php`. Their
+inherited `com.googlecode.soundlibs:soundlibs:1.4` parent POM likewise names
+the “LGPL 2.1 license”. The Java files in the corresponding source JARs use
+the older name “GNU Library General Public License” and state “either version
+2 of the License, or (at your option) any later version”. These are two
+separate pieces of upstream evidence; this notice records both and does not
+make a legal determination that one supersedes the other. The complete texts
+are included at:
+
+- [`LICENSES/LGPL-2.1.txt`](LICENSES/LGPL-2.1.txt)
+- [`LICENSES/GNU-Library-GPL-2.0-or-later.txt`](LICENSES/GNU-Library-GPL-2.0-or-later.txt)
+
+The upstream artifact evidence and corresponding source are:
+
+- MP3SPI `1.9.5.4`:
+  [POM](https://repo1.maven.org/maven2/com/googlecode/soundlibs/mp3spi/1.9.5.4/mp3spi-1.9.5.4.pom),
+  [source JAR](https://repo1.maven.org/maven2/com/googlecode/soundlibs/mp3spi/1.9.5.4/mp3spi-1.9.5.4-sources.jar)
+- JLayer `1.0.1.4`:
+  [POM](https://repo1.maven.org/maven2/com/googlecode/soundlibs/jlayer/1.0.1.4/jlayer-1.0.1.4.pom),
+  [source JAR](https://repo1.maven.org/maven2/com/googlecode/soundlibs/jlayer/1.0.1.4/jlayer-1.0.1.4-sources.jar)
+- Tritonus Share `0.3.7.4`:
+  [POM](https://repo1.maven.org/maven2/com/googlecode/soundlibs/tritonus-share/0.3.7.4/tritonus-share-0.3.7.4.pom),
+  [source JAR](https://repo1.maven.org/maven2/com/googlecode/soundlibs/tritonus-share/0.3.7.4/tritonus-share-0.3.7.4-sources.jar)
+- Soundlibs `1.4`
+  [parent POM](https://repo1.maven.org/maven2/com/googlecode/soundlibs/soundlibs/1.4/soundlibs-1.4.pom)
+
+The MP3SPI and JLayer POMs identify JavaZoom as original author and Patrik
+Duditš as packager. JLayer source files preserve, among others,
+`Copyright (C) 1993, 1994 Tobias Bading` and
+`Copyright (c) 1991 MPEG/audio software simulation group, All Rights
+Reserved`. The Tritonus Share POM identifies Florian Bomers as original
+author and Patrik Duditš as packager. Its source headers preserve copyrights
+of Matthias Pfisterer and Florian Bomers across 1999–2006.
+`TAudioFileReader.java` also preserves
+`Copyright (C) 1988-1991 Apple Computer, Inc.` and identifies Malcolm Slaney
+and Ken Turkowski as implementers of the incorporated conversion routines.
+
+Two files in Tritonus Share,
+`org/tritonus/share/sampled/FloatInputStream.java` and
+`org/tritonus/share/sampled/FloatSampleInput.java`, carry this separate
+two-clause BSD-style notice:
+
+Copyright (c) 2006 by Florian Bomers <http://www.bomers.de>
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+- Redistributions of source code must retain the above copyright notice,
+  this list of conditions and the following disclaimer.
+- Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+
+Gradle initially resolves these components as separate JARs. The current
+Desktop release build then enables ProGuard optimization and obfuscation with
+`joinOutputJars = true`, so the packaged release does not retain these three
+artifacts as separately replaceable, original JARs. This notice and the source
+links above do not claim that replacement or relinking requirements have been
+satisfied. Public GitHub Release publication remains blocked by the repository
+license-approval gate unless the project owner records the project license and
+Corresponding Source scope and explicitly sets `RELEASE_LICENSE_APPROVED=true`;
+adding this notice does not lift that gate.
 
 ## Desktop dynamic-cover video decoding
 

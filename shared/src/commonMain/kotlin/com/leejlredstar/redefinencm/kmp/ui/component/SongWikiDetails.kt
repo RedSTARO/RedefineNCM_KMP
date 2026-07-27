@@ -1,3 +1,12 @@
+/*
+ * Copyright (c) 2026 AMLL contributors and RedefineNCM KMP contributors.
+ *
+ * Native Compose translation/adaptation of Apple Music-like Lyrics and the former
+ * RedefineNCM AMLL host.
+ *
+ * Modified for RedefineNCM KMP on 2026-07-27.
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
 package com.leejlredstar.redefinencm.kmp.ui.component
 
 import androidx.compose.animation.core.CubicBezierEasing
@@ -104,6 +113,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.data.SongWikiSection
+import com.leejlredstar.redefinencm.kmp.ui.amll.nextAmllArtworkUriAfterFailure
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.viewmodel.SongWikiUiState
 import kotlinx.coroutines.delay
@@ -252,6 +262,7 @@ fun SongWikiDetailsSheet(
     songArtist: String? = null,
     albumTitle: String? = null,
     artworkUri: String? = null,
+    fallbackArtworkUri: String? = null,
     durationMs: Long? = null,
     artworkOverlay: (@Composable BoxScope.() -> Unit)? = null,
     reducedMotion: Boolean = false,
@@ -443,6 +454,7 @@ fun SongWikiDetailsSheet(
                             songArtist = songArtist,
                             albumTitle = albumTitle,
                             artworkUri = artworkUri,
+                            fallbackArtworkUri = fallbackArtworkUri,
                             durationMs = durationMs,
                             artworkOverlay = artworkOverlay,
                             state = state,
@@ -474,6 +486,7 @@ private fun WikiDialogContent(
     songArtist: String?,
     albumTitle: String?,
     artworkUri: String?,
+    fallbackArtworkUri: String?,
     durationMs: Long?,
     artworkOverlay: (@Composable BoxScope.() -> Unit)?,
     state: SongWikiUiState,
@@ -499,6 +512,7 @@ private fun WikiDialogContent(
             songArtist = songArtist,
             albumTitle = albumTitle,
             artworkUri = artworkUri,
+            fallbackArtworkUri = fallbackArtworkUri,
             durationMs = durationMs,
             artworkOverlay = artworkOverlay,
             onDismiss = onDismiss,
@@ -591,6 +605,7 @@ private fun WikiHero(
     songArtist: String?,
     albumTitle: String?,
     artworkUri: String?,
+    fallbackArtworkUri: String?,
     durationMs: Long?,
     artworkOverlay: (@Composable BoxScope.() -> Unit)?,
     onDismiss: () -> Unit,
@@ -639,6 +654,7 @@ private fun WikiHero(
             WikiArtwork(
                 songTitle = songTitle,
                 artworkUri = artworkUri,
+                fallbackArtworkUri = fallbackArtworkUri,
                 artworkOverlay = artworkOverlay,
                 size = artworkSize,
                 shape = artworkShape,
@@ -707,12 +723,16 @@ private fun WikiHero(
 private fun WikiArtwork(
     songTitle: String?,
     artworkUri: String?,
+    fallbackArtworkUri: String?,
     artworkOverlay: (@Composable BoxScope.() -> Unit)?,
     size: Dp,
     shape: RoundedCornerShape,
     reducedMotion: Boolean,
 ) {
-    var loaded by remember(artworkUri) { mutableStateOf(false) }
+    var displayedArtworkUri by remember(artworkUri, fallbackArtworkUri) {
+        mutableStateOf(artworkUri)
+    }
+    var loaded by remember(displayedArtworkUri) { mutableStateOf(false) }
     val imageAlpha by animateFloatAsState(
         targetValue = if (loaded) 1f else 0f,
         animationSpec = if (reducedMotion) snap() else tween(220, easing = WikiCssEase),
@@ -743,14 +763,23 @@ private fun WikiArtwork(
             modifier = Modifier.size(38.dp).alpha(0.72f),
         )
         AsyncImage(
-            model = artworkUri,
+            model = displayedArtworkUri,
             contentDescription = songTitle
                 ?.takeIf(String::isNotBlank)
                 ?.let { "$it 的专辑封面" }
                 ?: "专辑封面",
             contentScale = ContentScale.Crop,
             onSuccess = { loaded = true },
-            onError = { loaded = false },
+            onError = {
+                loaded = false
+                nextAmllArtworkUriAfterFailure(
+                    failedUri = displayedArtworkUri,
+                    primaryUri = artworkUri,
+                    fallbackUri = fallbackArtworkUri,
+                )?.let { fallback ->
+                    displayedArtworkUri = fallback
+                }
+            },
             modifier = Modifier.fillMaxSize().alpha(imageAlpha),
         )
         if (!reducedMotion) artworkOverlay?.invoke(this)

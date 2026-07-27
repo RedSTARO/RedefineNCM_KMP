@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.window.ComposeViewport
 import com.leejlredstar.redefinencm.kmp.di.initKoin
+import com.leejlredstar.redefinencm.kmp.ui.image.configureWebArtworkImageLoader
 import com.leejlredstar.redefinencm.kmp.ui.theme.platformFontFamily
 import com.leejlredstar.redefinencm.kmp.ui.theme.LocalPreloadedFontFamily
 import kotlinx.coroutines.delay
@@ -21,6 +22,7 @@ import kotlin.JsFun
 /** Browser entry point for the shared Compose application. */
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
+    configureWebArtworkImageLoader()
     startAfterWebFontReady {
         initKoin()
         ComposeViewport(viewportContainerId = "redefineNcmApp") {

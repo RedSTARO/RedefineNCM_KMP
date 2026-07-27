@@ -72,7 +72,7 @@ class LyricParserTest {
         )
 
         assertEquals(1, map.size)
-        assertEquals("echo", map[1000L])
+        assertEquals("main\n（echo）", map[1000L])
     }
 
     @Test

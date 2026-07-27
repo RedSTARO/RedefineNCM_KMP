@@ -71,8 +71,8 @@ val prepareDesktopLegalResources by tasks.registering(Sync::class) {
     from(rootProject.layout.projectDirectory.file("THIRD_PARTY_NOTICES.md")) {
         into("common")
     }
-    from(rootProject.layout.projectDirectory.dir("THIRD_PARTY_LICENSES")) {
-        into("common/THIRD_PARTY_LICENSES")
+    from(rootProject.layout.projectDirectory.dir("LICENSES")) {
+        into("common/LICENSES")
     }
 }
 

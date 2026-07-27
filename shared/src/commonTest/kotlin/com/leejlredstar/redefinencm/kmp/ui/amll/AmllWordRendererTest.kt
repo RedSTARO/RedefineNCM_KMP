@@ -153,6 +153,7 @@ class AmllWordRendererTest {
         val document = buildAmllLyricDocument(
             lyricMap = emptyMap(),
             wordLines = listOf(sourceLine),
+            showRoman = true,
             optimizeOptions = AmllLyricOptimizeOptions(
                 normalizeSpaces = false,
                 resetLineTimestamps = false,

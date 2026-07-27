@@ -66,6 +66,34 @@ data class DynamicCoverUiState(
     fun urlFor(mediaId: String?): String? = url?.takeIf { this.mediaId == mediaId }
 }
 
+internal data class LocalArtworkResolutionState(
+    val mediaId: String? = null,
+    val pending: Boolean = false,
+    val active: Boolean = false,
+)
+
+internal fun localArtworkAllowsDynamicCover(
+    mediaId: String?,
+    state: LocalArtworkResolutionState,
+): Boolean =
+    mediaId != null &&
+        (state.mediaId != mediaId || (!state.pending && !state.active))
+
+internal fun completeLocalArtworkResolutionState(
+    state: LocalArtworkResolutionState,
+    mediaId: String,
+    active: Boolean,
+): LocalArtworkResolutionState =
+    if (state.mediaId == mediaId && state.pending) {
+        LocalArtworkResolutionState(
+            mediaId = mediaId,
+            pending = false,
+            active = active,
+        )
+    } else {
+        state
+    }
+
 /**
  * Ported from the original Android NowPlayingViewModel.
  *
@@ -137,6 +165,7 @@ class NowPlayingViewModel(
     val dynamicCoverUiState = MutableStateFlow(DynamicCoverUiState())
     private val _localArtworkActive = MutableStateFlow(false)
     val localArtworkActive: StateFlow<Boolean> = _localArtworkActive.asStateFlow()
+    private val localArtworkResolution = MutableStateFlow(LocalArtworkResolutionState())
     private val _remoteArtworkUri = MutableStateFlow("")
     val remoteArtworkUri: StateFlow<String> = _remoteArtworkUri.asStateFlow()
     private var activeLocalArtworkUri: String? = null
@@ -179,9 +208,17 @@ class NowPlayingViewModel(
                 // Advance before the first suspension: an A → B → A switch must reject the
                 // original A request even if its cancellation is delivered late.
                 val lyricGeneration = beginLyricRequest()
-                currentMedia.value = media
                 releaseActiveLocalArtwork()
-                _localArtworkActive.value = false
+                if (media == null) {
+                    currentMedia.value = null
+                    clearLocalArtworkResolution()
+                } else {
+                    beginLocalArtworkResolution(media.id)
+                    // Dynamic-cover synchronization consumes this ViewModel flow. Publishing the
+                    // media only after its pending gate prevents it from observing the new song
+                    // without the matching local-artwork resolution state.
+                    currentMedia.value = media
+                }
                 _remoteArtworkUri.value = media?.artworkUri.orEmpty()
                 songWikiFetchJob?.cancel()
                 songWikiFetchJob = null
@@ -221,13 +258,15 @@ class NowPlayingViewModel(
                         unresolvedLocalArtwork?.let(localMediaAssets::releaseArtworkUri)
                         throw cancelled
                     }
-                    val effectiveMedia = if (unresolvedLocalArtwork.isNullOrBlank()) {
+                    val resolvedArtwork = unresolvedLocalArtwork?.takeIf(String::isNotBlank)
+                    if (!completeLocalArtworkResolution(media.id, resolvedArtwork != null)) {
+                        resolvedArtwork?.let(localMediaAssets::releaseArtworkUri)
+                        return@collectLatest
+                    }
+                    val effectiveMedia = if (resolvedArtwork == null) {
                         media
                     } else {
-                        val resolvedArtwork = unresolvedLocalArtwork
-                        unresolvedLocalArtwork = null
                         activeLocalArtworkUri = resolvedArtwork
-                        _localArtworkActive.value = true
                         media.copy(artworkUri = resolvedArtwork)
                     }
                     currentMedia.value = effectiveMedia
@@ -416,12 +455,20 @@ class NowPlayingViewModel(
     private fun initDynamicCoverSync() {
         scope.launch {
             combine(
-                player.currentMedia,
+                currentMedia,
                 mainViewModel.uid,
                 useDynamicCover,
-                _localArtworkActive,
-            ) { media, uid, enabled, hasLocalArtwork ->
-                DynamicCoverRequest(media?.id, uid, enabled, hasLocalArtwork)
+                localArtworkResolution,
+            ) { media, uid, enabled, localArtworkState ->
+                DynamicCoverRequest(
+                    mediaId = media?.id,
+                    uid = uid,
+                    enabled = enabled,
+                    localArtworkAllowsDynamicCover = localArtworkAllowsDynamicCover(
+                        media?.id,
+                        localArtworkState,
+                    ),
+                )
             }
                 .distinctUntilChanged()
                 .collectLatest { request ->
@@ -432,7 +479,7 @@ class NowPlayingViewModel(
                     val songId = mediaId?.toLongOrNull()?.takeIf { it > 0 }
                     if (
                         !enabled ||
-                        request.hasLocalArtwork ||
+                        !request.localArtworkAllowsDynamicCover ||
                         uid <= 0 ||
                         songId == null
                     ) return@collectLatest
@@ -442,7 +489,12 @@ class NowPlayingViewModel(
                     }
                     if (
                         useDynamicCover.value &&
+                        localArtworkAllowsDynamicCover(
+                            mediaId,
+                            localArtworkResolution.value,
+                        ) &&
                         mainViewModel.uid.value == uid &&
+                        currentMedia.value?.id == mediaId &&
                         player.currentMedia.value?.id == mediaId
                     ) {
                         dynamicCoverUiState.value = DynamicCoverUiState(
@@ -896,6 +948,31 @@ class NowPlayingViewModel(
         activeLocalArtworkUri = null
     }
 
+    private fun beginLocalArtworkResolution(mediaId: String) {
+        localArtworkResolution.value = LocalArtworkResolutionState(
+            mediaId = mediaId,
+            pending = true,
+        )
+        _localArtworkActive.value = false
+    }
+
+    private fun clearLocalArtworkResolution() {
+        localArtworkResolution.value = LocalArtworkResolutionState()
+        _localArtworkActive.value = false
+    }
+
+    private fun completeLocalArtworkResolution(
+        mediaId: String,
+        active: Boolean,
+    ): Boolean {
+        val current = localArtworkResolution.value
+        val completed = completeLocalArtworkResolutionState(current, mediaId, active)
+        if (completed === current) return false
+        localArtworkResolution.value = completed
+        _localArtworkActive.value = completed.active
+        return true
+    }
+
     private data class LyricNotificationPayload(
         val index: Int,
         val media: MediaInfo?,
@@ -910,7 +987,7 @@ class NowPlayingViewModel(
         val mediaId: String?,
         val uid: Long,
         val enabled: Boolean,
-        val hasLocalArtwork: Boolean,
+        val localArtworkAllowsDynamicCover: Boolean,
     )
 }
 
