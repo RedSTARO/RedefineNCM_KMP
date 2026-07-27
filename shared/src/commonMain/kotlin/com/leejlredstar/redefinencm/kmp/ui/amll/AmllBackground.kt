@@ -1,3 +1,12 @@
+/*
+ * Copyright (c) 2026 AMLL contributors and RedefineNCM KMP contributors.
+ *
+ * Native Compose translation/adaptation of Apple Music-like Lyrics and the former
+ * RedefineNCM AMLL host.
+ *
+ * Modified for RedefineNCM KMP on 2026-07-27.
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
 package com.leejlredstar.redefinencm.kmp.ui.amll
 
 import androidx.compose.animation.AnimatedContent
@@ -13,6 +22,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
@@ -68,6 +81,7 @@ internal fun amllBackgroundVisualSpec(
 @Composable
 internal fun AmllBackground(
     artworkUri: String?,
+    fallbackArtworkUri: String?,
     dynamicCoverUrl: String?,
     playDynamicCover: Boolean,
     androidPresentation: Boolean,
@@ -85,6 +99,9 @@ internal fun AmllBackground(
     val scale = visualSpec.combinedScale
     val saturation = visualSpec.saturation
     val brightness = visualSpec.brightness
+    var displayedArtworkUri by remember(artworkUri, fallbackArtworkUri) {
+        mutableStateOf(artworkUri)
+    }
 
     Box(
         modifier = modifier
@@ -92,7 +109,7 @@ internal fun AmllBackground(
             .background(Color(0xFF0A0A0A)),
     ) {
         AnimatedContent(
-            targetState = artworkUri,
+            targetState = displayedArtworkUri,
             modifier = Modifier.fillMaxSize(),
             transitionSpec = { artworkCrossfade(reducedMotion) },
             label = "AmllArtworkCrossfade",
@@ -105,8 +122,17 @@ internal fun AmllBackground(
                     ColorMatrix().apply { setToSaturation(saturation) },
                 ),
                 onSuccess = { state ->
-                    if (currentArtwork == artworkUri) {
+                    if (currentArtwork == displayedArtworkUri) {
                         onArtworkLoaded(state.result.image)
+                    }
+                },
+                onError = {
+                    nextAmllArtworkUriAfterFailure(
+                        failedUri = currentArtwork,
+                        primaryUri = artworkUri,
+                        fallbackUri = fallbackArtworkUri,
+                    )?.let { fallback ->
+                        displayedArtworkUri = fallback
                     }
                 },
                 modifier = Modifier.amllBackgroundEffect(
@@ -155,6 +181,14 @@ internal fun AmllBackground(
         )
     }
 }
+
+internal fun nextAmllArtworkUriAfterFailure(
+    failedUri: String?,
+    primaryUri: String?,
+    fallbackUri: String?,
+): String? = fallbackUri
+    ?.takeIf(String::isNotBlank)
+    ?.takeIf { failedUri == primaryUri && it != failedUri }
 
 private fun Modifier.amllBackgroundEffect(
     blurRadius: Dp,

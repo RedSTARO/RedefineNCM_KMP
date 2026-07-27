@@ -1,4 +1,4 @@
-package com.leejlredstar.redefinencm.kmp.viewmodel
+﻿package com.leejlredstar.redefinencm.kmp.viewmodel
 
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.SongWikiSummary
@@ -100,7 +100,7 @@ internal fun completeLocalArtworkResolutionState(
  * Key invariant (preserved from original):
  * The visible queue and current highlight MUST always be rebuilt together from the current
  * Player state via rebuildPlaylistFromTimeline().
- * Never update them independently — this prevents the shuffle highlight misalignment bug.
+ * Never update them independently �?this prevents the shuffle highlight misalignment bug.
  */
 class NowPlayingViewModel(
     private val repo: Repository,
@@ -205,13 +205,10 @@ class NowPlayingViewModel(
         }
         scope.launch {
             player.currentMedia.collectLatest { media ->
-<<<<<<< HEAD
-=======
                 // Advance before the first suspension: an A → B → A switch must reject the
                 // original A request even if its cancellation is delivered late.
                 val lyricGeneration = beginLyricRequest()
                 currentMedia.value = media
->>>>>>> 62ed4d0 (feat(lyrics): make playback transitions seamless)
                 releaseActiveLocalArtwork()
                 if (media == null) {
                     currentMedia.value = null
@@ -301,7 +298,7 @@ class NowPlayingViewModel(
 
     /**
      * Rebuild the visible playlist, window-order indices, and current highlight
-     * from the current Player state. This is the SINGLE rebuild path —
+     * from the current Player state. This is the SINGLE rebuild path �?
      * all track transitions, shuffle toggles, and timeline changes go through here.
      */
     fun rebuildPlaylistFromTimeline(snapshot: PlayerQueueSnapshot = player.queueSnapshot.value) {
@@ -574,12 +571,12 @@ class NowPlayingViewModel(
         }
         prepareLyricsForMedia(mediaId, initialCachedResolution)
         // 网络必须离开 Main：桌面端 Main=Swing EDT，AMLL 软件渲染期间 EDT 饱和会把
-        // 运行其上的 Ktor 连接协程饿到超时（实测 /lyric 连环 ConnectTimeout 的根因）
+        // 运行其上�?Ktor 连接协程饿到超时（实�?/lyric 连环 ConnectTimeout 的根因）
         lyricFetchJob = scope.launch(Dispatchers.Default) {
             val mode = lyricSourceModeGate.awaitMode()
             if (songId == null) {
                 applyLyricsForMedia(mediaId, requestGeneration) {
-                    applyLyricError("歌曲标识无效，无法加载歌词")
+                    applyLyricError("歌曲标识无效，无法加载歌�?)
                 }
                 return@launch
             }
@@ -837,7 +834,7 @@ class NowPlayingViewModel(
             songWikiRequestGeneration += 1
             songWikiUiState.value = SongWikiUiState.Error(
                 mediaId = "",
-                message = "当前没有正在播放的歌曲",
+                message = "当前没有正在播放的歌�?,
             )
             return
         }
@@ -853,7 +850,7 @@ class NowPlayingViewModel(
         if (id == null) {
             songWikiUiState.value = SongWikiUiState.Error(
                 mediaId = mediaId,
-                message = "歌曲标识无效，无法加载音乐百科",
+                message = "歌曲标识无效，无法加载音乐百�?,
             )
             return
         }
@@ -928,7 +925,7 @@ class NowPlayingViewModel(
 
         val duration = songLength.value
         val safePosition = if (duration > 0) {
-            // 旧歌的点击事件可能在切歌动画/WebView 重绘期间迟到；超出当前歌时长的 seek 丢弃。
+            // 旧歌的点击事件可能在切歌动画/WebView 重绘期间迟到；超出当前歌时长�?seek 丢弃�?
             if (newPosition > duration + 2_000L) return
             newPosition.coerceIn(0L, duration)
         } else {
@@ -1000,3 +997,4 @@ internal fun nextLyricPrefetchCandidate(snapshot: PlayerQueueSnapshot): MediaInf
     val candidate = snapshot.items.getOrNull(snapshot.currentIndex + 1) ?: return null
     return candidate.takeUnless { it.id == snapshot.currentMedia?.id }
 }
+
