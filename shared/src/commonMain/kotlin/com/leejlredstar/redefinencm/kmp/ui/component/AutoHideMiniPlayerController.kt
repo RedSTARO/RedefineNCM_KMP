@@ -2,10 +2,13 @@ package com.leejlredstar.redefinencm.kmp.ui.component
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -19,7 +22,6 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -100,7 +102,7 @@ fun AutoHideMiniPlayerController(
     showCollapsedWhenHidden: Boolean = true,
     collapsedHostFillsWidth: Boolean = false,
     autoHideDelayMillis: Long = 3_600L,
-    forceOpaqueSurfaces: Boolean = false,
+    reducedMotion: Boolean = false,
     externalRevealRequest: Int = 0,
     onOverlayVisibilityChanged: (Boolean) -> Unit = {},
     onSheetVisibilityChanged: (Boolean) -> Unit = {},
@@ -155,7 +157,7 @@ fun AutoHideMiniPlayerController(
     }
     val accentColor by animateColorAsState(
         targetValue = rawAccentColor,
-        animationSpec = spring(),
+        animationSpec = if (reducedMotion) snap() else spring(),
         label = "fullLyricControlAccent",
     )
     val accentPalette = contentAccentPalette(accentColor)
@@ -221,14 +223,10 @@ fun AutoHideMiniPlayerController(
         if (lyricCapabilityLevel == null) showLyricDetails = false
     }
 
+    // Keep the host transparent. The legacy Desktop overlay filled this box with an opaque
+    // rectangle to back a second native window; inside NativeAmllScreen that rectangle became
+    // visible around the rounded cards while AnimatedContent scaled between states.
     Box(modifier = modifier.fillMaxSize()) {
-        if (forceOpaqueSurfaces && !sheetVisible) {
-            OpaquePlaybackControlsBackdrop(
-                accentPalette = accentPalette,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-
         AnimatedContent(
             targetState = visible,
             modifier = Modifier
@@ -236,7 +234,12 @@ fun AutoHideMiniPlayerController(
                 .navigationBarsPadding()
                 .padding(bottom = 8.dp),
             contentAlignment = Alignment.BottomCenter,
-            transitionSpec = { fullLyricControllerTransform(expanding = targetState) },
+            transitionSpec = {
+                fullLyricControllerTransform(
+                    expanding = targetState,
+                    reducedMotion = reducedMotion,
+                )
+            },
             label = "FullLyricControllerTransform",
         ) { expanded ->
             if (expanded) {
@@ -254,7 +257,6 @@ fun AutoHideMiniPlayerController(
                     lyricEndpoint = displayedLyricEndpoint,
                     lyricDetailsExpanded = showLyricDetails,
                     accentPalette = accentPalette,
-                    forceOpaqueSurfaces = forceOpaqueSurfaces,
                     onArtworkLoaded = extractAccent,
                     onReveal = ::reveal,
                     onCollapse = ::collapse,
@@ -305,12 +307,12 @@ fun AutoHideMiniPlayerController(
                     totalDuration = totalDuration,
                     progress = progress,
                     accentPalette = accentPalette,
-                    forceOpaqueSurface = forceOpaqueSurfaces,
                     onReveal = ::reveal,
                     onTogglePlayPause = { if (hasMedia) player.togglePlayPause() },
                     onPrevious = { if (hasMedia) player.seekToPrevious() },
                     onNext = { if (hasMedia) player.seekToNext() },
                     fillHostWidth = collapsedHostFillsWidth,
+                    reducedMotion = reducedMotion,
                 )
             }
         }
@@ -343,51 +345,18 @@ fun AutoHideMiniPlayerController(
     }
 }
 
-@Composable
-private fun OpaquePlaybackControlsBackdrop(
-    accentPalette: ContentAccentPalette,
-    modifier: Modifier = Modifier,
-) {
-    BoxWithConstraints(modifier = modifier) {
-        if (maxHeight > 100.dp) {
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .widthIn(max = 620.dp)
-                    .fillMaxWidth()
-                    .height(153.dp),
-                shape = MaterialTheme.shapes.extraLarge,
-                color = accentPalette.container,
-                tonalElevation = 0.dp,
-            ) {}
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .widthIn(max = 620.dp)
-                    .fillMaxWidth()
-                    .height(64.dp),
-                shape = CircleShape,
-                color = accentPalette.quietContainer,
-                tonalElevation = 0.dp,
-            ) {}
-        } else {
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = 8.dp, vertical = 8.dp)
-                    .fillMaxWidth()
-                    .height(48.dp),
-                shape = CircleShape,
-                color = accentPalette.quietContainer,
-                tonalElevation = 0.dp,
-            ) {}
-        }
+private fun fullLyricControllerTransform(
+    expanding: Boolean,
+    reducedMotion: Boolean,
+): ContentTransform {
+    if (reducedMotion) {
+        return ContentTransform(
+            targetContentEnter = EnterTransition.None,
+            initialContentExit = ExitTransition.None,
+            sizeTransform = null,
+        )
     }
-}
 
-private fun fullLyricControllerTransform(expanding: Boolean): ContentTransform {
     val bottomCenter = TransformOrigin(pivotFractionX = 0.5f, pivotFractionY = 1f)
     val enterScale = if (expanding) 0.58f else 1.04f
     val exitScale = if (expanding) 1.04f else 0.58f
@@ -433,7 +402,6 @@ private fun FullLyricControlConsole(
     lyricEndpoint: String,
     lyricDetailsExpanded: Boolean,
     accentPalette: ContentAccentPalette,
-    forceOpaqueSurfaces: Boolean,
     onArtworkLoaded: (coil3.Image) -> Unit,
     onReveal: () -> Unit,
     onCollapse: () -> Unit,
@@ -463,7 +431,6 @@ private fun FullLyricControlConsole(
             lyricEndpoint = lyricEndpoint,
             lyricDetailsExpanded = lyricDetailsExpanded,
             accentPalette = accentPalette,
-            forceOpaqueSurface = forceOpaqueSurfaces,
             onArtworkLoaded = onArtworkLoaded,
             onReveal = onReveal,
             onCollapse = onCollapse,
@@ -480,9 +447,7 @@ private fun FullLyricControlConsole(
                 .fillMaxWidth()
                 .height(64.dp),
             shape = CircleShape,
-            color = accentPalette.quietContainer.copy(
-                alpha = if (forceOpaqueSurfaces) 1f else 0.88f,
-            ),
+            color = accentPalette.quietContainer.copy(alpha = 0.88f),
             contentColor = accentPalette.onQuietContainer,
             tonalElevation = 0.dp,
         ) {
@@ -570,7 +535,6 @@ private fun ExpandedPlaybackCard(
     lyricEndpoint: String,
     lyricDetailsExpanded: Boolean,
     accentPalette: ContentAccentPalette,
-    forceOpaqueSurface: Boolean,
     onArtworkLoaded: (coil3.Image) -> Unit,
     onReveal: () -> Unit,
     onCollapse: () -> Unit,
@@ -590,14 +554,12 @@ private fun ExpandedPlaybackCard(
     }
 
     Surface(
-                        modifier = Modifier
+        modifier = Modifier
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .widthIn(max = 620.dp)
             .fillMaxWidth(),
         shape = MaterialTheme.shapes.extraLarge,
-        color = accentPalette.container.copy(
-            alpha = if (forceOpaqueSurface) 1f else 0.88f,
-        ),
+        color = accentPalette.container.copy(alpha = 0.88f),
         contentColor = accentPalette.onContainer,
         tonalElevation = 0.dp,
     ) {
@@ -840,12 +802,12 @@ private fun CollapsedProgressController(
     totalDuration: Long,
     progress: Float,
     accentPalette: ContentAccentPalette,
-    forceOpaqueSurface: Boolean,
     onReveal: () -> Unit,
     onTogglePlayPause: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     fillHostWidth: Boolean,
+    reducedMotion: Boolean,
 ) {
     val dragThresholdPx = with(LocalDensity.current) { 56.dp.toPx() }
     var dragOffsetPx by remember { mutableStateOf(0f) }
@@ -853,7 +815,7 @@ private fun CollapsedProgressController(
     val dragFraction = (dragOffsetPx / dragThresholdPx).coerceIn(-1f, 1f)
     val animatedOffset by animateFloatAsState(
         targetValue = dragOffsetPx.coerceIn(-dragThresholdPx, dragThresholdPx) * 0.30f,
-        animationSpec = spring(),
+        animationSpec = if (reducedMotion) snap() else spring(),
         label = "collapsedControllerDragOffset",
     )
     val animatedScale by animateFloatAsState(
@@ -862,7 +824,7 @@ private fun CollapsedProgressController(
             dragOffsetPx != 0f -> 1f + abs(dragFraction) * 0.045f
             else -> 1f
         },
-        animationSpec = spring(),
+        animationSpec = if (reducedMotion) snap() else spring(),
         label = "collapsedControllerScale",
     )
     val swipeLabel = when {
@@ -872,7 +834,11 @@ private fun CollapsedProgressController(
     }
     val swipeAlpha by animateFloatAsState(
         targetValue = abs(dragFraction).coerceIn(0f, 1f),
-        animationSpec = tween(ExpressiveMotion.FastMillis, easing = LinearOutSlowInEasing),
+        animationSpec = if (reducedMotion) {
+            snap()
+        } else {
+            tween(ExpressiveMotion.FastMillis, easing = LinearOutSlowInEasing)
+        },
         label = "collapsedControllerSwipeAlpha",
     )
     val widthModifier = if (fillHostWidth) {
@@ -970,9 +936,7 @@ private fun CollapsedProgressController(
                 }
             },
         shape = CircleShape,
-        color = accentPalette.quietContainer.copy(
-            alpha = if (forceOpaqueSurface) 1f else 0.78f + swipeAlpha * 0.12f,
-        ),
+        color = accentPalette.quietContainer.copy(alpha = 0.78f + swipeAlpha * 0.12f),
         contentColor = accentPalette.onQuietContainer,
         tonalElevation = 0.dp,
     ) {

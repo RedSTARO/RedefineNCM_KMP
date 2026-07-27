@@ -26,7 +26,6 @@
 # JNA maps these Java method names and signatures directly to native symbols. In particular,
 # allowoptimization cannot be used here because ProGuard may remove parameters from methods.
 -keep class com.sun.jna.* { *; }
--keep interface com.leejlredstar.redefinencm.kmp.lyric.WebviewJna { *; }
 -keep interface com.leejlredstar.redefinencm.kmp.smtc.WindowsMediaControls$Combase { *; }
 -keepclassmembernames,includedescriptorclasses interface * extends com.sun.jna.Library { <methods>; }
 -keepclassmembers,includedescriptorclasses interface * extends com.sun.jna.Callback { <methods>; }
@@ -74,3 +73,23 @@
 -keep class org.sqlite.JDBC { *; }
 -keep class javazoom.spi.mpeg.sampled.file.MpegAudioFileReader { *; }
 -keep class javazoom.spi.mpeg.sampled.convert.MpegFormatConversionProvider { *; }
+
+# JavaCPP resolves generated FFmpeg wrapper classes, native method names, annotations, and
+# bundled JNI resources reflectively. Keep only the JavaCV classes used by the dynamic-cover
+# decoder while preserving the complete generated JavaCPP/FFmpeg JNI surface.
+-keep class org.bytedeco.javacv.Frame { *; }
+-keep class org.bytedeco.javacv.FrameGrabber { *; }
+-keep class org.bytedeco.javacv.FrameConverter { *; }
+-keep class org.bytedeco.javacv.FFmpegFrameGrabber { *; }
+-keep class org.bytedeco.javacv.FFmpegFrameGrabber$** { *; }
+-keep class org.bytedeco.javacv.Java2DFrameConverter { *; }
+-keep class org.bytedeco.javacpp.** { *; }
+-keep class org.bytedeco.ffmpeg.** { *; }
+
+# javacv.jar also contains optional camera/OpenCV converters that are intentionally absent
+# because its dependency is non-transitive; they are unreachable from this app.
+-dontwarn org.bytedeco.javacv.**
+# javacpp.jar also ships Maven-plugin build tools and optional OSGi package annotations.
+# Neither is loaded by the Desktop runtime, and their Maven/OSGi APIs are deliberately absent.
+-dontwarn org.bytedeco.javacpp.tools.**
+-dontwarn org.osgi.annotation.**

@@ -65,7 +65,7 @@ import com.leejlredstar.redefinencm.kmp.notification.FloatingLyricData
 import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.smtc.DesktopMediaControls
-import com.leejlredstar.redefinencm.kmp.ui.component.ProvideDesktopOverlayOwner
+import com.leejlredstar.redefinencm.kmp.ui.component.DesktopDynamicCoverWindowLifecycle
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
@@ -76,14 +76,6 @@ import org.koin.core.context.GlobalContext
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
-    if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
-        // WebView2 is a native child HWND. Put Dialog/Popup scenes on Swing's popup layer before
-        // Compose initializes so they can stay above it without a second transparent D3D window.
-        System.setProperty("compose.layers.type", "COMPONENT")
-    }
-    // AMLL 歌词页现在跑在系统 WebView（Windows=WebView2）里，见 LyricScreen.jvm.kt。
-    // 历史教训（勿回退）：JavaFX WebKit 需要 prism.maxvram 调大才不白屏，且无 GPU 合成，
-    // 字体/布局/动画均残缺；prism.order=sw 会打满 CPU 饿死网络协程。
     initKoin()
     val settings = GlobalContext.get().get<PlatformSettings>()
     LyricNotificationController.setOptionalSurfaceEnabled(
@@ -108,8 +100,13 @@ private fun launchDesktopApplication() = application {
         val player = remember { GlobalContext.get().get<PlatformPlayer>() }
         val mediaControls = remember(player) { DesktopMediaControls(player) }
         DisposableEffect(window, mediaControls) {
+            val dynamicCoverWindowBinding =
+                DesktopDynamicCoverWindowLifecycle.bind(window)
             mediaControls.start(window)
-            onDispose { mediaControls.stop() }
+            onDispose {
+                dynamicCoverWindowBinding.close()
+                mediaControls.stop()
+            }
         }
 
         val toggleMaximize = {
@@ -121,26 +118,24 @@ private fun launchDesktopApplication() = application {
                 WindowPlacement.Maximized
             }
         }
-        ProvideDesktopOverlayOwner(window) {
-            RedefineNCMTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.surface,
-                ) {
-                    Column(Modifier.fillMaxSize()) {
-                        Win10WindowChrome(
-                            isMaximized = mainWindowState.placement == WindowPlacement.Maximized,
-                            onMinimize = { mainWindowState.isMinimized = true },
-                            onToggleMaximize = toggleMaximize,
-                            onClose = ::exitApplication,
-                        )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                        ) {
-                            App()
-                        }
+        RedefineNCMTheme {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.surface,
+            ) {
+                Column(Modifier.fillMaxSize()) {
+                    Win10WindowChrome(
+                        isMaximized = mainWindowState.placement == WindowPlacement.Maximized,
+                        onMinimize = { mainWindowState.isMinimized = true },
+                        onToggleMaximize = toggleMaximize,
+                        onClose = ::exitApplication,
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                    ) {
+                        App()
                     }
                 }
             }

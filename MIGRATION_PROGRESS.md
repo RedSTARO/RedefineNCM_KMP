@@ -1,24 +1,28 @@
 # RedefineNCM → KMP 迁移进度
 
-> 最后更新：2026-07-11　｜　状态：**四目标均已启用，共用功能行为对齐**；Android + Desktop + Web 编译验证通过；iOS 代码就绪但需 macOS 构建。
+> 最后更新：2026-07-27　｜　状态：**四目标均已启用，全屏播放器已收敛为共用原生 Compose AMLL**；本分支 Android + Desktop + Web 编译、测试与 Web 生产分发均已通过；iOS Kotlin/Native 源码编译通过，Xcode 链接与运行仍需 macOS。
 > 权威细节与"目标规范 vs 现状差异清单"见 `AGENTS.md`（本仓库）与 `../RedefineNCM/AGENTS.md`（原始仓库，已冻结）。
 > 本文件只做"全步骤 / 已完成 / 剩余"的进度总览。
 
 ---
 
-## 0. 构建验证状态（本机 Windows，可构建 Android + Desktop + Web）
+## 0. 构建验证状态（本机 Windows，可构建 Android + Desktop + Web 并编译 iOS Kotlin 源码）
 
 | 任务 | 结果 |
 |---|---|
-| `:shared:compileKotlinJvm` | ✅ 通过（2026-07-04） |
-| `:androidApp:assembleDebug`（完整 APK） | ✅ 通过（2026-07-04） |
-| `:shared:jvmTest`（含 **PlayQueueTest**） | ✅ 通过（2026-07-04） |
-| iOS（`iosSimulatorArm64Test` 等） | ⛔ 本机 Windows 无 Xcode，Gradle 自动禁用 |
-| `:shared:compileKotlinWasmJs` | ✅ 通过（2026-07-11） |
-| `:shared:wasmJsBrowserTest` + `:shared:wasmJsBrowserDistribution` | ✅ 本机通过（2026-07-11）；生产目录为 `shared/build/dist/wasmJs/productionExecutable/` |
+| `:shared:compileKotlinJvm` + `:desktopApp:compileKotlin` | ✅ 本分支通过（2026-07-27） |
+| `:shared:compileAndroidMain` + `:androidApp:assembleDebug`（完整 APK） | ✅ 本分支通过（2026-07-27） |
+| `:shared:jvmTest`（含 **PlayQueueTest**、**AmllLyricModelTest**） | ✅ 本分支通过（2026-07-27） |
+| `:shared:compileKotlinIosSimulatorArm64` | ✅ 本分支通过（2026-07-27）；Xcode framework/app 链接、模拟器测试和运行验证仍需 macOS |
+| `:shared:compileKotlinWasmJs` | ✅ 本分支通过（2026-07-27） |
+| `:shared:wasmJsBrowserTest` + `:shared:wasmJsBrowserDistribution` | ✅ 本分支通过（2026-07-27，`CHROME_BIN` 使用本机 Edge Chromium）；生产目录为 `shared/build/dist/wasmJs/productionExecutable/` |
+
+> 上表是 2026-07-27 原生 Compose AMLL 分支的实际验证结果。Windows 主机不能替代
+> macOS/Xcode 的 iOS framework、应用和运行时验证。
 
 **工具链**：Kotlin 2.4.0 ・ AGP 9.0.1 ・ Gradle 9.1.0 ・ CMP 1.11.1 ・ JB material3 1.11.0-alpha07 ・
 Ktor 3.5.0 ・ Koin 4.2.1 ・ Coil 3.5.0（含 coil-network-ktor3）・ SQLDelight 2.3.2 ・
+JavaCV 1.5.13 / FFmpeg 8.0.1-1.5.13（Desktop 动态封面，仅打包宿主 native classifier）・
 media3 1.10.1 ・ androidx.palette 1.0.0 ・ compileSdk/targetSdk 36 / minSdk 24。
 
 ---
@@ -39,7 +43,7 @@ media3 1.10.1 ・ androidx.palette 1.0.0 ・ compileSdk/targetSdk 36 / minSdk 24
 | 歌单详情（封面取色 hero + 播放全部 + 下载全部 + 下载状态指示） | ✅ |
 | replacePlaylist 设置（单曲点击：单曲队列 vs 整单队列） | ✅ |
 | playlistUpdatePlaycount 上报 | ✅ |
-| 全屏播放器（AMLL/Compose fallback、进度、控制、队列 sheet、评论 sheet） | ✅（MiniNowPlaying 与系统入口直接打开；旧 KMP NowPlaying 已移除） |
+| 全屏播放器（四端共用原生 Compose AMLL、进度、控制、队列 sheet、评论 sheet） | ✅（唯一入口 `NativeAmllScreen`；HTML/WebView 与旧 Compose fallback 均已移除） |
 | 随机播放不变量（播放顺序队列 + 高亮同源重建） | ✅（ExoPlayer 按 timeline 播放顺序重建 + skipToIndex 映射窗口索引；VM 实时订阅） |
 | 播放状态持久化（队列/索引/进度/shuffle，onPause 存、启动恢复不自动播） | ✅（PlayerStatus.sq + PlatformPlayer.restoreQueue） |
 | 歌单批量下载（5 首/批，跳过已存在） | ✅（common 编排；Android MediaStore/JVM 文件系统/iOS NSURLSession/Web OPFS） |
@@ -84,10 +88,14 @@ media3 1.10.1 ・ androidx.palette 1.0.0 ・ compileSdk/targetSdk 36 / minSdk 24
       发布；所有 WinRT 创建、更新和释放固定在同一 MTA 线程。`WinGuid` 必须保持非
       private，JNA 需要从自身模块反射 `Structure` 字段。
 
-## 2.5 桌面 AMLL 实机调试（2026-07-04，computer-use 实机验证通过）
+## 2.5 桌面 AMLL 旧宿主调试（历史记录；2026-07-27 已移除）
 
-以真实 cookie 登录桌面端实机排查 AMLL 歌词页，修复了一条完整的故障链，最终
-歌词渲染/滚动/返回全部验证通过：
+> 本节只保留 JavaFX WebKit → WebView2 阶段的故障链，便于追溯旧提交；它不再描述
+> 当前架构。相关 WebView 宿主、HTML/JS/CSS 资源和桌面顶层覆盖窗均已由
+> `NativeAmllScreen` 取代。
+
+2026-07-04 曾以真实 cookie 登录桌面端实机排查旧 AMLL 歌词页，修复了一条完整的
+故障链，当时歌词渲染/滚动/返回全部验证通过：
 
 | 症状 | 根因 | 修复 |
 |---|---|---|
@@ -98,7 +106,7 @@ media3 1.10.1 ・ androidx.palette 1.0.0 ・ compileSdk/targetSdk 36 / minSdk 24
 | 迷你播放条撑满整窗 | FAB slot 无高度约束 + 内层 `fillMaxHeight()`（825c22c 修过的回归） | Surface 固定 `size(300×112dp)`（原版尺寸） |
 | 桌面恢复队列后自动出声 | `restoreQueue` 默认实现 setQueue→pause 与异步解析竞态 | `JvmMediaPlayer` 覆写 `restoreQueue`：装载不播放，play 时从记忆位置续播 |
 
-### 第三轮（2026-07-05）：AMLL 迁移到系统 WebView2（实机验证通过）
+### 第三轮（2026-07-05）：系统 WebView2（历史实现，已移除）
 
 JavaFX WebKit 天花板确认（无 GPU 合成：字体/布局/动画残缺，关掉特效才有帧率）→
 迁移到 **系统 WebView（Windows = WebView2 / Edge Chromium）**，AMLL 完整效果
@@ -116,6 +124,27 @@ JavaFX WebKit 天花板确认（无 GPU 合成：字体/布局/动画残缺，�
 - bind/dispatch 的 JNA 回调必须持强引用（native 侧存指针，GC 掉即崩）。
 - player.html 恢复完整特效（blur(48px) 背景等），signalReady 增加 amllReady 通道；
   移除 JavaFX 六模块依赖与 prism 系 hack。
+
+上述 WebView2 路径只代表 2026-07-05 的历史验证。2026-07-27 原生 Compose 迁移已
+删除 `WebviewJna`、各平台 `WebViewLyricScreen`、`player.html`/bundle/style、Android
+AMLL builder 与桌面覆盖窗；不得把本节内容当作当前依赖或回归方案。
+
+## 2.6 原生 Compose AMLL 迁移（2026-07-27）
+
+当前全屏播放器不再嵌入网页。`commonMain/ui/amll/NativeAmllScreen.kt` 是 Android、
+iOS、Desktop/JVM 和 Web/WASM 的唯一页面实现，`MiniNowPlayingBar`、桌面播放条和
+系统/深链入口都直接打开同一 Compose 树。
+
+| 项目 | 当前状态 |
+|---|---|
+| 响应式 AMLL 布局 | ✅ common Compose 统一负责封面/歌词双栏与窄屏重排，不再按平台选择页面 |
+| 歌词 | ✅ 共用逐行/逐字时序、翻译与罗马音、点击 seek、自动跟随与手动滚动恢复 |
+| 视觉与动效 | ✅ 共用专辑色渐变、模糊封面、焦点行层级、控制台自动隐藏、无障碍与减少动态效果 |
+| 音乐百科 | ✅ `SongWikiDetailsButton` + `SongWikiDetailsSheet` 为共用响应式 Compose surface，并保留 media-ID 防串歌约束 |
+| 动态封面 | ✅ 只保留 `NativeDynamicCoverLayer` 小型平台叶子；Android=Media3/TextureView、iOS=AVPlayerLayer/UIKitView、Desktop=FFmpeg 帧转 Compose ImageBitmap、Web=HTMLVideoElement/CanvasKit 互操作 |
+| Desktop 层级 | ✅ 是否有动态封面不再决定顶层窗口、overlay 所有权或播放器路由 |
+| 旧实现清理 | ✅ 删除 WebView2/JNA、HTML/JS/CSS、Android AMLL builder、`FullLyricScreen` 和各平台 WebView actual |
+| 本分支验证 | ✅ JVM/Android/WASM 编译、JVM/Wasm 浏览器测试及 Web 生产分发均通过；iOS Kotlin/Native 源码编译通过，framework/Xcode 应用链接和运行仍需 macOS |
 
 ## 3. 已知限制 / 合理偏差
 - HttpClient 为启动时构建的 Koin 单例：改 server/cookie 下次启动生效（与原版 RetrofitInstance 一致）。

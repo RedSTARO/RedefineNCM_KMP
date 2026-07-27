@@ -130,6 +130,30 @@ extension renders the resulting `ContentState`; it is wired into the Xcode proje
 not require an App Group. An App Group is only needed if artwork is later shared with the
 extension through a file cache.
 
+### D5 — Full-screen AMLL is one common native Compose route — **DONE (updated 2026-07-27)**
+
+`NativeAmllScreen` in `commonMain/ui/amll/` is the only full-screen player implementation.
+Android, iOS, Desktop/JVM, and Web/WASM all compose this same screen tree; platform targets must
+not select a different page or create a second top-level player hierarchy. The former
+`WebViewLyricScreen` expect/actual hosts, `FullLyricScreen` fallback, bundled
+`amll/player.html`/JavaScript/CSS assets, and Windows WebView2 host have been removed and must
+not be restored as parallel implementations.
+
+The common screen owns the responsive artwork/lyric layout, album-art gradient and blur
+treatment, timed/word lyrics, translation and romanization rows, lyric seek/scroll behavior,
+auto-hiding playback console, accessibility semantics, reduced-motion behavior, and the
+top-right song-details affordance. “音乐百科 - 简要信息” is a shared responsive Compose surface
+(`SongWikiDetailsButton` + `SongWikiDetailsSheet`), with the same media-ID-scoped request and
+stale-result rules on every target.
+
+Dynamic video is the only intentionally narrow platform leaf:
+`NativeDynamicCoverLayer` is an expect/actual composable inside the shared artwork slot.
+Android uses Media3 with a `TextureView`, iOS uses `AVPlayerLayer` inside `UIKitView`,
+Desktop/JVM decodes FFmpeg frames into Compose `ImageBitmap`, and Web/WASM hosts an
+`HTMLVideoElement` beneath the CanvasKit scene. Dynamic-cover capability must never decide the
+Desktop window hierarchy, overlay ownership, navigation route, or which full-screen player
+implementation is used.
+
 ---
 
 ## Toolchain
@@ -247,13 +271,21 @@ RedefineNCM_KMP/
 │       │   │   ├── NowPlayingViewModel.kt # holds shuffle invariant (rebuildPlaylistFromTimeline)
 │       │   │   └── SongRecognitionViewModel.kt
 │       │   └── ui/
-│       │       ├── screen/FullLyricScreen.kt     # Compose fallback for the full-screen player
+│       │       ├── amll/
+│       │       │   ├── NativeAmllScreen.kt       # only full-screen player; shared by all targets
+│       │       │   ├── AmllBackground.kt         # native artwork gradient / blur treatment
+│       │       │   ├── AmllLyricModel.kt         # timed, translated, romanized lyric document
+│       │       │   ├── AmllLyricViewport.kt      # responsive lyric layout / scroll / seek
+│       │       │   └── ReducedMotion.kt          # common reduced-motion contract
+│       │       ├── component/NativeDynamicCoverLayer.kt # narrow platform video leaf
+│       │       ├── component/SongWikiDetails.kt  # shared responsive song-details surface
 │       │       ├── screen/SongRecognitionScreen.kt
 │       │       ├── component/Expressive.kt      # connected-list shapes
 │       │       └── theme/{Color,Type,Theme}.kt  # real M3 Expressive theme + image-derived palettes
 │       ├── androidMain/  …/Platform.android.kt, notification/AndroidNotificationController.kt,
 │       │                  di/AndroidPlatformModule.kt, util/AndroidSettings.kt,
 │       │                  recognition/AndroidMicrophoneRecorder.kt,
+│       │                  ui/component/NativeDynamicCoverLayer.android.kt (Media3 video leaf),
 │       │                  player/ExoPlayerPlatformPlayer.kt (Media3/ExoPlayer PlatformPlayer impl),
 │       │                  player/RedirectingDataSource.kt (placeholder URI → CDN URL resolver)
 │       ├── iosMain/      …/Platform.ios.kt, MainViewController.kt,
@@ -395,35 +427,18 @@ cross-directory `file:` URLs.
 Pending/backup files stay hidden and are excluded from scans. Web audio discovery accepts only
 the single-extension audio shape and explicitly excludes `.lyric.*` and `.cover.*`.
 
-Full-screen playback keeps the `WebViewLyricScreen` expect/actual architecture. Its Android and
-supported Windows Desktop actuals host the bundled AMLL `player.html`; the other JVM platforms,
-iOS, and Web actuals delegate to the Compose `FullLyricScreen` fallback. Keep this host split, and
-do not make the fallback a second navigation destination.
-Untimed primary lyrics are content rather than an empty state. Android and supported Windows feed
-their normalized text lines into AMLL as a static line model: virtual times exist only inside the
-page for layout, AMLL playback time stays pinned at zero, and line clicks must not seek. Those
-virtual times must never enter caches, sidecars, capability classification, or player state.
-`FullLyricScreen` renders the same lines as a non-seeking static list on fallback targets.
-`MiniNowPlayingBar`, the Desktop playback strip, and OS/deep-link now-playing requests must open
-the `WebViewLyricScreen` route directly. The former common `NowPlayingScreen` has been removed and
-must not be restored as a parallel player page.
+ The only full-screen playback route is the common Compose `NativeAmllScreen`. Android, iOS,
+ Desktop/JVM, and Web/WASM use that exact implementation. `MiniNowPlayingBar`, the Desktop
+ playback strip, and OS/deep-link now-playing requests must open it directly. The former
+ `NowPlayingScreen`, `WebViewLyricScreen`, `FullLyricScreen`, and HTML/WebView AMLL paths have
+ been removed and must not be restored as parallel player pages.
 
-The expanded playback-control island is shared by both hosts through
-`AutoHideMiniPlayerController`. When a lyric document has been classified, its title row shows
-one visible Material 3 tonal `词` chip with four distinct color roles: neutral for untimed text,
-primary for ordinary line-synced LRC, secondary for successfully parsed NCM YRC, and tertiary for
-the AMLL TTML path. Loading, request errors, and a genuine no-lyric result show no chip. Capability
-follows the representation that parsed successfully; merely receiving a non-empty YRC field must
-not claim YRC support. The chip is an independent click target (it must not trigger the parent
-collapse action); its Material menu reports the current capability level and resolved provider,
-including a local-sidecar marker when the document came from the downloaded lyric file.
-
-The shared AMLL `player.html` owns the top-right song-details affordance and its in-page
-“音乐百科 - 简要信息” dialog, so Android WebView and Windows WebView2 remain behaviorally
-aligned. The host requests `/song/wiki/summary` through `Repository` for the current song and
-passes only the `SONG_PLAY_ABOUT_TAB_SONG_BASIC` display fields back to the page; recommendation
-and playlist blocks are excluded. Requests and rendered state are media-ID scoped, and changing
-tracks must close the dialog and prevent a late response from replacing the new track's state.
+`NativeAmllScreen` owns the top-right song-details affordance and shows the shared responsive
+Compose “音乐百科 - 简要信息” surface. It requests `/song/wiki/summary` through `Repository`
+for the current song and renders only the `SONG_PLAY_ABOUT_TAB_SONG_BASIC` display fields;
+recommendation and playlist blocks are excluded. Requests and rendered state are media-ID
+scoped, and changing tracks must close the surface and prevent a late response from replacing
+the new track's state.
 
 Now-playing favorite controls query `/song/like/check` with the current song ID only after the
 current account UID is available. A successful response containing that ID renders the filled
@@ -553,6 +568,7 @@ latest require the live verification pass described under Goal #4.
 | Images | Coil `3.5.0`: coil-compose (group `io.coil-kt.coil3`) | commonMain |
 | Web runtime | `kotlinx-browser 0.5.0` + Ktor JS engine `3.5.0` | wasmJsMain |
 | Desktop native APIs | JNA `5.14.0` + dbus-java `5.2.0` | jvmMain |
+| Desktop dynamic video | JavaCV `1.5.13` + FFmpeg `8.0.1-1.5.13` (host classifier only) | jvmMain |
 | Android settings | `androidx.datastore:datastore-preferences 1.2.0` | androidMain |
 | Android audio | `media3-exoplayer 1.10.1` + `media3-session 1.10.1` | androidMain + :androidApp |
 
@@ -648,9 +664,9 @@ Applies to all platforms, and the original Android repo is kept aligned (goal #3
 - **Use the real Expressive APIs** (`MaterialExpressiveTheme`, motion scheme) provided by the
   pinned `material3` version; custom shapes and page palettes extend that theme rather than
   replacing it.
-- **Per-screen:** Full-screen player (AMLL on Android/supported Windows Desktop,
-  `FullLyricScreen` fallback on other JVM platforms/iOS/Web, with the shared auto-hiding
-  playback console); Playlist detail (album-color gradient header, pill "Play All", connected
+- **Per-screen:** Full-screen player (`NativeAmllScreen` on every target, with the native
+  AMLL-style responsive artwork/lyrics composition and shared auto-hiding playback console);
+  Playlist detail (album-color gradient header, pill "Play All", connected
   rows with download indicators); User page (blurred hero + avatar, badged playlists);
   Search (pill→bar shared-element transition, suggestion list); Downloads (queue summary hero,
   progress rows, pause/resume/cancel/retry controls); Settings (gradient hero, tonal rows, pill
@@ -747,12 +763,12 @@ feature gap; platform integrations use target-specific actuals:
   `playlistUpdatePlaycount` reported, no auto-jump to the full-screen player (original behavior).
 - **Album-art theme color**: `themeColorFromCoilImage()` expect/actual (Android Palette /
   JVM Skia sampling / iOS stub) wired into MiniNowPlayingBar (with luminance-adaptive content
-  color + spring animation), PlaylistDetail hero, and the full-screen player fallback.
+  color + spring animation), PlaylistDetail hero, and the common `NativeAmllScreen`.
 - **Search shared-element transition** (pill → bar) via `SharedTransitionLayout` in HomeScreen.
 - **Responsive nav**: non-Desktop targets use NavigationRail on ≥600dp. Desktop keeps a collapsed
   modal wide navigation rail at every supported window size; expansion overlays content instead of
-  resizing it, so the AMLL native WebView surface is not moved per animation frame. No-cookie startup
-  routes to Login.
+  resizing it. Full-screen playback remains one common `NativeAmllScreen` hierarchy regardless of
+  window size or dynamic-cover capability. No-cookie startup routes to Login.
 - **Settings**: server availability check (`/inner/version/`); the legacy-persisted
   `adaptOriginalAndroidLyric` value now controls the optional Android Live Update notification
   and Desktop floating-lyrics window (default off, immediate enable/disable); iOS Live Activity
@@ -765,7 +781,23 @@ feature gap; platform integrations use target-specific actuals:
 - Skipped intentionally: `HiddenTestActivity`, `serverMocker` (dev tools), `dailysignin`
   (declared but never called in the original either).
 
-### Build catalog — DONE + BUILD-VERIFIED (Android + Desktop + Web, updated 2026-07-11)
+### Native Compose AMLL convergence — DONE + BUILD-VERIFIED (2026-07-27)
+- [x] `commonMain/ui/amll/NativeAmllScreen.kt` is the single full-screen player route for
+      Android, iOS, Desktop/JVM, and Web/WASM.
+- [x] The old `WebViewLyricScreen` actuals, `FullLyricScreen`, bundled AMLL HTML/JS/CSS,
+      Android AMLL builder, Desktop WebView2/JNA host, and overlay-window ownership shim are
+      removed.
+- [x] Lyrics, artwork treatment, responsive layout, playback console, and song-details surface
+      are common Compose code. Dynamic video remains a leaf inside the artwork slot, with a
+      target-specific decoder/interop implementation on Android, iOS, Desktop/JVM, and Web/WASM.
+- [x] This branch passes `:shared:jvmTest`, `:desktopApp:compileKotlin`,
+      `:shared:compileAndroidMain`, `:androidApp:assembleDebug`,
+      `:shared:compileKotlinWasmJs`, `:shared:wasmJsBrowserTest`, and
+      `:shared:wasmJsBrowserDistribution` on Windows. The iOS Kotlin source also passes
+      `:shared:compileKotlinIosSimulatorArm64` on Windows; framework linking, the Xcode app,
+      simulator tests, and runtime verification remain macOS/Xcode-gated.
+
+### Build catalog — DONE + BUILD-VERIFIED (Android + Desktop + Web + iOS source, updated 2026-07-27)
 - [x] `libs.versions.toml` + `shared/build.gradle.kts` declare every dependency the code imports
       (Ktor 3.5.0, kotlinx-serialization-json 1.11.0 + plugin, kotlinx-coroutines-core 1.11.0,
       Koin 4.2.1 + koin-android, Coil 3.5.0 coil-compose, datastore + androidx.core on androidMain,
@@ -775,8 +807,9 @@ feature gap; platform integrations use target-specific actuals:
 - [x] Dead `shared/src/desktopMain/` deleted (D1).
 - [x] **VERIFIED GREEN:** `:shared:compileKotlinJvm`, `:desktopApp:compileKotlin`,
       `:shared:jvmTest` (PlayQueueTest passes), `:shared:compileAndroidMain`,
-      `:androidApp:compileDebugKotlin`, `:androidApp:assembleDebug` (APK). iOS not buildable here
-      (Windows/no Xcode). The build caught several issues reading had missed — all fixed:
+      `:androidApp:compileDebugKotlin`, `:androidApp:assembleDebug` (APK), and
+      `:shared:compileKotlinIosSimulatorArm64`. Windows still cannot link or run the Xcode app.
+      The build caught several issues reading had missed — all fixed:
       KDoc `/*`, `defaultRequest` lacking `parameter()` (use `url.parameters.append`), missing
       platform color extraction actuals, desktopApp missing material3, androidx.core too old for
       `setRequestPromotedOngoing`, and a `PlayQueueTest` `List<String>`/`List<String?>` inference.
