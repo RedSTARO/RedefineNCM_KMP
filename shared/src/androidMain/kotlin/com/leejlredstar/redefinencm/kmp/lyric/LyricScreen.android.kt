@@ -107,6 +107,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val rawTranslatedLyric by viewModel.rawTranslatedLyric.collectAsState()
     val rawRomanLyric by viewModel.rawRomanLyric.collectAsState()
     val lyricMap by viewModel.lyricMap.collectAsState()
+    val untimedLyricLines by viewModel.untimedLyricLines.collectAsState()
     val lyricUiState by viewModel.lyricUiState.collectAsState()
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
@@ -159,6 +160,12 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             ""
         }
     }
+    val untimedLyricsForWeb = remember(untimedLyricLines) {
+        Json.encodeToString(untimedLyricLines)
+    }
+    val isUntimedContent =
+        (lyricUiState as? LyricUiState.Content)?.capabilityLevel ==
+        LyricCapabilityLevel.UNSYNCED
     val webView = remember(context, rendererGeneration) {
         if ((context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
             WebView.setWebContentsDebuggingEnabled(true)
@@ -285,6 +292,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         rawTtmlLyric,
         rawWordLyric,
         lyricForWeb,
+        untimedLyricsForWeb,
         rawTranslatedLyric,
         rawRomanLyric,
         showTranslatedLyric,
@@ -327,7 +335,13 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             showTranslatedLyric = showTranslatedLyric,
             showRomanLyric = showRomanLyric,
         )
-        if (rawTtmlLyric.isNotBlank()) {
+        if (contentState.capabilityLevel == LyricCapabilityLevel.UNSYNCED) {
+            Log.d("AMLL", "feeding untimed lyrics media=$mediaId, lines=${untimedLyricLines.size}")
+            webView.evaluateJavascript(
+                "AmllBridge.loadUntimedLyrics($untimedLyricsForWeb, ${JSONObject.quote(mediaId)}); AmllBridge.setTime(0);",
+                null,
+            )
+        } else if (rawTtmlLyric.isNotBlank()) {
             Log.d("AMLL", "feeding TTML media=$mediaId, len=${rawTtmlLyric.length}")
             webView.evaluateJavascript(
                 "AmllBridge.loadTtmlLyrics(${JSONObject.quote(rawTtmlLyric)}, ${JSONObject.quote(mediaId)}, $lyricOptions, ${JSONObject.quote(lyricForWeb)}); AmllBridge.setTime($currentPosition);",
@@ -351,9 +365,10 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         }
     }
 
-    LaunchedEffect(engineReady, currentPosition) {
+    LaunchedEffect(engineReady, currentPosition, isUntimedContent) {
         if (!engineReady) return@LaunchedEffect
-        webView.evaluateJavascript("AmllBridge.setTime($currentPosition);", null)
+        val position = if (isUntimedContent) 0L else currentPosition
+        webView.evaluateJavascript("AmllBridge.setTime($position);", null)
     }
 
     LaunchedEffect(engineReady, metadata, amllArtworkUri, dynamicCoverUrl) {
