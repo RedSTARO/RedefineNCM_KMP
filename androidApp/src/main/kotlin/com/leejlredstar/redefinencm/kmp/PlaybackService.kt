@@ -9,6 +9,7 @@ import com.leejlredstar.redefinencm.kmp.notification.createNowPlayingPendingInte
 import com.leejlredstar.redefinencm.kmp.player.AndroidMediaSessionInitializationState
 import com.leejlredstar.redefinencm.kmp.player.ExoPlayerPlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.player.PlayerStatusRestorer
 import com.leejlredstar.redefinencm.kmp.player.canExposeAndroidMediaSession
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import kotlinx.coroutines.CoroutineStart
@@ -47,6 +48,7 @@ class PlaybackService : MediaSessionService() {
         initializationJob = serviceScope.launch(start = CoroutineStart.UNDISPATCHED) {
             try {
                 get<PlatformSettings>().awaitLoaded()
+                get<PlayerStatusRestorer>().awaitRestored()
                 val exoPlayer = (get<PlatformPlayer>() as ExoPlayerPlatformPlayer).exoPlayer
                 val sessionBuilder = MediaSession.Builder(this@PlaybackService, exoPlayer)
                 createNowPlayingPendingIntent(this@PlaybackService, requestCode = 0x4D454449)

@@ -11,6 +11,8 @@ import com.leejlredstar.redefinencm.kmp.lyric.LyricResolver
 import com.leejlredstar.redefinencm.kmp.player.InMemoryPlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlaybackReportingCoordinator
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.player.PlayerStatusRestorer
+import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.viewmodel.LoginViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
@@ -72,6 +74,21 @@ val sharedModule = module {
     // Koin override). NowPlayingViewModel resolves PlatformPlayer from here.
     single<PlatformPlayer> { InMemoryPlatformPlayer() }
 
+    // Queue restoration is process work, not screen work. Platform media services can await it
+    // before exposing a transport session.
+    single(createdAtStart = true) {
+        val koin = getKoin()
+        val settings = get<PlatformSettings>()
+        PlayerStatusRestorer(
+            awaitSettings = { settings.awaitLoaded() },
+            playerProvider = { koin.get<PlatformPlayer>() },
+            statusLoader = { koin.get<Repository>().getPlayerStatus() },
+            onReady = { koin.get<NowPlayingViewModel>() },
+            playerDispatcher = kotlinx.coroutines.Dispatchers.Main,
+            workerDispatcher = kotlinx.coroutines.Dispatchers.Default,
+        )
+    }
+
     // Eager process-wide reporter: playback accounting must not depend on whether a particular
     // screen or ViewModel has already been composed.
     single(createdAtStart = true) { PlaybackReportingCoordinator(get(), get(), get()) }
@@ -80,9 +97,10 @@ val sharedModule = module {
     factory { LoginViewModel(get(), get(), get()) }
     // Single —— 与原版单 Activity 共享一个 MainViewModel 一致：各屏共享搜索/歌单/推荐状态，
     // init 中的 UID 解析与播放状态恢复只执行一次。
-    single { MainViewModel(get(), get(), get(), get(), get()) }
+    single { MainViewModel(get(), get(), get(), get(), get(), get()) }
     // Single — the now-playing state is inherently global (only one song plays at a time).
-    // The full-screen player and compact playback controls inject this same instance.
+    // The eager status restorer resolves this singleton after settings and queue restoration, so
+    // restored/background playback also resolves lyrics without waiting for a screen composition.
     single { NowPlayingViewModel(get(), get(), get(), get(), get(), get()) }
     // Factory — recording and cancellation are scoped to one pushed recognition page.
     factory { SongRecognitionViewModel(get(), get(), get()) }

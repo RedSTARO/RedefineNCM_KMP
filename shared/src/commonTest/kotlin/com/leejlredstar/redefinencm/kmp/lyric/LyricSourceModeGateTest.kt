@@ -6,6 +6,7 @@ import kotlinx.coroutines.yield
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 
 class LyricSourceModeGateTest {
     @Test
@@ -37,5 +38,14 @@ class LyricSourceModeGateTest {
         gate.failInitialLoad()
 
         assertEquals(LyricSourceMode.BACKEND_ONLY, gate.awaitMode())
+    }
+
+    @Test
+    fun synchronousModeSnapshotIsUnavailableUntilPrivacyChoiceLoads() {
+        val gate = LyricSourceModeGate()
+
+        assertNull(gate.currentModeOrNull())
+        gate.completeInitialLoad(LyricSourceMode.BACKEND_ONLY)
+        assertEquals(LyricSourceMode.BACKEND_ONLY, gate.currentModeOrNull())
     }
 }

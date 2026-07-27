@@ -102,4 +102,14 @@ internal class LyricSourceModeGate(
         ready.await()
         return mutableMode.value
     }
+
+    /**
+     * Returns the selected mode only after the persisted privacy choice is known.
+     *
+     * Callers use this synchronous snapshot to reuse an in-memory lyric without briefly clearing
+     * the current surface. Returning null while loading prevents the default TTML-first value from
+     * being treated as the user's persisted choice.
+     */
+    fun currentModeOrNull(): LyricSourceMode? =
+        mutableMode.value.takeIf { ready.isCompleted }
 }

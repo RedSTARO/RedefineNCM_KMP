@@ -6,10 +6,11 @@ import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
 import com.leejlredstar.redefinencm.kmp.data.api.dto.*
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
-import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlaybackAccountVerificationEvent
 import com.leejlredstar.redefinencm.kmp.player.PlaybackReportingCoordinator
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.player.PlayerStatusRestorer
+import com.leejlredstar.redefinencm.kmp.player.PlayerStatusRestoreState
 import com.leejlredstar.redefinencm.kmp.player.playbackCredentialKey
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
@@ -51,6 +52,7 @@ class MainViewModel(
     private val player: PlatformPlayer,
     private val downloadManager: SongDownloadManager,
     private val playbackReportingCoordinator: PlaybackReportingCoordinator,
+    private val playerStatusRestorer: PlayerStatusRestorer,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val accountCredentialKey = MutableStateFlow<Long?>(null)
@@ -59,6 +61,7 @@ class MainViewModel(
     private val playerStatusSaveMutex = Mutex()
     val playerStatusSaveError = MutableStateFlow<String?>(null)
     val playerStatusLoadError = MutableStateFlow<String?>(null)
+    val playerStatusRestoreState: StateFlow<PlayerStatusRestoreState> = playerStatusRestorer.state
 
     // ── User ──
     private val _uid = MutableStateFlow(0L)
@@ -124,7 +127,7 @@ class MainViewModel(
             clearPersistedAccount = false,
             claimVipGrowthPointsOnSuccess = true,
         )
-        restorePlayerStatus()
+        observePlayerStatusRestoration()
         downloadManager.syncWithLocalLibrary()
         initPlayerStatusAutosave()
         observePlaybackVerification()
@@ -235,37 +238,19 @@ class MainViewModel(
         }
     }
 
-    fun restorePlayerStatus() {
-        // DB 读取 + 整条播放列表 JSON 反序列化放后台，避免启动时阻塞主线程（Android 主线程/桌面 EDT）；
-        // 但 player 操作（ExoPlayer 要求主线程）切回 Main 执行。
-        scope.launch(Dispatchers.Default) {
-            val status = repo.getPlayerStatus()
-                .onFailure { failure ->
-                    playerStatusLoadError.value = failure.message ?: "播放状态读取失败"
+    private fun observePlayerStatusRestoration() {
+        scope.launch {
+            playerStatusRestorer.state.collect { state ->
+                when (state) {
+                    PlayerStatusRestoreState.Loading -> Unit
+                    is PlayerStatusRestoreState.Restored -> {
+                        lastSavedPlayerStatus = state.status
+                        playerStatusLoadError.value = null
+                    }
+                    is PlayerStatusRestoreState.Failed -> {
+                        playerStatusLoadError.value = state.message
+                    }
                 }
-                .getOrNull()
-                ?: return@launch
-            playerStatusLoadError.value = null
-            if (status.playlist.isEmpty()) return@launch
-            lastSavedPlayerStatus = status
-            val items = status.playlist.map {
-                MediaInfo(
-                    id = it.id,
-                    title = it.title,
-                    artist = it.artist,
-                    albumTitle = it.albumTitle,
-                    artworkUri = it.artworkUri,
-                    placeholderUri = "redefinencm://playbackPlaceHolder?id=${it.id}",
-                    duration = it.duration,
-                    sourceId = it.sourceId,
-                )
-            }
-            withContext(Dispatchers.Main) {
-                // 播放器里已有队列时不覆盖（例如服务先于 UI 恢复了状态）
-                if (player.queueSnapshot.value.items.isNotEmpty()) return@withContext
-                player.restoreQueue(items, status.index.coerceIn(0, items.lastIndex), status.position)
-                player.setShuffleEnabled(status.isShuffling)
-                // 原版恢复时不自动播放（play() 被注释掉），此处保持一致
             }
         }
     }
