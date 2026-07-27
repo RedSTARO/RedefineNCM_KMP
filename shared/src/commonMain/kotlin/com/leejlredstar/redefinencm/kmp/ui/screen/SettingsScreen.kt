@@ -63,8 +63,9 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
-import com.leejlredstar.redefinencm.kmp.lyric.supportsDynamicNowPlayingCover
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
+import com.leejlredstar.redefinencm.kmp.lyric.supportsDynamicNowPlayingCover
+import com.leejlredstar.redefinencm.kmp.lyric.supportsLegacyAmllWebView
 import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
@@ -95,6 +96,7 @@ import org.koin.compose.koinInject
 fun SettingsScreen(
     scaffoldPadding: PaddingValues,
     onOpenLogin: () -> Unit,
+    onAmllRendererPreferenceChanged: (Boolean) -> Unit = {},
     settings: PlatformSettings = koinInject(),
     api: NCMApi = koinInject(),
     mainViewModel: MainViewModel = koinInject(),
@@ -114,6 +116,7 @@ fun SettingsScreen(
     var lyricSourceMode by remember(settings) {
         mutableStateOf(LyricSourceMode.DEFAULT.wireValue)
     }
+    var useNativeAmllRenderer by remember(settings) { mutableStateOf(false) }
     var useDynamicCover by remember(settings) { mutableStateOf(false) }
     var importStatus by remember { mutableStateOf<String?>(null) }
     var serverCheckStatus by remember { mutableStateOf<String?>(null) }
@@ -152,6 +155,11 @@ fun SettingsScreen(
         nowPlayingViewModel.setLyricSourceMode(
             LyricSourceMode.fromStoredWireValue(lyricSourceMode),
         )
+        useNativeAmllRenderer = settings.getBoolean(
+            SettingKeys.USE_NATIVE_AMLL_RENDERER,
+            false,
+        )
+        onAmllRendererPreferenceChanged(useNativeAmllRenderer)
         useDynamicCover = settings.getBoolean(SettingKeys.USE_DYNAMIC_COVER, false)
         nowPlayingViewModel.setUseDynamicCover(useDynamicCover)
     }
@@ -218,6 +226,11 @@ fun SettingsScreen(
             nowPlayingViewModel.setLyricSourceMode(
                 LyricSourceMode.fromStoredWireValue(lyricSourceMode),
             )
+            useNativeAmllRenderer = settings.getBooleanAsync(
+                SettingKeys.USE_NATIVE_AMLL_RENDERER,
+                false,
+            )
+            onAmllRendererPreferenceChanged(useNativeAmllRenderer)
             useDynamicCover = settings.getBooleanAsync(SettingKeys.USE_DYNAMIC_COVER, false)
             nowPlayingViewModel.setUseDynamicCover(useDynamicCover)
             settingsLoaded = true
@@ -460,11 +473,36 @@ fun SettingsScreen(
 
                 ExpressiveSectionTitle("歌词", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
                 val lyricSettingCount =
-                    if (LyricNotificationController.supportsOptionalSurfaceControl) 4 else 3
+                    if (LyricNotificationController.supportsOptionalSurfaceControl) 5 else 4
+                val nativeRendererSelected =
+                    useNativeAmllRenderer || !supportsLegacyAmllWebView
+                SettingsSwitch(
+                    checked = nativeRendererSelected,
+                    label = "使用 Native Compose 播放页",
+                    accentPalette = settingsPalette,
+                    index = 0,
+                    count = lyricSettingCount,
+                    supportingText = when {
+                        !supportsLegacyAmllWebView ->
+                            "当前平台不支持 Legacy WebView，已自动使用 Native Compose。"
+                        useNativeAmllRenderer ->
+                            "Native Compose 仅推荐低端设备使用；关闭后使用推荐的 Legacy WebView。"
+                        else ->
+                            "推荐：Legacy WebView；Native Compose 仅推荐低端设备使用。"
+                    },
+                    enabled = supportsLegacyAmllWebView,
+                ) { enabled ->
+                    useNativeAmllRenderer = enabled
+                    persistSettings(write = {
+                        settings.setBoolean(SettingKeys.USE_NATIVE_AMLL_RENDERER, enabled)
+                    }, onWritten = {
+                        onAmllRendererPreferenceChanged(enabled)
+                    })
+                }
                 LyricSourceDropdown(
                     selectedWireValue = lyricSourceMode,
                     accentPalette = settingsPalette,
-                    index = 0,
+                    index = 1,
                     count = lyricSettingCount,
                 ) { mode ->
                     val writeGeneration = ++lyricSourceWriteGeneration
@@ -490,7 +528,7 @@ fun SettingsScreen(
                         extraLyricSurfaceEnabled,
                         LyricNotificationController.optionalSurfaceSettingLabel,
                         settingsPalette,
-                        index = 1,
+                        index = 2,
                         count = lyricSettingCount,
                     ) { enabled ->
                         extraLyricSurfaceEnabled = enabled
@@ -769,6 +807,8 @@ private fun SettingsSwitch(
     accentPalette: ContentAccentPalette,
     index: Int,
     count: Int,
+    supportingText: String? = null,
+    enabled: Boolean = true,
     onUpdate: (Boolean) -> Unit,
 ) {
     var state by remember(checked) { mutableStateOf(checked) }
@@ -781,6 +821,7 @@ private fun SettingsSwitch(
             .padding(vertical = 1.5.dp)
             .toggleable(
                 value = state,
+                enabled = enabled,
                 role = Role.Switch,
                 onValueChange = { updated ->
                     state = updated
@@ -792,10 +833,20 @@ private fun SettingsSwitch(
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            Column(Modifier.weight(1f)) {
+                Text(label, style = MaterialTheme.typography.bodyLarge)
+                if (supportingText != null) {
+                    Text(
+                        text = supportingText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = accentPalette.secondaryOnQuietContainer,
+                    )
+                }
+            }
             Spacer(Modifier.width(16.dp))
             Switch(
                 checked = state,
+                enabled = enabled,
                 onCheckedChange = null,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = accentPalette.onAccent,

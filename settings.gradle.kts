@@ -25,6 +25,9 @@ dependencyResolutionManagement {
             }
         }
         mavenCentral()
+        maven("https://jitpack.io") {
+            content { includeGroupAndSubgroups("com.github.webview") }
+        }
     }
 }
 

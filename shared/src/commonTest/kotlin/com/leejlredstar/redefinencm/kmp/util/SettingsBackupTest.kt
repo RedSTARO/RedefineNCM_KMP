@@ -127,6 +127,37 @@ class SettingsBackupTest {
     }
 
     @Test
+    fun amllRendererPreferenceRoundTripsWithoutChangingLegacyImports() {
+        val exported = encodeSettingsBackup(
+            getString = { _, default -> default },
+            getBoolean = { key, default ->
+                if (key == SettingKeys.USE_NATIVE_AMLL_RENDERER) true else default
+            },
+        )
+        val writtenBooleans = mutableMapOf<String, Boolean>()
+
+        assertTrue(exported.contains("\"useNativeAmllRenderer\":true"))
+        assertTrue(
+            applySettingsBackup(
+                json = exported,
+                setString = { _, _ -> },
+                setBoolean = { key, value -> writtenBooleans[key] = value },
+            ),
+        )
+        assertTrue(writtenBooleans[SettingKeys.USE_NATIVE_AMLL_RENDERER] == true)
+
+        writtenBooleans.clear()
+        assertTrue(
+            applySettingsBackup(
+                json = "{}",
+                setString = { _, _ -> },
+                setBoolean = { key, value -> writtenBooleans[key] = value },
+            ),
+        )
+        assertFalse(SettingKeys.USE_NATIVE_AMLL_RENDERER in writtenBooleans)
+    }
+
+    @Test
     fun invalidLyricSourceModeIsRejectedBeforeWriting() {
         val writes = mutableListOf<String>()
         val applied = applySettingsBackup(

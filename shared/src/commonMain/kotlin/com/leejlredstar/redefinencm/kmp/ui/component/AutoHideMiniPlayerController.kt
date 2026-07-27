@@ -103,6 +103,7 @@ fun AutoHideMiniPlayerController(
     collapsedHostFillsWidth: Boolean = false,
     autoHideDelayMillis: Long = 3_600L,
     reducedMotion: Boolean = false,
+    forceOpaqueSurfaces: Boolean = false,
     externalRevealRequest: Int = 0,
     onOverlayVisibilityChanged: (Boolean) -> Unit = {},
     onSheetVisibilityChanged: (Boolean) -> Unit = {},
@@ -257,6 +258,7 @@ fun AutoHideMiniPlayerController(
                     lyricEndpoint = displayedLyricEndpoint,
                     lyricDetailsExpanded = showLyricDetails,
                     accentPalette = accentPalette,
+                    forceOpaqueSurfaces = forceOpaqueSurfaces,
                     onArtworkLoaded = extractAccent,
                     onReveal = ::reveal,
                     onCollapse = ::collapse,
@@ -307,6 +309,7 @@ fun AutoHideMiniPlayerController(
                     totalDuration = totalDuration,
                     progress = progress,
                     accentPalette = accentPalette,
+                    forceOpaqueSurface = forceOpaqueSurfaces,
                     onReveal = ::reveal,
                     onTogglePlayPause = { if (hasMedia) player.togglePlayPause() },
                     onPrevious = { if (hasMedia) player.seekToPrevious() },
@@ -402,6 +405,7 @@ private fun FullLyricControlConsole(
     lyricEndpoint: String,
     lyricDetailsExpanded: Boolean,
     accentPalette: ContentAccentPalette,
+    forceOpaqueSurfaces: Boolean,
     onArtworkLoaded: (coil3.Image) -> Unit,
     onReveal: () -> Unit,
     onCollapse: () -> Unit,
@@ -431,6 +435,7 @@ private fun FullLyricControlConsole(
             lyricEndpoint = lyricEndpoint,
             lyricDetailsExpanded = lyricDetailsExpanded,
             accentPalette = accentPalette,
+            forceOpaqueSurface = forceOpaqueSurfaces,
             onArtworkLoaded = onArtworkLoaded,
             onReveal = onReveal,
             onCollapse = onCollapse,
@@ -447,7 +452,9 @@ private fun FullLyricControlConsole(
                 .fillMaxWidth()
                 .height(64.dp),
             shape = CircleShape,
-            color = accentPalette.quietContainer.copy(alpha = 0.88f),
+            color = accentPalette.quietContainer.copy(
+                alpha = if (forceOpaqueSurfaces) 1f else 0.88f,
+            ),
             contentColor = accentPalette.onQuietContainer,
             tonalElevation = 0.dp,
         ) {
@@ -535,6 +542,7 @@ private fun ExpandedPlaybackCard(
     lyricEndpoint: String,
     lyricDetailsExpanded: Boolean,
     accentPalette: ContentAccentPalette,
+    forceOpaqueSurface: Boolean,
     onArtworkLoaded: (coil3.Image) -> Unit,
     onReveal: () -> Unit,
     onCollapse: () -> Unit,
@@ -559,7 +567,9 @@ private fun ExpandedPlaybackCard(
             .widthIn(max = 620.dp)
             .fillMaxWidth(),
         shape = MaterialTheme.shapes.extraLarge,
-        color = accentPalette.container.copy(alpha = 0.88f),
+        color = accentPalette.container.copy(
+            alpha = if (forceOpaqueSurface) 1f else 0.88f,
+        ),
         contentColor = accentPalette.onContainer,
         tonalElevation = 0.dp,
     ) {
@@ -802,6 +812,7 @@ private fun CollapsedProgressController(
     totalDuration: Long,
     progress: Float,
     accentPalette: ContentAccentPalette,
+    forceOpaqueSurface: Boolean,
     onReveal: () -> Unit,
     onTogglePlayPause: () -> Unit,
     onPrevious: () -> Unit,
@@ -936,7 +947,9 @@ private fun CollapsedProgressController(
                 }
             },
         shape = CircleShape,
-        color = accentPalette.quietContainer.copy(alpha = 0.78f + swipeAlpha * 0.12f),
+        color = accentPalette.quietContainer.copy(
+            alpha = if (forceOpaqueSurface) 1f else 0.78f + swipeAlpha * 0.12f,
+        ),
         contentColor = accentPalette.onQuietContainer,
         tonalElevation = 0.dp,
     ) {

@@ -25,6 +25,7 @@ jna = "5.14.0"
 xmlutil = "0.91.3"
 javacv = "1.5.13"
 ffmpeg = "8.0.1-1.5.13"
+webview-java = "da910b62589c36961d50fa8895d79e3b3d792b78"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -48,6 +49,8 @@ androidx-media3-exoplayer = { module = "androidx.media3:media3-exoplayer", versi
 androidx-media3-session = { module = "androidx.media3:media3-session", version.ref = "media3" }
 # MP3 decoding SPI for the desktop audio player (pure-JVM: pulls jlayer + tritonus-share)
 mp3spi = { module = "com.googlecode.soundlibs:mp3spi", version.ref = "mp3spi" }
+# Fixed JitPack commit. The Desktop Legacy renderer extracts its bundled WebView2 native host.
+webview-java = { module = "com.github.webview.webview_java:core", version.ref = "webview-java" }
 # Direct native dependencies for Windows SMTC and macOS media APIs.
 jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
 jna-platform = { module = "net.java.dev.jna:jna-platform", version.ref = "jna" }

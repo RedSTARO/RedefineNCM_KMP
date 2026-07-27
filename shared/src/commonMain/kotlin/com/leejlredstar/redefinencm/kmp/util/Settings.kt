@@ -20,6 +20,7 @@ object SettingKeys {
     const val SHOW_TRANSLATED_LYRIC = "showTranslatedLyric"
     const val SHOW_ROMAN_LYRIC = "showRomanLyric"
     const val LYRIC_SOURCE_MODE = "lyricSourceMode"
+    const val USE_NATIVE_AMLL_RENDERER = "useNativeAmllRenderer"
     const val USE_DYNAMIC_COVER = "useDynamicCover"
     const val PLAYER_VOLUME = "playerVolume"
 }

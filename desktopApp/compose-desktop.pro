@@ -26,6 +26,7 @@
 # JNA maps these Java method names and signatures directly to native symbols. In particular,
 # allowoptimization cannot be used here because ProGuard may remove parameters from methods.
 -keep class com.sun.jna.* { *; }
+-keep interface com.leejlredstar.redefinencm.kmp.lyric.WebviewJna { *; }
 -keep interface com.leejlredstar.redefinencm.kmp.smtc.WindowsMediaControls$Combase { *; }
 -keepclassmembernames,includedescriptorclasses interface * extends com.sun.jna.Library { <methods>; }
 -keepclassmembers,includedescriptorclasses interface * extends com.sun.jna.Callback { <methods>; }
