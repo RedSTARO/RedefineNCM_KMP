@@ -92,6 +92,7 @@ fun FullLyricScreen(
     val lyricUiState by viewModel.lyricUiState.collectAsState()
     val lyricIndex by viewModel.lyricIndex.collectAsState()
     val wordLyricLines by viewModel.wordLyricLines.collectAsState()
+    val untimedLyricLines by viewModel.untimedLyricLines.collectAsState()
     val showTranslatedLyric by viewModel.showTranslatedLyric.collectAsState()
     val showRomanLyric by viewModel.showRomanLyric.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
@@ -109,6 +110,9 @@ fun FullLyricScreen(
     val accentPalette = contentAccentPalette(heroColor)
 
     val lyricEntries = remember(lyricMap) { lyricMap.entries.toList() }
+    val isUntimedContent =
+        (lyricUiState as? LyricUiState.Content)?.capabilityLevel ==
+            LyricCapabilityLevel.UNSYNCED
 
     // ── Scroll state ──
     val listState = rememberLazyListState()
@@ -119,6 +123,12 @@ fun FullLyricScreen(
 
     LaunchedEffect(metadata?.id) {
         showSongWikiDetails = false
+    }
+
+    LaunchedEffect(metadata?.id, isUntimedContent, untimedLyricLines) {
+        if (isUntimedContent && untimedLyricLines.isNotEmpty()) {
+            listState.scrollToItem(0)
+        }
     }
 
     // Auto-centre current line
@@ -279,6 +289,12 @@ fun FullLyricScreen(
                         onAction = viewModel::retryLyrics,
                         modifier = Modifier.padding(horizontal = 24.dp),
                     )
+                }
+                isUntimedContent && untimedLyricLines.isNotEmpty() -> itemsIndexed(
+                    items = untimedLyricLines,
+                    key = { index, line -> "untimed:$index:$line" },
+                ) { _, line ->
+                    UntimedLyricTextLine(line)
                 }
                 lyricUiState is LyricUiState.Empty -> item(key = "lyric-empty") {
                     val emptyState = lyricUiState as LyricUiState.Empty
@@ -564,5 +580,26 @@ private fun LyricKaraokeLine(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun UntimedLyricTextLine(text: String) {
+    Box(
+        modifier = Modifier
+            .widthIn(max = 840.dp)
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 24.dp, vertical = 4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            color = Color.White.copy(alpha = 0.88f),
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            softWrap = true,
+        )
     }
 }

@@ -1322,6 +1322,7 @@ window.addEventListener("DOMContentLoaded", function () {
 
 let currentLyricLines = [];
 let currentLyricMediaId = "";
+let currentLyricsSeekable = true;
 let lyricClickSeekingInstalled = false;
 let reducedMotionPreferenceInstalled = false;
 let lyricLineTaggingScheduled = false;
@@ -1346,8 +1347,9 @@ function initDesktopControls() {
   });
 }
 
-function setCurrentLyricLines(lines, mediaId) {
+function setCurrentLyricLines(lines, mediaId, seekable) {
   if (mediaId !== undefined) currentLyricMediaId = normalizeMediaId(mediaId);
+  currentLyricsSeekable = seekable !== false;
   currentLyricLines = Array.isArray(lines) ? lines : [];
   currentLyricLines.forEach(function (line) {
     if (line && currentLyricMediaId) line.mediaId = currentLyricMediaId;
@@ -1392,10 +1394,19 @@ function tagRenderedLyricLines() {
   );
   elements.forEach((element, index) => {
     element.dataset.amllRenderedLine = String(index);
-    element.setAttribute("role", "button");
-    element.tabIndex = index === (activeIndex >= 0 ? activeIndex : 0) ? 0 : -1;
     const readableText = element.textContent.trim();
-    element.setAttribute("aria-label", readableText ? `跳转到歌词：${readableText}` : "跳转到这句歌词");
+    if (currentLyricsSeekable) {
+      element.setAttribute("role", "button");
+      element.tabIndex = index === (activeIndex >= 0 ? activeIndex : 0) ? 0 : -1;
+      element.setAttribute(
+        "aria-label",
+        readableText ? `跳转到歌词：${readableText}` : "跳转到这句歌词",
+      );
+    } else {
+      element.removeAttribute("role");
+      element.tabIndex = -1;
+      element.setAttribute("aria-label", readableText || "无时间戳歌词");
+    }
     const isActive = element.classList.contains("FmKaba_active") ||
       Boolean(element.querySelector(".FmKaba_active"));
     if (isActive) element.setAttribute("aria-current", "true");
@@ -1422,6 +1433,7 @@ function installLyricClickSeeking() {
   if (!root || !player) return;
   lyricClickSeekingInstalled = true;
   player.addEventListener("line-click", function (event) {
+    if (!currentLyricsSeekable) return;
     const index = Number(event.lineIndex);
     const lineData = Number.isInteger(index) ? currentLyricLines[index] : null;
     const stableLineData = lineData || event.line;
@@ -1430,6 +1442,7 @@ function installLyricClickSeeking() {
     notifyHostLyricLineClicked(time, lineData && lineData.mediaId);
   });
   root.addEventListener("keydown", function (event) {
+    if (!currentLyricsSeekable) return;
     if (["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
       const elements = collectLyricLineElements();
       if (!elements.length) return;
@@ -1549,6 +1562,7 @@ function installWordLyricSupport() {
     bridge.__redefineLoadLyricsWrapped = true;
     bridge.loadLyrics = function (lrcText, mediaId, options) {
       if (!this.player) return;
+      this.untimedMode = false;
       const parsed = this.parseLrc ? this.parseLrc(lrcText) : [];
       const lines = applyLyricOptions(parsed, options);
       setCurrentLyricLines(lines, mediaId);
@@ -1559,6 +1573,7 @@ function installWordLyricSupport() {
   }
 
   bridge.resetTrack = function (mediaId) {
+    this.untimedMode = false;
     currentLyricMediaId = normalizeMediaId(mediaId);
     setCurrentLyricLines([], currentLyricMediaId);
     this.player?.setLyricLines([]);
@@ -1568,6 +1583,7 @@ function installWordLyricSupport() {
     bridge.__redefineWordLyricWrapped = true;
     bridge.loadWordLyrics = function (yrcText, mediaId, options) {
       if (!this.player) return;
+      this.untimedMode = false;
       const parsed = this.parseYrc ? this.parseYrc(yrcText) : [];
       const primaryLines = parsed.length ? parsed : (this.parseLrc ? this.parseLrc(yrcText) : []);
       const lines = applyLyricOptions(primaryLines, options);
@@ -1582,6 +1598,7 @@ function installWordLyricSupport() {
     bridge.__redefineTtmlLyricWrapped = true;
     bridge.loadTtmlLyrics = function (ttmlText, mediaId, options, fallbackLrc) {
       if (!this.player) return;
+      this.untimedMode = false;
       let primaryLines = [];
       try {
         const parsed = this.parseTTML ? this.parseTTML(ttmlText) : null;
@@ -1596,6 +1613,24 @@ function installWordLyricSupport() {
       setCurrentLyricLines(lines, mediaId);
       this.player.setLyricLines(lines);
       scheduleLyricLineTagging();
+      globalThis.AmllPage && globalThis.AmllPage.hideLoading();
+    };
+  }
+
+  if (!bridge.__redefineUntimedLyricWrapped && bridge.loadUntimedLyrics) {
+    bridge.__redefineUntimedLyricWrapped = true;
+    bridge.loadUntimedLyrics = function (plainLines, mediaId) {
+      if (!this.player) return;
+      this.untimedMode = true;
+      const lines = this.parseUntimedLyrics ? this.parseUntimedLyrics(plainLines) : [];
+      setCurrentLyricLines(lines, mediaId, false);
+      this.player.setLyricLines(lines);
+      this.player.setCurrentTime(0);
+      scheduleLyricLineTagging();
+      if (globalThis.__amllDebug) {
+        globalThis.__amllDebug.time = 0;
+        globalThis.__amllDebug.untimed = true;
+      }
       globalThis.AmllPage && globalThis.AmllPage.hideLoading();
     };
   }

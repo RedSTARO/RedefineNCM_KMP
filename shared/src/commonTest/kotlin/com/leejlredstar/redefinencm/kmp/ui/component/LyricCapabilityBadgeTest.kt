@@ -54,7 +54,10 @@ class LyricCapabilityBadgeTest {
         )
         assertEquals(
             LyricCapabilityLevel.UNSYNCED,
-            LyricUiState.Empty(LyricCapabilityLevel.UNSYNCED).lyricCapabilityLevel,
+            LyricUiState.Content(
+                lineCount = 2,
+                capabilityLevel = LyricCapabilityLevel.UNSYNCED,
+            ).lyricCapabilityLevel,
         )
         assertNull(LyricUiState.Empty().lyricCapabilityLevel)
         assertNull(LyricUiState.Idle.lyricCapabilityLevel)

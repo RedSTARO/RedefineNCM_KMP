@@ -107,6 +107,7 @@ class NowPlayingViewModel(
     val rawTranslatedLyric = MutableStateFlow("")
     val rawRomanLyric = MutableStateFlow("")
     val wordLyricLines = MutableStateFlow<List<LyricParser.WordLine>>(emptyList())
+    val untimedLyricLines = MutableStateFlow<List<String>>(emptyList())
     val activeLyricSource = MutableStateFlow<LyricSource?>(null)
     val activeLyricEndpoint = MutableStateFlow("")
     private val lyricSourceModeGate = LyricSourceModeGate()
@@ -586,6 +587,7 @@ class NowPlayingViewModel(
                     rawTtmlLyric.value = document.rawTtml
                     rawWordLyric.value = document.rawWordLyric
                     wordLyricLines.value = document.lines
+                    untimedLyricLines.value = emptyList()
                     rawTranslatedLyric.value = document.rawTranslatedLyric
                     rawRomanLyric.value = document.rawRomanLyric
                     rawLyric.value = document.rawLineLyric
@@ -606,9 +608,11 @@ class NowPlayingViewModel(
                 rawWordLyric.value = document.rawWordLyric
                 rawTranslatedLyric.value = document.rawTranslatedLyric
                 rawRomanLyric.value = document.rawRomanLyric
+                untimedLyricLines.value = document.untimedLines
                 activeLyricSource.value = document.source
                 activeLyricEndpoint.value = document.endpoint
-                lyricUiState.value = LyricUiState.Empty(
+                lyricUiState.value = LyricUiState.Content(
+                    lineCount = document.untimedLines.size,
                     capabilityLevel = LyricCapabilityLevel.UNSYNCED,
                 )
             }
@@ -668,6 +672,7 @@ class NowPlayingViewModel(
         rawTranslatedLyric.value = ""
         rawRomanLyric.value = ""
         wordLyricLines.value = emptyList()
+        untimedLyricLines.value = emptyList()
         activeLyricSource.value = null
         activeLyricEndpoint.value = ""
         lyricLoadError.value = null
@@ -682,6 +687,7 @@ class NowPlayingViewModel(
         rawTranslatedLyric.value = ""
         rawRomanLyric.value = ""
         wordLyricLines.value = emptyList()
+        untimedLyricLines.value = emptyList()
         activeLyricSource.value = null
         activeLyricEndpoint.value = ""
         lyricMap.value = linkedMapOf()
