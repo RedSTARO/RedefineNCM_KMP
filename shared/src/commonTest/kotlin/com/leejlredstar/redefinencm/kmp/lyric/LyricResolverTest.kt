@@ -1,4 +1,4 @@
-package com.leejlredstar.redefinencm.kmp.lyric
+﻿package com.leejlredstar.redefinencm.kmp.lyric
 
 import com.leejlredstar.redefinencm.kmp.data.api.dto.Lyric
 import com.leejlredstar.redefinencm.kmp.data.api.dto.LyricLrc
@@ -276,21 +276,21 @@ class LyricResolverTest {
         val query = LyricQuery(songId = 1, durationMs = 5_000)
         val validYrc = backendLyricDocument(
             query = query,
-            lrcText = "[00:00.00]逐字歌词",
-            yrcText = "[0,1000](0,500,0)逐字",
+            lrcText = "[00:00.00]閫愬瓧姝岃瘝",
+            yrcText = "[0,1000](0,500,0)閫愬瓧",
             translatedText = "",
             romanText = "",
         )
         val invalidYrcWithLineFallback = backendLyricDocument(
             query = query,
-            lrcText = "[00:00.00]逐行歌词",
+            lrcText = "[00:00.00]閫愯姝岃瘝",
             yrcText = "invalid yrc payload",
             translatedText = "",
             romanText = "",
         )
         val lineOnly = backendLyricDocument(
             query = query,
-            lrcText = "[00:00.00]普通逐行",
+            lrcText = "[00:00.00]鏅€氶€愯",
             yrcText = "",
             translatedText = "",
             romanText = "",
@@ -307,7 +307,7 @@ class LyricResolverTest {
         val query = LyricQuery(songId = 1)
         val plain = backendLyricDocument(
             query = query,
-            lrcText = "[ar:artist]\n第一句\n[broken]第二句",
+            lrcText = "[ar:artist]\n绗竴鍙n[broken]绗簩鍙?,
             yrcText = "",
             translatedText = "",
             romanText = "",
@@ -321,7 +321,7 @@ class LyricResolverTest {
         )
 
         assertEquals(LyricCapabilityLevel.UNSYNCED, plain?.capabilityLevel)
-        assertEquals(listOf("第一句", "第二句"), plain?.untimedLines)
+        assertEquals(listOf("绗竴鍙?, "绗簩鍙?), plain?.untimedLines)
         assertNull(supplementOnly)
     }
 
@@ -463,6 +463,43 @@ class LyricResolverTest {
             resolver.resolveLatest(query, LyricSourceMode.BACKEND_ONLY),
         )
         assertNull(resolver.cachedResolution(query, LyricSourceMode.BACKEND_ONLY))
+    }
+
+
+    @Test
+    fun backendLrcKeepsSameTimestampMainAndBackgroundLinesInSourceOrder() = runTest {
+        val provider = BackendLyricProvider(
+            lyricFlow = {
+                flowOf(
+                    Lyric(
+                        lrc = LyricLrc(
+                            lyric = """
+                            [00:01.000]main
+                            [00:01.000](echo)
+                            [00:03.000]next
+                            """.trimIndent(),
+                        ),
+                    ),
+                )
+            },
+            retryDelayMillis = 0,
+        )
+
+        val results = mutableListOf<LyricProviderResult>()
+        provider.load(
+            LyricQuery(
+                songId = 1,
+                durationMs = 5_000L,
+            ),
+        ).collect(results::add)
+
+        val document = assertIs<LyricProviderResult.Found>(results.single()).document
+        assertEquals(listOf("main", "echo", "next"), document.lines.map { it.text })
+        assertEquals(listOf(false, true, false), document.lines.map { it.isBackground })
+        assertEquals(listOf(1_000L, 1_000L, 3_000L), document.lines.map { it.startTimeMs })
+        assertEquals(5_000L, document.lines.last().endTimeMs)
+        assertEquals(5_000L, document.lines.last().exactEndTimeMs.toLong())
+        assertEquals(5_000L, document.lines.last().words.last().endTimeMs)
     }
 
     private fun fakeProvider(

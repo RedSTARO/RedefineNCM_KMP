@@ -349,9 +349,9 @@ work; writes back to `NowPlayingViewModel` are scoped to both media ID and reque
 `CachedLyric.json` is a versioned bundle that can hold the NCM backend DTO and AMLL TTML
 independently while lazily reading the previous raw-`Lyric` JSON shape. Keep those two entries
 independent when changing cache code. A valid external TTML entry is fresh for 24 hours; an expired
-entry remains displayable while a bounded refresh runs. Android and supported Windows feed original
-TTML into the official AMLL `parseTTML`; common `TtmlLyricParser` supplies shared Compose,
-notification and other platform surfaces.
+entry remains displayable while a bounded refresh runs. Every target feeds the original TTML through
+the common `TtmlLyricParser`, whose event parser and AMLL conversion preserve the behavior of
+`@applemusic-like-lyrics/ttml` 1.0.1 for the shared Compose page, notifications, and other surfaces.
 
 `LyricResolver` additionally owns a bounded process-memory cache of successfully parsed timed or
 untimed documents. Its key includes song ID, duration, source mode, and whether downloaded local
@@ -389,9 +389,9 @@ SQLDelight lyric cache. Deleting a downloaded song also deletes its sidecars.
 Platform storage uses Android MediaStore `content:` URIs, Android legacy/JVM/iOS `file:` URIs,
 and Web OPFS keys resolved to temporary `blob:` URLs. Runtime URIs are never persisted in
 `PlayerStatus` or the download queue, and Web blob URLs must be revoked when no longer active.
-AMLL hosts must bridge app-managed, path-validated local artwork through a controlled
-resource/data path; they must not assume a file page can read arbitrary `content:` or
-cross-directory `file:` URLs.
+Native Compose surfaces consume only app-managed, path-validated artwork URIs returned by
+`LocalMediaAssets`; platform image loaders must not broaden that contract to arbitrary `content:`
+or cross-directory `file:` paths.
 Pending/backup files stay hidden and are excluded from scans. Web audio discovery accepts only
 the single-extension audio shape and explicitly excludes `.lyric.*` and `.cover.*`.
 
