@@ -4,6 +4,7 @@
  */
 import { LyricPlayer } from "@applemusic-like-lyrics/core";
 import { parseLrc, parseTTML } from "@applemusic-like-lyrics/lyric";
+import { parseUntimedLyrics, resolvePlaybackTime } from "./untimed.js";
 
 function normalizeYrcWordStart(lineStart, lineDuration, wordStart) {
   if (wordStart < lineStart && wordStart <= lineDuration) return lineStart + wordStart;
@@ -62,7 +63,9 @@ globalThis.AmllBridge = {
   parseLrc,
   parseTTML,
   parseYrc,
+  parseUntimedLyrics,
   player: null,
+  untimedMode: false,
 
   /**
    * Initialize the lyric player and mount it into #amll-root.
@@ -74,7 +77,7 @@ globalThis.AmllBridge = {
     this.player = new LyricPlayer();
     root.appendChild(this.player.getElement());
 
-    globalThis.__amllDebug = { ready: true, lines: 0, time: 0 };
+    globalThis.__amllDebug = { ready: true, lines: 0, time: 0, untimed: false };
 
     // AMLL is driven by a requestAnimationFrame loop with real per-frame deltas;
     // setCurrentTime() only moves the target. Native position updates arrive
@@ -96,6 +99,7 @@ globalThis.AmllBridge = {
    */
   loadLyrics(lrcText) {
     if (!this.player) return;
+    this.untimedMode = false;
     const parsed = parseLrc(lrcText);
     this.player.setLyricLines(parsed);
     globalThis.AmllPage?.hideLoading?.();
@@ -108,6 +112,7 @@ globalThis.AmllBridge = {
    */
   loadWordLyrics(yrcText) {
     if (!this.player) return;
+    this.untimedMode = false;
     const parsed = parseYrc(yrcText);
     this.player.setLyricLines(parsed.length ? parsed : parseLrc(yrcText));
     globalThis.AmllPage?.hideLoading?.();
@@ -120,6 +125,7 @@ globalThis.AmllBridge = {
    */
   loadTtmlLyrics(ttmlText) {
     if (!this.player) return;
+    this.untimedMode = false;
     const parsed = parseTTML(ttmlText);
     const lines = Array.isArray(parsed?.lines) ? parsed.lines : [];
     this.player.setLyricLines(lines);
@@ -128,13 +134,36 @@ globalThis.AmllBridge = {
   },
 
   /**
+   * Load normalized plain-text lyrics through AMLL without inventing seekable timestamps.
+   * Virtual times exist only to give LyricPlayer a stable line layout; setTime() remains at zero.
+   * @param {string[]|string} lines Untimed lyric lines
+   */
+  loadUntimedLyrics(lines) {
+    if (!this.player) return;
+    this.untimedMode = true;
+    const parsed = parseUntimedLyrics(lines);
+    this.player.setLyricLines(parsed);
+    this.player.setCurrentTime(0);
+    globalThis.AmllPage?.hideLoading?.();
+    if (globalThis.__amllDebug) {
+      globalThis.__amllDebug.lines = parsed.length;
+      globalThis.__amllDebug.time = 0;
+      globalThis.__amllDebug.untimed = true;
+    }
+  },
+
+  /**
    * Set the current playback time (milliseconds). Only moves the target —
    * the rAF loop started in init() advances the animation.
    * @param {number} timeMs Current position in ms
    */
   setTime(timeMs) {
-    this.player?.setCurrentTime(timeMs);
-    if (globalThis.__amllDebug) globalThis.__amllDebug.time = timeMs;
+    const resolvedTime = resolvePlaybackTime(timeMs, this.untimedMode);
+    this.player?.setCurrentTime(resolvedTime);
+    if (globalThis.__amllDebug) {
+      globalThis.__amllDebug.time = resolvedTime;
+      globalThis.__amllDebug.untimed = this.untimedMode;
+    }
   },
 
   /**
