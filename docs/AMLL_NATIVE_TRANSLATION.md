@@ -12,7 +12,6 @@
 |---|---:|---|---|---|
 | `@applemusic-like-lyrics/core` | `0.5.2` | `AGPL-3.0-only` | `dist/amll-core.mjs.map` | `sha512-RlFwDlOzT7gzHo/dbrG9noO1Q51bHLDrG1vIgtsf9x7+SNmRXww9pkNubLrDyrHSEiMDgtjEvoG824bYbTAVIQ==` |
 | `@applemusic-like-lyrics/lyric` | `1.0.2` | `AGPL-3.0-only` | `dist/amll-lyric.mjs.map` | `sha512-dMCruzU1BERPkUFFcoumsT6oQL79nE9s3jmmhyVt9sXHG+87v1ZWFaC6j8SeyZzSur08i1xsivnCsly0ydrb5g==` |
-| `@applemusic-like-lyrics/ttml` | `1.0.1` | `AGPL-3.0-only` | `dist/amll-ttml.mjs.map` | `sha512-xhLajMI9Jm+Etv99GbK5Fx8wqa5m9wnS3kCqOTBUy9imjsah2PrV1XyCc6LBssPhEFcQt2SrFNQlwT6GZwpY7A==` |
 
 上游仓库：<https://github.com/amll-dev/applemusic-like-lyrics>
 
@@ -37,7 +36,6 @@
 |---|---|---|
 | lyric `src/formats/lrc.ts`：`parseLrc` | `util/LyricParser.kt`：`parseLrcLines`、`parseLrcTime` | 逐个时间标签展开同一文本；保留重复时间行；识别整行中英文圆括号背景人声。 |
 | lyric `src/utils.ts`：`createLine`、`createWord`、`parseTime` | `util/LyricParser.kt`：`WordLine`、`Word`、`parseLrcTime` | 将 JavaScript 数值时间转换为毫秒时间，保留后续优化所需的行级与字级字段。 |
-| ttml `src/parser.ts`：`TTMLParser.parse`、`processLineElement`、`processRubyElement`、`parseBackgroundVocal`、`parseInlineSubContent`；`src/utils/amll-converter.ts`：`toAmllLyrics`、`alignRomanization` | `lyric/TtmlLyricParser.kt`：`TtmlLyricParser.parse`、`processLineElement`、`processRubyElement`、`parseBackgroundVocal`、`parseInlineSubContent`、`convertToAmllLines`、`alignRomanization` | 以 `xmlutil` 流式事件替换 DOM 遍历。`Word` 保留 `romanWord`、`obscene`、`emptyBeat`、ruby 与 `exact*`；`WordLine` 保留翻译、罗马音、背景/对唱与 `exact*`。上游 `Math.round` 后的整数毫秒写入公共 Long 时间，同时以 Double 写入 `exact*`。 |
 | 旧 `entry.js`：`parseYrc`、`normalizeWordStart` | `util/LyricParser.kt`：`parseYrc`、`parseYrcLine`、`normalizeYrcWordStart` | 这里翻译的是 RedefineNCM 宿主实际使用的网易 YRC 方言，不以 lyric 包的通用 `src/formats/yrc.ts::parseYrc` 代替。该宿主方言不推断背景人声。 |
 | 旧 `player.html`：`parseLrcSupplement`、`nearestSupplement`、`applyLyricOptions` | `ui/amll/AmllLyricModel.kt`：`parseSupplement`、`findNearestSupplement`、`buildAmllLyricDocument` | 翻译/罗马音按原宿主的 `850 ms` 最近时间容差挂接；显示开关仍由公共设置控制。 |
 | core `src/utils/optimize-lyric.ts`：`optimizeLyricLines` | `ui/amll/AmllLyricModel.kt`：`optimizeAmllLyricLines` | 保持上游六个优化步骤的顺序和默认全部启用的行为。 |
@@ -174,5 +172,4 @@
 上述由 AMLL 翻译或改编的 Kotlin 文件使用
 `SPDX-License-Identifier: AGPL-3.0-only` 标记。版权与修改说明见
 [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md)，完整许可证文本见
-[`LICENSES/AGPL-3.0-only.txt`](../LICENSES/AGPL-3.0-only.txt)。Desktop 发布包会把
-完整 [`LICENSES/`](../LICENSES/) 目录与该 notice 一并写入应用资源。
+[`THIRD_PARTY_LICENSES/AGPL-3.0-only.txt`](../THIRD_PARTY_LICENSES/AGPL-3.0-only.txt)。

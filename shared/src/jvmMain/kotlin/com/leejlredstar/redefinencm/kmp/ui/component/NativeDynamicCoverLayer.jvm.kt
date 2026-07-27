@@ -1,12 +1,3 @@
-/*
- * Copyright (c) 2026 AMLL contributors and RedefineNCM KMP contributors.
- *
- * Native Compose translation/adaptation of Apple Music-like Lyrics and the former
- * RedefineNCM AMLL host.
- *
- * Modified for RedefineNCM KMP on 2026-07-27.
- * SPDX-License-Identifier: AGPL-3.0-only
- */
 package com.leejlredstar.redefinencm.kmp.ui.component
 
 import androidx.compose.animation.core.CubicBezierEasing

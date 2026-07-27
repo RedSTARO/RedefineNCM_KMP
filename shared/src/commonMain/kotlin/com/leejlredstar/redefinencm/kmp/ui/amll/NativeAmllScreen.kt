@@ -1,12 +1,3 @@
-/*
- * Copyright (c) 2026 AMLL contributors and RedefineNCM KMP contributors.
- *
- * Native Compose translation/adaptation of Apple Music-like Lyrics and the former
- * RedefineNCM AMLL host.
- *
- * Modified for RedefineNCM KMP on 2026-07-27.
- * SPDX-License-Identifier: AGPL-3.0-only
- */
 package com.leejlredstar.redefinencm.kmp.ui.amll
 
 import androidx.compose.animation.core.CubicBezierEasing
@@ -66,11 +57,19 @@ import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerControlle
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeDynamicCoverLayer
 import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsButton
 import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsSheet
+import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
+import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.SongWikiUiState
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
+
+private data class AmllLyricPreferences(
+    val showTranslated: Boolean = false,
+    val showRoman: Boolean = false,
+)
 
 private val WikiBackdropCssEase = CubicBezierEasing(0.25f, 0.10f, 0.25f, 1.00f)
 private const val NativeAmllControllerAutoHideMillis = 3_600L
@@ -87,25 +86,25 @@ private const val DesktopAmllControllerAutoHideMillis = 30_000L
 fun NativeAmllScreen(
     onBack: () -> Unit = {},
     viewModel: NowPlayingViewModel = koinInject(),
+    settings: PlatformSettings = koinInject(),
 ) {
     val lyricMap by viewModel.lyricMap.collectAsState()
     val lyricUiState by viewModel.lyricUiState.collectAsState()
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
+    val rawLyric by viewModel.rawLyric.collectAsState()
+    val rawWordLyric by viewModel.rawWordLyric.collectAsState()
     val wordLyricLines by viewModel.wordLyricLines.collectAsState()
     val rawTranslatedLyric by viewModel.rawTranslatedLyric.collectAsState()
     val rawRomanLyric by viewModel.rawRomanLyric.collectAsState()
-    val showTranslatedLyric by viewModel.showTranslatedLyric.collectAsState()
-    val showRomanLyric by viewModel.showRomanLyric.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val duration by viewModel.songLength.collectAsState()
     val isPlaying by viewModel.isPlaying.collectAsState()
     val playerState by viewModel.playerState.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
     val dynamicCoverState by viewModel.dynamicCoverUiState.collectAsState()
-    val localArtworkActive by viewModel.localArtworkActive.collectAsState()
-    val remoteArtworkUri by viewModel.remoteArtworkUri.collectAsState()
     val songWikiState by viewModel.songWikiUiState.collectAsState()
 
+    var lyricPreferences by remember(settings) { mutableStateOf(AmllLyricPreferences()) }
     var showSongWikiDetails by remember { mutableStateOf(false) }
     var wikiDynamicCoverVisible by remember { mutableStateOf(false) }
     var keepSongWikiBackdropBlur by remember { mutableStateOf(false) }
@@ -114,6 +113,26 @@ fun NativeAmllScreen(
     val songWikiButtonFocusRequester = remember { FocusRequester() }
     val reducedMotion = rememberReducedMotionEnabled()
     val platform = remember { getPlatform() }
+
+    LaunchedEffect(settings) {
+        try {
+            settings.awaitLoaded()
+            lyricPreferences = AmllLyricPreferences(
+                showTranslated = settings.getBooleanAsync(
+                    SettingKeys.SHOW_TRANSLATED_LYRIC,
+                    false,
+                ),
+                showRoman = settings.getBooleanAsync(
+                    SettingKeys.SHOW_ROMAN_LYRIC,
+                    false,
+                ),
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            lyricPreferences = AmllLyricPreferences()
+        }
+    }
 
     LaunchedEffect(metadata?.id) {
         showSongWikiDetails = false
@@ -149,20 +168,23 @@ fun NativeAmllScreen(
     val document = remember(
         lyricsBelongToCurrentMedia,
         lyricMap,
+        rawLyric,
+        rawWordLyric,
         wordLyricLines,
         rawTranslatedLyric,
         rawRomanLyric,
-        showTranslatedLyric,
-        showRomanLyric,
+        lyricPreferences,
     ) {
         if (lyricsBelongToCurrentMedia) {
             buildAmllLyricDocument(
                 lyricMap = lyricMap,
+                rawLrc = rawLyric,
+                rawYrc = rawWordLyric,
                 wordLines = wordLyricLines,
                 translatedLrc = rawTranslatedLyric,
                 romanLrc = rawRomanLyric,
-                showTranslated = showTranslatedLyric,
-                showRoman = showRomanLyric,
+                showTranslated = lyricPreferences.showTranslated,
+                showRoman = lyricPreferences.showRoman,
             )
         } else {
             AmllLyricDocument(emptyList())
@@ -177,12 +199,7 @@ fun NativeAmllScreen(
     // player.html keeps the full-screen dynamic cover available under reduced motion. The
     // preference disables the song-wiki video and pauses the background immediately; in normal
     // motion the background pauses only after the wiki video has presented a frame.
-    val primaryArtworkUri = metadata?.artworkUri
-    val fallbackArtworkUri = remoteArtworkUri
-        .takeIf { localArtworkActive && it.isNotBlank() && it != primaryArtworkUri }
-    val dynamicCoverUrl = dynamicCoverState
-        .urlFor(metadata?.id)
-        .takeUnless { localArtworkActive }
+    val dynamicCoverUrl = dynamicCoverState.urlFor(metadata?.id)
     val scopedSongWikiState = songWikiState.scopedTo(metadata?.id)
     LaunchedEffect(dynamicCoverUrl) {
         wikiDynamicCoverVisible = false
@@ -219,8 +236,7 @@ fun NativeAmllScreen(
         }
 
         AmllBackground(
-            artworkUri = primaryArtworkUri,
-            fallbackArtworkUri = fallbackArtworkUri,
+            artworkUri = metadata?.artworkUri,
             dynamicCoverUrl = dynamicCoverUrl,
             playDynamicCover = playDynamicBackground,
             androidPresentation = platform.isAndroid,
@@ -295,8 +311,7 @@ fun NativeAmllScreen(
         songTitle = metadata?.title,
         songArtist = metadata?.artist,
         albumTitle = metadata?.albumTitle,
-        artworkUri = primaryArtworkUri,
-        fallbackArtworkUri = fallbackArtworkUri,
+        artworkUri = metadata?.artworkUri,
         durationMs = metadata?.duration,
         artworkOverlay = dynamicCoverUrl
             ?.takeUnless { reducedMotion }
