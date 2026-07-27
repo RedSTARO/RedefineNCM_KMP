@@ -40,16 +40,6 @@ fun AmllPlayerScreen(
 
     when (mode) {
         AmllRendererMode.NativeCompose -> NativeAmllScreen(onBack = onBack)
-        AmllRendererMode.LegacyWebView -> LegacyAmllPlayerScreen(onBack = onBack)
+        AmllRendererMode.LegacyWebView -> WebViewLyricScreen(onBack = onBack)
     }
-}
-
-/**
- * Temporary compatibility path: map unsupported legacy route requests to the native screen.
- */
-@Composable
-private fun LegacyAmllPlayerScreen(
-    onBack: () -> Unit,
-) {
-    NativeAmllScreen(onBack = onBack)
 }

@@ -307,7 +307,7 @@ class LyricResolverTest {
         val query = LyricQuery(songId = 1)
         val plain = backendLyricDocument(
             query = query,
-            lrcText = "[ar:artist]\n绗竴鍙n[broken]绗簩鍙?,
+            lrcText = "[ar:artist]\nfirst plain\nsecond plain",
             yrcText = "",
             translatedText = "",
             romanText = "",
@@ -321,7 +321,7 @@ class LyricResolverTest {
         )
 
         assertEquals(LyricCapabilityLevel.UNSYNCED, plain?.capabilityLevel)
-        assertEquals(listOf("绗竴鍙?, "绗簩鍙?), plain?.untimedLines)
+        assertEquals(listOf("first plain", "second plain"), plain?.untimedLines)
         assertNull(supplementOnly)
     }
 
