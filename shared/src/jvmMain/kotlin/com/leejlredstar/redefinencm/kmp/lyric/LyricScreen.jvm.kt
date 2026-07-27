@@ -81,9 +81,6 @@ private val ExpandedControlsWindowSize = DpSize(652.dp, 240.dp)
 private val CollapsedControlsWindowSize = DpSize(436.dp, 64.dp)
 private val ControlsSheetWindowSize = DpSize(840.dp, 680.dp)
 
-actual val supportsDynamicNowPlayingCover: Boolean
-    get() = desktopEmbeddedWebViewSupported()
-
 /**
  * Desktop (JVM) actual: AMLL lyric engine in the **system WebView**
  * (Windows = WebView2 / Edge Chromium)，通过 [WebviewJna]（直传 HWND 的精简绑定）
@@ -355,9 +352,10 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     // page reject a delayed video command that belongs to the previous media item.
     LaunchedEffect(engineReady, metadata, amllArtworkUri, dynamicCoverUrl) {
         if (!engineReady) return@LaunchedEffect
-        val mediaId = metadata?.id.orEmpty()
+        val media = metadata ?: return@LaunchedEffect
+        val mediaId = media.id
         val details = Json.encodeToString(
-            metadata.toAmllSongDetails().copy(artworkUri = amllArtworkUri),
+            media.toAmllSongDetails().copy(artworkUri = amllArtworkUri),
         ).escapeJsSingleQuoted()
         val dynamicCoverCommand = dynamicCoverUrl
             ?.takeIf(String::isNotBlank)
