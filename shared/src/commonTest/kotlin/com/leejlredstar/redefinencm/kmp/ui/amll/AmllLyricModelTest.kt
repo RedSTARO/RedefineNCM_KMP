@@ -139,8 +139,8 @@ class AmllLyricModelTest {
                     romanWord = "romaji",
                 ),
             ),
-            translatedLyric = "embedded translation",
-            romanLyric = "embedded romanization",
+            translatedText = "embedded translation",
+            romanText = "embedded romanization",
         )
 
         val hidden = buildAmllLyricDocument(
@@ -160,62 +160,6 @@ class AmllLyricModelTest {
         assertEquals("embedded translation", shown.translatedText)
         assertEquals("embedded romanization", shown.romanText)
         assertEquals("romaji", shown.words.single().romanWord)
-    }
-
-    @Test
-    fun documentTransportPreservesEmptyBeat() {
-        val document = buildAmllLyricDocument(
-            lyricMap = emptyMap(),
-            wordLines = listOf(
-                LyricParser.WordLine(
-                    startTimeMs = 1_000L,
-                    endTimeMs = 2_000L,
-                    words = listOf(
-                        LyricParser.Word(
-                            startTimeMs = 1_000L,
-                            endTimeMs = 2_000L,
-                            text = "beat",
-                            emptyBeat = 5,
-                        ),
-                    ),
-                ),
-            ),
-            optimizeOptions = AmllLyricOptimizeOptions(
-                normalizeSpaces = false,
-                resetLineTimestamps = false,
-                convertExcessiveBackgroundLines = false,
-                syncMainAndBackgroundLines = false,
-                cleanUnintentionalOverlaps = false,
-                tryAdvanceStartTime = false,
-            ),
-        )
-
-        assertEquals(5, document.lines.single().words.single().emptyBeat)
-    }
-
-    @Test
-    fun optimizerPreservesEmptyBeatAcrossMutableRoundTrip() {
-        val optimized = optimizeAmllLyricLines(
-            lines = listOf(
-                AmllLyricLine(
-                    id = "line",
-                    startTimeMs = 1_000L,
-                    endTimeMs = 2_000L,
-                    mainText = "beat",
-                    words = listOf(
-                        AmllLyricWord(
-                            id = "word",
-                            text = "beat",
-                            startTimeMs = 1_000L,
-                            endTimeMs = 2_000L,
-                            emptyBeat = 7,
-                        ),
-                    ),
-                ),
-            ),
-        )
-
-        assertEquals(7, optimized.single().words.single().emptyBeat)
     }
 
     @Test

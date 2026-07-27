@@ -1,11 +1,3 @@
-/*
- * Copyright (c) 2026 AMLL contributors and RedefineNCM KMP contributors.
- *
- * Platform adaptation of Apple Music-like Lyrics text segmentation.
- *
- * Modified for RedefineNCM KMP on 2026-07-27.
- * SPDX-License-Identifier: AGPL-3.0-only
- */
 package com.leejlredstar.redefinencm.kmp.ui.amll
 
 import java.text.BreakIterator
