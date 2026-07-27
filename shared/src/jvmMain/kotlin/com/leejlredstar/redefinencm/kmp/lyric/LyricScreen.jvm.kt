@@ -31,6 +31,7 @@ import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayPlacement
 import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayWindow
 import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayWindowShape
 import com.leejlredstar.redefinencm.kmp.ui.screen.FullLyricScreen
+import com.leejlredstar.redefinencm.kmp.player.PlayerStatusRestoreState
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
 import com.leejlredstar.redefinencm.kmp.util.LyricParser
 import com.leejlredstar.redefinencm.kmp.util.isLocalArtworkSidecarFileName
@@ -113,6 +114,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
+    val playerStatusRestoreState by viewModel.playerStatusRestoreState.collectAsState()
     val localArtworkActive by viewModel.localArtworkActive.collectAsState()
     val remoteArtworkUri by viewModel.remoteArtworkUri.collectAsState()
     val dynamicCoverUiState by viewModel.dynamicCoverUiState.collectAsState()
@@ -413,6 +415,8 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
 
     DesktopLyricStateWindow(
         state = lyricOverlayState,
+        hasMedia = metadata != null,
+        isPlayerRestoring = playerStatusRestoreState is PlayerStatusRestoreState.Loading,
         width = (overlayWidth - 32.dp).coerceAtLeast(1.dp).coerceAtMost(560.dp),
         height = (overlayHeight - 32.dp).coerceAtLeast(1.dp).coerceAtMost(360.dp),
         onBack = onBack,
@@ -476,6 +480,8 @@ internal fun desktopLyricControlsWindowSize(
 @Composable
 private fun DesktopLyricStateWindow(
     state: LyricUiState,
+    hasMedia: Boolean,
+    isPlayerRestoring: Boolean,
     width: Dp,
     height: Dp,
     onBack: () -> Unit,
@@ -497,6 +503,8 @@ private fun DesktopLyricStateWindow(
             Box(Modifier.fillMaxSize()) {
                 LyricStateOverlay(
                     state = state,
+                    hasMedia = hasMedia,
+                    isPlayerRestoring = isPlayerRestoring,
                     onRetry = onRetry,
                 )
             }

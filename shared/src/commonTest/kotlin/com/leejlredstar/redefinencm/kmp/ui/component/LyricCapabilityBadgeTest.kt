@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.ui.component
 
 import com.leejlredstar.redefinencm.kmp.lyric.LyricCapabilityLevel
+import com.leejlredstar.redefinencm.kmp.lyric.LyricSource
 import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
 import com.leejlredstar.redefinencm.kmp.viewmodel.lyricCapabilityLevel
 import kotlin.test.Test
@@ -23,6 +24,23 @@ class LyricCapabilityBadgeTest {
             ),
             specs.map { it.contentDescription },
         )
+        assertEquals(
+            listOf("无时间戳", "普通逐行", "NCM YRC 逐字", "TTML 完全支持"),
+            specs.map { it.levelLabel },
+        )
+    }
+
+    @Test
+    fun sourceLabelDistinguishesProviderAndLocalSidecar() {
+        assertEquals(
+            "AMLL TTML",
+            lyricSourceDisplayName(LyricSource.AMLL_TTML, "stevexmh-exact"),
+        )
+        assertEquals(
+            "网易云歌词后端 · 本地歌词文件",
+            lyricSourceDisplayName(LyricSource.NCM_BACKEND, "local-sidecar"),
+        )
+        assertEquals("未知", lyricSourceDisplayName(null, ""))
     }
 
     @Test

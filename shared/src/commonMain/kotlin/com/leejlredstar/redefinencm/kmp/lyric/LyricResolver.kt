@@ -12,8 +12,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.update
 import kotlin.time.Clock
 
 data class LyricQuery(
@@ -62,6 +64,9 @@ class LyricResolver(
     private val providers: List<LyricSourceProvider>,
     private val localLyricLoader: (suspend (LyricQuery, LyricSource) -> LyricDocument?)? = null,
 ) {
+    private val memoryCache =
+        MutableStateFlow<Map<LyricMemoryCacheKey, LyricResolution>>(emptyMap())
+
     constructor(
         repository: Repository,
         amlldbApi: AmlldbApi,
@@ -80,6 +85,14 @@ class LyricResolver(
         preferLocal: Boolean = false,
     ): Flow<LyricResolution> = flow {
         require(query.songId > 0) { "songId must be positive" }
+        val cacheKey = LyricMemoryCacheKey(
+            songId = query.songId,
+            durationMs = query.durationMs,
+            mode = mode,
+            preferLocal = preferLocal,
+        )
+        val retainedResolution = memoryCache.value[cacheKey]
+        retainedResolution?.let { emit(it) }
         val failures = mutableListOf<String>()
         var untimedCandidate: LyricDocument? = null
 
@@ -96,7 +109,9 @@ class LyricResolver(
                     if (localDocument.capabilityLevel == LyricCapabilityLevel.UNSYNCED) {
                         if (untimedCandidate == null) untimedCandidate = localDocument
                     } else {
-                        emit(LyricResolution.Found(localDocument))
+                        val resolution = LyricResolution.Found(localDocument)
+                        remember(cacheKey, resolution)
+                        if (resolution != retainedResolution) emit(resolution)
                         return@flow
                     }
                 }
@@ -116,7 +131,9 @@ class LyricResolver(
                                 if (untimedCandidate == null) untimedCandidate = result.document
                             } else {
                                 found = true
-                                emit(LyricResolution.Found(result.document))
+                                val resolution = LyricResolution.Found(result.document)
+                                remember(cacheKey, resolution)
+                                if (resolution != retainedResolution) emit(resolution)
                             }
                         }
                         is LyricProviderResult.Untimed -> {
@@ -136,12 +153,56 @@ class LyricResolver(
         }
 
         val fallbackDocument = untimedCandidate
-        if (fallbackDocument != null) {
-            emit(LyricResolution.Untimed(fallbackDocument))
-        } else if (failures.isEmpty()) {
-            emit(LyricResolution.Empty)
-        } else {
-            emit(LyricResolution.Error(failures.distinct().joinToString("；")))
+        if (fallbackDocument != null && retainedResolution !is LyricResolution.Found) {
+            val resolution = LyricResolution.Untimed(fallbackDocument)
+            remember(cacheKey, resolution)
+            if (resolution != retainedResolution) emit(resolution)
+        } else if (retainedResolution == null) {
+            if (failures.isEmpty()) {
+                emit(LyricResolution.Empty)
+            } else {
+                emit(LyricResolution.Error(failures.distinct().joinToString("；")))
+            }
+        }
+    }
+
+    /**
+     * Synchronous media-scoped snapshot used by the player UI before launching a refresh.
+     *
+     * Source mode and local preference are part of the key so a cached fallback can never bypass
+     * TTML-only/backend-only or the downloaded-sidecar boundary.
+     */
+    fun cachedResolution(
+        query: LyricQuery,
+        mode: LyricSourceMode,
+        preferLocal: Boolean = false,
+    ): LyricResolution? = memoryCache.value[
+        LyricMemoryCacheKey(
+            songId = query.songId,
+            durationMs = query.durationMs,
+            mode = mode,
+            preferLocal = preferLocal,
+        )
+    ]
+
+    private fun remember(
+        key: LyricMemoryCacheKey,
+        resolution: LyricResolution,
+    ) {
+        if (resolution !is LyricResolution.Found && resolution !is LyricResolution.Untimed) return
+        memoryCache.update { current ->
+            val next = LinkedHashMap<LyricMemoryCacheKey, LyricResolution>(
+                minOf(current.size + 1, MEMORY_CACHE_MAX_ENTRIES),
+            )
+            current.forEach { (existingKey, existingResolution) ->
+                if (existingKey != key) next[existingKey] = existingResolution
+            }
+            while (next.size >= MEMORY_CACHE_MAX_ENTRIES) {
+                val oldestKey = next.keys.firstOrNull() ?: break
+                next.remove(oldestKey)
+            }
+            next[key] = resolution
+            next
         }
     }
 
@@ -173,7 +234,18 @@ class LyricResolver(
         }
         return latest
     }
+
+    private companion object {
+        const val MEMORY_CACHE_MAX_ENTRIES = 24
+    }
 }
+
+private data class LyricMemoryCacheKey(
+    val songId: Long,
+    val durationMs: Long,
+    val mode: LyricSourceMode,
+    val preferLocal: Boolean,
+)
 
 internal class BackendLyricProvider(
     private val lyricFlow: (Long) -> Flow<Lyric?>,
