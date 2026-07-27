@@ -97,6 +97,24 @@ val resolvedAppNativePackageVersion = rootProject.extra["redefineNcmNativePackag
 val generatedBuildInfoDir = layout.buildDirectory.dir("generated/redefinencmVersion/commonMain/kotlin")
 val generatedWebVersionResourcesDir = layout.buildDirectory.dir("generated/redefinencmVersion/wasmJsMain/resources")
 
+// JavaCV's *-platform coordinates pull native binaries for every supported OS and make
+// each installer hundreds of megabytes larger. Resolve only the FFmpeg/JavaCPP native
+// classifier that can execute on the build host producing this Desktop package.
+val bytedecoNativeClassifier = run {
+    val osName = System.getProperty("os.name").lowercase()
+    val architecture = System.getProperty("os.arch").lowercase()
+    val isX64 = architecture == "amd64" || architecture == "x86_64"
+    val isArm64 = architecture == "aarch64" || architecture == "arm64"
+    when {
+        osName.contains("windows") && isX64 -> "windows-x86_64"
+        osName.contains("linux") && isX64 -> "linux-x86_64"
+        osName.contains("linux") && isArm64 -> "linux-arm64"
+        (osName.contains("mac") || osName.contains("darwin")) && isX64 -> "macosx-x86_64"
+        (osName.contains("mac") || osName.contains("darwin")) && isArm64 -> "macosx-arm64"
+        else -> null
+    }
+}
+
 val generateAppBuildInfo by tasks.registering(GenerateAppBuildInfoTask::class) {
     group = "versioning"
     description = "Generates common BuildInfo constants from the Git-derived app version."
@@ -229,7 +247,6 @@ kotlin {
             implementation(libs.sqldelight.native.driver)
         }
         jvmMain {
-            resources.srcDir("src/commonMain/amllAssets")
             dependencies {
                 // OkHttp 而非 CIO：目标服务器 DNS 有黑洞 A 记录，CIO 不做多地址回退会连环
                 // ConnectTimeout；OkHttp 的 RouteSelector 会自动换下一个 IP（与 Android 端一致）
@@ -239,24 +256,29 @@ kotlin {
                 // Dispatchers.Main for JVM (needed by DesktopFloatingWindowController + jvmTest)
                 implementation(libs.kotlinx.coroutinesSwing)
                 implementation(libs.sqldelight.sqlite.driver)
-                // 系统 WebView（Windows=WebView2/Edge Chromium）承载桌面 AMLL 歌词页 —— GPU 加速、
-                // 完整现代内核。此前的 JavaFX WebKit（WebKit 无 GPU 合成、字体/布局/动画均不完整）
-                // 与 KCEF（已归档、native init 崩溃）均被淘汰。
-                implementation(libs.webview.java)
                 // Windows SMTC and macOS now-playing bindings call native APIs through JNA.
                 implementation(libs.jna)
                 implementation(libs.jna.platform)
                 // Linux desktop transport controls: a real MPRIS service on the session D-Bus.
                 implementation(libs.dbus.java.core)
                 runtimeOnly(libs.dbus.java.native.unixsocket)
+                // Decode MP4 dynamic-cover frames into Compose ImageBitmap. javacv is kept
+                // non-transitive so camera/OpenCV/Tesseract presets are not dragged into the app.
+                implementation("org.bytedeco:javacv:${libs.versions.javacv.get()}") {
+                    isTransitive = false
+                }
+                implementation(libs.javacpp)
+                implementation(libs.ffmpeg)
+                bytedecoNativeClassifier?.let { nativeClassifier ->
+                    runtimeOnly("org.bytedeco:javacpp:${libs.versions.javacv.get()}:$nativeClassifier")
+                    runtimeOnly("org.bytedeco:ffmpeg:${libs.versions.ffmpeg.get()}:$nativeClassifier")
+                }
             }
         }
         jvmTest.dependencies {
             implementation(libs.ktor.client.mock)
         }
         wasmJsMain {
-            // AMLL 静态资源与 Android/Desktop 使用同一份源文件，避免 Web 打包出旧副本。
-            resources.srcDir("src/commonMain/amllAssets")
             resources.srcDir(generateWebVersionManifest)
             dependencies {
                 implementation(libs.kotlinx.browser)

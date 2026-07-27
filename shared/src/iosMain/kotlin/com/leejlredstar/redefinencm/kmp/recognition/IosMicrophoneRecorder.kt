@@ -16,6 +16,7 @@ import platform.AVFAudio.AVAudioSessionModeDefault
 import platform.AVFAudio.AVAudioSessionModeMeasurement
 import platform.AVFAudio.AVAudioSessionRecordPermissionDenied
 import platform.AVFAudio.AVAudioSessionRecordPermissionGranted
+import platform.AVFAudio.setActive
 import kotlin.coroutines.resume
 import kotlin.math.ceil
 import kotlin.math.sqrt

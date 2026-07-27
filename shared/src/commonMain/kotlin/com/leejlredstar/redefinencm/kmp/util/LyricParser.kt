@@ -1,18 +1,57 @@
+/*
+ * Copyright (c) 2026 AMLL contributors and RedefineNCM KMP contributors.
+ *
+ * The LRC parser in this file is a Kotlin translation of
+ * @applemusic-like-lyrics/lyric 1.0.2 (formats/lrc.ts). The NetEase YRC parser
+ * follows RedefineNCM KMP's AMLL bridge entry.js.
+ *
+ * Modified for RedefineNCM KMP on 2026-07-26.
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
 package com.leejlredstar.redefinencm.kmp.util
+
+import kotlin.math.roundToLong
 
 /**
  * LRC/YRC lyric parser.
- * Pure Kotlin, no platform dependencies.
+ *
+ * [parseLrcLines] is the lossless AMLL-facing API: it retains repeated timestamps and vocal-role
+ * metadata. [parse] remains as the legacy map adapter for call sites that only support one line per
+ * timestamp.
  */
 object LyricParser {
+
+    const val MAX_LRC_TIMESTAMP_MS: Long = 60_039_999L
+
+    /**
+     * AMLL `LyricWord.ruby` transport.
+     *
+     * The compatibility [startTimeMs]/[endTimeMs] values remain available to Long-only parsers,
+     * while TTML and other fractional sources can preserve the original JavaScript-number timing
+     * through [exactStartTimeMs]/[exactEndTimeMs].
+     */
+    data class RubySegment(
+        val startTimeMs: Long,
+        val endTimeMs: Long,
+        val text: String,
+        val exactStartTimeMs: Double = startTimeMs.toDouble(),
+        val exactEndTimeMs: Double = endTimeMs.toDouble(),
+    )
 
     data class Word(
         val startTimeMs: Long,
         val endTimeMs: Long,
         val text: String,
         val romanWord: String = "",
+        val obscene: Boolean = false,
+        val ruby: List<RubySegment> = emptyList(),
+        val exactStartTimeMs: Double = startTimeMs.toDouble(),
+        val exactEndTimeMs: Double = endTimeMs.toDouble(),
     )
 
+    /**
+     * AMLL-compatible raw lyric line. The parser does not run AMLL's presentation optimizer.
+     */
     data class WordLine(
         val startTimeMs: Long,
         val endTimeMs: Long,
@@ -21,49 +60,130 @@ object LyricParser {
         val romanLyric: String = "",
         val isBackground: Boolean = false,
         val isDuet: Boolean = false,
+        val exactStartTimeMs: Double = startTimeMs.toDouble(),
+        val exactEndTimeMs: Double = endTimeMs.toDouble(),
     ) {
         val text: String
             get() = words.joinToString(separator = "") { it.text }
     }
 
-    private val regexWord = Regex(".*](.*)")
-    private val regexTime = Regex("\\[([0-9.:]*)]")
-    private val yrcLineRegex = Regex("""^\[(\d+),(\d+)\](.*)$""")
+    private data class MutableLine(
+        val startTimeMs: Long,
+        var endTimeMs: Long,
+        val words: MutableList<Word>,
+        val isBackground: Boolean,
+    )
+
+    private val lrcTagRegex = Regex("""^\[([a-z]+):([^\]]+)]$""")
+    private val lrcTimeRegex = Regex("""^\[((?:\d+:)*\d+(?:\.\d+)?)](.*)$""")
+    private val backgroundRegex = Regex("""^[（(](.+)[）)]$""")
+    private val yrcLineRegex = Regex("""^\[(\d+),(\d+)](.*)$""")
     private val yrcWordRegex = Regex("""\((\d+),(\d+)(?:,\d+)?\)([^()]*)""")
     private val chinesePattern = Regex("[\\u4E00-\\u9FFF]")
 
-    fun parse(lyric: String): LinkedHashMap<Long?, String?> {
-        val lyricPair = LinkedHashMap<Long?, String?>()
+    /**
+     * Kotlin translation of `parseLrc()` from `@applemusic-like-lyrics/lyric` 1.0.2.
+     */
+    fun parseLrcLines(lyric: String): List<WordLine> {
+        val parsed = mutableListOf<MutableLine>()
 
-        lyric.lineSequence().forEach { line ->
-            if (line.isBlank()) return@forEach
+        lyric
+            .split(Regex("""\r?\n"""))
+            .asSequence()
+            .map { it.trimEcmaScriptWhitespace() }
+            .filter(String::isNotEmpty)
+            .forEach { rawLine ->
+                if (lrcTagRegex.matches(rawLine)) return@forEach
 
-            val matchWord = regexWord.find(line)
-            val word = matchWord?.groups?.get(1)?.value
+                var remainder = rawLine
+                val timestamps = mutableListOf<Long>()
+                while (true) {
+                    val match = lrcTimeRegex.matchEntire(remainder) ?: break
+                    val timestamp = parseLrcTime(match.groupValues[1]) ?: break
+                    timestamps += timestamp
+                    remainder = match.groupValues[2]
+                }
+                if (timestamps.isEmpty()) return@forEach
 
-            val matchTime = regexTime.findAll(line)
-            for (item in matchTime) {
-                val timeString = item.groups[1]?.value ?: continue
-                // 畸形时间戳（空括号 []、缺秒 [00:] 等）只跳过该标签，不让整首歌词失效
-                val time = runCatching { parseTimeString(timeString) }.getOrNull() ?: continue
-                lyricPair[time] = word
+                var text = remainder.trimEcmaScriptWhitespace()
+                val backgroundMatch = backgroundRegex.matchEntire(text)
+                val isBackground = backgroundMatch != null
+                if (backgroundMatch != null) text = backgroundMatch.groupValues[1]
+
+                timestamps.forEach { timestamp ->
+                    parsed += MutableLine(
+                        startTimeMs = timestamp,
+                        endTimeMs = MAX_LRC_TIMESTAMP_MS,
+                        words = mutableListOf(
+                            Word(
+                                startTimeMs = timestamp,
+                                endTimeMs = timestamp,
+                                text = text,
+                            ),
+                        ),
+                        isBackground = isBackground,
+                    )
+                }
             }
+
+        // Kotlin's sortedBy is stable, matching modern JavaScript Array.prototype.sort.
+        val sorted = parsed.sortedBy { it.startTimeMs }
+        for (index in 0 until sorted.lastIndex) {
+            val nextStart = sorted[index + 1].startTimeMs
+            val line = sorted[index]
+            line.endTimeMs = nextStart
+            line.words[0] = line.words[0].copy(
+                endTimeMs = nextStart,
+                exactEndTimeMs = nextStart.toDouble(),
+            )
         }
 
-        val sorted = LinkedHashMap<Long?, String?>()
-        lyricPair.entries
-            .sortedWith(compareBy { it.key ?: Long.MAX_VALUE })
-            .forEach { (key, value) -> sorted[key] = value }
-
         return sorted
+            .asSequence()
+            // Upstream filters only the empty string. It intentionally retains whitespace inside
+            // a parenthesized background line.
+            .filter { it.words[0].text.isNotEmpty() }
+            .map { line ->
+                WordLine(
+                    startTimeMs = line.startTimeMs,
+                    endTimeMs = line.endTimeMs,
+                    words = line.words.toList(),
+                    isBackground = line.isBackground,
+                    isDuet = false,
+                )
+            }
+            .toList()
     }
 
+    /**
+     * Legacy one-line-per-timestamp adapter. Repeated timestamps necessarily collapse here; AMLL
+     * code must use [parseLrcLines] when repetition or background-vocal metadata matters.
+     */
+    fun parse(lyric: String): LinkedHashMap<Long?, String?> =
+        toLineLyricMap(parseLrcLines(lyric))
+
+    /**
+     * Kotlin translation of the custom YRC parser from `androidApp/amll-builder/entry.js`.
+     */
     fun parseYrc(lyric: String): List<WordLine> {
-        return lyric
-            .lineSequence()
-            .mapNotNull { parseYrcLine(it.trim()) }
+        val lines = lyric
+            .split(Regex("""\r?\n"""))
+            .asSequence()
+            .mapNotNull { parseYrcLine(it.trimEcmaScriptWhitespace()) }
             .sortedBy { it.startTimeMs }
-            .toList()
+            .toMutableList()
+
+        for (index in 0 until lines.lastIndex) {
+            val line = lines[index]
+            val nextStart = lines[index + 1].startTimeMs
+            if (line.endTimeMs <= line.startTimeMs || line.endTimeMs > nextStart) {
+                lines[index] = line.copy(
+                    endTimeMs = nextStart,
+                    exactEndTimeMs = nextStart.toDouble(),
+                )
+            }
+        }
+        return lines
     }
 
     fun toLineLyricMap(lines: List<WordLine>): LinkedHashMap<Long?, String?> {
@@ -91,13 +211,13 @@ object LyricParser {
 
     private fun parseYrcLine(line: String): WordLine? {
         val lineMatch = yrcLineRegex.matchEntire(line) ?: return null
-        val lineStart = lineMatch.groupValues[1].toLongOrNull() ?: return null
-        val lineDuration = lineMatch.groupValues[2].toLongOrNull() ?: 0L
+        val lineStart = lineMatch.groupValues[1].toLongOrNull() ?: 0L
+        val lineDuration = lineMatch.groupValues[2].toLongOrNull()?.coerceAtLeast(0L) ?: 0L
         val body = lineMatch.groupValues[3]
-        val rawWords = yrcWordRegex
+        val words = yrcWordRegex
             .findAll(body)
             .mapNotNull { match ->
-                val rawStart = match.groupValues[1].toLongOrNull() ?: return@mapNotNull null
+                val rawStart = match.groupValues[1].toLongOrNull() ?: 0L
                 val duration = match.groupValues[2].toLongOrNull()?.coerceAtLeast(0L) ?: 0L
                 val text = match.groupValues[3]
                 if (text.isEmpty()) return@mapNotNull null
@@ -111,23 +231,16 @@ object LyricParser {
             }
             .toList()
 
-        if (rawWords.isEmpty()) return null
+        if (words.isEmpty()) return null
 
-        val words = rawWords.mapIndexed { index, word ->
-            val nextStart = rawWords.getOrNull(index + 1)?.startTimeMs
-            val fallbackEnd = nextStart ?: (lineStart + lineDuration)
-            val end = when {
-                word.endTimeMs > word.startTimeMs -> word.endTimeMs
-                fallbackEnd > word.startTimeMs -> fallbackEnd
-                else -> word.startTimeMs
-            }
-            word.copy(endTimeMs = end)
-        }
-        val lineEnd = maxOf(lineStart + lineDuration, words.maxOf { it.endTimeMs })
         return WordLine(
             startTimeMs = lineStart,
-            endTimeMs = lineEnd.coerceAtLeast(lineStart),
+            endTimeMs = maxOf(lineStart + lineDuration, words.maxOf { it.endTimeMs }),
             words = words,
+            translatedText = "",
+            romanText = "",
+            isBackground = false,
+            isDuet = false,
         )
     }
 
@@ -139,11 +252,18 @@ object LyricParser {
         }
     }
 
-    private fun parseTimeString(timeString: String): Long {
+    private fun parseLrcTime(timeString: String): Long? {
         val parts = timeString.split(":")
-        val minutes = parts[0].toInt()
-        val seconds = parts[1].toFloat()
-        return ((minutes * 60 + seconds) * 1000).toLong()
+        var multiplierSeconds = 1.0
+        var totalSeconds = 0.0
+        for (part in parts.asReversed()) {
+            val value = part.toDoubleOrNull() ?: return null
+            totalSeconds += value * multiplierSeconds
+            multiplierSeconds *= 60.0
+        }
+        val milliseconds = totalSeconds * 1_000.0
+        if (!milliseconds.isFinite()) return null
+        return milliseconds.roundToLong()
     }
 
     internal fun formatLrcTimestamp(timeMs: Long): String {
@@ -151,11 +271,33 @@ object LyricParser {
         val totalSeconds = safe / 1000L
         val minutes = totalSeconds / 60L
         val seconds = totalSeconds % 60L
-        val centiseconds = safe % 1000L / 10L
-        return "[${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}]"
+        val milliseconds = safe % 1000L
+        return "[${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${
+            milliseconds.toString().padStart(3, '0')
+        }]"
     }
 
     fun isLyricContainsChinese(lyric: String): Boolean {
         return chinesePattern.containsMatchIn(lyric)
+    }
+
+    private fun String.trimEcmaScriptWhitespace(): String =
+        trim { character -> character.isEcmaScriptWhitespace() }
+
+    private fun Char.isEcmaScriptWhitespace(): Boolean = when (code) {
+        in 0x0009..0x000D,
+        0x0020,
+        0x00A0,
+        0x1680,
+        in 0x2000..0x200A,
+        0x2028,
+        0x2029,
+        0x202F,
+        0x205F,
+        0x3000,
+        0xFEFF,
+        -> true
+
+        else -> false
     }
 }

@@ -1,6 +1,5 @@
 package com.leejlredstar.redefinencm.kmp.player
 
-import com.leejlredstar.redefinencm.kmp.lyric.desktopEmbeddedWebViewSupported
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -112,12 +111,4 @@ class JvmAudioSupportTest {
         assertEquals("last", afterEnd.currentItem)
     }
 
-    @Test
-    fun embeddedLyricWebViewAdvertisesOnlyItsActualNativeTarget() {
-        assertTrue(desktopEmbeddedWebViewSupported("Windows 11", "amd64"))
-        assertTrue(desktopEmbeddedWebViewSupported("Windows 11", "x86_64"))
-        assertFalse(desktopEmbeddedWebViewSupported("Windows 11", "aarch64"))
-        assertFalse(desktopEmbeddedWebViewSupported("Linux", "amd64"))
-        assertFalse(desktopEmbeddedWebViewSupported("Mac OS X", "x86_64"))
-    }
 }

@@ -88,14 +88,9 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import com.leejlredstar.redefinencm.kmp.lyric.WebViewLyricScreen
-import com.leejlredstar.redefinencm.kmp.lyric.supportsDynamicNowPlayingCover
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
-import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayPlacement
-import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayWindow
 import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackSeekBar
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
 import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
@@ -109,6 +104,7 @@ import com.leejlredstar.redefinencm.kmp.ui.screen.PlaylistDetailScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.SettingsScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.SongRecognitionScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.UserPlaylistScreen
+import com.leejlredstar.redefinencm.kmp.ui.amll.NativeAmllScreen
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
@@ -308,16 +304,10 @@ private fun AppContent(
 
             // 启动更新检查提示（原版 SplashActivity Toast）
             val snackbarHostState = remember { SnackbarHostState() }
-            var desktopSnackbarVisible by remember { mutableStateOf(false) }
             val updateMessage by mainViewModel.updateMessage.collectAsState()
             LaunchedEffect(updateMessage) {
                 val message = updateMessage ?: return@LaunchedEffect
-                desktopSnackbarVisible = true
-                try {
-                    snackbarHostState.showSnackbar(message)
-                } finally {
-                    desktopSnackbarVisible = false
-                }
+                snackbarHostState.showSnackbar(message)
                 // 若新的消息取消了本协程，执行不到这里，不会误消费新值。
                 mainViewModel.consumeUpdateMessage()
             }
@@ -333,8 +323,6 @@ private fun AppContent(
 
             Box(Modifier.fillMaxSize()) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
-                    val appContentWidth = maxWidth
-                    val appContentHeight = maxHeight
                     val desktopMode = desktopLayoutMode(maxWidth, maxHeight)
                     val desktopCompact = platform.isDesktop && desktopMode == DesktopLayoutMode.Compact
                     val showDesktopRail = platform.isDesktop && !desktopCompact
@@ -357,7 +345,7 @@ private fun AppContent(
                     Scaffold(
                         contentWindowInsets = WindowInsets(0, 0, 0, 0),
                         snackbarHost = {
-                            if (!platform.isDesktop) SnackbarHost(snackbarHostState)
+                            SnackbarHost(snackbarHostState)
                         },
                         floatingActionButtonPosition = FabPosition.End,
                         bottomBar = {
@@ -434,18 +422,6 @@ private fun AppContent(
                                     accentPalette = chromePalette,
                                     player = player,
                                     showFullPlayer = showDesktopFullPlayer,
-                                    nativeOverlaySize = if (
-                                        supportsDynamicNowPlayingCover &&
-                                        rootDest is RootDest.Pushed &&
-                                        rootDest.dest is PushedDest.FullLyric
-                                    ) {
-                                        DpSize(
-                                            width = appContentWidth.coerceAtMost(360.dp),
-                                            height = appContentHeight,
-                                        )
-                                    } else {
-                                        null
-                                    },
                                     onSelectTab = {
                                         pushedStack.clear()
                                         currentTab = it
@@ -488,7 +464,6 @@ private fun AppContent(
                                         pageTransition(
                                             initial = initialState,
                                             target = targetState,
-                                            disableFullLyricMotion = platform.isDesktop,
                                         )
                                     },
                                     modifier = Modifier.weight(1f).fillMaxSize(),
@@ -497,7 +472,7 @@ private fun AppContent(
                                     when (target) {
                                         is RootDest.Pushed -> when (val dest = target.dest) {
                                             is PushedDest.Login -> LoginScreen(onBack = ::back)
-                                            is PushedDest.FullLyric -> WebViewLyricScreen(onBack = ::back)
+                                            is PushedDest.FullLyric -> NativeAmllScreen(onBack = ::back)
                                             is PushedDest.Downloads -> DownloadManagementScreen(
                                                 scaffoldPadding = innerPadding,
                                                 onBack = if (platform.isDesktop) ::back else null,
@@ -532,25 +507,6 @@ private fun AppContent(
                         }
                     }
 
-                    if (platform.isDesktop && desktopSnackbarVisible) {
-                        DesktopOverlayWindow(
-                            visible = true,
-                            title = "RedefineNCM 通知",
-                            width = (appContentWidth - 32.dp).coerceAtLeast(0.dp).coerceAtMost(560.dp),
-                            height = appContentHeight.coerceAtMost(96.dp),
-                            placement = DesktopOverlayPlacement.BottomCenter,
-                            focusable = false,
-                            onCloseRequest = {},
-                        ) {
-                            Surface(
-                                modifier = Modifier.fillMaxSize(),
-                                color = MaterialTheme.colorScheme.surface,
-                            ) {
-                                SnackbarHost(snackbarHostState)
-                            }
-                        }
-                    }
-
                 }
             }
 }
@@ -564,15 +520,12 @@ private fun DesktopExpandableSidebar(
     accentPalette: ContentAccentPalette,
     player: PlatformPlayer,
     showFullPlayer: Boolean,
-    nativeOverlaySize: DpSize?,
     onSelectTab: (TabDest) -> Unit,
     onOpenDownloads: () -> Unit,
     onChromeAccent: (Color) -> Unit,
     onOpenNowPlaying: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    val collapsedDisplayState = rememberWideNavigationRailState()
-    val useNativeOverlay = nativeOverlaySize != null
     val railExpanded = state.targetValue == WideNavigationRailValue.Expanded
     val expansionSettled = railExpanded &&
         !state.isAnimating &&
@@ -595,22 +548,10 @@ private fun DesktopExpandableSidebar(
             expansionSettled -> showExpandedPlayerContent = true
         }
     }
-    LaunchedEffect(useNativeOverlay) {
-        if (!useNativeOverlay && state.targetValue == WideNavigationRailValue.Expanded) {
-            state.snapTo(WideNavigationRailValue.Collapsed)
-        }
-    }
 
     fun collapseAfter(action: () -> Unit) {
-        if (useNativeOverlay) {
-            scope.launch {
-                state.snapTo(WideNavigationRailValue.Collapsed)
-                action()
-            }
-        } else {
-            action()
-            scope.launch { state.collapse() }
-        }
+        action()
+        scope.launch { state.collapse() }
     }
     fun toggleRail() {
         scope.launch {
@@ -619,9 +560,7 @@ private fun DesktopExpandableSidebar(
             } else {
                 WideNavigationRailValue.Expanded
             }
-            if (useNativeOverlay) {
-                state.snapTo(target)
-            } else if (target == WideNavigationRailValue.Expanded) {
+            if (target == WideNavigationRailValue.Expanded) {
                 state.expand()
             } else {
                 state.collapse()
@@ -629,88 +568,26 @@ private fun DesktopExpandableSidebar(
         }
     }
 
-    val overlaySize = nativeOverlaySize
-    if (overlaySize != null) {
-        WideNavigationRail(
-            state = collapsedDisplayState,
-            colors = railColors,
-        ) {
-            DesktopSidebarContent(
-                railExpanded = false,
-                expandedContentVisible = false,
-                tabs = tabs,
-                selectedTab = selectedTab,
-                downloadsSelected = downloadsSelected,
-                accentPalette = accentPalette,
-                player = player,
-                showFullPlayer = false,
-                showExpandedPlayerContent = false,
-                onToggle = ::toggleRail,
-                onSelectTab = { collapseAfter { onSelectTab(it) } },
-                onOpenDownloads = { collapseAfter(onOpenDownloads) },
-                onChromeAccent = onChromeAccent,
-                onOpenNowPlaying = { collapseAfter(onOpenNowPlaying) },
-            )
-        }
-
-        DesktopOverlayWindow(
-            visible = modalExpansionActive,
-            title = "RedefineNCM 导航",
-            width = overlaySize.width,
-            height = overlaySize.height,
-            placement = DesktopOverlayPlacement.TopStart,
-            topOffset = 32.dp,
-            focusable = true,
-            modal = true,
-            onCloseRequest = {
-                scope.launch { state.snapTo(WideNavigationRailValue.Collapsed) }
-            },
-        ) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = accentPalette.quietContainer,
-                contentColor = accentPalette.onQuietContainer,
-            ) {
-                DesktopSidebarContent(
-                    railExpanded = true,
-                    expandedContentVisible = true,
-                    tabs = tabs,
-                    selectedTab = selectedTab,
-                    downloadsSelected = downloadsSelected,
-                    accentPalette = accentPalette,
-                    player = player,
-                    showFullPlayer = showFullPlayer,
-                    showExpandedPlayerContent = showExpandedPlayerContent,
-                    onToggle = ::toggleRail,
-                    onSelectTab = { collapseAfter { onSelectTab(it) } },
-                    onOpenDownloads = { collapseAfter(onOpenDownloads) },
-                    onChromeAccent = onChromeAccent,
-                    onOpenNowPlaying = { collapseAfter(onOpenNowPlaying) },
-                )
-            }
-        }
-    } else {
-        ModalWideNavigationRail(
-            state = state,
-            colors = railColors,
-        ) {
-            DesktopSidebarContent(
-                railExpanded = railExpanded,
-                expandedContentVisible = modalExpansionActive,
-                tabs = tabs,
-                selectedTab = selectedTab,
-                downloadsSelected = downloadsSelected,
-                accentPalette = accentPalette,
-                player = player,
-                showFullPlayer = showFullPlayer,
-                showExpandedPlayerContent = showExpandedPlayerContent,
-                onToggle = ::toggleRail,
-                onSelectTab = { collapseAfter { onSelectTab(it) } },
-                onOpenDownloads = { collapseAfter(onOpenDownloads) },
-                onChromeAccent = onChromeAccent,
-                onOpenNowPlaying = { collapseAfter(onOpenNowPlaying) },
-            )
-        }
+    ModalWideNavigationRail(
+        state = state,
+        colors = railColors,
+    ) {
+        DesktopSidebarContent(
+            railExpanded = railExpanded,
+            expandedContentVisible = modalExpansionActive,
+            tabs = tabs,
+            selectedTab = selectedTab,
+            downloadsSelected = downloadsSelected,
+            accentPalette = accentPalette,
+            player = player,
+            showFullPlayer = showFullPlayer,
+            showExpandedPlayerContent = showExpandedPlayerContent,
+            onToggle = ::toggleRail,
+            onSelectTab = { collapseAfter { onSelectTab(it) } },
+            onOpenDownloads = { collapseAfter(onOpenDownloads) },
+            onChromeAccent = onChromeAccent,
+            onOpenNowPlaying = { collapseAfter(onOpenNowPlaying) },
+        )
     }
 }
 
@@ -1170,13 +1047,8 @@ private fun desktopSecondaryButtonColors(accentPalette: ContentAccentPalette) =
 private fun pageTransition(
     initial: RootDest,
     target: RootDest,
-    disableFullLyricMotion: Boolean,
 ): ContentTransform =
     when {
-        // Desktop AMLL is a native child HWND hosted by SwingPanel. It cannot follow Compose
-        // transforms or clipping, so animating it produces a half-height native surface.
-        disableFullLyricMotion && isFullLyricSheetTransition(initial, target) ->
-            EnterTransition.None togetherWith ExitTransition.None
         isFullLyricSheetTransition(initial, target) -> sheetTransition(showingSheet = isFullLyric(target))
         initial is RootDest.Tab && target is RootDest.Tab -> {
             val forward = tabIndex(target.tab) > tabIndex(initial.tab)
