@@ -383,6 +383,88 @@ class LyricResolverTest {
         )
     }
 
+    @Test
+    fun memoryCacheIsScopedByModeLocalPreferenceAndDuration() = runTest {
+        val resolver = LyricResolver(
+            listOf(
+                object : LyricSourceProvider {
+                    override val source = LyricSource.NCM_BACKEND
+                    override fun load(query: LyricQuery) =
+                        flowOf(found(LyricSource.NCM_BACKEND))
+                },
+            ),
+        )
+        val query = LyricQuery(songId = 42, durationMs = 10_000)
+
+        resolver.resolveLatest(query, LyricSourceMode.BACKEND_ONLY)
+
+        assertIs<LyricResolution.Found>(
+            resolver.cachedResolution(query, LyricSourceMode.BACKEND_ONLY),
+        )
+        assertNull(
+            resolver.cachedResolution(query, LyricSourceMode.TTML_PREFERRED),
+        )
+        assertNull(
+            resolver.cachedResolution(
+                query,
+                LyricSourceMode.BACKEND_ONLY,
+                preferLocal = true,
+            ),
+        )
+        assertNull(
+            resolver.cachedResolution(
+                query.copy(durationMs = 20_000),
+                LyricSourceMode.BACKEND_ONLY,
+            ),
+        )
+    }
+
+    @Test
+    fun cachedContentSurvivesARefreshFailureWithoutEmittingAnError() = runTest {
+        var firstLoad = true
+        val resolver = LyricResolver(
+            listOf(
+                object : LyricSourceProvider {
+                    override val source = LyricSource.NCM_BACKEND
+                    override fun load(query: LyricQuery): Flow<LyricProviderResult> =
+                        if (firstLoad) {
+                            firstLoad = false
+                            flowOf(found(LyricSource.NCM_BACKEND))
+                        } else {
+                            flowOf(LyricProviderResult.Unavailable("offline"))
+                        }
+                },
+            ),
+        )
+        val query = LyricQuery(songId = 7, durationMs = 5_000)
+        resolver.resolveLatest(query, LyricSourceMode.BACKEND_ONLY)
+
+        val refreshed = mutableListOf<LyricResolution>()
+        resolver.resolve(query, LyricSourceMode.BACKEND_ONLY).collect(refreshed::add)
+
+        assertEquals(1, refreshed.size)
+        assertIs<LyricResolution.Found>(refreshed.single())
+    }
+
+    @Test
+    fun emptyResultIsNotKeptInMemory() = runTest {
+        val resolver = LyricResolver(
+            listOf(
+                object : LyricSourceProvider {
+                    override val source = LyricSource.NCM_BACKEND
+                    override fun load(query: LyricQuery) =
+                        flowOf(LyricProviderResult.NoMatch)
+                },
+            ),
+        )
+        val query = LyricQuery(songId = 9)
+
+        assertIs<LyricResolution.Empty>(
+            resolver.resolveLatest(query, LyricSourceMode.BACKEND_ONLY),
+        )
+        assertNull(resolver.cachedResolution(query, LyricSourceMode.BACKEND_ONLY))
+    }
+
     private fun fakeProvider(
         source: LyricSource,
         calls: MutableList<LyricSource>,

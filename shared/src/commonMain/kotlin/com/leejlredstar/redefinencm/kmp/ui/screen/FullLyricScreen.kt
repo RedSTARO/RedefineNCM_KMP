@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.lyric.LyricCapabilityLevel
+import com.leejlredstar.redefinencm.kmp.player.PlayerStatusRestoreState
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
@@ -95,6 +96,7 @@ fun FullLyricScreen(
     val showRomanLyric by viewModel.showRomanLyric.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
+    val playerStatusRestoreState by viewModel.playerStatusRestoreState.collectAsState()
     val songWikiUiState by viewModel.songWikiUiState.collectAsState()
     var showSongWikiDetails by remember { mutableStateOf(false) }
 
@@ -240,6 +242,14 @@ fun FullLyricScreen(
             item { Spacer(Modifier.height(lyricEdgeSpacer)) }
 
             when {
+                playerStatusRestoreState is PlayerStatusRestoreState.Loading &&
+                    metadata == null -> item(key = "player-restoring") {
+                    ExpressiveLoadingState(
+                        label = "正在恢复播放…",
+                        accentColor = accentPalette.accent,
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                    )
+                }
                 metadata == null -> item(key = "no-media") {
                     ExpressiveStatePanel(
                         title = "还没有播放音乐",
