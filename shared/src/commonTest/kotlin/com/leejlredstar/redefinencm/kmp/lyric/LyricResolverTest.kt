@@ -12,6 +12,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 
 class LyricResolverTest {
     @Test
@@ -101,6 +102,35 @@ class LyricResolverTest {
         assertEquals(
             LyricSource.NCM_BACKEND,
             assertIs<LyricResolution.Found>(result).document.source,
+        )
+    }
+
+    @Test
+    fun localUntimedTextStillChecksTheSameSourceForTimedLyrics() = runTest {
+        val providerCalls = mutableListOf<LyricSource>()
+        val resolver = LyricResolver(
+            providers = listOf(
+                fakeProvider(
+                    LyricSource.NCM_BACKEND,
+                    providerCalls,
+                    found(LyricSource.NCM_BACKEND),
+                ),
+            ),
+            localLyricLoader = { _, source ->
+                untimed(source).takeIf { source == LyricSource.NCM_BACKEND }
+            },
+        )
+
+        val result = resolver.resolveLatest(
+            LyricQuery(songId = 1),
+            LyricSourceMode.BACKEND_ONLY,
+            preferLocal = true,
+        )
+
+        assertEquals(listOf(LyricSource.NCM_BACKEND), providerCalls)
+        assertEquals(
+            LyricCapabilityLevel.LINE_SYNCED,
+            assertIs<LyricResolution.Found>(result).document.capabilityLevel,
         )
     }
 
@@ -241,6 +271,118 @@ class LyricResolverTest {
         assertIs<LyricProviderResult.NoMatch>(results.single())
     }
 
+    @Test
+    fun backendCapabilityUsesTheRepresentationThatActuallyParsed() {
+        val query = LyricQuery(songId = 1, durationMs = 5_000)
+        val validYrc = backendLyricDocument(
+            query = query,
+            lrcText = "[00:00.00]逐字歌词",
+            yrcText = "[0,1000](0,500,0)逐字",
+            translatedText = "",
+            romanText = "",
+        )
+        val invalidYrcWithLineFallback = backendLyricDocument(
+            query = query,
+            lrcText = "[00:00.00]逐行歌词",
+            yrcText = "invalid yrc payload",
+            translatedText = "",
+            romanText = "",
+        )
+        val lineOnly = backendLyricDocument(
+            query = query,
+            lrcText = "[00:00.00]普通逐行",
+            yrcText = "",
+            translatedText = "",
+            romanText = "",
+        )
+
+        assertEquals(LyricCapabilityLevel.NCM_YRC, validYrc?.capabilityLevel)
+        assertEquals(LyricCapabilityLevel.LINE_SYNCED, invalidYrcWithLineFallback?.capabilityLevel)
+        assertEquals("invalid yrc payload", invalidYrcWithLineFallback?.rawWordLyric)
+        assertEquals(LyricCapabilityLevel.LINE_SYNCED, lineOnly?.capabilityLevel)
+    }
+
+    @Test
+    fun backendPlainTextIsUntimedButSupplementOnlyIsNotPrimaryLyrics() {
+        val query = LyricQuery(songId = 1)
+        val plain = backendLyricDocument(
+            query = query,
+            lrcText = "[ar:artist]\n第一句\n[broken]第二句",
+            yrcText = "",
+            translatedText = "",
+            romanText = "",
+        )
+        val supplementOnly = backendLyricDocument(
+            query = query,
+            lrcText = "",
+            yrcText = "",
+            translatedText = "[00:00.00]translation",
+            romanText = "[00:00.00]romanization",
+        )
+
+        assertEquals(LyricCapabilityLevel.UNSYNCED, plain?.capabilityLevel)
+        assertEquals(listOf("第一句", "第二句"), plain?.untimedLines)
+        assertNull(supplementOnly)
+    }
+
+    @Test
+    fun untimedCandidateDoesNotBlockALaterTimedSource() = runTest {
+        val calls = mutableListOf<LyricSource>()
+        val resolver = LyricResolver(
+            listOf(
+                fakeProvider(
+                    LyricSource.NCM_BACKEND,
+                    calls,
+                    LyricProviderResult.Untimed(untimed(LyricSource.NCM_BACKEND)),
+                ),
+                fakeProvider(
+                    LyricSource.AMLL_TTML,
+                    calls,
+                    found(LyricSource.AMLL_TTML),
+                ),
+            ),
+        )
+
+        val result = resolver.resolveLatest(
+            LyricQuery(songId = 1),
+            LyricSourceMode.BACKEND_PREFERRED,
+        )
+
+        assertEquals(
+            listOf(LyricSource.NCM_BACKEND, LyricSource.AMLL_TTML),
+            calls,
+        )
+        assertEquals(
+            LyricSource.AMLL_TTML,
+            assertIs<LyricResolution.Found>(result).document.source,
+        )
+    }
+
+    @Test
+    fun resolverReturnsUntimedOnlyAfterAllowedSourcesAreExhausted() = runTest {
+        val calls = mutableListOf<LyricSource>()
+        val resolver = LyricResolver(
+            listOf(
+                fakeProvider(
+                    LyricSource.NCM_BACKEND,
+                    calls,
+                    LyricProviderResult.Untimed(untimed(LyricSource.NCM_BACKEND)),
+                ),
+            ),
+        )
+
+        val result = resolver.resolveLatest(
+            LyricQuery(songId = 1),
+            LyricSourceMode.BACKEND_ONLY,
+        )
+
+        assertEquals(listOf(LyricSource.NCM_BACKEND), calls)
+        assertEquals(
+            LyricCapabilityLevel.UNSYNCED,
+            assertIs<LyricResolution.Untimed>(result).document.capabilityLevel,
+        )
+    }
+
     private fun fakeProvider(
         source: LyricSource,
         calls: MutableList<LyricSource>,
@@ -257,6 +399,11 @@ class LyricResolverTest {
         LyricProviderResult.Found(
             LyricDocument(
                 source = source,
+                capabilityLevel = if (source == LyricSource.AMLL_TTML) {
+                    LyricCapabilityLevel.TTML_FULL
+                } else {
+                    LyricCapabilityLevel.LINE_SYNCED
+                },
                 lines = listOf(
                     LyricParser.WordLine(
                         startTimeMs = 0,
@@ -266,4 +413,12 @@ class LyricResolverTest {
                 ),
             ),
         )
+
+    private fun untimed(source: LyricSource): LyricDocument = LyricDocument(
+        source = source,
+        capabilityLevel = LyricCapabilityLevel.UNSYNCED,
+        lines = emptyList(),
+        untimedLines = listOf("plain line"),
+        rawLineLyric = "plain line",
+    )
 }

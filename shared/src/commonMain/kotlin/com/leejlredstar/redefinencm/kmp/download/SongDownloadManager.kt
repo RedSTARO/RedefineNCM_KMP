@@ -1069,6 +1069,14 @@ class SongDownloadManager(
                         fileName = snapshot.lyricFileName,
                     )
                 }
+                is LyricResolution.Untimed -> {
+                    val snapshot = localMediaAssets.saveLyrics(task.id, resolution.document)
+                    LocalLyricAssetResult(
+                        status = DownloadLyricStatus.Saved,
+                        format = snapshot.lyricFormat,
+                        fileName = snapshot.lyricFileName,
+                    )
+                }
                 LyricResolution.Empty -> LocalLyricAssetResult(DownloadLyricStatus.NoLyric)
                 is LyricResolution.Error -> LocalLyricAssetResult(
                     status = DownloadLyricStatus.Failed,

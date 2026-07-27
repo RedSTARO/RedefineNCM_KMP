@@ -18,7 +18,10 @@ class AmllDesktopHostTest {
                 1_500L to "第一句",
                 3_000L to "第二句",
             ),
-            lyricUiState = LyricUiState.Content(lineCount = 2),
+            lyricUiState = LyricUiState.Content(
+                lineCount = 2,
+                capabilityLevel = LyricCapabilityLevel.LINE_SYNCED,
+            ),
         )
 
         assertTrue(payload.contains("第一句"))

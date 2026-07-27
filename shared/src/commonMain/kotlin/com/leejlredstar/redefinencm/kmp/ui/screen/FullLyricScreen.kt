@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.leejlredstar.redefinencm.kmp.lyric.LyricCapabilityLevel
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
@@ -270,9 +271,15 @@ fun FullLyricScreen(
                     )
                 }
                 lyricUiState is LyricUiState.Empty -> item(key = "lyric-empty") {
+                    val emptyState = lyricUiState as LyricUiState.Empty
+                    val isUntimed = emptyState.capabilityLevel == LyricCapabilityLevel.UNSYNCED
                     ExpressiveStatePanel(
-                        title = "暂无歌词",
-                        message = "这首歌曲暂时没有可用歌词。",
+                        title = if (isUntimed) "歌词无时间戳" else "暂无歌词",
+                        message = if (isUntimed) {
+                            "检测到歌词文本，但没有可用于同步的时间戳。"
+                        } else {
+                            "这首歌曲暂时没有可用歌词。"
+                        },
                         icon = AppIcons.GraphicEq,
                         accentPalette = accentPalette,
                         modifier = Modifier.padding(horizontal = 24.dp),

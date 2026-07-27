@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.download
 
 import com.leejlredstar.redefinencm.kmp.lyric.LyricDocument
+import com.leejlredstar.redefinencm.kmp.lyric.LyricCapabilityLevel
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -11,6 +12,7 @@ class LocalMediaAssetsTest {
         val raw = """<?xml version="1.0"?><tt><body><p begin="0s">原文</p></body></tt>"""
         val files = LyricDocument(
             source = LyricSource.AMLL_TTML,
+            capabilityLevel = LyricCapabilityLevel.TTML_FULL,
             lines = emptyList(),
             rawTtml = raw,
             rawLineLyric = "[00:00.00]derived",
@@ -30,6 +32,7 @@ class LocalMediaAssetsTest {
 
         val files = LyricDocument(
             source = LyricSource.NCM_BACKEND,
+            capabilityLevel = LyricCapabilityLevel.NCM_YRC,
             lines = emptyList(),
             rawWordLyric = yrc,
             rawLineLyric = lrc,
@@ -54,6 +57,7 @@ class LocalMediaAssetsTest {
 
         val files = LyricDocument(
             source = LyricSource.NCM_BACKEND,
+            capabilityLevel = LyricCapabilityLevel.LINE_SYNCED,
             lines = emptyList(),
             rawLineLyric = lrc,
         ).toOriginalLyricSidecars(9)

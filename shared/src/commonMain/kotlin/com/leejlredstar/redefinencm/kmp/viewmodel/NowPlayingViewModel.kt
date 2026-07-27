@@ -4,6 +4,7 @@ import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.SongWikiSummary
 import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusic
 import com.leejlredstar.redefinencm.kmp.download.LocalMediaAssets
+import com.leejlredstar.redefinencm.kmp.lyric.LyricCapabilityLevel
 import com.leejlredstar.redefinencm.kmp.lyric.LyricQuery
 import com.leejlredstar.redefinencm.kmp.lyric.LyricResolution
 import com.leejlredstar.redefinencm.kmp.lyric.LyricResolver
@@ -25,10 +26,25 @@ import kotlinx.coroutines.flow.*
 sealed interface LyricUiState {
     data object Idle : LyricUiState
     data object Loading : LyricUiState
-    data object Empty : LyricUiState
-    data class Content(val lineCount: Int) : LyricUiState
+    data class Empty(
+        val capabilityLevel: LyricCapabilityLevel? = null,
+    ) : LyricUiState
+    data class Content(
+        val lineCount: Int,
+        val capabilityLevel: LyricCapabilityLevel,
+    ) : LyricUiState
     data class Error(val message: String) : LyricUiState
 }
+
+val LyricUiState.lyricCapabilityLevel: LyricCapabilityLevel?
+    get() = when (this) {
+        is LyricUiState.Content -> capabilityLevel
+        is LyricUiState.Empty -> capabilityLevel
+        is LyricUiState.Idle,
+        is LyricUiState.Loading,
+        is LyricUiState.Error,
+        -> null
+    }
 
 sealed interface SongWikiUiState {
     data object Idle : SongWikiUiState
@@ -484,14 +500,32 @@ class NowPlayingViewModel(
                                     rawLyric.value = document.rawLineLyric
                                     activeLyricSource.value = document.source
                                     lyricMap.value = displayLyricMap
-                                    lyricUiState.value = LyricUiState.Content(displayLyricMap.size)
+                                    lyricUiState.value = LyricUiState.Content(
+                                        lineCount = displayLyricMap.size,
+                                        capabilityLevel = document.capabilityLevel,
+                                    )
                                 }
+                            }
+                        }
+                        is LyricResolution.Untimed -> {
+                            val document = resolution.document
+                            applyLyricsForMedia(mediaId, requestGeneration) {
+                                clearLyricPayload()
+                                lyricLoadError.value = null
+                                rawLyric.value = document.rawLineLyric
+                                rawWordLyric.value = document.rawWordLyric
+                                rawTranslatedLyric.value = document.rawTranslatedLyric
+                                rawRomanLyric.value = document.rawRomanLyric
+                                activeLyricSource.value = document.source
+                                lyricUiState.value = LyricUiState.Empty(
+                                    capabilityLevel = LyricCapabilityLevel.UNSYNCED,
+                                )
                             }
                         }
                         LyricResolution.Empty -> applyLyricsForMedia(mediaId, requestGeneration) {
                             clearLyricPayload()
                             lyricLoadError.value = null
-                            lyricUiState.value = LyricUiState.Empty
+                            lyricUiState.value = LyricUiState.Empty()
                         }
                         is LyricResolution.Error ->
                             applyLyricsForMedia(mediaId, requestGeneration) {

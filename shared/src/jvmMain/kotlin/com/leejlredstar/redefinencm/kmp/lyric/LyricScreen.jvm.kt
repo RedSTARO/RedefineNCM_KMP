@@ -297,6 +297,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             session.eval("AmllBridge.loadLyrics('');")
             return@LaunchedEffect
         }
+        val contentState = lyricUiState as LyricUiState.Content
         val lyricOptions = buildLyricOptionsJs(
             translatedLyric = rawTranslatedLyric,
             romanLyric = rawRomanLyric,
@@ -308,7 +309,10 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             session.eval(
                 "AmllBridge.loadTtmlLyrics('${rawTtmlLyric.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}', $lyricOptions, '${lyricForWeb.escapeJsSingleQuoted()}'); AmllBridge.setTime($currentPosition);",
             )
-        } else if (rawWordLyric.isNotBlank()) {
+        } else if (
+            contentState.capabilityLevel == LyricCapabilityLevel.NCM_YRC &&
+            rawWordLyric.isNotBlank()
+        ) {
             println("AMLL[wv2] feeding word lyrics media=$mediaId, len=${rawWordLyric.length}")
             session.eval(
                 "AmllBridge.loadWordLyrics('${rawWordLyric.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}', $lyricOptions); AmllBridge.setTime($currentPosition);",
@@ -422,7 +426,10 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         sheetVisible = controlsSheetVisible,
     )
     DesktopLyricControlsWindow(
-        visible = controlsVisible && lyricOverlayState is LyricUiState.Content,
+        visible = desktopLyricControlsVisible(
+            requested = controlsVisible,
+            state = lyricOverlayState,
+        ),
         revealRequest = controlsRevealRequest,
         width = controlsWindowSize.width,
         height = controlsWindowSize.height,
@@ -435,6 +442,18 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             if (expanded) controlsWindowExpanded = true
         },
     )
+}
+
+internal fun desktopLyricControlsVisible(
+    requested: Boolean,
+    state: LyricUiState,
+): Boolean = requested && when (state) {
+    is LyricUiState.Content -> true
+    is LyricUiState.Empty -> state.capabilityLevel == LyricCapabilityLevel.UNSYNCED
+    is LyricUiState.Idle,
+    is LyricUiState.Loading,
+    is LyricUiState.Error,
+    -> false
 }
 
 internal fun desktopLyricControlsWindowSize(
