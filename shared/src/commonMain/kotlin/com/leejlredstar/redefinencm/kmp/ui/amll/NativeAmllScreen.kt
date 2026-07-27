@@ -69,6 +69,7 @@ import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsSheet
 import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.SongWikiUiState
+import com.leejlredstar.redefinencm.kmp.player.PlayerStatusRestoreState
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
 
@@ -101,6 +102,7 @@ fun NativeAmllScreen(
     val isPlaying by viewModel.isPlaying.collectAsState()
     val playerState by viewModel.playerState.collectAsState()
     val metadata by viewModel.currentMedia.collectAsState()
+    val playerStatusRestoreState by viewModel.playerStatusRestoreState.collectAsState()
     val dynamicCoverState by viewModel.dynamicCoverUiState.collectAsState()
     val localArtworkActive by viewModel.localArtworkActive.collectAsState()
     val remoteArtworkUri by viewModel.remoteArtworkUri.collectAsState()
@@ -261,6 +263,8 @@ fun NativeAmllScreen(
         } else {
             LyricStateOverlay(
                 state = lyricUiState,
+                hasMedia = metadata != null,
+                isPlayerRestoring = playerStatusRestoreState is PlayerStatusRestoreState.Loading,
                 onRetry = viewModel::retryLyrics,
             )
         }

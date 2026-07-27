@@ -571,12 +571,12 @@ class NowPlayingViewModel(
         }
         prepareLyricsForMedia(mediaId, initialCachedResolution)
         // 网络必须离开 Main：桌面端 Main=Swing EDT，AMLL 软件渲染期间 EDT 饱和会把
-        // 运行其上�?Ktor 连接协程饿到超时（实�?/lyric 连环 ConnectTimeout 的根因）
+        // 运行其上Ktor 连接协程避免超时（特别是 lyric 连环 ConnectTimeout 的根因）
         lyricFetchJob = scope.launch(Dispatchers.Default) {
             val mode = lyricSourceModeGate.awaitMode()
             if (songId == null) {
                 applyLyricsForMedia(mediaId, requestGeneration) {
-                    applyLyricError("歌曲标识无效，无法加载歌�?)
+                    applyLyricError("Current media id is invalid")
                 }
                 return@launch
             }
@@ -602,12 +602,11 @@ class NowPlayingViewModel(
                 throw cancelled
             } catch (_: Exception) {
                 applyLyricsForMedia(mediaId, requestGeneration) {
-                    applyLyricError("歌词请求失败")
+                    applyLyricError("Failed to request lyrics")
                 }
             }
         }
     }
-
     private fun beginLyricRequest(): Long {
         lyricFetchJob?.cancel()
         return lyricRequestGeneration.updateAndGet { it + 1L }
@@ -834,7 +833,7 @@ class NowPlayingViewModel(
             songWikiRequestGeneration += 1
             songWikiUiState.value = SongWikiUiState.Error(
                 mediaId = "",
-                message = "当前没有正在播放的歌�?,
+                message = "No song is currently playing",
             )
             return
         }
@@ -850,7 +849,7 @@ class NowPlayingViewModel(
         if (id == null) {
             songWikiUiState.value = SongWikiUiState.Error(
                 mediaId = mediaId,
-                message = "歌曲标识无效，无法加载音乐百�?,
+                message = "Current song id is invalid",
             )
             return
         }
@@ -866,7 +865,7 @@ class NowPlayingViewModel(
                 songWikiUiState.value = when {
                     summary == null -> SongWikiUiState.Error(
                         mediaId = mediaId,
-                        message = "音乐百科加载失败，请检查网络后重试",
+                        message = "Failed to load song details; please try again later",
                     )
                     summary.sections.isEmpty() -> SongWikiUiState.Empty(mediaId)
                     else -> SongWikiUiState.Content(mediaId, summary)
@@ -880,13 +879,12 @@ class NowPlayingViewModel(
                 ) {
                     songWikiUiState.value = SongWikiUiState.Error(
                         mediaId = mediaId,
-                        message = failure.message ?: "音乐百科加载失败",
+                        message = failure.message ?: "Failed to load song details",
                     )
                 }
             }
         }
     }
-
     // ── Playback actions ──
 
     fun onFavClick() {
@@ -997,4 +995,5 @@ internal fun nextLyricPrefetchCandidate(snapshot: PlayerQueueSnapshot): MediaInf
     val candidate = snapshot.items.getOrNull(snapshot.currentIndex + 1) ?: return null
     return candidate.takeUnless { it.id == snapshot.currentMedia?.id }
 }
+
 

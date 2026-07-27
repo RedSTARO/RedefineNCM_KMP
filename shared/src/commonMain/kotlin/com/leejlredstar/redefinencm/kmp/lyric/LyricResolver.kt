@@ -147,7 +147,7 @@ class LyricResolver(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
-                failures += "$source 姝岃瘝璇锋眰澶辫触"
+                failures += "$source lyric request failed"
             }
             if (found) return@flow
         }
@@ -161,7 +161,7 @@ class LyricResolver(
             if (failures.isEmpty()) {
                 emit(LyricResolution.Empty)
             } else {
-                emit(LyricResolution.Error(failures.distinct().joinToString("锛?)))
+                emit(LyricResolution.Error(failures.distinct().joinToString("; ")))
             }
         }
     }
