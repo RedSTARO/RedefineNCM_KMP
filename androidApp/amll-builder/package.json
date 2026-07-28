@@ -1,0 +1,17 @@
+{
+  "name": "amll-bundle",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.js",
+    "test": "node smoke.mjs"
+  },
+  "dependencies": {
+    "@applemusic-like-lyrics/core": "0.5.2",
+    "@applemusic-like-lyrics/lyric": "1.0.2"
+  },
+  "devDependencies": {
+    "@xmldom/xmldom": "0.9.10",
+    "esbuild": "0.25.12"
+  }
+}
