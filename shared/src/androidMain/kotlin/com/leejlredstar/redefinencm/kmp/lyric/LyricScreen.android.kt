@@ -87,8 +87,6 @@ import org.koin.compose.koinInject
 import java.io.ByteArrayOutputStream
 import java.io.File
 
-actual val supportsDynamicNowPlayingCover: Boolean = true
-
 /**
  * Android actual: AMLL lyric engine in the system WebView.
  *
@@ -373,9 +371,10 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
 
     LaunchedEffect(engineReady, metadata, amllArtworkUri, dynamicCoverUrl) {
         if (!engineReady) return@LaunchedEffect
-        val mediaId = metadata?.id.orEmpty()
+        val media = metadata ?: return@LaunchedEffect
+        val mediaId = media.id
         val details = Json.encodeToString(
-            metadata.toAmllSongDetails().copy(artworkUri = amllArtworkUri),
+            media.toAmllSongDetails().copy(artworkUri = amllArtworkUri),
         )
         val dynamicCoverCommand = dynamicCoverUrl
             ?.takeIf(String::isNotBlank)
