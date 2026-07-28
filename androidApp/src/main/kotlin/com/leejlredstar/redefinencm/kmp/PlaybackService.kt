@@ -72,8 +72,9 @@ class PlaybackService : MediaSessionService() {
         } else {
             // MediaSessionService has a synchronous callback and cannot suspend a cold external
             // controller while DataStore loads. That first connection is rejected; the caller must
-            // reconnect. MainActivity waits for settings first, and UNDISPATCHED therefore creates
-            // the normal in-app session synchronously before onCreate returns.
+            // reconnect. MainActivity waits for settings and queue restoration first, and
+            // UNDISPATCHED therefore creates the normal in-app session synchronously before
+            // onCreate returns.
             null
         }
     }

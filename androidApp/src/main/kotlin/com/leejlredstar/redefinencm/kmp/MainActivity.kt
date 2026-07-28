@@ -18,6 +18,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.leejlredstar.redefinencm.kmp.download.DownloadNotificationIntents
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.notification.NowPlayingNotificationIntents
+import com.leejlredstar.redefinencm.kmp.player.PlayerStatusRestorer
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.requiresLegacyDownloadWritePermission
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
@@ -51,9 +52,12 @@ class MainActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             get<PlatformSettings>().awaitLoaded()
+            get<PlayerStatusRestorer>().awaitRestored()
 
             // 服务、播放器和 UI 都只能在 DataStore 初始快照就绪后创建；否则同步 getter
-            // 会合法地返回默认值，并把错误的音量/服务器配置固化进进程级单例。
+            // 会合法地返回默认值，并把错误的音量/服务器配置固化进进程级单例。控制器也
+            // 必须等队列恢复完成：PlaybackService 在恢复前拒绝同步 onGetSession，
+            // MediaController 的首次连接一旦被拒绝不会自动重试，原生媒体通知也不会激活。
             startService(Intent(this@MainActivity, PlaybackService::class.java))
             controllerFuture = MediaController.Builder(
                 this@MainActivity,
