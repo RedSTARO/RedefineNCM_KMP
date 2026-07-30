@@ -12,6 +12,11 @@ import java.io.FileNotFoundException
 
 internal const val DOWNLOAD_SUBDIR = "RedefineNCM"
 internal val DOWNLOAD_RELATIVE_PATH = "${Environment.DIRECTORY_DOWNLOADS}/$DOWNLOAD_SUBDIR/"
+internal const val ANDROID_LOCAL_ARTWORK_SUBDIR = "local-media-artwork"
+internal const val ANDROID_LOCAL_ARTWORK_EXTERNAL_PROVIDER_ROOT =
+    "local_media_artwork_external"
+internal const val ANDROID_LOCAL_ARTWORK_INTERNAL_PROVIDER_ROOT =
+    "local_media_artwork_internal"
 
 /**
  * Android-specific: scan the RedefineNCM download folder and return all downloaded songs.

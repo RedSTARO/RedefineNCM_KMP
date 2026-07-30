@@ -3,12 +3,16 @@ package com.leejlredstar.redefinencm.kmp.util
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.core.content.FileProvider
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.io.InputStream
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -78,37 +82,8 @@ actual object LocalMediaAssetStorage {
         return mutex.withLock {
             withContext(Dispatchers.IO) {
                 val context = KoinPlatform.getKoin().get<Context>()
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    var inserted: Uri? = null
-                    val backups = mutableListOf<AndroidMediaAssetBackup>()
-                    try {
-                        val temporaryName = temporaryMediaStoreAssetName(fileName)
-                        inserted = insertPendingMediaStoreAsset(
-                            context = context,
-                            fileName = temporaryName,
-                            mimeType = mimeType.trim(),
-                            bytes = bytes,
-                        )
-                        backupMediaStoreAssets(
-                            context = context,
-                            songId = songId,
-                            predicate = ::isLocalArtworkSidecarFileName,
-                            backups = backups,
-                        )
-                        publishMediaStoreAsset(context, inserted, fileName)
-                    } catch (failure: Throwable) {
-                        rollbackMediaStoreReplacement(
-                            context = context,
-                            inserted = listOfNotNull(inserted),
-                            backups = backups,
-                            failure = failure,
-                        )
-                        throw failure
-                    }
-                    deleteMediaStoreBackups(context, backups)
-                } else {
-                    replaceLegacyArtwork(songId, fileName, bytes)
-                }
+                replacePrivateArtwork(context, songId, fileName, bytes)
+                deleteSharedArtwork(context, songId)
                 fileName
             }
         }
@@ -119,12 +94,16 @@ actual object LocalMediaAssetStorage {
         return mutex.withLock {
             withContext(Dispatchers.IO) {
                 val context = KoinPlatform.getKoin().get<Context>()
-                val names = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                migrateSharedArtworkToPrivate(context, songId)
+                val sharedNames = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     queryMediaStoreAssetRows(context, songId).map { it.fileName }
                 } else {
                     legacyAssetFileNames()
                 }
-                localMediaAssetSnapshot(songId, names)
+                localMediaAssetSnapshot(
+                    songId,
+                    sharedNames + privateArtworkFileNames(context),
+                )
             }
         }
     }
@@ -134,20 +113,17 @@ actual object LocalMediaAssetStorage {
         return mutex.withLock {
             withContext(Dispatchers.IO) {
                 val context = KoinPlatform.getKoin().get<Context>()
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    queryMediaStoreAssetRows(context, songId)
-                        .filter { isLocalArtworkSidecarFileName(songId, it.fileName) }
-                        .sortedBy { it.fileName }
-                        .firstOrNull()
-                        ?.uri
-                        ?.toString()
-                } else {
-                    legacyAssetFiles(songId, ::isLocalArtworkSidecarFileName)
-                        .sortedBy { it.name }
-                        .firstOrNull()
-                        ?.toURI()
-                        ?.toString()
-                }
+                migrateSharedArtworkToPrivate(context, songId)
+                privateArtworkFiles(context, songId)
+                    .sortedBy { it.name }
+                    .firstOrNull()
+                    ?.let { file ->
+                        FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.fileprovider",
+                            file,
+                        ).toString()
+                    }
             }
         }
     }
@@ -159,7 +135,7 @@ actual object LocalMediaAssetStorage {
         return mutex.withLock {
             withContext(Dispatchers.IO) {
                 val context = KoinPlatform.getKoin().get<Context>()
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val sharedDeleted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     deleteMediaStoreAssets(context, songId) { id, name ->
                         isLocalLyricSidecarFileName(id, name) ||
                             isLocalArtworkSidecarFileName(id, name) ||
@@ -172,6 +148,7 @@ actual object LocalMediaAssetStorage {
                     files.forEach(::deleteLegacyAssetOrThrow)
                     files.isNotEmpty()
                 }
+                deletePrivateArtworkAssets(context, songId) || sharedDeleted
             }
         }
     }
@@ -187,6 +164,187 @@ private data class AndroidMediaAssetBackup(
     val originalFileName: String,
 )
 
+private fun migrateSharedArtworkToPrivate(
+    context: Context,
+    songId: Long,
+) {
+    val existingPrivate = privateArtworkFiles(context, songId)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val sharedRows = queryMediaStoreAssetRows(context, songId)
+            .filter { isLocalArtworkSidecarFileName(songId, it.fileName) }
+            .sortedBy { it.fileName }
+        if (sharedRows.isEmpty()) return
+        if (existingPrivate.isEmpty()) {
+            val source = sharedRows.first()
+            val bytes = context.contentResolver.openInputStream(source.uri)
+                ?.use { it.readBytesAtMost(MAX_MIGRATED_ARTWORK_BYTES) }
+                ?: error("无法读取待迁移的 Android 本地封面：${source.fileName}")
+            check(bytes.isNotEmpty()) {
+                "待迁移的 Android 本地封面为空：${source.fileName}"
+            }
+            replacePrivateArtwork(context, songId, source.fileName, bytes)
+        }
+    } else {
+        val sharedFiles = legacyAssetFiles(songId, ::isLocalArtworkSidecarFileName)
+            .sortedBy { it.name }
+        if (sharedFiles.isEmpty()) return
+        if (existingPrivate.isEmpty()) {
+            val source = sharedFiles.first()
+            val bytes = source.inputStream().use {
+                it.readBytesAtMost(MAX_MIGRATED_ARTWORK_BYTES)
+            }
+            check(bytes.isNotEmpty()) {
+                "待迁移的 Android 本地封面为空：${source.name}"
+            }
+            replacePrivateArtwork(context, songId, source.name, bytes)
+        }
+    }
+    deleteSharedArtwork(context, songId)
+}
+
+private fun replacePrivateArtwork(
+    context: Context,
+    songId: Long,
+    fileName: String,
+    bytes: ByteArray,
+) {
+    val directory = ensureAndroidPrivateArtworkDirectory(
+        context.getExternalFilesDir(null) ?: context.filesDir,
+    )
+    val temporary = temporaryLegacyAssetFile(directory, fileName)
+    val backups = mutableListOf<Pair<File, File>>()
+    var published: File? = null
+    try {
+        writeLegacyAsset(temporary, bytes)
+        privateArtworkFiles(context, songId).forEach { original ->
+            val backup = backupLegacyAssetFile(original.parentFile, original.name)
+            check(original.renameTo(backup)) {
+                "无法备份 Android 应用专属封面：${original.name}"
+            }
+            backups += backup to original
+        }
+        val target = File(directory, fileName)
+        check(temporary.renameTo(target)) {
+            "无法发布 Android 应用专属封面：$fileName"
+        }
+        published = target
+        backups.forEach { (backup, _) -> backup.delete() }
+    } catch (failure: Throwable) {
+        temporary.delete()
+        published?.delete()
+        backups.forEach { (backup, original) ->
+            if (backup.exists() && !backup.renameTo(original)) {
+                failure.addSuppressed(
+                    IllegalStateException("无法恢复 Android 应用专属封面：${original.name}")
+                )
+            }
+        }
+        throw failure
+    }
+}
+
+private fun deleteSharedArtwork(
+    context: Context,
+    songId: Long,
+): Boolean =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        deleteMediaStoreAssets(context, songId, ::isLocalArtworkSidecarFileName)
+    } else {
+        val files = legacyAssetFiles(songId, ::isLocalArtworkSidecarFileName)
+        val deletedPaths = files.map { it.absolutePath }.toTypedArray()
+        files.forEach(::deleteLegacyAssetOrThrow)
+        if (deletedPaths.isNotEmpty()) {
+            MediaScannerConnection.scanFile(context, deletedPaths, null, null)
+        }
+        files.isNotEmpty()
+    }
+
+private fun privateArtworkFiles(
+    context: Context,
+    songId: Long,
+): List<File> =
+    privateArtworkDirectories(context)
+        .asSequence()
+        .flatMap { directory ->
+            checkNotNull(directory.listFiles()) {
+                "无法读取 Android 应用专属封面目录：$directory"
+            }.asSequence()
+        }
+        .filter(File::isFile)
+        .filter { isLocalArtworkSidecarFileName(songId, it.name) }
+        .toList()
+
+private fun privateArtworkFileNames(context: Context): List<String> =
+    privateArtworkDirectories(context)
+        .asSequence()
+        .flatMap { directory ->
+            checkNotNull(directory.listFiles()) {
+                "无法读取 Android 应用专属封面目录：$directory"
+            }.asSequence()
+        }
+        .filter(File::isFile)
+        .map { it.name }
+        .toList()
+
+private fun deletePrivateArtworkAssets(
+    context: Context,
+    songId: Long,
+): Boolean {
+    val files = privateArtworkDirectories(context)
+        .asSequence()
+        .flatMap { directory ->
+            checkNotNull(directory.listFiles()) {
+                "无法读取 Android 应用专属封面目录：$directory"
+            }.asSequence()
+        }
+        .filter(File::isFile)
+        .filter {
+            isLocalArtworkSidecarFileName(songId, it.name) ||
+                isLocalMediaAssetTransactionFileName(songId, it.name)
+        }
+        .toList()
+    files.forEach(::deleteLegacyAssetOrThrow)
+    return files.isNotEmpty()
+}
+
+private fun privateArtworkDirectories(context: Context): List<File> =
+    listOfNotNull(context.getExternalFilesDir(null), context.filesDir)
+        .distinctBy { it.absolutePath }
+        .map { File(it, ANDROID_LOCAL_ARTWORK_SUBDIR) }
+        .filter(File::exists)
+        .onEach { directory ->
+            check(directory.isDirectory) {
+                "Android 应用专属封面路径不是目录：$directory"
+            }
+        }
+
+internal fun ensureAndroidPrivateArtworkDirectory(storageRoot: File): File {
+    val directory = File(storageRoot, ANDROID_LOCAL_ARTWORK_SUBDIR)
+    check(directory.isDirectory || directory.mkdirs()) {
+        "无法创建 Android 应用专属封面目录：$directory"
+    }
+    val noMedia = File(directory, ANDROID_NO_MEDIA_FILE_NAME)
+    check(noMedia.isFile || noMedia.createNewFile()) {
+        "无法创建 Android 封面媒体扫描屏蔽标记：$noMedia"
+    }
+    return directory
+}
+
+private fun InputStream.readBytesAtMost(maxBytes: Int): ByteArray {
+    val output = ByteArrayOutputStream()
+    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+    var total = 0
+    while (true) {
+        val read = read(buffer)
+        if (read < 0) return output.toByteArray()
+        total += read
+        check(total <= maxBytes) {
+            "待迁移的 Android 本地封面超过 ${maxBytes / (1024 * 1024)} MiB 限制"
+        }
+        output.write(buffer, 0, read)
+    }
+}
+
 private fun replaceMediaStoreLyrics(
     context: Context,
     songId: Long,
@@ -199,7 +357,7 @@ private fun replaceMediaStoreLyrics(
             val uri = insertPendingMediaStoreAsset(
                 context = context,
                 fileName = temporaryMediaStoreAssetName(file.fileName),
-                mimeType = lyricMimeType(file.fileName),
+                mimeType = androidLyricMimeType(file.fileName),
                 bytes = file.content.encodeToByteArray(),
             )
             inserted += uri to file.fileName
@@ -416,12 +574,12 @@ private fun temporaryMediaStoreAssetName(targetName: String): String =
 private fun backupMediaStoreAssetName(targetName: String): String =
     ".$targetName.${UUID.randomUUID()}.asset-backup"
 
-private fun lyricMimeType(fileName: String): String =
-    if (fileName.endsWith(".ttml", ignoreCase = true)) {
-        "application/ttml+xml"
-    } else {
-        "text/plain"
-    }
+internal fun androidLyricMimeType(fileName: String): String = when {
+    fileName.endsWith(".ttml", ignoreCase = true) -> "application/ttml+xml"
+    fileName.endsWith(".yrc", ignoreCase = true) -> "application/x-yrc"
+    fileName.endsWith(".lrc", ignoreCase = true) -> "application/x-lrc"
+    else -> error("不支持的本地歌词文件类型：$fileName")
+}
 
 private fun replaceLegacyLyrics(
     songId: Long,
@@ -459,44 +617,6 @@ private fun replaceLegacyLyrics(
             if (backup.exists() && !backup.renameTo(original)) {
                 failure.addSuppressed(
                     IllegalStateException("无法恢复 Android 本地歌词：${original.name}")
-                )
-            }
-        }
-        throw failure
-    }
-}
-
-private fun replaceLegacyArtwork(
-    songId: Long,
-    fileName: String,
-    bytes: ByteArray,
-) {
-    val directory = ensureLegacyAssetDirectory()
-    val temporary = temporaryLegacyAssetFile(directory, fileName)
-    val backups = mutableListOf<Pair<File, File>>()
-    var published: File? = null
-    try {
-        writeLegacyAsset(temporary, bytes)
-        legacyAssetFiles(songId, ::isLocalArtworkSidecarFileName).forEach { original ->
-            val backup = backupLegacyAssetFile(directory, original.name)
-            check(original.renameTo(backup)) {
-                "无法备份 Android 本地封面：${original.name}"
-            }
-            backups += backup to original
-        }
-        val target = File(directory, fileName)
-        check(temporary.renameTo(target)) {
-            "无法发布本地封面：$fileName"
-        }
-        published = target
-        backups.forEach { (backup, _) -> backup.delete() }
-    } catch (failure: Throwable) {
-        temporary.delete()
-        published?.delete()
-        backups.forEach { (backup, original) ->
-            if (backup.exists() && !backup.renameTo(original)) {
-                failure.addSuppressed(
-                    IllegalStateException("无法恢复 Android 本地封面：${original.name}")
                 )
             }
         }
@@ -559,3 +679,6 @@ private fun deleteLegacyAssetOrThrow(file: File) {
         "无法删除本地媒体边车：${file.name}"
     }
 }
+
+private const val ANDROID_NO_MEDIA_FILE_NAME = ".nomedia"
+private const val MAX_MIGRATED_ARTWORK_BYTES = 16 * 1024 * 1024
