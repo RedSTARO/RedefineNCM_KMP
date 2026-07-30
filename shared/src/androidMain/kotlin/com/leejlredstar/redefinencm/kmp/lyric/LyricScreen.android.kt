@@ -73,6 +73,8 @@ import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
 import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsButton
 import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsSheet
 import com.leejlredstar.redefinencm.kmp.util.LyricParser
+import com.leejlredstar.redefinencm.kmp.util.ANDROID_LOCAL_ARTWORK_EXTERNAL_PROVIDER_ROOT
+import com.leejlredstar.redefinencm.kmp.util.ANDROID_LOCAL_ARTWORK_INTERNAL_PROVIDER_ROOT
 import com.leejlredstar.redefinencm.kmp.util.DOWNLOAD_RELATIVE_PATH
 import com.leejlredstar.redefinencm.kmp.util.DOWNLOAD_SUBDIR
 import com.leejlredstar.redefinencm.kmp.util.isLocalArtworkSidecarFileName
@@ -606,34 +608,54 @@ private fun localArtworkDataUriOrNull(
     val id = songId?.takeIf { it > 0L } ?: return null
     val uri = runCatching { Uri.parse(uriText) }.getOrNull() ?: return null
     val fileName = when (uri.scheme?.lowercase()) {
-        "content" -> {
-            if (
-                uri.authority != MediaStore.AUTHORITY ||
-                uri.pathSegments.getOrNull(1) != "downloads"
-            ) return null
-            context.contentResolver.query(
-                uri,
-                arrayOf(
-                    OpenableColumns.DISPLAY_NAME,
-                    MediaStore.MediaColumns.RELATIVE_PATH,
-                ),
-                null,
-                null,
-                null,
-            )?.use { cursor ->
-                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                val pathIndex = cursor.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
-                if (
-                    nameIndex >= 0 &&
-                    pathIndex >= 0 &&
-                    cursor.moveToFirst() &&
-                    cursor.getString(pathIndex) == DOWNLOAD_RELATIVE_PATH
-                ) {
-                    cursor.getString(nameIndex)
-                } else {
-                    null
+        "content" -> when {
+            uri.authority == MediaStore.AUTHORITY &&
+                uri.pathSegments.getOrNull(1) == "downloads" -> {
+                context.contentResolver.query(
+                    uri,
+                    arrayOf(
+                        OpenableColumns.DISPLAY_NAME,
+                        MediaStore.MediaColumns.RELATIVE_PATH,
+                    ),
+                    null,
+                    null,
+                    null,
+                )?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    val pathIndex = cursor.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
+                    if (
+                        nameIndex >= 0 &&
+                        pathIndex >= 0 &&
+                        cursor.moveToFirst() &&
+                        cursor.getString(pathIndex) == DOWNLOAD_RELATIVE_PATH
+                    ) {
+                        cursor.getString(nameIndex)
+                    } else {
+                        null
+                    }
                 }
             }
+            uri.authority == "${context.packageName}.fileprovider" &&
+                uri.pathSegments.firstOrNull() in setOf(
+                    ANDROID_LOCAL_ARTWORK_EXTERNAL_PROVIDER_ROOT,
+                    ANDROID_LOCAL_ARTWORK_INTERNAL_PROVIDER_ROOT,
+                ) -> {
+                context.contentResolver.query(
+                    uri,
+                    arrayOf(OpenableColumns.DISPLAY_NAME),
+                    null,
+                    null,
+                    null,
+                )?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (nameIndex >= 0 && cursor.moveToFirst()) {
+                        cursor.getString(nameIndex)
+                    } else {
+                        null
+                    }
+                }
+            }
+            else -> null
         }
         "file" -> {
             val file = uri.path?.let(::File)?.canonicalFile ?: return null

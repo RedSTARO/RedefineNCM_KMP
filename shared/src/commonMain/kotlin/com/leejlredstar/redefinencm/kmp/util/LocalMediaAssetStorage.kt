@@ -18,10 +18,12 @@ data class LocalMediaAssetSnapshot(
 )
 
 /**
- * Stores lyric and artwork sidecars beside the downloaded audio file.
+ * Stores durable lyrics and artwork associated with downloaded audio.
  *
- * Audio uses `<songId>.<extension>`, while sidecars deliberately use an extra name segment:
- * `<songId>.lyric.*` and `<songId>.cover.*`. This keeps sidecars out of audio-library scans.
+ * Audio uses `<songId>.<extension>`, while assets deliberately use an extra name segment:
+ * `<songId>.lyric.*` and `<songId>.cover.*`. Android keeps artwork in app-specific storage so
+ * image-aware gallery scanners cannot publish it as a user photo; other targets keep sidecars
+ * beside the audio where their platform storage contract permits it.
  */
 expect object LocalMediaAssetStorage {
     suspend fun replaceLyrics(songId: Long, files: List<LocalTextMediaAsset>)
@@ -102,9 +104,7 @@ internal fun isLocalLyricSidecarFileName(songId: Long, fileName: String): Boolea
         return false
     }
     val suffix = fileName.removePrefix("$songId.lyric.")
-    return suffix != fileName &&
-        suffix.length in 1..64 &&
-        suffix.matches(Regex("[A-Za-z0-9][A-Za-z0-9._-]*"))
+    return suffix != fileName && suffix in LOCAL_LYRIC_SUFFIXES
 }
 
 internal fun isLocalArtworkSidecarFileName(songId: Long, fileName: String): Boolean {
@@ -153,3 +153,12 @@ internal fun localMediaAssetSnapshot(
         artworkFileName = artwork,
     )
 }
+
+private val LOCAL_LYRIC_SUFFIXES = setOf(
+    "ttml",
+    "yrc",
+    "lrc",
+    "line.lrc",
+    "translation.lrc",
+    "romanization.lrc",
+)

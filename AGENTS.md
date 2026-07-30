@@ -385,15 +385,19 @@ the common `TtmlLyricParser`, whose event parser and AMLL conversion preserve th
 
 ### Downloaded media sidecar contract
 
-Downloaded audio remains `<songId>.<extension>`. Lyrics and artwork live beside it as
-multi-segment sidecars so no platform audio scanner can mistake them for songs:
+Downloaded audio remains `<songId>.<extension>`. Lyrics use multi-segment sidecars beside it so
+no platform audio scanner can mistake them for songs:
 
 - AMLL source: `<id>.lyric.ttml` stores the upstream TTML verbatim.
 - Backend source: YRC is `<id>.lyric.yrc`; line LRC is `<id>.lyric.lrc`, or
   `<id>.lyric.line.lrc` when YRC is the primary format; translations and romanizations are
   `<id>.lyric.translation.lrc` and `<id>.lyric.romanization.lrc`.
 - App-downloaded artwork is `<id>.cover.<detected-extension>` and keeps the validated upstream
-  bytes.
+  bytes. Android stores artwork under app-specific external-files storage behind a restricted
+  `FileProvider` URI, with an internal-files fallback and `.nomedia` marker; it must never publish
+  artwork as an `image/*` row in shared `MediaStore` or place it beside public audio. Inspection
+  and local playback migrate and remove historical public Android cover sidecars. Other targets
+  retain the adjacent-sidecar layout.
 
 Derived TTML line text must never be persisted as if it were an original backend LRC. Local
 playback applies the same four-state source policy as network playback: within each selected
@@ -407,9 +411,10 @@ back or marking the audio failed. Completed/download-imported rows expose separa
 artwork backfill actions. Queue status is reconciled against actual sidecars rather than the
 SQLDelight lyric cache. Deleting a downloaded song also deletes its sidecars.
 
-Platform storage uses Android MediaStore `content:` URIs, Android legacy/JVM/iOS `file:` URIs,
-and Web OPFS keys resolved to temporary `blob:` URLs. Runtime URIs are never persisted in
-`PlayerStatus` or the download queue, and Web blob URLs must be revoked when no longer active.
+Platform storage uses Android MediaStore `content:` URIs for public audio/lyrics and restricted
+app `FileProvider` `content:` URIs for artwork, JVM/iOS `file:` URIs, and Web OPFS keys resolved
+to temporary `blob:` URLs. Runtime URIs are never persisted in `PlayerStatus` or the download
+queue, and Web blob URLs must be revoked when no longer active.
 Native Compose surfaces consume only app-managed, path-validated artwork URIs returned by
 `LocalMediaAssets`; platform image loaders must not broaden that contract to arbitrary `content:`
 or cross-directory `file:` paths.

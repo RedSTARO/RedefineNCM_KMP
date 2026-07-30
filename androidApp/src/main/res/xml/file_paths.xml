@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <cache-path name="cache" path="." />
+    <external-files-path
+        name="local_media_artwork_external"
+        path="local-media-artwork/" />
+    <files-path
+        name="local_media_artwork_internal"
+        path="local-media-artwork/" />
 </paths>

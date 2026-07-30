@@ -14,8 +14,11 @@ class LocalMediaAssetStorageTest {
 
         assertTrue(isLocalLyricSidecarFileName(songId, "1234.lyric.ttml"))
         assertTrue(isLocalLyricSidecarFileName(songId, "1234.lyric.translation.lrc"))
+        assertTrue(isLocalLyricSidecarFileName(songId, "1234.lyric.yrc"))
         assertTrue(isLocalArtworkSidecarFileName(songId, "1234.cover.webp"))
         assertFalse(isLocalLyricSidecarFileName(songId, "1234.ttml"))
+        assertFalse(isLocalLyricSidecarFileName(songId, "1234.lyric.txt"))
+        assertFalse(isLocalLyricSidecarFileName(songId, "1234.lyric.json"))
         assertFalse(isLocalArtworkSidecarFileName(songId, "1234.jpg"))
         assertFalse(isLocalLyricSidecarFileName(songId, "../1234.lyric.ttml"))
         assertFalse(isLocalArtworkSidecarFileName(songId, "other/1234.cover.jpg"))
