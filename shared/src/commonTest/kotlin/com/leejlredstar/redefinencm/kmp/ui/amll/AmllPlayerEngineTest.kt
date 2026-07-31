@@ -767,6 +767,31 @@ class AmllPlayerEngineTest {
     }
 
     @Test
+    fun seekStateIsConsumedByItsRequestedLayoutWhilePlaybackIsStopped() {
+        val engine = AmllPlayerEngine(
+            lines = listOf(line(id = "a", startMs = 0.0, endMs = 1_000.0)),
+        )
+        val input = AmllLayoutInput(
+            viewportWidthPx = 1_200.0,
+            viewportHeightPx = 800.0,
+            groupHeightsPx = listOf(100.0),
+            interludeDotsWidthPx = 30.0,
+            interludeDotsHeightPx = 20.0,
+            sync = true,
+            force = false,
+        )
+        engine.layout(input)
+
+        val seekUpdate = engine.setTime(timeMs = 500.0, isSeek = true)
+        assertTrue(seekUpdate.shouldLayout)
+        assertTrue(engine.timelineState.isSeeking)
+
+        engine.layout(input)
+
+        assertFalse(engine.timelineState.isSeeking)
+    }
+
+    @Test
     fun alwaysPostpositionResolvesBackgroundInitialDirectionAtGroupCreation() {
         val main = line(id = "main", startMs = 1_000.0, endMs = 2_000.0)
         val background = line(

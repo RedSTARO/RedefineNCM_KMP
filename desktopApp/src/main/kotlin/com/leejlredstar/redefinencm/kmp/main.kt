@@ -77,6 +77,7 @@ import org.koin.core.context.GlobalContext
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
+    configureUncappedDesktopRendering()
     if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
         // Legacy WebView2 is a native child HWND. Compose popups and dialogs must use the
         // component layer from process start so overlay windows can remain above it.
@@ -88,6 +89,17 @@ fun main() {
         settings.getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false),
     )
     launchDesktopApplication()
+}
+
+internal fun configureUncappedDesktopRendering() {
+    // Skiko reads these before constructing its first SkiaLayer. Keep the 60 Hz lyric sampler
+    // independent from the renderer: active Compose animation frames have no fixed FPS ceiling.
+    if (System.getProperty("skiko.vsync.enabled") == null) {
+        System.setProperty("skiko.vsync.enabled", "false")
+    }
+    if (System.getProperty("skiko.vsync.framelimit.fallback.enabled") == null) {
+        System.setProperty("skiko.vsync.framelimit.fallback.enabled", "false")
+    }
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
