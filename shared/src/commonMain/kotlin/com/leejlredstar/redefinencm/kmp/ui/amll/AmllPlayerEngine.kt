@@ -1009,6 +1009,10 @@ internal class AmllPlayerEngine(
 
         lastLayoutResult = result
         timelineState.initialLayoutFinished = true
+        // A seek changes the parameters of one layout pass. Previously the per-frame host
+        // cleared this on its next setTime(false); the decoupled 60 Hz timeline must also work
+        // while paused or at end-of-track, when no later position emission is guaranteed.
+        timelineState.isSeeking = false
         frameDirty = true
         return result
     }

@@ -99,11 +99,17 @@ dependencies {
 
     // SLF4J backend so dbus-java and Ktor diagnostics are not discarded by a NOP provider.
     implementation(libs.slf4j.simple)
+    testImplementation(libs.kotlin.test)
 }
 
 compose.desktop {
     application {
         mainClass = "com.leejlredstar.redefinencm.kmp.MainKt"
+        // Apply before Skiko classes load. main() repeats these defaults for direct JVM launches.
+        jvmArgs += listOf(
+            "-Dskiko.vsync.enabled=false",
+            "-Dskiko.vsync.framelimit.fallback.enabled=false",
+        )
 
         buildTypes.release.proguard {
             // Release packaging is the Desktop/JVM equivalent of the Android R8 pipeline:

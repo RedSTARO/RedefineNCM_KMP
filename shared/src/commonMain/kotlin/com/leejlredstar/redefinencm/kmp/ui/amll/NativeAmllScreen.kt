@@ -38,7 +38,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -70,11 +72,15 @@ import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.SongWikiUiState
 import com.leejlredstar.redefinencm.kmp.player.PlayerStatusRestoreState
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import org.koin.compose.koinInject
 
 private val WikiBackdropCssEase = CubicBezierEasing(0.25f, 0.10f, 0.25f, 1.00f)
 private const val NativeAmllControllerAutoHideMillis = 3_600L
 private const val DesktopAmllControllerAutoHideMillis = 30_000L
+internal const val AmllPresentationRefreshHz = 60L
+internal const val AmllPresentationFrameIntervalNanos =
+    1_000_000_000L / AmllPresentationRefreshHz
 
 /**
  * One native AMLL-style full-screen player shared by Android, iOS, Desktop, and Web.
@@ -172,7 +178,8 @@ fun NativeAmllScreen(
     val presentationPosition = rememberPresentationPosition(
         sampledPositionMs = currentPosition,
         durationMs = duration,
-        advancing = isPlaying && playerState == PlayerState.PLAYING && !reducedMotion,
+        // Reduced motion disables spatial transitions, not the lyric playback clock.
+        advancing = isPlaying && playerState == PlayerState.PLAYING,
     )
 
     // player.html keeps the full-screen dynamic cover available under reduced motion. The
@@ -248,6 +255,7 @@ fun NativeAmllScreen(
             AmllLyricViewport(
                 document = document,
                 mediaId = metadata!!.id,
+                sampledPositionMs = currentPosition,
                 positionState = presentationPosition,
                 isPlaying = isPlaying,
                 parameters = visualParameters,
@@ -427,34 +435,77 @@ private fun rememberPresentationPosition(
     sampledPositionMs: Long,
     durationMs: Long,
     advancing: Boolean,
-): State<Long> = produceState(
-    initialValue = sampledPositionMs.coerceAtLeast(0L),
-    sampledPositionMs,
-    durationMs,
-    advancing,
-) {
-    val safeSample = sampledPositionMs.coerceAtLeast(0L)
-    val anchoredSample = if (durationMs > 0L) {
-        safeSample.coerceAtMost(durationMs)
-    } else {
-        safeSample
-    }
-    value = anchoredSample
-    if (!advancing) {
-        return@produceState
-    }
-
-    val frameOrigin = withFrameNanos { it }
-    while (true) {
-        withFrameNanos { frameTime ->
-            val elapsedMs = ((frameTime - frameOrigin) / 1_000_000L).coerceAtLeast(0L)
-            val extrapolated = anchoredSample + elapsedMs
-            value = if (durationMs > 0L) {
-                extrapolated.coerceAtMost(durationMs)
-            } else {
-                extrapolated
+): State<Long> {
+    val latestSampledPosition = rememberUpdatedState(sampledPositionMs)
+    return produceState(
+        initialValue = coerceAmllPresentationPosition(sampledPositionMs, durationMs),
+        durationMs,
+        advancing,
+    ) {
+        if (!advancing) {
+            snapshotFlow { latestSampledPosition.value }.collect { sample ->
+                value = coerceAmllPresentationPosition(sample, durationMs)
             }
+            return@produceState
         }
+
+        var observedSample = latestSampledPosition.value
+        var anchoredSample = coerceAmllPresentationPosition(observedSample, durationMs)
+        var anchorFrameNanos: Long? = null
+        val frameGate = AmllPresentationFrameGate()
+        while (true) {
+            val frameTimeNanos = withFrameNanos { it }
+            val currentSample = latestSampledPosition.value
+            if (anchorFrameNanos == null || currentSample != observedSample) {
+                observedSample = currentSample
+                anchoredSample = coerceAmllPresentationPosition(currentSample, durationMs)
+                anchorFrameNanos = frameTimeNanos
+            }
+
+            if (!frameGate.shouldPublish(frameTimeNanos)) continue
+            value = amllPresentationPositionAt(
+                anchoredSampleMs = anchoredSample,
+                anchorFrameNanos = checkNotNull(anchorFrameNanos),
+                frameTimeNanos = frameTimeNanos,
+                durationMs = durationMs,
+            )
+        }
+    }
+}
+
+internal fun amllPresentationFrameBucket(frameTimeNanos: Long): Long =
+    frameTimeNanos.coerceAtLeast(0L) / AmllPresentationFrameIntervalNanos
+
+internal class AmllPresentationFrameGate {
+    private var lastPublishedBucket = Long.MIN_VALUE
+
+    fun shouldPublish(frameTimeNanos: Long): Boolean {
+        val bucket = amllPresentationFrameBucket(frameTimeNanos)
+        if (bucket <= lastPublishedBucket) return false
+        lastPublishedBucket = bucket
+        return true
+    }
+}
+
+internal fun amllPresentationPositionAt(
+    anchoredSampleMs: Long,
+    anchorFrameNanos: Long,
+    frameTimeNanos: Long,
+    durationMs: Long,
+): Long {
+    val elapsedMs = (frameTimeNanos - anchorFrameNanos).coerceAtLeast(0L) / 1_000_000L
+    return coerceAmllPresentationPosition(anchoredSampleMs + elapsedMs, durationMs)
+}
+
+private fun coerceAmllPresentationPosition(
+    positionMs: Long,
+    durationMs: Long,
+): Long {
+    val safePosition = positionMs.coerceAtLeast(0L)
+    return if (durationMs > 0L) {
+        safePosition.coerceAtMost(durationMs)
+    } else {
+        safePosition
     }
 }
 

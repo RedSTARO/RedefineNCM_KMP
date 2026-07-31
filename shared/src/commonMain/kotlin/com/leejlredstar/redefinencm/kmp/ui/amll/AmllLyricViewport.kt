@@ -38,6 +38,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -90,6 +91,7 @@ import androidx.compose.ui.zIndex
 import com.leejlredstar.redefinencm.kmp.getPlatform
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.abs
@@ -100,8 +102,6 @@ import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
-import kotlin.time.DurationUnit
-import kotlin.time.TimeSource
 
 private const val AmllScrollResetMillis = 5_000L
 private const val AmllMinimumInertiaSpeedPxPerMs = 0.1
@@ -271,6 +271,14 @@ internal data class AmllInertiaFrameResult(
     val shouldLayout: Boolean,
     val finished: Boolean,
 )
+
+internal fun amllFrameDeltaMillis(
+    previousFrameNanos: Long,
+    currentFrameNanos: Long,
+): Double {
+    if (currentFrameNanos <= previousFrameNanos) return 0.0
+    return (currentFrameNanos - previousFrameNanos) / 1_000_000.0
+}
 
 /**
  * One requestAnimationFrame step from `attachPlayerScrollHandlers`.
@@ -473,6 +481,7 @@ internal fun shouldShowAmllFocusOutline(
 internal fun AmllLyricViewport(
     document: AmllLyricDocument,
     mediaId: String,
+    sampledPositionMs: Long,
     positionState: State<Long>,
     isPlaying: Boolean,
     parameters: AmllLyricVisualParameters,
@@ -508,7 +517,7 @@ internal fun AmllLyricViewport(
         ).also {
             it.setGroups(
                 groups = document.groups,
-                initialTimeMs = positionState.value.toDouble(),
+                initialTimeMs = sampledPositionMs.toDouble(),
                 // Core computes this over every optimized line before grouping can replace BG rows.
                 isNonDynamic = document.lines.all { line -> line.words.size <= 1 },
             )
@@ -518,7 +527,7 @@ internal fun AmllLyricViewport(
     val hasDuetLine = remember(document.lines) { document.lines.any(AmllLyricLine::isDuet) }
     var frame by remember(engine) { mutableStateOf(engine.currentFrame()) }
     var inactiveWordPositionMs by remember(engine) {
-        mutableLongStateOf(positionState.value)
+        mutableLongStateOf(sampledPositionMs)
     }
     var keyboardIndex by remember(document.groups) { mutableIntStateOf(0) }
     var focusedKeyboardIndex by remember(document.groups) { mutableStateOf<Int?>(null) }
@@ -603,12 +612,15 @@ internal fun AmllLyricViewport(
         }
         scope.launch {
             var speed = initialSpeed
-            var previous = TimeSource.Monotonic.markNow()
+            var previousFrameNanos = withFrameNanos { it }
             while (true) {
-                withFrameNanos { }
+                val currentFrameNanos = withFrameNanos { it }
                 if (scrollId != inertiaGeneration) return@launch
-                val deltaMs = previous.elapsedNow().toDouble(DurationUnit.MILLISECONDS)
-                previous = TimeSource.Monotonic.markNow()
+                val deltaMs = amllFrameDeltaMillis(
+                    previousFrameNanos = previousFrameNanos,
+                    currentFrameNanos = currentFrameNanos,
+                )
+                previousFrameNanos = currentFrameNanos
                 val step = advanceAmllInertiaFrame(
                     scrollOffsetPx = runtime.scrollOffsetPx,
                     speedPxPerMs = speed,
@@ -629,17 +641,8 @@ internal fun AmllLyricViewport(
         }
     }
 
-    LaunchedEffect(engine, positionState, isPlaying, parameters.springEnabled) {
-        var previousFrame = TimeSource.Monotonic.markNow()
-        while (true) {
-            withFrameNanos { }
-            val deltaMs = previousFrame
-                .elapsedNow()
-                .toDouble(DurationUnit.MILLISECONDS)
-                .coerceAtLeast(0.0)
-            previousFrame = TimeSource.Monotonic.markNow()
-
-            val timelinePositionMs = positionState.value
+    LaunchedEffect(engine, positionState) {
+        snapshotFlow { positionState.value }.collect { timelinePositionMs ->
             val timeUpdate = engine.setTime(timelinePositionMs.toDouble())
             if (timeUpdate.shouldRefreshInactiveWords) {
                 inactiveWordPositionMs = timelinePositionMs
@@ -650,9 +653,30 @@ internal fun AmllLyricViewport(
             if (timeUpdate.shouldLayout) {
                 runtime.requestLayout()
             }
-            if (engine.setPlaying(isPlaying)) {
-                runtime.requestLayout()
-            }
+        }
+    }
+
+    LaunchedEffect(engine, isPlaying) {
+        if (engine.setPlaying(isPlaying)) {
+            runtime.requestLayout()
+        }
+    }
+
+    // Spring motion follows every platform frame. The 60 Hz lyric clock above must never
+    // throttle this loop, and Desktop may provide frames faster than the display refresh rate.
+    LaunchedEffect(engine) {
+        var previousFrameNanos = withFrameNanos { it }
+        frame = engine.update(
+            deltaMs = 0.0,
+            isPageVisible = isPageVisible,
+        )
+        while (true) {
+            val currentFrameNanos = withFrameNanos { it }
+            val deltaMs = amllFrameDeltaMillis(
+                previousFrameNanos = previousFrameNanos,
+                currentFrameNanos = currentFrameNanos,
+            )
+            previousFrameNanos = currentFrameNanos
             frame = engine.update(
                 deltaMs = deltaMs,
                 isPageVisible = isPageVisible,
@@ -733,7 +757,7 @@ internal fun AmllLyricViewport(
                 isPageVisible = visible
                 if (visible && forceResync) {
                     // LyricPlayerBase.onPageShow calls setCurrentTime(currentTime, true).
-                    val timelinePositionMs = positionState.value
+                    val timelinePositionMs = sampledPositionMs
                     val timeUpdate = engine.setTime(
                         timeMs = timelinePositionMs.toDouble(),
                         isSeek = true,
@@ -1687,14 +1711,14 @@ private fun AmllInterludeDotsVisual(
     }
     LaunchedEffect(visualRuntime, target, isPlaying) {
         if (!isPlaying || target == null) return@LaunchedEffect
-        var previousFrame = TimeSource.Monotonic.markNow()
+        var previousFrameNanos = withFrameNanos { it }
         while (true) {
-            withFrameNanos { }
-            val deltaMs = previousFrame
-                .elapsedNow()
-                .toDouble(DurationUnit.MILLISECONDS)
-                .coerceAtLeast(0.0)
-            previousFrame = TimeSource.Monotonic.markNow()
+            val currentFrameNanos = withFrameNanos { it }
+            val deltaMs = amllFrameDeltaMillis(
+                previousFrameNanos = previousFrameNanos,
+                currentFrameNanos = currentFrameNanos,
+            )
+            previousFrameNanos = currentFrameNanos
             visualRuntime.update(deltaMs)
         }
     }
