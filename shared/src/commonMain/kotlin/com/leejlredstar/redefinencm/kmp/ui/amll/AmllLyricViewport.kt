@@ -109,7 +109,7 @@ private const val AmllStopInertiaSpeedPxPerMs = 0.05
 private const val AmllDomTouchClickThresholdCssPx = 10.0
 private val AmllCssEase = CubicBezierEasing(0.25f, 0.10f, 0.25f, 1.00f)
 
-private class AmllViewportRuntime(
+internal class AmllViewportRuntime(
     val engine: AmllPlayerEngine,
 ) {
     var scrollOffsetPx = 0.0
@@ -119,6 +119,8 @@ private class AmllViewportRuntime(
     var isScrolled = false
     var isUserScrolling = false
     var needsLayout = true
+    var layoutRevision by mutableLongStateOf(0L)
+        private set
     var syncNextLayout = true
     var forceNextLayout = false
     var hasPerformedInitialLayout = false
@@ -140,6 +142,17 @@ private class AmllViewportRuntime(
         needsLayout = true
         syncNextLayout = syncNextLayout || sync
         forceNextLayout = forceNextLayout || force
+        layoutRevision += 1L
+    }
+
+    /**
+     * Read from the Compose measure phase so [requestLayout] schedules a remeasure even when the
+     * engine frame is structurally unchanged before the pending layout applies its new targets.
+     */
+    fun hasPendingLayoutForMeasure(): Boolean {
+        @Suppress("UNUSED_EXPRESSION")
+        layoutRevision
+        return needsLayout
     }
 
     fun clampScroll() {
@@ -1075,7 +1088,7 @@ internal fun AmllLyricViewport(
         }
 
         var localFrame = frame
-        if (runtime.needsLayout) {
+        if (runtime.hasPendingLayoutForMeasure()) {
             val result = engine.layout(
                 AmllLayoutInput(
                     viewportWidthPx = width.toDouble(),
