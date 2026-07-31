@@ -30,6 +30,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -59,6 +60,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.flow.first
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -1156,10 +1158,26 @@ private data class AmllAtomParentDataModifier(
     override fun Density.modifyParentData(parentData: Any?): Any = data
 }
 
+/**
+ * Inactive atoms only need one deterministic terminal sample. This keeps them detached from the
+ * 60 Hz presentation clock while still allowing a seek across the line to reset or complete them.
+ */
+internal fun resolveAmllInactiveAtomPositionMs(
+    playbackPositionMs: Double,
+    lineStartTimeMs: Double,
+    atomEndTimeMs: Double,
+): Double {
+    if (!playbackPositionMs.isFinite() || atomEndTimeMs <= lineStartTimeMs) {
+        return lineStartTimeMs
+    }
+    return playbackPositionMs.coerceIn(lineStartTimeMs, atomEndTimeMs)
+}
+
 @Composable
 internal fun AmllTimedWordLine(
     line: AmllLyricLine,
     positionState: State<Long>,
+    inactiveWordPositionMs: Long,
     active: Boolean,
     baseFontSizeSp: Float,
     androidPresentation: Boolean,
@@ -1428,19 +1446,36 @@ internal fun AmllTimedWordLine(
     var maskAlphaState by remember(line.id) { mutableStateOf(AmllMaskAlphaState()) }
     if (animateMaskAlpha) {
         LaunchedEffect(line.id) {
-            var previousFrameNanos = withFrameNanos { it }
             while (true) {
-                val frameNanos = withFrameNanos { it }
-                val deltaSeconds = (frameNanos - previousFrameNanos) / 1_000_000_000.0
-                previousFrameNanos = frameNanos
-                maskAlphaState = advanceAmllMaskAlpha(
-                    current = maskAlphaState,
-                    target = targetAmllMaskAlpha(
+                val currentTarget = targetAmllMaskAlpha(
+                    scale = latestMaskScale,
+                    renderMode = latestMaskRenderMode,
+                )
+                if (maskAlphaState == currentTarget) {
+                    snapshotFlow {
+                        targetAmllMaskAlpha(
+                            scale = latestMaskScale,
+                            renderMode = latestMaskRenderMode,
+                        )
+                    }.first { target -> target != maskAlphaState }
+                }
+
+                var previousFrameNanos = withFrameNanos { it }
+                while (true) {
+                    val target = targetAmllMaskAlpha(
                         scale = latestMaskScale,
                         renderMode = latestMaskRenderMode,
-                    ),
-                    deltaSeconds = deltaSeconds,
-                )
+                    )
+                    if (maskAlphaState == target) break
+                    val frameNanos = withFrameNanos { it }
+                    val deltaSeconds = (frameNanos - previousFrameNanos) / 1_000_000_000.0
+                    previousFrameNanos = frameNanos
+                    maskAlphaState = advanceAmllMaskAlpha(
+                        current = maskAlphaState,
+                        target = target,
+                        deltaSeconds = deltaSeconds,
+                    )
+                }
             }
         }
     } else {
@@ -1505,6 +1540,7 @@ internal fun AmllTimedWordLine(
                     textLayout = layouts[index],
                     maskTimeline = atom.maskWordIndex?.let(maskTimelines::getOrNull),
                     positionState = positionState,
+                    inactiveWordPositionMs = inactiveWordPositionMs,
                     active = active,
                     baseFontSizeSp = baseFontSizeSp,
                     androidPresentation = androidPresentation,
@@ -1788,6 +1824,7 @@ private fun AmllWordAtom(
     textLayout: AmllAtomTextLayout,
     maskTimeline: AmllWebMaskTimeline?,
     positionState: State<Long>,
+    inactiveWordPositionMs: Long,
     active: Boolean,
     baseFontSizeSp: Float,
     androidPresentation: Boolean,
@@ -1822,20 +1859,6 @@ private fun AmllWordAtom(
     ) {
         mutableStateOf(active)
     }
-    var hasEverBeenActive by remember(
-        atom.lineStartTimeMs,
-        atom.startTimeMs,
-        atom.endTimeMs,
-    ) {
-        mutableStateOf(active)
-    }
-    var frozenMaskPositionMs by remember(
-        atom.lineStartTimeMs,
-        atom.startTimeMs,
-        atom.endTimeMs,
-    ) {
-        mutableStateOf(atom.lineStartTimeMs)
-    }
     LaunchedEffect(active, atom.startTimeMs, atom.endTimeMs, atom.isDynamic) {
         val wasActive = previousActive
         if (wasActive && !active && atom.isDynamic) {
@@ -1845,7 +1868,6 @@ private fun AmllWordAtom(
                 startTimeMs = atom.startTimeMs,
                 endTimeMs = atom.endTimeMs,
             )
-            frozenMaskPositionMs = snapshotTimeMs
             reverseNormalFloatProgress.snapTo(progress.toFloat())
             previousActive = false
             val reverseDurationMs = (
@@ -1863,7 +1885,6 @@ private fun AmllWordAtom(
         } else {
             previousActive = active
             if (active || !atom.isDynamic) {
-                if (active) hasEverBeenActive = true
                 reverseNormalFloatProgress.snapTo(0f)
             }
         }
@@ -1875,7 +1896,19 @@ private fun AmllWordAtom(
             .height(heightDp),
     ) {
         if (atom.isSpace || atom.text.isEmpty()) return@Canvas
-        val now = positionState.value.toDouble()
+        // Future and completed atoms have deterministic terminal frames. Subscribing every atom
+        // in the song to the 60 Hz playback position forced off-screen canvases to redraw.
+        val livePositionMs = if (active || previousActive) {
+            positionState.value.toDouble()
+        } else {
+            null
+        }
+        val terminalPositionMs = resolveAmllInactiveAtomPositionMs(
+            playbackPositionMs = inactiveWordPositionMs.toDouble(),
+            lineStartTimeMs = atom.lineStartTimeMs,
+            atomEndTimeMs = atom.endTimeMs,
+        )
+        val now = livePositionMs ?: terminalPositionMs
         val normalFloat = when {
             !atom.isDynamic -> 0.0
             active -> computeAmllNormalFloatOffsetEm(
@@ -1895,9 +1928,8 @@ private fun AmllWordAtom(
                 isBackground = atom.isBackground,
             )
         }
-        val maskPositionMs = if (active || previousActive) now else frozenMaskPositionMs
-        val elementAnimationPositionMs =
-            if (active || hasEverBeenActive) now else atom.lineStartTimeMs
+        val maskPositionMs = livePositionMs ?: terminalPositionMs
+        val elementAnimationPositionMs = livePositionMs ?: terminalPositionMs
         val maskFrame = if (atom.isDynamic && maskTimeline != null) {
             sampleAmllWebMaskTimeline(
                 timeline = maskTimeline,

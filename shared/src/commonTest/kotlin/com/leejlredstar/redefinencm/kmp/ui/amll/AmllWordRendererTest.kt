@@ -11,6 +11,34 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class AmllWordRendererTest {
+
+    @Test
+    fun inactiveAtomSnapshotResetsAndCompletesAcrossSeeks() {
+        assertClose(
+            1_000.0,
+            resolveAmllInactiveAtomPositionMs(
+                playbackPositionMs = 500.0,
+                lineStartTimeMs = 1_000.0,
+                atomEndTimeMs = 2_000.0,
+            ),
+        )
+        assertClose(
+            1_500.0,
+            resolveAmllInactiveAtomPositionMs(
+                playbackPositionMs = 1_500.0,
+                lineStartTimeMs = 1_000.0,
+                atomEndTimeMs = 2_000.0,
+            ),
+        )
+        assertClose(
+            2_000.0,
+            resolveAmllInactiveAtomPositionMs(
+                playbackPositionMs = 2_500.0,
+                lineStartTimeMs = 1_000.0,
+                atomEndTimeMs = 2_000.0,
+            ),
+        )
+    }
     @Test
     fun chunkAndSplitPreservesEveryWhitespaceSeparatorAndSourceOrder() {
         val words = listOf(

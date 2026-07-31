@@ -80,9 +80,10 @@ class AmllSpringTest {
     @Test
     fun springUpdateUsesSecondsAndRetargetsFromCurrentPosition() {
         val spring = AmllSpring(0.0)
+        assertFalse(spring.update(0.1))
         spring.setTargetPosition(100.0)
 
-        spring.update(0.1)
+        assertTrue(spring.update(0.1))
         assertClose(34.02998466082984, spring.currentPosition)
         assertFalse(spring.arrived())
 
@@ -96,6 +97,7 @@ class AmllSpringTest {
         }
         assertClose(50.0, spring.currentPosition, tolerance = 0.01)
         assertTrue(spring.arrived())
+        assertFalse(spring.update(0.05))
     }
 
     @Test

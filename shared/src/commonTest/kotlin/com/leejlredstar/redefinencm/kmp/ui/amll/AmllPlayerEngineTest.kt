@@ -9,14 +9,163 @@
 package com.leejlredstar.redefinencm.kmp.ui.amll
 
 import androidx.compose.ui.geometry.Offset
+import kotlin.math.floor
 import kotlin.math.sqrt
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotSame
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class AmllPlayerEngineTest {
+
+    @Test
+    fun timelineBoundarySearchUsesExclusiveStartAndInclusiveEnd() {
+        val boundaries = doubleArrayOf(1_000.0, 2_000.0, 3_000.0)
+
+        assertFalse(
+            crossesAmllTimelineBoundary(
+                boundariesMs = boundaries,
+                fromExclusiveMs = 1_000.0,
+                toInclusiveMs = 1_999.0,
+            ),
+        )
+        assertTrue(
+            crossesAmllTimelineBoundary(
+                boundariesMs = boundaries,
+                fromExclusiveMs = 1_000.0,
+                toInclusiveMs = 2_000.0,
+            ),
+        )
+        assertFalse(
+            crossesAmllTimelineBoundary(
+                boundariesMs = boundaries,
+                fromExclusiveMs = 3_000.0,
+                toInclusiveMs = 3_500.0,
+            ),
+        )
+        assertTrue(
+            crossesAmllTimelineBoundary(
+                boundariesMs = boundaries,
+                fromExclusiveMs = 2_000.0,
+                toInclusiveMs = 1_999.0,
+            ),
+        )
+    }
+
+    @Test
+    fun timelineUpdateSkipsGroupScanUntilTheNextBoundary() {
+        val engine = AmllPlayerEngine(
+            lines = listOf(line(id = "first", startMs = 1_000.0, endMs = 2_000.0)),
+            initialTimeMs = 1_100.0,
+        )
+
+        val firstStableUpdate = engine.setTime(timeMs = 1_500.0)
+        assertSame(firstStableUpdate, engine.setTime(timeMs = 1_750.0))
+        val boundaryUpdate = engine.setTime(timeMs = 2_000.0)
+        assertTrue(boundaryUpdate.shouldLayout)
+        assertEquals(emptySet(), engine.timelineState.hotGroups)
+    }
+
+    @Test
+    fun optimizedTimelineMatchesAFullScanAcrossPlaybackTransitions() {
+        val engine = AmllPlayerEngine(
+            lines = listOf(
+                line(id = "a", startMs = 1_000.4, endMs = 2_500.0),
+                line(id = "b", startMs = 1_500.0, endMs = 3_000.0),
+                line(id = "zero", startMs = 2_000.0, endMs = 2_000.0),
+                line(id = "d", startMs = 4_000.0, endMs = 5_000.0),
+            ),
+            initialTimeMs = 0.0,
+        )
+        val reference = engine.timelineState.copy(
+            hotGroups = LinkedHashSet(engine.timelineState.hotGroups),
+            bufferedGroups = LinkedHashSet(engine.timelineState.bufferedGroups),
+        )
+        val timelineBoundaries = engine.groups
+            .flatMap { group -> listOf(group.exactStartTimeMs, group.exactEndTimeMs) }
+            .filter(Double::isFinite)
+            .distinct()
+            .sorted()
+            .toDoubleArray()
+        val steps = listOf(
+            Triple(0.0, false, false),
+            Triple(999.4, false, false),
+            Triple(1_000.4, false, false),
+            Triple(1_000.6, false, false),
+            Triple(1_499.6, false, false),
+            Triple(2_000.0, false, false),
+            Triple(3_500.0, false, false),
+            Triple(1_600.0, false, false),
+            Triple(2_750.0, true, false),
+            Triple(5_500.0, false, true),
+            Triple(5_500.0, false, false),
+        )
+
+        for ((timeMs, isSeek, hasBottomContent) in steps) {
+            val roundedTimeMs = floor(timeMs + 0.5)
+            val previousTimeMs = reference.currentTimeMs
+            val crossedTimelineBoundary = crossesAmllTimelineBoundary(
+                boundariesMs = timelineBoundaries,
+                fromExclusiveMs = previousTimeMs,
+                toInclusiveMs = roundedTimeMs,
+            )
+            reference.isSeeking = isSeek
+            reference.currentTimeMs = roundedTimeMs
+            val stateResult = computeAmllPlayerTimeState(
+                timeMs = roundedTimeMs,
+                currentGroups = engine.groups,
+                timelineState = reference,
+            )
+            val commitResult = commitAmllPlayerTimeState(
+                timelineState = reference,
+                timeMs = roundedTimeMs,
+                currentGroups = engine.groups,
+                hasBottomContent = hasBottomContent,
+                stateResult = stateResult,
+            )
+            val expected = AmllTimeUpdateResult(
+                applied = true,
+                shouldLayout = commitResult.shouldLayout,
+                shouldResetScroll = commitResult.shouldResetScroll,
+                groupsToEnable = commitResult.groupsToEnable,
+                groupsToDisable = commitResult.groupsToDisable,
+                shouldRefreshInactiveWords =
+                    isSeek ||
+                        roundedTimeMs < previousTimeMs ||
+                        crossedTimelineBoundary,
+            )
+
+            assertEquals(
+                expected = expected,
+                actual = engine.setTime(
+                    timeMs = timeMs,
+                    isSeek = isSeek,
+                    hasBottomContent = hasBottomContent,
+                ),
+                message = "time=$timeMs seek=$isSeek bottom=$hasBottomContent",
+            )
+            assertEquals(reference, engine.timelineState)
+        }
+    }
+
+    @Test
+    fun stableEngineFrameIsReusedUntilEngineStateChanges() {
+        val engine = AmllPlayerEngine(
+            lines = listOf(line(id = "first", startMs = 0.0, endMs = 1_000.0)),
+        )
+
+        val firstFrame = engine.currentFrame()
+        assertSame(firstFrame, engine.currentFrame())
+        assertSame(firstFrame, engine.update(deltaMs = 16.0))
+
+        engine.setLines(
+            lines = listOf(line(id = "second", startMs = 0.0, endMs = 2_000.0)),
+        )
+        assertNotSame(firstFrame, engine.currentFrame())
+    }
 
     @Test
     fun hotGroupsUseStartInclusiveAndEndExclusiveIntervals() {
@@ -802,6 +951,27 @@ class AmllPlayerEngineTest {
                 thresholdPx = 10.0,
             ),
         )
+    }
+
+    @Test
+    fun pointerDragCannotBecomeATapAgainByReturningToItsStart() {
+        val start = Offset.Zero
+        var exceeded = false
+
+        exceeded = hasAmllPointerExceededTapThreshold(
+            alreadyExceeded = exceeded,
+            start = start,
+            current = Offset(20f, 0f),
+            thresholdPx = 10.0,
+        )
+        exceeded = hasAmllPointerExceededTapThreshold(
+            alreadyExceeded = exceeded,
+            start = start,
+            current = Offset.Zero,
+            thresholdPx = 10.0,
+        )
+
+        assertTrue(exceeded)
     }
 
     @Test

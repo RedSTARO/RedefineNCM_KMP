@@ -14,6 +14,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
@@ -48,8 +49,6 @@ import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.shadow.Shadow
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -231,20 +230,17 @@ fun NativeAmllScreen(
             modifier = Modifier.fillMaxSize(),
         )
 
-        // Tapping unused background space should reveal the same shared controller without
-        // stealing line-click or sheet gestures from children composed above it.
+        // Only a completed tap on unused background space reveals the controller. A raw press
+        // may become a lyric drag or trackpad gesture and must not expand the island.
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(Unit) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                            if (event.type == PointerEventType.Press) {
-                                controllerRevealRequest += 1
-                            }
-                        }
-                    }
+                    detectTapGestures(
+                        onTap = {
+                            controllerRevealRequest += 1
+                        },
+                    )
                 },
         )
 
