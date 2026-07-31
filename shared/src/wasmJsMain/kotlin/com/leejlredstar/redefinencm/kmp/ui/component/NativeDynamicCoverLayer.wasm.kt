@@ -192,11 +192,15 @@ private class WebDynamicCoverNode(
                 style.zIndex = "2"
                 style.borderRadius = "inherit"
             } else {
-                // Common Compose draws brightness and scrim after the clear node.
-                // Blur, saturation and the 120% * 110% overscan must therefore be
-                // applied on the real DOM pixels here rather than on an empty layer.
+                // Common Compose draws brightness and scrim after the clear node. Match
+                // player.html's runtime layout literally: 120% centered overscan is element
+                // geometry, while only the filtered result receives scale(1.10).
+                style.left = "-10%"
+                style.top = "-10%"
+                style.width = "120%"
+                style.height = "120%"
                 style.transformOrigin = "50% 50%"
-                style.transform = "scale(1.32)"
+                style.transform = "scale(1.10)"
                 style.filter = "blur(48px) saturate(${visualSpec.saturation})"
             }
         }
@@ -401,7 +405,12 @@ private class WebDynamicCoverNode(
         }
 
         video.style.position = "absolute";
-        video.style.inset = "0";
+        video.style.left = "-10%";
+        video.style.top = "-10%";
+        video.style.right = "auto";
+        video.style.bottom = "auto";
+        video.style.width = "120%";
+        video.style.height = "120%";
         video.style.zIndex = "0";
         appContainer.insertBefore(video, canvas);
 

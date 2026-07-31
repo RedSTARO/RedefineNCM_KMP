@@ -36,18 +36,22 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.Image
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeDynamicCoverLayer
+import kotlin.math.ceil
 
 private const val BackgroundCrossfadeMillis = 400
 private val BackgroundCssEase = CubicBezierEasing(0.25f, 0.10f, 0.25f, 1.00f)
 
 internal data class AmllBackgroundVisualSpec(
     val blurRadiusDp: Float,
-    val combinedScale: Float,
+    val overscanFraction: Double = 0.10,
+    val transformScale: Float,
     val saturation: Float,
     val brightness: Float,
     val scrimStartAlpha: Float = 0.62f,
@@ -60,14 +64,14 @@ internal fun amllBackgroundVisualSpec(
     if (androidPresentation) {
         AmllBackgroundVisualSpec(
             blurRadiusDp = 24f,
-            combinedScale = 1.20f * 1.06f,
+            transformScale = 1.06f,
             saturation = 1.15f,
             brightness = 0.46f,
         )
     } else {
         AmllBackgroundVisualSpec(
             blurRadiusDp = 48f,
-            combinedScale = 1.20f * 1.10f,
+            transformScale = 1.10f,
             saturation = 1.30f,
             brightness = 0.55f,
         )
@@ -93,10 +97,11 @@ internal fun AmllBackground(
     // Keeping that distinction matters for Android tablets and narrow desktop windows.
     val visualSpec = amllBackgroundVisualSpec(androidPresentation)
     val blurRadius = visualSpec.blurRadiusDp.dp
-    // applyViewportSize() first made both background elements 120% of the viewport and centered
-    // them at -10%, then CSS applied the platform scale. Equal aspect ratios make the combined
-    // centered scale exactly 1.20 * 1.06/1.10.
-    val scale = visualSpec.combinedScale
+    // applyViewportSize() makes both background elements 120% of the viewport and centers them
+    // at -10%. That is layout overscan, not a transform: CSS blur runs in the enlarged element's
+    // own coordinate space and only the later platform transform scales the filtered result.
+    val overscanFraction = visualSpec.overscanFraction
+    val transformScale = visualSpec.transformScale
     val saturation = visualSpec.saturation
     val brightness = visualSpec.brightness
     var displayedArtworkUri by remember(artworkUri, fallbackArtworkUri) {
@@ -137,7 +142,8 @@ internal fun AmllBackground(
                 },
                 modifier = Modifier.amllBackgroundEffect(
                     blurRadius = blurRadius,
-                    scale = scale,
+                    overscanFraction = overscanFraction,
+                    transformScale = transformScale,
                 ),
             )
         }
@@ -152,7 +158,8 @@ internal fun AmllBackground(
                     reducedMotion = reducedMotion,
                     modifier = Modifier.amllBackgroundEffect(
                         blurRadius = blurRadius,
-                        scale = scale,
+                        overscanFraction = overscanFraction,
+                        transformScale = transformScale,
                     ),
                 )
             }
@@ -192,16 +199,49 @@ internal fun nextAmllArtworkUriAfterFailure(
 
 private fun Modifier.amllBackgroundEffect(
     blurRadius: Dp,
-    scale: Float,
+    overscanFraction: Double,
+    transformScale: Float,
 ): Modifier = fillMaxSize()
+    .layout { measurable, constraints ->
+        val width = constraints.maxWidth
+        val height = constraints.maxHeight
+        val overscanWidth = scaledAmllBackgroundDimension(width, overscanFraction)
+        val overscanHeight = scaledAmllBackgroundDimension(height, overscanFraction)
+        val placeable = measurable.measure(
+            Constraints.fixed(
+                width = overscanWidth,
+                height = overscanHeight,
+            ),
+        )
+        layout(width, height) {
+            placeable.place(
+                x = (width - overscanWidth) / 2,
+                y = (height - overscanHeight) / 2,
+            )
+        }
+    }
     .graphicsLayer {
-        scaleX = scale
-        scaleY = scale
+        scaleX = transformScale
+        scaleY = transformScale
     }
     .blur(
         radius = blurRadius,
         edgeTreatment = BlurredEdgeTreatment.Unbounded,
     )
+
+internal fun scaledAmllBackgroundDimension(
+    viewportDimensionPx: Int,
+    overscanFraction: Double,
+): Int {
+    if (viewportDimensionPx <= 0) return 0
+    val maximumDimensionPx = Constraints.Infinity - 1
+    val maximumOverscanPx =
+        ((maximumDimensionPx - viewportDimensionPx).coerceAtLeast(0)) / 2
+    val overscanPx = ceil(viewportDimensionPx * overscanFraction)
+        .toInt()
+        .coerceIn(0, maximumOverscanPx)
+    return viewportDimensionPx + overscanPx * 2
+}
 
 private fun artworkCrossfade(reducedMotion: Boolean): ContentTransform =
     if (reducedMotion) {

@@ -46,6 +46,7 @@ internal class AmllSpring(currentPosition: Double = 0.0) {
     private var accelerationAt: (Double) -> Double = { 0.0 }
     private var queuedParameters: QueuedParameters? = null
     private var queuedPosition: QueuedPosition? = null
+    private var isAtRest = true
 
     val currentPosition: Double
         get() = currentPositionValue
@@ -62,6 +63,7 @@ internal class AmllSpring(currentPosition: Double = 0.0) {
         )
         velocityAt = amllDerivative(currentSolver)
         accelerationAt = amllDerivative(velocityAt)
+        isAtRest = false
     }
 
     fun arrived(): Boolean =
@@ -77,9 +79,18 @@ internal class AmllSpring(currentPosition: Double = 0.0) {
         currentSolver = { targetPosition }
         velocityAt = { 0.0 }
         accelerationAt = { 0.0 }
+        isAtRest = true
     }
 
-    fun update(deltaSeconds: Double = 0.0) {
+    fun update(deltaSeconds: Double = 0.0): Boolean {
+        if (
+            isAtRest &&
+            queuedParameters == null &&
+            queuedPosition == null
+        ) {
+            return false
+        }
+        val previousPosition = currentPositionValue
         currentTimeSeconds += deltaSeconds
         currentPositionValue = currentSolver(currentTimeSeconds)
 
@@ -105,6 +116,7 @@ internal class AmllSpring(currentPosition: Double = 0.0) {
         if (arrived()) {
             setPosition(targetPosition)
         }
+        return currentPositionValue != previousPosition
     }
 
     fun updateParameters(

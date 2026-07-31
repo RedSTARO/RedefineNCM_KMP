@@ -328,15 +328,24 @@ class AmllLyricModelTest {
         val android = amllBackgroundVisualSpec(androidPresentation = true)
 
         assertEquals(48f, desktop.blurRadiusDp)
-        assertEquals(1.32f, desktop.combinedScale, absoluteTolerance = 0.0001f)
+        assertEquals(0.10, desktop.overscanFraction, absoluteTolerance = 0.0001)
+        assertEquals(1.10f, desktop.transformScale, absoluteTolerance = 0.0001f)
         assertEquals(1.30f, desktop.saturation)
         assertEquals(0.55f, desktop.brightness)
 
         assertEquals(24f, android.blurRadiusDp)
-        assertEquals(1.272f, android.combinedScale, absoluteTolerance = 0.0001f)
+        assertEquals(0.10, android.overscanFraction, absoluteTolerance = 0.0001)
+        assertEquals(1.06f, android.transformScale, absoluteTolerance = 0.0001f)
         assertEquals(1.15f, android.saturation)
         assertEquals(0.46f, android.brightness)
         assertEquals(0.62f, android.scrimStartAlpha)
         assertEquals(0.56f, android.scrimEndAlpha)
+    }
+
+    @Test
+    fun backgroundOverscanUsesLayoutPixelsRatherThanFilterScale() {
+        assertEquals(1_200, scaledAmllBackgroundDimension(1_000, 0.10))
+        assertEquals(1_203, scaledAmllBackgroundDimension(1_001, 0.10))
+        assertEquals(0, scaledAmllBackgroundDimension(0, 0.10))
     }
 }

@@ -240,6 +240,19 @@ internal fun isAmllTouchClickCandidate(
     abs((end.x - start.x).toDouble()) < thresholdPx &&
         abs((end.y - start.y).toDouble()) < thresholdPx
 
+internal fun hasAmllPointerExceededTapThreshold(
+    alreadyExceeded: Boolean,
+    start: Offset,
+    current: Offset,
+    thresholdPx: Double,
+): Boolean =
+    alreadyExceeded ||
+        !isAmllTouchClickCandidate(
+            start = start,
+            end = current,
+            thresholdPx = thresholdPx,
+        )
+
 internal fun computeAmllTouchScrollOffset(
     startScrollOffsetPx: Double,
     startTouchYPx: Double,
@@ -504,7 +517,9 @@ internal fun AmllLyricViewport(
     val runtime = remember(engine) { AmllViewportRuntime(engine) }
     val hasDuetLine = remember(document.lines) { document.lines.any(AmllLyricLine::isDuet) }
     var frame by remember(engine) { mutableStateOf(engine.currentFrame()) }
-    var renderPulse by remember { mutableLongStateOf(0L) }
+    var inactiveWordPositionMs by remember(engine) {
+        mutableLongStateOf(positionState.value)
+    }
     var keyboardIndex by remember(document.groups) { mutableIntStateOf(0) }
     var focusedKeyboardIndex by remember(document.groups) { mutableStateOf<Int?>(null) }
     var pendingKeyboardFocusIndex by remember(document.groups) { mutableStateOf<Int?>(null) }
@@ -522,7 +537,6 @@ internal fun AmllLyricViewport(
 
     fun invalidateLayout(sync: Boolean = false, force: Boolean = false) {
         runtime.requestLayout(sync = sync, force = force)
-        renderPulse++
     }
 
     fun beginScrollHandler(): Boolean {
@@ -625,7 +639,11 @@ internal fun AmllLyricViewport(
                 .coerceAtLeast(0.0)
             previousFrame = TimeSource.Monotonic.markNow()
 
-            val timeUpdate = engine.setTime(positionState.value.toDouble())
+            val timelinePositionMs = positionState.value
+            val timeUpdate = engine.setTime(timelinePositionMs.toDouble())
+            if (timeUpdate.shouldRefreshInactiveWords) {
+                inactiveWordPositionMs = timelinePositionMs
+            }
             if (timeUpdate.shouldResetScroll) {
                 resetScroll()
             }
@@ -639,7 +657,6 @@ internal fun AmllLyricViewport(
                 deltaMs = deltaMs,
                 isPageVisible = isPageVisible,
             )
-            renderPulse++
         }
     }
 
@@ -709,7 +726,6 @@ internal fun AmllLyricViewport(
                     runtime.scrollOffsetPx += translated.deltaPx
                     runtime.clampScroll()
                     invalidateLayout(sync = translated.sync, force = false)
-                    onInteraction()
                     true
                 }
             },
@@ -717,10 +733,14 @@ internal fun AmllLyricViewport(
                 isPageVisible = visible
                 if (visible && forceResync) {
                     // LyricPlayerBase.onPageShow calls setCurrentTime(currentTime, true).
+                    val timelinePositionMs = positionState.value
                     val timeUpdate = engine.setTime(
-                        timeMs = positionState.value.toDouble(),
+                        timeMs = timelinePositionMs.toDouble(),
                         isSeek = true,
                     )
+                    if (timeUpdate.shouldRefreshInactiveWords) {
+                        inactiveWordPositionMs = timelinePositionMs
+                    }
                     if (timeUpdate.shouldResetScroll) {
                         resetScroll()
                     }
@@ -728,7 +748,6 @@ internal fun AmllLyricViewport(
                         runtime.requestLayout()
                     }
                     frame = engine.currentFrame()
-                    renderPulse++
                 }
             },
         )
@@ -749,13 +768,41 @@ internal fun AmllLyricViewport(
             },
         )
         .hoverable(viewportHoverSource)
-        .pointerInput(onInteraction) {
+        .pointerInput(onInteraction, touchClickThresholdPx) {
+            var activePointerId: PointerId? = null
+            var startPointerPosition = Offset.Zero
+            var exceededTapThreshold = false
+
             awaitPointerEventScope {
                 while (true) {
                     val event = awaitPointerEvent(PointerEventPass.Initial)
-                    if (event.type == PointerEventType.Press) {
-                        // player.html reveals the controller on capture-phase pointerdown.
-                        onInteraction()
+                    if (activePointerId == null) {
+                        val down = event.changes.firstOrNull { change ->
+                            change.type != PointerType.Touch &&
+                                change.pressed &&
+                                !change.previousPressed
+                        }
+                        if (down != null) {
+                            activePointerId = down.id
+                            startPointerPosition = down.position
+                            exceededTapThreshold = false
+                        }
+                        continue
+                    }
+
+                    val change = event.changes.firstOrNull { it.id == activePointerId }
+                        ?: continue
+                    exceededTapThreshold = hasAmllPointerExceededTapThreshold(
+                        alreadyExceeded = exceededTapThreshold,
+                        start = startPointerPosition,
+                        current = change.position,
+                        thresholdPx = touchClickThresholdPx,
+                    )
+                    if (!change.pressed && change.previousPressed) {
+                        if (!exceededTapThreshold) {
+                            onInteraction()
+                        }
+                        activePointerId = null
                     }
                 }
             }
@@ -774,7 +821,6 @@ internal fun AmllLyricViewport(
                     runtime.scrollOffsetPx += translated.deltaPx
                     runtime.clampScroll()
                     invalidateLayout(sync = translated.sync, force = false)
-                    onInteraction()
                     event.changes.forEach { it.consume() }
                 }
             }
@@ -786,6 +832,7 @@ internal fun AmllLyricViewport(
             var lastMoveYPx = 0.0
             var lastMoveTimeMs = 0L
             var scrollSpeedPxPerMs = 0.0
+            var exceededTapThreshold = false
 
             awaitPointerEventScope {
                 while (true) {
@@ -804,6 +851,7 @@ internal fun AmllLyricViewport(
                             lastMoveYPx = down.position.y.toDouble()
                             lastMoveTimeMs = down.uptimeMillis
                             scrollSpeedPxPerMs = 0.0
+                            exceededTapThreshold = false
                             down.consume()
                             invalidateLayout(sync = true, force = true)
                         }
@@ -813,6 +861,12 @@ internal fun AmllLyricViewport(
                     val change = event.changes.firstOrNull { it.id == activeTouchId }
                         ?: continue
                     if (event.type == PointerEventType.Move && change.pressed) {
+                        exceededTapThreshold = hasAmllPointerExceededTapThreshold(
+                            alreadyExceeded = exceededTapThreshold,
+                            start = startTouchPosition,
+                            current = change.position,
+                            thresholdPx = touchClickThresholdPx,
+                        )
                         if (beginScrollHandler()) {
                             change.consume()
                             val currentY = change.position.y.toDouble()
@@ -840,6 +894,7 @@ internal fun AmllLyricViewport(
                         if (allowed) {
                             change.consume()
                             if (
+                                !exceededTapThreshold &&
                                 isAmllTouchClickCandidate(
                                     start = startTouchPosition,
                                     end = change.position,
@@ -856,8 +911,11 @@ internal fun AmllLyricViewport(
                                     groupHeightsPx = runtime.renderedGroupHeightsPx,
                                 )
                                 runtime.isUserScrolling = false
-                                clickedIndex?.let { index ->
+                                if (clickedIndex != null) {
+                                    val index = clickedIndex
                                     clickGroup(index, requestPointerFocus = true)
+                                } else {
+                                    onInteraction()
                                 }
                             } else {
                                 launchInertia(scrollSpeedPxPerMs)
@@ -922,9 +980,6 @@ internal fun AmllLyricViewport(
             }
         }
 
-    @Suppress("UNUSED_EXPRESSION")
-    renderPulse
-
     Layout(
         modifier = rootModifier,
         content = {
@@ -959,6 +1014,7 @@ internal fun AmllLyricViewport(
                     group = group,
                     frame = groupFrame,
                     positionState = positionState,
+                    inactiveWordPositionMs = inactiveWordPositionMs,
                     isPlaying = isPlaying,
                     parameters = parameters,
                     androidPresentation = androidPresentation,
@@ -1208,6 +1264,7 @@ private fun AmllLyricGroupContent(
     group: AmllLyricGroup,
     frame: AmllGroupFrame,
     positionState: State<Long>,
+    inactiveWordPositionMs: Long,
     isPlaying: Boolean,
     parameters: AmllLyricVisualParameters,
     androidPresentation: Boolean,
@@ -1255,7 +1312,9 @@ private fun AmllLyricGroupContent(
     )
     val blurModifier = if (renderedBlurPx > 0f) {
         Modifier.blur(
-            radius = with(density) { renderedBlurPx.toDp() },
+            // CSS `blur(Npx)` uses logical CSS pixels. Compose dp is the corresponding logical
+            // unit; converting N from device px first made Native blur too weak on HiDPI screens.
+            radius = renderedBlurPx.dp,
             edgeTreatment = BlurredEdgeTreatment.Unbounded,
         )
     } else {
@@ -1351,6 +1410,7 @@ private fun AmllLyricGroupContent(
             AmllLyricLineContent(
                 line = group.mainLine,
                 positionState = positionState,
+                inactiveWordPositionMs = inactiveWordPositionMs,
                 active = frame.renderMode == AmllLineRenderMode.GRADIENT,
                 maskScale = frame.mainScalePercent / 100.0,
                 maskRenderMode = frame.renderMode,
@@ -1420,6 +1480,7 @@ private fun AmllLyricGroupContent(
                     AmllLyricLineContent(
                         line = backgroundLine,
                         positionState = positionState,
+                        inactiveWordPositionMs = inactiveWordPositionMs,
                         active = frame.renderMode == AmllLineRenderMode.GRADIENT,
                         maskScale = frame.backgroundScalePercent / 100.0,
                         maskRenderMode = frame.renderMode,
@@ -1517,6 +1578,7 @@ internal fun isAmllBackgroundWrapperHidden(
 private fun AmllLyricLineContent(
     line: AmllLyricLine,
     positionState: State<Long>,
+    inactiveWordPositionMs: Long,
     active: Boolean,
     maskScale: Double,
     maskRenderMode: AmllLineRenderMode,
@@ -1547,6 +1609,7 @@ private fun AmllLyricLineContent(
                 AmllTimedWordLine(
                     line = line,
                     positionState = positionState,
+                    inactiveWordPositionMs = inactiveWordPositionMs,
                     active = active,
                     baseFontSizeSp = baseFontSizeDp,
                     androidPresentation = androidPresentation,

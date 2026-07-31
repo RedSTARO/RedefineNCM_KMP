@@ -50,6 +50,39 @@ internal data class AmllPlayerTimeStateResult(
 )
 
 /**
+ * Returns whether a monotonically advancing clock crossed a lyric start/end boundary.
+ *
+ * The lower bound is exclusive because [AmllTimelineState.currentTimeMs] has already been
+ * committed for that instant. The upper bound is inclusive because AMLL starts groups at
+ * `startTime <= currentTime` and ends them at `endTime <= currentTime`.
+ */
+internal fun crossesAmllTimelineBoundary(
+    boundariesMs: DoubleArray,
+    fromExclusiveMs: Double,
+    toInclusiveMs: Double,
+): Boolean {
+    if (
+        !fromExclusiveMs.isFinite() ||
+        !toInclusiveMs.isFinite() ||
+        toInclusiveMs < fromExclusiveMs
+    ) {
+        return true
+    }
+
+    var low = 0
+    var high = boundariesMs.size
+    while (low < high) {
+        val middle = (low + high) ushr 1
+        if (boundariesMs[middle] <= fromExclusiveMs) {
+            low = middle + 1
+        } else {
+            high = middle
+        }
+    }
+    return low < boundariesMs.size && boundariesMs[low] <= toInclusiveMs
+}
+
+/**
  * Direct translation of `computePlayerTimeState`.
  */
 internal fun computeAmllPlayerTimeState(
@@ -739,6 +772,19 @@ internal data class AmllTimeUpdateResult(
     val shouldResetScroll: Boolean,
     val groupsToEnable: List<Int>,
     val groupsToDisable: List<Int>,
+    /**
+     * Inactive word canvases use a coarse playback snapshot instead of observing the 60 Hz clock.
+     * Refresh it only when the clock crosses lyric state or moves discontinuously.
+     */
+    val shouldRefreshInactiveWords: Boolean = false,
+)
+
+private val AmllUnchangedTimeUpdateResult = AmllTimeUpdateResult(
+    applied = true,
+    shouldLayout = false,
+    shouldResetScroll = false,
+    groupsToEnable = emptyList(),
+    groupsToDisable = emptyList(),
 )
 
 /**
@@ -765,6 +811,10 @@ internal class AmllPlayerEngine(
     private var enableSpring = true
     private var lastLayoutResult: AmllLayoutResult? = null
     private var layoutRevision = 0L
+    private var cachedFrame: AmllEngineFrame? = null
+    private var frameDirty = true
+    private var timelineBoundariesMs: DoubleArray = doubleArrayOf()
+    private var lastHasBottomContent = false
 
     val timelineState = AmllTimelineState()
     val layoutState = AmllPlayerLayoutState()
@@ -818,6 +868,13 @@ internal class AmllPlayerEngine(
         timelineState.scrollToIndex = 0
 
         currentGroups = groups.toList()
+        timelineBoundariesMs = currentGroups
+            .flatMap { group -> listOf(group.exactStartTimeMs, group.exactEndTimeMs) }
+            .filter(Double::isFinite)
+            .distinct()
+            .sorted()
+            .toDoubleArray()
+        lastHasBottomContent = false
         currentDocumentIsNonDynamic = isNonDynamic
         groupMotionStates = currentGroups.map { group ->
             GroupMotionState(
@@ -829,6 +886,8 @@ internal class AmllPlayerEngine(
             }
         }
         lastLayoutResult = null
+        cachedFrame = null
+        frameDirty = true
         setTime(
             timeMs = initialTimeMs,
             isSeek = true,
@@ -842,6 +901,13 @@ internal class AmllPlayerEngine(
         hasBottomContent: Boolean = false,
     ): AmllTimeUpdateResult {
         val roundedTimeMs = floor(timeMs + 0.5)
+        val previousTimeMs = timelineState.currentTimeMs
+        val crossedTimelineBoundary = crossesAmllTimelineBoundary(
+            boundariesMs = timelineBoundariesMs,
+            fromExclusiveMs = previousTimeMs,
+            toInclusiveMs = roundedTimeMs,
+        )
+        val playbackMovedBackward = roundedTimeMs < previousTimeMs
         timelineState.isSeeking = isSeek
         timelineState.currentTimeMs = roundedTimeMs
 
@@ -853,6 +919,16 @@ internal class AmllPlayerEngine(
                 groupsToEnable = emptyList(),
                 groupsToDisable = emptyList(),
             )
+        }
+
+        if (
+            !isSeek &&
+            hasBottomContent == lastHasBottomContent &&
+            !playbackMovedBackward &&
+            !crossedTimelineBoundary
+        ) {
+            timelineState.lastCurrentTimeMs = roundedTimeMs
+            return AmllUnchangedTimeUpdateResult
         }
 
         val stateResult = computeAmllPlayerTimeState(
@@ -867,12 +943,15 @@ internal class AmllPlayerEngine(
             hasBottomContent = hasBottomContent,
             stateResult = stateResult,
         )
+        lastHasBottomContent = hasBottomContent
         return AmllTimeUpdateResult(
             applied = true,
             shouldLayout = commitResult.shouldLayout,
             shouldResetScroll = commitResult.shouldResetScroll,
             groupsToEnable = commitResult.groupsToEnable,
             groupsToDisable = commitResult.groupsToDisable,
+            shouldRefreshInactiveWords =
+                isSeek || playbackMovedBackward || crossedTimelineBoundary,
         )
     }
 
@@ -930,6 +1009,7 @@ internal class AmllPlayerEngine(
 
         lastLayoutResult = result
         timelineState.initialLayoutFinished = true
+        frameDirty = true
         return result
     }
 
@@ -941,25 +1021,30 @@ internal class AmllPlayerEngine(
         deltaMs: Double = 0.0,
         isPageVisible: Boolean = true,
     ): AmllEngineFrame {
+        var frameChanged = false
         if (enableSpring) {
             val deltaSeconds = deltaMs / 1_000.0
             // DomLyricPlayer.update() advances BaseLyricPlayer's bottom line before checking
             // isPageVisible, then skips every LyricLineGroup update while pagehide/hidden.
             if (isPageVisible) {
-                groupMotionStates.forEach { it.update(deltaSeconds) }
+                groupMotionStates.forEach { motion ->
+                    frameChanged = motion.update(deltaSeconds) || frameChanged
+                }
             }
-            bottomLineYSpring.update(deltaSeconds)
+            frameChanged = bottomLineYSpring.update(deltaSeconds) || frameChanged
         }
+        frameDirty = frameDirty || frameChanged
         return currentFrame()
     }
 
     fun currentFrame(): AmllEngineFrame {
-        val targetsByIndex = lastLayoutResult
-            ?.groupTargets
-            .orEmpty()
-            .associateBy(AmllGroupTarget::index)
+        cachedFrame?.takeUnless { frameDirty }?.let { return it }
+        val targets = lastLayoutResult?.groupTargets.orEmpty()
         val groupFrames = groupMotionStates.mapIndexed { index, motion ->
-            val target = targetsByIndex[index] ?: DEFAULT_GROUP_TARGET.copy(index = index)
+            val target = targets.getOrNull(index)
+                ?.takeIf { candidate -> candidate.index == index }
+                ?: targets.firstOrNull { candidate -> candidate.index == index }
+                ?: DEFAULT_GROUP_TARGET.copy(index = index)
             motion.frame(index = index, target = target)
         }
         return AmllEngineFrame(
@@ -970,7 +1055,10 @@ internal class AmllPlayerEngine(
                 lastLayoutResult?.bottomLineTarget?.blurLevel ?: 0.0,
             ),
             interludeDotsTarget = lastLayoutResult?.interludeDotsTarget,
-        )
+        ).also { builtFrame ->
+            cachedFrame = builtFrame
+            frameDirty = false
+        }
     }
 
     private fun updateYSpringParameters(parameters: AmllSpringParameters) {
@@ -1042,12 +1130,11 @@ internal class AmllPlayerEngine(
             }
         }
 
-        fun update(deltaSeconds: Double) {
-            positionY.update(deltaSeconds)
-            backgroundSlideY.update(deltaSeconds)
-            mainScale.update(deltaSeconds)
-            backgroundScale.update(deltaSeconds)
-        }
+        fun update(deltaSeconds: Double): Boolean =
+            positionY.update(deltaSeconds) or
+                backgroundSlideY.update(deltaSeconds) or
+                mainScale.update(deltaSeconds) or
+                backgroundScale.update(deltaSeconds)
 
         fun frame(
             index: Int,
