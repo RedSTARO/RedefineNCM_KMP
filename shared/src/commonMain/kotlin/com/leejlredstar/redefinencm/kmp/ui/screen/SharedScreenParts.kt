@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,6 +22,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
+import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -234,8 +239,9 @@ fun RecommendSquareCard(
     Surface(
         onClick = onClick,
         modifier = Modifier
-            .padding(end = 12.dp, top = 8.dp, bottom = 8.dp)
-            .size(168.dp)
+            .padding(vertical = 8.dp)
+            .fillMaxWidth()
+            .height(CarouselItemWidth)
             .semantics(mergeDescendants = true) {
                 if (text == "私人雷达") contentDescription = text
             },
@@ -288,8 +294,9 @@ fun RecommendSquareCard(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun <T> SectionWithLazyRow(
+fun <T> SectionWithCarousel(
     title: String,
     items: List<T>,
     isLoading: Boolean = false,
@@ -336,12 +343,26 @@ fun <T> SectionWithLazyRow(
                 modifier = Modifier.fillMaxWidth(),
             )
         } else {
-            LazyRow {
-                items(items = items, key = key) { item -> itemContent(item) }
+            // Expressive carousel rather than a plain LazyRow: item widths grow and shrink as
+            // they cross the viewport, so the row itself animates instead of only translating.
+            // Items must fill the width the carousel hands them — a fixed-size child cannot
+            // squeeze, which is why RecommendSquareCard fills rather than setting .size().
+            val carouselState = rememberCarouselState { items.size }
+            HorizontalMultiBrowseCarousel(
+                state = carouselState,
+                preferredItemWidth = CarouselItemWidth,
+                itemSpacing = 12.dp,
+                contentPadding = PaddingValues(horizontal = 4.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) { index ->
+                itemContent(items[index])
             }
         }
     }
 }
+
+/** Preferred carousel slot width; cards fill this and squeeze at the viewport edges. */
+private val CarouselItemWidth = 168.dp
 
 @Composable
 fun PlaylistCard(

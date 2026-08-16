@@ -51,12 +51,6 @@ object ExpressiveLayout {
     val MinimumTouchTarget = 48.dp
     val ReadingContentMaxWidth = 840.dp
     val BrowseContentMaxWidth = 1200.dp
-
-    /** Height of the expressive hero block that opens every top-level screen. */
-    val HeroMinHeight = 220.dp
-
-    /** Edge inset reserved for the floating nav toolbar so content can scroll clear of it. */
-    val FloatingNavClearance = 108.dp
 }
 
 /** Shared timing tokens for custom transitions not owned by a Material component. */

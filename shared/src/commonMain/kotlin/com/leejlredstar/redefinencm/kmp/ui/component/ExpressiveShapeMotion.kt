@@ -8,7 +8,6 @@ import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.toPath
-import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -33,15 +32,18 @@ import androidx.graphics.shapes.RoundedPolygon
  * M3 Expressive's defining interaction is shape *morphing* — a surface changing its silhouette
  * in response to touch rather than only its colour or elevation. Material provides that natively
  * for `ButtonGroup`, `ToggleButton` and `SplitButton`; this file supplies the same behaviour for
- * the surfaces this app draws itself (artwork frames, hero medallions, badges), so the language
- * is consistent instead of only appearing on stock components.
+ * the artwork surfaces this app draws itself, so the language is consistent instead of only
+ * appearing on stock components.
  */
 
 /**
  * A [Shape] that renders a point along a [Morph] between two [RoundedPolygon]s.
  *
- * [MaterialShapes] polygons are normalised to a 2×2 box centred on the origin, so the path is
- * scaled by half the target size and then translated by one unit to land in the layout bounds.
+ * [MaterialShapes] polygons are **normalised into a unit `[0,1]` box**, so the path only needs
+ * scaling by the full target size. The widely-copied `scale(width / 2f, height / 2f)` +
+ * `translate(1f, 1f)` recipe applies to polygons built centred on the origin with radius 1 (a
+ * `[-1,1]` box); using it here renders the shape at half size in the lower-right quadrant.
+ *
  * The [Path] and [Matrix] are held per instance and rewound on each pass to avoid allocating on
  * every frame of a morph animation.
  */
@@ -60,8 +62,7 @@ private class MorphPolygonShape(
         path.rewind()
         morph.toPath(progress = progress, path = path)
         matrix.reset()
-        matrix.scale(size.width / 2f, size.height / 2f)
-        matrix.translate(1f, 1f)
+        matrix.scale(size.width, size.height)
         path.transform(matrix)
         return Outline.Generic(path)
     }
@@ -77,17 +78,16 @@ enum class ExpressiveMorphPair(
     internal val start: () -> RoundedPolygon,
     internal val end: () -> RoundedPolygon,
 ) {
-    /** Artwork frames: a soft squircle that blooms into a scalloped cookie while pressed. */
-    ArtworkBloom({ MaterialShapes.Cookie9Sided }, { MaterialShapes.Cookie12Sided }),
-
-    /** Hero medallions: a round badge that snaps into a many-pointed burst. */
-    HeroBurst({ MaterialShapes.Circle }, { MaterialShapes.SoftBurst }),
-
-    /** Playful accents on empty states and identity surfaces. */
-    Bloom({ MaterialShapes.Flower }, { MaterialShapes.Clover8Leaf }),
-
-    /** Compact status badges: pill relaxing into a gem while active. */
-    BadgeGem({ MaterialShapes.Pill }, { MaterialShapes.Gem }),
+    /**
+     * Artwork frames: a rounded square that blooms into a scalloped cookie while pressed.
+     *
+     * The **start** shape must be the resting silhouette, because progress `0f` is what the
+     * artwork displays whenever it is not being touched. Starting from a cookie leaves every
+     * cover permanently scalloped and crops the image badly, so the rest end is
+     * [MaterialShapes.Square] — a rounded square close to the `medium` shape these covers used
+     * before — and only the pressed end is decorative.
+     */
+    ArtworkBloom({ MaterialShapes.Square }, { MaterialShapes.Cookie12Sided }),
 }
 
 /**
@@ -125,10 +125,6 @@ fun rememberPressMorphProgress(interactionSource: InteractionSource): State<Floa
     }
     return animatable.asState()
 }
-
-/** A static [MaterialShapes] silhouette, for decorative frames that do not animate. */
-@Composable
-fun materialShape(polygon: RoundedPolygon): Shape = polygon.toShape()
 
 /**
  * Determinate wavy progress — the Expressive replacement for a flat linear bar.

@@ -678,8 +678,9 @@ Applies to all platforms, and the original Android repo is kept aligned (goal #3
   replacing it.
 - **Per-screen:** Full-screen player (`AmllPlayerScreen`, resolving the recommended Legacy
   WebView on Android/Windows x64 or the Native Compose renderer elsewhere/by user choice);
-  Playlist detail (album-color gradient header, pill "Play All", connected
-  rows with download indicators); User page (blurred hero + avatar, badged playlists);
+  Playlist detail (album-color gradient header, play-all/download-all as one
+  `SplitButtonLayout`, connected rows with download indicators); User page (blurred hero +
+  avatar, badged playlists);
   Search (pill→bar shared-element transition, suggestion list); Downloads (queue summary hero,
   progress rows, pause/resume/cancel/retry controls); Settings (gradient hero, tonal rows, pill
   actions); Mini-player FAB (image-derived color w/ adaptive content luminance via

@@ -183,7 +183,7 @@ fun HomeScreen(
                     }
 
                     item {
-                        SectionWithLazyRow(
+                        SectionWithCarousel(
                             title = "推荐歌单",
                             items = resources,
                             isLoading = accountLoading && recommendResource == null,
@@ -208,7 +208,7 @@ fun HomeScreen(
                     }
 
                     item {
-                        SectionWithLazyRow(
+                        SectionWithCarousel(
                             title = "每日推荐",
                             items = dailySongs,
                             isLoading = accountLoading && recommend == null,

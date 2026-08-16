@@ -9,11 +9,22 @@ import androidx.compose.ui.unit.sp
 /**
  * Material 3 Expressive type scale, tuned for maximum hierarchy contrast.
  *
- * The scale is intentionally bimodal. Display and headline roles are set in [FontWeight.Black]
- * / [FontWeight.ExtraBold] with negative tracking so they read as poster type, while every body
- * role stays at [FontWeight.Normal] with positive tracking for sustained reading. The gap
- * between those two groups — not the absolute sizes — is what carries the expressive voice, so
- * body sizes are left at the comfortable M3 values rather than being scaled up alongside.
+ * The scale is intentionally bimodal. Display and headline roles are heavy
+ * ([FontWeight.Black] / [FontWeight.ExtraBold]) while every body role stays at
+ * [FontWeight.Normal] with positive tracking for sustained reading. The gap between those two
+ * groups is what carries the expressive voice, so body sizes are left at the comfortable M3
+ * values rather than being scaled up alongside.
+ *
+ * Two constraints come from this app's UI being predominantly Chinese:
+ *
+ * - **No negative tracking.** CJK glyphs are already set on a tight em box; pulling them
+ *   together collides them. Display roles therefore sit at `0.sp` rather than the negative
+ *   tracking a Latin-only poster scale would use.
+ * - **The weight ladder collapses on CJK.** System CJK families (Noto Sans CJK, PingFang,
+ *   Microsoft YaHei) rarely ship above Bold, so Black / ExtraBold / Bold render alike for
+ *   Chinese text and only the Bold-vs-Normal step survives. That step is still real contrast,
+ *   but it means **size** has to do the rest of the hierarchy work — which is why the display
+ *   and headline sizes are set well apart rather than relying on weight alone.
  *
  * Titles bridge the two: heavy enough to anchor a section, small enough to sit inside list rows.
  */
@@ -23,42 +34,42 @@ val ExpressiveTypography = Typography(
         fontWeight = FontWeight.Black,
         fontSize = 64.sp,
         lineHeight = 66.sp,
-        letterSpacing = (-1.5).sp,
+        letterSpacing = 0.sp,
     ),
     displayMedium = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Black,
         fontSize = 50.sp,
         lineHeight = 54.sp,
-        letterSpacing = (-1.0).sp,
+        letterSpacing = 0.sp,
     ),
     displaySmall = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.ExtraBold,
         fontSize = 40.sp,
         lineHeight = 46.sp,
-        letterSpacing = (-0.5).sp,
+        letterSpacing = 0.sp,
     ),
     headlineLarge = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.ExtraBold,
         fontSize = 34.sp,
         lineHeight = 40.sp,
-        letterSpacing = (-0.4).sp,
+        letterSpacing = 0.sp,
     ),
     headlineMedium = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.ExtraBold,
         fontSize = 29.sp,
         lineHeight = 36.sp,
-        letterSpacing = (-0.2).sp,
+        letterSpacing = 0.sp,
     ),
     headlineSmall = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Bold,
         fontSize = 25.sp,
         lineHeight = 32.sp,
-        letterSpacing = (-0.1).sp,
+        letterSpacing = 0.sp,
     ),
     titleLarge = TextStyle(
         fontFamily = FontFamily.Default,
