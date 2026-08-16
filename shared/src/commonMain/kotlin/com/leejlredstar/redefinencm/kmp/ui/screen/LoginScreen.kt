@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -61,6 +62,7 @@ import com.leejlredstar.redefinencm.kmp.util.decodePngToImageBitmap
 import com.leejlredstar.redefinencm.kmp.viewmodel.LoginViewModel
 import org.koin.compose.koinInject
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun LoginScreen(
     onBack: () -> Unit,
@@ -265,7 +267,7 @@ fun LoginScreen(
                     Button(
                         onClick = { viewModel.startQrLogin() },
                         modifier = Modifier.fillMaxWidth().height(48.dp),
-                        shape = CircleShape,
+                        shapes = ButtonDefaults.shapes(),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = loginPalette.accent,
                             contentColor = loginPalette.onAccent,
@@ -278,7 +280,7 @@ fun LoginScreen(
                     OutlinedButton(
                         onClick = { viewModel.cancelQrLogin() },
                         modifier = Modifier.fillMaxWidth().height(48.dp),
-                        shape = CircleShape,
+                        shapes = ButtonDefaults.shapes(),
                         colors = ButtonDefaults.outlinedButtonColors(
                             contentColor = loginPalette.accent,
                         ),

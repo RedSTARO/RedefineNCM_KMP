@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.ui.component
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -116,11 +117,17 @@ fun QueueBottomSheet(
                 val isCurrent = index == currentIndex
                 val title = item.title.ifBlank { "未知歌曲" }
                 val artist = item.artist.ifBlank { "未知歌手" }
+                val interactionSource = remember { MutableInteractionSource() }
                 Surface(
                     onClick = { onSeekClick(index); onDismiss() },
-                    shape = connectedListItemShape(index, queueEntries.size),
+                    shape = rememberConnectedListItemShape(
+                        index = index,
+                        count = queueEntries.size,
+                        interactionSource = interactionSource,
+                    ),
                     color = if (isCurrent) accentPalette.container else accentPalette.quietContainer,
                     contentColor = if (isCurrent) accentPalette.onContainer else accentPalette.onQuietContainer,
+                    interactionSource = interactionSource,
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = ExpressiveLayout.MinimumTouchTarget)
@@ -145,13 +152,14 @@ fun QueueBottomSheet(
                             color = if (isCurrent) accentPalette.onContainer else accentPalette.accent,
                             modifier = Modifier.width(36.dp),
                         )
-                        AsyncImage(
+                        ExpressiveArtwork(
                             model = item.artworkUri,
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(52.dp)
-                                .clip(MaterialTheme.shapes.medium),
+                            modifier = Modifier.size(52.dp),
+                            pressInteractionSource = interactionSource,
+                            containerColor = accentPalette.container,
+                            contentColor = accentPalette.onContainer,
                         )
                         Spacer(Modifier.width(14.dp))
                         Column(modifier = Modifier.weight(1f)) {

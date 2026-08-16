@@ -3,6 +3,7 @@ package com.leejlredstar.redefinencm.kmp.ui.screen
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -45,7 +46,9 @@ import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
+import com.leejlredstar.redefinencm.kmp.ui.component.rememberConnectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
@@ -220,14 +223,20 @@ fun SearchScreen(
                         items = suggestions,
                         key = { _, keyword -> keyword },
                     ) { index, keyword ->
+                        val interactionSource = remember { MutableInteractionSource() }
                         Surface(
                             onClick = { submit(keyword) },
-                            shape = connectedListItemShape(index, suggestions.size),
+                            shape = rememberConnectedListItemShape(
+                                index = index,
+                                count = suggestions.size,
+                                interactionSource = interactionSource,
+                            ),
                             color = searchPalette.quietContainer,
                             contentColor = searchPalette.onQuietContainer,
+                            interactionSource = interactionSource,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 1.5.dp),
+                                .padding(vertical = ExpressiveLayout.ConnectedItemGap),
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),

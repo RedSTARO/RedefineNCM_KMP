@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.ripple
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -74,6 +76,7 @@ import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
+import com.leejlredstar.redefinencm.kmp.ui.component.rememberConnectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.BuildInfo
@@ -812,17 +815,20 @@ private fun SettingsSwitch(
     onUpdate: (Boolean) -> Unit,
 ) {
     var state by remember(checked) { mutableStateOf(checked) }
+    val interactionSource = remember { MutableInteractionSource() }
     Surface(
-        shape = connectedListItemShape(index, count),
+        shape = rememberConnectedListItemShape(index, count, interactionSource),
         color = accentPalette.quietContainer,
         contentColor = accentPalette.onQuietContainer,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 1.5.dp)
+            .padding(vertical = ExpressiveLayout.ConnectedItemGap)
             .toggleable(
                 value = state,
                 enabled = enabled,
                 role = Role.Switch,
+                interactionSource = interactionSource,
+                indication = ripple(),
                 onValueChange = { updated ->
                     state = updated
                     onUpdate(updated)

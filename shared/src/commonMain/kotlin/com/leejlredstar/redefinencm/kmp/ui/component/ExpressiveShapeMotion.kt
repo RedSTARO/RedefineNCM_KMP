@@ -97,8 +97,22 @@ enum class ExpressiveMorphPair(
  * drive the transition.
  */
 @Composable
-fun rememberMorphShape(pair: ExpressiveMorphPair, progress: Float): Shape {
-    val morph = remember(pair) { Morph(pair.start(), pair.end()) }
+fun rememberMorphShape(pair: ExpressiveMorphPair, progress: Float): Shape =
+    rememberMorphShape(pair.start(), pair.end(), progress)
+
+/**
+ * Remember a [Shape] morphing between two explicit [MaterialShapes] polygons.
+ *
+ * Use this when the resting silhouette is chosen at runtime — for example when a surface's shape
+ * encodes state — so it cannot be expressed as a fixed [ExpressiveMorphPair].
+ */
+@Composable
+fun rememberMorphShape(
+    start: RoundedPolygon,
+    end: RoundedPolygon,
+    progress: Float,
+): Shape {
+    val morph = remember(start, end) { Morph(start, end) }
     return remember(morph, progress) { MorphPolygonShape(morph, progress.coerceIn(0f, 1f)) }
 }
 

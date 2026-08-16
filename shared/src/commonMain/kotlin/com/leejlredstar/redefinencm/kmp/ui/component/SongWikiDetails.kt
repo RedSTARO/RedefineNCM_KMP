@@ -620,11 +620,14 @@ private fun WikiHero(
         mobile -> 108.dp
         else -> 144.dp
     }
+    // Corner radii track the expressive shape scale rather than a MaterialShapes silhouette:
+    // this is a large hero cover, and the scalloped silhouettes crop recognisable album art
+    // badly at any size — the same reason ArtworkBloom rests on a rounded square.
     val artworkShape = RoundedCornerShape(
         when {
-            lowHeight -> 24.dp
-            mobile -> 26.dp
-            else -> 32.dp
+            lowHeight -> 32.dp
+            mobile -> 36.dp
+            else -> 44.dp
         },
     )
     val heroHorizontalPadding = if (mobile) 20.dp else if (lowHeight) 20.dp else 24.dp

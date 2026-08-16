@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.ui.component
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -25,6 +26,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -75,10 +77,19 @@ enum class ExpressiveStateTone {
 /**
  * Compute the connected-list item shape: large outer corners, tight inner corners.
  * This is a core Material 3 Expressive pattern used across all list screens.
+ *
+ * [pressProgress] rounds the *inner* corners up toward the outer radius, so a held row visibly
+ * detaches from the rows above and below it instead of staying welded into the stack. At `0f`
+ * the result is the plain connected shape, so existing callers are unaffected.
  */
-fun connectedListItemShape(index: Int, count: Int): RoundedCornerShape {
+fun connectedListItemShape(
+    index: Int,
+    count: Int,
+    pressProgress: Float = 0f,
+): RoundedCornerShape {
     val big = ExpressiveLayout.ConnectedOuterCorner
-    val small = ExpressiveLayout.ConnectedInnerCorner
+    val tight = ExpressiveLayout.ConnectedInnerCorner
+    val small = tight + (big - tight) * pressProgress.coerceIn(0f, 1f)
     return when {
         count <= 1 -> RoundedCornerShape(big)
         index == 0 -> RoundedCornerShape(
@@ -95,6 +106,22 @@ fun connectedListItemShape(index: Int, count: Int): RoundedCornerShape {
         )
         else -> RoundedCornerShape(small)
     }
+}
+
+/**
+ * Connected-list shape that detaches from its neighbours while [interactionSource] is pressed.
+ *
+ * Pass the same source to the row's `clickable`/`toggleable` so the shape animation and the
+ * ripple share one press stream.
+ */
+@Composable
+fun rememberConnectedListItemShape(
+    index: Int,
+    count: Int,
+    interactionSource: InteractionSource,
+): RoundedCornerShape {
+    val progress by rememberPressMorphProgress(interactionSource)
+    return connectedListItemShape(index, count, progress)
 }
 
 /**
