@@ -7,69 +7,76 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 /**
- * Material 3 Expressive type scale.
- * Stronger weight/size contrast for hierarchy and personality.
+ * Material 3 Expressive type scale, tuned for maximum hierarchy contrast.
+ *
+ * The scale is intentionally bimodal. Display and headline roles are set in [FontWeight.Black]
+ * / [FontWeight.ExtraBold] with negative tracking so they read as poster type, while every body
+ * role stays at [FontWeight.Normal] with positive tracking for sustained reading. The gap
+ * between those two groups — not the absolute sizes — is what carries the expressive voice, so
+ * body sizes are left at the comfortable M3 values rather than being scaled up alongside.
+ *
+ * Titles bridge the two: heavy enough to anchor a section, small enough to sit inside list rows.
  */
 val ExpressiveTypography = Typography(
     displayLarge = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.ExtraBold,
-        fontSize = 57.sp,
-        lineHeight = 64.sp,
-        letterSpacing = (-0.25).sp,
+        fontWeight = FontWeight.Black,
+        fontSize = 64.sp,
+        lineHeight = 66.sp,
+        letterSpacing = (-1.5).sp,
     ),
     displayMedium = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.ExtraBold,
-        fontSize = 45.sp,
-        lineHeight = 52.sp,
-        letterSpacing = 0.sp,
+        fontWeight = FontWeight.Black,
+        fontSize = 50.sp,
+        lineHeight = 54.sp,
+        letterSpacing = (-1.0).sp,
     ),
     displaySmall = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
-        fontSize = 36.sp,
-        lineHeight = 44.sp,
-        letterSpacing = 0.sp,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 40.sp,
+        lineHeight = 46.sp,
+        letterSpacing = (-0.5).sp,
     ),
     headlineLarge = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
-        fontSize = 32.sp,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 34.sp,
         lineHeight = 40.sp,
-        letterSpacing = 0.sp,
+        letterSpacing = (-0.4).sp,
     ),
     headlineMedium = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 28.sp,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 29.sp,
         lineHeight = 36.sp,
-        letterSpacing = 0.sp,
+        letterSpacing = (-0.2).sp,
     ),
     headlineSmall = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 24.sp,
+        fontWeight = FontWeight.Bold,
+        fontSize = 25.sp,
         lineHeight = 32.sp,
-        letterSpacing = 0.sp,
+        letterSpacing = (-0.1).sp,
     ),
     titleLarge = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
-        fontSize = 22.sp,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 23.sp,
         lineHeight = 28.sp,
         letterSpacing = 0.sp,
     ),
     titleMedium = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 16.sp,
+        fontWeight = FontWeight.Bold,
+        fontSize = 17.sp,
         lineHeight = 24.sp,
-        letterSpacing = 0.15.sp,
+        letterSpacing = 0.1.sp,
     ),
     titleSmall = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.SemiBold,
+        fontWeight = FontWeight.Bold,
         fontSize = 14.sp,
         lineHeight = 20.sp,
         letterSpacing = 0.1.sp,
@@ -97,21 +104,21 @@ val ExpressiveTypography = Typography(
     ),
     labelLarge = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 14.sp,
+        fontWeight = FontWeight.Bold,
+        fontSize = 15.sp,
         lineHeight = 20.sp,
         letterSpacing = 0.1.sp,
     ),
     labelMedium = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 12.sp,
         lineHeight = 16.sp,
         letterSpacing = 0.5.sp,
     ),
     labelSmall = TextStyle(
         fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
+        fontWeight = FontWeight.Medium,
         fontSize = 11.sp,
         lineHeight = 16.sp,
         letterSpacing = 0.5.sp,

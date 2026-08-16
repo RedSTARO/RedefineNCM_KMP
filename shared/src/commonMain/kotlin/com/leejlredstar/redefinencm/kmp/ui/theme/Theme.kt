@@ -10,15 +10,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 
 /**
- * Material 3 Expressive shape scale: rounder, larger corner radii than baseline M3.
- * Drives the connected-list shape language used across screens (see ui/component/Expressive.kt).
+ * Material 3 Expressive shape scale, pushed past the baseline expressive values.
+ *
+ * The scale is deliberately steep: `extraSmall` stays legible for dense chips while
+ * `extraLarge` is round enough that panels read as capsules rather than cards. That
+ * contrast is what makes the connected-list language (large outer / tight inner corners,
+ * see ui/component/Expressive.kt) land as a deliberate shape statement instead of
+ * uniformly rounded boxes.
  */
 private val ExpressiveShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(20.dp),
-    large = RoundedCornerShape(28.dp),
-    extraLarge = RoundedCornerShape(36.dp),
+    extraSmall = RoundedCornerShape(12.dp),
+    small = RoundedCornerShape(18.dp),
+    medium = RoundedCornerShape(28.dp),
+    large = RoundedCornerShape(40.dp),
+    extraLarge = RoundedCornerShape(52.dp),
 )
 
 /**

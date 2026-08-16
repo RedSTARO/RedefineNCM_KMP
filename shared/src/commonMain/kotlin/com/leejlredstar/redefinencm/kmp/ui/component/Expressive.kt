@@ -44,13 +44,19 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 object ExpressiveLayout {
     val PageHorizontalPadding = 16.dp
     val PageVerticalPadding = 16.dp
-    val SectionSpacing = 24.dp
-    val ConnectedItemGap = 1.5.dp
-    val ConnectedOuterCorner = 28.dp
-    val ConnectedInnerCorner = 6.dp
+    val SectionSpacing = 32.dp
+    val ConnectedItemGap = 2.5.dp
+    val ConnectedOuterCorner = 40.dp
+    val ConnectedInnerCorner = 4.dp
     val MinimumTouchTarget = 48.dp
     val ReadingContentMaxWidth = 840.dp
     val BrowseContentMaxWidth = 1200.dp
+
+    /** Height of the expressive hero block that opens every top-level screen. */
+    val HeroMinHeight = 220.dp
+
+    /** Edge inset reserved for the floating nav toolbar so content can scroll clear of it. */
+    val FloatingNavClearance = 108.dp
 }
 
 /** Shared timing tokens for custom transitions not owned by a Material component. */
