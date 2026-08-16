@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.ui.component
 
+import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -23,6 +24,11 @@ import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
  *
  * Palette extraction stays tied to this visible request through [onImageLoaded]; callers do not
  * need a second hidden image request.
+ *
+ * Passing [pressInteractionSource] — the same source given to the enclosing clickable — opts the
+ * artwork into the expressive shape morph: the frame blooms from a soft squircle into a
+ * scalloped cookie while held, then springs back on release. It is off by default so callers
+ * that are not interactive keep a plain rectangle and pay nothing for the morph path.
  */
 @Composable
 fun ExpressiveArtwork(
@@ -34,11 +40,19 @@ fun ExpressiveArtwork(
     contentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     contentScale: ContentScale = ContentScale.Crop,
     placeholderIcon: ImageVector = AppIcons.GraphicEq,
+    pressInteractionSource: InteractionSource? = null,
+    morphPair: ExpressiveMorphPair = ExpressiveMorphPair.ArtworkBloom,
     onImageLoaded: (Image) -> Unit = {},
 ) {
+    val morphProgress = pressInteractionSource?.let { rememberPressMorphProgress(it) }
+    val resolvedShape = if (morphProgress != null) {
+        rememberMorphShape(morphPair, morphProgress.value)
+    } else {
+        shape
+    }
     Surface(
         modifier = modifier,
-        shape = shape,
+        shape = resolvedShape,
         color = containerColor,
         contentColor = contentColor,
     ) {

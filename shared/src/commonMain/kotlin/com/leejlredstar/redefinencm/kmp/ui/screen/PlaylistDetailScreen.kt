@@ -21,11 +21,14 @@ import androidx.compose.foundation.shape.CircleShape
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SplitButtonDefaults
+import androidx.compose.material3.SplitButtonLayout
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -230,6 +233,7 @@ fun PlaylistDetailScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun PlaylistHeader(
     coverUrl: String?,
@@ -316,35 +320,46 @@ private fun PlaylistHeader(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Button(
-                    onClick = onPlayAll,
-                    enabled = actionsEnabled,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(56.dp),
-                    shape = CircleShape,
-                    contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = accentPalette.accent,
-                        contentColor = accentPalette.onAccent,
-                    ),
-                ) {
-                    Icon(AppIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("播放全部", style = MaterialTheme.typography.titleMedium)
-                }
-                FilledTonalIconButton(
-                    onClick = onDownloadAll,
-                    enabled = actionsEnabled,
-                    modifier = Modifier.size(56.dp),
-                    shape = MaterialTheme.shapes.large,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = accentPalette.container,
-                        contentColor = accentPalette.onContainer,
-                    ),
-                ) {
-                    Icon(AppIcons.Download, contentDescription = "下载全部")
-                }
+                // Play-all and download-all are one primary action plus its connected secondary,
+                // which is exactly the split-button pairing: the two halves share a silhouette and
+                // each half reshapes independently as it is pressed.
+                SplitButtonLayout(
+                    modifier = Modifier.weight(1f),
+                    leadingButton = {
+                        SplitButtonDefaults.LeadingButton(
+                            onClick = onPlayAll,
+                            enabled = actionsEnabled,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(56.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = accentPalette.accent,
+                                contentColor = accentPalette.onAccent,
+                            ),
+                        ) {
+                            Icon(
+                                AppIcons.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("播放全部", style = MaterialTheme.typography.titleMedium)
+                        }
+                    },
+                    trailingButton = {
+                        SplitButtonDefaults.TrailingButton(
+                            onClick = onDownloadAll,
+                            enabled = actionsEnabled,
+                            modifier = Modifier.height(56.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = accentPalette.container,
+                                contentColor = accentPalette.onContainer,
+                            ),
+                        ) {
+                            Icon(AppIcons.Download, contentDescription = "下载全部")
+                        }
+                    },
+                )
             }
             Spacer(Modifier.height(16.dp))
         }

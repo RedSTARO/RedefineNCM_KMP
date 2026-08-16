@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -42,6 +41,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.data.api.dto.UserLevelResponse
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveWavyProgress
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveCacheHint
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
@@ -425,9 +425,9 @@ private fun UserPlaylistHero(
                             color = accentPalette.secondaryOnQuietContainer,
                         )
                         Spacer(Modifier.height(4.dp))
-                        LinearProgressIndicator(
+                        ExpressiveWavyProgress(
                             progress = { display.progress },
-                            modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape),
+                            modifier = Modifier.fillMaxWidth(),
                             color = accentPalette.accent,
                             trackColor = accentPalette.onQuietContainer.copy(alpha = 0.14f),
                         )

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.collectAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -89,12 +90,15 @@ fun SongRow(
         label = "songRowAccent",
     )
     val accentPalette = contentAccentPalette(animatedAccent)
+    // Shared with the cover below so a row press morphs the artwork silhouette.
+    val interactionSource = remember { MutableInteractionSource() }
     Surface(
         onClick = onClick,
         shape = shape,
         color = accentPalette.quietContainer,
         contentColor = accentPalette.onQuietContainer,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 1.5.dp),
+        interactionSource = interactionSource,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -121,6 +125,7 @@ fun SongRow(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.size(56.dp),
                 shape = MaterialTheme.shapes.medium,
+                pressInteractionSource = interactionSource,
                 containerColor = accentPalette.container,
                 contentColor = accentPalette.onContainer,
                 onImageLoaded = { image ->
@@ -223,6 +228,9 @@ fun RecommendSquareCard(
         label = "recommendCardAccent",
     )
     val accentPalette = contentAccentPalette(animatedAccent)
+    // Shared with the artwork below so pressing the card morphs the cover's silhouette rather
+    // than only rippling the container.
+    val interactionSource = remember { MutableInteractionSource() }
     Surface(
         onClick = onClick,
         modifier = Modifier
@@ -233,9 +241,11 @@ fun RecommendSquareCard(
             },
         shape = MaterialTheme.shapes.extraLarge,
         color = accentPalette.quietContainer,
+        interactionSource = interactionSource,
     ) {
         Box(Modifier.fillMaxSize()) {
             ExpressiveArtwork(
+                pressInteractionSource = interactionSource,
                 model = picUrl,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),

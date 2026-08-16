@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -27,12 +28,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -63,6 +64,7 @@ import com.leejlredstar.redefinencm.kmp.download.LocalLibrarySyncState
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadTask
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveWavyProgress
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
@@ -502,6 +504,7 @@ private fun DownloadStatPill(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun DownloadFilterRow(
     selected: DownloadFilter,
@@ -512,25 +515,29 @@ private fun DownloadFilterRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // ToggleButton rather than ButtonGroup: six filters cannot fit a non-scrollable group on
+        // a phone, so the row stays lazy and horizontally scrollable while each button still
+        // carries the expressive shape morph on press and selection.
         items(DownloadFilter.entries) { filter ->
-            FilterChip(
-                selected = selected == filter,
-                onClick = { onSelected(filter) },
-                modifier = Modifier.height(48.dp),
-                label = { Text(filter.label) },
-                colors = FilterChipDefaults.filterChipColors(
+            val isSelected = selected == filter
+            ToggleButton(
+                checked = isSelected,
+                onCheckedChange = { onSelected(filter) },
+                modifier = Modifier.heightIn(min = 48.dp),
+                shapes = ToggleButtonDefaults.shapes(),
+                colors = ToggleButtonDefaults.toggleButtonColors(
                     containerColor = accentPalette.quietContainer,
-                    labelColor = accentPalette.onQuietContainer,
-                    selectedContainerColor = accentPalette.container,
-                    selectedLabelColor = accentPalette.onContainer,
-                    selectedLeadingIconColor = accentPalette.onContainer,
+                    contentColor = accentPalette.onQuietContainer,
+                    checkedContainerColor = accentPalette.container,
+                    checkedContentColor = accentPalette.onContainer,
                 ),
-                leadingIcon = if (selected == filter) {
-                    { Icon(AppIcons.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                } else {
-                    null
-                },
-            )
+            ) {
+                if (isSelected) {
+                    Icon(AppIcons.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(filter.label)
+            }
         }
     }
 }
@@ -674,16 +681,18 @@ private fun DownloadTaskDetails(
             overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.height(8.dp))
+        // Wavy indicators carry their own stroke and amplitude, so the height is left
+        // unconstrained here — clamping it to the old 4dp bar would flatten the wave away.
         if (task.status == DownloadTaskStatus.Downloading && task.totalBytes == null) {
-            LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape),
+            ExpressiveWavyProgress(
+                modifier = Modifier.fillMaxWidth(),
                 color = accentPalette.accent,
                 trackColor = accentPalette.onQuietContainer.copy(alpha = 0.12f),
             )
         } else {
-            LinearProgressIndicator(
+            ExpressiveWavyProgress(
                 progress = { task.progressFraction },
-                modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape),
+                modifier = Modifier.fillMaxWidth(),
                 color = progressColor(task.status, accentPalette),
                 trackColor = accentPalette.onQuietContainer.copy(alpha = 0.12f),
             )

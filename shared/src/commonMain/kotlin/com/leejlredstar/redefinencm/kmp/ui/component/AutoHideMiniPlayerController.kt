@@ -41,7 +41,6 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -991,13 +990,11 @@ private fun CollapsedProgressController(
                     maxLines = 1,
                 )
             }
-            LinearProgressIndicator(
+            ExpressiveWavyProgress(
                 progress = { progress },
                 modifier = Modifier
                     .padding(top = 6.dp)
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(CircleShape),
+                    .fillMaxWidth(),
                 color = accentPalette.accent,
                 trackColor = accentPalette.onQuietContainer.copy(alpha = 0.20f),
             )

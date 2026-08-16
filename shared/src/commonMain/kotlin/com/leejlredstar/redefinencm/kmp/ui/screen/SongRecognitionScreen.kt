@@ -19,7 +19,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -39,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.recognition.AudioFingerprint
 import com.leejlredstar.redefinencm.kmp.recognition.rememberMicrophonePermissionRequester
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveWavyProgress
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveArtwork
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
@@ -362,7 +362,7 @@ private fun RecognitionListeningPanel(
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
             )
-            LinearProgressIndicator(
+            ExpressiveWavyProgress(
                 progress = { progress },
                 color = accentPalette.accent,
                 trackColor = accentPalette.container,

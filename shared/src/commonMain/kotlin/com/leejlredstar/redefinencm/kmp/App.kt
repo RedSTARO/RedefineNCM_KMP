@@ -37,18 +37,20 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalWideNavigationRail
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
@@ -251,6 +253,42 @@ fun App() {
     }
 }
 
+/**
+ * Expressive navigation affordance for the floating toolbar.
+ *
+ * Uses [ToggleButton] instead of a plain icon button so selection carries Material's own shape
+ * morph — the silhouette relaxes between round and squared as the item becomes checked. That
+ * morph replaces the pill indicator a `NavigationBarItem` used to draw behind the icon, and the
+ * label is revealed only on the selected item so the toolbar stays compact on narrow windows.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun ExpressiveNavToggle(
+    label: String,
+    icon: ImageVector,
+    selected: Boolean,
+    palette: ContentAccentPalette,
+    onSelect: () -> Unit,
+) {
+    ToggleButton(
+        checked = selected,
+        onCheckedChange = { onSelect() },
+        shapes = ToggleButtonDefaults.shapes(),
+        colors = ToggleButtonDefaults.toggleButtonColors(
+            containerColor = Color.Transparent,
+            contentColor = palette.secondaryOnQuietContainer,
+            checkedContainerColor = palette.container,
+            checkedContentColor = palette.onContainer,
+        ),
+    ) {
+        Icon(icon, contentDescription = if (selected) null else label)
+        AnimatedVisibility(visible = selected) {
+            Text(text = label, modifier = Modifier.padding(start = 8.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun AppContent(
     settings: PlatformSettings,
@@ -386,39 +424,37 @@ private fun AppContent(
                                 enter = bottomNavEnterTransition(),
                                 exit = bottomNavExitTransition(),
                             ) {
-                                NavigationBar(
-                                    containerColor = chromePalette.quietContainer,
-                                    tonalElevation = 0.dp,
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                                    contentAlignment = Alignment.Center,
                                 ) {
-                                    tabs.forEach { item ->
-                                        NavigationBarItem(
-                                            selected = currentTab == item.dest,
-                                            onClick = { currentTab = item.dest },
-                                            icon = { Icon(item.icon, contentDescription = null) },
-                                            label = { Text(item.label) },
-                                            colors = NavigationBarItemDefaults.colors(
-                                                indicatorColor = chromePalette.container,
-                                                selectedIconColor = chromePalette.onContainer,
-                                                selectedTextColor = chromePalette.onQuietContainer,
-                                                unselectedIconColor = chromePalette.secondaryOnQuietContainer,
-                                                unselectedTextColor = chromePalette.secondaryOnQuietContainer,
-                                            ),
-                                        )
-                                    }
-                                    if (desktopCompact) {
-                                        NavigationBarItem(
-                                            selected = false,
-                                            onClick = ::openDownloads,
-                                            icon = { Icon(AppIcons.Download, contentDescription = null) },
-                                            label = { Text("下载") },
-                                            colors = NavigationBarItemDefaults.colors(
-                                                indicatorColor = chromePalette.container,
-                                                selectedIconColor = chromePalette.onContainer,
-                                                selectedTextColor = chromePalette.onQuietContainer,
-                                                unselectedIconColor = chromePalette.secondaryOnQuietContainer,
-                                                unselectedTextColor = chromePalette.secondaryOnQuietContainer,
-                                            ),
-                                        )
+                                    HorizontalFloatingToolbar(
+                                        expanded = true,
+                                        colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
+                                            toolbarContainerColor = chromePalette.quietContainer,
+                                            toolbarContentColor = chromePalette.onQuietContainer,
+                                        ),
+                                    ) {
+                                        tabs.forEach { item ->
+                                            ExpressiveNavToggle(
+                                                label = item.label,
+                                                icon = item.icon,
+                                                selected = currentTab == item.dest,
+                                                palette = chromePalette,
+                                                onSelect = { currentTab = item.dest },
+                                            )
+                                        }
+                                        if (desktopCompact) {
+                                            ExpressiveNavToggle(
+                                                label = "下载",
+                                                icon = AppIcons.Download,
+                                                selected = false,
+                                                palette = chromePalette,
+                                                onSelect = ::openDownloads,
+                                            )
+                                        }
                                     }
                                 }
                             }
