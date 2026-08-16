@@ -648,12 +648,31 @@ Applies to all platforms, and the original Android repo is kept aligned (goal #3
 - **Color:** `surface` for page bases; `surfaceContainerHigh` / `surfaceContainerHighest` for
   tonal panels and list rows. Album-art–derived accents via `themeColorFromCoilImage()` as
   gradient endpoints / highlights; extraction runs off the UI thread and is keyed by artwork.
-- **Shape — connected-list language:** large outer corners (~28dp), tight inner corners
-  (~6dp), small vertical gaps (~1.5dp) between rows; implemented in
+  Chroma is raised past baseline M3 on **container** roles only — they pair with dark
+  on-colours and can absorb it — while `primary`/`secondary`/`tertiary` hold their tone so
+  white-on-colour label contrast survives. `tertiary` is a saturated coral acting as the true
+  complement to the teal core.
+- **Shape — connected-list language:** large outer corners (~40dp), tight inner corners
+  (~4dp), small vertical gaps (~2.5dp) between rows; implemented in
   `ui/component/Expressive.kt` (`connectedListItemShape()`). Interactive elements use pill
-  (`RoundedCornerShape(50%)`) or `extraLarge` shapes.
-- **Typography:** aggressive weight/size contrast — bold headlines (`DisplaySmall`,
-  `HeadlineLarge`), regular body, lighter captions. Use the M3 Expressive type scale.
+  (`RoundedCornerShape(50%)`) or `extraLarge` shapes. The theme shape scale is deliberately
+  steep (`extraSmall` 12dp → `extraLarge` 52dp) so panels read as capsules, not cards.
+- **Typography:** the scale is bimodal by design. Display and headline roles are
+  `Black`/`ExtraBold` with negative tracking; every body role stays `Normal` with positive
+  tracking for sustained reading. The **gap** between those groups carries the expressive
+  voice, so body sizes must not be scaled up to match the headlines.
+- **Shape morphing is the signature interaction.** Material morphs `ButtonGroup`,
+  `ToggleButton` and `SplitButton` natively — prefer those over plain buttons/chips.
+  `ui/component/ExpressiveShapeMotion.kt` supplies the same behaviour for surfaces the app
+  draws itself: a `Morph`-backed `Shape`, named `MaterialShapes` pairs, and a press-driven
+  progress bound to the theme motion scheme. `ExpressiveArtwork` takes the enclosing row's
+  `interactionSource` to morph a cover while it is held.
+- **Progress:** wavy indicators for prominent, full-width progress (downloads, recognition,
+  user level, desktop mini strip). Do **not** make thin decorative bars wavy — anything under
+  roughly 4dp has no room for wave amplitude and renders as a smudge.
+- **Navigation chrome:** narrow windows use a `HorizontalFloatingToolbar` of `ToggleButton`
+  items. Wide windows keep the navigation rail — it is the correct responsive pattern for
+  desktop and tablet and must not be replaced by a floating toolbar.
 - **Use the real Expressive APIs** (`MaterialExpressiveTheme`, motion scheme) provided by the
   pinned `material3` version; custom shapes and page palettes extend that theme rather than
   replacing it.
