@@ -26,6 +26,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -424,9 +426,16 @@ private fun AppContent(
                                 enter = bottomNavEnterTransition(),
                                 exit = bottomNavExitTransition(),
                             ) {
+                                // NavigationBar applied NavigationBarDefaults.windowInsets itself;
+                                // a floating toolbar carries no insets of its own, and this
+                                // Scaffold runs with contentWindowInsets = 0, so without this the
+                                // toolbar sits under the system navigation/gesture bar on phones
+                                // and short windows. Insetting here also grows the measured
+                                // bottomBar height, so every screen's scaffoldPadding clears it.
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .windowInsetsPadding(WindowInsets.navigationBars)
                                         .padding(horizontal = 16.dp, vertical = 14.dp),
                                     contentAlignment = Alignment.Center,
                                 ) {
