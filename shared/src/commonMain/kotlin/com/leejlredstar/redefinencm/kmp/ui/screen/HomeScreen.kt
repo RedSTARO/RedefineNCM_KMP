@@ -129,7 +129,6 @@ fun HomeScreen(
     ExpressivePage(
         accentPalette = pagePalette,
         contentWindowInsets = WindowInsets.statusBars,
-        contentPadding = PaddingValues(bottom = scaffoldPadding.calculateBottomPadding()),
     ) {
         SharedTransitionLayout {
             val sharedTransitionScope = this
@@ -154,7 +153,18 @@ fun HomeScreen(
                 val animatedVisibilityScope = this
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 96.dp),
+                    // Bottom clearance belongs on the LazyColumn, not on ExpressivePage:
+                    // container padding shrinks the viewport so items stop above the floating
+                    // toolbar, while contentPadding lets them scroll underneath it.
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 16.dp,
+                        // coerce, not add: the 96dp was the mini-player FAB's clearance and the
+                        // scaffold clearance covers the toolbar. Summing them stacks two gaps and
+                        // leaves a dead band at the end of the list.
+                        bottom = scaffoldPadding.calculateBottomPadding().coerceAtLeast(96.dp),
+                    ),
                 ) {
                     item {
                         HomeHero(

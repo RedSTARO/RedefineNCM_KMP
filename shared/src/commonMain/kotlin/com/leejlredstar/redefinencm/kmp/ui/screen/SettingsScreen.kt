@@ -276,12 +276,15 @@ fun SettingsScreen(
     ExpressivePage(
         accentPalette = settingsPalette,
         maxContentWidth = ExpressiveLayout.ReadingContentMaxWidth,
-        contentPadding = PaddingValues(bottom = scaffoldPadding.calculateBottomPadding()),
     ) {
+        // The clearance is padding *inside* the scrolling Column, not on ExpressivePage: padding
+        // the container would shrink the viewport and stop rows above the floating toolbar,
+        // whereas this lets them scroll underneath it while still being reachable at the end.
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = scaffoldPadding.calculateBottomPadding()),
         ) {
             SettingsHero(settingsPalette)
 

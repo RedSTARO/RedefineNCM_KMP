@@ -144,9 +144,12 @@ fun UserPlaylistScreen(
 
     ExpressivePage(
         accentPalette = accentPalette,
-        contentPadding = PaddingValues(bottom = scaffoldPadding.calculateBottomPadding()),
     ) {
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            // contentPadding, not container padding, so rows scroll under the floating toolbar.
+            contentPadding = PaddingValues(bottom = scaffoldPadding.calculateBottomPadding()),
+        ) {
             userDetail?.let { detail ->
                 item(key = "user-hero") {
                     UserPlaylistHero(

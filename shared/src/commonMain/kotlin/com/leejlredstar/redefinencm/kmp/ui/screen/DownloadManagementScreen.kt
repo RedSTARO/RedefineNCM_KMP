@@ -158,7 +158,9 @@ fun DownloadManagementScreen(
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = scaffoldPadding.calculateBottomPadding() + 96.dp),
+            contentPadding = PaddingValues(
+                bottom = scaffoldPadding.calculateBottomPadding().coerceAtLeast(96.dp),
+            ),
         ) {
             item {
                 DownloadHero(

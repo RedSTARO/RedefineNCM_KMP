@@ -23,9 +23,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -103,6 +105,7 @@ import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayPlacement
 import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayWindow
 import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackSeekBar
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
 import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
 import com.leejlredstar.redefinencm.kmp.ui.component.CommentBottomSheet
@@ -414,73 +417,47 @@ private fun AppContent(
                         if (desktopCompact) desktopRailState.collapse()
                     }
 
+                    val bottomNavVisible =
+                        showTabs && if (platform.isDesktop) desktopCompact else !isWide
+                    // The toolbar floats over the content instead of occupying a Scaffold
+                    // bottomBar, so Scaffold reserves nothing for it and screens are handed this
+                    // clearance directly. navigationBars is added because the Scaffold runs with
+                    // contentWindowInsets = 0 and a floating toolbar carries no insets of its own
+                    // — without it the pill sits under the system gesture bar on phones.
+                    val systemNavInset = WindowInsets.navigationBars
+                        .asPaddingValues()
+                        .calculateBottomPadding()
+                    val contentBottomInset = systemNavInset + if (bottomNavVisible) {
+                        ExpressiveLayout.FloatingNavClearance
+                    } else {
+                        0.dp
+                    }
+                    val screenPadding = PaddingValues(bottom = contentBottomInset)
+
                     Scaffold(
                         contentWindowInsets = WindowInsets(0, 0, 0, 0),
                         snackbarHost = {
                             if (!legacyAmllFullScreenActive) SnackbarHost(snackbarHostState)
                         },
                         floatingActionButtonPosition = FabPosition.End,
-                        bottomBar = {
-                            AnimatedVisibility(
-                                visible = showTabs && if (platform.isDesktop) desktopCompact else !isWide,
-                                enter = bottomNavEnterTransition(),
-                                exit = bottomNavExitTransition(),
-                            ) {
-                                // NavigationBar applied NavigationBarDefaults.windowInsets itself;
-                                // a floating toolbar carries no insets of its own, and this
-                                // Scaffold runs with contentWindowInsets = 0, so without this the
-                                // toolbar sits under the system navigation/gesture bar on phones
-                                // and short windows. Insetting here also grows the measured
-                                // bottomBar height, so every screen's scaffoldPadding clears it.
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .windowInsetsPadding(WindowInsets.navigationBars)
-                                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    HorizontalFloatingToolbar(
-                                        expanded = true,
-                                        colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
-                                            toolbarContainerColor = chromePalette.quietContainer,
-                                            toolbarContentColor = chromePalette.onQuietContainer,
-                                        ),
-                                    ) {
-                                        tabs.forEach { item ->
-                                            ExpressiveNavToggle(
-                                                label = item.label,
-                                                icon = item.icon,
-                                                selected = currentTab == item.dest,
-                                                palette = chromePalette,
-                                                onSelect = { currentTab = item.dest },
-                                            )
-                                        }
-                                        if (desktopCompact) {
-                                            ExpressiveNavToggle(
-                                                label = "下载",
-                                                icon = AppIcons.Download,
-                                                selected = false,
-                                                palette = chromePalette,
-                                                onSelect = ::openDownloads,
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        },
                         floatingActionButton = {
                             AnimatedVisibility(
                                 visible = showMiniPlayer && !desktopRailExpanded,
                                 enter = miniPlayerEnterTransition(),
                                 exit = miniPlayerExitTransition(),
                             ) {
-                                MiniNowPlayingBar(
-                                    onExpand = ::openFullLyric,
-                                    onAccentColor = { rawChromeAccent = it },
-                                )
+                                // Scaffold no longer reserves the toolbar's height, so the FAB
+                                // has to step over the floating pill itself.
+                                Box(Modifier.padding(bottom = contentBottomInset)) {
+                                    MiniNowPlayingBar(
+                                        onExpand = ::openFullLyric,
+                                        onAccentColor = { rawChromeAccent = it },
+                                    )
+                                }
                             }
                         },
                     ) { innerPadding ->
+                        Box(Modifier.fillMaxSize()) {
                         Row(Modifier.fillMaxSize()) {
                             if (showDesktopRail) {
                                 DesktopExpandableSidebar(
@@ -566,7 +543,7 @@ private fun AppContent(
                                                 onBack = ::back,
                                             )
                                             is PushedDest.Downloads -> DownloadManagementScreen(
-                                                scaffoldPadding = innerPadding,
+                                                scaffoldPadding = screenPadding,
                                                 onBack = if (platform.isDesktop) ::back else null,
                                             )
                                             is PushedDest.SongRecognition -> SongRecognitionScreen(
@@ -579,17 +556,17 @@ private fun AppContent(
                                         }
                                         is RootDest.Tab -> when (target.tab) {
                                             is TabDest.Home -> HomeScreen(
-                                                scaffoldPadding = innerPadding,
+                                                scaffoldPadding = screenPadding,
                                                 onOpenPlaylist = { push(PushedDest.Playlist(it)) },
                                                 onOpenMy = { currentTab = TabDest.My },
                                                 onOpenRecognition = { push(PushedDest.SongRecognition) },
                                             )
                                             is TabDest.My -> UserPlaylistScreen(
-                                                scaffoldPadding = innerPadding,
+                                                scaffoldPadding = screenPadding,
                                                 onOpenPlaylist = { push(PushedDest.Playlist(it)) },
                                             )
                                             is TabDest.Settings -> SettingsScreen(
-                                                scaffoldPadding = innerPadding,
+                                                scaffoldPadding = screenPadding,
                                                 onOpenLogin = { push(PushedDest.Login) },
                                                 onAmllRendererPreferenceChanged = {
                                                     useNativeAmllRenderer = it
@@ -599,6 +576,48 @@ private fun AppContent(
                                     }
                                 }
                             }
+                        }
+                        AnimatedVisibility(
+                            visible = bottomNavVisible,
+                            enter = bottomNavEnterTransition(),
+                            exit = bottomNavExitTransition(),
+                            modifier = Modifier.align(Alignment.BottomCenter),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .windowInsetsPadding(WindowInsets.navigationBars)
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                HorizontalFloatingToolbar(
+                                    expanded = true,
+                                    colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
+                                        toolbarContainerColor = chromePalette.quietContainer,
+                                        toolbarContentColor = chromePalette.onQuietContainer,
+                                    ),
+                                ) {
+                                    tabs.forEach { item ->
+                                        ExpressiveNavToggle(
+                                            label = item.label,
+                                            icon = item.icon,
+                                            selected = currentTab == item.dest,
+                                            palette = chromePalette,
+                                            onSelect = { currentTab = item.dest },
+                                        )
+                                    }
+                                    if (desktopCompact) {
+                                        ExpressiveNavToggle(
+                                            label = "下载",
+                                            icon = AppIcons.Download,
+                                            selected = false,
+                                            palette = chromePalette,
+                                            onSelect = ::openDownloads,
+                                        )
+                                    }
+                                }
+                            }
+                        }
                         }
                     }
 

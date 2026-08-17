@@ -53,6 +53,16 @@ object ExpressiveLayout {
     val MinimumTouchTarget = 48.dp
     val ReadingContentMaxWidth = 840.dp
     val BrowseContentMaxWidth = 1200.dp
+
+    /**
+     * Bottom inset reserved for the floating nav toolbar.
+     *
+     * The toolbar is an overlay, not a Scaffold `bottomBar` — content scrolls *underneath* it,
+     * which is the point of a floating toolbar. Scaffold therefore contributes no bottom
+     * padding of its own, so screens are handed this clearance instead: enough that the last
+     * list item can be scrolled clear of the pill rather than being permanently hidden by it.
+     */
+    val FloatingNavClearance = 96.dp
 }
 
 /** Shared timing tokens for custom transitions not owned by a Material component. */

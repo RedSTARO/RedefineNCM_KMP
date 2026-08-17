@@ -17,12 +17,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.carousel.CarouselItemScope
 import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
 import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.material3.Icon
@@ -36,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
@@ -215,12 +218,14 @@ fun compactCount(value: Long): String = when {
 }
 
 @Composable
-fun RecommendSquareCard(
+fun CarouselItemScope.RecommendSquareCard(
     picUrl: String,
     text: String,
     onAccentColor: ((Color) -> Unit)? = null,
     onClick: () -> Unit,
 ) {
+    // Fully opaque while the tile is near full width, gone by the time it is a sliver.
+    val overlayAlpha = ((expandedFraction - 0.45f) / 0.35f).coerceIn(0f, 1f)
     val fallbackAccent = MaterialTheme.colorScheme.tertiaryContainer
     var imageAccent by remember(picUrl, fallbackAccent) { mutableStateOf(fallbackAccent) }
     val extractAccent = rememberThemeColorExtractor(picUrl) { extracted ->
@@ -245,7 +250,9 @@ fun RecommendSquareCard(
             .semantics(mergeDescendants = true) {
                 if (text == "私人雷达") contentDescription = text
             },
-        shape = MaterialTheme.shapes.extraLarge,
+        // `large` (40dp), not `extraLarge` (52dp): on a 168dp tile a 52dp radius is 31% of the
+        // side, and the corner curve cut into the title sitting in the bottom-left.
+        shape = MaterialTheme.shapes.large,
         color = accentPalette.quietContainer,
         interactionSource = interactionSource,
     ) {
@@ -270,8 +277,8 @@ fun RecommendSquareCard(
                             brush = Brush.verticalGradient(
                                 colors = listOf(
                                     Color.Transparent,
-                                    accentPalette.accent.copy(alpha = 0.40f),
-                                    Color.Black.copy(alpha = 0.72f),
+                                    accentPalette.accent.copy(alpha = 0.40f * overlayAlpha),
+                                    Color.Black.copy(alpha = 0.72f * overlayAlpha),
                                 ),
                                 startY = 120f,
                             ),
@@ -284,10 +291,15 @@ fun RecommendSquareCard(
                     fontWeight = FontWeight.ExtraBold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                    // 16dp keeps the second line clear of the rounded corner's inward curve.
+                    // The alpha is what keeps a squeezed item legible: the carousel mask would
+                    // otherwise slice the title mid-character, so it is faded out entirely before
+                    // the item narrows enough for that to show.
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(12.dp)
-                        .fillMaxWidth(),
+                        .padding(horizontal = 16.dp, vertical = 14.dp)
+                        .fillMaxWidth()
+                        .graphicsLayer { alpha = overlayAlpha },
                 )
             }
         }
@@ -306,7 +318,7 @@ fun <T> SectionWithCarousel(
     onRetry: (() -> Unit)? = null,
     key: ((T) -> Any)? = null,
     action: (@Composable () -> Unit)? = null,
-    itemContent: @Composable (T) -> Unit,
+    itemContent: @Composable CarouselItemScope.(T) -> Unit,
 ) {
     Column(modifier = Modifier.padding(top = 20.dp)) {
         ExpressiveSectionTitle(
@@ -343,10 +355,13 @@ fun <T> SectionWithCarousel(
                 modifier = Modifier.fillMaxWidth(),
             )
         } else {
-            // Expressive carousel rather than a plain LazyRow: item widths grow and shrink as
-            // they cross the viewport, so the row itself animates instead of only translating.
-            // Items must fill the width the carousel hands them — a fixed-size child cannot
-            // squeeze, which is why RecommendSquareCard fills rather than setting .size().
+            // Multi-browse carousel: items shrink toward the trailing edge and grow back as they
+            // scroll in, which is the row's signature motion.
+            //
+            // The mask that produces that motion also clips whatever the item draws, so a title
+            // laid over the artwork gets sliced mid-character once an item narrows. Items are
+            // therefore handed how expanded they currently are, and fade their own overlay out
+            // before the mask can cut it — see RecommendSquareCard.
             val carouselState = rememberCarouselState { items.size }
             HorizontalMultiBrowseCarousel(
                 state = carouselState,
@@ -361,7 +376,22 @@ fun <T> SectionWithCarousel(
     }
 }
 
-/** Preferred carousel slot width; cards fill this and squeeze at the viewport edges. */
+/**
+ * How expanded a carousel item currently is: `1f` at full width, `0f` fully squeezed.
+ *
+ * Items animate continuously between [CarouselItemDrawInfo.minSize] and
+ * [CarouselItemDrawInfo.maxSize] as the row scrolls, so this is read every frame rather than
+ * derived once from the index.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+private val CarouselItemScope.expandedFraction: Float
+    get() {
+        val info = carouselItemDrawInfo
+        val range = info.maxSize - info.minSize
+        return if (range <= 0f) 1f else ((info.size - info.minSize) / range).coerceIn(0f, 1f)
+    }
+
+/** Home row card size; fixed so every tile is uniform and the overlaid title has stable room. */
 private val CarouselItemWidth = 168.dp
 
 @Composable
