@@ -95,6 +95,10 @@ class LyricResolver(
         retainedResolution?.let { emit(it) }
         val failures = mutableListOf<String>()
         var untimedCandidate: LyricDocument? = null
+        // Best timed document emitted so far. Cache-then-network keeps resolving after a local
+        // hit, so this is what later results must beat before they are allowed to replace it.
+        var emittedDocument: LyricDocument? =
+            (retainedResolution as? LyricResolution.Found)?.document
 
         for (source in mode.sourceOrder) {
             if (preferLocal) {
@@ -108,11 +112,14 @@ class LyricResolver(
                 if (localDocument != null) {
                     if (localDocument.capabilityLevel == LyricCapabilityLevel.UNSYNCED) {
                         if (untimedCandidate == null) untimedCandidate = localDocument
-                    } else {
+                    } else if (localDocument.outranks(emittedDocument)) {
+                        // Cache-then-network: show the on-disk lyric immediately, then keep going
+                        // so the upstream copy can still upgrade it. Previously this returned here,
+                        // which made the local sidecar authoritative and skipped the refresh.
+                        emittedDocument = localDocument
                         val resolution = LyricResolution.Found(localDocument)
                         remember(cacheKey, resolution)
                         if (resolution != retainedResolution) emit(resolution)
-                        return@flow
                     }
                 }
             }
@@ -131,9 +138,12 @@ class LyricResolver(
                                 if (untimedCandidate == null) untimedCandidate = result.document
                             } else {
                                 found = true
-                                val resolution = LyricResolution.Found(result.document)
-                                remember(cacheKey, resolution)
-                                if (resolution != retainedResolution) emit(resolution)
+                                if (result.document.outranks(emittedDocument)) {
+                                    emittedDocument = result.document
+                                    val resolution = LyricResolution.Found(result.document)
+                                    remember(cacheKey, resolution)
+                                    if (resolution != retainedResolution) emit(resolution)
+                                }
                             }
                         }
                         is LyricProviderResult.Untimed -> {
@@ -151,6 +161,10 @@ class LyricResolver(
             }
             if (found) return@flow
         }
+
+        // A local hit has already been emitted at this point, so the terminal states below must
+        // not fire and wipe it: every provider missing is not an error once the disk copy is up.
+        if (emittedDocument != null) return@flow
 
         val fallbackDocument = untimedCandidate
         if (fallbackDocument != null && retainedResolution !is LyricResolution.Found) {
@@ -239,6 +253,16 @@ class LyricResolver(
         const val MEMORY_CACHE_MAX_ENTRIES = 24
     }
 }
+
+/**
+ * Whether [this] is a strict capability upgrade over [current].
+ *
+ * [LyricCapabilityLevel] is declared in ascending capability order, so the ordinal is the
+ * ranking. Only a strict improvement is allowed to replace what the user is already reading:
+ * re-emitting an equal-ranked document would restart the lyric surface for no visible gain.
+ */
+private fun LyricDocument.outranks(current: LyricDocument?): Boolean =
+    current == null || capabilityLevel.ordinal > current.capabilityLevel.ordinal
 
 private data class LyricMemoryCacheKey(
     val songId: Long,

@@ -73,7 +73,7 @@ class LyricResolverTest {
     }
 
     @Test
-    fun matchingLocalSourceShortCircuitsItsUpstreamProvider() = runTest {
+    fun matchingLocalSourceStillRefreshesFromItsUpstreamProvider() = runTest {
         val providerCalls = mutableListOf<LyricSource>()
         val localCalls = mutableListOf<LyricSource>()
         val localDocument = found(LyricSource.NCM_BACKEND).document
@@ -97,11 +97,71 @@ class LyricResolverTest {
             preferLocal = true,
         )
 
+        // Cache-then-network: the on-disk copy is shown first, but the upstream source is still
+        // consulted so a better version can replace it. It previously short-circuited here.
         assertEquals(listOf(LyricSource.NCM_BACKEND), localCalls)
-        assertEquals(emptyList(), providerCalls)
+        assertEquals(listOf(LyricSource.NCM_BACKEND), providerCalls)
         assertEquals(
             LyricSource.NCM_BACKEND,
             assertIs<LyricResolution.Found>(result).document.source,
+        )
+    }
+
+    @Test
+    fun localLyricSurvivesWhenTheUpstreamRefreshFindsNothing() = runTest {
+        val localDocument = found(LyricSource.NCM_BACKEND).document
+        val resolver = LyricResolver(
+            providers = listOf(
+                object : LyricSourceProvider {
+                    override val source = LyricSource.NCM_BACKEND
+                    override fun load(query: LyricQuery) =
+                        flowOf<LyricProviderResult>(LyricProviderResult.NoMatch)
+                },
+            ),
+            localLyricLoader = { _, source ->
+                localDocument.takeIf { source == LyricSource.NCM_BACKEND }
+            },
+        )
+
+        val result = resolver.resolveLatest(
+            LyricQuery(songId = 1),
+            LyricSourceMode.BACKEND_ONLY,
+            preferLocal = true,
+        )
+
+        // The refresh missing must not downgrade the already-displayed disk copy to Empty.
+        assertEquals(
+            LyricSource.NCM_BACKEND,
+            assertIs<LyricResolution.Found>(result).document.source,
+        )
+    }
+
+    @Test
+    fun upstreamUpgradeReplacesALowerRankedLocalDocument() = runTest {
+        val resolver = LyricResolver(
+            providers = listOf(
+                fakeProvider(
+                    LyricSource.NCM_BACKEND,
+                    mutableListOf(),
+                    found(LyricSource.NCM_BACKEND, LyricCapabilityLevel.NCM_YRC),
+                ),
+            ),
+            localLyricLoader = { _, source ->
+                found(LyricSource.NCM_BACKEND, LyricCapabilityLevel.LINE_SYNCED)
+                    .document
+                    .takeIf { source == LyricSource.NCM_BACKEND }
+            },
+        )
+
+        val result = resolver.resolveLatest(
+            LyricQuery(songId = 1),
+            LyricSourceMode.BACKEND_ONLY,
+            preferLocal = true,
+        )
+
+        assertEquals(
+            LyricCapabilityLevel.NCM_YRC,
+            assertIs<LyricResolution.Found>(result).document.capabilityLevel,
         )
     }
 
@@ -514,15 +574,18 @@ class LyricResolverTest {
         }
     }
 
-    private fun found(source: LyricSource): LyricProviderResult.Found =
+    private fun found(
+        source: LyricSource,
+        capabilityLevel: LyricCapabilityLevel = if (source == LyricSource.AMLL_TTML) {
+            LyricCapabilityLevel.TTML_FULL
+        } else {
+            LyricCapabilityLevel.LINE_SYNCED
+        },
+    ): LyricProviderResult.Found =
         LyricProviderResult.Found(
             LyricDocument(
                 source = source,
-                capabilityLevel = if (source == LyricSource.AMLL_TTML) {
-                    LyricCapabilityLevel.TTML_FULL
-                } else {
-                    LyricCapabilityLevel.LINE_SYNCED
-                },
+                capabilityLevel = capabilityLevel,
                 lines = listOf(
                     LyricParser.WordLine(
                         startTimeMs = 0,
