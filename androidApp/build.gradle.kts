@@ -62,6 +62,14 @@ android {
                 "proguard-rules.pro"
             )
         }
+        getByName("debug") {
+            // Distinct applicationId so a debug build installs beside an installed release
+            // instead of replacing it. The two are signed with different keys, so an in-place
+            // update is impossible anyway — without this the only path is uninstalling the
+            // release, which destroys its data.
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

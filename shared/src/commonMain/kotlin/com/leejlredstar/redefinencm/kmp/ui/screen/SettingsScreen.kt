@@ -59,6 +59,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -882,32 +883,45 @@ private fun SettingsDropdown(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val current = options.find { it.name == selectedName } ?: options.first()
+    val interactionSource = remember { MutableInteractionSource() }
+    // Setting name leading, current value trailing — the M3 list-item arrangement. The old
+    // label-over-value stack with a caret read as a filled text field, so these rows looked
+    // like inputs sitting among the switch rows instead of like the same kind of row.
     Surface(
         onClick = { expanded = true },
-        shape = connectedListItemShape(index, count),
+        shape = rememberConnectedListItemShape(index, count, interactionSource),
         color = accentPalette.quietContainer,
         contentColor = accentPalette.onQuietContainer,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 1.5.dp),
+        interactionSource = interactionSource,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = ExpressiveLayout.ConnectedItemGap),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 20.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                .heightIn(min = ExpressiveLayout.MinimumTouchTarget)
+                .padding(start = 20.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = accentPalette.secondaryOnQuietContainer,
-                )
-                Text(text = current.toString(), style = MaterialTheme.typography.bodyLarge)
-            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(16.dp))
+            Text(
+                text = current.toString(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = accentPalette.secondaryOnQuietContainer,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Icon(
-                AppIcons.ArrowDropDown,
+                AppIcons.KeyboardArrowRight,
                 contentDescription = null,
-                tint = accentPalette.accent,
-                modifier = Modifier.padding(12.dp),
+                tint = accentPalette.secondaryOnQuietContainer,
+                modifier = Modifier.padding(start = 4.dp),
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {

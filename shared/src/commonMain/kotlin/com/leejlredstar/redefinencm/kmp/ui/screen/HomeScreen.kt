@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -302,20 +303,15 @@ private fun RecognitionToolSection(
     accentColor: Color,
     onOpenRecognition: () -> Unit,
 ) {
+    // One entry point does not earn a titled section plus a carousel: the old layout spent a
+    // 168dp tile, a heading and a supporting line — roughly a third of the viewport — on a
+    // single tap target, and the LazyRow never had a second item to scroll to. A list item is
+    // the M3 element for "one action with a label and a description".
     Column(modifier = Modifier.padding(top = 20.dp)) {
-        ExpressiveSectionTitle(
-            text = "音乐工具",
-            supportingText = "从周围声音发现歌曲",
-            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+        RecognitionToolCard(
+            accentColor = accentColor,
+            onClick = onOpenRecognition,
         )
-        LazyRow {
-            item(key = "song-recognition") {
-                RecognitionToolCard(
-                    accentColor = accentColor,
-                    onClick = onOpenRecognition,
-                )
-            }
-        }
     }
 }
 
@@ -331,54 +327,49 @@ private fun RecognitionToolCard(
         color = palette.quietContainer,
         contentColor = palette.onQuietContainer,
         modifier = Modifier
-            .padding(end = 12.dp, top = 8.dp, bottom = 8.dp)
-            .size(168.dp)
+            .fillMaxWidth()
             .semantics(mergeDescendants = true) {
                 contentDescription = "打开听歌识曲"
             },
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            palette.pageStart,
-                            palette.container,
-                            palette.quietContainer,
-                        ),
-                    ),
-                )
-                .padding(16.dp),
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Surface(
                 shape = CircleShape,
                 color = palette.container,
                 contentColor = palette.onContainer,
-                modifier = Modifier.size(64.dp),
+                modifier = Modifier.size(48.dp),
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = AppIcons.GraphicEq,
                         contentDescription = null,
-                        modifier = Modifier.size(32.dp),
+                        modifier = Modifier.size(24.dp),
                     )
                 }
             }
-            Column(modifier = Modifier.align(Alignment.BottomStart)) {
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
                 Text(
                     text = "听歌识曲",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.ExtraBold,
+                    style = MaterialTheme.typography.titleMedium,
                     color = palette.onQuietContainer,
                 )
                 Text(
-                    text = "录制三秒开始匹配",
-                    style = MaterialTheme.typography.bodySmall,
+                    text = "录制三秒，从周围声音里找出这首歌",
+                    style = MaterialTheme.typography.bodyMedium,
                     color = palette.secondaryOnQuietContainer,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
+            Icon(
+                imageVector = AppIcons.KeyboardArrowRight,
+                contentDescription = null,
+                tint = palette.secondaryOnQuietContainer,
+            )
         }
     }
 }
@@ -424,10 +415,14 @@ private fun HomeHero(
                 val compactHeader = maxWidth < 300.dp
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
+                    // The page's own identity, not the app name: "RedefineNCM" is a fixed 11
+                    // characters that cannot shrink, and at displaySmall (40sp) it truncated to
+                    // "RedefineN..." next to the avatar on a normal phone. This also matches the
+                    // Settings header, so both tabs open the same way.
                     Text(
-                        text = "RedefineNCM",
+                        text = "推荐",
                         style = if (compactHeader) {
-                            MaterialTheme.typography.headlineSmall
+                            MaterialTheme.typography.headlineMedium
                         } else {
                             MaterialTheme.typography.displaySmall
                         },
@@ -438,7 +433,7 @@ private fun HomeHero(
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "推荐 · $dailySongCount 首每日歌曲 · $playlistCount 张歌单",
+                        text = "$dailySongCount 首每日歌曲 · $playlistCount 张歌单",
                         style = MaterialTheme.typography.titleMedium,
                         color = heroPalette.secondaryOnPageStart,
                         maxLines = 1,
