@@ -39,6 +39,10 @@ import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LargeFlexibleTopAppBar
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -50,6 +54,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -88,7 +93,7 @@ internal fun replaceQueueWithDailyRecommendations(
  * 推荐主页（原版 RecommendPage）：搜索药丸 → 搜索页 的共享元素过渡由
  * SharedTransitionLayout + AnimatedVisibility + sharedBounds 实现。
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun HomeScreen(
     scaffoldPadding: PaddingValues,
@@ -152,6 +157,46 @@ fun HomeScreen(
                     ),
             ) {
                 val animatedVisibilityScope = this
+                // The page title, the counts and the avatar are a real collapsing app bar now.
+                // They used to be a Surface inside the list that scrolled away like content;
+                // as a top bar they collapse to a pinned compact title instead, and the search
+                // pill is left as the first actual row of the page.
+                val appBarScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+                Scaffold(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .nestedScroll(appBarScrollBehavior.nestedScrollConnection),
+                    containerColor = Color.Transparent,
+                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                    topBar = {
+                        LargeFlexibleTopAppBar(
+                            title = { Text("推荐") },
+                            subtitle = {
+                                Text("${dailySongs.size} 首每日歌曲 · ${resources.size} 张歌单")
+                            },
+                            actions = {
+                                HomeAccountAvatar(
+                                    avatarUrl = avatarUrl,
+                                    nickname = nickname,
+                                    accentColor = pageAccent,
+                                    onOpenMy = onOpenMy,
+                                    onAccentColor = if (pageAccentSource == avatarUrl) {
+                                        { color -> rawPageAccent = color }
+                                    } else {
+                                        null
+                                    },
+                                )
+                                Spacer(Modifier.width(8.dp))
+                            },
+                            scrollBehavior = appBarScrollBehavior,
+                            colors = TopAppBarDefaults.largeTopAppBarColors(
+                                containerColor = Color.Transparent,
+                                scrolledContainerColor = pagePalette.pageStart,
+                                titleContentColor = pagePalette.onPageStart,
+                            ),
+                        )
+                    },
+                ) { appBarPadding ->
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     // Bottom clearance belongs on the LazyColumn, not on ExpressivePage:
@@ -160,30 +205,21 @@ fun HomeScreen(
                     contentPadding = PaddingValues(
                         start = 16.dp,
                         end = 16.dp,
-                        top = 16.dp,
+                        top = appBarPadding.calculateTopPadding(),
                         // coerce, not add: the 96dp was the mini-player FAB's clearance and the
                         // scaffold clearance covers the toolbar. Summing them stacks two gaps and
                         // leaves a dead band at the end of the list.
                         bottom = scaffoldPadding.calculateBottomPadding().coerceAtLeast(96.dp),
                     ),
                 ) {
-                    item {
-                        HomeHero(
-                            dailySongCount = dailySongs.size,
-                            playlistCount = resources.size,
-                            accentColor = pageAccent,
-                            avatarUrl = avatarUrl,
-                            nickname = nickname,
-                            onOpenMy = onOpenMy,
-                            onAccentColor = if (pageAccentSource == avatarUrl) {
-                                { color -> rawPageAccent = color }
-                            } else {
-                                null
-                            },
+                    item(key = "search") {
+                        SearchBox(
                             onClick = { showSearch = true },
+                            accentColor = pageAccent,
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
                         )
+                        Spacer(Modifier.height(4.dp))
                     }
 
                     item(key = "music-tools") {
@@ -265,6 +301,7 @@ fun HomeScreen(
                     }
 
                     item { Spacer(Modifier.height(96.dp)) }
+                }
                 }
             }
 
@@ -369,93 +406,6 @@ private fun RecognitionToolCard(
                 imageVector = AppIcons.KeyboardArrowRight,
                 contentDescription = null,
                 tint = palette.secondaryOnQuietContainer,
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalSharedTransitionApi::class)
-@Composable
-private fun HomeHero(
-    dailySongCount: Int,
-    playlistCount: Int,
-    accentColor: Color,
-    avatarUrl: String?,
-    nickname: String,
-    onOpenMy: () -> Unit,
-    onAccentColor: ((Color) -> Unit)?,
-    onClick: () -> Unit,
-    sharedTransitionScope: SharedTransitionScope,
-    animatedVisibilityScope: AnimatedVisibilityScope,
-) {
-    val heroPalette = contentAccentPalette(accentColor)
-    Surface(
-        shape = MaterialTheme.shapes.extraLarge,
-        color = heroPalette.quietContainer,
-        contentColor = heroPalette.onQuietContainer,
-        tonalElevation = 0.dp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 12.dp),
-    ) {
-        Column(
-            modifier = Modifier
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            heroPalette.pageStart,
-                            heroPalette.container,
-                            heroPalette.quietContainer,
-                        ),
-                    ),
-                )
-                .padding(20.dp),
-        ) {
-            BoxWithConstraints {
-                val compactHeader = maxWidth < 300.dp
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                    // The page's own identity, not the app name: "RedefineNCM" is a fixed 11
-                    // characters that cannot shrink, and at displaySmall (40sp) it truncated to
-                    // "RedefineN..." next to the avatar on a normal phone. This also matches the
-                    // Settings header, so both tabs open the same way.
-                    Text(
-                        text = "推荐",
-                        style = if (compactHeader) {
-                            MaterialTheme.typography.headlineMedium
-                        } else {
-                            MaterialTheme.typography.displaySmall
-                        },
-                        fontWeight = FontWeight.ExtraBold,
-                        color = heroPalette.onPageStart,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = "$dailySongCount 首每日歌曲 · $playlistCount 张歌单",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = heroPalette.secondaryOnPageStart,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    }
-                    Spacer(Modifier.size(if (compactHeader) 8.dp else 16.dp))
-                    HomeAccountAvatar(
-                        avatarUrl = avatarUrl,
-                        nickname = nickname,
-                        accentColor = accentColor,
-                        onOpenMy = onOpenMy,
-                        onAccentColor = onAccentColor,
-                    )
-                }
-            }
-            Spacer(Modifier.height(18.dp))
-            SearchBox(
-                onClick = onClick,
-                accentColor = accentColor,
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
             )
         }
     }
