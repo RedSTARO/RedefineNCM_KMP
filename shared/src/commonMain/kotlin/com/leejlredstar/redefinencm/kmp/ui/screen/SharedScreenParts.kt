@@ -280,13 +280,15 @@ fun CarouselItemScope.RecommendSquareCard(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
+                            // Fractional stops, not a pixel startY: `startY = 120f` is 120 raw
+                            // pixels, which is a third of the way down a 168dp tile on a 3.5x
+                            // phone but almost the whole tile on a 1x one, so the scrim covered
+                            // a different amount of artwork on every density. Weighted to the
+                            // bottom so the title keeps contrast over busy covers.
                             brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    accentPalette.accent.copy(alpha = 0.40f * overlayAlpha),
-                                    Color.Black.copy(alpha = 0.72f * overlayAlpha),
-                                ),
-                                startY = 120f,
+                                0.40f to Color.Transparent,
+                                0.72f to accentPalette.accent.copy(alpha = 0.38f * overlayAlpha),
+                                1f to Color.Black.copy(alpha = 0.88f * overlayAlpha),
                             ),
                         ),
                 )
