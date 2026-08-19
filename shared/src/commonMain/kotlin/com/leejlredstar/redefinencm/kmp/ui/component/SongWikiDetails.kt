@@ -9,12 +9,14 @@
  */
 package com.leejlredstar.redefinencm.kmp.ui.component
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -54,6 +56,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -114,6 +117,9 @@ import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.data.SongWikiSection
 import com.leejlredstar.redefinencm.kmp.ui.amll.nextAmllArtworkUriAfterFailure
+import com.leejlredstar.redefinencm.kmp.ui.theme.DarkColors
+import com.leejlredstar.redefinencm.kmp.ui.theme.buildContentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.viewmodel.SongWikiUiState
 import kotlinx.coroutines.delay
@@ -129,25 +135,14 @@ import kotlin.math.sqrt
  * shared/src/commonMain/amllAssets/amll/player.html (AMLL core 0.5.2),
  * selectors :root and #wiki-info through #wiki-dialog/.wiki-*.
  *
- * These are deliberately fixed dark tokens. The HTML surface did not inherit the app's
- * dynamic Material palette, so doing so here would make platform renderings diverge.
+ * Colours are no longer a frozen copy of the dark scheme. That copy was thirteen literals
+ * duplicating DarkColors, so this surface could not follow the theme, could not be tinted by the
+ * artwork the way every other page is, and drifted silently whenever Color.kt changed.
+ *
+ * It still pins the dark scheme, because it always sits over the player. The trade-off is that
+ * the Desktop Legacy renderer draws this dialog from player.html's fixed CSS instead, so the two
+ * now differ there until that CSS is updated to match; every other renderer uses this composable.
  */
-private object WikiTokens {
-    val Primary = Color(0xFF80D8C5)
-    val OnPrimary = Color(0xFF00382F)
-    val PrimaryContainer = Color(0xFF005144)
-    val OnPrimaryContainer = Color(0xFF9CF2DC)
-    val Surface = Color(0xFF101410)
-    val SurfaceContainer = Color(0xFF1D211E)
-    val SurfaceContainerHigh = Color(0xFF282C29)
-    val SurfaceContainerHighest = Color(0xFF333733)
-    val OnSurface = Color(0xFFE1E5DE)
-    val OnSurfaceVariant = Color(0xFFC0C9C2)
-    val Outline = Color(0xFF8A938B)
-    val ErrorContainer = Color(0xFF8C1D18)
-    val OnErrorContainer = Color(0xFFF9DEDC)
-}
-
 private val WikiExpressiveEasing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
 private val WikiCssEase = CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f)
 private const val WikiOverlayMillis = 180
@@ -309,6 +304,34 @@ fun SongWikiDetailsSheet(
         }
     }
 
+    // This sheet always sits over the full-screen player, which is a dark surface regardless of
+    // the app's theme, so it pins the dark scheme rather than inheriting a light one. It used to
+    // pin a *hand-copied* dark palette instead — thirteen literals duplicating DarkColors, which
+    // meant the surface could not follow the theme, could not be tinted, and silently drifted
+    // whenever Color.kt changed.
+    //
+    // The primary roles and the tonal surfaces are rebuilt from the artwork, so the panel now
+    // picks up the song's colour the same way every other page does.
+    val artworkAccentSource = artworkUri ?: fallbackArtworkUri
+    var rawWikiAccent by remember(artworkAccentSource) { mutableStateOf(DarkColors.primary) }
+    val extractWikiAccent = rememberThemeColorExtractor(artworkAccentSource) { rawWikiAccent = it }
+    val wikiAccent by animateColorAsState(
+        targetValue = rawWikiAccent,
+        animationSpec = spring(),
+        label = "wiki-accent",
+    )
+    val wikiPalette = remember(wikiAccent) { buildContentAccentPalette(wikiAccent, DarkColors) }
+    val wikiScheme = remember(wikiPalette) {
+        DarkColors.copy(
+            primary = wikiPalette.accent,
+            onPrimary = wikiPalette.onAccent,
+            primaryContainer = wikiPalette.container,
+            onPrimaryContainer = wikiPalette.onContainer,
+            surfaceContainerHigh = wikiPalette.quietContainer,
+            surfaceContainerHighest = wikiPalette.container,
+        )
+    }
+
     val overlayAlpha by animateFloatAsState(
         targetValue = if (open) 0.64f else 0f,
         animationSpec = if (reducedMotion) snap() else tween(WikiOverlayMillis, easing = WikiCssEase),
@@ -337,6 +360,13 @@ fun SongWikiDetailsSheet(
             usePlatformDefaultWidth = false,
         ),
     ) {
+        // Everything below reads MaterialTheme, so the artwork-tinted dark scheme is installed
+        // once here rather than threaded through two dozen call sites.
+        MaterialTheme(
+            colorScheme = wikiScheme,
+            typography = MaterialTheme.typography,
+            shapes = MaterialTheme.shapes,
+        ) {
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
@@ -446,8 +476,8 @@ fun SongWikiDetailsSheet(
                                 },
                             ),
                         shape = dialogShape,
-                        color = WikiTokens.Surface,
-                        contentColor = WikiTokens.OnSurface,
+                        color = MaterialTheme.colorScheme.surface,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
                     ) {
                         WikiDialogContent(
                             songTitle = songTitle,
@@ -476,6 +506,7 @@ fun SongWikiDetailsSheet(
                     runCatching { closeFocusRequester.requestFocus() }
                 }
             }
+        }
         }
     }
 }
@@ -536,7 +567,7 @@ private fun WikiDialogContent(
                     bottom = 10.dp,
                 )
                 .semantics { heading() },
-            color = WikiTokens.OnSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.52.sp,
@@ -642,7 +673,11 @@ private fun WikiHero(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .wikiHeroBackground(),
+            .wikiHeroBackground(
+                gradientStart = MaterialTheme.colorScheme.surfaceContainerHighest,
+                gradientEnd = MaterialTheme.colorScheme.surfaceContainer,
+                glow = MaterialTheme.colorScheme.primary,
+            ),
     ) {
         Row(
             modifier = Modifier
@@ -671,7 +706,7 @@ private fun WikiHero(
             ) {
                 Text(
                     text = "歌曲详细信息 · 音乐百科",
-                    color = WikiTokens.Primary,
+                    color = MaterialTheme.colorScheme.primary,
                     fontSize = 12.sp,
                     fontWeight = FontWeight(750),
                     letterSpacing = 0.96.sp,
@@ -680,7 +715,7 @@ private fun WikiHero(
                 Text(
                     text = songTitle?.trim().takeUnless { it.isNullOrEmpty() } ?: "当前歌曲",
                     modifier = Modifier.semantics { heading() },
-                    color = WikiTokens.OnSurface,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontSize = titleSize.sp,
                     fontWeight = FontWeight.ExtraBold,
                     lineHeight = (titleSize * 1.08f).sp,
@@ -756,13 +791,13 @@ private fun WikiArtwork(
                 ),
             )
             .clip(shape)
-            .background(WikiTokens.SurfaceContainerHighest),
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = AppIcons.GraphicEq,
             contentDescription = null,
-            tint = WikiTokens.OnSurfaceVariant,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(38.dp).alpha(0.72f),
         )
         AsyncImage(
@@ -823,7 +858,7 @@ private fun WikiMetadata(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(WikiTokens.SurfaceContainerHighest, shape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest, shape)
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.Top,
@@ -831,7 +866,7 @@ private fun WikiMetadata(
                 Text(
                     text = label,
                     modifier = Modifier.width(42.dp),
-                    color = WikiTokens.Primary,
+                    color = MaterialTheme.colorScheme.primary,
                     fontSize = 12.sp,
                     fontWeight = FontWeight(750),
                     lineHeight = 18.6.sp,
@@ -839,7 +874,7 @@ private fun WikiMetadata(
                 Text(
                     text = value,
                     modifier = Modifier.weight(1f),
-                    color = WikiTokens.OnSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     lineHeight = 19.5.sp,
@@ -864,13 +899,13 @@ private fun WikiCloseButton(
             Icon(
                 imageVector = AppIcons.Clear,
                 contentDescription = null,
-                tint = WikiTokens.OnSurfaceVariant,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(24.dp),
             )
         },
         label = "关闭歌曲详细信息",
-        baseColor = WikiTokens.SurfaceContainerHighest,
-        hoverColor = WikiTokens.Primary.copy(alpha = 0.18f),
+        baseColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        hoverColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
         reducedMotion = reducedMotion,
     )
 }
@@ -965,7 +1000,7 @@ private fun WikiLoadingState(reducedMotion: Boolean) {
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 164.dp)
-            .background(WikiTokens.SurfaceContainerHigh, RoundedCornerShape(28.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(28.dp))
             .padding(28.dp)
             .semantics(mergeDescendants = true) {
                 contentDescription = "正在加载音乐百科…"
@@ -979,7 +1014,7 @@ private fun WikiLoadingState(reducedMotion: Boolean) {
         WikiSpinner(reducedMotion = reducedMotion)
         Text(
             text = "正在加载音乐百科…",
-            color = WikiTokens.OnSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 14.sp,
             lineHeight = 21.7.sp,
             textAlign = TextAlign.Center,
@@ -1001,6 +1036,8 @@ private fun WikiSpinner(reducedMotion: Boolean) {
         )
         value
     }
+    // The draw scope is not composable, so the role is read here and captured.
+    val spinnerColor = MaterialTheme.colorScheme.primary
     Canvas(
         modifier = Modifier
             .size(28.dp)
@@ -1009,12 +1046,12 @@ private fun WikiSpinner(reducedMotion: Boolean) {
         val strokeWidth = 3.dp.toPx()
         val inset = strokeWidth / 2f
         drawCircle(
-            color = WikiTokens.Primary.copy(alpha = if (reducedMotion) 0.35f else 0.20f),
+            color = spinnerColor.copy(alpha = if (reducedMotion) 0.35f else 0.20f),
             radius = size.minDimension / 2f - inset,
             style = Stroke(strokeWidth),
         )
         drawArc(
-            color = WikiTokens.Primary,
+            color = spinnerColor,
             startAngle = -90f,
             sweepAngle = 90f,
             useCenter = false,
@@ -1035,14 +1072,14 @@ private fun WikiStatePanel(
     onAction: (() -> Unit)? = null,
 ) {
     val foreground = if (kind == WikiStateKind.Error) {
-        WikiTokens.OnErrorContainer
+        MaterialTheme.colorScheme.onErrorContainer
     } else {
-        WikiTokens.OnSurfaceVariant
+        MaterialTheme.colorScheme.onSurfaceVariant
     }
     val background = if (kind == WikiStateKind.Error) {
-        WikiTokens.ErrorContainer
+        MaterialTheme.colorScheme.errorContainer
     } else {
-        WikiTokens.SurfaceContainerHigh
+        MaterialTheme.colorScheme.surfaceContainerHigh
     }
     Column(
         modifier = Modifier
@@ -1142,7 +1179,7 @@ private fun WikiRetryButton(
                 scaleX = scale
                 scaleY = scale
             }
-            .background(WikiTokens.Primary.withBrightness(brightness), CircleShape)
+            .background(MaterialTheme.colorScheme.primary.withBrightness(brightness), CircleShape)
             .wikiFocusOutline(focused)
             .hoverable(interactionSource)
             .clickable(
@@ -1159,7 +1196,7 @@ private fun WikiRetryButton(
     ) {
         Text(
             text = label,
-            color = WikiTokens.OnPrimary.withBrightness(brightness),
+            color = MaterialTheme.colorScheme.onPrimary.withBrightness(brightness),
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
         )
@@ -1191,13 +1228,13 @@ private fun WikiSectionCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(WikiTokens.SurfaceContainerHigh, shape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh, shape)
             .padding(horizontal = 20.dp, vertical = 18.dp),
     ) {
         Text(
             text = section.title.trim(),
             modifier = Modifier.semantics { heading() },
-            color = WikiTokens.OnSurface,
+            color = MaterialTheme.colorScheme.onSurface,
             fontSize = 16.sp,
             fontWeight = FontWeight(750),
             lineHeight = 20.8.sp,
@@ -1216,9 +1253,9 @@ private fun WikiSectionCard(
                     Text(
                         text = value,
                         modifier = Modifier
-                            .background(WikiTokens.PrimaryContainer, CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
                             .padding(horizontal = 12.dp, vertical = 7.dp),
-                        color = WikiTokens.OnPrimaryContainer,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         lineHeight = 18.9.sp,
@@ -1230,7 +1267,7 @@ private fun WikiSectionCard(
             if (values.isNotEmpty()) Spacer(Modifier.height(12.dp))
             Text(
                 text = it,
-                color = WikiTokens.OnSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 14.sp,
                 lineHeight = 24.08.sp,
             )
@@ -1273,7 +1310,11 @@ internal fun cssLinearGradientAxis(
     )
 }
 
-private fun Modifier.wikiHeroBackground(): Modifier = drawWithCache {
+private fun Modifier.wikiHeroBackground(
+    gradientStart: Color,
+    gradientEnd: Color,
+    glow: Color,
+): Modifier = drawWithCache {
     val center = Offset(size.width * 0.18f, size.height * 0.12f)
     val farthestX = max(center.x, size.width - center.x)
     val farthestY = max(center.y, size.height - center.y)
@@ -1284,13 +1325,13 @@ private fun Modifier.wikiHeroBackground(): Modifier = drawWithCache {
         angleDegrees = 135f,
     )
     val linear = Brush.linearGradient(
-        colors = listOf(WikiTokens.SurfaceContainerHighest, WikiTokens.SurfaceContainer),
+        colors = listOf(gradientStart, gradientEnd),
         start = linearAxis.start,
         end = linearAxis.end,
     )
     val radial = Brush.radialGradient(
         colorStops = arrayOf(
-            0f to WikiTokens.Primary.copy(alpha = 0.20f),
+            0f to glow.copy(alpha = 0.20f),
             0.44f to Color.Transparent,
             1f to Color.Transparent,
         ),
