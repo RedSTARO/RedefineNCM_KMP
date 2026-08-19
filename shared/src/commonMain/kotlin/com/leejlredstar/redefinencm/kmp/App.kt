@@ -47,6 +47,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.FloatingToolbarExitDirection
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
@@ -86,6 +87,7 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -433,6 +435,9 @@ private fun AppContent(
                         0.dp
                     }
                     val screenPadding = PaddingValues(bottom = contentBottomInset)
+                    val toolbarScrollBehavior = FloatingToolbarDefaults.exitAlwaysScrollBehavior(
+                        exitDirection = FloatingToolbarExitDirection.Bottom,
+                    )
 
                     Scaffold(
                         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -457,7 +462,11 @@ private fun AppContent(
                             }
                         },
                     ) { innerPadding ->
-                        Box(Modifier.fillMaxSize()) {
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .nestedScroll(toolbarScrollBehavior),
+                        ) {
                         Row(Modifier.fillMaxSize()) {
                             if (showDesktopRail) {
                                 DesktopExpandableSidebar(
@@ -577,14 +586,10 @@ private fun AppContent(
                                 }
                             }
                         }
-                        AnimatedVisibility(
-                            visible = bottomNavVisible,
-                            enter = bottomNavEnterTransition(),
-                            exit = bottomNavExitTransition(),
-                            modifier = Modifier.align(Alignment.BottomCenter),
-                        ) {
+                        if (bottomNavVisible) {
                             Box(
                                 modifier = Modifier
+                                    .align(Alignment.BottomCenter)
                                     .fillMaxWidth()
                                     .windowInsetsPadding(WindowInsets.navigationBars)
                                     .padding(horizontal = 16.dp, vertical = 14.dp),
@@ -592,6 +597,7 @@ private fun AppContent(
                             ) {
                                 HorizontalFloatingToolbar(
                                     expanded = true,
+                                    scrollBehavior = toolbarScrollBehavior,
                                     colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
                                         toolbarContainerColor = chromePalette.quietContainer,
                                         toolbarContentColor = chromePalette.onQuietContainer,
