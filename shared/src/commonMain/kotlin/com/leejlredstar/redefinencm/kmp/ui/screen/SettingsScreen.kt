@@ -63,6 +63,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
@@ -334,7 +335,7 @@ fun SettingsScreen(
                         )
                     }
                 }
-                ExpressiveSectionTitle("服务器", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
+                SettingsSectionLabel("服务器", settingsPalette)
                 SettingsTextField(
                     value = server,
                     label = "服务器地址",
@@ -407,7 +408,7 @@ fun SettingsScreen(
                     }
                 }
 
-                ExpressiveSectionTitle("账号", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
+                SettingsSectionLabel("账号", settingsPalette)
                 SettingsButton(
                     label = if (cookie.isBlank()) "扫码 / 登录" else "重新登录 / 换号",
                     leadingIcon = AppIcons.QrCode2,
@@ -440,7 +441,7 @@ fun SettingsScreen(
                     },
                 )
 
-                ExpressiveSectionTitle("播放", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
+                SettingsSectionLabel("播放", settingsPalette)
                 val playbackSettingCount = if (supportsDynamicNowPlayingCover) 6 else 5
                 SettingsDropdown(onlineQuality, "在线播放音质", SoundQuality.entries, settingsPalette, index = 0, count = playbackSettingCount) { v ->
                     onlineQuality = v.name
@@ -478,7 +479,7 @@ fun SettingsScreen(
                     }
                 }
 
-                ExpressiveSectionTitle("歌词", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
+                SettingsSectionLabel("歌词", settingsPalette)
                 val lyricSettingCount =
                     if (LyricNotificationController.supportsOptionalSurfaceControl) 5 else 4
                 val nativeRendererSelected =
@@ -592,13 +593,13 @@ fun SettingsScreen(
                     )
                 }
 
-                ExpressiveSectionTitle("通用", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
+                SettingsSectionLabel("通用", settingsPalette)
                 SettingsSwitch(checkUpdate, "启动时检查更新", settingsPalette, index = 0, count = 1) { v ->
                     checkUpdate = v
                     persistSettings({ settings.setBoolean(SettingKeys.CHECK_UPDATE, v) })
                 }
 
-                ExpressiveSectionTitle("应用", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
+                SettingsSectionLabel("应用", settingsPalette)
                 SettingsValue(
                     label = "版本",
                     value = BuildInfo.VERSION_NAME,
@@ -606,7 +607,7 @@ fun SettingsScreen(
                     accentPalette = settingsPalette,
                 )
 
-                ExpressiveSectionTitle("备份", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp))
+                SettingsSectionLabel("备份", settingsPalette)
                 SettingsButton("导出设置", settingsPalette, index = 0, count = 2) { launchExport(encodeSettingsBackup(settings)) }
                 SettingsButton("导入设置", settingsPalette, index = 1, count = 2) {
                     showImportConfirmation = true
@@ -642,6 +643,30 @@ fun SettingsScreen(
             },
         )
     }
+}
+
+/**
+ * Group label for a settings section.
+ *
+ * Settings groups are not page titles. ExpressiveSectionTitle renders at `headlineSmall`, which
+ * is the right weight above the home carousels but announced every one of the seven groups here
+ * at 25sp, so each one opened a large empty band and the rows below it read as unrelated
+ * floating cards. A short accent-coloured label ties a group to the rows underneath it and
+ * leaves the page title as the only large type on screen.
+ */
+@Composable
+private fun SettingsSectionLabel(
+    text: String,
+    accentPalette: ContentAccentPalette,
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = accentPalette.accent,
+        modifier = Modifier
+            .semantics { heading() }
+            .padding(start = 20.dp, end = 20.dp, top = 26.dp, bottom = 8.dp),
+    )
 }
 
 @Composable
