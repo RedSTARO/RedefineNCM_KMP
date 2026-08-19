@@ -75,7 +75,7 @@ fun SearchScreen(
     val keyboard = LocalSoftwareKeyboardController.current
     val focusRequester = remember { FocusRequester() }
     val searchPrediction = remember { settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true) }
-    val searchPalette = contentAccentPalette(MaterialTheme.colorScheme.tertiaryContainer)
+    val searchPalette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
 
     LaunchedEffect(Unit) { viewModel.clearSearch() }
     LaunchedEffect(Unit) {

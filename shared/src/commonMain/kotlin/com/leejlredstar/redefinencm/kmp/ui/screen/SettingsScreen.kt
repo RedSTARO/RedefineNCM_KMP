@@ -294,7 +294,7 @@ fun SettingsScreen(
         }
     }
     val launchExport = rememberExportFileLauncher()
-    val settingsPalette = contentAccentPalette(MaterialTheme.colorScheme.secondaryContainer)
+    val settingsPalette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
 
     // The page title is a real LargeFlexibleTopAppBar rather than a hand-rolled hero Box. The
     // bar owns the collapse: it starts large and shrinks to a compact title as the page scrolls,

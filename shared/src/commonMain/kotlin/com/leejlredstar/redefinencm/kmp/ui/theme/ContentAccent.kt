@@ -46,34 +46,46 @@ fun contentAccentPalette(source: Color): ContentAccentPalette {
     return remember(source, scheme) { buildContentAccentPalette(source, scheme) }
 }
 
-private fun buildContentAccentPalette(
+internal fun buildContentAccentPalette(
     source: Color,
     scheme: ColorScheme,
 ): ContentAccentPalette {
     val isDark = scheme.surface.luminance() < 0.5f
-    val accent = normalizeAccent(source, isDark)
-    val accentLuminance = accent.luminance()
-    val buttonAccent = when {
-        accentLuminance > 0.62f -> lerp(accent, Color.Black, 0.30f)
-        accentLuminance < 0.16f -> lerp(accent, Color.White, 0.18f)
-        else -> accent
-    }
-    val container = if (isDark) {
-        lerp(accent, scheme.surfaceContainerHigh, 0.46f)
-    } else {
-        lerp(accent, scheme.surfaceContainerHigh, 0.58f)
-    }
-    val quietContainer = if (isDark) {
-        lerp(accent, scheme.surfaceContainerHigh, 0.72f)
-    } else {
-        lerp(accent, scheme.surfaceContainerHigh, 0.78f)
-    }
-    val pageStart = if (isDark) lerp(accent, scheme.surface, 0.32f) else lerp(accent, scheme.surface, 0.48f)
-    val pageMiddle = if (isDark) lerp(accent, scheme.surface, 0.62f) else lerp(accent, scheme.surface, 0.76f)
+    // Everything below is derived the way Material derives a scheme: hold the source's hue,
+    // choose a chroma, place a tone. The previous implementation lerp'd the raw source toward
+    // the surface in sRGB, which is what produced the muddy washes — blending a saturated yellow
+    // toward a dark surface travels through olive, because the straight numeric path between two
+    // sRGB colours is not the path the eye expects.
+    //
+    // The chroma ceilings matter more than the tones. A Material surface tint is *barely*
+    // tinted; letting a fully saturated album colour through at full chroma is what made whole
+    // pages look dyed.
+    val hue = source.copy(alpha = 1f)
+    val surfaceTone = scheme.surface.toOklch().lightness
+
+    fun tint(toneDelta: Float, maxChroma: Float): Color =
+        hue.withTone(
+            lightness = (surfaceTone + if (isDark) toneDelta else -toneDelta).coerceIn(0f, 1f),
+            chroma = hue.toOklch().chroma.coerceAtMost(maxChroma),
+        )
+
+    val pageStart = tint(toneDelta = 0.075f, maxChroma = SurfaceTintChroma)
+    val pageMiddle = tint(toneDelta = 0.030f, maxChroma = SurfaceTintChroma * 0.6f)
     val pageEnd = scheme.surface
+    val container = tint(toneDelta = 0.170f, maxChroma = ContainerChroma)
+    val quietContainer = tint(toneDelta = 0.105f, maxChroma = ContainerChroma * 0.7f)
+
+    // The accent is the one role allowed real colour, but still bounded: an album cover can be
+    // far more saturated than anything Material would put on a control, and it has to stay
+    // legible against its own container.
+    val accent = hue.withTone(
+        lightness = if (isDark) AccentToneDark else AccentToneLight,
+        chroma = hue.toOklch().chroma.coerceIn(AccentChromaMin, AccentChromaMax),
+    )
+
     return ContentAccentPalette(
-        accent = buttonAccent,
-        onAccent = contentColorFor(buttonAccent, scheme.surface),
+        accent = accent,
+        onAccent = contentColorFor(accent, scheme.surface),
         container = container,
         onContainer = contentColorFor(container, scheme.surface),
         secondaryOnContainer = secondaryContentColorFor(container, scheme.surface),
@@ -91,6 +103,17 @@ private fun buildContentAccentPalette(
         secondaryOnPageEnd = secondaryContentColorFor(pageEnd, scheme.surface),
     )
 }
+
+/** Ceiling for page-background tinting. Material surface tints are subtle by design. */
+private const val SurfaceTintChroma = 0.030f
+
+/** Ceiling for tonal containers — visibly coloured, still a surface rather than a swatch. */
+private const val ContainerChroma = 0.055f
+
+private const val AccentChromaMin = 0.055f
+private const val AccentChromaMax = 0.135f
+private const val AccentToneDark = 0.78f
+private const val AccentToneLight = 0.52f
 
 private val DarkContentColor = Color(0xFF101010)
 private val LightContentColor = Color.White
@@ -245,14 +268,5 @@ private object ImageAccentCache {
         while (entries.size > MaxEntries) {
             entries.keys.firstOrNull()?.let(entries::remove) ?: break
         }
-    }
-}
-
-private fun normalizeAccent(source: Color, isDark: Boolean): Color {
-    val opaque = source.copy(alpha = 1f)
-    return when {
-        opaque.luminance() < 0.05f -> lerp(opaque, Color.White, if (isDark) 0.20f else 0.34f)
-        opaque.luminance() > 0.92f -> lerp(opaque, Color.Black, if (isDark) 0.46f else 0.18f)
-        else -> opaque
     }
 }

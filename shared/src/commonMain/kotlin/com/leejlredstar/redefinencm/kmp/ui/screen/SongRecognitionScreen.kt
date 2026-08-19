@@ -61,7 +61,7 @@ fun SongRecognitionScreen(
     viewModel: SongRecognitionViewModel = koinInject(),
 ) {
     val state by viewModel.uiState.collectAsState()
-    val accentPalette = contentAccentPalette(MaterialTheme.colorScheme.tertiaryContainer)
+    val accentPalette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
     var queuedSongId by remember { mutableStateOf<Long?>(null) }
     val requestMicrophonePermission = rememberMicrophonePermissionRequester(
         onResult = viewModel::onPermissionResult,
