@@ -306,8 +306,10 @@ jobs:
       - name: Build .deb package
         run: |
           chmod +x gradlew
-          ./gradlew :desktopApp:packageDeb
-          package=$(find desktopApp/build/compose/binaries/main/deb -name '*.deb' -print -quit)
+          # packageReleaseDeb is the ProGuard-shrunk/optimized/obfuscated distribution — the
+          # Desktop counterpart of the Android R8 release pipeline. Never plain packageDeb.
+          ./gradlew :desktopApp:packageReleaseDeb
+          package=$(find desktopApp/build/compose/binaries/main-release/deb -name '*.deb' -print -quit)
           test -n "$package"
           test "$(dpkg-deb -f "$package" Version)" = "$NATIVE_PACKAGE_VERSION"
           mv "$package" "$(dirname "$package")/RedefineNCM_KMP-${APP_VERSION}.deb"
@@ -315,7 +317,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: desktop-linux-deb
-          path: desktopApp/build/compose/binaries/main/deb/RedefineNCM_KMP-${{ needs.test.outputs.app_version }}.deb
+          path: desktopApp/build/compose/binaries/main-release/deb/RedefineNCM_KMP-${{ needs.test.outputs.app_version }}.deb
           if-no-files-found: error
 
   # ─── Desktop · Windows ──────────────────────────────────────────────────────
@@ -409,13 +411,14 @@ jobs:
         run: |
           chmod +x gradlew
           # jvmTest executes the native MPNowPlayingInfoCenter/remote-command smoke on macOS.
-          ./gradlew :shared:jvmTest :desktopApp:packageDmg
-          plist=$(find desktopApp/build/compose/binaries/main -path '*/RedefineNCM.app/Contents/Info.plist' -print -quit)
+          # packageReleaseDmg runs the same ProGuard release pipeline as the .msi and .deb.
+          ./gradlew :shared:jvmTest :desktopApp:packageReleaseDmg
+          plist=$(find desktopApp/build/compose/binaries/main-release -path '*/RedefineNCM.app/Contents/Info.plist' -print -quit)
           test -n "$plist"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")" = "$NATIVE_PACKAGE_VERSION"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist")" = "$NATIVE_PACKAGE_VERSION"
           test "$(/usr/libexec/PlistBuddy -c 'Print :RedefineNCMVersionName' "$plist")" = "$APP_VERSION"
-          package=$(find desktopApp/build/compose/binaries/main/dmg -name '*.dmg' -print -quit)
+          package=$(find desktopApp/build/compose/binaries/main-release/dmg -name '*.dmg' -print -quit)
           test -n "$package"
           mv "$package" "$(dirname "$package")/RedefineNCM_KMP-${APP_VERSION}.dmg"
 
@@ -430,7 +433,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: desktop-macos-dmg
-          path: desktopApp/build/compose/binaries/main/dmg/RedefineNCM_KMP-${{ needs.test.outputs.app_version }}.dmg
+          path: desktopApp/build/compose/binaries/main-release/dmg/RedefineNCM_KMP-${{ needs.test.outputs.app_version }}.dmg
           if-no-files-found: error
 
   # ─── iOS ────────────────────────────────────────────────────────────────────
@@ -456,17 +459,26 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Compile iOS Simulator framework
-        # Verifies iOS Kotlin compilation; produces the Shared.framework used by Xcode.
-        # Full IPA signing requires Xcode provisioning and is not done in CI.
-        run: ./gradlew :shared:iosSimulatorArm64Test :shared:linkReleaseFrameworkIosSimulatorArm64
+      - name: Compile iOS release frameworks
+        # Release frameworks are the Kotlin/Native optimized binaries (LLVM -O plus
+        # whole-program dead-code elimination) — the iOS counterpart of the Android R8
+        # release pipeline. Both declared Apple targets are linked so the device slice
+        # is covered, not just the simulator. Full IPA signing requires Xcode
+        # provisioning and is not done in CI.
+        run: |
+          ./gradlew \
+            :shared:iosSimulatorArm64Test \
+            :shared:linkReleaseFrameworkIosSimulatorArm64 \
+            :shared:linkReleaseFrameworkIosArm64
 
       - name: Compile iOS app and Live Activity widget
+        # Release drives Swift whole-module optimization and makes the Gradle build
+        # phase embed the release (optimized) Shared.framework, not the debug one.
         run: |
           xcodebuild \
             -project iosApp/iosApp.xcodeproj \
             -scheme iosApp \
-            -configuration Debug \
+            -configuration Release \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath iosApp/build/DerivedData \
@@ -475,8 +487,8 @@ jobs:
 
       - name: Verify iOS product versions
         run: |
-          app_plist="iosApp/build/DerivedData/Build/Products/Debug-iphonesimulator/RedefineNCM_KMP.app/Info.plist"
-          widget_plist="iosApp/build/DerivedData/Build/Products/Debug-iphonesimulator/RedefineNCM_KMP.app/PlugIns/LyricWidget.appex/Info.plist"
+          app_plist="iosApp/build/DerivedData/Build/Products/Release-iphonesimulator/RedefineNCM_KMP.app/Info.plist"
+          widget_plist="iosApp/build/DerivedData/Build/Products/Release-iphonesimulator/RedefineNCM_KMP.app/PlugIns/LyricWidget.appex/Info.plist"
           for plist in "$app_plist" "$widget_plist"; do
             test -f "$plist"
             test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")" = "${REDEFINE_NCM_BASE_TAG#v}"
