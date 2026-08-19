@@ -3,6 +3,7 @@ package com.leejlredstar.redefinencm.kmp.ui.screen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -25,10 +26,14 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LargeFlexibleTopAppBar
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -49,6 +54,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -96,7 +102,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SettingsScreen(
     scaffoldPadding: PaddingValues,
@@ -275,10 +281,36 @@ fun SettingsScreen(
     val launchExport = rememberExportFileLauncher()
     val settingsPalette = contentAccentPalette(MaterialTheme.colorScheme.secondaryContainer)
 
+    // The page title is a real LargeFlexibleTopAppBar rather than a hand-rolled hero Box. The
+    // bar owns the collapse: it starts large and shrinks to a compact title as the page scrolls,
+    // which a fixed 188dp gradient header could not do. Its container is transparent so
+    // ExpressivePage's gradient still reads through, and the Scaffold here exists only to give
+    // the bar somewhere to live and to hand back its measured height.
+    val appBarScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     ExpressivePage(
         accentPalette = settingsPalette,
         maxContentWidth = ExpressiveLayout.ReadingContentMaxWidth,
     ) {
+        Scaffold(
+            modifier = Modifier.nestedScroll(appBarScrollBehavior.nestedScrollConnection),
+            containerColor = Color.Transparent,
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            topBar = {
+                LargeFlexibleTopAppBar(
+                    title = { Text("设置") },
+                    subtitle = { Text("账号、播放、歌词与备份") },
+                    scrollBehavior = appBarScrollBehavior,
+                    colors = TopAppBarDefaults.largeTopAppBarColors(
+                        // Transparent while expanded so ExpressivePage's gradient reads through,
+                        // but the collapsed bar stays pinned over the scrolling list and has to
+                        // be opaque or the title sits on top of the rows passing beneath it.
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = settingsPalette.pageStart,
+                        titleContentColor = settingsPalette.onPageStart,
+                    ),
+                )
+            },
+        ) { appBarPadding ->
         // The clearance is padding *inside* the scrolling Column, not on ExpressivePage: padding
         // the container would shrink the viewport and stop rows above the floating toolbar,
         // whereas this lets them scroll underneath it while still being reachable at the end.
@@ -286,9 +318,11 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(bottom = scaffoldPadding.calculateBottomPadding()),
+                .padding(
+                    top = appBarPadding.calculateTopPadding(),
+                    bottom = scaffoldPadding.calculateBottomPadding(),
+                ),
         ) {
-            SettingsHero(settingsPalette)
 
             if (settingsLoadError != null) {
                 ExpressiveStatePanel(
@@ -614,6 +648,7 @@ fun SettingsScreen(
                 }
 
                     Spacer(Modifier.height(48.dp))
+                }
                 }
             }
         }
