@@ -73,9 +73,13 @@ internal fun rgb555ThemeColor(
         for (swatch in swatches) {
             val saturation = swatch.saturation
             val luminance = swatch.luminance
+            // A narrow luminance window rejects every swatch on covers that are simply dark or
+            // simply bright, and the caller then falls back to the dominant swatch — usually the
+            // background, so a moody cover produced a flat grey theme. The window is widened and
+            // the distance-from-mid-grey term below still prefers mid tones when they exist.
             if (
                 saturation !in saturationMin..saturationMax ||
-                luminance !in 0.3f..0.7f
+                luminance !in 0.18f..0.85f
             ) continue
             val score = 0.24f * (1f - abs(saturation - saturationTarget)) +
                 0.52f * (1f - abs(luminance - 0.5f)) +

@@ -199,7 +199,10 @@ private fun compositeOver(foreground: Color, background: Color): Color {
 @Composable
 fun rememberThemeColorExtractor(
     requestKey: Any?,
-    preferStyle: Int = 0,
+    // Vibrant, not muted. The palette now bounds chroma itself, so the extractor's job is to
+    // find the colour that actually represents the cover rather than to pre-soften it; picking a
+    // muted swatch first and then tinting with it gave washed-out, near-interchangeable pages.
+    preferStyle: Int = 1,
     onAccentColor: (Color) -> Unit,
 ): (Image) -> Unit {
     val scope = rememberCoroutineScope()
