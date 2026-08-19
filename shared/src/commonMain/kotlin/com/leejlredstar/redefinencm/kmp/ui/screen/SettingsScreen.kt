@@ -642,6 +642,11 @@ fun SettingsScreen(
                 )
 
                 SettingsSectionLabel("备份", settingsPalette)
+                // Deliberately two buttons, not a ButtonGroup. ButtonGroupScope.clickableItem
+                // takes `label: String` plus an `icon` composable and rendered nothing at all
+                // here — verified on device with and without an icon, scrolled to the end of the
+                // list — so the group is not usable for two text-labelled actions in this
+                // Compose Multiplatform build.
                 SettingsButton("导出设置", settingsPalette, index = 0, count = 2) { launchExport(encodeSettingsBackup(settings)) }
                 SettingsButton("导入设置", settingsPalette, index = 1, count = 2) {
                     showImportConfirmation = true
