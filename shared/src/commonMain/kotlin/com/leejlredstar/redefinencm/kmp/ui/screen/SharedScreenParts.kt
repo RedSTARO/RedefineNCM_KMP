@@ -40,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -241,28 +242,33 @@ fun CarouselItemScope.RecommendSquareCard(
     // Shared with the artwork below so pressing the card morphs the cover's silhouette rather
     // than only rippling the container.
     val interactionSource = remember { MutableInteractionSource() }
+    // One silhouette, not three. maskClip applies the carousel's own mask, which is the shape
+    // that actually animates as the tile squeezes; the Surface and the artwork therefore draw
+    // square. Previously the container rounded at `large` and the cover at `extraLarge` inside
+    // it, so two mismatched arcs sat on top of each other and both got clipped again by the
+    // squeeze — the doubled outline.
     Surface(
         onClick = onClick,
         modifier = Modifier
             .padding(vertical = 8.dp)
             .fillMaxWidth()
             .height(CarouselItemWidth)
+            .maskClip(MaterialTheme.shapes.large)
             .semantics(mergeDescendants = true) {
                 if (text == "私人雷达") contentDescription = text
             },
-        // `large` (40dp), not `extraLarge` (52dp): on a 168dp tile a 52dp radius is 31% of the
-        // side, and the corner curve cut into the title sitting in the bottom-left.
-        shape = MaterialTheme.shapes.large,
+        shape = RectangleShape,
         color = accentPalette.quietContainer,
         interactionSource = interactionSource,
     ) {
         Box(Modifier.fillMaxSize()) {
+            // No press morph here: a MaterialShapes silhouette inside a masked, squeezing tile
+            // would be a second animating outline. The morph stays on SongRow, which has no mask.
             ExpressiveArtwork(
-                pressInteractionSource = interactionSource,
                 model = picUrl,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
-                shape = MaterialTheme.shapes.extraLarge,
+                shape = RectangleShape,
                 containerColor = accentPalette.quietContainer,
                 contentColor = accentPalette.onQuietContainer,
                 contentScale = ContentScale.Crop,
