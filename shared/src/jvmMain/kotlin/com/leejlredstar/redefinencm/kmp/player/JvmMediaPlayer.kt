@@ -310,9 +310,14 @@ class JvmMediaPlayer(
                 AudioSystem.getAudioInputStream(fmt, rawStream)
             }
 
-            val info = DataLine.Info(SourceDataLine::class.java, fmt)
-            audioLine = AudioSystem.getLine(info) as SourceDataLine
-            audioLine.open(fmt)
+            // 每次开流都重新读设置：换设备后当前这首也要跟着走，而不是等下一首。
+            audioLine = openAudioOutputLine(
+                fmt,
+                settings.getString(
+                    SettingKeys.AUDIO_OUTPUT_DEVICE,
+                    SYSTEM_DEFAULT_AUDIO_OUTPUT_ID,
+                ),
+            )
             applyVolumeToLine(audioLine)
 
             synchronized(playbackLock) {

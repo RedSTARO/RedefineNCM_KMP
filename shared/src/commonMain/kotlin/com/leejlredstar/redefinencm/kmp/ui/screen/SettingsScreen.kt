@@ -77,6 +77,12 @@ import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
 import com.leejlredstar.redefinencm.kmp.lyric.supportsDynamicNowPlayingCover
 import com.leejlredstar.redefinencm.kmp.lyric.supportsLegacyAmllWebView
 import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
+import com.leejlredstar.redefinencm.kmp.player.AudioOutputDevice
+import com.leejlredstar.redefinencm.kmp.player.SYSTEM_DEFAULT_AUDIO_OUTPUT_ID
+import com.leejlredstar.redefinencm.kmp.player.audioOutputDeviceName
+import com.leejlredstar.redefinencm.kmp.player.availableAudioOutputDevices
+import com.leejlredstar.redefinencm.kmp.player.resolveAudioOutputSelection
+import com.leejlredstar.redefinencm.kmp.player.supportsAudioOutputDeviceSelection
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
@@ -99,6 +105,8 @@ import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -129,6 +137,9 @@ fun SettingsScreen(
     }
     var useNativeAmllRenderer by remember(settings) { mutableStateOf(false) }
     var useDynamicCover by remember(settings) { mutableStateOf(false) }
+    var audioOutputDeviceId by remember(settings) {
+        mutableStateOf(SYSTEM_DEFAULT_AUDIO_OUTPUT_ID)
+    }
     var importStatus by remember { mutableStateOf<String?>(null) }
     var serverCheckStatus by remember { mutableStateOf<String?>(null) }
     var settingsLoaded by remember(settings) { mutableStateOf(false) }
@@ -173,6 +184,10 @@ fun SettingsScreen(
         onAmllRendererPreferenceChanged(useNativeAmllRenderer)
         useDynamicCover = settings.getBoolean(SettingKeys.USE_DYNAMIC_COVER, false)
         nowPlayingViewModel.setUseDynamicCover(useDynamicCover)
+        audioOutputDeviceId = settings.getString(
+            SettingKeys.AUDIO_OUTPUT_DEVICE,
+            SYSTEM_DEFAULT_AUDIO_OUTPUT_ID,
+        )
     }
 
     fun flushSettings(
@@ -476,7 +491,11 @@ fun SettingsScreen(
                 )
 
                 SettingsSectionLabel("播放", settingsPalette)
-                val playbackSettingCount = if (supportsDynamicNowPlayingCover) 6 else 5
+                // The output-device row sits with the quality dropdowns because it is the other
+                // half of "what comes out of the speakers", not a behaviour toggle.
+                val outputDeviceRows = if (supportsAudioOutputDeviceSelection) 1 else 0
+                val playbackSettingCount =
+                    5 + outputDeviceRows + if (supportsDynamicNowPlayingCover) 1 else 0
                 SettingsDropdown(onlineQuality, "在线播放音质", SoundQuality.entries, settingsPalette, index = 0, count = playbackSettingCount) { v ->
                     onlineQuality = v.name
                     persistSettings({ settings.setString(SettingKeys.ONLINE_PLAY_QUALITY, v.name) })
@@ -485,15 +504,32 @@ fun SettingsScreen(
                     dlQuality = v.name
                     persistSettings({ settings.setString(SettingKeys.DOWNLOAD_QUALITY, v.name) })
                 }
-                SettingsSwitch(replacePlaylist, "点击单曲时替换播放队列", settingsPalette, index = 2, count = playbackSettingCount) { v ->
+                if (supportsAudioOutputDeviceSelection) {
+                    AudioOutputDeviceDropdown(
+                        selectedId = audioOutputDeviceId,
+                        accentPalette = settingsPalette,
+                        index = 2,
+                        count = playbackSettingCount,
+                    ) { deviceId ->
+                        audioOutputDeviceId = deviceId
+                        persistSettings(
+                            write = {
+                                settings.setString(SettingKeys.AUDIO_OUTPUT_DEVICE, deviceId)
+                            },
+                            // Move the track that is playing now, not just the next one.
+                            onWritten = { nowPlayingViewModel.reopenAudioOutput() },
+                        )
+                    }
+                }
+                SettingsSwitch(replacePlaylist, "点击单曲时替换播放队列", settingsPalette, index = 2 + outputDeviceRows, count = playbackSettingCount) { v ->
                     replacePlaylist = v
                     persistSettings({ settings.setBoolean(SettingKeys.REPLACE_PLAYLIST, v) })
                 }
-                SettingsSwitch(searchPrediction, "搜索联想", settingsPalette, index = 3, count = playbackSettingCount) { v ->
+                SettingsSwitch(searchPrediction, "搜索联想", settingsPalette, index = 3 + outputDeviceRows, count = playbackSettingCount) { v ->
                     searchPrediction = v
                     persistSettings({ settings.setBoolean(SettingKeys.SEARCH_PREDICTION, v) })
                 }
-                SettingsSwitch(showDownloadStatus, "显示下载状态", settingsPalette, index = 4, count = playbackSettingCount) { v ->
+                SettingsSwitch(showDownloadStatus, "显示下载状态", settingsPalette, index = 4 + outputDeviceRows, count = playbackSettingCount) { v ->
                     showDownloadStatus = v
                     persistSettings({ settings.setBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, v) })
                 }
@@ -502,7 +538,7 @@ fun SettingsScreen(
                         useDynamicCover,
                         "播放页使用歌曲动态封面",
                         settingsPalette,
-                        index = 5,
+                        index = 5 + outputDeviceRows,
                         count = playbackSettingCount,
                     ) { enabled ->
                         useDynamicCover = enabled
@@ -994,6 +1030,94 @@ private fun SettingsDropdown(
                 DropdownMenuItem(
                     text = { Text(opt.toString()) },
                     onClick = { expanded = false; onUpdate(opt) },
+                )
+            }
+        }
+    }
+}
+
+/** Shown for the "no explicit choice" entry and whenever the saved device cannot be resolved. */
+private const val DefaultAudioOutputLabel = "系统默认"
+
+/**
+ * Picks which output device desktop playback opens.
+ *
+ * Its own composable rather than a [SettingsDropdown] call because the options are enumerated
+ * from the OS at display time, not a fixed enum: the list changes when a headset or USB DAC is
+ * plugged in, and a saved device can disappear entirely.
+ */
+@Composable
+private fun AudioOutputDeviceDropdown(
+    selectedId: String,
+    accentPalette: ContentAccentPalette,
+    index: Int,
+    count: Int,
+    onUpdate: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    // null until the first enumeration lands, so an unresolved id is not mistaken for a
+    // missing device while the list is still empty.
+    var devices by remember { mutableStateOf<List<AudioOutputDevice>?>(null) }
+    LaunchedEffect(expanded) {
+        devices = withContext(Dispatchers.Default) { availableAudioOutputDevices() }
+    }
+    val known = devices
+    val selected = known?.let { resolveAudioOutputSelection(selectedId, it) }
+    val selectedLabel = when {
+        selectedId == SYSTEM_DEFAULT_AUDIO_OUTPUT_ID -> DefaultAudioOutputLabel
+        selected != null -> selected.displayName
+        known == null -> audioOutputDeviceName(selectedId)
+        // The device is gone; playback already falls back to the default output, so say so
+        // instead of showing a name that nothing is coming out of.
+        else -> "${audioOutputDeviceName(selectedId)}（不可用）"
+    }
+    val interactionSource = remember { MutableInteractionSource() }
+    Surface(
+        onClick = { expanded = true },
+        shape = rememberConnectedListItemShape(index, count, interactionSource),
+        color = accentPalette.quietContainer,
+        contentColor = accentPalette.onQuietContainer,
+        interactionSource = interactionSource,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = ExpressiveLayout.ConnectedItemGap),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = ExpressiveLayout.MinimumTouchTarget)
+                .padding(start = 20.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "音频输出设备",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(16.dp))
+            Text(
+                text = selectedLabel,
+                style = MaterialTheme.typography.bodyMedium,
+                color = accentPalette.secondaryOnQuietContainer,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Icon(
+                AppIcons.KeyboardArrowRight,
+                contentDescription = null,
+                tint = accentPalette.secondaryOnQuietContainer,
+                modifier = Modifier.padding(start = 4.dp),
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text(DefaultAudioOutputLabel) },
+                onClick = { expanded = false; onUpdate(SYSTEM_DEFAULT_AUDIO_OUTPUT_ID) },
+            )
+            known.orEmpty().forEach { device ->
+                DropdownMenuItem(
+                    text = { Text(device.displayName) },
+                    onClick = { expanded = false; onUpdate(device.id) },
                 )
             }
         }

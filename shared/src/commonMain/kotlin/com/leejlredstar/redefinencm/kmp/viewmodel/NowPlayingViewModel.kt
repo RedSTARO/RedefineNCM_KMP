@@ -916,6 +916,18 @@ class NowPlayingViewModel(
     fun onSeekClick(index: Int) = player.skipToIndex(index)
     fun onPositionSeekClick(newPosition: Long) = player.seekTo(newPosition)
 
+    /**
+     * Re-opens the audio pipeline so a just-changed output device takes effect on the track that
+     * is loaded now instead of only on the next one.
+     *
+     * Seeking to the current position is the players' existing re-open path, so this needs no
+     * device-specific hook in [PlatformPlayer]: it reuses the same tested resolve-and-play route.
+     */
+    fun reopenAudioOutput() {
+        if (player.currentMedia.value == null) return
+        player.seekTo(player.position.value.coerceAtLeast(0L))
+    }
+
     fun onLyricLineClick(mediaId: String?, newPosition: Long) {
         val currentId = currentMedia.value?.id ?: return
         if (mediaId != null && mediaId != currentId) return
