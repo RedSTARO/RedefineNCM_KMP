@@ -57,6 +57,10 @@ typically against a server on the same LAN or localhost (so cleartext HTTP must 
    This is a *verified* pass (check Maven Central / release notes); it must also **converge
    the two repos' shared versions** (Kotlin, coroutines, serialization, AGP), which are
    currently skewed.
+5. **Aggregate multiple music providers** (NetEase first, QQ Music second) — see
+   [D6](#d6--multiple-music-providers-keyed-by-provider--planned-recorded-2026-08-20).
+   Start with the provider-neutral domain model; it is worth doing before any second provider
+   exists.
 
 ---
 
@@ -172,6 +176,73 @@ Android uses Media3 with a `TextureView`, iOS uses `AVPlayerLayer` inside `UIKit
 Desktop/JVM decodes FFmpeg frames into Compose `ImageBitmap`, and Web/WASM hosts an
 `HTMLVideoElement` beneath the CanvasKit scene. Dynamic-cover capability must never decide
 renderer availability, renderer selection, Desktop overlay ownership, or navigation routing.
+
+### D6 — Multiple music providers, keyed by provider — **PLANNED (recorded 2026-08-20)**
+
+The app aggregates more than one music service. NetEase Cloud Music is the first; QQ Music is
+the second. The decisions below are settled; the work is not started.
+
+**Identity.** A track, playlist, album or user is identified by a `(provider, rawId)` pair,
+serialized as `"ncm:123456"`. `MediaInfo.id` is already a `String`, so the player and the
+`placeholderUri` → `StreamUrlResolver` indirection carry composite ids unchanged — the player
+never sees a real stream URL and must not learn what a provider is. Roughly fifty call sites
+currently assume a numeric id (`toLongOrNull()`, `songId: Long`); those are the migration
+surface, not the design.
+
+**Credentials are keyed by provider, not by account.** One signed-in account per provider.
+`SettingKeys.COOKIE` / `SettingKeys.SERVER` become per-provider entries. Multiple accounts of
+the *same* provider are explicitly out of scope; do not add an account dimension to the
+credential store to "future-proof" it.
+
+**Both library views ship, and the choice is a setting.** A unified library that merges every
+provider, and per-provider tabs. Neither is the default-and-only view. This means the domain
+model must carry provider identity all the way to the UI, because rows in the merged view have
+to say where they came from.
+
+**The UI must not bind to a provider's DTOs.** Today eight files under `ui/` and `viewmodel/`
+import `data.api.dto` directly and read NetEase-shaped fields such as `song.al.picUrl`. A
+provider-neutral domain model (`Track`, `Playlist`, `Album`, `UserProfile`) is mapped at the
+`Repository` boundary, and provider clients sit behind one interface. This is worth doing on its
+own merits and does not depend on QQ Music shipping.
+
+**Cached tables are keyed by provider.** Every `song_id INTEGER` cache table gains a provider
+column and a composite key over a text id; two providers' id spaces would otherwise collide
+silently. Existing rows migrate to `provider = 'ncm'`. This and the credential move are the only
+steps in the plan that can destroy real user data, and they carry over a year of it.
+
+**Three existing contracts become provider-conditional and must not be quietly broken:**
+
+- The shuffle / queue ordering invariant below still holds for a queue mixing providers.
+- The lyric source-mode privacy gate is currently a closed policy over two sources, where
+  `BACKEND_ONLY` must never *read or request* the other. Extending it to N providers is a
+  redesign of that policy, not a new enum entry.
+- The playback reporting contract is NetEase-specific. It must not fire for another provider's
+  tracks.
+
+**Backend.** QQ Music has no public API, so it needs a self-hosted service, the same shape as
+the NeteaseCloudMusicApi server this app already points at. Surveyed 2026-08-20:
+
+| Project | Stars | Last push | Shape | License |
+| --- | --- | --- | --- | --- |
+| `Rain120/qq-music-api` | 1046 | 2026-08 | Koa2 HTTP server (TS) | MIT |
+| `jsososo/QQMusicApi` | 1616 | 2024-06 | Express HTTP server | GPL-3.0 |
+| `L-1124/QQMusicApi` | 451 | 2026-08 | Python library | GPL-3.0 |
+
+`Rain120/qq-music-api` is the working pick: it is the closest analogue to the server already in
+use, it is still maintained, and it is MIT. `jsososo/QQMusicApi` has the most stars but has not
+been pushed to in over two years with 64 issues open. `L-1124/QQMusicApi` is healthy but is a
+library rather than a service, so it would need a server written around it.
+
+The backend runs as a separate process reached over HTTP, so its GPL does not reach this
+AGPL-3.0-only app either way; MIT simply avoids the question.
+
+Two limits are properties of the services, not of this design: these APIs are unofficial and
+break without notice, and DRM-protected paid tracks cannot be streamed regardless of
+architecture. Neither is a reason to change the plan; both are reasons not to promise coverage.
+
+**Order of work.** The neutral domain model comes first — it is the keystone, it is useful with
+or without QQ Music, and it removes an existing coupling. Provider abstraction follows, then the
+schema and credential migrations, then aggregation UX, then the QQ Music client itself.
 
 ---
 
