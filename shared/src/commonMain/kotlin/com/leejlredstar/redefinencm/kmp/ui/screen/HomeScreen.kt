@@ -272,6 +272,13 @@ fun HomeScreen(
                                     enabled = dailySongs.isNotEmpty(),
                                     shape = CircleShape,
                                     contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                                    // Default tonal colours land on secondaryContainer, which in
+                                    // this scheme is a yellow — the one loud element left on an
+                                    // otherwise artwork-tinted page. Follow the page accent.
+                                    colors = ButtonDefaults.filledTonalButtonColors(
+                                        containerColor = pagePalette.container,
+                                        contentColor = pagePalette.onContainer,
+                                    ),
                                 ) {
                                     Icon(
                                         imageVector = AppIcons.PlayArrow,
