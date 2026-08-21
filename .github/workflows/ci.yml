@@ -474,7 +474,10 @@ jobs:
       - name: Compile iOS app and Live Activity widget
         # Release drives Swift whole-module optimization and makes the Gradle build
         # phase embed the release (optimized) Shared.framework, not the debug one.
+        # stamp-version.sh must run first: it writes Configuration/Version.xcconfig, and
+        # xcconfig files are read when xcodebuild starts, not during the build phases.
         run: |
+          sh iosApp/Scripts/stamp-version.sh
           xcodebuild \
             -project iosApp/iosApp.xcodeproj \
             -scheme iosApp \

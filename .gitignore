@@ -26,3 +26,6 @@ __pycache__/
 /dump.rdb
 /out.kt
 /desktopApp/webview.dll
+
+# Generated from Git by iosApp/Scripts/stamp-version.sh.
+/iosApp/Configuration/Version.xcconfig
