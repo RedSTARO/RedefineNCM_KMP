@@ -138,8 +138,15 @@ persisted `useNativeAmllRenderer` setting defaults to `false`, so Legacy WebView
 the user opts into Native Compose. The Settings UI must state that WebView is recommended and
 Native Compose is recommended only for lower-end devices.
 
-The existing Legacy host is real only on Android System WebView and Windows x64 WebView2.
-iOS, Web/WASM, Windows ARM64, Linux, and macOS must force `NativeAmllScreen`, disable the
+The existing Legacy host is real on Android System WebView, Windows x64 WebView2, and — since
+2026-08-21 — iOS `WKWebView` (`shared/src/iosMain/.../lyric/LyricScreen.ios.kt`). All three drive
+the same `amllAssets/amll/player.html` bundle through the same `AmllBridge.*` calls; the shared
+argument encoding lives in `commonMain/.../lyric/AmllWebBridge.kt`. On iOS the page's
+`globalThis.AmllCallback` does not exist, so a `WKUserScript` installs a façade forwarding to a
+`WKScriptMessageHandler`; that handler must be a class, never a Kotlin `object`, because
+Kotlin/Native cannot lower an Obj-C-backed singleton.
+
+Web/WASM, Windows ARM64, Linux, and macOS still must force `NativeAmllScreen`, disable the
 unavailable choice, and explain the platform limitation. They must not claim a Compose fallback
 is a Legacy WebView implementation. The former `FullLyricScreen` and `NowPlayingScreen` remain
 removed; renderer selection must not create a second navigation destination.
@@ -207,8 +214,14 @@ Platform mapping:
   `CFBundleVersion` constraint and reserves package major 1 above the historical `1.0.0` installer;
   the stable Windows `upgradeUuid` remains unchanged.
 - iOS app + LyricWidget: `CFBundleShortVersionString = base semantic version`,
-  `CFBundleVersion = commit count`, and `RedefineNCMVersionName = full product version`. Xcode build
-  phases run `iosApp/Scripts/stamp-version.sh`; CI passes the same version inputs resolved once by
+  `CFBundleVersion = commit count`, and `RedefineNCMVersionName = full product version`.
+  `iosApp/Scripts/stamp-version.sh` **must run before `xcodebuild`** — it writes
+  `iosApp/Configuration/Version.xcconfig` (git-ignored), which `Config.xcconfig` pulls in with
+  `#include?`, and `ProcessInfoPlistFile` substitutes those settings into both Info.plists. Do
+  **not** turn this back into a build phase that rewrites the built plist: the app target has an
+  AppIcon asset catalog, so actool emits a partial plist and Xcode schedules `ProcessInfoPlistFile`
+  after every build phase — the script would never see the file, and declaring the plist as a phase
+  input produces a dependency cycle. CI passes the same version inputs resolved once by
   Gradle, and the script fails if the supplied full version differs from `tag.hash`.
 - CI resolves the version once in the test job, passes the same tag/hash/build inputs to every
   platform job, and names APK/DEB/MSI/DMG/Web artifacts with the full product version.
@@ -706,6 +719,13 @@ locally available Chrome/Chromium-compatible headless browser.
 ./gradlew :shared:jvmTest
 # iOS (macOS only) — then open iosApp/iosApp.xcodeproj in Xcode
 ./gradlew :shared:iosSimulatorArm64Test
+# iOS device build: generate the version xcconfig first, and keep DerivedData off any
+# iCloud-synced folder (iCloud stamps com.apple.FinderInfo, which codesign rejects).
+sh iosApp/Scripts/stamp-version.sh
+xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug \
+  -sdk iphoneos -destination 'generic/platform=iOS' \
+  -derivedDataPath "$HOME/Library/Developer/Xcode/DerivedData/RedefineNCM_KMP-ios" \
+  -allowProvisioningUpdates build
 # Web development server
 ./gradlew :shared:wasmJsBrowserDevelopmentRun
 # Web browser tests + production static distribution
@@ -880,8 +900,9 @@ feature gap; platform integrations use target-specific actuals:
 ### Platform integration status
 - [x] **App, DI and real players are wired on all enabled targets.** `initKoin()` runs from every
       entry point; Android binds `ExoPlayerPlatformPlayer`, Desktop binds `JvmMediaPlayer`, iOS
-      binds `IosAVPlayer`, and Web binds `WebPlatformPlayer`. Android, Desktop and Web are
-      build-verified in this repository; iOS source remains macOS/Xcode-gated.
+      binds `IosAVPlayer`, and Web binds `WebPlatformPlayer`. All four are build-verified; iOS was
+      link- and device-verified on 2026-08-21 (`:shared:iosSimulatorArm64Test` = 374 passing, signed
+      `.app` installed on an iPad). Actual audio output on an iOS device is still unverified.
 - [x] **Song recognition is wired on all enabled targets** (2026-07-12). Shared fingerprint,
       resampler, DTO and ViewModel tests pass in `:shared:jvmTest`; Desktop compilation, Android
       assembly, and Wasm compilation/browser tests/distribution are green. A recorded audio sample
@@ -926,9 +947,12 @@ feature gap; platform integrations use target-specific actuals:
       across the module boundary must not be private because JDK 21 blocks reflective field access.
       Keep all Windows session creation, metadata/timeline updates, and release on the dedicated
       SMTC MTA thread so `RoInitialize` and `RoUninitialize` stay paired on one thread.
-- [x] **iOS Live Activity source and Xcode target are wired.** Kotlin publishes serial
+- [x] **iOS Live Activity source and Xcode target are wired, and the app now builds and installs
+      on a real device** (2026-08-21, macOS 26 / Xcode 26.5). Kotlin publishes serial
       `LiveActivityData`; Swift drives ActivityKit and the LyricWidget extension renders Lock Screen
-      and Dynamic Island content. Runtime verification still requires macOS and a real iOS build.
+      and Dynamic Island content. `LyricWidget.appex` is embedded, signed, and installs. **Still
+      unverified:** ActivityKit behaviour at runtime — the Live Activity is only observable on a
+      device by hand, and the Dynamic Island layout needs Dynamic-Island-capable hardware.
 - [x] **Desktop floating window is wired and Expressive** (updated 2026-07-12) —
       `desktopApp/main.kt` opens a frameless / translucent Compose window, derives its palette
       from the visible artwork, exposes transport controls and a user-toggleable always-on-top
