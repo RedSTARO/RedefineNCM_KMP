@@ -465,11 +465,16 @@ jobs:
         # release pipeline. Both declared Apple targets are linked so the device slice
         # is covered, not just the simulator. Full IPA signing requires Xcode
         # provisioning and is not done in CI.
+        #
+        # One Gradle invocation per link, deliberately. Asking for all three in a single
+        # invocation lets Gradle schedule them concurrently inside one Kotlin daemon, and each
+        # Kotlin/Native link needs several GB of heap on its own, so they exhaust
+        # kotlin.daemon.jvmargs together and die with "Compilation failed: Java heap space".
+        # Serially each one fits comfortably. Do not re-merge these lines.
         run: |
-          ./gradlew \
-            :shared:iosSimulatorArm64Test \
-            :shared:linkReleaseFrameworkIosSimulatorArm64 \
-            :shared:linkReleaseFrameworkIosArm64
+          ./gradlew :shared:iosSimulatorArm64Test
+          ./gradlew :shared:linkReleaseFrameworkIosSimulatorArm64
+          ./gradlew :shared:linkReleaseFrameworkIosArm64
 
       - name: Compile iOS app and Live Activity widget
         # Release drives Swift whole-module optimization and makes the Gradle build
