@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AM11A55E7500000000AMLL002 /* amll in Resources */ = {isa = PBXBuildFile; fileRef = AM11A55E7500000000AMLL001 /* amll */; };
 		A1B2C3D4E5F60718293A4B50 /* LyricWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B51 /* LyricWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -35,6 +36,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		AM11A55E7500000000AMLL001 /* amll */ = {isa = PBXFileReference; lastKnownFileType = folder; name = amll; path = ../shared/src/commonMain/amllAssets/amll; sourceTree = SOURCE_ROOT; };
 		A1B2C3D4E5F60718293A4B51 /* LyricWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LyricWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		9451963F840FF4198F011262 /* RedefineNCM_KMP.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RedefineNCM_KMP.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -44,6 +46,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+				SETUP.md,
 			);
 			target = A1B2C3D4E5F60718293A4B56 /* LyricWidget */;
 		};
@@ -113,6 +116,7 @@
 				1FE32CD77B15EC595D029593 /* Configuration */,
 				E88BE7FD370ED99EC0288AE4 /* iosApp */,
 				A1B2C3D4E5F60718293A4B55 /* LyricWidget */,
+				AM11A55E7500000000AMLL001 /* amll */,
 				447CE9667CDE620E13B8E383 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -128,7 +132,6 @@
 				79F8D7963B70179790EE7A6E /* Sources */,
 				3D5B3ECA7A2DCF4345389440 /* Frameworks */,
 				5FAB998374DAEA3260CB2957 /* Resources */,
-				C93F0E7A8C394EAB9D316A01 /* Stamp App Version */,
 				A1B2C3D4E5F60718293A4B54 /* Embed App Extensions */,
 			);
 			buildRules = (
@@ -153,7 +156,6 @@
 				A1B2C3D4E5F60718293A4B59 /* Sources */,
 				A1B2C3D4E5F60718293A4B57 /* Frameworks */,
 				A1B2C3D4E5F60718293A4B58 /* Resources */,
-				C93F0E7A8C394EAB9D316A02 /* Stamp App Version */,
 			);
 			buildRules = (
 			);
@@ -212,6 +214,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AM11A55E7500000000AMLL002 /* amll in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -225,44 +228,6 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		C93F0E7A8C394EAB9D316A01 /* Stamp App Version */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Stamp App Version";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "sh \"$SRCROOT/Scripts/stamp-version.sh\"\n";
-		};
-		C93F0E7A8C394EAB9D316A02 /* Stamp App Version */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Stamp App Version";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "sh \"$SRCROOT/Scripts/stamp-version.sh\"\n";
-		};
 		B5DDA51EB9F4CDFDE60A611D /* Compile Kotlin Framework */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -475,7 +440,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -539,7 +504,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;

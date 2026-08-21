@@ -68,13 +68,19 @@ internal fun iosDownloadCancelledDecision(
  * `taskDescription` contains the validated destination file name. This is intentionally enough to
  * finish moving a system-owned temporary file after iOS relaunches the app and reconnects the
  * background session, even though the original coroutine no longer exists in that process.
+ *
+ * A Kotlin `object` cannot inherit from an Obj-C class — Kotlin/Native aborts codegen with
+ * "Allocation of Obj-C class ... should have been lowered" — so this stays a plain singleton and
+ * delegates the protocol conformance to [IosBackgroundDownloadSessionDelegate].
  */
-internal object IosBackgroundDownloadCoordinator : NSObject(), NSURLSessionDownloadDelegateProtocol {
+internal object IosBackgroundDownloadCoordinator {
     private val stateLock = NSLock()
     private val pending = mutableMapOf<ULong, PendingIosDownload>()
     private val outcomes = mutableMapOf<ULong, IosDownloadOutcome>()
     private val lifecycles = mutableMapOf<ULong, IosDownloadLifecycleState>()
     private var backgroundEventsCompletion: (() -> Unit)? = null
+
+    private val sessionDelegate = IosBackgroundDownloadSessionDelegate()
 
     private val delegateQueue = NSOperationQueue().apply {
         maxConcurrentOperationCount = 1
@@ -90,7 +96,7 @@ internal object IosBackgroundDownloadCoordinator : NSObject(), NSURLSessionDownl
             }
         NSURLSession.sessionWithConfiguration(
             configuration = configuration,
-            delegate = this,
+            delegate = sessionDelegate,
             delegateQueue = delegateQueue,
         )
     }
@@ -156,10 +162,8 @@ internal object IosBackgroundDownloadCoordinator : NSObject(), NSURLSessionDownl
         }
     }
 
-    override fun URLSession(
-        session: NSURLSession,
+    fun handleProgress(
         downloadTask: NSURLSessionDownloadTask,
-        didWriteData: Long,
         totalBytesWritten: Long,
         totalBytesExpectedToWrite: Long,
     ) {
@@ -170,8 +174,7 @@ internal object IosBackgroundDownloadCoordinator : NSObject(), NSURLSessionDownl
         )
     }
 
-    override fun URLSession(
-        session: NSURLSession,
+    fun handleFinishedDownload(
         downloadTask: NSURLSessionDownloadTask,
         didFinishDownloadingToURL: NSURL,
     ) {
@@ -189,8 +192,7 @@ internal object IosBackgroundDownloadCoordinator : NSObject(), NSURLSessionDownl
         }
     }
 
-    override fun URLSession(
-        session: NSURLSession,
+    fun handleCompletion(
         task: NSURLSessionTask,
         didCompleteWithError: NSError?,
     ) {
@@ -230,7 +232,7 @@ internal object IosBackgroundDownloadCoordinator : NSObject(), NSURLSessionDownl
         }
     }
 
-    override fun URLSessionDidFinishEventsForBackgroundURLSession(session: NSURLSession) {
+    fun handleBackgroundSessionEventsFinished() {
         val completion = withStateLock {
             backgroundEventsCompletion.also { backgroundEventsCompletion = null }
         }
@@ -286,6 +288,55 @@ internal object IosBackgroundDownloadCoordinator : NSObject(), NSURLSessionDownl
         } finally {
             stateLock.unlock()
         }
+    }
+}
+
+/**
+ * NSURLSession retains its delegate and calls it back on [IosBackgroundDownloadCoordinator]'s
+ * serial queue. This class exists only to be a real Obj-C object; all state lives in the
+ * coordinator.
+ */
+private class IosBackgroundDownloadSessionDelegate :
+    NSObject(), NSURLSessionDownloadDelegateProtocol {
+
+    override fun URLSession(
+        session: NSURLSession,
+        downloadTask: NSURLSessionDownloadTask,
+        didWriteData: Long,
+        totalBytesWritten: Long,
+        totalBytesExpectedToWrite: Long,
+    ) {
+        IosBackgroundDownloadCoordinator.handleProgress(
+            downloadTask = downloadTask,
+            totalBytesWritten = totalBytesWritten,
+            totalBytesExpectedToWrite = totalBytesExpectedToWrite,
+        )
+    }
+
+    override fun URLSession(
+        session: NSURLSession,
+        downloadTask: NSURLSessionDownloadTask,
+        didFinishDownloadingToURL: NSURL,
+    ) {
+        IosBackgroundDownloadCoordinator.handleFinishedDownload(
+            downloadTask = downloadTask,
+            didFinishDownloadingToURL = didFinishDownloadingToURL,
+        )
+    }
+
+    override fun URLSession(
+        session: NSURLSession,
+        task: NSURLSessionTask,
+        didCompleteWithError: NSError?,
+    ) {
+        IosBackgroundDownloadCoordinator.handleCompletion(
+            task = task,
+            didCompleteWithError = didCompleteWithError,
+        )
+    }
+
+    override fun URLSessionDidFinishEventsForBackgroundURLSession(session: NSURLSession) {
+        IosBackgroundDownloadCoordinator.handleBackgroundSessionEventsFinished()
     }
 }
 

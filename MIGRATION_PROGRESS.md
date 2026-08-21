@@ -6,19 +6,23 @@
 
 ---
 
-## 0. 构建验证状态（本机 Windows，可构建 Android + Desktop + Web 并编译 iOS Kotlin 源码）
+## 0. 构建验证状态（Android + Desktop + Web + iOS 均已在真实工具链上构建）
 
 | 任务 | 结果 |
 |---|---|
 | `:shared:compileKotlinJvm` + `:desktopApp:compileKotlin` | ✅ 本分支通过（2026-07-27） |
 | `:shared:compileAndroidMain` + `:androidApp:assembleDebug`（完整 APK） | ✅ 本分支通过（2026-07-27） |
 | `:shared:jvmTest`（含 **PlayQueueTest**、**AmllLyricModelTest**） | ✅ 本分支通过（2026-07-27） |
-| `:shared:compileKotlinIosSimulatorArm64` | ✅ 本分支通过（2026-07-27）；Xcode framework/app 链接、模拟器测试和运行验证仍需 macOS |
+| `:shared:compileKotlinIosSimulatorArm64` | ✅ 通过（2026-07-27，Windows）|
+| `:shared:linkDebugFrameworkIosSimulatorArm64` | ✅ **首次通过（2026-08-21，macOS 26 / Xcode 26.5）**；此前一直崩在 Kotlin/Native codegen |
+| `:shared:iosSimulatorArm64Test` | ✅ **首次真正运行（2026-08-21）**：374 tests / 0 failures |
+| `xcodebuild -sdk iphoneos`（真机签名构建 + 安装） | ✅ **首次通过（2026-08-21）**：iPad 10 / iPadOS 17.5.1 安装成功 |
 | `:shared:compileKotlinWasmJs` | ✅ 本分支通过（2026-07-27） |
 | `:shared:wasmJsBrowserTest` + `:shared:wasmJsBrowserDistribution` | ✅ 本分支通过（2026-07-27，`CHROME_BIN` 使用本机 Edge Chromium）；生产目录为 `shared/build/dist/wasmJs/productionExecutable/` |
 
-> 上表是 2026-07-27 AMLL 分支的实际验证结果。Windows 主机不能替代
-> macOS/Xcode 的 iOS framework、应用和运行时验证。
+> 非 iOS 各行是 2026-07-27 AMLL 分支在 Windows 上的验证结果。iOS 各行于 2026-08-21
+> 在 macOS 26 / Xcode 26.5 上补齐——**Kotlin 源码编译通过并不代表 framework 能链接**：
+> `object : NSObject()` 这类只在 codegen 阶段才暴露的错误，必须有 macOS 才能发现。
 
 **工具链**：Kotlin 2.4.0 ・ AGP 9.0.1 ・ Gradle 9.1.0 ・ CMP 1.11.1 ・ JB material3 1.11.0-alpha07 ・
 Ktor 3.5.0 ・ Koin 4.2.1 ・ Coil 3.5.0（含 coil-network-ktor3）・ SQLDelight 2.3.2 ・
@@ -78,7 +82,10 @@ media3 1.10.1 ・ androidx.palette 1.0.0 ・ compileSdk/targetSdk 36 / minSdk 24
 - [x] `Platform.isDesktop/isMobile` 接口与四平台 actual 一致化（2026-07-11）
 
 ### B. 需要外部环境
-- [ ] **iOS 构建与验证**：需 macOS + Xcode 16+（AVPlayer、Live Activity、NSURLSession 后台下载源码已就绪；专辑色提取仍为 fallback）
+- [x] **iOS 构建与验证**（2026-08-21，macOS 26 / Xcode 26.5）：framework 链接、`iosSimulatorArm64Test`
+      （374 通过）、真机签名构建与安装全部打通。封面取色已改用与 JVM/Web 共用的 RGB555 量化器，
+      不再是 fallback。**尚未做**：真机运行时行为（AVPlayer 播放、Live Activity/灵动岛、
+      NSURLSession 后台下载、麦克风识曲）仍需人工在设备上验证。
 - [ ] **AGP 9.2.0 收敛**：仍卡上游（aapt2 解析 + 配置缓存）
 
 ### C. Windows 系统媒体协议

@@ -157,6 +157,9 @@ kotlin {
         iosTarget.binaries.framework {
             baseName = "Shared"
             isStatic = true
+            // Without this the linker cannot infer a bundle ID and falls back to the bare
+            // framework name, which breaks crash-report symbolication for the Kotlin frames.
+            binaryOption("bundleId", "com.leejlredstar.redefinencm.kmp.shared")
         }
     }
     
