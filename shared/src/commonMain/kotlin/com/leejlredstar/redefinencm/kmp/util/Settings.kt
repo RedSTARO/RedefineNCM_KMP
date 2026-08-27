@@ -5,8 +5,21 @@ package com.leejlredstar.redefinencm.kmp.util
  * Backed by multiplatform-settings on each platform.
  */
 object SettingKeys {
+    // The unprefixed credential keys are NetEase's. They are deliberately not renamed to
+    // `cookieNcm` / `serverNcm`: a year of installs have them under these names, and rewriting
+    // them buys nothing that adding provider-suffixed keys alongside does not.
     const val COOKIE = "cookie"
     const val SERVER = "server"
+
+    // ── QQ Music ──
+    // QQ Music has no public API, so it needs a self-hosted backend the same way NetEase does.
+    // The account cookie lives in that backend rather than here, so there is no QQ_COOKIE.
+    const val QQ_ENABLED = "qqEnabled"
+    const val QQ_SERVER = "qqServer"
+    const val QQ_SERVER_DEFAULT = "http://localhost:3200"
+
+    /** Whether the library merges every provider into one view or keeps a tab per provider. */
+    const val LIBRARY_AGGREGATION_MODE = "libraryAggregationMode"
     const val UID = "uid"
     const val UID_COOKIE_FINGERPRINT = "uidCookieFingerprint"
     const val ONLINE_PLAY_QUALITY = "onlinePlayQuality"

@@ -3,6 +3,8 @@
 package com.leejlredstar.redefinencm.kmp.player
 
 import com.leejlredstar.redefinencm.kmp.data.Repository
+import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
+import com.leejlredstar.redefinencm.kmp.data.provider.toProviderItemIdOrNull
 import com.leejlredstar.redefinencm.kmp.download.LocalMediaAssets
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
@@ -41,12 +43,16 @@ class WebPlatformPlayer(
     private val repo: Repository,
     private val settings: PlatformSettings,
     private val localMediaAssets: LocalMediaAssets,
+    private val providers: MusicProviderRegistry,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
 ) : PlatformPlayer {
 
     private val audio = document.createElement("audio") as HTMLAudioElement
     private val resolver = StreamUrlResolver { mediaId ->
-        val id = mediaId.toLongOrNull() ?: return@StreamUrlResolver null
+        val itemId = mediaId.toProviderItemIdOrNull() ?: return@StreamUrlResolver null
+        // Other providers carry their own quality ladders and have no local-download support yet.
+        val id = itemId.neteaseIdOrNull
+            ?: return@StreamUrlResolver providers.streamUrlForForeignProvider(itemId)
         val qualityName = settings.getString(
             SettingKeys.ONLINE_PLAY_QUALITY,
             SoundQuality.EXHIGH.name,

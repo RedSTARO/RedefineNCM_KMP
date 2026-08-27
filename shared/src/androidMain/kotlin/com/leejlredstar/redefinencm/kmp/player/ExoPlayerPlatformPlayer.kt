@@ -13,6 +13,8 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.leejlredstar.redefinencm.kmp.data.Repository
+import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
+import com.leejlredstar.redefinencm.kmp.data.provider.toProviderItemIdOrNull
 import com.leejlredstar.redefinencm.kmp.download.LocalMediaAssets
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
@@ -45,12 +47,16 @@ class ExoPlayerPlatformPlayer(
     private val repo: Repository,
     private val settings: PlatformSettings,
     private val localMediaAssets: LocalMediaAssets,
+    private val providers: MusicProviderRegistry,
 ) : PlatformPlayer {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private val resolver = StreamUrlResolver { mediaId ->
-        val id = mediaId.toLong()
+        val itemId = mediaId.toProviderItemIdOrNull() ?: return@StreamUrlResolver null
+        // Other providers carry their own quality ladders and have no local-download support yet.
+        val id = itemId.neteaseIdOrNull
+            ?: return@StreamUrlResolver providers.streamUrlForForeignProvider(itemId)
 
         // Check for a locally-downloaded offline file first.
         findDownloadedSongUri(id)?.let { localAudioUri ->

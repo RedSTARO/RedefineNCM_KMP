@@ -26,7 +26,7 @@ actual fun platformModule() = module {
     // Desktop audio player backed by javax.sound.sampled + mp3spi.
     // Overrides the InMemoryPlatformPlayer default from sharedModule.
     // Uses JVM-decodable local files before hitting the CDN.
-    single<PlatformPlayer> { JvmMediaPlayer(get(), get()) }
+    single<PlatformPlayer> { JvmMediaPlayer(get(), get(), get()) }
 
     // Java Sound 麦克风输入；录音生命周期由调用协程控制。
     single<MicrophoneRecorder> { JvmMicrophoneRecorder() }

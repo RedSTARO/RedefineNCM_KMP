@@ -2,7 +2,12 @@ package com.leejlredstar.redefinencm.kmp.di
 
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.AmlldbApi
+import com.leejlredstar.redefinencm.kmp.data.api.ExternalHttpClient
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
+import com.leejlredstar.redefinencm.kmp.data.api.QQMusicApi
+import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
+import com.leejlredstar.redefinencm.kmp.data.provider.NeteaseProvider
+import com.leejlredstar.redefinencm.kmp.data.provider.QQProvider
 import com.leejlredstar.redefinencm.kmp.data.db.AppDatabase
 import com.leejlredstar.redefinencm.kmp.data.db.DatabaseDriverFactory
 import com.leejlredstar.redefinencm.kmp.download.LocalMediaAssets
@@ -13,6 +18,7 @@ import com.leejlredstar.redefinencm.kmp.player.PlaybackReportingCoordinator
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlayerStatusRestorer
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
+import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.LoginViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
@@ -57,12 +63,35 @@ val sharedModule = module {
     // API
     single { NCMApi(get()) }
     single { AmlldbApi(get()) }
+    // QQ Music talks to a backend the user self-hosts, addressed by a setting rather than a
+    // constant so it works the same way the NetEase server address already does.
+    single {
+        val settings = get<PlatformSettings>()
+        QQMusicApi(
+            client = get<ExternalHttpClient>().client,
+            baseUrl = {
+                settings.getStringAsync(SettingKeys.QQ_SERVER, SettingKeys.QQ_SERVER_DEFAULT)
+            },
+        )
+    }
 
     // Database — DatabaseDriverFactory is provided by platformModule()
     single { AppDatabase(get<DatabaseDriverFactory>().createDriver()) }
 
     // Repository
     single { Repository(get(), get()) }
+
+    // Providers — NetEase is an adapter over the existing Repository, not a rewrite of it. Order
+    // here is the order aggregated results are grouped in, so NetEase stays first.
+    single {
+        MusicProviderRegistry(
+            providers = listOf(
+                NeteaseProvider(get(), get()),
+                QQProvider(get(), get()),
+            ),
+            settings = get(),
+        )
+    }
     single { LocalMediaAssets(get()) }
     single { LyricResolver(get(), get(), get()) }
 

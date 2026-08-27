@@ -1,6 +1,8 @@
 package com.leejlredstar.redefinencm.kmp.player
 
 import com.leejlredstar.redefinencm.kmp.data.Repository
+import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
+import com.leejlredstar.redefinencm.kmp.data.provider.toProviderItemIdOrNull
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
@@ -30,13 +32,17 @@ import kotlin.math.log10
 class JvmMediaPlayer(
     private val repo: Repository,
     private val settings: PlatformSettings,
+    private val providers: MusicProviderRegistry,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : PlatformPlayer {
 
     // ── URL resolver with offline check ──
 
     private val resolver = StreamUrlResolver { mediaId ->
-        val id = mediaId.toLong()
+        val itemId = mediaId.toProviderItemIdOrNull() ?: return@StreamUrlResolver null
+        // Other providers carry their own quality ladders and have no local-download support yet.
+        val id = itemId.neteaseIdOrNull
+            ?: return@StreamUrlResolver providers.streamUrlForForeignProvider(itemId)
 
         // Check for a locally-downloaded offline file first. Skip unsupported lossless files:
         // this backend is Java Sound + mp3spi, not a general FFmpeg-style decoder.

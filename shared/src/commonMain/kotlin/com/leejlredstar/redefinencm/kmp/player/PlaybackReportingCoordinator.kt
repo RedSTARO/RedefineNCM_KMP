@@ -7,6 +7,7 @@ import com.leejlredstar.redefinencm.kmp.data.PlaybackReportResult
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.comparePlaybackAccountSnapshots
 import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
+import com.leejlredstar.redefinencm.kmp.data.provider.toProviderItemIdOrNull
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
@@ -599,7 +600,12 @@ internal class PlaybackReportingReducer(
         }
 
         val media = observation.media
-        val songId = media?.id?.toLongOrNull()?.takeIf { it > 0L }
+        // Playback reporting is a NetEase contract end to end: their endpoints, their song ids,
+        // their account. Another provider's track must never be reported against it. A composite
+        // id like `qq:0039MnYb0qxYhV` already failed the old `toLongOrNull()` and so reported
+        // nothing, but that was an accident of parsing rather than a decision — `neteaseIdOrNull`
+        // returns null for any provider but NetEase, which makes the exclusion explicit.
+        val songId = media?.id?.toProviderItemIdOrNull()?.neteaseIdOrNull?.takeIf { it > 0L }
         val stableSelection = pendingOccurrence?.let { pending ->
             observation.occurrence == pending &&
                 observation.isPlaying &&
