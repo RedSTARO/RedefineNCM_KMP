@@ -126,6 +126,7 @@ fun SettingsScreen(
     var server by remember(settings) { mutableStateOf("") }
     var qqEnabled by remember(settings) { mutableStateOf(false) }
     var qqServer by remember(settings) { mutableStateOf(SettingKeys.QQ_SERVER_DEFAULT) }
+    var qqCookie by remember(settings) { mutableStateOf("") }
     var aggregationMode by remember(settings) { mutableStateOf(LibraryAggregationMode.Default) }
     var onlineQuality by remember(settings) { mutableStateOf(SoundQuality.STANDARD.name) }
     var dlQuality by remember(settings) { mutableStateOf(SoundQuality.STANDARD.name) }
@@ -160,6 +161,7 @@ fun SettingsScreen(
         server = settings.getString(SettingKeys.SERVER, "")
         qqEnabled = settings.getBoolean(SettingKeys.QQ_ENABLED, false)
         qqServer = settings.getString(SettingKeys.QQ_SERVER, SettingKeys.QQ_SERVER_DEFAULT)
+        qqCookie = settings.getString(SettingKeys.QQ_COOKIE, "")
         aggregationMode = LibraryAggregationMode.fromWireValueOrDefault(
             settings.getString(SettingKeys.LIBRARY_AGGREGATION_MODE, ""),
         )
@@ -240,6 +242,7 @@ fun SettingsScreen(
             server = settings.getStringAsync(SettingKeys.SERVER, "")
             qqEnabled = settings.getBooleanAsync(SettingKeys.QQ_ENABLED, false)
             qqServer = settings.getStringAsync(SettingKeys.QQ_SERVER, SettingKeys.QQ_SERVER_DEFAULT)
+            qqCookie = settings.getStringAsync(SettingKeys.QQ_COOKIE, "")
             aggregationMode = LibraryAggregationMode.fromWireValueOrDefault(
                 settings.getStringAsync(SettingKeys.LIBRARY_AGGREGATION_MODE, ""),
             )
@@ -473,14 +476,15 @@ fun SettingsScreen(
 
                 SettingsSectionLabel("多平台", settingsPalette)
                 // QQ Music has no public API, so it needs a backend the user self-hosts, the same
-                // arrangement as the NetEase server above. The QQ account cookie lives in that
-                // backend rather than in this app, which is why there is no cookie field here.
+                // arrangement as the NetEase server above. The cookie is held here and sent on every
+                // QQ request, so the Android build can sign in without reaching the backend's config
+                // file. Rain120/qq-music-api does not read that header yet — see AGENTS.md D6.
                 SettingsSwitch(
                     checked = qqEnabled,
                     label = "启用 QQ 音乐",
                     accentPalette = settingsPalette,
                     index = 0,
-                    count = if (qqEnabled) 3 else 1,
+                    count = if (qqEnabled) 4 else 1,
                     supportingText = "需要自建 qq-music-api 后端；未登录时仅能播放免费歌曲的普通音质",
                 ) { value ->
                     qqEnabled = value
@@ -492,7 +496,7 @@ fun SettingsScreen(
                         label = "QQ 音乐后端地址",
                         accentPalette = settingsPalette,
                         index = 1,
-                        count = 3,
+                        count = 4,
                         onDraftChange = { qqServer = it },
                         onCommit = { raw ->
                             val normalized = normalizeServerInput(raw)
@@ -501,13 +505,28 @@ fun SettingsScreen(
                             persistSettings({ settings.setString(SettingKeys.QQ_SERVER, normalized) })
                         },
                     )
+                    // Obscured and kept out of the settings backup, exactly like the NetEase one.
+                    SettingsTextField(
+                        value = qqCookie,
+                        label = "QQ 音乐 Cookie",
+                        obscureText = true,
+                        accentPalette = settingsPalette,
+                        index = 2,
+                        count = 4,
+                        onDraftChange = { qqCookie = it },
+                        onCommit = { raw ->
+                            val normalized = raw.trim()
+                            qqCookie = normalized
+                            persistSettings({ settings.setString(SettingKeys.QQ_COOKIE, normalized) })
+                        },
+                    )
                     // Both aggregation views ship; this picks which one the library and search use.
                     SettingsSwitch(
                         checked = aggregationMode == LibraryAggregationMode.PER_PROVIDER,
                         label = "按平台分组显示",
                         accentPalette = settingsPalette,
-                        index = 2,
-                        count = 3,
+                        index = 3,
+                        count = 4,
                         supportingText = "关闭时各平台结果混合为一个列表",
                     ) { value ->
                         val mode = if (value) {

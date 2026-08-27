@@ -49,6 +49,67 @@ class SettingsBackupTest {
     }
 
     @Test
+    fun exportedBackupCarriesTheQqBackendButNotItsCookie() {
+        val json = encodeSettingsBackup(
+            getString = { key, default ->
+                when (key) {
+                    SettingKeys.QQ_COOKIE -> "qm_keyst=qq-secret-token"
+                    SettingKeys.QQ_SERVER -> "http://[::1]:3200"
+                    else -> default
+                }
+            },
+            getBoolean = { key, default ->
+                if (key == SettingKeys.QQ_ENABLED) true else default
+            },
+        )
+
+        // A second provider must not reopen the hole the NetEase cookie exclusion closes.
+        assertFalse(json.contains("qm_keyst=qq-secret-token"))
+        assertFalse(json.contains("qqCookie"))
+        // The backend address is not a credential and travels the way `server` does.
+        assertTrue(json.contains("http://[::1]:3200"))
+        assertTrue(json.contains("\"qqEnabled\":true"))
+    }
+
+    @Test
+    fun importedBackupDoesNotOverwriteTheQqCookie() {
+        val writtenStrings = mutableMapOf<String, String>()
+        val json = """
+            {
+              "server": "http://server/",
+              "qqCookie": "qm_keyst=old-exported-token",
+              "qqServer": "http://[::1]:3200",
+              "libraryAggregationMode": "perProvider"
+            }
+        """.trimIndent()
+
+        val applied = applySettingsBackup(
+            json = json,
+            setString = { key, value -> writtenStrings[key] = value },
+            setBoolean = { _, _ -> },
+        )
+
+        assertTrue(applied)
+        assertFalse(SettingKeys.QQ_COOKIE in writtenStrings)
+        assertTrue(writtenStrings[SettingKeys.QQ_SERVER] == "http://[::1]:3200")
+        assertTrue(writtenStrings[SettingKeys.LIBRARY_AGGREGATION_MODE] == "perProvider")
+    }
+
+    @Test
+    fun aBackupMadeBeforeMultiProviderSupportKeepsTheCurrentChoice() {
+        val writtenStrings = mutableMapOf<String, String>()
+        val applied = applySettingsBackup(
+            json = """{"server":"http://server/"}""",
+            setString = { key, value -> writtenStrings[key] = value },
+            setBoolean = { _, _ -> },
+        )
+
+        assertTrue(applied)
+        assertFalse(SettingKeys.LIBRARY_AGGREGATION_MODE in writtenStrings)
+        assertFalse(SettingKeys.QQ_SERVER in writtenStrings)
+    }
+
+    @Test
     fun extraLyricSurfaceSettingKeepsLegacyBackupCompatibility() {
         val json = encodeSettingsBackup(
             getString = { _, default -> default },

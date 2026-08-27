@@ -3,9 +3,11 @@ package com.leejlredstar.redefinencm.kmp.data.api
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -14,8 +16,14 @@ import kotlinx.serialization.json.Json
  * Client for a self-hosted `Rain120/qq-music-api` instance.
  *
  * QQ Music has no public API, so this talks to a backend the user runs, the same arrangement as
- * the NetEase side. The account cookie lives in that backend (`/user/setCookie`), never in this
- * app, which is why this client is credential-free and uses [ExternalHttpClient].
+ * the NetEase side. The account cookie is held by the app and sent as a `Cookie` header on every
+ * request, so one backend can serve several clients and so the Android build can sign in without
+ * reaching the backend's own config file.
+ *
+ * `Rain120/qq-music-api` does not read that header yet: it takes its credential only from
+ * `config/user-info`, and `/user/setCookie` answers 403 by design. The header is sent regardless
+ * because it is the standard mechanism and costs nothing, but until the backend honours it, QQ
+ * requests are effectively anonymous whatever the app has stored.
  *
  * Two shapes of that backend are load-bearing here. Its routes declare path parameters but every
  * controller reads `ctx.query`, so requests must pass query strings — `/getSearchByKey/周杰伦`
@@ -25,6 +33,7 @@ import kotlinx.serialization.json.Json
 class QQMusicApi(
     private val client: HttpClient,
     private val baseUrl: suspend () -> String,
+    private val cookie: suspend () -> String = { "" },
 ) {
     suspend fun search(keyword: String, limit: Int, page: Int = 1): QQSearchData? =
         request<QQEnvelope<QQSearchData>>("getSearchByKey") {
@@ -62,7 +71,13 @@ class QQMusicApi(
     ): T? = runCatching {
         val root = baseUrl().trimEnd('/')
         if (root.isEmpty()) return null
-        val response: HttpResponse = client.get("$root/$path") { block() }
+        val account = cookie().trim()
+        val response: HttpResponse = client.get("$root/$path") {
+            // Credentials travel per request rather than being installed into the backend, so one
+            // backend can serve several clients and so the Android build can sign in at all.
+            if (account.isNotEmpty()) header(HttpHeaders.Cookie, account)
+            block()
+        }
         // The backend answers 400 with a JSON body for bad input; decoding that as the success
         // shape would yield an empty result that reads like "no such song".
         if (response.status.value !in 200..299) return null

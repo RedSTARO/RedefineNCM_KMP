@@ -22,10 +22,15 @@ import kotlin.test.assertTrue
  */
 class QQMusicMappingTest {
     private val recordedUrls = mutableListOf<String>()
+    private val recordedCookies = mutableListOf<String?>()
 
-    private fun apiAnswering(body: (path: String, query: String) -> String?): QQMusicApi {
+    private fun apiAnswering(
+        cookie: String = "",
+        body: (path: String, query: String) -> String?,
+    ): QQMusicApi {
         val engine = MockEngine { request ->
             recordedUrls += request.url.toString()
+            recordedCookies += request.headers[HttpHeaders.Cookie]
             val payload = body(request.url.encodedPath, request.url.encodedQuery)
             if (payload == null) {
                 respond("{}", HttpStatusCode.BadRequest)
@@ -37,7 +42,11 @@ class QQMusicMappingTest {
                 )
             }
         }
-        return QQMusicApi(HttpClient(engine), baseUrl = { "http://localhost:3200" })
+        return QQMusicApi(
+            HttpClient(engine),
+            baseUrl = { "http://localhost:3200" },
+            cookie = { cookie },
+        )
     }
 
     @Test
@@ -136,6 +145,29 @@ class QQMusicMappingTest {
         val api = apiAnswering { _, _ -> null }
         // A 400 body decoded as the success shape would read as "no such song" instead of an error.
         assertNull(api.search("x", 1))
+    }
+
+    @Test
+    fun theStoredCookieTravelsWithEveryRequest() = runTest {
+        val api = apiAnswering(cookie = " uin=123; qm_keyst=abc ") { _, _ ->
+            """{"response":{"data":{"song":{"list":[]}}}}"""
+        }
+        api.search("x", 1)
+        api.lyric("m")
+
+        // Credentials go per request rather than being installed into the backend, so the Android
+        // build can sign in without reaching the backend's config file.
+        assertEquals(
+            listOf<String?>("uin=123; qm_keyst=abc", "uin=123; qm_keyst=abc"),
+            recordedCookies,
+        )
+    }
+
+    @Test
+    fun noCookieHeaderIsSentWhenSignedOut() = runTest {
+        val api = apiAnswering { _, _ -> """{"response":{"data":{"song":{"list":[]}}}}""" }
+        api.search("x", 1)
+        assertEquals(listOf<String?>(null), recordedCookies)
     }
 
     @Test

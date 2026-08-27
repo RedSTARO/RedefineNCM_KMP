@@ -13,10 +13,14 @@ object SettingKeys {
 
     // ── QQ Music ──
     // QQ Music has no public API, so it needs a self-hosted backend the same way NetEase does.
-    // The account cookie lives in that backend rather than here, so there is no QQ_COOKIE.
     const val QQ_ENABLED = "qqEnabled"
     const val QQ_SERVER = "qqServer"
     const val QQ_SERVER_DEFAULT = "http://localhost:3200"
+
+    // Held here and sent per request, the same shape as [COOKIE], so one backend can serve several
+    // clients and so the Android build can sign in at all — it has no access to the backend's own
+    // config file. Like [COOKIE] it is deliberately absent from the settings backup.
+    const val QQ_COOKIE = "qqCookie"
 
     /** Whether the library merges every provider into one view or keeps a tab per provider. */
     const val LIBRARY_AGGREGATION_MODE = "libraryAggregationMode"

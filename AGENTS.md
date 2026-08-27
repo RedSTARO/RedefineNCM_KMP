@@ -272,9 +272,25 @@ This sharpens the limit stated above. The gate is account entitlement checked se
 verified by fetching one, which answered `206 audio/mpeg` with an `ID3` header and honoured range
 requests, so seeking works. The same call for a VIP track returns an empty `purl` at every
 quality, and `320`/`flac` are empty even for free tracks. A cookie is therefore needed for parity
-with the NetEase side, not merely for personal playlists; `/user/setCookie` is where it goes.
-What a cookie actually unlocks has not been measured, and a non-VIP account is not expected to
-lift the VIP wall.
+with the NetEase side, not merely for personal playlists. What a cookie actually unlocks has not
+been measured, and a non-VIP account is not expected to lift the VIP wall.
+
+**The cookie is held by the app, and this backend cannot yet receive it.** The app stores a QQ
+cookie beside the NetEase one and sends it as a `Cookie` header on every QQ request. That is the
+right architecture rather than installing a credential into the backend: it lets one backend serve
+several clients, and it is the only way the Android build can sign in at all, since it has no
+access to the backend's config file.
+
+`Rain120/qq-music-api` ignores that header, for four independent reasons: `/user/setCookie`
+answers `403` by design, the cookie middleware reads only the config file, the outbound request
+never forwards a `Cookie` header upstream (the credential only derives `uin` into query params),
+and `export const userInfo = appConfig.user` captures a reference while `updateConfig()` replaces
+the object — so merely re-enabling `setCookie` would log success and change nothing. Until the
+backend is patched, QQ requests are anonymous whatever the app has stored, and the only working
+credential path is its `config/user-info` file, which is desktop-only. The patch, its staleness
+trap, and its caveats are written up in
+[docs/qq-music-api-per-request-cookie.md](docs/qq-music-api-per-request-cookie.md); it is
+deliberately not applied, because it forks a third-party repository.
 
 Two shape hazards for the mapper. Routes declare path parameters but every controller reads
 `ctx.query`, so `/getSearchByKey/周杰伦` answers `400 search key is null` — pass query strings.
@@ -290,7 +306,14 @@ schema and credential migrations, then aggregation UX, then the QQ Music client 
 **Shipped so far (2026-08-27).** `ProviderItemId`, `MusicProvider` and `MusicProviderRegistry`,
 a `NeteaseProvider` adapter over the untouched `Repository`, a `QQProvider`, provider dispatch in
 all four platform stream resolvers, provider-neutral search end to end, and the settings to turn
-QQ Music on and choose merged or per-provider grouping.
+QQ Music on, point it at a backend, sign in with a cookie, and choose merged or per-provider
+grouping.
+
+Credentials stay additive: `qqEnabled` / `qqServer` / `qqCookie` sit beside the existing
+`cookie` / `server` keys rather than renaming them, so nothing migrates and no user data is at
+risk. `qqCookie` is excluded from the settings backup for the same reason `cookie` is — a shared
+export must never carry a credential — while `qqServer` and the aggregation choice travel with a
+backup the way `server` does.
 
 `MediaInfo.id` keeps NetEase ids bare and prefixes only foreign providers. Around fifteen call
 sites read `MediaInfo.id.toLongOrNull()` to reach NetEase-only features — lyrics, the local

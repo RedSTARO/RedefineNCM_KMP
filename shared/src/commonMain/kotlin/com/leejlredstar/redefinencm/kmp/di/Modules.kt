@@ -72,6 +72,7 @@ val sharedModule = module {
             baseUrl = {
                 settings.getStringAsync(SettingKeys.QQ_SERVER, SettingKeys.QQ_SERVER_DEFAULT)
             },
+            cookie = { settings.getStringAsync(SettingKeys.QQ_COOKIE, "") },
         )
     }
 

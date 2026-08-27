@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.util
 
+import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -11,6 +12,12 @@ data class SettingsBackupData(
     /** Kept only so older exported files decode; auth cookies are no longer exported/imported. */
     val cookie: String = "",
     val server: String = "",
+    // The QQ backend address and view preference travel with a backup the way `server` does.
+    // Its cookie deliberately does not — same rule as `cookie` above.
+    val qqEnabled: Boolean = false,
+    val qqServer: String = "",
+    /** Null keeps the current choice when importing a backup made before multi-provider support. */
+    val libraryAggregationMode: String? = null,
     val onlinePlayQuality: String = SoundQuality.STANDARD.name,
     val downloadQuality: String = SoundQuality.STANDARD.name,
     val replacePlaylist: Boolean = false,
@@ -42,6 +49,11 @@ internal fun encodeSettingsBackup(
     SettingsBackupData(
         cookie = "",
         server = getString(SettingKeys.SERVER, ""),
+        qqEnabled = getBoolean(SettingKeys.QQ_ENABLED, false),
+        qqServer = getString(SettingKeys.QQ_SERVER, SettingKeys.QQ_SERVER_DEFAULT),
+        libraryAggregationMode = LibraryAggregationMode.fromWireValueOrDefault(
+            getString(SettingKeys.LIBRARY_AGGREGATION_MODE, ""),
+        ).wireValue,
         onlinePlayQuality = getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name),
         downloadQuality = getString(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name),
         replacePlaylist = getBoolean(SettingKeys.REPLACE_PLAYLIST, false),
@@ -77,6 +89,9 @@ internal fun applySettingsBackup(
         LyricSourceMode.fromWireValueOrNull(stored) ?: return false
     }
     if (data.server.isNotEmpty()) setString(SettingKeys.SERVER, data.server)
+    setBoolean(SettingKeys.QQ_ENABLED, data.qqEnabled)
+    if (data.qqServer.isNotEmpty()) setString(SettingKeys.QQ_SERVER, data.qqServer)
+    data.libraryAggregationMode?.let { setString(SettingKeys.LIBRARY_AGGREGATION_MODE, it) }
     setString(SettingKeys.ONLINE_PLAY_QUALITY, data.onlinePlayQuality)
     setString(SettingKeys.DOWNLOAD_QUALITY, data.downloadQuality)
     setBoolean(SettingKeys.REPLACE_PLAYLIST, data.replacePlaylist)
