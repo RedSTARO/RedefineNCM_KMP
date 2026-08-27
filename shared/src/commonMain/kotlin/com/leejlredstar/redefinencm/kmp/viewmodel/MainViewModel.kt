@@ -5,6 +5,11 @@ import com.leejlredstar.redefinencm.kmp.data.PlayerStatus
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
 import com.leejlredstar.redefinencm.kmp.data.api.dto.*
+import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
+import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
+import com.leejlredstar.redefinencm.kmp.data.provider.ProviderSearchResults
+import com.leejlredstar.redefinencm.kmp.data.provider.ProviderTrack
+import com.leejlredstar.redefinencm.kmp.data.provider.interleaved
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.player.PlaybackAccountVerificationEvent
 import com.leejlredstar.redefinencm.kmp.player.PlaybackReportingCoordinator
@@ -53,6 +58,7 @@ class MainViewModel(
     private val downloadManager: SongDownloadManager,
     private val playbackReportingCoordinator: PlaybackReportingCoordinator,
     private val playerStatusRestorer: PlayerStatusRestorer,
+    private val providers: MusicProviderRegistry,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val accountCredentialKey = MutableStateFlow<Long?>(null)
@@ -111,7 +117,11 @@ class MainViewModel(
     val recommendSongsFromCache = MutableStateFlow(false)
 
     // ── Search ──
-    val searchResults = MutableStateFlow<List<SongDetailSongs>>(emptyList())
+    /** Every provider's hits, grouped, for the per-provider view. */
+    val searchGroups = MutableStateFlow<List<ProviderSearchResults>>(emptyList())
+    /** The same hits interleaved, for the merged view. */
+    val searchResults = MutableStateFlow<List<ProviderTrack>>(emptyList())
+    val searchAggregationMode = MutableStateFlow(LibraryAggregationMode.Default)
     val searchSuggestions = MutableStateFlow<List<String>>(emptyList())
     val searchLoading = MutableStateFlow(false)
     val searchSubmittedQuery = MutableStateFlow<String?>(null)
@@ -657,6 +667,7 @@ class MainViewModel(
         val query = keyword.trim()
         searchJob?.cancel()
         if (query.isEmpty()) {
+            searchGroups.value = emptyList()
             searchResults.value = emptyList()
             searchLoading.value = false
             searchSubmittedQuery.value = null
@@ -669,15 +680,25 @@ class MainViewModel(
         searchJob = scope.launch(Dispatchers.Default) {
             searchLoading.value = true
             try {
-                val response = repo.search(query)
-                searchResults.value = response?.result?.songs ?: emptyList()
-                if (response == null) {
-                    searchError.value = "搜索失败，请检查网络后重试"
+                searchAggregationMode.value = providers.aggregationMode()
+                val groups = providers.searchAll(query)
+                searchGroups.value = groups.filter { it.tracks.isNotEmpty() }
+                searchResults.value = groups.interleaved()
+
+                // "Nothing matched" and "the backend is down" are different answers, and with two
+                // providers configured a partial failure must not be reported as either.
+                val failed = groups.filter { it.failed }
+                searchError.value = when {
+                    failed.isEmpty() -> null
+                    failed.size == groups.size -> "搜索失败，请检查网络后重试"
+                    else -> failed.joinToString("、") { it.provider.displayName }
+                        .let { "$it 搜索失败，仅显示其他平台结果" }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Throwable) {
                 if (currentCoroutineContext()[Job] == searchJob) {
+                    searchGroups.value = emptyList()
                     searchResults.value = emptyList()
                     searchError.value = "搜索失败，请检查网络后重试"
                 }
@@ -706,6 +727,7 @@ class MainViewModel(
     fun clearSearch() {
         searchJob?.cancel()
         suggestionJob?.cancel()
+        searchGroups.value = emptyList()
         searchResults.value = emptyList()
         searchSuggestions.value = emptyList()
         searchLoading.value = false

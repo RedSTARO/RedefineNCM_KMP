@@ -41,6 +41,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
+import com.leejlredstar.redefinencm.kmp.data.provider.ProviderTrack
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
@@ -67,6 +69,8 @@ fun SearchScreen(
     settings: PlatformSettings = koinInject(),
 ) {
     val results by viewModel.searchResults.collectAsState()
+    val groups by viewModel.searchGroups.collectAsState()
+    val aggregationMode by viewModel.searchAggregationMode.collectAsState()
     val suggestions by viewModel.searchSuggestions.collectAsState()
     val loading by viewModel.searchLoading.collectAsState()
     val submittedQuery by viewModel.searchSubmittedQuery.collectAsState()
@@ -174,7 +178,10 @@ fun SearchScreen(
                     modifier = Modifier.padding(top = 24.dp),
                 )
             }
-            searchError != null && submittedMatchesQuery -> {
+            // Only a total failure replaces the results. With two providers configured, one being
+            // down still leaves the other's hits worth showing — that case is reported by the
+            // notice inside the list instead.
+            searchError != null && results.isEmpty() && submittedMatchesQuery -> {
                 ExpressiveStatePanel(
                     title = "搜索失败",
                     message = searchError.orEmpty(),
@@ -187,24 +194,61 @@ fun SearchScreen(
                 )
             }
             results.isNotEmpty() && submittedMatchesQuery -> {
+                // Both aggregation views ship. Merged interleaves providers into one list; the
+                // per-provider view keeps them under their own headers. The setting picks.
+                val perProvider = aggregationMode == LibraryAggregationMode.PER_PROVIDER &&
+                    groups.size > 1
+                val showProviderBadge = groups.size > 1 && !perProvider
+
+                fun play(track: ProviderTrack) {
+                    player.setQueue(listOf(track.toMediaInfo()), 0)
+                    player.play()
+                    onBack()
+                }
+
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    itemsIndexed(
-                        items = results,
-                        key = { _, song -> song.id },
-                    ) { index, song ->
-                        SongRow(
-                            index = index,
-                            title = song.name,
-                            artist = song.ar.joinToString(" / ") { it.name }.ifEmpty { "未知歌手" },
-                            artworkUri = song.al.picUrl,
-                            shape = connectedListItemShape(index, results.size),
-                            onClick = {
-                                player.setQueue(listOf(song.toMediaInfo()), 0)
-                                player.play()
-                                onBack()
-                            },
-                            songId = song.id,
-                        )
+                    searchError?.let { partialFailure ->
+                        item(key = "partial-failure") {
+                            SearchProviderHeader(
+                                label = partialFailure,
+                                accent = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                    if (perProvider) {
+                        groups.forEach { group ->
+                            item(key = "header-${group.provider.key}") {
+                                SearchProviderHeader(
+                                    label = group.provider.displayName,
+                                    accent = searchPalette.accent,
+                                )
+                            }
+                            itemsIndexed(
+                                items = group.tracks,
+                                key = { _, track -> "${group.provider.key}-${track.id}" },
+                            ) { index, track ->
+                                SearchTrackRow(
+                                    index = index,
+                                    track = track,
+                                    count = group.tracks.size,
+                                    showProviderBadge = false,
+                                    onClick = { play(track) },
+                                )
+                            }
+                        }
+                    } else {
+                        itemsIndexed(
+                            items = results,
+                            key = { _, track -> track.id.toString() },
+                        ) { index, track ->
+                            SearchTrackRow(
+                                index = index,
+                                track = track,
+                                count = results.size,
+                                showProviderBadge = showProviderBadge,
+                                onClick = { play(track) },
+                            )
+                        }
                     }
                 }
             }
@@ -273,5 +317,52 @@ fun SearchScreen(
             }
         }
         }
+    }
+}
+
+/** Section label for the per-provider view, and for the partial-failure notice. */
+@Composable
+private fun SearchProviderHeader(label: String, accent: Color) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelLarge,
+        color = accent,
+        modifier = Modifier.padding(start = 4.dp, top = 16.dp, bottom = 8.dp),
+    )
+}
+
+/**
+ * One search hit.
+ *
+ * [SongRow]'s `songId` drives the download-status chip, which is NetEase-only: downloads are keyed
+ * by a numeric song id and no other provider has one, so a foreign track passes null and shows no
+ * chip rather than showing a wrong one.
+ */
+@Composable
+private fun SearchTrackRow(
+    index: Int,
+    track: ProviderTrack,
+    count: Int,
+    showProviderBadge: Boolean,
+    onClick: () -> Unit,
+) {
+    Column {
+        if (showProviderBadge) {
+            Text(
+                text = track.provider.displayName,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, top = 6.dp),
+            )
+        }
+        SongRow(
+            index = index,
+            title = track.title,
+            artist = track.artistLine,
+            artworkUri = track.artworkUrl,
+            shape = connectedListItemShape(index, count),
+            onClick = onClick,
+            songId = track.id.neteaseIdOrNull,
+        )
     }
 }

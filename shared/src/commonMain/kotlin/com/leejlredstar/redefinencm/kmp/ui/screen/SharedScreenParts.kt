@@ -48,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.leejlredstar.redefinencm.kmp.data.provider.ProviderTrack
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
 import com.leejlredstar.redefinencm.kmp.data.api.dto.UserPlaylistEach
 import com.leejlredstar.redefinencm.kmp.data.toPlayerMediaInfo
@@ -71,6 +72,11 @@ import org.koin.compose.koinInject
 
 /** Map an API song DTO to the player's [MediaInfo] (placeholder URI resolved at play time). */
 fun SongDetailSongs.toMediaInfo(
+    sourceId: String = "",
+): MediaInfo = toPlayerMediaInfo(sourceId)
+
+/** The same, for a track that may have come from any provider. */
+fun ProviderTrack.toMediaInfo(
     sourceId: String = "",
 ): MediaInfo = toPlayerMediaInfo(sourceId)
 

@@ -249,6 +249,14 @@ server down when the last session closes, so it needs a session held open rather
 An Android device reaches it over `adb reverse tcp:3200 tcp:3200`; WSL is in NAT mode, so a LAN
 device would otherwise need a `netsh portproxy` rule.
 
+**`localhost` is not reachable from the JVM in this setup.** WSL's port forwarding answers on the
+IPv6 loopback only: `http://[::1]:3200` and the WSL address both return 200, while `127.0.0.1`
+is refused. Windows `curl` hides this because it tries IPv6 first; a JVM client resolves
+`localhost` to IPv4 and gets `Connection refused`. So the desktop app needs `http://[::1]:3200`
+in the QQ backend field, or a `netsh interface portproxy` rule to make the IPv4 loopback work.
+This is a property of the WSL deployment, not of the client — the same client reaches a natively
+hosted backend through `localhost` unchanged.
+
 Measured against the live server, signed out:
 
 | Capability | Endpoint | Anonymous result |
@@ -278,6 +286,26 @@ when QQ rotates it.
 **Order of work.** The neutral domain model comes first — it is the keystone, it is useful with
 or without QQ Music, and it removes an existing coupling. Provider abstraction follows, then the
 schema and credential migrations, then aggregation UX, then the QQ Music client itself.
+
+**Shipped so far (2026-08-27).** `ProviderItemId`, `MusicProvider` and `MusicProviderRegistry`,
+a `NeteaseProvider` adapter over the untouched `Repository`, a `QQProvider`, provider dispatch in
+all four platform stream resolvers, provider-neutral search end to end, and the settings to turn
+QQ Music on and choose merged or per-provider grouping.
+
+`MediaInfo.id` keeps NetEase ids bare and prefixes only foreign providers. Around fifteen call
+sites read `MediaInfo.id.toLongOrNull()` to reach NetEase-only features — lyrics, the local
+download lookup, the song wiki, the download-status chip — and prefixing NetEase's own ids would
+switch all of them off at once. A bare id still parses back to NetEase, so dispatch is unaffected,
+while a `qq:` id is correctly read by those sites as "not a NetEase song".
+
+**Still open, in the order they matter.** QQ results are uncached, because the provider column on
+the eleven cache tables is the data-destroying step and belongs in its own change. The library
+and playlist screens still bind to NetEase DTOs, so the aggregation setting currently only reaches
+search — the per-provider tabs the setting promises are not built. QQ tracks cannot be downloaded,
+since the download queue is keyed by a numeric song id. And the lyric source-mode privacy gate is
+still a closed policy over two NetEase-era sources: QQ lyrics are reachable through the provider
+interface but are not wired into that pipeline, which is a redesign of the policy rather than a
+new enum entry.
 
 ---
 

@@ -126,7 +126,7 @@ val sharedModule = module {
     factory { LoginViewModel(get(), get(), get()) }
     // Single —— 与原版单 Activity 共享一个 MainViewModel 一致：各屏共享搜索/歌单/推荐状态，
     // init 中的 UID 解析与播放状态恢复只执行一次。
-    single { MainViewModel(get(), get(), get(), get(), get(), get()) }
+    single { MainViewModel(get(), get(), get(), get(), get(), get(), get()) }
     // Single — the now-playing state is inherently global (only one song plays at a time).
     // The eager status restorer resolves this singleton after settings and queue restoration, so
     // restored/background playback also resolves lyrics without waiting for a screen composition.

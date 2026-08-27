@@ -95,6 +95,7 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.BuildInfo
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
+import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
 import com.leejlredstar.redefinencm.kmp.util.applySettingsBackup
@@ -123,6 +124,9 @@ fun SettingsScreen(
 ) {
     var cookie by remember(settings) { mutableStateOf("") }
     var server by remember(settings) { mutableStateOf("") }
+    var qqEnabled by remember(settings) { mutableStateOf(false) }
+    var qqServer by remember(settings) { mutableStateOf(SettingKeys.QQ_SERVER_DEFAULT) }
+    var aggregationMode by remember(settings) { mutableStateOf(LibraryAggregationMode.Default) }
     var onlineQuality by remember(settings) { mutableStateOf(SoundQuality.STANDARD.name) }
     var dlQuality by remember(settings) { mutableStateOf(SoundQuality.STANDARD.name) }
     var replacePlaylist by remember(settings) { mutableStateOf(false) }
@@ -154,6 +158,11 @@ fun SettingsScreen(
     fun reloadSettingsSnapshot() {
         cookie = settings.getString(SettingKeys.COOKIE, "")
         server = settings.getString(SettingKeys.SERVER, "")
+        qqEnabled = settings.getBoolean(SettingKeys.QQ_ENABLED, false)
+        qqServer = settings.getString(SettingKeys.QQ_SERVER, SettingKeys.QQ_SERVER_DEFAULT)
+        aggregationMode = LibraryAggregationMode.fromWireValueOrDefault(
+            settings.getString(SettingKeys.LIBRARY_AGGREGATION_MODE, ""),
+        )
         onlineQuality = settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name)
         dlQuality = settings.getString(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name)
         replacePlaylist = settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false)
@@ -229,6 +238,11 @@ fun SettingsScreen(
         try {
             cookie = settings.getStringAsync(SettingKeys.COOKIE, "")
             server = settings.getStringAsync(SettingKeys.SERVER, "")
+            qqEnabled = settings.getBooleanAsync(SettingKeys.QQ_ENABLED, false)
+            qqServer = settings.getStringAsync(SettingKeys.QQ_SERVER, SettingKeys.QQ_SERVER_DEFAULT)
+            aggregationMode = LibraryAggregationMode.fromWireValueOrDefault(
+                settings.getStringAsync(SettingKeys.LIBRARY_AGGREGATION_MODE, ""),
+            )
             onlineQuality = settings.getStringAsync(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name)
             dlQuality = settings.getStringAsync(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name)
             replacePlaylist = settings.getBooleanAsync(SettingKeys.REPLACE_PLAYLIST, false)
@@ -457,6 +471,59 @@ fun SettingsScreen(
                     }
                 }
 
+                SettingsSectionLabel("多平台", settingsPalette)
+                // QQ Music has no public API, so it needs a backend the user self-hosts, the same
+                // arrangement as the NetEase server above. The QQ account cookie lives in that
+                // backend rather than in this app, which is why there is no cookie field here.
+                SettingsSwitch(
+                    checked = qqEnabled,
+                    label = "启用 QQ 音乐",
+                    accentPalette = settingsPalette,
+                    index = 0,
+                    count = if (qqEnabled) 3 else 1,
+                    supportingText = "需要自建 qq-music-api 后端；未登录时仅能播放免费歌曲的普通音质",
+                ) { value ->
+                    qqEnabled = value
+                    persistSettings({ settings.setBoolean(SettingKeys.QQ_ENABLED, value) })
+                }
+                if (qqEnabled) {
+                    SettingsTextField(
+                        value = qqServer,
+                        label = "QQ 音乐后端地址",
+                        accentPalette = settingsPalette,
+                        index = 1,
+                        count = 3,
+                        onDraftChange = { qqServer = it },
+                        onCommit = { raw ->
+                            val normalized = normalizeServerInput(raw)
+                                .ifEmpty { SettingKeys.QQ_SERVER_DEFAULT }
+                            qqServer = normalized
+                            persistSettings({ settings.setString(SettingKeys.QQ_SERVER, normalized) })
+                        },
+                    )
+                    // Both aggregation views ship; this picks which one the library and search use.
+                    SettingsSwitch(
+                        checked = aggregationMode == LibraryAggregationMode.PER_PROVIDER,
+                        label = "按平台分组显示",
+                        accentPalette = settingsPalette,
+                        index = 2,
+                        count = 3,
+                        supportingText = "关闭时各平台结果混合为一个列表",
+                    ) { value ->
+                        val mode = if (value) {
+                            LibraryAggregationMode.PER_PROVIDER
+                        } else {
+                            LibraryAggregationMode.MERGED
+                        }
+                        aggregationMode = mode
+                        persistSettings({
+                            settings.setString(
+                                SettingKeys.LIBRARY_AGGREGATION_MODE,
+                                mode.wireValue,
+                            )
+                        })
+                    }
+                }
                 SettingsSectionLabel("账号", settingsPalette)
                 SettingsButton(
                     label = if (cookie.isBlank()) "扫码 / 登录" else "重新登录 / 换号",

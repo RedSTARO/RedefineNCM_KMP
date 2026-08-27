@@ -88,19 +88,29 @@ class MusicProviderRegistry(
         available()
             .map { provider ->
                 provider to async {
-                    runCatching { provider.search(keyword, limit) }.getOrDefault(emptyList())
+                    runCatching { provider.search(keyword, limit) }
                 }
             }
             .map { (provider, deferred) ->
-                ProviderSearchResults(provider.id, deferred.await())
+                val outcome = deferred.await()
+                ProviderSearchResults(
+                    provider = provider.id,
+                    tracks = outcome.getOrDefault(emptyList()),
+                    failed = outcome.isFailure,
+                )
             }
-            .filter { it.tracks.isNotEmpty() }
     }
 }
 
 data class ProviderSearchResults(
     val provider: MusicProviderId,
     val tracks: List<ProviderTrack>,
+    /**
+     * Whether this provider errored rather than simply matching nothing. Kept apart so a caller
+     * can report "one of two providers is down" instead of "no results", which are different
+     * things to a user with two accounts.
+     */
+    val failed: Boolean = false,
 )
 
 /**

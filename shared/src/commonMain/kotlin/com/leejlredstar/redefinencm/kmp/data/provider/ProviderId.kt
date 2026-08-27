@@ -98,6 +98,19 @@ data class ProviderItemId(
 fun String.toProviderItemIdOrNull(): ProviderItemId? = ProviderItemId.parseOrNull(this)
 
 /**
+ * The form written into `MediaInfo.id` — bare for NetEase, prefixed for every other provider.
+ *
+ * This is deliberately not [ProviderItemId.toString]. Around fifteen call sites read
+ * `MediaInfo.id.toLongOrNull()` to reach NetEase-only features — lyrics, the local-download
+ * lookup, the song wiki, the download-status chip — and prefixing NetEase's own ids would switch
+ * all of them off at once. A bare id still parses back to NetEase through the legacy reader, so
+ * provider dispatch is unaffected, while a foreign provider's id is correctly read by those same
+ * sites as "not a NetEase song".
+ */
+val ProviderItemId.mediaId: String
+    get() = if (provider == MusicProviderId.NETEASE) rawId else toString()
+
+/**
  * The provider a raw id belongs to, defaulting to NetEase for ids written before providers
  * existed. Use this for dispatch; use [toProviderItemIdOrNull] when the raw id is needed too.
  */
