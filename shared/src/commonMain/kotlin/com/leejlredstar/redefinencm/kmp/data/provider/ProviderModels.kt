@@ -70,10 +70,24 @@ data class ProviderLyric(
 }
 
 /**
+ * A provider could not answer: its backend is unreachable, erroring, or rejected the request.
+ *
+ * This exists because "matched nothing" and "is down" are different answers, and collapsing them
+ * into an empty list makes a dead backend read as "没有找到结果". [MusicProvider.search] throws it
+ * so an aggregating caller can report which provider failed while still showing the others' hits.
+ */
+class ProviderUnavailableException(
+    val provider: MusicProviderId,
+    message: String,
+) : Exception(message)
+
+/**
  * One music service, reduced to the four things every provider must be able to answer.
  *
- * Implementations return null (or an empty list) for "unavailable" rather than throwing, because
- * every caller is a UI path where one provider failing must not take the others down with it.
+ * [search] throws [ProviderUnavailableException] on transport failure, because its caller
+ * aggregates across providers and has to tell an empty result from a broken one. The other three
+ * address a single item on a single provider, where the caller has no such distinction to draw
+ * and a null is the whole answer.
  */
 interface MusicProvider {
     val id: MusicProviderId
@@ -84,6 +98,7 @@ interface MusicProvider {
      */
     suspend fun isAvailable(): Boolean
 
+    /** @throws ProviderUnavailableException when the backend could not be reached or errored. */
     suspend fun search(keyword: String, limit: Int = DefaultSearchLimit): List<ProviderTrack>
 
     suspend fun playlistDetail(id: ProviderItemId): ProviderPlaylist?

@@ -7,6 +7,7 @@ import com.leejlredstar.redefinencm.kmp.data.api.QQSinger
 import com.leejlredstar.redefinencm.kmp.data.api.qqAlbumArtworkUrl
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * QQ Music, reached through a self-hosted `Rain120/qq-music-api` backend.
@@ -27,8 +28,10 @@ class QQProvider(
 
     override suspend fun search(keyword: String, limit: Int): List<ProviderTrack> {
         if (keyword.isBlank() || !isAvailable()) return emptyList()
-        return api.search(keyword, limit)
-            ?.data
+        // Null is a transport failure, not an empty result set — see NeteaseProvider.search.
+        val response = api.search(keyword, limit)
+            ?: throw ProviderUnavailableException(id, "QQ音乐后端无响应")
+        return response.data
             ?.song
             ?.list
             .orEmpty()
@@ -72,13 +75,29 @@ class QQProvider(
      * returns an empty URL for everything above `128` and for VIP tracks at every tier. Asking
      * once at the user's configured quality would make an entire provider look broken whenever
      * that quality is set to lossless, which is the app's default-ish case rather than a corner.
+     *
+     * The walk is time-bounded because of where it runs: Android resolves stream URLs under
+     * `runBlocking` on ExoPlayer's IO thread, and the shared external client allows 30s per
+     * request. A VIP track answers empty at every rung, so an unbounded walk would hold playback
+     * for two minutes before admitting defeat. The per-attempt bound keeps one slow rung from
+     * eating the whole budget; the overall bound caps the walk however many rungs remain.
+     *
+     * The `size128`/`sizeflac` fields on a search row cannot shortcut this: 晴天 reports
+     * `size128 = 4308000` and still resolves empty, so they describe which encodings exist, not
+     * which the configured account may fetch.
      */
     override suspend fun streamUrl(id: ProviderItemId, quality: SoundQualityPreference): String? {
         if (id.provider != MusicProviderId.QQ || !isAvailable()) return null
-        for (tier in quality.qqTierLadder()) {
-            api.songUrl(id.rawId, tier)?.let { return it }
+        return withTimeoutOrNull(StreamResolveBudgetMillis) {
+            quality.qqTierLadder().firstNotNullOfOrNull { tier ->
+                withTimeoutOrNull(StreamResolveAttemptMillis) { api.songUrl(id.rawId, tier) }
+            }
         }
-        return null
+    }
+
+    private companion object {
+        const val StreamResolveAttemptMillis = 6_000L
+        const val StreamResolveBudgetMillis = 15_000L
     }
 }
 

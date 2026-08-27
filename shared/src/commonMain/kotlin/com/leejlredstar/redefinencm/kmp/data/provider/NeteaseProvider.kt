@@ -23,16 +23,23 @@ class NeteaseProvider(
     override val id: MusicProviderId = MusicProviderId.NETEASE
 
     /**
-     * NetEase works signed out for search and most lyrics, so availability is about having a
-     * backend to talk to at all, not about being logged in.
+     * Always available.
+     *
+     * Gating this on a configured server address would be a new behaviour: NetEase search was
+     * never conditional before, and excluding the provider would turn an unconfigured backend into
+     * "没有找到结果" instead of the search failure it actually is. Letting the call run and fail
+     * keeps the honest message.
      */
-    override suspend fun isAvailable(): Boolean =
-        settings.getStringAsync(SettingKeys.SERVER, "").isNotBlank()
+    override suspend fun isAvailable(): Boolean = true
 
     override suspend fun search(keyword: String, limit: Int): List<ProviderTrack> {
         if (keyword.isBlank()) return emptyList()
-        return repository.search(keyword)
-            ?.result
+        // A search that matched nothing answers with code 200 and an empty song list; null means
+        // the call itself failed. Flattening that to an empty list would report a dead backend as
+        // "no results".
+        val response = repository.search(keyword)
+            ?: throw ProviderUnavailableException(id, "网易云音乐搜索请求失败")
+        return response.result
             ?.songs
             .orEmpty()
             .take(limit)
