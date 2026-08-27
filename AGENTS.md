@@ -237,8 +237,43 @@ The backend runs as a separate process reached over HTTP, so its GPL does not re
 AGPL-3.0-only app either way; MIT simply avoids the question.
 
 Two limits are properties of the services, not of this design: these APIs are unofficial and
-break without notice, and DRM-protected paid tracks cannot be streamed regardless of
-architecture. Neither is a reason to change the plan; both are reasons not to promise coverage.
+break without notice, and paid tracks cannot be streamed without an entitled account. Neither is
+a reason to change the plan; both are reasons not to promise coverage.
+
+**The backend is deployed locally and its coverage is measured (2026-08-27).** `Rain120/qq-music-api`
+runs in WSL (Debian 13, Node 20.19.2) on port 3200, reachable from Windows at `localhost:3200`.
+Two setup traps: `npm` on the WSL `PATH` resolves to the *Windows* binary through interop and
+must not be used to install, and corepack's current `npm` 12 and `pnpm` 11 both refuse Node 20 —
+`corepack prepare pnpm@9.15.9 --activate` is the combination that installs. WSL also tears the
+server down when the last session closes, so it needs a session held open rather than `nohup`.
+An Android device reaches it over `adb reverse tcp:3200 tcp:3200`; WSL is in NAT mode, so a LAN
+device would otherwise need a `netsh portproxy` rule.
+
+Measured against the live server, signed out:
+
+| Capability | Endpoint | Anonymous result |
+| --- | --- | --- |
+| Search | `/getSearchByKey?key=` | works |
+| Playlist browse | `/getSongLists` | works |
+| Playlist detail | `/getSongListDetail?disstid=` | works, full track metadata |
+| Lyrics | `/getLyric?songmid=` | works — LRC, plus a separate `trans` field |
+| Stream URL | `/getMusicPlay?songmid=&quality=` | free tracks at `m4a`/`128` only |
+
+This sharpens the limit stated above. The gate is account entitlement checked server-side at
+`vkey.GetVkeyServer`, not client-side DRM, so signed out a *free* track does return a real URL —
+verified by fetching one, which answered `206 audio/mpeg` with an `ID3` header and honoured range
+requests, so seeking works. The same call for a VIP track returns an empty `purl` at every
+quality, and `320`/`flac` are empty even for free tracks. A cookie is therefore needed for parity
+with the NetEase side, not merely for personal playlists; `/user/setCookie` is where it goes.
+What a cookie actually unlocks has not been measured, and a non-VIP account is not expected to
+lift the VIP wall.
+
+Two shape hazards for the mapper. Routes declare path parameters but every controller reads
+`ctx.query`, so `/getSearchByKey/周杰伦` answers `400 search key is null` — pass query strings.
+And the two list shapes disagree: search rows carry `songmid`/`songname`, playlist rows carry
+`mid`/`name` with nested `singer[]` and `album{}`. The provider client normalises both.
+`getMusicPlay` also sends a hardcoded `sign` constant, which is the most likely thing to break
+when QQ rotates it.
 
 **Order of work.** The neutral domain model comes first — it is the keystone, it is useful with
 or without QQ Music, and it removes an existing coupling. Provider abstraction follows, then the
