@@ -23,45 +23,50 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import kotlin.JsFun
 
-@Composable
-internal actual fun Modifier.amllPlatformEvents(
-    onWheel: (deltaY: Double, mode: AmllWheelDeltaMode) -> Boolean,
-    onPageVisibilityChanged: (visible: Boolean, forceResync: Boolean) -> Unit,
-): Modifier {
-    val token = remember { newAmllPlatformEventToken() }
-    val latestOnWheel by rememberUpdatedState(onWheel)
-    val latestOnPageVisibilityChanged by rememberUpdatedState(onPageVisibilityChanged)
-    var viewportBoundsInWindow by remember { mutableStateOf<Rect?>(null) }
+/** Installed by `main.kt` through [LocalAmllPlatformEventBridge]; Web is the only provider. */
+internal object WebAmllPlatformEventBridge : AmllPlatformEventBridge {
 
-    DisposableEffect(token) {
-        installAmllPlatformEvents(
-            token = token,
-            onWheel = wheel@{ deltaY, deltaMode, canvasX, canvasY ->
-                val bounds = viewportBoundsInWindow ?: return@wheel false
-                if (!bounds.contains(Offset(canvasX.toFloat(), canvasY.toFloat()))) {
-                    return@wheel false
-                }
-                val mode = when (deltaMode) {
-                    0 -> AmllWheelDeltaMode.PIXEL
-                    1 -> AmllWheelDeltaMode.LINE
-                    2 -> AmllWheelDeltaMode.PAGE
-                    // DOM specifies only 0, 1, and 2. AMLL's source sends every unknown value
-                    // through the same non-pixel branch as LINE/PAGE.
-                    else -> AmllWheelDeltaMode.LINE
-                }
-                latestOnWheel(deltaY, mode)
-            },
-            onPageVisibilityChanged = { visible, forceResync ->
-                latestOnPageVisibilityChanged(visible, forceResync)
-            },
-        )
-        onDispose {
-            uninstallAmllPlatformEvents(token)
+    @Composable
+    override fun attach(
+        modifier: Modifier,
+        onWheel: (deltaY: Double, mode: AmllWheelDeltaMode) -> Boolean,
+        onPageVisibilityChanged: (visible: Boolean, forceResync: Boolean) -> Unit,
+    ): Modifier {
+        val token = remember { newAmllPlatformEventToken() }
+        val latestOnWheel by rememberUpdatedState(onWheel)
+        val latestOnPageVisibilityChanged by rememberUpdatedState(onPageVisibilityChanged)
+        var viewportBoundsInWindow by remember { mutableStateOf<Rect?>(null) }
+
+        DisposableEffect(token) {
+            installAmllPlatformEvents(
+                token = token,
+                onWheel = wheel@{ deltaY, deltaMode, canvasX, canvasY ->
+                    val bounds = viewportBoundsInWindow ?: return@wheel false
+                    if (!bounds.contains(Offset(canvasX.toFloat(), canvasY.toFloat()))) {
+                        return@wheel false
+                    }
+                    val mode = when (deltaMode) {
+                        0 -> AmllWheelDeltaMode.PIXEL
+                        1 -> AmllWheelDeltaMode.LINE
+                        2 -> AmllWheelDeltaMode.PAGE
+                        // DOM specifies only 0, 1, and 2. AMLL's source sends every unknown value
+                        // through the same non-pixel branch as LINE/PAGE.
+                        else -> AmllWheelDeltaMode.LINE
+                    }
+                    latestOnWheel(deltaY, mode)
+                },
+                onPageVisibilityChanged = { visible, forceResync ->
+                    latestOnPageVisibilityChanged(visible, forceResync)
+                },
+            )
+            onDispose {
+                uninstallAmllPlatformEvents(token)
+            }
         }
-    }
 
-    return onGloballyPositioned { coordinates ->
-        viewportBoundsInWindow = coordinates.boundsInWindow()
+        return modifier.onGloballyPositioned { coordinates ->
+            viewportBoundsInWindow = coordinates.boundsInWindow()
+        }
     }
 }
 

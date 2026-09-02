@@ -150,6 +150,9 @@ plugins {
 }
 
 kotlin {
+    // Adding the skiaMain edges below suppresses the implicit template, so apply it explicitly.
+    applyDefaultHierarchyTemplate()
+
     listOf(
         iosArm64(),
         iosSimulatorArm64()
@@ -193,6 +196,27 @@ kotlin {
     }
     
     sourceSets {
+        // Desktop, iOS and Web all draw through Skia/skiko, so the pieces that only need a
+        // Skia bitmap — Coil's decoded image surface and the palette extraction over it —
+        // live here once instead of being copied into three identical actuals. Android is
+        // deliberately outside: it has its own Bitmap and androidx.palette.
+        val skiaMain by creating {
+            dependsOn(commonMain.get())
+        }
+        jvmMain.get().dependsOn(skiaMain)
+        iosMain.get().dependsOn(skiaMain)
+        wasmJsMain.get().dependsOn(skiaMain)
+
+        // Android, iOS and the browser have no window the app owns and no in-app audio-route
+        // picker — the OS provides both. Their "this target cannot do that" actuals were three
+        // copies of one file differing only in a word of an error message; they live here once.
+        val nonDesktopMain by creating {
+            dependsOn(commonMain.get())
+        }
+        androidMain.get().dependsOn(nonDesktopMain)
+        iosMain.get().dependsOn(nonDesktopMain)
+        wasmJsMain.get().dependsOn(nonDesktopMain)
+
         androidMain.dependencies {
             implementation(libs.sqldelight.android.driver)
             implementation(libs.compose.uiToolingPreview)

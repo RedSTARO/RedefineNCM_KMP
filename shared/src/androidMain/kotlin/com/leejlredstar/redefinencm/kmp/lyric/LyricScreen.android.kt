@@ -72,7 +72,6 @@ import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerControlle
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
 import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsButton
 import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsSheet
-import com.leejlredstar.redefinencm.kmp.util.LyricParser
 import com.leejlredstar.redefinencm.kmp.util.ANDROID_LOCAL_ARTWORK_EXTERNAL_PROVIDER_ROOT
 import com.leejlredstar.redefinencm.kmp.util.ANDROID_LOCAL_ARTWORK_INTERNAL_PROVIDER_ROOT
 import com.leejlredstar.redefinencm.kmp.util.DOWNLOAD_RELATIVE_PATH
@@ -84,7 +83,6 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 import org.koin.compose.koinInject
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -155,7 +153,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     }
     val lyricForWeb = remember(rawLyric, lyricMap, lyricUiState) {
         if (lyricUiState is LyricUiState.Content) {
-            rawLyric.takeIf { it.isNotBlank() } ?: lyricMap.toLrcFallback()
+            rawLyric.takeIf { it.isNotBlank() } ?: lyricMap.toLrcFallbackText()
         } else {
             ""
         }
@@ -281,7 +279,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         Log.d("AMLL", "reset lyric surface for media=$mediaId")
         val position = currentPosition.coerceAtLeast(0L)
         webView.evaluateJavascript(
-            "AmllBridge.resetTrack(${JSONObject.quote(mediaId)}); AmllBridge.setTime($position);",
+            "AmllBridge.resetTrack(${AmllWebBridge.quote(mediaId)}); AmllBridge.setTime($position);",
             null,
         )
     }
@@ -329,7 +327,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         }
         val contentState = lyricUiState as LyricUiState.Content
         val mediaId = lyricMediaId ?: return@LaunchedEffect
-        val lyricOptions = buildLyricOptionsJson(
+        val lyricOptions = AmllWebBridge.lyricOptionsJson(
             translatedLyric = rawTranslatedLyric,
             romanLyric = rawRomanLyric,
             showTranslatedLyric = showTranslatedLyric,
@@ -338,13 +336,13 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         if (contentState.capabilityLevel == LyricCapabilityLevel.UNSYNCED) {
             Log.d("AMLL", "feeding untimed lyrics media=$mediaId, lines=${untimedLyricLines.size}")
             webView.evaluateJavascript(
-                "AmllBridge.loadUntimedLyrics($untimedLyricsForWeb, ${JSONObject.quote(mediaId)}); AmllBridge.setTime(0);",
+                "AmllBridge.loadUntimedLyrics($untimedLyricsForWeb, ${AmllWebBridge.quote(mediaId)}); AmllBridge.setTime(0);",
                 null,
             )
         } else if (rawTtmlLyric.isNotBlank()) {
             Log.d("AMLL", "feeding TTML media=$mediaId, len=${rawTtmlLyric.length}")
             webView.evaluateJavascript(
-                "AmllBridge.loadTtmlLyrics(${JSONObject.quote(rawTtmlLyric)}, ${JSONObject.quote(mediaId)}, $lyricOptions, ${JSONObject.quote(lyricForWeb)}); AmllBridge.setTime($currentPosition);",
+                "AmllBridge.loadTtmlLyrics(${AmllWebBridge.quote(rawTtmlLyric)}, ${AmllWebBridge.quote(mediaId)}, $lyricOptions, ${AmllWebBridge.quote(lyricForWeb)}); AmllBridge.setTime($currentPosition);",
                 null,
             )
         } else if (
@@ -353,13 +351,13 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         ) {
             Log.d("AMLL", "feeding word lyrics media=$mediaId, len=${rawWordLyric.length}")
             webView.evaluateJavascript(
-                "AmllBridge.loadWordLyrics(${JSONObject.quote(rawWordLyric)}, ${JSONObject.quote(mediaId)}, $lyricOptions); AmllBridge.setTime($currentPosition);",
+                "AmllBridge.loadWordLyrics(${AmllWebBridge.quote(rawWordLyric)}, ${AmllWebBridge.quote(mediaId)}, $lyricOptions); AmllBridge.setTime($currentPosition);",
                 null,
             )
         } else {
             Log.d("AMLL", "feeding lyrics media=$mediaId, len=${lyricForWeb.length}")
             webView.evaluateJavascript(
-                "AmllBridge.loadLyrics(${JSONObject.quote(lyricForWeb)}, ${JSONObject.quote(mediaId)}, $lyricOptions); AmllBridge.setTime($currentPosition);",
+                "AmllBridge.loadLyrics(${AmllWebBridge.quote(lyricForWeb)}, ${AmllWebBridge.quote(mediaId)}, $lyricOptions); AmllBridge.setTime($currentPosition);",
                 null,
             )
         }
@@ -381,12 +379,12 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         val dynamicCoverCommand = dynamicCoverUrl
             ?.takeIf(String::isNotBlank)
             ?.let {
-                "AmllPage.setDynamicCover(${JSONObject.quote(it)}, ${JSONObject.quote(mediaId)});"
+                "AmllPage.setDynamicCover(${AmllWebBridge.quote(it)}, ${AmllWebBridge.quote(mediaId)});"
             }
-            ?: "AmllPage.clearDynamicCover(${JSONObject.quote(mediaId)});"
+            ?: "AmllPage.clearDynamicCover(${AmllWebBridge.quote(mediaId)});"
         webView.evaluateJavascript(
             "if (globalThis.AmllPage) { " +
-                "AmllPage.setSongDetails(${JSONObject.quote(details)}); " +
+                "AmllPage.setSongDetails(${AmllWebBridge.quote(details)}); " +
                 dynamicCoverCommand +
                 " }",
             null,
@@ -578,14 +576,14 @@ private class AmllCallback(
 
 private fun WebView.showAmllStatus(message: String) {
     evaluateJavascript(
-        "if (globalThis.AmllPage) AmllPage.setStatus(${JSONObject.quote(message)});",
+        "if (globalThis.AmllPage) AmllPage.setStatus(${AmllWebBridge.quote(message)});",
         null,
     )
 }
 
 private fun WebView.showAmllError(message: String) {
     evaluateJavascript(
-        "if (globalThis.AmllPage) AmllPage.showError(${JSONObject.quote(message)});",
+        "if (globalThis.AmllPage) AmllPage.showError(${AmllWebBridge.quote(message)});",
         null,
     )
 }
@@ -668,7 +666,7 @@ private fun localArtworkDataUriOrNull(
         else -> null
     } ?: return null
     if (!isLocalArtworkSidecarFileName(id, fileName)) return null
-    val mimeType = webArtworkMimeType(fileName) ?: return null
+    val mimeType = amllArtworkMimeType(fileName) ?: return null
     val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
         val output = ByteArrayOutputStream()
         val buffer = ByteArray(DEFAULT_AMLL_ARTWORK_BUFFER_BYTES)
@@ -684,40 +682,3 @@ private fun localArtworkDataUriOrNull(
     }?.takeIf { it.isNotEmpty() } ?: return null
     return "data:$mimeType;base64,${Base64.encodeToString(bytes, Base64.NO_WRAP)}"
 }
-
-private fun webArtworkMimeType(fileName: String): String? =
-    when (fileName.substringAfterLast('.', "").lowercase()) {
-        "jpg", "jpeg" -> "image/jpeg"
-        "png" -> "image/png"
-        "gif" -> "image/gif"
-        "webp" -> "image/webp"
-        "bmp" -> "image/bmp"
-        "avif" -> "image/avif"
-        // HEIC/HEIF support is not consistent across Android System WebView versions.
-        else -> null
-    }
-
-private fun buildLyricOptionsJson(
-    translatedLyric: String,
-    romanLyric: String,
-    showTranslatedLyric: Boolean,
-    showRomanLyric: Boolean,
-): String = JSONObject()
-    .put("translatedLyric", translatedLyric)
-    .put("romanLyric", romanLyric)
-    .put("showTranslation", showTranslatedLyric)
-    .put("showRoman", showRomanLyric)
-    .toString()
-
-private fun LinkedHashMap<Long?, String?>.toLrcFallback(): String =
-    entries
-        .mapNotNull { (time, text) ->
-            val line = text?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            "${LyricParser.formatLrcTimestamp(time ?: 0L)}$line"
-        }
-        .joinToString("\n")
-
-// Keep the WebView bridge far below the durable 16 MiB download cap: Base64 plus JSON/JS
-// escaping creates several in-memory copies. Larger local covers fall back to the remote URI.
-private const val MAX_AMLL_ARTWORK_BYTES = 4 * 1024 * 1024
-private const val DEFAULT_AMLL_ARTWORK_BUFFER_BYTES = 16 * 1024

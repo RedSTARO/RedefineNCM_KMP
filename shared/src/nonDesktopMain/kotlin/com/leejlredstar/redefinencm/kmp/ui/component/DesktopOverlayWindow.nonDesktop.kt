@@ -3,6 +3,11 @@ package com.leejlredstar.redefinencm.kmp.ui.component
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.Dp
 
+/**
+ * Android, iOS and the browser have no window the app owns, so there is nothing to host an
+ * overlay in. Callers gate on the desktop capability before asking for one; the check keeps a
+ * missed gate loud instead of silently dropping UI.
+ */
 @Composable
 internal actual fun DesktopOverlayWindow(
     visible: Boolean,
@@ -18,5 +23,5 @@ internal actual fun DesktopOverlayWindow(
     onCloseRequest: () -> Unit,
     content: @Composable () -> Unit,
 ) {
-    check(!visible) { "DesktopOverlayWindow cannot be shown on iOS" }
+    check(!visible) { "DesktopOverlayWindow is desktop-only and cannot be shown on this target" }
 }

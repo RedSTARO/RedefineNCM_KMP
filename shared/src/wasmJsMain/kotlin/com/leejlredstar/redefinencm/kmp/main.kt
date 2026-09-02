@@ -14,7 +14,9 @@ import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.window.ComposeViewport
 import com.leejlredstar.redefinencm.kmp.di.initKoin
 import com.leejlredstar.redefinencm.kmp.ui.image.configureWebArtworkImageLoader
-import com.leejlredstar.redefinencm.kmp.ui.theme.platformFontFamily
+import com.leejlredstar.redefinencm.kmp.ui.amll.LocalAmllPlatformEventBridge
+import com.leejlredstar.redefinencm.kmp.ui.amll.WebAmllPlatformEventBridge
+import com.leejlredstar.redefinencm.kmp.ui.theme.webBundledFontFamily
 import com.leejlredstar.redefinencm.kmp.ui.theme.LocalPreloadedFontFamily
 import kotlinx.coroutines.delay
 import kotlin.JsFun
@@ -33,7 +35,7 @@ fun main() {
 
 @Composable
 private fun WebAppAfterFontPreload() {
-    val fontFamily = platformFontFamily()
+    val fontFamily = webBundledFontFamily()
     val fontFamilyResolver = LocalFontFamilyResolver.current
     var fontReady by remember { mutableStateOf(false) }
     LaunchedEffect(fontFamily, fontFamilyResolver) {
@@ -45,7 +47,12 @@ private fun WebAppAfterFontPreload() {
         showWebAppAndRemoveBootSurface()
     }
     if (fontReady) {
-        CompositionLocalProvider(LocalPreloadedFontFamily provides fontFamily) {
+        CompositionLocalProvider(
+            LocalPreloadedFontFamily provides fontFamily,
+            // Web is the only target with a DOM wheel deltaMode and page-visibility events to
+            // forward into AMLL; the shared default is a no-op modifier.
+            LocalAmllPlatformEventBridge provides WebAmllPlatformEventBridge,
+        ) {
             App()
         }
     }

@@ -54,3 +54,32 @@ internal fun LinkedHashMap<Long?, String?>.toLrcFallbackText(): String =
             "${LyricParser.formatLrcTimestamp(time ?: 0L)}$line"
         }
         .joinToString("\n")
+
+/**
+ * Ceiling for artwork inlined into the AMLL page as a `data:` URI.
+ *
+ * Kept far below the durable 16 MiB download cap: Base64 plus JSON/JS escaping creates several
+ * in-memory copies inside the embedded browser. Larger local covers fall back to the remote URI.
+ */
+internal const val MAX_AMLL_ARTWORK_BYTES: Int = 4 * 1024 * 1024
+
+/** Read-chunk size for streaming a local cover into that buffer. */
+internal const val DEFAULT_AMLL_ARTWORK_BUFFER_BYTES: Int = 16 * 1024
+
+/**
+ * Maps a cover file name to the MIME type its `data:` URI must declare, or null when no host
+ * can be relied on to decode it.
+ *
+ * HEIC/HEIF is deliberately absent: Android System WebView support varies by version and
+ * WebView2 depends on optional host codecs, so those fall back to the remote URI instead.
+ */
+internal fun amllArtworkMimeType(fileName: String): String? =
+    when (fileName.substringAfterLast('.', "").lowercase()) {
+        "jpg", "jpeg" -> "image/jpeg"
+        "png" -> "image/png"
+        "gif" -> "image/gif"
+        "webp" -> "image/webp"
+        "bmp" -> "image/bmp"
+        "avif" -> "image/avif"
+        else -> null
+    }

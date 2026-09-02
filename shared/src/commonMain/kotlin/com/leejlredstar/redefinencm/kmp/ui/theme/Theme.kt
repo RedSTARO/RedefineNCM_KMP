@@ -7,6 +7,7 @@ import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 
 /**
@@ -47,7 +48,7 @@ fun RedefineNCMTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    val fontFamily = LocalPreloadedFontFamily.current ?: platformFontFamily()
+    val fontFamily = LocalPreloadedFontFamily.current ?: FontFamily.Default
     val typography = ExpressiveTypography.withFontFamily(fontFamily)
     MaterialExpressiveTheme(
         colorScheme = if (darkTheme) DarkColors else LightColors,
