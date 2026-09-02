@@ -75,6 +75,14 @@
 -keep class javazoom.spi.mpeg.sampled.file.MpegAudioFileReader { *; }
 -keep class javazoom.spi.mpeg.sampled.convert.MpegFormatConversionProvider { *; }
 
+# JLayer reads its decoder tables through JavaLayerUtils.getResourceAsStream(), which is a
+# package-relative Class.getResourceAsStream(): renaming the package to javazoom.a.a sends the
+# lookup to javazoom/a/a/sfd.ser while the resource stays at javazoom/jl/decoder/sfd.ser.
+# The MP3 file reader and the format converter both resolve fine without this, so the release
+# build reached PLAYING and then died on the first decoded read with
+# `ExceptionInInitializerError: unable to load resource 'sfd.ser'` — audible as no sound at all.
+-keepnames class javazoom.jl.decoder.**
+
 # JavaCPP resolves generated FFmpeg wrapper classes, native method names, annotations, and
 # bundled JNI resources reflectively. Keep only the JavaCV classes used by the dynamic-cover
 # decoder while preserving the complete generated JavaCPP/FFmpeg JNI surface.

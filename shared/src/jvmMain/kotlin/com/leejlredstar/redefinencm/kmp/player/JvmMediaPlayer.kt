@@ -393,9 +393,14 @@ class JvmMediaPlayer(
             if (completedNaturally && isPlaybackCurrent(generation)) {
                 audioLine.drain()
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            // Throwable, not Exception: a decoder SPI that fails to initialise throws
+            // ExceptionInInitializerError from the first read(), which is an Error. Letting it
+            // past this handler killed the playback thread with the state flows still reading
+            // PLAYING, so the UI kept advancing its progress bar over silence instead of
+            // reporting a failure.
             if (isPlaybackCurrent(generation)) {
-                System.err.println("JvmMediaPlayer failed to open audio stream: ${e.javaClass.simpleName}: ${e.message}")
+                System.err.println("JvmMediaPlayer failed to play audio stream: ${e.javaClass.name}: ${e.message}")
                 _state.value = PlayerState.ERROR
                 _isPlaying.value = false
                 stopPollingIfCurrent(generation)
