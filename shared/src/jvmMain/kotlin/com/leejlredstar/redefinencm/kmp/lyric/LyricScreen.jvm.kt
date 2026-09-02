@@ -30,10 +30,9 @@ import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerControlle
 import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayPlacement
 import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayWindow
 import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayWindowShape
-import com.leejlredstar.redefinencm.kmp.ui.screen.FullLyricScreen
+import com.leejlredstar.redefinencm.kmp.ui.amll.NativeAmllScreen
 import com.leejlredstar.redefinencm.kmp.player.PlayerStatusRestoreState
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
-import com.leejlredstar.redefinencm.kmp.util.LyricParser
 import com.leejlredstar.redefinencm.kmp.util.isLocalArtworkSidecarFileName
 import com.leejlredstar.redefinencm.kmp.util.jvmDownloadDirectory
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
@@ -95,11 +94,6 @@ private val ControlsSheetWindowSize = DpSize(840.dp, 680.dp)
  */
 @Composable
 actual fun WebViewLyricScreen(onBack: () -> Unit) {
-    if (!desktopEmbeddedWebViewSupported()) {
-        FullLyricScreen(onBack = onBack)
-        return
-    }
-
     val viewModel: NowPlayingViewModel = koinInject()
     val rawLyric by viewModel.rawLyric.collectAsState()
     val rawWordLyric by viewModel.rawWordLyric.collectAsState()
@@ -130,7 +124,7 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val engineErrorFlow = remember { MutableStateFlow<String?>(null) }
     val engineError by engineErrorFlow.collectAsState()
     if (engineError != null) {
-        FullLyricScreen(onBack = onBack)
+        NativeAmllScreen(onBack = onBack)
         return
     }
     val lyricForWeb = remember(rawLyric, lyricMap, lyricUiState) {
@@ -281,7 +275,9 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         if (!engineReady) return@LaunchedEffect
         val mediaId = lyricMediaId ?: return@LaunchedEffect
         val position = currentPosition.coerceAtLeast(0L)
-        session.eval("AmllBridge.resetTrack('${mediaId.escapeJsSingleQuoted()}'); AmllBridge.setTime($position);")
+        session.eval(
+            "AmllBridge.resetTrack(${AmllWebBridge.quote(mediaId)}); AmllBridge.setTime($position);",
+        )
     }
 
     // Feed raw LRC once the engine is ready and whenever the track changes.
@@ -309,7 +305,8 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             return@LaunchedEffect
         }
         val contentState = lyricUiState as LyricUiState.Content
-        val lyricOptions = buildLyricOptionsJs(
+        val quotedMediaId = AmllWebBridge.quote(mediaId)
+        val lyricOptions = AmllWebBridge.lyricOptionsJson(
             translatedLyric = rawTranslatedLyric,
             romanLyric = rawRomanLyric,
             showTranslatedLyric = showTranslatedLyric,
@@ -318,12 +315,15 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         if (contentState.capabilityLevel == LyricCapabilityLevel.UNSYNCED) {
             println("AMLL[wv2] feeding untimed lyrics media=$mediaId, lines=${untimedLyricLines.size}")
             session.eval(
-                "AmllBridge.loadUntimedLyrics($untimedLyricsForWeb, '${mediaId.escapeJsSingleQuoted()}'); AmllBridge.setTime(0);",
+                "AmllBridge.loadUntimedLyrics($untimedLyricsForWeb, $quotedMediaId); " +
+                    "AmllBridge.setTime(0);",
             )
         } else if (rawTtmlLyric.isNotBlank()) {
             println("AMLL[wv2] feeding TTML media=$mediaId, len=${rawTtmlLyric.length}")
             session.eval(
-                "AmllBridge.loadTtmlLyrics('${rawTtmlLyric.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}', $lyricOptions, '${lyricForWeb.escapeJsSingleQuoted()}'); AmllBridge.setTime($currentPosition);",
+                "AmllBridge.loadTtmlLyrics(${AmllWebBridge.quote(rawTtmlLyric)}, $quotedMediaId, " +
+                    "$lyricOptions, ${AmllWebBridge.quote(lyricForWeb)}); " +
+                    "AmllBridge.setTime($currentPosition);",
             )
         } else if (
             contentState.capabilityLevel == LyricCapabilityLevel.NCM_YRC &&
@@ -331,12 +331,14 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         ) {
             println("AMLL[wv2] feeding word lyrics media=$mediaId, len=${rawWordLyric.length}")
             session.eval(
-                "AmllBridge.loadWordLyrics('${rawWordLyric.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}', $lyricOptions); AmllBridge.setTime($currentPosition);",
+                "AmllBridge.loadWordLyrics(${AmllWebBridge.quote(rawWordLyric)}, $quotedMediaId, " +
+                    "$lyricOptions); AmllBridge.setTime($currentPosition);",
             )
         } else {
             println("AMLL[wv2] feeding lyrics media=$mediaId, len=${lyricForWeb.length}")
             session.eval(
-                "AmllBridge.loadLyrics('${lyricForWeb.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}', $lyricOptions); AmllBridge.setTime($currentPosition);",
+                "AmllBridge.loadLyrics(${AmllWebBridge.quote(lyricForWeb)}, $quotedMediaId, " +
+                    "$lyricOptions); AmllBridge.setTime($currentPosition);",
             )
         }
     }
@@ -353,19 +355,17 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
     LaunchedEffect(engineReady, metadata, amllArtworkUri, dynamicCoverUrl) {
         if (!engineReady) return@LaunchedEffect
         val media = metadata ?: return@LaunchedEffect
-        val mediaId = media.id
-        val details = Json.encodeToString(
-            media.toAmllSongDetails().copy(artworkUri = amllArtworkUri),
-        ).escapeJsSingleQuoted()
+        val quotedMediaId = AmllWebBridge.quote(media.id)
+        val details = AmllWebBridge.quote(
+            Json.encodeToString(media.toAmllSongDetails().copy(artworkUri = amllArtworkUri)),
+        )
         val dynamicCoverCommand = dynamicCoverUrl
             ?.takeIf(String::isNotBlank)
-            ?.let {
-                "AmllPage.setDynamicCover('${it.escapeJsSingleQuoted()}', '${mediaId.escapeJsSingleQuoted()}');"
-            }
-            ?: "AmllPage.clearDynamicCover('${mediaId.escapeJsSingleQuoted()}');"
+            ?.let { "AmllPage.setDynamicCover(${AmllWebBridge.quote(it)}, $quotedMediaId);" }
+            ?: "AmllPage.clearDynamicCover($quotedMediaId);"
         session.eval(
             "if (globalThis.AmllPage) { " +
-                "AmllPage.setSongDetails('$details'); " +
+                "AmllPage.setSongDetails($details); " +
                 dynamicCoverCommand +
                 " }",
         )
@@ -377,25 +377,25 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         val command = when (val state = songWikiUiState) {
             SongWikiUiState.Idle -> "AmllPage.resetSongWiki();"
             is SongWikiUiState.Loading -> if (state.mediaId == currentMediaId) {
-                "AmllPage.setSongWikiLoading('${state.mediaId.escapeJsSingleQuoted()}');"
+                "AmllPage.setSongWikiLoading(${AmllWebBridge.quote(state.mediaId)});"
             } else {
                 "AmllPage.resetSongWiki();"
             }
             is SongWikiUiState.Content -> if (state.mediaId == currentMediaId) {
-                val payload = Json.encodeToString(state.summary).escapeJsSingleQuoted()
-                "AmllPage.setSongWikiSummary('$payload', '${state.mediaId.escapeJsSingleQuoted()}');"
+                val payload = AmllWebBridge.quote(Json.encodeToString(state.summary))
+                "AmllPage.setSongWikiSummary($payload, ${AmllWebBridge.quote(state.mediaId)});"
             } else {
                 "AmllPage.resetSongWiki();"
             }
             is SongWikiUiState.Empty -> if (state.mediaId == currentMediaId) {
-                "AmllPage.setSongWikiEmpty('${state.mediaId.escapeJsSingleQuoted()}');"
+                "AmllPage.setSongWikiEmpty(${AmllWebBridge.quote(state.mediaId)});"
             } else {
                 "AmllPage.resetSongWiki();"
             }
             is SongWikiUiState.Error -> if (state.mediaId == currentMediaId) {
                 "AmllPage.setSongWikiError(" +
-                    "'${state.message.escapeJsSingleQuoted()}', " +
-                    "'${state.mediaId.escapeJsSingleQuoted()}');"
+                    "${AmllWebBridge.quote(state.message)}, " +
+                    "${AmllWebBridge.quote(state.mediaId)});"
             } else {
                 "AmllPage.resetSongWiki();"
             }
@@ -1207,18 +1207,10 @@ internal fun desktopAmllLyricPayload(
     lyricUiState: LyricUiState,
 ): String =
     if (lyricUiState is LyricUiState.Content) {
-        rawLyric.takeIf(String::isNotBlank) ?: lyricMap.toLrcFallback()
+        rawLyric.takeIf(String::isNotBlank) ?: lyricMap.toLrcFallbackText()
     } else {
         ""
     }
-
-private fun LinkedHashMap<Long?, String?>.toLrcFallback(): String =
-    entries
-        .mapNotNull { (time, text) ->
-            val line = text?.takeIf(String::isNotBlank) ?: return@mapNotNull null
-            "${LyricParser.formatLrcTimestamp(time ?: 0L)}$line"
-        }
-        .joinToString("\n")
 
 internal fun desktopLocalArtworkDataUri(
     songId: Long?,
@@ -1276,31 +1268,7 @@ private fun fileUrl(file: File): String {
     return if (raw.startsWith("file://")) raw else raw.replaceFirst("file:/", "file:///")
 }
 
-private fun String.escapeJsSingleQuoted(): String =
-    replace("\\", "\\\\")
-        .replace("'", "\\'")
-        .replace("\n", "\\n")
-        .replace("\r", "\\r")
-
-private fun buildLyricOptionsJs(
-    translatedLyric: String,
-    romanLyric: String,
-    showTranslatedLyric: Boolean,
-    showRomanLyric: Boolean,
-): String =
-    "{translatedLyric:'${translatedLyric.escapeJsSingleQuoted()}'," +
-        "romanLyric:'${romanLyric.escapeJsSingleQuoted()}'," +
-        "showTranslation:$showTranslatedLyric," +
-        "showRoman:$showRomanLyric}"
-
 // Base64 and JavaScript serialization create multiple copies; larger durable covers use the
 // remote fallback instead of inflating the embedded browser process.
 private const val MAX_AMLL_ARTWORK_BYTES = 4 * 1024 * 1024
 private const val DEFAULT_AMLL_ARTWORK_BUFFER_BYTES = 16 * 1024
-
-internal fun desktopEmbeddedWebViewSupported(
-    osName: String = System.getProperty("os.name").orEmpty(),
-    osArch: String = System.getProperty("os.arch").orEmpty(),
-): Boolean =
-    osName.contains("Windows", ignoreCase = true) &&
-        (osArch.equals("amd64", ignoreCase = true) || osArch.equals("x86_64", ignoreCase = true))
