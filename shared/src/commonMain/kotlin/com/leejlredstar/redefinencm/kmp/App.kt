@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp
 
+import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ContentTransform

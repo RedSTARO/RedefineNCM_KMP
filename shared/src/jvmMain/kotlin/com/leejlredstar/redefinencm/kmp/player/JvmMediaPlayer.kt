@@ -34,27 +34,23 @@ class JvmMediaPlayer(
     private val settings: PlatformSettings,
     private val providers: MusicProviderRegistry,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
-) : PlatformPlayer {
+) : BasePlatformPlayer(settings.persistedPlayerVolume()) {
 
     // ── URL resolver with offline check ──
 
     private val resolver = StreamUrlResolver { mediaId ->
-        val itemId = mediaId.toProviderItemIdOrNull() ?: return@StreamUrlResolver null
-        // Other providers carry their own quality ladders and have no local-download support yet.
-        val id = itemId.neteaseIdOrNull
-            ?: return@StreamUrlResolver providers.streamUrlForForeignProvider(itemId)
-
-        // Check for a locally-downloaded offline file first. Skip unsupported lossless files:
-        // this backend is Java Sound + mp3spi, not a general FFmpeg-style decoder.
-        DownloadedSongsCache.ensureInitialized()
-        DownloadedSongsCache.snapshot()[id]?.uri?.takeIf(::isJvmPlayableAudioUri)?.let { uri ->
-            return@StreamUrlResolver uri
-        }
-
-        // Fall through to online CDN resolution.
-        val qualityName = settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.EXHIGH.name)
-        val quality = runCatching { SoundQuality.valueOf(qualityName) }.getOrDefault(SoundQuality.EXHIGH)
-        repo.getSongUrl(id, jvmPlaybackQualityLevel(quality))
+        resolveStreamUrl(
+            mediaId = mediaId,
+            providers = providers,
+            localAudioUri = { id ->
+                // Skip unsupported lossless files: this backend is Java Sound + mp3spi, not a
+                // general FFmpeg-style decoder.
+                DownloadedSongsCache.ensureInitialized()
+                DownloadedSongsCache.snapshot()[id]?.uri?.takeIf(::isJvmPlayableAudioUri)
+            },
+            onlineUrl = { id, quality -> repo.getSongUrl(id, jvmPlaybackQualityLevel(quality)) },
+            quality = { settings.onlinePlaybackQuality() },
+        )
     }
 
     // ── Queue state ──
@@ -64,41 +60,6 @@ class JvmMediaPlayer(
     // an old snapshot after mutation B has already published a newer one.
     private val queueOperationLock = Any()
     private val queueState = JvmQueueState<MediaInfo>()
-
-    private val _state = MutableStateFlow(PlayerState.IDLE)
-    override val state: StateFlow<PlayerState> = _state.asStateFlow()
-
-    private val _position = MutableStateFlow(0L)
-    override val position: StateFlow<Long> = _position.asStateFlow()
-
-    private val _isPlaying = MutableStateFlow(false)
-    override val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
-
-    private val _duration = MutableStateFlow(-1L)
-    override val duration: StateFlow<Long> = _duration.asStateFlow()
-
-    private val _currentMedia = MutableStateFlow<MediaInfo?>(null)
-    override val currentMedia: StateFlow<MediaInfo?> = _currentMedia.asStateFlow()
-
-    private val _playbackOccurrence = MutableStateFlow(0L)
-    override val playbackOccurrence: StateFlow<Long> = _playbackOccurrence.asStateFlow()
-
-    private val _queue = MutableStateFlow<List<MediaInfo>>(emptyList())
-    override val queue: StateFlow<List<MediaInfo>> = _queue.asStateFlow()
-
-    private val _currentIndex = MutableStateFlow(-1)
-    override val currentIndex: StateFlow<Int> = _currentIndex.asStateFlow()
-
-    private val _shuffleEnabled = MutableStateFlow(false)
-    override val shuffleEnabled: StateFlow<Boolean> = _shuffleEnabled.asStateFlow()
-
-    private val _queueSnapshot = MutableStateFlow(PlayerQueueSnapshot())
-    override val queueSnapshot: StateFlow<PlayerQueueSnapshot> = _queueSnapshot.asStateFlow()
-
-    private val _volume = MutableStateFlow(
-        playerVolumeFromPercent(settings.getLong(SettingKeys.PLAYER_VOLUME, DEFAULT_PLAYER_VOLUME_PERCENT))
-    )
-    override val volume: StateFlow<Float> = _volume.asStateFlow()
 
     // ── Audio playback state ──
 
@@ -122,17 +83,15 @@ class JvmMediaPlayer(
 
     private fun publishQueueLocked(snapshot: PlayQueue<MediaInfo>) {
         val publication = snapshot.asJvmQueuePublication()
-        _queueSnapshot.value = PlayerQueueSnapshot(
-            items = publication.items,
-            currentIndex = publication.currentIndex,
-            currentMedia = publication.currentMedia,
-            shuffleEnabled = publication.shuffleEnabled,
+        publishQueueSnapshot(
+            PlayerQueueSnapshot(
+                items = publication.items,
+                currentIndex = publication.currentIndex,
+                currentMedia = publication.currentMedia,
+                shuffleEnabled = publication.shuffleEnabled,
+            ),
         )
-        _queue.value = publication.items
-        _currentIndex.value = publication.currentIndex
-        _currentMedia.value = publication.currentMedia
-        _shuffleEnabled.value = publication.shuffleEnabled
-        _duration.value = publication.currentMedia?.duration?.takeIf { it > 0 } ?: -1L
+        publishDurationFromMedia(publication.currentMedia)
     }
 
     private fun mutateQueue(
@@ -695,15 +654,10 @@ class JvmMediaPlayer(
     }
 
     override fun setVolume(volume: Float) {
-        val safeVolume = normalizePlayerVolume(volume)
-        val oldPercent = playerVolumeToPercent(_volume.value)
-        val newPercent = playerVolumeToPercent(safeVolume)
-        _volume.value = safeVolume
-        synchronized(playbackLock) {
-            applyVolumeToLine(line, safeVolume)
-        }
-        if (newPercent != oldPercent) {
-            settings.setLong(SettingKeys.PLAYER_VOLUME, newPercent)
+        applyVolume(volume, settings) { safeVolume ->
+            synchronized(playbackLock) {
+                applyVolumeToLine(line, safeVolume)
+            }
         }
     }
 

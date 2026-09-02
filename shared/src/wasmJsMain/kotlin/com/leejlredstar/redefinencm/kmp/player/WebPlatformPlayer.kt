@@ -45,61 +45,21 @@ class WebPlatformPlayer(
     private val localMediaAssets: LocalMediaAssets,
     private val providers: MusicProviderRegistry,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
-) : PlatformPlayer {
+) : BasePlatformPlayer(settings.persistedPlayerVolume()) {
 
     private val audio = document.createElement("audio") as HTMLAudioElement
     private val resolver = StreamUrlResolver { mediaId ->
-        val itemId = mediaId.toProviderItemIdOrNull() ?: return@StreamUrlResolver null
-        // Other providers carry their own quality ladders and have no local-download support yet.
-        val id = itemId.neteaseIdOrNull
-            ?: return@StreamUrlResolver providers.streamUrlForForeignProvider(itemId)
-        val qualityName = settings.getString(
-            SettingKeys.ONLINE_PLAY_QUALITY,
-            SoundQuality.EXHIGH.name,
+        resolveStreamUrl(
+            mediaId = mediaId,
+            providers = providers,
+            // The browser has no local download store to prefer.
+            localAudioUri = { null },
+            onlineUrl = { id, quality -> repo.getSongUrl(id, quality.name.lowercase()) },
+            quality = { settings.onlinePlaybackQuality() },
         )
-        val quality = runCatching { SoundQuality.valueOf(qualityName) }
-            .getOrDefault(SoundQuality.EXHIGH)
-        repo.getSongUrl(id, quality.name.lowercase())
     }
 
     private var queueModel: PlayQueue<MediaInfo> = PlayQueue.empty()
-
-    private val _state = MutableStateFlow(PlayerState.IDLE)
-    override val state: StateFlow<PlayerState> = _state.asStateFlow()
-
-    private val _position = MutableStateFlow(0L)
-    override val position: StateFlow<Long> = _position.asStateFlow()
-
-    private val _isPlaying = MutableStateFlow(false)
-    override val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
-
-    private val _duration = MutableStateFlow(-1L)
-    override val duration: StateFlow<Long> = _duration.asStateFlow()
-
-    private val _currentMedia = MutableStateFlow<MediaInfo?>(null)
-    override val currentMedia: StateFlow<MediaInfo?> = _currentMedia.asStateFlow()
-
-    private val _playbackOccurrence = MutableStateFlow(0L)
-    override val playbackOccurrence: StateFlow<Long> = _playbackOccurrence.asStateFlow()
-
-    private val _queue = MutableStateFlow<List<MediaInfo>>(emptyList())
-    override val queue: StateFlow<List<MediaInfo>> = _queue.asStateFlow()
-
-    private val _currentIndex = MutableStateFlow(-1)
-    override val currentIndex: StateFlow<Int> = _currentIndex.asStateFlow()
-
-    private val _shuffleEnabled = MutableStateFlow(false)
-    override val shuffleEnabled: StateFlow<Boolean> = _shuffleEnabled.asStateFlow()
-
-    private val _queueSnapshot = MutableStateFlow(PlayerQueueSnapshot())
-    override val queueSnapshot: StateFlow<PlayerQueueSnapshot> = _queueSnapshot.asStateFlow()
-
-    private val _volume = MutableStateFlow(
-        playerVolumeFromPercent(
-            settings.getLong(SettingKeys.PLAYER_VOLUME, DEFAULT_PLAYER_VOLUME_PERCENT),
-        ),
-    )
-    override val volume: StateFlow<Float> = _volume.asStateFlow()
 
     private var resolveJob: Job? = null
     private var positionJob: Job? = null
@@ -226,12 +186,8 @@ class WebPlatformPlayer(
             currentMedia = queueModel.currentItem,
             shuffleEnabled = queueModel.shuffleEnabled,
         )
-        _queueSnapshot.value = snapshot
-        _queue.value = snapshot.items
-        _currentIndex.value = snapshot.currentIndex
-        _currentMedia.value = snapshot.currentMedia
-        _shuffleEnabled.value = snapshot.shuffleEnabled
-        _duration.value = snapshot.currentMedia?.duration?.takeIf { it > 0L } ?: -1L
+        publishQueueSnapshot(snapshot)
+        publishDurationFromMedia(snapshot.currentMedia)
         lastMediaSessionPositionSecond = -1L
         if (snapshot.currentMedia == null) {
             clearWebMediaSession()
@@ -592,14 +548,7 @@ class WebPlatformPlayer(
 
     override fun setVolume(volume: Float) {
         if (released) return
-        val safeVolume = normalizePlayerVolume(volume)
-        val oldPercent = playerVolumeToPercent(_volume.value)
-        val newPercent = playerVolumeToPercent(safeVolume)
-        _volume.value = safeVolume
-        audio.volume = safeVolume.toDouble()
-        if (oldPercent != newPercent) {
-            settings.setLong(SettingKeys.PLAYER_VOLUME, newPercent)
-        }
+        applyVolume(volume, settings) { audio.volume = it.toDouble() }
     }
 
     private fun handleNaturalEnd() {

@@ -33,7 +33,7 @@ import org.koin.mp.Lockable
 class InMemoryPlatformPlayer(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     private val tickerIntervalMs: Long = 1_000L,
-) : PlatformPlayer {
+) : BasePlatformPlayer() {
 
     init {
         require(tickerIntervalMs > 0L) { "tickerIntervalMs must be positive" }
@@ -41,39 +41,6 @@ class InMemoryPlatformPlayer(
 
     private val stateLock = Lockable()
     private var queueModel: PlayQueue<MediaInfo> = PlayQueue.empty()
-
-    private val _state = MutableStateFlow(PlayerState.IDLE)
-    override val state: StateFlow<PlayerState> = _state.asStateFlow()
-
-    private val _position = MutableStateFlow(0L)
-    override val position: StateFlow<Long> = _position.asStateFlow()
-
-    private val _isPlaying = MutableStateFlow(false)
-    override val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
-
-    private val _duration = MutableStateFlow(-1L)
-    override val duration: StateFlow<Long> = _duration.asStateFlow()
-
-    private val _currentMedia = MutableStateFlow<MediaInfo?>(null)
-    override val currentMedia: StateFlow<MediaInfo?> = _currentMedia.asStateFlow()
-
-    private val _playbackOccurrence = MutableStateFlow(0L)
-    override val playbackOccurrence: StateFlow<Long> = _playbackOccurrence.asStateFlow()
-
-    private val _queue = MutableStateFlow<List<MediaInfo>>(emptyList())
-    override val queue: StateFlow<List<MediaInfo>> = _queue.asStateFlow()
-
-    private val _currentIndex = MutableStateFlow(-1)
-    override val currentIndex: StateFlow<Int> = _currentIndex.asStateFlow()
-
-    private val _shuffleEnabled = MutableStateFlow(false)
-    override val shuffleEnabled: StateFlow<Boolean> = _shuffleEnabled.asStateFlow()
-
-    private val _queueSnapshot = MutableStateFlow(PlayerQueueSnapshot())
-    override val queueSnapshot: StateFlow<PlayerQueueSnapshot> = _queueSnapshot.asStateFlow()
-
-    private val _volume = MutableStateFlow(1f)
-    override val volume: StateFlow<Float> = _volume.asStateFlow()
 
     private var ticker: Job? = null
 
@@ -86,12 +53,8 @@ class InMemoryPlatformPlayer(
             currentMedia = model.currentItem,
             shuffleEnabled = model.shuffleEnabled,
         )
-        _queueSnapshot.value = snapshot
-        _queue.value = snapshot.items
-        _currentIndex.value = snapshot.currentIndex
-        _currentMedia.value = snapshot.currentMedia
-        _shuffleEnabled.value = snapshot.shuffleEnabled
-        _duration.value = snapshot.currentMedia?.duration?.takeIf { it > 0 } ?: -1L
+        publishQueueSnapshot(snapshot)
+        publishDurationFromMedia(snapshot.currentMedia)
     }
 
     override fun play() {

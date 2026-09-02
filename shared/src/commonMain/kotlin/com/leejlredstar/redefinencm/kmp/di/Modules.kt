@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.di
 
+import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.AmlldbApi
 import com.leejlredstar.redefinencm.kmp.data.api.ExternalHttpClient

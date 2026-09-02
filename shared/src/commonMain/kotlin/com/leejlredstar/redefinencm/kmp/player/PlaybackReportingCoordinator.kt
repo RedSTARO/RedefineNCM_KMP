@@ -1,5 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.player
 
+import com.leejlredstar.redefinencm.kmp.util.getStringAsync
+import com.leejlredstar.redefinencm.kmp.util.getLongAsync
 import com.leejlredstar.redefinencm.kmp.data.PlaybackAccountComparison
 import com.leejlredstar.redefinencm.kmp.data.PlaybackAccountSnapshot
 import com.leejlredstar.redefinencm.kmp.data.PlaybackReportEndpoint

@@ -1,5 +1,7 @@
 ﻿package com.leejlredstar.redefinencm.kmp.viewmodel
 
+import com.leejlredstar.redefinencm.kmp.util.getStringAsync
+import com.leejlredstar.redefinencm.kmp.util.getBooleanAsync
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.SongWikiSummary
 import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusic

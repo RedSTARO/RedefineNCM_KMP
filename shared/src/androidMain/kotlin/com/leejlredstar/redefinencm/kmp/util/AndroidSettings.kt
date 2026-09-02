@@ -128,12 +128,6 @@ actual class PlatformSettings(private val context: Context) {
         return cache[key] as? String ?: default
     }
 
-    actual suspend fun getStringAsync(key: String, default: String): String {
-        (cache[key] as? String)?.let { return it }
-        val value = initialPreferences.await().getOrThrow()[stringPreferencesKey(key)] ?: default
-        return cache.putIfAbsent(key, value) as? String ?: value
-    }
-
     actual fun setString(key: String, value: String) {
         persist(key, value) {
             it[stringPreferencesKey(key)] = value
@@ -144,12 +138,6 @@ actual class PlatformSettings(private val context: Context) {
         return cache[key] as? Boolean ?: default
     }
 
-    actual suspend fun getBooleanAsync(key: String, default: Boolean): Boolean {
-        (cache[key] as? Boolean)?.let { return it }
-        val value = initialPreferences.await().getOrThrow()[booleanPreferencesKey(key)] ?: default
-        return cache.putIfAbsent(key, value) as? Boolean ?: value
-    }
-
     actual fun setBoolean(key: String, value: Boolean) {
         persist(key, value) {
             it[booleanPreferencesKey(key)] = value
@@ -158,12 +146,6 @@ actual class PlatformSettings(private val context: Context) {
 
     actual fun getLong(key: String, default: Long): Long {
         return cache[key] as? Long ?: default
-    }
-
-    actual suspend fun getLongAsync(key: String, default: Long): Long {
-        (cache[key] as? Long)?.let { return it }
-        val value = initialPreferences.await().getOrThrow()[longPreferencesKey(key)] ?: default
-        return cache.putIfAbsent(key, value) as? Long ?: value
     }
 
     actual fun setLong(key: String, value: Long) {

@@ -1,5 +1,8 @@
 package com.leejlredstar.redefinencm.kmp.viewmodel
 
+import com.leejlredstar.redefinencm.kmp.util.getStringAsync
+import com.leejlredstar.redefinencm.kmp.util.getBooleanAsync
+import com.leejlredstar.redefinencm.kmp.util.getLongAsync
 import com.leejlredstar.redefinencm.kmp.data.PersistedMediaItem
 import com.leejlredstar.redefinencm.kmp.data.PlayerStatus
 import com.leejlredstar.redefinencm.kmp.data.Repository

@@ -60,6 +60,17 @@ enum class SoundQuality(val displayName: String) {
     override fun toString(): String = displayName
 }
 
+/**
+ * A platform's persisted key-value store.
+ *
+ * Each target keeps its own storage format — DataStore stores typed preferences, NSUserDefaults
+ * stores native booleans, `java.util.prefs` and `localStorage` store strings — so the typed
+ * accessors stay in the expect surface rather than being derived from one raw string getter.
+ * Rewriting them onto a common raw format would strand every existing install's saved values.
+ *
+ * The suspending reads are not part of that surface: on every platform they mean "wait for the
+ * process snapshot, then read it", which [getStringAsync] and friends express once below.
+ */
 expect class PlatformSettings {
     /** Wait until the platform's persisted settings have been loaded into its process snapshot. */
     suspend fun awaitLoaded()
@@ -68,14 +79,33 @@ expect class PlatformSettings {
     suspend fun flush()
 
     fun getString(key: String, default: String): String
-    suspend fun getStringAsync(key: String, default: String): String
     fun setString(key: String, value: String)
 
     fun getBoolean(key: String, default: Boolean): Boolean
-    suspend fun getBooleanAsync(key: String, default: Boolean): Boolean
     fun setBoolean(key: String, value: Boolean)
 
     fun getLong(key: String, default: Long): Long
-    suspend fun getLongAsync(key: String, default: Long): Long
     fun setLong(key: String, value: Long)
+}
+
+/**
+ * Reads that wait for the persisted snapshot first.
+ *
+ * Callers that must see the durable value before continuing use these; the synchronous getters
+ * are snapshot-only and would return the default before the first load completes. Every platform
+ * implemented the same await-then-read three times over, once per value type.
+ */
+suspend fun PlatformSettings.getStringAsync(key: String, default: String): String {
+    awaitLoaded()
+    return getString(key, default)
+}
+
+suspend fun PlatformSettings.getBooleanAsync(key: String, default: Boolean): Boolean {
+    awaitLoaded()
+    return getBoolean(key, default)
+}
+
+suspend fun PlatformSettings.getLongAsync(key: String, default: Long): Long {
+    awaitLoaded()
+    return getLong(key, default)
 }

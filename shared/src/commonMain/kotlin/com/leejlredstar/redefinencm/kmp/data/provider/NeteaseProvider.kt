@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.data.provider
 
+import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongAlbum
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongArtist

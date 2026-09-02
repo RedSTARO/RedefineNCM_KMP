@@ -1,8 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.util
 
 import platform.Foundation.NSUserDefaults
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 actual class PlatformSettings {
     private val defaults = NSUserDefaults.standardUserDefaults
@@ -13,12 +11,6 @@ actual class PlatformSettings {
 
     actual fun getString(key: String, default: String): String {
         return defaults.stringForKey(key) ?: default
-    }
-
-    actual suspend fun getStringAsync(key: String, default: String): String {
-        return withContext(Dispatchers.Main) {
-            defaults.stringForKey(key) ?: default
-        }
     }
 
     actual fun setString(key: String, value: String) {
@@ -33,10 +25,6 @@ actual class PlatformSettings {
         }
     }
 
-    actual suspend fun getBooleanAsync(key: String, default: Boolean): Boolean {
-        return withContext(Dispatchers.Main) { getBoolean(key, default) }
-    }
-
     actual fun setBoolean(key: String, value: Boolean) {
         persist(key) { defaults.setBool(value, forKey = key) }
     }
@@ -47,10 +35,6 @@ actual class PlatformSettings {
         } else {
             default
         }
-    }
-
-    actual suspend fun getLongAsync(key: String, default: Long): Long {
-        return withContext(Dispatchers.Main) { getLong(key, default) }
     }
 
     actual fun setLong(key: String, value: Long) {

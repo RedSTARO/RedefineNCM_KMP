@@ -1,5 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.data.provider
 
+import com.leejlredstar.redefinencm.kmp.util.getStringAsync
+import com.leejlredstar.redefinencm.kmp.util.getBooleanAsync
 import com.leejlredstar.redefinencm.kmp.data.api.QQMusicApi
 import com.leejlredstar.redefinencm.kmp.data.api.QQPlaylistSong
 import com.leejlredstar.redefinencm.kmp.data.api.QQSearchSong

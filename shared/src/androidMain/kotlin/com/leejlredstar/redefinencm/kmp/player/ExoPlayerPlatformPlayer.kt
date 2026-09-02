@@ -48,26 +48,20 @@ class ExoPlayerPlatformPlayer(
     private val settings: PlatformSettings,
     private val localMediaAssets: LocalMediaAssets,
     private val providers: MusicProviderRegistry,
-) : PlatformPlayer {
+) : BasePlatformPlayer(settings.persistedPlayerVolume()) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private val resolver = StreamUrlResolver { mediaId ->
-        val itemId = mediaId.toProviderItemIdOrNull() ?: return@StreamUrlResolver null
-        // Other providers carry their own quality ladders and have no local-download support yet.
-        val id = itemId.neteaseIdOrNull
-            ?: return@StreamUrlResolver providers.streamUrlForForeignProvider(itemId)
-
-        // Check for a locally-downloaded offline file first.
-        findDownloadedSongUri(id)?.let { localAudioUri ->
-            publishLocalMediaSessionArtwork(mediaId)
-            return@StreamUrlResolver localAudioUri
-        }
-
-        // Fall through to online CDN resolution.
-        val qualityName = settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.EXHIGH.name)
-        val quality = runCatching { SoundQuality.valueOf(qualityName) }.getOrDefault(SoundQuality.EXHIGH)
-        repo.getSongUrl(id, quality.name.lowercase())
+        resolveStreamUrl(
+            mediaId = mediaId,
+            providers = providers,
+            localAudioUri = { id ->
+                findDownloadedSongUri(id)?.also { publishLocalMediaSessionArtwork(mediaId) }
+            },
+            onlineUrl = { id, quality -> repo.getSongUrl(id, quality.name.lowercase()) },
+            quality = { settings.onlinePlaybackQuality() },
+        )
     }
 
     /** Exposed so PlaybackService can wrap it in a MediaSession. Do not release externally. */
@@ -78,41 +72,6 @@ class ExoPlayerPlatformPlayer(
             )
         )
         .build()
-
-    private val _state = MutableStateFlow(PlayerState.IDLE)
-    override val state: StateFlow<PlayerState> = _state
-
-    private val _position = MutableStateFlow(0L)
-    override val position: StateFlow<Long> = _position
-
-    private val _isPlaying = MutableStateFlow(false)
-    override val isPlaying: StateFlow<Boolean> = _isPlaying
-
-    private val _duration = MutableStateFlow(-1L)
-    override val duration: StateFlow<Long> = _duration
-
-    private val _currentMedia = MutableStateFlow<MediaInfo?>(null)
-    override val currentMedia: StateFlow<MediaInfo?> = _currentMedia
-
-    private val _playbackOccurrence = MutableStateFlow(0L)
-    override val playbackOccurrence: StateFlow<Long> = _playbackOccurrence
-
-    private val _queue = MutableStateFlow<List<MediaInfo>>(emptyList())
-    override val queue: StateFlow<List<MediaInfo>> = _queue
-
-    private val _currentIndex = MutableStateFlow(-1)
-    override val currentIndex: StateFlow<Int> = _currentIndex
-
-    private val _shuffleEnabled = MutableStateFlow(false)
-    override val shuffleEnabled: StateFlow<Boolean> = _shuffleEnabled
-
-    private val _queueSnapshot = MutableStateFlow(PlayerQueueSnapshot())
-    override val queueSnapshot: StateFlow<PlayerQueueSnapshot> = _queueSnapshot
-
-    private val _volume = MutableStateFlow(
-        playerVolumeFromPercent(settings.getLong(SettingKeys.PLAYER_VOLUME, DEFAULT_PLAYER_VOLUME_PERCENT))
-    )
-    override val volume: StateFlow<Float> = _volume
 
     private var positionJob: Job? = null
 
@@ -237,14 +196,6 @@ class ExoPlayerPlatformPlayer(
         publishCurrentPositionAndDuration()
     }
 
-    private fun publishQueueSnapshot(snapshot: PlayerQueueSnapshot) {
-        _queueSnapshot.value = snapshot
-        _queue.value = snapshot.items
-        _currentIndex.value = snapshot.currentIndex
-        _currentMedia.value = snapshot.currentMedia
-        _shuffleEnabled.value = snapshot.shuffleEnabled
-    }
-
     private fun publishCurrentPositionAndDuration() {
         _position.value = exoPlayer.currentPosition.coerceAtLeast(0L)
         val duration = exoPlayer.duration
@@ -296,14 +247,7 @@ class ExoPlayerPlatformPlayer(
     override fun setShuffleEnabled(enabled: Boolean) { exoPlayer.shuffleModeEnabled = enabled }
 
     override fun setVolume(volume: Float) {
-        val safeVolume = normalizePlayerVolume(volume)
-        val oldPercent = playerVolumeToPercent(_volume.value)
-        val newPercent = playerVolumeToPercent(safeVolume)
-        _volume.value = safeVolume
-        exoPlayer.volume = safeVolume
-        if (newPercent != oldPercent) {
-            settings.setLong(SettingKeys.PLAYER_VOLUME, newPercent)
-        }
+        applyVolume(volume, settings) { exoPlayer.volume = it }
     }
 
     override fun setQueue(items: List<MediaInfo>, startIndex: Int) {

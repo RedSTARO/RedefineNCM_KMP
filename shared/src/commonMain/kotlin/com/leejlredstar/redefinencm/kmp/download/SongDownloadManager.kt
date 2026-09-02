@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.download
 
+import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
 import com.leejlredstar.redefinencm.kmp.lyric.LyricQuery

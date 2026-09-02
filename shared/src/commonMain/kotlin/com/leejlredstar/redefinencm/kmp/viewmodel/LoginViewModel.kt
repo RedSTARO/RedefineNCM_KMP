@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.viewmodel
 
+import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.data.api.safeApiCall
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
