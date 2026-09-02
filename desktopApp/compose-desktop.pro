@@ -36,6 +36,16 @@
     public <init>(com.sun.jna.Pointer);
 }
 
+# JNA builds every NativeMapped return and parameter type reflectively through
+# NativeMappedConverter, which requires the public no-arg constructor. The rule above matches
+# only the com.sun.jna root package, so the Win32 handle types (WinDef$HRGN, WinDef$HWND, and
+# the rest of PointerType's subclasses) lost theirs. The Legacy AMLL overlay windows then died
+# on the EDT inside CreateRoundRectRgn with
+# `Can't create an instance of class com.sun.jna.platform.win32.WinDef$HRGN`.
+-keepclassmembers class * implements com.sun.jna.NativeMapped {
+    public <init>();
+}
+
 # dbus-java discovers exported interfaces, methods, signals, and struct fields reflectively.
 -keep @org.freedesktop.dbus.annotations.DBusInterfaceName interface * { *; }
 -keepclassmembers class * implements org.freedesktop.dbus.interfaces.DBusInterface { public <methods>; }
