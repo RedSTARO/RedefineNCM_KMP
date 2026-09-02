@@ -73,40 +73,32 @@ import platform.darwin.NSObject
 @Composable
 actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val viewModel: NowPlayingViewModel = koinInject()
-    val rawLyric by viewModel.rawLyric.collectAsState()
-    val rawWordLyric by viewModel.rawWordLyric.collectAsState()
-    val rawTtmlLyric by viewModel.rawTtmlLyric.collectAsState()
-    val rawTranslatedLyric by viewModel.rawTranslatedLyric.collectAsState()
-    val rawRomanLyric by viewModel.rawRomanLyric.collectAsState()
-    val lyricMap by viewModel.lyricMap.collectAsState()
-    val untimedLyricLines by viewModel.untimedLyricLines.collectAsState()
-    val lyricUiState by viewModel.lyricUiState.collectAsState()
-    val lyricMediaId by viewModel.lyricMediaId.collectAsState()
-    val currentPosition by viewModel.currentPosition.collectAsState()
-    val metadata by viewModel.currentMedia.collectAsState()
-    val playerStatusRestoreState by viewModel.playerStatusRestoreState.collectAsState()
-    val localArtworkActive by viewModel.localArtworkActive.collectAsState()
-    val remoteArtworkUri by viewModel.remoteArtworkUri.collectAsState()
-    val dynamicCoverUiState by viewModel.dynamicCoverUiState.collectAsState()
-    val dynamicCoverUrl = dynamicCoverUiState.urlFor(metadata?.id)
-    val songWikiUiState by viewModel.songWikiUiState.collectAsState()
-    val showTranslatedLyric by viewModel.showTranslatedLyric.collectAsState()
-    val showRomanLyric by viewModel.showRomanLyric.collectAsState()
+    val amll = rememberAmllHostState(viewModel)
+    val rawTtmlLyric = amll.rawTtmlLyric
+    val rawWordLyric = amll.rawWordLyric
+    val rawTranslatedLyric = amll.rawTranslatedLyric
+    val rawRomanLyric = amll.rawRomanLyric
+    val lyricUiState = amll.lyricUiState
+    val lyricMediaId = amll.lyricMediaId
+    val currentPosition = amll.currentPosition
+    val metadata = amll.metadata
+    val playerStatusRestoreState = amll.playerStatusRestoreState
+    val untimedLyricLines = amll.untimedLyricLines
+    val localArtworkActive = amll.localArtworkActive
+    val remoteArtworkUri = amll.remoteArtworkUri
+    val dynamicCoverUrl = amll.dynamicCoverUrl
+    val songWikiUiState = amll.songWikiUiState
+    val showTranslatedLyric = amll.showTranslatedLyric
+    val showRomanLyric = amll.showRomanLyric
+    val lyricForWeb = amll.lyricForWeb
+    val untimedLyricsForWeb = amll.untimedLyricsForWeb
+    val isUntimedContent = amll.isUntimedContent
 
     var engineReady by remember { mutableStateOf(false) }
     var showSongWikiDetails by remember { mutableStateOf(false) }
     var localAmllArtwork by remember { mutableStateOf<Pair<String, String>?>(null) }
 
-    val amllArtworkUri = metadata?.let { media ->
-        if (!localArtworkActive) {
-            media.artworkUri
-        } else {
-            localAmllArtwork
-                ?.takeIf { (mediaId, _) -> mediaId == media.id }
-                ?.second
-                ?: remoteArtworkUri
-        }
-    }.orEmpty()
+    val amllArtworkUri = amll.artworkUriFor(localAmllArtwork)
 
     LaunchedEffect(metadata?.id, metadata?.artworkUri, localArtworkActive, remoteArtworkUri) {
         val media = metadata
@@ -125,19 +117,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             localAmllArtwork = media.id to (dataUri ?: remoteArtworkUri)
         }
     }
-
-    val lyricForWeb = remember(rawLyric, lyricMap, lyricUiState) {
-        if (lyricUiState is LyricUiState.Content) {
-            rawLyric.takeIf { it.isNotBlank() } ?: lyricMap.toLrcFallbackText()
-        } else {
-            ""
-        }
-    }
-    val untimedLyricsForWeb = remember(untimedLyricLines) {
-        Json.encodeToString(untimedLyricLines)
-    }
-    val isUntimedContent =
-        (lyricUiState as? LyricUiState.Content)?.capabilityLevel == LyricCapabilityLevel.UNSYNCED
 
     val currentOnLineClicked = rememberUpdatedState<(Long, String?) -> Unit> { timeMs, mediaId ->
         viewModel.onLyricLineClick(mediaId, timeMs)
@@ -192,24 +171,10 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         if (!engineReady) return@LaunchedEffect
         if (lyricUiState !is LyricUiState.Content) {
             webView.runJs("AmllBridge.loadLyrics('');")
-            when (val state = lyricUiState) {
-                is LyricUiState.Idle -> webView.showAmllStatus(
-                    when {
-                        metadata != null -> "正在恢复歌词…"
-                        playerStatusRestoreState is PlayerStatusRestoreState.Loading -> "正在恢复播放…"
-                        else -> "等待播放…"
-                    },
-                )
-                is LyricUiState.Loading -> webView.showAmllStatus("正在加载歌词…")
-                is LyricUiState.Empty -> webView.showAmllStatus(
-                    if (state.capabilityLevel == LyricCapabilityLevel.UNSYNCED) {
-                        "歌词无时间戳"
-                    } else {
-                        "暂无歌词"
-                    },
-                )
-                is LyricUiState.Error -> webView.showAmllError(state.message)
-                is LyricUiState.Content -> Unit
+            when (val placeholder = amll.placeholder()) {
+                is AmllHostPlaceholder.Status -> webView.showAmllStatus(placeholder.message)
+                is AmllHostPlaceholder.Error -> webView.showAmllError(placeholder.message)
+                null -> Unit
             }
             return@LaunchedEffect
         }
@@ -453,13 +418,13 @@ private fun WKWebView.showAmllError(message: String) {
     runJs("if (globalThis.AmllPage) { AmllPage.showError(${AmllWebBridge.quote(message)}); }")
 }
 
-/** Mirrors the Android host's 4 MiB inline-artwork ceiling. */
-private const val MAX_AMLL_ARTWORK_BYTES = 4 * 1024 * 1024
-
 private fun artworkDataUri(fileUri: String): String? {
     val url = NSURL.URLWithString(fileUri) ?: return null
+    // A PNG or WebP sidecar announced as image/jpeg is a decode failure in WKWebView, not a
+    // fallback, so the declared type has to follow the actual file.
+    val mimeType = amllArtworkMimeType(url.lastPathComponent.orEmpty()) ?: return null
     val data = NSData.dataWithContentsOfURL(url) ?: return null
     if (data.length.toLong() > MAX_AMLL_ARTWORK_BYTES) return null
     val base64 = data.base64EncodedStringWithOptions(0uL)
-    return "data:image/jpeg;base64,$base64"
+    return "data:$mimeType;base64,$base64"
 }

@@ -99,41 +99,33 @@ import java.io.File
 @Composable
 actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val viewModel: NowPlayingViewModel = koinInject()
-    val rawLyric by viewModel.rawLyric.collectAsState()
-    val rawWordLyric by viewModel.rawWordLyric.collectAsState()
-    val rawTtmlLyric by viewModel.rawTtmlLyric.collectAsState()
-    val rawTranslatedLyric by viewModel.rawTranslatedLyric.collectAsState()
-    val rawRomanLyric by viewModel.rawRomanLyric.collectAsState()
-    val lyricMap by viewModel.lyricMap.collectAsState()
-    val untimedLyricLines by viewModel.untimedLyricLines.collectAsState()
-    val lyricUiState by viewModel.lyricUiState.collectAsState()
-    val lyricMediaId by viewModel.lyricMediaId.collectAsState()
-    val currentPosition by viewModel.currentPosition.collectAsState()
-    val metadata by viewModel.currentMedia.collectAsState()
-    val playerStatusRestoreState by viewModel.playerStatusRestoreState.collectAsState()
-    val localArtworkActive by viewModel.localArtworkActive.collectAsState()
-    val remoteArtworkUri by viewModel.remoteArtworkUri.collectAsState()
-    val dynamicCoverUiState by viewModel.dynamicCoverUiState.collectAsState()
-    val dynamicCoverUrl = dynamicCoverUiState.urlFor(metadata?.id)
-    val songWikiUiState by viewModel.songWikiUiState.collectAsState()
-    val showTranslatedLyric by viewModel.showTranslatedLyric.collectAsState()
-    val showRomanLyric by viewModel.showRomanLyric.collectAsState()
+    val amll = rememberAmllHostState(viewModel)
+    val rawTtmlLyric = amll.rawTtmlLyric
+    val rawWordLyric = amll.rawWordLyric
+    val rawTranslatedLyric = amll.rawTranslatedLyric
+    val rawRomanLyric = amll.rawRomanLyric
+    val lyricUiState = amll.lyricUiState
+    val lyricMediaId = amll.lyricMediaId
+    val currentPosition = amll.currentPosition
+    val metadata = amll.metadata
+    val playerStatusRestoreState = amll.playerStatusRestoreState
+    val untimedLyricLines = amll.untimedLyricLines
+    val localArtworkActive = amll.localArtworkActive
+    val remoteArtworkUri = amll.remoteArtworkUri
+    val dynamicCoverUrl = amll.dynamicCoverUrl
+    val songWikiUiState = amll.songWikiUiState
+    val showTranslatedLyric = amll.showTranslatedLyric
+    val showRomanLyric = amll.showRomanLyric
+    val lyricForWeb = amll.lyricForWeb
+    val untimedLyricsForWeb = amll.untimedLyricsForWeb
+    val isUntimedContent = amll.isUntimedContent
 
     val context = LocalContext.current
     var engineReady by remember { mutableStateOf(false) }
     var rendererGeneration by remember { mutableIntStateOf(0) }
     var showSongWikiDetails by remember { mutableStateOf(false) }
     var localAmllArtwork by remember { mutableStateOf<Pair<String, String>?>(null) }
-    val amllArtworkUri = metadata?.let { media ->
-        if (!localArtworkActive) {
-            media.artworkUri
-        } else {
-            localAmllArtwork
-                ?.takeIf { (mediaId, _) -> mediaId == media.id }
-                ?.second
-                ?: remoteArtworkUri
-        }
-    }.orEmpty()
+    val amllArtworkUri = amll.artworkUriFor(localAmllArtwork)
     LaunchedEffect(metadata?.id, metadata?.artworkUri, localArtworkActive, remoteArtworkUri) {
         val media = metadata
         if (media == null || !localArtworkActive) {
@@ -151,19 +143,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             localAmllArtwork = media.id to (dataUri ?: remoteArtworkUri)
         }
     }
-    val lyricForWeb = remember(rawLyric, lyricMap, lyricUiState) {
-        if (lyricUiState is LyricUiState.Content) {
-            rawLyric.takeIf { it.isNotBlank() } ?: lyricMap.toLrcFallbackText()
-        } else {
-            ""
-        }
-    }
-    val untimedLyricsForWeb = remember(untimedLyricLines) {
-        Json.encodeToString(untimedLyricLines)
-    }
-    val isUntimedContent =
-        (lyricUiState as? LyricUiState.Content)?.capabilityLevel ==
-        LyricCapabilityLevel.UNSYNCED
     val webView = remember(context, rendererGeneration) {
         if ((context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
             WebView.setWebContentsDebuggingEnabled(true)
@@ -303,25 +282,10 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         if (lyricUiState !is LyricUiState.Content) {
             Log.d("AMLL", "waiting for lyric media=$lyricMediaId")
             webView.evaluateJavascript("AmllBridge.loadLyrics('');", null)
-            when (val state = lyricUiState) {
-                is LyricUiState.Idle -> webView.showAmllStatus(
-                    when {
-                        metadata != null -> "正在恢复歌词…"
-                        playerStatusRestoreState is PlayerStatusRestoreState.Loading ->
-                            "正在恢复播放…"
-                        else -> "等待播放…"
-                    },
-                )
-                is LyricUiState.Loading -> webView.showAmllStatus("正在加载歌词…")
-                is LyricUiState.Empty -> webView.showAmllStatus(
-                    if (state.capabilityLevel == LyricCapabilityLevel.UNSYNCED) {
-                        "歌词无时间戳"
-                    } else {
-                        "暂无歌词"
-                    },
-                )
-                is LyricUiState.Error -> webView.showAmllError(state.message)
-                is LyricUiState.Content -> Unit
+            when (val placeholder = amll.placeholder()) {
+                is AmllHostPlaceholder.Status -> webView.showAmllStatus(placeholder.message)
+                is AmllHostPlaceholder.Error -> webView.showAmllError(placeholder.message)
+                null -> Unit
             }
             return@LaunchedEffect
         }

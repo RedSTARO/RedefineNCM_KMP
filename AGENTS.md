@@ -421,6 +421,8 @@ RedefineNCM_KMP/
 ├── shared/                              # KMP shared module — business logic + shared Compose UI
 │   ├── build.gradle.kts                 # KMP plugin config, source sets, dependencies
 │   └── src/
+│       ├── skiaMain/                    # JVM + iOS + Web: anything needing only a Skia bitmap
+│       ├── nonDesktopMain/              # Android + iOS + Web: no app-owned window, no route picker
 │       ├── commonMain/kotlin/com/leejlredstar/redefinencm/kmp/
 │       │   ├── App.kt                   # Root composable + hand-rolled back-stack nav
 │       │   ├── Platform.kt              # expect fun getPlatform(): Platform
@@ -445,7 +447,9 @@ RedefineNCM_KMP/
 │       │   ├── util/
 │       │   │   ├── LyricParser.kt        # Pure-Kotlin LRC parser
 │       │   │   ├── CoilImageTheme.kt      # expect fun themeColorFromCoilImage — album-art accent
-│       │   │   └── Settings.kt           # expect class PlatformSettings + SettingKeys
+│       │   │   │                          #   (one skiaMain actual covers JVM/iOS/Web)
+│       │   │   └── Settings.kt           # expect class PlatformSettings + SettingKeys; the
+│       │   │                             #   suspending getters are commonMain extensions
 │       │   ├── viewmodel/
 │       │   │   ├── LoginViewModel.kt
 │       │   │   ├── MainViewModel.kt

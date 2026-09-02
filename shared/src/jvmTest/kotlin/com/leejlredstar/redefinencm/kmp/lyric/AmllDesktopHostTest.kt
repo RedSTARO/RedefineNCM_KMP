@@ -11,36 +11,6 @@ import kotlin.test.assertTrue
 
 class AmllDesktopHostTest {
     @Test
-    fun fallsBackToParsedLyricsWhenRawPayloadIsBlank() {
-        val payload = desktopAmllLyricPayload(
-            rawLyric = " \n ",
-            lyricMap = linkedMapOf(
-                1_500L to "第一句",
-                3_000L to "第二句",
-            ),
-            lyricUiState = LyricUiState.Content(
-                lineCount = 2,
-                capabilityLevel = LyricCapabilityLevel.LINE_SYNCED,
-            ),
-        )
-
-        assertTrue(payload.contains("第一句"))
-        assertTrue(payload.contains("第二句"))
-        assertTrue(payload.contains("["))
-    }
-
-    @Test
-    fun doesNotExposeStaleLyricsOutsideContentState() {
-        val payload = desktopAmllLyricPayload(
-            rawLyric = "[00:01.00]旧歌词",
-            lyricMap = linkedMapOf(1_000L to "旧歌词"),
-            lyricUiState = LyricUiState.Loading,
-        )
-
-        assertEquals("", payload)
-    }
-
-    @Test
     fun extractsImmutableContentAddressedAssetSetsAndRepairsCorruption() {
         val root = Files.createTempDirectory("amll-assets-test").toFile()
         try {

@@ -95,25 +95,26 @@ private val ControlsSheetWindowSize = DpSize(840.dp, 680.dp)
 @Composable
 actual fun WebViewLyricScreen(onBack: () -> Unit) {
     val viewModel: NowPlayingViewModel = koinInject()
-    val rawLyric by viewModel.rawLyric.collectAsState()
-    val rawWordLyric by viewModel.rawWordLyric.collectAsState()
-    val rawTtmlLyric by viewModel.rawTtmlLyric.collectAsState()
-    val rawTranslatedLyric by viewModel.rawTranslatedLyric.collectAsState()
-    val rawRomanLyric by viewModel.rawRomanLyric.collectAsState()
-    val lyricMap by viewModel.lyricMap.collectAsState()
-    val untimedLyricLines by viewModel.untimedLyricLines.collectAsState()
-    val lyricUiState by viewModel.lyricUiState.collectAsState()
-    val lyricMediaId by viewModel.lyricMediaId.collectAsState()
-    val currentPosition by viewModel.currentPosition.collectAsState()
-    val metadata by viewModel.currentMedia.collectAsState()
-    val playerStatusRestoreState by viewModel.playerStatusRestoreState.collectAsState()
-    val localArtworkActive by viewModel.localArtworkActive.collectAsState()
-    val remoteArtworkUri by viewModel.remoteArtworkUri.collectAsState()
-    val dynamicCoverUiState by viewModel.dynamicCoverUiState.collectAsState()
-    val dynamicCoverUrl = dynamicCoverUiState.urlFor(metadata?.id)
-    val songWikiUiState by viewModel.songWikiUiState.collectAsState()
-    val showTranslatedLyric by viewModel.showTranslatedLyric.collectAsState()
-    val showRomanLyric by viewModel.showRomanLyric.collectAsState()
+    val amll = rememberAmllHostState(viewModel)
+    val rawTtmlLyric = amll.rawTtmlLyric
+    val rawWordLyric = amll.rawWordLyric
+    val rawTranslatedLyric = amll.rawTranslatedLyric
+    val rawRomanLyric = amll.rawRomanLyric
+    val lyricUiState = amll.lyricUiState
+    val lyricMediaId = amll.lyricMediaId
+    val currentPosition = amll.currentPosition
+    val metadata = amll.metadata
+    val playerStatusRestoreState = amll.playerStatusRestoreState
+    val untimedLyricLines = amll.untimedLyricLines
+    val localArtworkActive = amll.localArtworkActive
+    val remoteArtworkUri = amll.remoteArtworkUri
+    val dynamicCoverUrl = amll.dynamicCoverUrl
+    val songWikiUiState = amll.songWikiUiState
+    val showTranslatedLyric = amll.showTranslatedLyric
+    val showRomanLyric = amll.showRomanLyric
+    val lyricForWeb = amll.lyricForWeb
+    val untimedLyricsForWeb = amll.untimedLyricsForWeb
+    val isUntimedContent = amll.isUntimedContent
     val windowSize = LocalWindowInfo.current.containerSize
     val density = LocalDensity.current
     val overlayWidth = with(density) { windowSize.width.toDp() }
@@ -127,30 +128,8 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         NativeAmllScreen(onBack = onBack)
         return
     }
-    val lyricForWeb = remember(rawLyric, lyricMap, lyricUiState) {
-        desktopAmllLyricPayload(
-            rawLyric = rawLyric,
-            lyricMap = lyricMap,
-            lyricUiState = lyricUiState,
-        )
-    }
-    val untimedLyricsForWeb = remember(untimedLyricLines) {
-        Json.encodeToString(untimedLyricLines)
-    }
-    val isUntimedContent =
-        (lyricUiState as? LyricUiState.Content)?.capabilityLevel ==
-        LyricCapabilityLevel.UNSYNCED
     var localAmllArtwork by remember { mutableStateOf<Pair<String, String>?>(null) }
-    val amllArtworkUri = metadata?.let { media ->
-        if (!localArtworkActive) {
-            media.artworkUri
-        } else {
-            localAmllArtwork
-                ?.takeIf { (mediaId, _) -> mediaId == media.id }
-                ?.second
-                ?: remoteArtworkUri
-        }
-    }.orEmpty()
+    val amllArtworkUri = amll.artworkUriFor(localAmllArtwork)
     LaunchedEffect(metadata?.id, metadata?.artworkUri, localArtworkActive, remoteArtworkUri) {
         val media = metadata
         if (media == null || !localArtworkActive) {
@@ -1200,17 +1179,6 @@ private fun File.matchesAmllAssets(assets: Map<String, ByteArray>): Boolean =
             val file = File(this, name)
             file.isFile && runCatching { file.readBytes().contentEquals(expected) }.getOrDefault(false)
         }
-
-internal fun desktopAmllLyricPayload(
-    rawLyric: String,
-    lyricMap: LinkedHashMap<Long?, String?>,
-    lyricUiState: LyricUiState,
-): String =
-    if (lyricUiState is LyricUiState.Content) {
-        rawLyric.takeIf(String::isNotBlank) ?: lyricMap.toLrcFallbackText()
-    } else {
-        ""
-    }
 
 internal fun desktopLocalArtworkDataUri(
     songId: Long?,
