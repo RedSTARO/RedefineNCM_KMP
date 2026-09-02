@@ -2,8 +2,14 @@ package com.leejlredstar.redefinencm.kmp.util
 
 import platform.Foundation.NSUserDefaults
 
-actual class PlatformSettings {
-    private val defaults = NSUserDefaults.standardUserDefaults
+/**
+ * [suiteName] exists so tests can hold a throwaway defaults suite. Production always uses the
+ * standard defaults: a suite change would orphan every value an installed copy has written.
+ */
+actual class PlatformSettings(suiteName: String? = null) {
+    private val defaults = suiteName
+        ?.let { NSUserDefaults(suiteName = it) }
+        ?: NSUserDefaults.standardUserDefaults
 
     actual suspend fun awaitLoaded() = Unit
 

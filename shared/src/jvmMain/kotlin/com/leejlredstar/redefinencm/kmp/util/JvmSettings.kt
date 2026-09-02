@@ -2,8 +2,14 @@ package com.leejlredstar.redefinencm.kmp.util
 
 import java.util.prefs.Preferences
 
-actual class PlatformSettings {
-    private val prefs = Preferences.userRoot().node("com.leejlredstar.redefinencm.kmp")
+internal const val DEFAULT_SETTINGS_NODE = "com.leejlredstar.redefinencm.kmp"
+
+/**
+ * [nodeName] exists so tests can hold a throwaway preference node. Production always uses the
+ * default: changing it would orphan every value an installed copy has already written.
+ */
+actual class PlatformSettings(nodeName: String = DEFAULT_SETTINGS_NODE) {
+    private val prefs = Preferences.userRoot().node(nodeName)
 
     actual suspend fun awaitLoaded() = Unit
 
