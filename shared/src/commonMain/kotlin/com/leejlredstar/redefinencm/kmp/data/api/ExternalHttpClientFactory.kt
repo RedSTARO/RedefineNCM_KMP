@@ -20,11 +20,7 @@ object ExternalHttpClientFactory {
         ExternalHttpClient(
             HttpClient(engineFactory) {
                 install(ContentNegotiation) {
-                    json(Json {
-                        ignoreUnknownKeys = true
-                        isLenient = true
-                        coerceInputValues = true
-                    })
+                    json(ApiJson)
                 }
                 install(HttpTimeout) {
                     connectTimeoutMillis = 15_000

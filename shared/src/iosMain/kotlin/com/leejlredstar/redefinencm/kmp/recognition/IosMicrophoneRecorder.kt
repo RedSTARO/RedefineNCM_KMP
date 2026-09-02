@@ -6,7 +6,6 @@ import kotlinx.cinterop.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import platform.AVFAudio.AVAudioEngine
 import platform.AVFAudio.AVAudioSession
@@ -21,22 +20,13 @@ import kotlin.coroutines.resume
 import kotlin.math.ceil
 import kotlin.math.sqrt
 
-class IosMicrophoneRecorder : MicrophoneRecorder {
-    private val captureMutex = Mutex()
+class IosMicrophoneRecorder : ExclusiveMicrophoneRecorder() {
 
-    override suspend fun capture(
+    override suspend fun captureExclusively(
         durationMillis: Long,
         onProgress: (elapsedMillis: Long, level: Float) -> Unit,
-    ): CapturedPcm {
-        require(durationMillis > 0L) { "录音时长必须大于 0" }
-        if (!captureMutex.tryLock()) throw MicrophoneBusyException()
-        try {
-            return withContext(Dispatchers.Main) {
-                captureOnMain(durationMillis, onProgress)
-            }
-        } finally {
-            captureMutex.unlock()
-        }
+    ): CapturedPcm = withContext(Dispatchers.Main) {
+        captureOnMain(durationMillis, onProgress)
     }
 
     private suspend fun captureOnMain(

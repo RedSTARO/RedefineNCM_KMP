@@ -104,6 +104,7 @@ import com.leejlredstar.redefinencm.kmp.lyric.AmllRendererMode
 import com.leejlredstar.redefinencm.kmp.lyric.resolveAmllRendererMode
 import com.leejlredstar.redefinencm.kmp.lyric.supportsLegacyAmllWebView
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.ui.component.rememberNowPlayingUiState
 import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayPlacement
 import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayWindow
 import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackSeekBar
@@ -935,34 +936,24 @@ private fun DesktopNowPlayingStrip(
     onOpenNowPlaying: () -> Unit,
     viewModel: NowPlayingViewModel = koinInject(),
 ) {
-    val media by player.currentMedia.collectAsState()
-    val isPlaying by player.isPlaying.collectAsState()
+    val nowPlaying = rememberNowPlayingUiState(player, viewModel)
     val volume by player.volume.collectAsState()
-    val position by player.position.collectAsState()
-    val duration by player.duration.collectAsState()
-    val queueSnapshot by viewModel.queueSnapshot.collectAsState()
-    val playList = queueSnapshot.items
-    val currentIndex = queueSnapshot.currentIndex
-    val shuffleEnabled = queueSnapshot.shuffleEnabled
-    val comments by viewModel.comments.collectAsState()
-    val commentsLoading by viewModel.commentsLoading.collectAsState()
-    val commentsLoadError by viewModel.commentsLoadError.collectAsState()
-    val commentsFromCache by viewModel.commentsFromCache.collectAsState()
-    val favoriteState by viewModel.favoriteUiState.collectAsState()
+    val media = nowPlaying.media
+    val isPlaying = nowPlaying.isPlaying
+    val playList = nowPlaying.playList
+    val currentIndex = nowPlaying.currentIndex
+    val shuffleEnabled = nowPlaying.shuffleEnabled
+    val comments = nowPlaying.comments
+    val commentsLoading = nowPlaying.commentsLoading
+    val commentsLoadError = nowPlaying.commentsLoadError
+    val commentsFromCache = nowPlaying.commentsFromCache
     val artwork = media?.artworkUri.orEmpty()
     val extractAccent = rememberThemeColorExtractor(artwork) { onAccentColor(it) }
-    val hasMedia = media != null
-    val isFavorite = favoriteState.mediaId == media?.id && favoriteState.isLiked
-    val safePosition = position.coerceAtLeast(0L)
-    val totalDuration = duration
-        .takeIf { it > 0L }
-        ?: media?.duration?.takeIf { it > 0L }
-        ?: 0L
-    val progress = if (totalDuration > 0L) {
-        (safePosition.toDouble() / totalDuration.toDouble()).coerceIn(0.0, 1.0).toFloat()
-    } else {
-        0f
-    }
+    val hasMedia = nowPlaying.hasMedia
+    val isFavorite = nowPlaying.isFavorite
+    val safePosition = nowPlaying.safePosition
+    val totalDuration = nowPlaying.totalDuration
+    val progress = nowPlaying.progress
     var showQueue by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
     var isDragging by remember(media?.id) { mutableStateOf(false) }

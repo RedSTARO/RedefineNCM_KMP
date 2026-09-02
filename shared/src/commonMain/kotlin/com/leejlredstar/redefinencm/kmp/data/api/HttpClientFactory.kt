@@ -65,11 +65,7 @@ object HttpClientFactory {
     ): HttpClient {
         return HttpClient(engineFactory) {
             install(ContentNegotiation) {
-                json(Json {
-                    ignoreUnknownKeys = true
-                    isLenient = true
-                    coerceInputValues = true
-                })
+                json(ApiJson)
             }
             install(Logging) {
                 // Request URLs can contain the microphone-derived audioFP. Redact it before

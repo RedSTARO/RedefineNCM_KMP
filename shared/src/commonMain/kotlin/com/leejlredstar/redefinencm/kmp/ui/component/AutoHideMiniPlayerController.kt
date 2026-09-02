@@ -110,19 +110,17 @@ fun AutoHideMiniPlayerController(
     viewModel: NowPlayingViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
 ) {
-    val media by player.currentMedia.collectAsState()
-    val isPlaying by player.isPlaying.collectAsState()
-    val position by player.position.collectAsState()
-    val duration by player.duration.collectAsState()
-    val queueSnapshot by viewModel.queueSnapshot.collectAsState()
-    val playList = queueSnapshot.items
-    val currentIndex = queueSnapshot.currentIndex
-    val shuffleEnabled = queueSnapshot.shuffleEnabled
-    val comments by viewModel.comments.collectAsState()
-    val commentsLoading by viewModel.commentsLoading.collectAsState()
-    val commentsLoadError by viewModel.commentsLoadError.collectAsState()
-    val commentsFromCache by viewModel.commentsFromCache.collectAsState()
-    val favoriteState by viewModel.favoriteUiState.collectAsState()
+    val nowPlaying = rememberNowPlayingUiState(player, viewModel)
+    val media = nowPlaying.media
+    val isPlaying = nowPlaying.isPlaying
+    val position = nowPlaying.position
+    val playList = nowPlaying.playList
+    val currentIndex = nowPlaying.currentIndex
+    val shuffleEnabled = nowPlaying.shuffleEnabled
+    val comments = nowPlaying.comments
+    val commentsLoading = nowPlaying.commentsLoading
+    val commentsLoadError = nowPlaying.commentsLoadError
+    val commentsFromCache = nowPlaying.commentsFromCache
     val lyricUiState by viewModel.lyricUiState.collectAsState()
     val lyricMediaId by viewModel.lyricMediaId.collectAsState()
     val activeLyricSource by viewModel.activeLyricSource.collectAsState()
@@ -134,22 +132,15 @@ fun AutoHideMiniPlayerController(
     var showComments by remember { mutableStateOf(false) }
     var showLyricDetails by remember { mutableStateOf(false) }
 
-    val hasMedia = media != null
-    val isFavorite = favoriteState.mediaId == media?.id && favoriteState.isLiked
+    val hasMedia = nowPlaying.hasMedia
+    val isFavorite = nowPlaying.isFavorite
     val lyricCapabilityLevel = lyricUiState.lyricCapabilityLevel.takeIf {
         hasMedia && lyricMediaId == media?.id
     }
     val displayedLyricSource = activeLyricSource.takeIf { lyricCapabilityLevel != null }
     val displayedLyricEndpoint = activeLyricEndpoint.takeIf { lyricCapabilityLevel != null }.orEmpty()
-    val totalDuration = duration
-        .takeIf { it > 0L }
-        ?: media?.duration?.takeIf { it > 0L }
-        ?: 0L
-    val progress = if (totalDuration > 0L) {
-        (position.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
-    } else {
-        0f
-    }
+    val totalDuration = nowPlaying.totalDuration
+    val progress = nowPlaying.progress
 
     val defaultAccentColor = MaterialTheme.colorScheme.primaryContainer
     var rawAccentColor by remember(media?.artworkUri, defaultAccentColor) {

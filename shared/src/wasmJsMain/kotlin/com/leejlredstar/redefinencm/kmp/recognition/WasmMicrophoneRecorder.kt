@@ -7,7 +7,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.await
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.sync.Mutex
 import org.khronos.webgl.ArrayBuffer
 import org.khronos.webgl.Float32Array
 import org.khronos.webgl.get
@@ -28,24 +27,12 @@ import kotlin.time.TimeSource
 
 private const val WEB_CAPTURE_PADDING_MILLIS = 250L
 
-class WasmMicrophoneRecorder : MicrophoneRecorder {
-    private val captureMutex = Mutex()
+class WasmMicrophoneRecorder : ExclusiveMicrophoneRecorder() {
 
-    override suspend fun capture(
-        durationMillis: Long,
-        onProgress: (elapsedMillis: Long, level: Float) -> Unit,
-    ): CapturedPcm {
-        require(durationMillis > 0L) { "录音时长必须大于 0" }
-        ensureSecureWebMicrophoneContext()
-        if (!captureMutex.tryLock()) throw MicrophoneBusyException()
-        try {
-            return captureLocked(durationMillis, onProgress)
-        } finally {
-            captureMutex.unlock()
-        }
-    }
+    /** getUserMedia is unavailable outside a secure context; say so before claiming. */
+    override suspend fun onBeforeClaim() = ensureSecureWebMicrophoneContext()
 
-    private suspend fun captureLocked(
+    override suspend fun captureExclusively(
         durationMillis: Long,
         onProgress: (elapsedMillis: Long, level: Float) -> Unit,
     ): CapturedPcm {

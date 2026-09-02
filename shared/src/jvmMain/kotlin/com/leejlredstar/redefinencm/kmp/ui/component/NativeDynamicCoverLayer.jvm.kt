@@ -17,9 +17,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -35,12 +32,7 @@ import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -412,26 +404,3 @@ internal fun desktopDynamicCoverLifecycleActive(
     isVisible: Boolean,
     extendedState: Int,
 ): Boolean = isVisible && extendedState.and(Frame.ICONIFIED) == 0
-
-@Composable
-private fun DynamicCoverBadge(
-    modifier: Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = CircleShape,
-        color = Color(0xFF005144).copy(alpha = 0.92f),
-        contentColor = Color(0xFF9CF2DC),
-    ) {
-        Text(
-            text = "动态封面",
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            style = TextStyle(
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.02.em,
-                lineHeight = TextUnit.Unspecified,
-            ),
-        )
-    }
-}

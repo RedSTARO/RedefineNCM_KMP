@@ -3,7 +3,6 @@ package com.leejlredstar.redefinencm.kmp.recognition
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import javax.sound.sampled.AudioFormat
@@ -12,28 +11,12 @@ import javax.sound.sampled.DataLine
 import javax.sound.sampled.LineUnavailableException
 import javax.sound.sampled.TargetDataLine
 import kotlin.coroutines.coroutineContext
-import kotlin.math.ceil
-import kotlin.math.sqrt
 
 private val desktopCaptureRates = intArrayOf(8_000, 44_100, 48_000)
 
-class JvmMicrophoneRecorder : MicrophoneRecorder {
-    private val captureMutex = Mutex()
+class JvmMicrophoneRecorder : ExclusiveMicrophoneRecorder() {
 
-    override suspend fun capture(
-        durationMillis: Long,
-        onProgress: (elapsedMillis: Long, level: Float) -> Unit,
-    ): CapturedPcm {
-        require(durationMillis > 0L) { "录音时长必须大于 0" }
-        if (!captureMutex.tryLock()) throw MicrophoneBusyException()
-        try {
-            return captureLocked(durationMillis, onProgress)
-        } finally {
-            captureMutex.unlock()
-        }
-    }
-
-    private suspend fun captureLocked(
+    override suspend fun captureExclusively(
         durationMillis: Long,
         onProgress: (elapsedMillis: Long, level: Float) -> Unit,
     ): CapturedPcm = withContext(Dispatchers.IO) {
@@ -58,7 +41,7 @@ class JvmMicrophoneRecorder : MicrophoneRecorder {
         }
 
         val sampleRateHz = format.sampleRate.toInt()
-        val targetSamples = ceil(durationMillis * sampleRateHz.toDouble() / 1_000.0).toInt()
+        val targetSamples = pcmTargetSampleCount(durationMillis, sampleRateHz)
         val targetBytes = targetSamples * 2
         val capturedBytes = ByteArrayOutputStream(targetBytes)
         val buffer = ByteArray(minOf(maxOf(line.bufferSize / 4, 2_048), 16_384))
@@ -87,16 +70,15 @@ class JvmMicrophoneRecorder : MicrophoneRecorder {
                 var frameCount = 0
                 var index = 0
                 while (index + 1 < read) {
-                    val value = ((buffer[index + 1].toInt() shl 8) or (buffer[index].toInt() and 0xff)).toShort()
-                    val sample = value.toFloat() / 32_768f
+                    val sample = pcmSampleAt(buffer, index)
                     energy += sample * sample
                     frameCount++
                     index += 2
                 }
                 if (frameCount > 0) {
                     onProgress(
-                        (capturedBytes.size() / 2) * 1_000L / sampleRateHz,
-                        sqrt(energy / frameCount).toFloat().coerceIn(0f, 1f),
+                        pcmElapsedMillis(capturedBytes.size() / 2, sampleRateHz),
+                        pcmRmsLevel(energy, frameCount),
                     )
                 }
             }
@@ -109,9 +91,7 @@ class JvmMicrophoneRecorder : MicrophoneRecorder {
         val bytes = capturedBytes.toByteArray()
         val samples = FloatArray(targetSamples)
         for (sampleIndex in samples.indices) {
-            val byteIndex = sampleIndex * 2
-            val value = ((bytes[byteIndex + 1].toInt() shl 8) or (bytes[byteIndex].toInt() and 0xff)).toShort()
-            samples[sampleIndex] = value.toFloat() / 32_768f
+            samples[sampleIndex] = pcmSampleAt(bytes, sampleIndex * 2)
         }
         CapturedPcm(samples, sampleRateHz)
     }

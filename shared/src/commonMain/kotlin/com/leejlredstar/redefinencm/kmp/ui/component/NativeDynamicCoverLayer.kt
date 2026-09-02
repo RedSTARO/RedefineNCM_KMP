@@ -9,8 +9,19 @@
  */
 package com.leejlredstar.redefinencm.kmp.ui.component
 
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 
 /**
  * Source-faithful visual constants for the two `<video>` elements in AMLL's `player.html`.
@@ -84,3 +95,31 @@ internal expect fun NativeDynamicCoverLayer(
     reducedMotion: Boolean = false,
     onVisibilityChanged: (Boolean) -> Unit = {},
 )
+
+/**
+ * The "动态封面" pill AMLL shows over `#wiki-cover-video`.
+ *
+ * Pure Compose with no platform surface of its own, so it is declared once here rather than
+ * copied into each target's video layer — the Desktop and iOS copies had drifted into being
+ * byte-identical, and Android and Web rendered no badge at all.
+ */
+@Composable
+internal fun DynamicCoverBadge(modifier: Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = CircleShape,
+        color = Color(0xFF005144).copy(alpha = 0.92f),
+        contentColor = Color(0xFF9CF2DC),
+    ) {
+        Text(
+            text = "动态封面",
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            style = TextStyle(
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.02.em,
+                lineHeight = TextUnit.Unspecified,
+            ),
+        )
+    }
+}

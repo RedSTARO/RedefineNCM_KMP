@@ -21,9 +21,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -36,12 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.UIKitInteropProperties
 import androidx.compose.ui.viewinterop.UIKitView
 import kotlinx.coroutines.delay
@@ -311,28 +303,5 @@ private class IosDynamicCoverView(
         player.replaceCurrentItemWithPlayerItem(null)
         playerLayer.player = null
         playerLayer.removeFromSuperlayer()
-    }
-}
-
-@Composable
-private fun DynamicCoverBadge(
-    modifier: Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = CircleShape,
-        color = Color(0xFF005144).copy(alpha = 0.92f),
-        contentColor = Color(0xFF9CF2DC),
-    ) {
-        Text(
-            text = "动态封面",
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            style = TextStyle(
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.02.em,
-                lineHeight = TextUnit.Unspecified,
-            ),
-        )
     }
 }

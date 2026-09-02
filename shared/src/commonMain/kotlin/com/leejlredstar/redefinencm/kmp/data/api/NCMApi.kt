@@ -13,12 +13,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 private val playSessionIdPattern = Regex("^[A-Z0-9]{12}$")
-private val responseJson = Json {
-    ignoreUnknownKeys = true
-    isLenient = true
-    coerceInputValues = true
-}
-
 enum class NcmResponseBodyKind {
     JSON,
     HTML,
@@ -51,7 +45,7 @@ private suspend inline fun <reified T> HttpResponse.toNcmHttpResponse(): NcmHttp
         return NcmHttpResponse(status.value, null, NcmResponseBodyKind.HTML, responseContentType)
     }
 
-    val decoded = runCatching { responseJson.decodeFromString<T>(responseText) }.getOrNull()
+    val decoded = runCatching { ApiJson.decodeFromString<T>(responseText) }.getOrNull()
     val kind = when {
         decoded != null -> NcmResponseBodyKind.JSON
         responseContentType?.startsWith("application/json", ignoreCase = true) == true ||

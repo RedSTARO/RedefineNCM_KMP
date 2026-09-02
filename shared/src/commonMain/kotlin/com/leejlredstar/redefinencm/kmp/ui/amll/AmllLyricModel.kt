@@ -10,6 +10,7 @@
  */
 package com.leejlredstar.redefinencm.kmp.ui.amll
 
+import com.leejlredstar.redefinencm.kmp.util.isEcmaScriptWhitespace
 import com.leejlredstar.redefinencm.kmp.util.LyricParser
 import kotlin.math.abs
 import kotlin.math.roundToLong
@@ -732,19 +733,3 @@ private fun findNearestSupplement(
 private fun String.trimEcmaScriptWhitespace(): String =
     trim { character -> character.isEcmaScriptWhitespace() }
 
-private fun Char.isEcmaScriptWhitespace(): Boolean = when (code) {
-    in 0x0009..0x000D,
-    0x0020,
-    0x00A0,
-    0x1680,
-    in 0x2000..0x200A,
-    0x2028,
-    0x2029,
-    0x202F,
-    0x205F,
-    0x3000,
-    0xFEFF,
-    -> true
-
-    else -> false
-}

@@ -81,18 +81,12 @@ class QQMusicApi(
         // The backend answers 400 with a JSON body for bad input; decoding that as the success
         // shape would yield an empty result that reads like "no such song".
         if (response.status.value !in 200..299) return null
-        qqJson.decodeFromString<T>(response.bodyAsText())
+        ApiJson.decodeFromString<T>(response.bodyAsText())
     }.getOrNull()
 
     private companion object {
         const val QQ_SUCCESS_CODE = 0
     }
-}
-
-private val qqJson = Json {
-    ignoreUnknownKeys = true
-    isLenient = true
-    coerceInputValues = true
 }
 
 /** Almost every route wraps its payload in this envelope; `/getMusicPlay` does not. */

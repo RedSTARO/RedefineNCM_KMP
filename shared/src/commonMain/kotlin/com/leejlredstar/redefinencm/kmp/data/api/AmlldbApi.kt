@@ -55,12 +55,6 @@ class AmlldbApi(
     externalHttpClient: ExternalHttpClient,
 ) {
     private val client = externalHttpClient.client
-    private val searchJson = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-        coerceInputValues = true
-    }
-
     suspend fun findByNcmId(songId: Long): AmlldbTtmlResult {
         require(songId > 0) { "songId must be positive" }
 
@@ -103,7 +97,7 @@ class AmlldbApi(
                             SearchFetch.Failed(AmlldbTtmlResult.Malformed("AMLL DB 搜索响应过大"))
                         is BoundedBody.Text -> {
                             val items = try {
-                                searchJson.decodeFromString<List<AmlldbSearchItem>>(boundedBody.value)
+                                ApiJson.decodeFromString<List<AmlldbSearchItem>>(boundedBody.value)
                             } catch (_: Exception) {
                                 return@withTimeoutOrNull SearchFetch.Failed(
                                     AmlldbTtmlResult.Malformed("AMLL DB 搜索响应格式无效"),

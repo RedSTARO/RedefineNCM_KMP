@@ -10,33 +10,16 @@ import android.media.MediaRecorder
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
-import kotlin.math.ceil
-import kotlin.math.sqrt
 
 private const val ANDROID_CAPTURE_SAMPLE_RATE_HZ = 44_100
 
 class AndroidMicrophoneRecorder(
     private val context: Context,
-) : MicrophoneRecorder {
-    private val captureMutex = Mutex()
+) : ExclusiveMicrophoneRecorder() {
 
-    override suspend fun capture(
-        durationMillis: Long,
-        onProgress: (elapsedMillis: Long, level: Float) -> Unit,
-    ): CapturedPcm {
-        require(durationMillis > 0L) { "录音时长必须大于 0" }
-        if (!captureMutex.tryLock()) throw MicrophoneBusyException()
-        try {
-            return captureLocked(durationMillis, onProgress)
-        } finally {
-            captureMutex.unlock()
-        }
-    }
-
-    private suspend fun captureLocked(
+    override suspend fun captureExclusively(
         durationMillis: Long,
         onProgress: (elapsedMillis: Long, level: Float) -> Unit,
     ): CapturedPcm = withContext(Dispatchers.IO) {
@@ -82,9 +65,8 @@ class AndroidMicrophoneRecorder(
             throw MicrophoneUnavailableException("录音设备初始化失败")
         }
 
-        val targetSamples = ceil(
-            durationMillis * ANDROID_CAPTURE_SAMPLE_RATE_HZ.toDouble() / 1_000.0,
-        ).toInt()
+        val targetSamples =
+            pcmTargetSampleCount(durationMillis, ANDROID_CAPTURE_SAMPLE_RATE_HZ)
         val samples = FloatArray(targetSamples)
         val readBuffer = ShortArray(maxOf(minimumBufferBytes / 2, 2_048))
         var written = 0
@@ -111,14 +93,14 @@ class AndroidMicrophoneRecorder(
 
                 var energy = 0.0
                 for (index in 0 until read) {
-                    val sample = readBuffer[index].toFloat() / 32_768f
+                    val sample = readBuffer[index].toPcmSample()
                     samples[written + index] = sample
                     energy += sample * sample
                 }
                 written += read
                 onProgress(
-                    written * 1_000L / ANDROID_CAPTURE_SAMPLE_RATE_HZ,
-                    sqrt(energy / read).toFloat().coerceIn(0f, 1f),
+                    pcmElapsedMillis(written, ANDROID_CAPTURE_SAMPLE_RATE_HZ),
+                    pcmRmsLevel(energy, read),
                 )
             }
         } catch (error: SecurityException) {
