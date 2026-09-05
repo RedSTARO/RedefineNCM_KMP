@@ -3,8 +3,9 @@
 ## Apple Music-like Lyrics renderer
 
 The application ships one AMLL renderer on every platform: native Compose,
-provided by the standalone `AMLLJetpackCompose` library (Gradle coordinate
-`com.leejlredstar.amll:amll-compose`). The Legacy WebView renderer and its
+provided by the standalone
+[AMLL_Jetpack_Compose](https://github.com/RedSTARO/AMLL_Jetpack_Compose) library
+(Gradle coordinate `com.leejlredstar.amll:amll-compose`). The Legacy WebView renderer and its
 bundled HTML/JS/CSS page were removed on 2026-09-06.
 
 It is based on:

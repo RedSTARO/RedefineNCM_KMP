@@ -147,8 +147,9 @@ field were all removed on 2026-09-06. Do not reintroduce a WebView, an HTML lyri
 renderer preference, or a second full-screen destination. `FullLyricScreen` and
 `NowPlayingScreen` remain removed.
 
-The lyric engine lives in a **separate repository**, `AMLLJetpackCompose`, consumed as a Gradle
-composite build. `settings.gradle.kts` calls `includeBuild` on `../AMLLJetpackCompose` by
+The lyric engine lives in a **separate repository**,
+[`RedSTARO/AMLL_Jetpack_Compose`](https://github.com/RedSTARO/AMLL_Jetpack_Compose), checked out
+locally as `AMLLJetpackCompose` and consumed as a Gradle composite build. `settings.gradle.kts` calls `includeBuild` on `../AMLLJetpackCompose` by
 default, overridable with `-PamllComposePath` or `AMLL_COMPOSE_PATH`; `:shared` depends on the
 `com.leejlredstar.amll:amll-compose` coordinate and Gradle substitutes the local project.
 `TYPESAFE_PROJECT_ACCESSORS` does not generate accessors for included builds, so that coordinate
