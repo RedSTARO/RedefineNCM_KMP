@@ -321,6 +321,12 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         }
     }
 
+    // The old Compose console re-fetched comments whenever the track changed underneath an open
+    // sheet. Opening the sheet is now a one-shot page action, so keep that refresh here.
+    LaunchedEffect(activeSheet, metadata?.id) {
+        if (activeSheet == DesktopPlaybackSheet.Comments) viewModel.getComments()
+    }
+
     // Everything the in-page console needs except position, which rides setTime below.
     LaunchedEffect(
         engineReady,
