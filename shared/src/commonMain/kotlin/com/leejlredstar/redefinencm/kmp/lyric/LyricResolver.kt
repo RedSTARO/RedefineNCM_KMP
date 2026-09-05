@@ -7,7 +7,9 @@ import com.leejlredstar.redefinencm.kmp.data.api.AmlldbApi
 import com.leejlredstar.redefinencm.kmp.data.api.AmlldbTtmlResult
 import com.leejlredstar.redefinencm.kmp.data.api.dto.Lyric
 import com.leejlredstar.redefinencm.kmp.download.LocalMediaAssets
-import com.leejlredstar.redefinencm.kmp.util.LyricParser
+import com.leejlredstar.amll.compose.lyric.LyricParser
+import com.leejlredstar.amll.compose.lyric.TtmlLyricParser
+import com.leejlredstar.amll.compose.lyric.hasPrimaryTimedLine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
@@ -411,13 +413,6 @@ private class TtmlLyricProvider(
         const val TTML_CACHE_TTL_MILLIS = 24L * 60L * 60L * 1_000L
     }
 }
-
-internal fun List<LyricParser.WordLine>.hasPrimaryTimedLine(): Boolean =
-    any { line ->
-        !line.isBackground &&
-            line.text.isNotBlank() &&
-            line.endTimeMs >= line.startTimeMs
-    }
 
 internal fun ttmlDocument(
     ttml: String,

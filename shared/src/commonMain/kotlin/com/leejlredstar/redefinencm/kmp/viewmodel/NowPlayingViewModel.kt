@@ -17,7 +17,7 @@ import com.leejlredstar.redefinencm.kmp.lyric.supportsDynamicNowPlayingCover
 import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
 import com.leejlredstar.redefinencm.kmp.player.*
 import com.leejlredstar.redefinencm.kmp.smtc.MediaControlsIntegrator
-import com.leejlredstar.redefinencm.kmp.util.LyricParser
+import com.leejlredstar.amll.compose.lyric.LyricParser
 import com.leejlredstar.redefinencm.kmp.util.DownloadScanResult
 import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
@@ -937,7 +937,7 @@ class NowPlayingViewModel(
 
         val duration = songLength.value
         val safePosition = if (duration > 0) {
-            // 旧歌的点击事件可能在切歌动画/WebView 重绘期间迟到；超出当前歌时长�?seek 丢弃�?
+            // 切歌时旧歌的点击可能迟到，超出当前歌曲时长的 seek 直接丢弃。
             if (newPosition > duration + 2_000L) return
             newPosition.coerceIn(0L, duration)
         } else {

@@ -10,6 +10,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # settings.gradle.kts includes ../AMLLJetpackCompose by default; on CI both repositories
+  # have to live inside the workspace.
+  AMLL_COMPOSE_PATH: ${{ github.workspace }}/amll-jetpack-compose
+
 jobs:
   # ─── Tests ──────────────────────────────────────────────────────────────────
   test:
@@ -26,6 +31,12 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
+
+      - name: Check out the AMLL Compose renderer
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: ${{ github.repository_owner }}/AMLLJetpackCompose
+          path: amll-jetpack-compose
 
       - name: Fetch tags
         run: git fetch --force --tags
@@ -73,23 +84,6 @@ jobs:
         run: |
           python scripts/check_tracked_secrets.py --self-test
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: androidApp/amll-builder/package-lock.json
-
-      - name: Verify committed Legacy AMLL assets
-        working-directory: androidApp/amll-builder
-        run: |
-          npm ci
-          npm test
-          npm run build
-          git -C ../.. diff --exit-code -- \
-            shared/src/commonMain/amllAssets/amll/bundle.js \
-            shared/src/commonMain/amllAssets/amll/style.css \
-            shared/src/commonMain/amllAssets/amll/THIRD_PARTY_LICENSES.txt
-
       - name: Verify packaged third-party notices
         run: |
           for license in \
@@ -100,12 +94,10 @@ jobs:
             GNU-Library-GPL-2.0-or-later.txt \
             GPL-3.0.txt \
             LGPL-2.1.txt \
-            LGPL-3.0-or-later.txt \
-            webview-java-da910b-LICENSE.md
+            LGPL-3.0-or-later.txt
           do
             test -s "LICENSES/$license"
           done
-          test -s shared/src/commonMain/amllAssets/amll/THIRD_PARTY_LICENSES.txt
           cmp LICENSES/AGPL-3.0-only.txt \
             shared/src/commonMain/composeResources/files/licenses/AGPL-3.0-only.txt
           cmp LICENSES/Apache-2.0.txt \
@@ -146,6 +138,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check out the AMLL Compose renderer
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: ${{ github.repository_owner }}/AMLLJetpackCompose
+          path: amll-jetpack-compose
+
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
           java-version: '17'
@@ -163,10 +161,6 @@ jobs:
             androidApp/build/outputs/apk/release/output-metadata.json
           source_apk=$(find androidApp/build/outputs/apk/release -name '*-unsigned.apk' -print -quit)
           test -n "$source_apk"
-          unzip -l "$source_apk" | grep -q 'assets/amll/player.html'
-          unzip -l "$source_apk" | grep -q 'assets/amll/bundle.js'
-          unzip -l "$source_apk" | grep -q 'assets/amll/style.css'
-          unzip -l "$source_apk" | grep -q 'assets/amll/THIRD_PARTY_LICENSES.txt'
           cp "$source_apk" \
             "androidApp/build/outputs/apk/release/RedefineNCM_KMP-${APP_VERSION}-release-unsigned.apk"
 
@@ -193,6 +187,12 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
+
+      - name: Check out the AMLL Compose renderer
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: ${{ github.repository_owner }}/AMLLJetpackCompose
+          path: amll-jetpack-compose
 
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
@@ -297,6 +297,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check out the AMLL Compose renderer
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: ${{ github.repository_owner }}/AMLLJetpackCompose
+          path: amll-jetpack-compose
+
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
           java-version: '17'
@@ -337,6 +343,12 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
+
+      - name: Check out the AMLL Compose renderer
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: ${{ github.repository_owner }}/AMLLJetpackCompose
+          path: amll-jetpack-compose
 
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
@@ -401,6 +413,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check out the AMLL Compose renderer
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: ${{ github.repository_owner }}/AMLLJetpackCompose
+          path: amll-jetpack-compose
+
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
           java-version: '17'
@@ -452,6 +470,12 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
+
+      - name: Check out the AMLL Compose renderer
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: ${{ github.repository_owner }}/AMLLJetpackCompose
+          path: amll-jetpack-compose
 
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
@@ -515,7 +539,6 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
-
       - name: Count commits since last tag
         id: commitcount
         run: |
@@ -608,7 +631,6 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
-
       - name: Build changelog since last tag
         id: changelog
         run: |

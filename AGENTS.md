@@ -136,39 +136,47 @@ extension renders the resulting `ContentState`; it is wired into the Xcode proje
 not require an App Group. An App Group is only needed if artwork is later shared with the
 extension through a file cache.
 
-### D5 — Full-screen AMLL has one route with two selectable renderers — **DONE (updated 2026-07-27)**
+### D5 — Full-screen AMLL is one route with one native Compose renderer — **DONE (updated 2026-09-06)**
 
-`AmllPlayerScreen` is the only full-screen navigation route. On Android and Windows x64 it
-selects between the recommended Legacy AMLL WebView renderer and `NativeAmllScreen`; the
-persisted `useNativeAmllRenderer` setting defaults to `false`, so Legacy WebView is used unless
-the user opts into Native Compose. The Settings UI must state that WebView is recommended and
-Native Compose is recommended only for lower-end devices.
+`AmllPlayerScreen` is the only full-screen navigation route and it renders `NativeAmllScreen` on
+every target. **There is no WebView anywhere in this project.** The Legacy AMLL WebView renderer
+— Android System WebView, Windows x64 WebView2 (`WebviewJna`), iOS `WKWebView` — the
+`amllAssets/amll/player.html` bundle it drove, the `AmllBridge.*` argument encoding, the
+`androidApp/amll-builder/` Node builder, the `useNativeAmllRenderer` setting and its backup
+field were all removed on 2026-09-06. Do not reintroduce a WebView, an HTML lyric host, a
+renderer preference, or a second full-screen destination. `FullLyricScreen` and
+`NowPlayingScreen` remain removed.
 
-The existing Legacy host is real on Android System WebView, Windows x64 WebView2, and — since
-2026-08-21 — iOS `WKWebView` (`shared/src/iosMain/.../lyric/LyricScreen.ios.kt`). All three drive
-the same `amllAssets/amll/player.html` bundle through the same `AmllBridge.*` calls; the shared
-argument encoding lives in `commonMain/.../lyric/AmllWebBridge.kt`. On iOS the page's
-`globalThis.AmllCallback` does not exist, so a `WKUserScript` installs a façade forwarding to a
-`WKScriptMessageHandler`; that handler must be a class, never a Kotlin `object`, because
-Kotlin/Native cannot lower an Obj-C-backed singleton.
+The lyric engine lives in a **separate repository**, `AMLLJetpackCompose`, consumed as a Gradle
+composite build. `settings.gradle.kts` calls `includeBuild` on `../AMLLJetpackCompose` by
+default, overridable with `-PamllComposePath` or `AMLL_COMPOSE_PATH`; `:shared` depends on the
+`com.leejlredstar.amll:amll-compose` coordinate and Gradle substitutes the local project.
+`TYPESAFE_PROJECT_ACCESSORS` does not generate accessors for included builds, so that coordinate
+— not a `projects.*` accessor — is the dependency notation. Kotlin, Compose Multiplatform, AGP
+and the target set must stay identical in both catalogs: an included build only substitutes when
+both sides publish the same Kotlin target variants.
 
-Web/WASM, Windows ARM64, Linux, and macOS still must force `NativeAmllScreen`, disable the
-unavailable choice, and explain the platform limitation. They must not claim a Compose fallback
-is a Legacy WebView implementation. The former `FullLyricScreen` and `NowPlayingScreen` remain
-removed; renderer selection must not create a second navigation destination.
+The library owns the lyric model and the renderer: LRC/YRC/TTML parsing (`LyricParser`,
+`TtmlLyricParser`), AMLL's optimizer and grouping, the spring/timeline/layout engine, the
+word-level mask/emphasis/ruby renderer, platform word and grapheme segmentation, the
+reduced-motion system read, the browser DOM event bridge, and the artwork background stack.
+This repository owns everything app-shaped: `NativeAmllScreen` as the composition root,
+`NowPlayingViewModel` wiring, the song-details surface, the control island, and
+`NativeDynamicCoverLayer`. Two host couplings are deliberately inverted — `AmllBackground` takes
+an `AmllDynamicCoverLayer` slot instead of importing the app's video leaf, and the viewport uses
+the library's own `amllComposeWheelDeltaMode` expect/actual instead of the app's `getPlatform()`.
+Do not re-couple them.
 
-Both renderers consume the same media-ID-scoped `NowPlayingViewModel` state, lyric source policy,
-favorite state, and song-details request contract. The Native renderer owns its responsive
-artwork/lyric layout, album-art gradient and blur treatment, timed/word lyrics, translation and
-romanization rows, seek/scroll behavior, auto-hiding playback console, accessibility semantics,
-reduced-motion behavior, and shared Compose song-details surface. The Legacy page owns its
-equivalent HTML presentation and host bridge. Late state and song-details results must remain
-scoped to the current media ID in either renderer.
+The renderer consumes media-ID-scoped `NowPlayingViewModel` state, lyric source policy, favorite
+state, and the song-details request contract. Late state and song-details results must stay
+scoped to the current media ID.
 
-Windows WebView2 is a native child HWND. Only while Legacy is selected, full-player page
-transforms are disabled and navigation, snackbar, lyric-state, playback-control, and modal
-surfaces that overlap the child use `DesktopOverlayWindow`. Native Compose must retain the
-normal Compose transitions and transparent rounded controller surfaces.
+The playback control island (`AutoHideMiniPlayerController`) is one common Compose surface on all
+four targets, and the Android presentation is the baseline: the same 3.6-second auto-hide on
+every platform. Desktop's former 30-second timeout belonged to the in-page `#desktop-console`,
+which existed only because Compose could not draw above the WebView2 child HWND; it went with
+the page. `DesktopOverlayWindow` was that same workaround and is removed — desktop uses normal
+Compose transitions, the in-scene snackbar host, and `ModalWideNavigationRail`.
 
 Dynamic video is the only intentionally narrow platform leaf:
 `NativeDynamicCoverLayer` is an expect/actual composable inside the shared artwork slot.
@@ -456,12 +464,8 @@ RedefineNCM_KMP/
 │       │   │   ├── NowPlayingViewModel.kt # holds shuffle invariant (rebuildPlaylistFromTimeline)
 │       │   │   └── SongRecognitionViewModel.kt
 │       │   └── ui/
-│       │       ├── amll/
-│       │       │   ├── NativeAmllScreen.kt       # Native renderer; used everywhere Legacy is unavailable
-│       │       │   ├── AmllBackground.kt         # native artwork gradient / blur treatment
-│       │       │   ├── AmllLyricModel.kt         # timed, translated, romanized lyric document
-│       │       │   ├── AmllLyricViewport.kt      # responsive lyric layout / scroll / seek
-│       │       │   └── ReducedMotion.kt          # common reduced-motion contract
+│       │       ├── amll/NativeAmllScreen.kt    # the only full-player renderer, all four targets
+│       │       ├── component/AutoHideMiniPlayerController.kt # the playback control island
 │       │       ├── component/NativeDynamicCoverLayer.kt # narrow platform video leaf
 │       │       ├── component/SongWikiDetails.kt  # shared responsive song-details surface
 │       │       ├── screen/SongRecognitionScreen.kt
@@ -599,11 +603,10 @@ the single-extension audio shape and explicitly excludes `.lyric.*` and `.cover.
 
 The only full-screen playback destination is `AmllPlayerScreen`. `MiniNowPlayingBar`, the
 Desktop playback strip, and OS/deep-link now-playing requests open that destination directly.
-It resolves the persisted renderer preference against `supportsLegacyAmllWebView`: Android and
-Windows x64 default to Legacy WebView, while an explicit Native choice and every unsupported
-platform use `NativeAmllScreen`. `FullLyricScreen` and `NowPlayingScreen` must not be restored.
+It renders `NativeAmllScreen` on every platform; there is no renderer preference to resolve.
+`FullLyricScreen` and `NowPlayingScreen` must not be restored.
 
-Both renderers expose the top-right song-details affordance and request `/song/wiki/summary`
+The renderer exposes the top-right song-details affordance and requests `/song/wiki/summary`
 through `Repository` for the current song. They render only the
 `SONG_PLAY_ABOUT_TAB_SONG_BASIC` display fields; recommendation and playlist blocks are
 excluded. Requests and rendered state are media-ID scoped, and changing tracks must close the
@@ -852,8 +855,8 @@ Applies to all platforms, and the original Android repo is kept aligned (goal #3
 - **Use the real Expressive APIs** (`MaterialExpressiveTheme`, motion scheme) provided by the
   pinned `material3` version; custom shapes and page palettes extend that theme rather than
   replacing it.
-- **Per-screen:** Full-screen player (`AmllPlayerScreen`, resolving the recommended Legacy
-  WebView on Android/Windows x64 or the Native Compose renderer elsewhere/by user choice);
+- **Per-screen:** Full-screen player (`AmllPlayerScreen` → `NativeAmllScreen`, native Compose
+  on every target, with the auto-hiding control island);
   Playlist detail (album-color gradient header, play-all/download-all as one
   `SplitButtonLayout`, connected rows with download indicators); User page (blurred hero +
   avatar, badged playlists);
@@ -964,13 +967,14 @@ feature gap; platform integrations use target-specific actuals:
 - **Responsive nav**: non-Desktop targets use NavigationRail on ≥600dp. Desktop keeps a collapsed
   modal wide navigation rail at every supported window size; expansion overlays content instead of
   resizing it. Full-screen playback remains one `AmllPlayerScreen` destination regardless of
-  renderer choice, window size, or dynamic-cover capability. No-cookie startup routes to Login.
+  window size or dynamic-cover capability. No-cookie startup routes to Login.
 - **Settings**: server availability check (`/inner/version/`); the legacy-persisted
   `adaptOriginalAndroidLyric` value now controls the optional Android Live Update notification
   and Desktop floating-lyrics window (default off, immediate enable/disable); iOS Live Activity
-  and Web lyrics remain independent. The AMLL renderer switch persists the Legacy/Native choice,
-  defaults to recommended Legacy WebView where supported, and explains that Native is intended
-  for lower-end devices. The lyric-source dropdown persists the four-state TTML/backend policy
+  and Web lyrics remain independent. There is no AMLL renderer switch: the removed
+  `useNativeAmllRenderer` key must not come back, and `SettingsBackupData` deliberately no longer
+  declares it — `backupJson` sets `ignoreUnknownKeys`, so older exports still import.
+  The lyric-source dropdown persists the four-state TTML/backend policy
   and discloses the third-party ID lookup. A source change applies to the current process
   immediately after the settings write so backend-only cancels an in-flight external lookup;
   durable-write failure rolls the process snapshot and current-song load back. The live-update
@@ -979,18 +983,21 @@ feature gap; platform integrations use target-specific actuals:
 - Skipped intentionally: `HiddenTestActivity`, `serverMocker` (dev tools), `dailysignin`
   (declared but never called in the original either).
 
-### Selectable AMLL renderers — DONE (updated 2026-07-27)
-- [x] `AmllPlayerScreen` is the single full-screen destination and resolves one renderer at a
-      time from the persisted setting and platform capability.
-- [x] Android System WebView and Windows x64 WebView2 provide the recommended Legacy renderer;
-      iOS, Web/WASM, Windows ARM64, Linux, and macOS force Native Compose.
-- [x] `NativeAmllScreen` remains the common low-overhead renderer. `FullLyricScreen` and
+### WebView removal and renderer extraction — DONE (updated 2026-09-06)
+- [x] Every WebView is gone: the four `LyricScreen.*` hosts, `WebviewJna`, `AmllWebBridge`,
+      `AmllHostState`, `AmllSongDetails`, `AmllRendererSupport.*`, `amllAssets/`,
+      `androidApp/amll-builder/`, the `webview-java` dependency and its JitPack repository, the
+      ProGuard keep rules, and the `compose.layers.type=COMPONENT` startup workaround.
+- [x] `DesktopOverlayWindow` and its `ProvideDesktopOverlayOwner` owner went with it; every call
+      site was gated on the Legacy renderer being active.
+- [x] The lyric engine and lyric model live in the standalone `AMLLJetpackCompose` repository and
+      are consumed through `includeBuild`.
+- [x] `AmllPlayerScreen` renders `NativeAmllScreen` on all four targets. `FullLyricScreen` and
       `NowPlayingScreen` remain removed.
-- [x] The Legacy HTML/JS/CSS preferred source, reproducible Node builder, JNA host, generated
-      runtime notices, and Desktop overlay ownership are restored without changing Android/iOS/
-      Web Native implementations.
-- [x] Renderer preference is exported/imported; backups from before the setting leave the current
-      choice untouched.
+- [x] `USE_NATIVE_AMLL_RENDERER` is dropped from `SettingKeys`, the Settings UI and the backup
+      schema; backups written while the setting existed still import.
+- [x] The control island is one common surface on all four targets with Android's 3.6-second
+      auto-hide everywhere.
 - [x] This branch passes `:shared:jvmTest`, `:desktopApp:compileKotlin`,
       `:shared:compileAndroidMain`, `:androidApp:assembleDebug`,
       `:shared:compileKotlinWasmJs`, `:shared:wasmJsBrowserTest`, and

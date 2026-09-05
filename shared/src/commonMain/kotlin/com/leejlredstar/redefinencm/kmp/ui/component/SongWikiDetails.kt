@@ -116,7 +116,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.data.SongWikiSection
-import com.leejlredstar.redefinencm.kmp.ui.amll.nextAmllArtworkUriAfterFailure
+import com.leejlredstar.amll.compose.nextAmllArtworkUriAfterFailure
 import com.leejlredstar.redefinencm.kmp.ui.theme.DarkColors
 import com.leejlredstar.redefinencm.kmp.ui.theme.buildContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
@@ -131,17 +131,16 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /*
- * Literal Compose translation of HEAD
- * shared/src/commonMain/amllAssets/amll/player.html (AMLL core 0.5.2),
- * selectors :root and #wiki-info through #wiki-dialog/.wiki-*.
+ * Literal Compose translation of the former AMLL host page (AMLL core 0.5.2), selectors :root
+ * and #wiki-info through #wiki-dialog/.wiki-*. That page was deleted on 2026-09-06; recover it
+ * for auditing with
+ * `git show d3cfaf168d5f605d5bcea265055d84fedf691e6d:shared/src/commonMain/amllAssets/amll/player.html`.
  *
  * Colours are no longer a frozen copy of the dark scheme. That copy was thirteen literals
  * duplicating DarkColors, so this surface could not follow the theme, could not be tinted by the
  * artwork the way every other page is, and drifted silently whenever Color.kt changed.
  *
- * It still pins the dark scheme, because it always sits over the player. The trade-off is that
- * the Desktop Legacy renderer draws this dialog from player.html's fixed CSS instead, so the two
- * now differ there until that CSS is updated to match; every other renderer uses this composable.
+ * It still pins the dark scheme, because it always sits over the player.
  */
 private val WikiExpressiveEasing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
 private val WikiCssEase = CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f)
@@ -161,7 +160,7 @@ internal data class SongWikiDialogGeometry(
 )
 
 /**
- * Resolves the literal `#wiki-overlay`/`#wiki-dialog` media-query geometry from player.html.
+ * Resolves the literal `#wiki-overlay`/`#wiki-dialog` media-query geometry from that page.
  * Safe-area values are explicit inputs so the same calculation is testable on every target.
  */
 internal fun songWikiDialogGeometry(

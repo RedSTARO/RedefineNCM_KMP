@@ -6,7 +6,6 @@
 
 package com.leejlredstar.redefinencm.kmp.ui.amll
 
-import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -56,15 +55,6 @@ class AmllFrameClockTest {
         }
     }
 
-    @Test
-    fun animationDeltaPreservesHighRefreshFrameDurations() {
-        assertClose(16.666667, amllFrameDeltaMillis(0L, 16_666_667L))
-        assertClose(6.944444, amllFrameDeltaMillis(0L, 6_944_444L))
-        assertClose(4.166667, amllFrameDeltaMillis(0L, 4_166_667L))
-        assertEquals(0.0, amllFrameDeltaMillis(10L, 10L))
-        assertEquals(0.0, amllFrameDeltaMillis(10L, 9L))
-    }
-
     private fun countPresentationPublishes(inputHz: Int): Int {
         val frameGate = AmllPresentationFrameGate()
         var publishes = 0
@@ -112,13 +102,5 @@ class AmllFrameClockTest {
             publishTimes += frameTimeNanos
         }
         return publishTimes
-    }
-
-    private fun assertClose(
-        expected: Double,
-        actual: Double,
-        tolerance: Double = 0.000001,
-    ) {
-        assertTrue(abs(expected - actual) <= tolerance, "expected=$expected actual=$actual")
     }
 }

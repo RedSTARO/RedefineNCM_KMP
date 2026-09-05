@@ -26,7 +26,6 @@
 # JNA maps these Java method names and signatures directly to native symbols. In particular,
 # allowoptimization cannot be used here because ProGuard may remove parameters from methods.
 -keep class com.sun.jna.* { *; }
--keep interface com.leejlredstar.redefinencm.kmp.lyric.WebviewJna { *; }
 -keep interface com.leejlredstar.redefinencm.kmp.smtc.WindowsMediaControls$Combase { *; }
 -keepclassmembernames,includedescriptorclasses interface * extends com.sun.jna.Library { <methods>; }
 -keepclassmembers,includedescriptorclasses interface * extends com.sun.jna.Callback { <methods>; }
@@ -112,9 +111,3 @@
 # Neither is loaded by the Desktop runtime, and their Maven/OSGi APIs are deliberately absent.
 -dontwarn org.bytedeco.javacpp.tools.**
 -dontwarn org.osgi.annotation.**
-
-# webview_java is non-transitive because only its bundled native WebView2 library is consumed;
-# the Legacy host talks to that DLL through this project's own WebviewJna binding, so the
-# upstream Java classes are shrunk away unused and the Casterlabs Commons platform/IO helpers
-# they reference are deliberately absent.
--dontwarn co.casterlabs.commons.**

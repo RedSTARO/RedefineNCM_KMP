@@ -3,43 +3,15 @@ package com.leejlredstar.redefinencm.kmp.lyric
 import androidx.compose.runtime.Composable
 import com.leejlredstar.redefinencm.kmp.ui.amll.NativeAmllScreen
 
-enum class AmllRendererMode {
-    LegacyWebView,
-    NativeCompose,
-}
-
 /**
- * Whether the current target can use the legacy AMLL WebView route.
- */
-expect val supportsLegacyAmllWebView: Boolean
-
-/**
- * Pure utility for selecting the route from a persisted preference plus platform support.
- */
-fun resolveAmllRendererMode(
-    useNativeRenderer: Boolean,
-    legacyWebViewSupported: Boolean,
-): AmllRendererMode = if (useNativeRenderer || !legacyWebViewSupported) {
-    AmllRendererMode.NativeCompose
-} else {
-    AmllRendererMode.LegacyWebView
-}
-
-/**
- * Current sole route for the full-player surface.
+ * The only full-player surface, on every target.
+ *
+ * The Legacy AMLL WebView renderer this used to select between — Android System WebView,
+ * Windows x64 WebView2 and iOS WKWebView, all driving one bundled `player.html` — is gone.
+ * `NativeAmllScreen` is native Compose from the same AMLL sources, so there is nothing left
+ * to choose and no persisted preference to honour.
  */
 @Composable
-fun AmllPlayerScreen(
-    useNativeRenderer: Boolean,
-    onBack: () -> Unit,
-) {
-    val mode = resolveAmllRendererMode(
-        useNativeRenderer = useNativeRenderer,
-        legacyWebViewSupported = supportsLegacyAmllWebView,
-    )
-
-    when (mode) {
-        AmllRendererMode.NativeCompose -> NativeAmllScreen(onBack = onBack)
-        AmllRendererMode.LegacyWebView -> WebViewLyricScreen(onBack = onBack)
-    }
+fun AmllPlayerScreen(onBack: () -> Unit) {
+    NativeAmllScreen(onBack = onBack)
 }

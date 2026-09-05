@@ -188,34 +188,30 @@ class SettingsBackupTest {
     }
 
     @Test
-    fun amllRendererPreferenceRoundTripsWithoutChangingLegacyImports() {
-        val exported = encodeSettingsBackup(
-            getString = { _, default -> default },
-            getBoolean = { key, default ->
-                if (key == SettingKeys.USE_NATIVE_AMLL_RENDERER) true else default
-            },
-        )
+    fun backupsFromTheSelectableRendererEraStillImport() {
+        // The AMLL WebView renderer and its `useNativeAmllRenderer` preference are gone. Files
+        // exported while both renderers existed still carry the key, so importing one must
+        // neither fail nor write a setting the app no longer reads.
         val writtenBooleans = mutableMapOf<String, Boolean>()
 
-        assertTrue(exported.contains("\"useNativeAmllRenderer\":true"))
         assertTrue(
             applySettingsBackup(
-                json = exported,
+                json = """{"server":"http://server/","useNativeAmllRenderer":true}""",
                 setString = { _, _ -> },
                 setBoolean = { key, value -> writtenBooleans[key] = value },
             ),
         )
-        assertTrue(writtenBooleans[SettingKeys.USE_NATIVE_AMLL_RENDERER] == true)
+        assertFalse("useNativeAmllRenderer" in writtenBooleans)
+    }
 
-        writtenBooleans.clear()
-        assertTrue(
-            applySettingsBackup(
-                json = "{}",
-                setString = { _, _ -> },
-                setBoolean = { key, value -> writtenBooleans[key] = value },
-            ),
+    @Test
+    fun exportsNoLongerCarryARendererPreference() {
+        val exported = encodeSettingsBackup(
+            getString = { _, default -> default },
+            getBoolean = { _, _ -> true },
         )
-        assertFalse(SettingKeys.USE_NATIVE_AMLL_RENDERER in writtenBooleans)
+
+        assertFalse(exported.contains("useNativeAmllRenderer"))
     }
 
     @Test

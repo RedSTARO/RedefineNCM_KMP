@@ -1,6 +1,6 @@
 # RedefineNCM → KMP 迁移进度
 
-> 最后更新：2026-07-27　｜　状态：**四目标均已启用；全屏播放器为单一路由、双渲染器**。Android 与 Windows x64 默认使用推荐的 Legacy WebView，用户可切换到仅建议低端设备使用的 Native Compose；其余平台自动使用 Native。
+> 最后更新：2026-09-06　｜　状态：**四目标均已启用；全屏播放器为单一路由、单一原生 Compose 渲染器**。项目内已无任何 WebView；歌词引擎在独立仓库 `AMLLJetpackCompose` 中，以 Gradle composite build 接入。
 > 权威细节与"目标规范 vs 现状差异清单"见 `AGENTS.md`（本仓库）与 `../RedefineNCM/AGENTS.md`（原始仓库，已冻结）。
 > 本文件只做"全步骤 / 已完成 / 剩余"的进度总览。
 
@@ -47,7 +47,7 @@ media3 1.10.1 ・ androidx.palette 1.0.0 ・ compileSdk/targetSdk 36 / minSdk 24
 | 歌单详情（封面取色 hero + 播放全部 + 下载全部 + 下载状态指示） | ✅ |
 | replacePlaylist 设置（单曲点击：单曲队列 vs 整单队列） | ✅ |
 | playlistUpdatePlaycount 上报 | ✅ |
-| 全屏播放器（单一路由、Legacy WebView / Native Compose 可选） | ✅（Android/Windows x64 默认推荐 Legacy；Native 仅建议低端设备；不支持 Legacy 的平台强制 Native） |
+| 全屏播放器（单一路由、原生 Compose） | ✅（四端同一份 `NativeAmllScreen`；无渲染器选项） |
 | 随机播放不变量（播放顺序队列 + 高亮同源重建） | ✅（ExoPlayer 按 timeline 播放顺序重建 + skipToIndex 映射窗口索引；VM 实时订阅） |
 | 播放状态持久化（队列/索引/进度/shuffle，onPause 存、启动恢复不自动播） | ✅（PlayerStatus.sq + PlatformPlayer.restoreQueue） |
 | 歌单批量下载（5 首/批，跳过已存在） | ✅（common 编排；Android MediaStore/JVM 文件系统/iOS NSURLSession/Web OPFS） |
@@ -95,62 +95,50 @@ media3 1.10.1 ・ androidx.palette 1.0.0 ・ compileSdk/targetSdk 36 / minSdk 24
       发布；所有 WinRT 创建、更新和释放固定在同一 MTA 线程。`WinGuid` 必须保持非
       private，JNA 需要从自身模块反射 `Structure` 字段。
 
-## 2.5 桌面 AMLL Legacy WebView 宿主
+## 2.5 桌面 AMLL WebView 宿主（已于 2026-09-06 删除）
 
-> JavaFX WebKit 已永久淘汰。Windows x64 当前恢复并维护 WebView2 作为推荐的 Legacy
-> 渲染器；Native Compose 是用户可选的低开销渲染器。两者仍通过同一个全屏路由进入。
+> 保留为历史记录。JavaFX WebKit 于 2026-07-05 淘汰，Windows x64 WebView2 于 2026-07-27
+> 恢复为可选的 Legacy 渲染器，2026-09-06 与 Android System WebView、iOS `WKWebView`
+> 一并删除。当前四端只有原生 Compose 一条路径。
 
-2026-07-04 曾以真实 cookie 登录桌面端实机排查旧 AMLL 歌词页，修复了一条完整的
-故障链，当时歌词渲染/滚动/返回全部验证通过：
+删除范围：四个 `LyricScreen.*` 宿主、`WebviewJna` 绑定、`AmllWebBridge` 参数编码、
+`AmllHostState` / `AmllSongDetails` 宿主状态、`AmllRendererSupport.*` 能力判定、
+`amllAssets/amll/`（`player.html` / `bundle.js` / `style.css`）、`androidApp/amll-builder/`
+Node 构建器、`webview-java` 依赖与其 JitPack 仓库、ProGuard keep 规则，以及
+`compose.layers.type=COMPONENT` 启动 hack。
 
-| 症状 | 根因 | 修复 |
-|---|---|---|
-| AMLL 页纯白屏 | JavaFX D3D 管线下 WebKit `RTImage.getTexture` NPE——Prism 纹理池默认 512M 对大 WebView 表面不够 | `main()` 设 `prism.maxvram=2G`（不要用 `prism.order=sw`：软件渲染会打满 CPU 并饿死网络协程） |
-| 退出歌词页整个 JVM 崩溃 | `onDispose { engine.load("about:blank") }` 触发 WebKit native 崩溃（`twkOpen → fwkDisposeGraphics`） | dispose 只清空歌词行，不重载页面 |
-| 歌词永远加载不出（连环 ConnectTimeout） | 服务器 DNS 有黑洞 A 记录（43.174.246.32 不通），CIO 引擎无多地址回退 + JVM DNS 缓存 30s 覆盖全部重试窗口 | JVM 端 Ktor 引擎 CIO → **OkHttp**（RouteSelector 自动换 IP，与 Android 一致）；另配 `HttpTimeout`（connect 20s）+ 歌词获取失败重试 4 次 |
-| 网络请求跑在 Swing EDT | VM scope 是 `Dispatchers.Main`（桌面=EDT） | 两个 VM 的网络获取统一 `launch(Dispatchers.Default)`（播放器控制保留 Main） |
-| 迷你播放条撑满整窗 | FAB slot 无高度约束 + 内层 `fillMaxHeight()`（825c22c 修过的回归） | Surface 固定 `size(300×112dp)`（原版尺寸） |
-| 桌面恢复队列后自动出声 | `restoreQueue` 默认实现 setQueue→pause 与异步解析竞态 | `JvmMediaPlayer` 覆写 `restoreQueue`：装载不播放，play 时从记忆位置续播 |
+`DesktopOverlayWindow` 与 `ProvideDesktopOverlayOwner` 同时删除：它们存在的唯一原因是
+WebView2 子 HWND 永远压在轻量 Compose 层之上，所有调用点都以 Legacy 是否激活为条件。
+桌面端现在使用普通 Compose 页面转场、场景内 Snackbar 与 `ModalWideNavigationRail`。
 
-### 第三轮（2026-07-05，2026-07-27 恢复）：系统 WebView2
+页内 `#desktop-console` 播放控制台也一并删除，桌面端改用与 Android 相同的控制岛屿
+`AutoHideMiniPlayerController`（岛屿是页内控制台的严格超集：额外提供折叠态、歌词详情
+展开与封面取色）。
 
-JavaFX WebKit 天花板确认（无 GPU 合成：字体/布局/动画残缺，关掉特效才有帧率）→
-迁移到 **系统 WebView（Windows = WebView2 / Edge Chromium）**，AMLL 完整效果
-（无衬线粗体、弹簧滚动、逐行模糊渐隐、blur 封面背景）实机验证通过：
-
-- 依赖固定 JitPack commit 的 `webview_java`，只用其打包的 native dll；该依赖设为
-  non-transitive，JNA 由项目显式声明，绑定层为精简 Kotlin `WebviewJna`。
-- **打包 dll 的嵌入分支已损坏**：window 参数无论直传 HWND 还是包 HWND* 在纯 AWT
-  下都以 JNA "Invalid memory access" 崩（C++ 异常穿 C ABI）；只有 window=null 的
-  自建窗口路径稳定 → 采用 **自建窗口 + Win32 SetParent 收编** 为 AWT Canvas 子窗口
-  （dll 自身 WndProc/DPI/WM_SIZE→resize 逻辑全保留）。
-- JAWT 句柄需 GetClassName 校验，失效时回退 EnumChildWindows 找 SunAwt* 子窗口。
-- AWT 报逻辑尺寸（DIP），MoveWindow 需物理像素 —— 乘 graphicsConfiguration
-  defaultTransform 缩放（150% DPI 下否则只铺 2/3）。
-- bind/dispatch 的 JNA 回调必须持强引用（native 侧存指针，GC 掉即崩）。
-- player.html 恢复完整特效（blur(48px) 背景等），signalReady 增加 amllReady 通道；
-  移除 JavaFX 六模块依赖与 prism 系 hack。
-
-WebView2 是原生子 HWND，Legacy 活跃时必须关闭全屏页进出 transform，并以独立
-`DesktopOverlayWindow` 承载会与其重叠的导航、Snackbar、歌词状态、控制器和弹窗。
-切换到 Native 后继续使用普通 Compose 动画与透明圆角控制器，不能复用 Legacy 的不透明
-窗口背景。
+原宿主内容可用 `git show d3cfaf168d5f605d5bcea265055d84fedf691e6d:<path>` 取回。
 
 ## 2.6 原生 Compose AMLL 迁移（2026-07-27）
 
-`commonMain/ui/amll/NativeAmllScreen.kt` 是跨平台 Native 渲染器。
-`MiniNowPlayingBar`、桌面播放条和系统/深链入口统一打开 `AmllPlayerScreen`；该路由
-在 Android/Windows x64 按设置选择 Legacy WebView 或 Native，在其他平台强制 Native。
+`commonMain/ui/amll/NativeAmllScreen.kt` 是四端唯一的全屏渲染器。
+`MiniNowPlayingBar`、桌面播放条和系统/深链入口统一打开 `AmllPlayerScreen`，该路由直接
+渲染 `NativeAmllScreen`，没有渲染器选项。
+
+歌词引擎（解析、优化器、弹簧、时间线、布局、字级遮罩与强调、分词、减少动态效果、封面
+背景）已于 2026-09-06 抽出到独立仓库 `AMLLJetpackCompose`，坐标
+`com.leejlredstar.amll:amll-compose`，通过 `settings.gradle.kts` 的 `includeBuild` 接入；
+默认解析同级目录 `../AMLLJetpackCompose`，可用 `-PamllComposePath` / `AMLL_COMPOSE_PATH`
+覆盖。两侧的 Kotlin / Compose / AGP 版本和目标集必须保持一致。
 
 | 项目 | 当前状态 |
 |---|---|
-| 响应式 AMLL 布局 | ✅ Native 由 common Compose 负责；Legacy 使用同一份 HTML/CSS/JS 资产 |
+| 响应式 AMLL 布局 | ✅ 全部由 common Compose 负责 |
 | 歌词 | ✅ 共用逐行/逐字时序、翻译与罗马音、点击 seek、自动跟随与手动滚动恢复 |
-| 视觉与动效 | ✅ 共用专辑色渐变、模糊封面、焦点行层级、控制台自动隐藏、无障碍与减少动态效果 |
+| 视觉与动效 | ✅ 共用专辑色渐变、模糊封面、焦点行层级、无障碍与减少动态效果 |
+| 控制岛屿 | ✅ `AutoHideMiniPlayerController` 四端同一份，统一按 Android 基准 3600 ms 自动收起 |
 | 音乐百科 | ✅ `SongWikiDetailsButton` + `SongWikiDetailsSheet` 为共用响应式 Compose surface，并保留 media-ID 防串歌约束 |
 | 动态封面 | ✅ 只保留 `NativeDynamicCoverLayer` 小型平台叶子；Android=Media3/TextureView、iOS=AVPlayerLayer/UIKitView、Desktop=FFmpeg 帧转 Compose ImageBitmap、Web=HTMLVideoElement/CanvasKit 互操作 |
-| Desktop 层级 | ✅ 只有 Legacy WebView2 激活时使用顶层 overlay 与无页面 transform；动态封面不参与渲染器决策 |
-| 路由收敛 | ✅ 保留 Legacy 与 Native 两个渲染器，但只有一个 `AmllPlayerScreen` 导航目的地；`FullLyricScreen` 已删除 |
+| Desktop 层级 | ✅ 与其他端一致的普通 Compose 层级；顶层 overlay 窗口已随 WebView2 删除 |
+| 路由收敛 | ✅ 一个渲染器、一个 `AmllPlayerScreen` 导航目的地；`FullLyricScreen` 已删除 |
 | 本分支验证 | ✅ JVM/Android/WASM 编译、JVM/Wasm 浏览器测试及 Web 生产分发均通过；iOS Kotlin/Native 源码编译通过，framework/Xcode 应用链接和运行仍需 macOS |
 
 ## 3. 已知限制 / 合理偏差

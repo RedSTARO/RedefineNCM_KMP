@@ -259,8 +259,9 @@ kotlin {
             implementation(libs.coil.network.ktor3)
             // SQLDelight runtime
             implementation(libs.sqldelight.runtime)
-            // Common TTML parsing for iOS/Web/non-WebView desktop fallbacks and lyric surfaces.
-            implementation(libs.xmlutil.core)
+            // Native AMLL renderer + lyric model. Resolved from the included build declared in
+            // settings.gradle.kts; `api` because NativeAmllScreen exposes its types outward.
+            api("com.leejlredstar.amll:amll-compose")
         }
         commonMain {
             kotlin.srcDir(generateAppBuildInfo)
@@ -274,7 +275,6 @@ kotlin {
             implementation(libs.sqldelight.native.driver)
         }
         jvmMain {
-            resources.srcDir("src/commonMain/amllAssets")
             dependencies {
                 // OkHttp 而非 CIO：目标服务器 DNS 有黑洞 A 记录，CIO 不做多地址回退会连环
                 // ConnectTimeout；OkHttp 的 RouteSelector 会自动换下一个 IP（与 Android 端一致）
@@ -282,13 +282,6 @@ kotlin {
                 // Dispatchers.Main for JVM (needed by DesktopFloatingWindowController + jvmTest)
                 implementation(libs.kotlinx.coroutinesSwing)
                 implementation(libs.sqldelight.sqlite.driver)
-                // Windows x64 Legacy AMLL host. Only the bundled native WebView2 library is used;
-                // keep this non-transitive because JNA is declared explicitly below.
-                implementation(
-                    "com.github.webview.webview_java:core:${libs.versions.webview.java.get()}",
-                ) {
-                    isTransitive = false
-                }
                 // Windows SMTC and macOS now-playing bindings call native APIs through JNA.
                 implementation(libs.jna)
                 implementation(libs.jna.platform)

@@ -71,7 +71,6 @@ import androidx.compose.material3.WideNavigationRailItem
 import androidx.compose.material3.WideNavigationRailItemDefaults
 import androidx.compose.material3.WideNavigationRailState
 import androidx.compose.material3.WideNavigationRailValue
-import androidx.compose.material3.WideNavigationRail
 import androidx.compose.material3.rememberWideNavigationRailState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -97,17 +96,11 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.lyric.AmllPlayerScreen
-import com.leejlredstar.redefinencm.kmp.lyric.AmllRendererMode
-import com.leejlredstar.redefinencm.kmp.lyric.resolveAmllRendererMode
-import com.leejlredstar.redefinencm.kmp.lyric.supportsLegacyAmllWebView
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberNowPlayingUiState
-import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayPlacement
-import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayWindow
 import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackSeekBar
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
@@ -319,21 +312,6 @@ private fun AppContent(
             val chromePalette = contentAccentPalette(chromeAccent)
             val platform = remember { getPlatform() }
             val desktopRailState = rememberWideNavigationRailState()
-            var useNativeAmllRenderer by remember(settings) {
-                mutableStateOf(
-                    settings.getBoolean(
-                        SettingKeys.USE_NATIVE_AMLL_RENDERER,
-                        false,
-                    ),
-                )
-            }
-            val amllRendererMode = resolveAmllRendererMode(
-                useNativeRenderer = useNativeAmllRenderer,
-                legacyWebViewSupported = supportsLegacyAmllWebView,
-            )
-            val legacyAmllRendererSelected =
-                amllRendererMode == AmllRendererMode.LegacyWebView
-
             var currentTab by rememberSaveable(stateSaver = tabDestSaver) {
                 mutableStateOf<TabDest>(TabDest.Home)
             }
@@ -410,10 +388,6 @@ private fun AppContent(
                     val rootDest = pushedStack.lastOrNull()
                         ?.let { RootDest.Pushed(it, pushedStack.size) }
                         ?: RootDest.Tab(currentTab)
-                    val legacyAmllFullScreenActive =
-                        legacyAmllRendererSelected &&
-                            rootDest is RootDest.Pushed &&
-                            rootDest.dest is PushedDest.FullLyric
                     val desktopRailExpanded = platform.isDesktop &&
                         showDesktopRail &&
                         desktopRailState.targetValue == WideNavigationRailValue.Expanded
@@ -443,9 +417,7 @@ private fun AppContent(
 
                     Scaffold(
                         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-                        snackbarHost = {
-                            if (!legacyAmllFullScreenActive) SnackbarHost(snackbarHostState)
-                        },
+                        snackbarHost = { SnackbarHost(snackbarHostState) },
                         floatingActionButtonPosition = FabPosition.End,
                         floatingActionButton = {
                             AnimatedVisibility(
@@ -487,16 +459,6 @@ private fun AppContent(
                                     accentPalette = chromePalette,
                                     player = player,
                                     showFullPlayer = showDesktopFullPlayer,
-                                    nativeOverlaySize = if (
-                                        platform.isDesktop && legacyAmllFullScreenActive
-                                    ) {
-                                        DpSize(
-                                            width = appContentWidth.coerceAtMost(360.dp),
-                                            height = appContentHeight,
-                                        )
-                                    } else {
-                                        null
-                                    },
                                     onSelectTab = {
                                         pushedStack.clear()
                                         currentTab = it
@@ -539,8 +501,6 @@ private fun AppContent(
                                         pageTransition(
                                             initial = initialState,
                                             target = targetState,
-                                            disableFullLyricMotion =
-                                                platform.isDesktop && legacyAmllRendererSelected,
                                         )
                                     },
                                     modifier = Modifier.weight(1f).fillMaxSize(),
@@ -550,7 +510,6 @@ private fun AppContent(
                                         is RootDest.Pushed -> when (val dest = target.dest) {
                                             is PushedDest.Login -> LoginScreen(onBack = ::back)
                                             is PushedDest.FullLyric -> AmllPlayerScreen(
-                                                useNativeRenderer = useNativeAmllRenderer,
                                                 onBack = ::back,
                                             )
                                             is PushedDest.Downloads -> DownloadManagementScreen(
@@ -579,9 +538,6 @@ private fun AppContent(
                                             is TabDest.Settings -> SettingsScreen(
                                                 scaffoldPadding = screenPadding,
                                                 onOpenLogin = { push(PushedDest.Login) },
-                                                onAmllRendererPreferenceChanged = {
-                                                    useNativeAmllRenderer = it
-                                                },
                                             )
                                         }
                                     }
@@ -629,25 +585,6 @@ private fun AppContent(
                         }
                     }
 
-                    if (legacyAmllFullScreenActive && desktopSnackbarVisible) {
-                        DesktopOverlayWindow(
-                            visible = true,
-                            title = "RedefineNCM 通知",
-                            width = (appContentWidth - 32.dp).coerceAtLeast(0.dp).coerceAtMost(560.dp),
-                            height = appContentHeight.coerceAtMost(96.dp),
-                            placement = DesktopOverlayPlacement.BottomCenter,
-                            focusable = false,
-                            onCloseRequest = {},
-                        ) {
-                            Surface(
-                                modifier = Modifier.fillMaxSize(),
-                                color = MaterialTheme.colorScheme.surface,
-                            ) {
-                                SnackbarHost(snackbarHostState)
-                            }
-                        }
-                    }
-
                 }
             }
 }
@@ -661,15 +598,12 @@ private fun DesktopExpandableSidebar(
     accentPalette: ContentAccentPalette,
     player: PlatformPlayer,
     showFullPlayer: Boolean,
-    nativeOverlaySize: DpSize?,
     onSelectTab: (TabDest) -> Unit,
     onOpenDownloads: () -> Unit,
     onChromeAccent: (Color) -> Unit,
     onOpenNowPlaying: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    val collapsedDisplayState = rememberWideNavigationRailState()
-    val useNativeOverlay = nativeOverlaySize != null
     val railExpanded = state.targetValue == WideNavigationRailValue.Expanded
     val expansionSettled = railExpanded &&
         !state.isAnimating &&
@@ -692,22 +626,10 @@ private fun DesktopExpandableSidebar(
             expansionSettled -> showExpandedPlayerContent = true
         }
     }
-    LaunchedEffect(useNativeOverlay) {
-        if (!useNativeOverlay && state.targetValue == WideNavigationRailValue.Expanded) {
-            state.snapTo(WideNavigationRailValue.Collapsed)
-        }
-    }
 
     fun collapseAfter(action: () -> Unit) {
-        if (useNativeOverlay) {
-            scope.launch {
-                state.snapTo(WideNavigationRailValue.Collapsed)
-                action()
-            }
-        } else {
-            action()
-            scope.launch { state.collapse() }
-        }
+        action()
+        scope.launch { state.collapse() }
     }
     fun toggleRail() {
         scope.launch {
@@ -716,9 +638,7 @@ private fun DesktopExpandableSidebar(
             } else {
                 WideNavigationRailValue.Expanded
             }
-            if (useNativeOverlay) {
-                state.snapTo(target)
-            } else if (target == WideNavigationRailValue.Expanded) {
+            if (target == WideNavigationRailValue.Expanded) {
                 state.expand()
             } else {
                 state.collapse()
@@ -726,89 +646,28 @@ private fun DesktopExpandableSidebar(
         }
     }
 
-    val overlaySize = nativeOverlaySize
-    if (overlaySize != null) {
-        WideNavigationRail(
-            state = collapsedDisplayState,
-            colors = railColors,
-        ) {
-            DesktopSidebarContent(
-                railExpanded = false,
-                expandedContentVisible = false,
-                tabs = tabs,
-                selectedTab = selectedTab,
-                downloadsSelected = downloadsSelected,
-                accentPalette = accentPalette,
-                player = player,
-                showFullPlayer = false,
-                showExpandedPlayerContent = false,
-                onToggle = ::toggleRail,
-                onSelectTab = { collapseAfter { onSelectTab(it) } },
-                onOpenDownloads = { collapseAfter(onOpenDownloads) },
-                onChromeAccent = onChromeAccent,
-                onOpenNowPlaying = { collapseAfter(onOpenNowPlaying) },
-            )
-        }
-
-        DesktopOverlayWindow(
-            visible = modalExpansionActive,
-            title = "RedefineNCM 导航",
-            width = overlaySize.width,
-            height = overlaySize.height,
-            placement = DesktopOverlayPlacement.TopStart,
-            topOffset = 32.dp,
-            focusable = true,
-            modal = true,
-            onCloseRequest = {
-                scope.launch { state.snapTo(WideNavigationRailValue.Collapsed) }
-            },
-        ) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = accentPalette.quietContainer,
-                contentColor = accentPalette.onQuietContainer,
-            ) {
-                DesktopSidebarContent(
-                    railExpanded = true,
-                    expandedContentVisible = true,
-                    tabs = tabs,
-                    selectedTab = selectedTab,
-                    downloadsSelected = downloadsSelected,
-                    accentPalette = accentPalette,
-                    player = player,
-                    showFullPlayer = showFullPlayer,
-                    showExpandedPlayerContent = showExpandedPlayerContent,
-                    onToggle = ::toggleRail,
-                    onSelectTab = { collapseAfter { onSelectTab(it) } },
-                    onOpenDownloads = { collapseAfter(onOpenDownloads) },
-                    onChromeAccent = onChromeAccent,
-                    onOpenNowPlaying = { collapseAfter(onOpenNowPlaying) },
-                )
-            }
-        }
-    } else {
-        ModalWideNavigationRail(
-            state = state,
-            colors = railColors,
-        ) {
-            DesktopSidebarContent(
-                railExpanded = railExpanded,
-                expandedContentVisible = modalExpansionActive,
-                tabs = tabs,
-                selectedTab = selectedTab,
-                downloadsSelected = downloadsSelected,
-                accentPalette = accentPalette,
-                player = player,
-                showFullPlayer = showFullPlayer,
-                showExpandedPlayerContent = showExpandedPlayerContent,
-                onToggle = ::toggleRail,
-                onSelectTab = { collapseAfter { onSelectTab(it) } },
-                onOpenDownloads = { collapseAfter(onOpenDownloads) },
-                onChromeAccent = onChromeAccent,
-                onOpenNowPlaying = { collapseAfter(onOpenNowPlaying) },
-            )
-        }
+    ModalWideNavigationRail(
+        state = state,
+        colors = railColors,
+    ) {
+        DesktopSidebarContent(
+            railExpanded = railExpanded,
+            expandedContentVisible = modalExpansionActive,
+            tabs = tabs,
+            selectedTab = selectedTab,
+            downloadsSelected = downloadsSelected,
+            accentPalette = accentPalette,
+            player = player,
+            showFullPlayer = showFullPlayer,
+            showExpandedPlayerContent = showExpandedPlayerContent,
+            onToggle = ::toggleRail,
+            onSelectTab = { collapseAfter { onSelectTab(it) } },
+            onOpenDownloads = { collapseAfter(onOpenDownloads) },
+            onChromeAccent = onChromeAccent,
+            onOpenNowPlaying = { collapseAfter(onOpenNowPlaying) },
+        )
     }
+
 }
 
 @Composable
@@ -1257,13 +1116,8 @@ private fun desktopSecondaryButtonColors(accentPalette: ContentAccentPalette) =
 private fun pageTransition(
     initial: RootDest,
     target: RootDest,
-    disableFullLyricMotion: Boolean,
 ): ContentTransform =
     when {
-        // Desktop AMLL is a native child HWND hosted by SwingPanel. It cannot follow Compose
-        // transforms or clipping, so animating it produces a half-height native surface.
-        disableFullLyricMotion && isFullLyricSheetTransition(initial, target) ->
-            EnterTransition.None togetherWith ExitTransition.None
         isFullLyricSheetTransition(initial, target) -> sheetTransition(showingSheet = isFullLyric(target))
         initial is RootDest.Tab && target is RootDest.Tab -> {
             val forward = tabIndex(target.tab) > tabIndex(initial.tab)

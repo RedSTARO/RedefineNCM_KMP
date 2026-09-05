@@ -54,25 +54,27 @@ AMLL TTML 按当前网易云歌曲 ID 精确查询
 [`amll-dev/amll-ttml-db`](https://github.com/amll-dev/amll-ttml-db)，不自动套用模糊标题
 结果。该请求使用独立无凭证客户端，只发送歌曲 ID，不会把网易云 Cookie、`realIP` 或后端
 地址发给第三方。Android、iOS、Desktop/JVM 与 Web/WASM 都使用同一个
-`NowPlayingViewModel` 歌词状态与来源策略。Android 和 Windows x64 默认使用推荐的
-Legacy WebView AMLL 页面；设置中可切换到仅建议低端设备使用的
-`commonMain/ui/amll/NativeAmllScreen.kt`。iOS、Web/WASM、Windows ARM64、Linux 与
-macOS 当前没有 Legacy 宿主，会自动使用 Native Compose。
+`NowPlayingViewModel` 歌词状态与来源策略。全屏播放页在四端都是同一份原生 Compose
+实现 `commonMain/ui/amll/NativeAmllScreen.kt`；项目内已无任何 WebView。
 
-原生实现按源码固定翻译 `@applemusic-like-lyrics/core 0.5.2`、
-`@applemusic-like-lyrics/lyric 1.0.2` 与 `@applemusic-like-lyrics/ttml 1.0.1`。
-修改歌词解析、布局、弹簧或逐字渲染后运行：
+歌词引擎在独立仓库 [AMLLJetpackCompose](../AMLLJetpackCompose) 中，通过
+`settings.gradle.kts` 的 `includeBuild` 以 composite build 方式接入（坐标
+`com.leejlredstar.amll:amll-compose`）。默认从同级目录 `../AMLLJetpackCompose` 解析，
+可用 `-PamllComposePath` 或 `AMLL_COMPOSE_PATH` 指向其他位置。它按源码固定翻译
+`@applemusic-like-lyrics/core 0.5.2`、`@applemusic-like-lyrics/lyric 1.0.2` 与
+`@applemusic-like-lyrics/ttml 1.0.1`。修改歌词解析、布局、弹簧或逐字渲染后运行：
 
 ```sh
+cd ../AMLLJetpackCompose && ./gradlew :amll-compose:jvmTest
 ./gradlew :shared:jvmTest
 ./gradlew :shared:testAndroidHostTest
 ./gradlew :shared:wasmJsBrowserTest
 ```
 
-CI 验证 Legacy Web 资产可从锁定依赖重建，也验证 TTML → 公共歌词模型 → Native
-Compose 渲染字段链路，并校验应用内许可证资源与仓库声明一致。Native 的逐文件、
-逐符号映射及有意的平台 API 边界见
-[`docs/AMLL_NATIVE_TRANSLATION.md`](docs/AMLL_NATIVE_TRANSLATION.md)。
+CI 验证 TTML → 公共歌词模型 → Compose 渲染字段链路，并校验应用内许可证资源与仓库
+声明一致。宿主侧映射见
+[`docs/AMLL_NATIVE_TRANSLATION.md`](docs/AMLL_NATIVE_TRANSLATION.md)；歌词引擎的逐符号
+映射与平台 API 边界以 AMLLJetpackCompose 仓库内的同名文档为准。
 
 AMLL 包声明为 `AGPL-3.0-only`；完整文本和上游版本/源码定位见
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。仓库当前没有项目级 `LICENSE`，因此发布

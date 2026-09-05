@@ -14,8 +14,8 @@ import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.window.ComposeViewport
 import com.leejlredstar.redefinencm.kmp.di.initKoin
 import com.leejlredstar.redefinencm.kmp.ui.image.configureWebArtworkImageLoader
-import com.leejlredstar.redefinencm.kmp.ui.amll.LocalAmllPlatformEventBridge
-import com.leejlredstar.redefinencm.kmp.ui.amll.WebAmllPlatformEventBridge
+import com.leejlredstar.amll.compose.LocalAmllPlatformEventBridge
+import com.leejlredstar.amll.compose.WebAmllPlatformEventBridge
 import com.leejlredstar.redefinencm.kmp.ui.theme.webBundledFontFamily
 import com.leejlredstar.redefinencm.kmp.ui.theme.LocalPreloadedFontFamily
 import kotlinx.coroutines.delay

@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.ui.amll
 
+import com.leejlredstar.amll.compose.nextAmllArtworkUriAfterFailure
 import com.leejlredstar.redefinencm.kmp.viewmodel.SongWikiUiState
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -41,12 +42,6 @@ class NativeAmllScreenTest {
                 wikiDynamicCoverVisible = false,
             ),
         )
-    }
-
-    @Test
-    fun desktopPreservesItsThirtySecondExpandedControllerTimeout() {
-        assertEquals(30_000L, amllControllerAutoHideDelayMillis(isDesktop = true))
-        assertEquals(3_600L, amllControllerAutoHideDelayMillis(isDesktop = false))
     }
 
     @Test

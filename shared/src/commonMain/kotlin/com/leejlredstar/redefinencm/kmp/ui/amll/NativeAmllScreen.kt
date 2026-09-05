@@ -60,6 +60,12 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import com.leejlredstar.amll.compose.AmllBackground
+import com.leejlredstar.amll.compose.AmllLyricDocument
+import com.leejlredstar.amll.compose.AmllLyricViewport
+import com.leejlredstar.amll.compose.buildAmllLyricDocument
+import com.leejlredstar.amll.compose.calculateAmllLyricVisualParameters
+import com.leejlredstar.amll.compose.rememberReducedMotionEnabled
 import com.leejlredstar.redefinencm.kmp.lyric.LyricStateOverlay
 import com.leejlredstar.redefinencm.kmp.player.PlayerState
 import com.leejlredstar.redefinencm.kmp.getPlatform
@@ -76,8 +82,14 @@ import kotlinx.coroutines.flow.collect
 import org.koin.compose.koinInject
 
 private val WikiBackdropCssEase = CubicBezierEasing(0.25f, 0.10f, 0.25f, 1.00f)
-private const val NativeAmllControllerAutoHideMillis = 3_600L
-private const val DesktopAmllControllerAutoHideMillis = 30_000L
+/**
+ * The Android control island's own timeout, now the timeout on every target.
+ *
+ * Desktop used to keep the expanded console up for 30 seconds because its console lived inside
+ * the AMLL WebView page and a Compose reveal could not sit above the WebView2 child HWND. That
+ * page is gone; desktop shows the same island as Android and follows the same timing.
+ */
+private const val AmllControllerAutoHideMillis = 3_600L
 internal const val AmllPresentationRefreshHz = 60L
 internal const val AmllPresentationFrameIntervalNanos =
     1_000_000_000L / AmllPresentationRefreshHz
@@ -235,6 +247,16 @@ fun NativeAmllScreen(
             reducedMotion = reducedMotion,
             onArtworkLoaded = {},
             modifier = Modifier.fillMaxSize(),
+            // `#dynamic-bg`. The renderer owns every filter around it; this supplies frames only.
+            dynamicCoverLayer = { url, play, layerReducedMotion, layerModifier ->
+                NativeDynamicCoverLayer(
+                    url = url,
+                    play = play,
+                    showBadge = false,
+                    reducedMotion = layerReducedMotion,
+                    modifier = layerModifier,
+                )
+            },
         )
 
         // Only a completed tap on unused background space reveals the controller. A raw press
@@ -292,7 +314,7 @@ fun NativeAmllScreen(
 
         AutoHideMiniPlayerController(
             modifier = Modifier.fillMaxSize(),
-            autoHideDelayMillis = amllControllerAutoHideDelayMillis(platform.isDesktop),
+            autoHideDelayMillis = AmllControllerAutoHideMillis,
             reducedMotion = reducedMotion,
             externalRevealRequest = controllerRevealRequest,
         )
@@ -345,15 +367,7 @@ internal fun shouldPlayAmllDynamicBackground(
     !songWikiVisible || (!reducedMotion && !wikiDynamicCoverVisible)
 
 /**
- * The former Desktop host kept its expanded controller available for 30 seconds. Other targets
- * used the shared controller's 3.6-second default, so preserve that distinction without forking
- * the common screen tree.
- */
-internal fun amllControllerAutoHideDelayMillis(isDesktop: Boolean): Long =
-    if (isDesktop) DesktopAmllControllerAutoHideMillis else NativeAmllControllerAutoHideMillis
-
-/**
- * `player.html::openSongWiki()` fetches only from its idle state. Closing and reopening an error
+ * The former host page's `openSongWiki()` fetched only from its idle state. Closing and reopening an error
  * keeps that error visible; the explicit retry button is the retry path for the same track.
  */
 internal fun shouldRequestSongWikiOnOpen(

@@ -45,7 +45,6 @@ android {
     }
     sourceSets {
         getByName("main") {
-            assets.directories.add("../shared/src/commonMain/amllAssets")
         }
     }
     packaging {

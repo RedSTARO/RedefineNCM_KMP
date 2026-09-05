@@ -77,7 +77,6 @@ import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
 import com.leejlredstar.redefinencm.kmp.lyric.supportsDynamicNowPlayingCover
-import com.leejlredstar.redefinencm.kmp.lyric.supportsLegacyAmllWebView
 import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
 import com.leejlredstar.redefinencm.kmp.player.AudioOutputDevice
 import com.leejlredstar.redefinencm.kmp.player.SYSTEM_DEFAULT_AUDIO_OUTPUT_ID
@@ -118,7 +117,6 @@ import org.koin.compose.koinInject
 fun SettingsScreen(
     scaffoldPadding: PaddingValues,
     onOpenLogin: () -> Unit,
-    onAmllRendererPreferenceChanged: (Boolean) -> Unit = {},
     settings: PlatformSettings = koinInject(),
     api: NCMApi = koinInject(),
     mainViewModel: MainViewModel = koinInject(),
@@ -142,7 +140,6 @@ fun SettingsScreen(
     var lyricSourceMode by remember(settings) {
         mutableStateOf(LyricSourceMode.DEFAULT.wireValue)
     }
-    var useNativeAmllRenderer by remember(settings) { mutableStateOf(false) }
     var useDynamicCover by remember(settings) { mutableStateOf(false) }
     var audioOutputDeviceId by remember(settings) {
         mutableStateOf(SYSTEM_DEFAULT_AUDIO_OUTPUT_ID)
@@ -190,11 +187,6 @@ fun SettingsScreen(
         nowPlayingViewModel.setLyricSourceMode(
             LyricSourceMode.fromStoredWireValue(lyricSourceMode),
         )
-        useNativeAmllRenderer = settings.getBoolean(
-            SettingKeys.USE_NATIVE_AMLL_RENDERER,
-            false,
-        )
-        onAmllRendererPreferenceChanged(useNativeAmllRenderer)
         useDynamicCover = settings.getBoolean(SettingKeys.USE_DYNAMIC_COVER, false)
         nowPlayingViewModel.setUseDynamicCover(useDynamicCover)
         audioOutputDeviceId = settings.getString(
@@ -271,11 +263,6 @@ fun SettingsScreen(
             nowPlayingViewModel.setLyricSourceMode(
                 LyricSourceMode.fromStoredWireValue(lyricSourceMode),
             )
-            useNativeAmllRenderer = settings.getBooleanAsync(
-                SettingKeys.USE_NATIVE_AMLL_RENDERER,
-                false,
-            )
-            onAmllRendererPreferenceChanged(useNativeAmllRenderer)
             useDynamicCover = settings.getBooleanAsync(SettingKeys.USE_DYNAMIC_COVER, false)
             nowPlayingViewModel.setUseDynamicCover(useDynamicCover)
             settingsLoaded = true
@@ -639,36 +626,11 @@ fun SettingsScreen(
 
                 SettingsSectionLabel("歌词", settingsPalette)
                 val lyricSettingCount =
-                    if (LyricNotificationController.supportsOptionalSurfaceControl) 5 else 4
-                val nativeRendererSelected =
-                    useNativeAmllRenderer || !supportsLegacyAmllWebView
-                SettingsSwitch(
-                    checked = nativeRendererSelected,
-                    label = "使用 Native Compose 播放页",
-                    accentPalette = settingsPalette,
-                    index = 0,
-                    count = lyricSettingCount,
-                    supportingText = when {
-                        !supportsLegacyAmllWebView ->
-                            "当前平台不支持 Legacy WebView，已自动使用 Native Compose。"
-                        useNativeAmllRenderer ->
-                            "Native Compose 仅推荐低端设备使用；关闭后使用推荐的 Legacy WebView。"
-                        else ->
-                            "推荐：Legacy WebView；Native Compose 仅推荐低端设备使用。"
-                    },
-                    enabled = supportsLegacyAmllWebView,
-                ) { enabled ->
-                    useNativeAmllRenderer = enabled
-                    persistSettings(write = {
-                        settings.setBoolean(SettingKeys.USE_NATIVE_AMLL_RENDERER, enabled)
-                    }, onWritten = {
-                        onAmllRendererPreferenceChanged(enabled)
-                    })
-                }
+                    if (LyricNotificationController.supportsOptionalSurfaceControl) 4 else 3
                 LyricSourceDropdown(
                     selectedWireValue = lyricSourceMode,
                     accentPalette = settingsPalette,
-                    index = 1,
+                    index = 0,
                     count = lyricSettingCount,
                 ) { mode ->
                     val writeGeneration = ++lyricSourceWriteGeneration
@@ -694,7 +656,7 @@ fun SettingsScreen(
                         extraLyricSurfaceEnabled,
                         LyricNotificationController.optionalSurfaceSettingLabel,
                         settingsPalette,
-                        index = 2,
+                        index = 1,
                         count = lyricSettingCount,
                     ) { enabled ->
                         extraLyricSurfaceEnabled = enabled

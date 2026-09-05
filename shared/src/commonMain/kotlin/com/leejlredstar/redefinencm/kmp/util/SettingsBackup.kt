@@ -29,8 +29,6 @@ data class SettingsBackupData(
     val showRomanLyric: Boolean = false,
     /** Null keeps the current choice when importing a backup made before lyric-source support. */
     val lyricSourceMode: String? = null,
-    /** Null keeps the current renderer when importing a backup made before renderer selection. */
-    val useNativeAmllRenderer: Boolean? = null,
     val useDynamicCover: Boolean = false,
 )
 
@@ -66,7 +64,6 @@ internal fun encodeSettingsBackup(
         lyricSourceMode = LyricSourceMode.fromStoredWireValue(
             getString(SettingKeys.LYRIC_SOURCE_MODE, LyricSourceMode.DEFAULT.wireValue),
         ).wireValue,
-        useNativeAmllRenderer = getBoolean(SettingKeys.USE_NATIVE_AMLL_RENDERER, false),
         useDynamicCover = getBoolean(SettingKeys.USE_DYNAMIC_COVER, false),
     )
 )
@@ -102,9 +99,6 @@ internal fun applySettingsBackup(
     setBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, data.showTranslatedLyric)
     setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, data.showRomanLyric)
     lyricSourceMode?.let { setString(SettingKeys.LYRIC_SOURCE_MODE, it.wireValue) }
-    data.useNativeAmllRenderer?.let {
-        setBoolean(SettingKeys.USE_NATIVE_AMLL_RENDERER, it)
-    }
     setBoolean(SettingKeys.USE_DYNAMIC_COVER, data.useDynamicCover)
     true
 } catch (_: Exception) {

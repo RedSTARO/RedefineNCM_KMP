@@ -2,7 +2,7 @@
 
 import com.leejlredstar.redefinencm.kmp.data.api.dto.Lyric
 import com.leejlredstar.redefinencm.kmp.data.api.dto.LyricLrc
-import com.leejlredstar.redefinencm.kmp.util.LyricParser
+import com.leejlredstar.amll.compose.lyric.LyricParser
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
