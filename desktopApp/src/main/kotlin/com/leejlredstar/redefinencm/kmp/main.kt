@@ -64,6 +64,7 @@ import com.leejlredstar.redefinencm.kmp.di.initKoin
 import com.leejlredstar.redefinencm.kmp.notification.FloatingLyricData
 import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.player.SYSTEM_DEFAULT_AUDIO_OUTPUT_ID
 import com.leejlredstar.redefinencm.kmp.smtc.DesktopMediaControls
 import com.leejlredstar.redefinencm.kmp.ui.component.DesktopDynamicCoverWindowLifecycle
 import com.leejlredstar.redefinencm.kmp.ui.component.ProvideDesktopOverlayOwner
@@ -85,10 +86,42 @@ fun main() {
     }
     initKoin()
     val settings = GlobalContext.get().get<PlatformSettings>()
+    startFromTheSystemAudioOutput(settings::getString, settings::setString)
     LyricNotificationController.setOptionalSurfaceEnabled(
         settings.getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false),
     )
     launchDesktopApplication()
+}
+
+/**
+ * Drops any output device pinned in a previous session so this launch follows the system.
+ *
+ * A chosen device is a per-session override, not a preference worth carrying across restarts.
+ * The OS renames and reorders endpoints as hardware comes and goes — a monitor that reconnects
+ * as `1 - Display (2- ...)` no longer matches the `1 - Display (...)` that was stored — and a
+ * pin that survives a restart keeps sending audio at whatever was chosen last week. Playing into
+ * a device nobody is listening to is indistinguishable from a broken player, so the safe start
+ * is the one the OS is currently using.
+ *
+ * Only [JvmMediaPlayer][com.leejlredstar.redefinencm.kmp.player.JvmMediaPlayer] reads this key,
+ * and only when opening a stream, which cannot happen before this returns: queue restoration
+ * runs with `autoplay = false`.
+ */
+internal fun startFromTheSystemAudioOutput(
+    getString: (key: String, default: String) -> String,
+    setString: (key: String, value: String) -> Unit,
+) {
+    val pinned = getString(SettingKeys.AUDIO_OUTPUT_DEVICE, SYSTEM_DEFAULT_AUDIO_OUTPUT_ID)
+    if (pinned == SYSTEM_DEFAULT_AUDIO_OUTPUT_ID) return
+    runCatching {
+        setString(SettingKeys.AUDIO_OUTPUT_DEVICE, SYSTEM_DEFAULT_AUDIO_OUTPUT_ID)
+    }.onFailure { error ->
+        // A store that will not take the reset leaves the pin in place, so say which device
+        // playback is still aimed at rather than letting the silence be a mystery again.
+        System.err.println(
+            "Could not clear the pinned audio output device, keeping '$pinned': ${error.message}",
+        )
+    }
 }
 
 internal fun configureUncappedDesktopRendering() {

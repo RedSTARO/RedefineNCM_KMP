@@ -3,12 +3,17 @@ package com.leejlredstar.redefinencm.kmp.player
 /**
  * One audio endpoint playback can be routed to.
  *
- * [id] is the value persisted in settings and must stay stable across restarts and across
- * devices being plugged in or out; [displayName] is what Settings shows.
+ * [id] identifies the endpoint well enough to survive the list being reordered while the app
+ * runs; [displayName] is what Settings shows. It is not durable across restarts, and nothing
+ * asks it to be — a chosen device only holds for the session that chose it.
  */
 data class AudioOutputDevice(val id: String, val displayName: String)
 
-/** Persisted [SettingKeys.AUDIO_OUTPUT_DEVICE][com.leejlredstar.redefinencm.kmp.util.SettingKeys] value meaning "follow whatever the platform picks". */
+/**
+ * The [SettingKeys.AUDIO_OUTPUT_DEVICE][com.leejlredstar.redefinencm.kmp.util.SettingKeys] value
+ * meaning "follow whatever the platform is currently using", and the value every launch starts
+ * from — desktop startup clears any device pinned by an earlier session.
+ */
 const val SYSTEM_DEFAULT_AUDIO_OUTPUT_ID: String = ""
 
 /**

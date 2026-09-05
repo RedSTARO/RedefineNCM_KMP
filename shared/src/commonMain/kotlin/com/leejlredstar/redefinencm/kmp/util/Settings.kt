@@ -40,9 +40,9 @@ object SettingKeys {
     const val USE_NATIVE_AMLL_RENDERER = "useNativeAmllRenderer"
     const val USE_DYNAMIC_COVER = "useDynamicCover"
     const val PLAYER_VOLUME = "playerVolume"
-    // Machine-specific, so deliberately left out of the settings backup: importing one
-    // machine's speakers onto another would silently route playback at a device that is
-    // not there.
+    // A per-session override, not a preference: desktop startup resets it so playback follows
+    // the current system output device. Left out of the settings backup for the same reason it
+    // is not carried across restarts — it names one machine's hardware at one moment in time.
     const val AUDIO_OUTPUT_DEVICE = "audioOutputDevice"
 }
 

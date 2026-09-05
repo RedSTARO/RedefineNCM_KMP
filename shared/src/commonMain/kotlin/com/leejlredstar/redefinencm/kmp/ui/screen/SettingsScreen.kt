@@ -1124,8 +1124,11 @@ private fun SettingsDropdown(
     }
 }
 
-/** Shown for the "no explicit choice" entry and whenever the saved device cannot be resolved. */
+/** Shown for the "no explicit choice" entry and whenever the chosen device cannot be resolved. */
 private const val DefaultAudioOutputLabel = "系统默认"
+
+/** The menu row has space to say what the compact value cannot. */
+private const val DefaultAudioOutputMenuLabel = "系统默认（跟随系统输出设备）"
 
 /**
  * Picks which output device desktop playback opens.
@@ -1199,7 +1202,7 @@ private fun AudioOutputDeviceDropdown(
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
-                text = { Text(DefaultAudioOutputLabel) },
+                text = { Text(DefaultAudioOutputMenuLabel) },
                 onClick = { expanded = false; onUpdate(SYSTEM_DEFAULT_AUDIO_OUTPUT_ID) },
             )
             known.orEmpty().forEach { device ->
