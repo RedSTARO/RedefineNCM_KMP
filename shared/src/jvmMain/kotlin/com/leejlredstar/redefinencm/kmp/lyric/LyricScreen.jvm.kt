@@ -26,12 +26,16 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
+import com.leejlredstar.redefinencm.kmp.ui.component.CommentBottomSheet
+import com.leejlredstar.redefinencm.kmp.ui.component.QueueBottomSheet
+import com.leejlredstar.redefinencm.kmp.ui.component.rememberNowPlayingUiState
 import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayPlacement
 import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayWindow
 import com.leejlredstar.redefinencm.kmp.ui.component.DesktopOverlayWindowShape
 import com.leejlredstar.redefinencm.kmp.ui.amll.NativeAmllScreen
+import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlayerStatusRestoreState
+import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
 import com.leejlredstar.redefinencm.kmp.util.isLocalArtworkSidecarFileName
 import com.leejlredstar.redefinencm.kmp.util.jvmDownloadDirectory
@@ -74,11 +78,11 @@ import java.awt.Color as AwtColor
 
 private const val AMLL_READY_TIMEOUT_MILLIS = 10_000L
 private const val NATIVE_HOST_LAYOUT_TIMEOUT_MILLIS = 1_000L
-private const val CONTROLS_COLLAPSE_ANIMATION_MILLIS = 320L
 
-private val ExpandedControlsWindowSize = DpSize(652.dp, 240.dp)
-private val CollapsedControlsWindowSize = DpSize(436.dp, 64.dp)
 private val ControlsSheetWindowSize = DpSize(840.dp, 680.dp)
+
+/** The list surfaces that stay in Compose now that the transport console lives in the page. */
+internal enum class DesktopPlaybackSheet { Queue, Comments }
 
 /**
  * Desktop (JVM) actual: AMLL lyric engine in the **system WebView**
@@ -146,18 +150,16 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             localAmllArtwork = media.id to (dataUri ?: remoteArtworkUri)
         }
     }
-    var controlsVisible by remember { mutableStateOf(true) }
-    var controlsExpanded by remember { mutableStateOf(true) }
-    var controlsWindowExpanded by remember { mutableStateOf(true) }
-    var controlsSheetVisible by remember { mutableStateOf(false) }
-    var controlsRevealRequest by remember { mutableIntStateOf(0) }
+    var activeSheet by remember { mutableStateOf<DesktopPlaybackSheet?>(null) }
     var songWikiSyncRequest by remember { mutableIntStateOf(0) }
+    val player: PlatformPlayer = koinInject()
+    val isPlaying by viewModel.isPlaying.collectAsState()
+    val songLength by viewModel.songLength.collectAsState()
+    val favoriteUiState by viewModel.favoriteUiState.collectAsState()
+    val shuffleEnabled by viewModel.shuffleStatus.collectAsState()
 
-    fun dismissControls() {
-        controlsVisible = false
-        controlsExpanded = true
-        controlsWindowExpanded = true
-        controlsSheetVisible = false
+    fun dismissSheets() {
+        activeSheet = null
     }
 
     val lyricOverlayState = if (!engineReady && lyricUiState is LyricUiState.Content) {
@@ -177,17 +179,33 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
             initiallyVisible = nativeSurfaceVisible,
             onLineClicked = { timeMs, mediaId -> viewModel.onLyricLineClick(mediaId, timeMs) },
             onBack = onBack,
-            onControlsRequested = {
-                controlsWindowExpanded = true
-                controlsExpanded = true
-                controlsRevealRequest += 1
-                controlsVisible = true
+            // Read every value straight from the flows: this lambda is captured once, so a
+            // captured snapshot would go stale as soon as the track or shuffle mode changed.
+            onTransportAction = { action, value ->
+                when (action) {
+                    "playPause" -> player.togglePlayPause()
+                    "previous" -> player.seekToPrevious()
+                    "next" -> player.seekToNext()
+                    // Deliberately not onLyricLineClick: that path carries lyric-specific
+                    // late-event guards and drops anything past the track duration.
+                    "seek" -> value?.let { player.seekTo(it.coerceAtLeast(0L)) }
+                    "favorite" -> viewModel.onFavClick()
+                    "shuffle" -> viewModel.onShuffleClick(!viewModel.shuffleStatus.value)
+                    "queue" -> {
+                        viewModel.onPlaylistClick()
+                        activeSheet = DesktopPlaybackSheet.Queue
+                    }
+                    "comments" -> {
+                        viewModel.getComments()
+                        activeSheet = DesktopPlaybackSheet.Comments
+                    }
+                }
             },
             onSongWikiRequested = { requestedMediaId ->
                 if (requestedMediaId == viewModel.currentMedia.value?.id) {
-                    // The native Compose dialog is above WebView2. Hide it before the in-page wiki
-                    // opens so it cannot cover the lower half of the WebView dialog.
-                    dismissControls()
+                    // Compose sheets are layered HWNDs above WebView2. Close them before the
+                    // in-page wiki opens so they cannot cover the WebView dialog.
+                    dismissSheets()
                     viewModel.getSongWikiSummary()
                     songWikiSyncRequest += 1
                 }
@@ -206,25 +224,6 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         delay(AMLL_READY_TIMEOUT_MILLIS)
         if (!engineReadyFlow.value && engineErrorFlow.value == null) {
             engineErrorFlow.value = "AMLL 页面初始化超时"
-        }
-    }
-
-    LaunchedEffect(engineReady) {
-        if (engineReady) session.installControlsRevealHook()
-    }
-
-    LaunchedEffect(controlsVisible, controlsExpanded, controlsSheetVisible) {
-        when {
-            !controlsVisible || controlsSheetVisible || controlsExpanded -> {
-                controlsWindowExpanded = true
-            }
-
-            else -> {
-                delay(CONTROLS_COLLAPSE_ANIMATION_MILLIS)
-                if (!controlsExpanded && !controlsSheetVisible) {
-                    controlsWindowExpanded = false
-                }
-            }
         }
     }
 
@@ -322,6 +321,32 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         }
     }
 
+    // Everything the in-page console needs except position, which rides setTime below.
+    LaunchedEffect(
+        engineReady,
+        metadata?.id,
+        isPlaying,
+        songLength,
+        favoriteUiState,
+        shuffleEnabled,
+    ) {
+        if (!engineReady) return@LaunchedEffect
+        val mediaId = metadata?.id
+        val payload = AmllWebBridge.quote(
+            Json.encodeToString(
+                AmllPlaybackState(
+                    mediaId = mediaId.orEmpty(),
+                    hasMedia = mediaId != null,
+                    isPlaying = isPlaying,
+                    durationMs = songLength.coerceAtLeast(0L),
+                    isFavorite = favoriteUiState.mediaId == mediaId && favoriteUiState.isLiked,
+                    shuffleEnabled = shuffleEnabled,
+                ),
+            ),
+        )
+        session.eval("if (globalThis.AmllPage) AmllPage.setPlaybackState($payload);")
+    }
+
     // Push playback position; the page's rAF loop animates between updates.
     LaunchedEffect(engineReady, currentPosition, isUntimedContent) {
         if (!engineReady) return@LaunchedEffect
@@ -389,8 +414,8 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         }
     }
 
-    BackHandler(enabled = controlsVisible) {
-        dismissControls()
+    BackHandler(enabled = activeSheet != null) {
+        dismissSheets()
     }
 
     Box(
@@ -418,59 +443,28 @@ actual fun WebViewLyricScreen(onBack: () -> Unit) {
         onRetry = viewModel::retryLyrics,
     )
 
-    val controlsWindowSize = desktopLyricControlsWindowSize(
+    val sheetWindowSize = desktopPlaybackSheetWindowSize(
         availableWidth = overlayWidth,
         availableHeight = overlayHeight,
-        expanded = controlsWindowExpanded,
-        sheetVisible = controlsSheetVisible,
     )
-    DesktopLyricControlsWindow(
-        visible = desktopLyricControlsVisible(
-            requested = controlsVisible,
-            state = lyricOverlayState,
-        ),
-        revealRequest = controlsRevealRequest,
-        width = controlsWindowSize.width,
-        height = controlsWindowSize.height,
-        expanded = controlsWindowExpanded,
-        sheetVisible = controlsSheetVisible,
-        onDismiss = ::dismissControls,
-        onSheetVisibilityChanged = { controlsSheetVisible = it },
-        onExpandedChanged = { expanded ->
-            controlsExpanded = expanded
-            if (expanded) controlsWindowExpanded = true
-        },
+    DesktopPlaybackSheetWindow(
+        sheet = activeSheet,
+        player = player,
+        width = sheetWindowSize.width,
+        height = sheetWindowSize.height,
+        onDismiss = ::dismissSheets,
     )
 }
 
-internal fun desktopLyricControlsVisible(
-    requested: Boolean,
-    state: LyricUiState,
-): Boolean = requested && when (state) {
-    is LyricUiState.Content -> true
-    is LyricUiState.Empty -> state.capabilityLevel == LyricCapabilityLevel.UNSYNCED
-    is LyricUiState.Idle,
-    is LyricUiState.Loading,
-    is LyricUiState.Error,
-    -> false
-}
-
-internal fun desktopLyricControlsWindowSize(
+internal fun desktopPlaybackSheetWindowSize(
     availableWidth: Dp,
     availableHeight: Dp,
-    expanded: Boolean,
-    sheetVisible: Boolean,
-): DpSize {
-    val target = when {
-        sheetVisible -> ControlsSheetWindowSize
-        expanded -> ExpandedControlsWindowSize
-        else -> CollapsedControlsWindowSize
-    }
-    return DpSize(
-        width = (availableWidth - 32.dp).coerceAtLeast(0.dp).coerceAtMost(target.width),
-        height = (availableHeight - 16.dp).coerceAtLeast(0.dp).coerceAtMost(target.height),
-    )
-}
+): DpSize = DpSize(
+    width = (availableWidth - 32.dp).coerceAtLeast(0.dp).coerceAtMost(ControlsSheetWindowSize.width),
+    height = (availableHeight - 16.dp)
+        .coerceAtLeast(0.dp)
+        .coerceAtMost(ControlsSheetWindowSize.height),
+)
 
 @Composable
 private fun DesktopLyricStateWindow(
@@ -508,54 +502,64 @@ private fun DesktopLyricStateWindow(
 }
 
 @Composable
-private fun DesktopLyricControlsWindow(
-    visible: Boolean,
-    revealRequest: Int,
+private fun DesktopPlaybackSheetWindow(
+    sheet: DesktopPlaybackSheet?,
+    player: PlatformPlayer,
     width: Dp,
     height: Dp,
-    expanded: Boolean,
-    sheetVisible: Boolean,
     onDismiss: () -> Unit,
-    onSheetVisibilityChanged: (Boolean) -> Unit,
-    onExpandedChanged: (Boolean) -> Unit,
 ) {
+    val viewModel: NowPlayingViewModel = koinInject()
+    val nowPlaying = rememberNowPlayingUiState(player, viewModel)
+    // These sheets carry no artwork of their own, so there is no image load to extract an accent
+    // from the way the Compose console did. The themed container colour is the honest source.
+    val accentPalette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
+
     DesktopOverlayWindow(
-        visible = visible,
-        title = "播放控制",
+        visible = sheet != null,
+        title = when (sheet) {
+            DesktopPlaybackSheet.Comments -> "评论"
+            else -> "播放队列"
+        },
         width = width,
         height = height,
         placement = DesktopOverlayPlacement.BottomCenter,
         focusable = true,
         // WebView2 renders through DirectComposition. A transparent Compose window becomes a
         // layered HWND and can be composited behind the native WebView even when its input HWND is
-        // above it. Keep this window opaque so the controls and their hit targets stay together.
+        // above it. Keep this window opaque so the sheet and its hit targets stay together.
         transparent = false,
-        windowShape = when {
-            sheetVisible -> DesktopOverlayWindowShape.Rectangle
-            expanded -> DesktopOverlayWindowShape.ExpandedPlaybackControls
-            else -> DesktopOverlayWindowShape.CollapsedPlaybackControls
-        },
+        windowShape = DesktopOverlayWindowShape.Rectangle,
         onCloseRequest = onDismiss,
     ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.surface,
         ) {
-            AutoHideMiniPlayerController(
-                modifier = Modifier.fillMaxSize(),
-                initialExpanded = true,
-                showCollapsedWhenHidden = true,
-                collapsedHostFillsWidth = true,
-                autoHideDelayMillis = 30_000L,
-                forceOpaqueSurfaces = true,
-                externalRevealRequest = revealRequest,
-                // The controller always renders either its expanded or collapsed surface here.
-                // Treating a composition disposal as a close request makes track-loading
-                // transitions or host recreation permanently hide the desktop controls. Only the
-                // dialog close request and the page BackHandler dismiss them.
-                onSheetVisibilityChanged = onSheetVisibilityChanged,
-                onExpandedChanged = onExpandedChanged,
-            )
+            when (sheet) {
+                DesktopPlaybackSheet.Queue -> QueueBottomSheet(
+                    playlist = nowPlaying.playList,
+                    currentIndex = nowPlaying.currentIndex,
+                    accentPalette = accentPalette,
+                    onDismiss = onDismiss,
+                    onSeekClick = viewModel::onSeekClick,
+                )
+
+                DesktopPlaybackSheet.Comments -> CommentBottomSheet(
+                    comments = nowPlaying.comments?.hotComments
+                        ?.ifEmpty { nowPlaying.comments?.comments }
+                        ?: emptyList(),
+                    hasLoadedData = nowPlaying.comments != null,
+                    accentPalette = accentPalette,
+                    onDismiss = onDismiss,
+                    isLoading = nowPlaying.commentsLoading,
+                    isFromCache = nowPlaying.commentsFromCache,
+                    errorMessage = nowPlaying.commentsLoadError,
+                    onRetry = viewModel::getComments,
+                )
+
+                null -> Unit
+            }
         }
     }
 }
@@ -570,7 +574,7 @@ private class WebviewSession(
     initiallyVisible: Boolean,
     private val onLineClicked: (Long, String?) -> Unit,
     private val onBack: () -> Unit,
-    private val onControlsRequested: () -> Unit,
+    private val onTransportAction: (String, Long?) -> Unit,
     private val onSongWikiRequested: (String?) -> Unit,
 ) {
     private val handle = AtomicLong(0)
@@ -606,7 +610,10 @@ private class WebviewSession(
         }
     }
     private val backCallback = hostCallback("back") { onBack() }
-    private val controlsCallback = hostCallback("controls") { onControlsRequested() }
+    private val transportCallback = hostCallback("transport") { request ->
+        val (action, value) = parseAmllTransportRequest(request)
+        if (action.isNotEmpty()) onTransportAction(action, value)
+    }
     private val songWikiCallback = hostCallback("song wiki") { request ->
         onSongWikiRequested(parseAmllMediaIdRequest(request))
     }
@@ -667,7 +674,7 @@ private class WebviewSession(
                 native.webview_bind(webview, "amllReady", bindCallback, 0)
                 native.webview_bind(webview, "amllSeek", seekCallback, 0)
                 native.webview_bind(webview, "amllBack", backCallback, 0)
-                native.webview_bind(webview, "amllControls", controlsCallback, 0)
+                native.webview_bind(webview, "amllTransport", transportCallback, 0)
                 native.webview_bind(webview, "amllSongWikiRequested", songWikiCallback, 0)
                 native.webview_navigate(webview, url)
                 if (stopped.get()) native.webview_terminate(webview)
@@ -780,27 +787,6 @@ private class WebviewSession(
 
     private fun dispatch(w: Long) {
         runCatching { WebviewJna.N.webview_dispatch(w, dispatchCallback, 0) }
-    }
-
-    fun installControlsRevealHook() {
-        eval(
-            """
-            if (!globalThis.__redefineControlsRevealBound) {
-              globalThis.__redefineControlsRevealBound = true;
-              const revealRedefineControls = (event) => {
-                const target = event && event.target;
-                const wikiOverlay = document.getElementById('wiki-overlay');
-                if ((target && target.closest && target.closest('#wiki-info, #wiki-overlay')) ||
-                    (wikiOverlay && !wikiOverlay.hidden)) return;
-                try {
-                  if (typeof globalThis.amllControls === 'function') globalThis.amllControls();
-                } catch (_) {}
-              };
-              document.addEventListener('pointerdown', revealRedefineControls, true);
-              document.addEventListener('keydown', revealRedefineControls, true);
-            }
-            """.trimIndent(),
-        )
     }
 
     fun setNativeWindowVisible(visible: Boolean): Boolean {
@@ -1030,6 +1016,29 @@ internal fun parseAmllSeekRequest(req: String?): Pair<Long, String?> {
         .map { it.groupValues[1].replace("\\\"", "\"").replace("\\\\", "\\") }
         .firstOrNull { it.isNotBlank() && it != timeText }
     return time to mediaId
+}
+
+/**
+ * Parses one `amllTransport(action[, value])` call.
+ *
+ * `webview_bind` hands the arguments over as a JSON array, so the action is element 0 and the
+ * optional numeric payload (currently only the scrubber target in milliseconds) is element 1.
+ * An unrecognised shape yields an empty action, which the caller ignores.
+ */
+internal fun parseAmllTransportRequest(req: String?): Pair<String, Long?> {
+    val text = req.orEmpty().trim()
+    if (text.isEmpty()) return "" to null
+
+    val element = runCatching { amllSeekJson.parseToJsonElement(text) }.getOrNull()
+    if (element is JsonArray) {
+        val action = element.getOrNull(0)?.asStringOrNull().orEmpty()
+        return action to element.getOrNull(1)?.asLongOrNull()
+    }
+    if (element is JsonObject) {
+        val action = element["action"]?.asStringOrNull().orEmpty()
+        return action to element["value"]?.asLongOrNull()
+    }
+    return "" to null
 }
 
 internal fun parseAmllMediaIdRequest(req: String?): String? {
