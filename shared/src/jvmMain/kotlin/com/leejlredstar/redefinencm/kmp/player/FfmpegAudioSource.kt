@@ -3,7 +3,9 @@ package com.leejlredstar.redefinencm.kmp.player
 import org.bytedeco.ffmpeg.global.avutil
 import org.bytedeco.javacv.FFmpegFrameGrabber
 import org.bytedeco.javacv.FrameGrabber
+import java.net.URI
 import java.nio.ShortBuffer
+import java.nio.file.Paths
 import javax.sound.sampled.AudioFormat
 
 /**
@@ -92,7 +94,7 @@ internal class FfmpegAudioSource private constructor(
             startMs: Long = 0L,
             forcedSampleRate: Int? = null,
         ): FfmpegAudioSource {
-            val grabber = FFmpegFrameGrabber(source).apply {
+            val grabber = FFmpegFrameGrabber(ffmpegAudioInput(source)).apply {
                 sampleMode = FrameGrabber.SampleMode.SHORT
                 sampleFormat = avutil.AV_SAMPLE_FMT_S16
                 setOption("rw_timeout", NetworkTimeoutMicros.toString())
@@ -126,4 +128,19 @@ internal class FfmpegAudioSource private constructor(
             return opened
         }
     }
+}
+
+/**
+ * Hands FFmpeg a plain filesystem path for local files, and the URL as-is for streams.
+ *
+ * Offline downloads arrive as the `file:/C:/...` form `File.toURI()` produces, and
+ * `avformat_open_input()` rejects that with EINVAL — Java Sound used to absorb the difference
+ * through `URI.toURL()`. Anything that is not a file: URI, notably the CDN's http(s) URLs, is
+ * passed through untouched, and a file: URI that will not parse is left alone so FFmpeg reports
+ * the real failure rather than this function inventing one.
+ */
+internal fun ffmpegAudioInput(source: String): String {
+    val trimmed = source.trim()
+    if (!trimmed.startsWith("file:", ignoreCase = true)) return trimmed
+    return runCatching { Paths.get(URI(trimmed)).toString() }.getOrDefault(trimmed)
 }

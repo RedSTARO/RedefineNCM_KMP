@@ -24,6 +24,20 @@ class JvmAudioSupportTest {
     }
 
     @Test
+    fun localFileUrisReachFfmpegAsPlainPaths() {
+        // File.toURI() emits the single-slash form, which avformat_open_input() rejects with
+        // EINVAL. This only became reachable once .flac stopped being filtered out.
+        val converted = ffmpegAudioInput("file:/C:/Music/RedefineNCM/1304882922.flac")
+        assertFalse(converted.startsWith("file:"))
+        assertTrue(converted.endsWith("1304882922.flac"))
+        assertTrue(ffmpegAudioInput("file:/C:/Music/a%20b.flac").endsWith("a b.flac"))
+
+        // Streams must survive untouched, including their signed query string.
+        val cdn = "https://m8.music.126.net/x/y.flac?authSecret=deadbeef"
+        assertEquals(cdn, ffmpegAudioInput(cdn))
+    }
+
+    @Test
     fun localResolverAcceptsTheLosslessDownloadsItUsedToSkip() {
         assertTrue(isJvmPlayableAudioUri("file:/C:/Music/RedefineNCM/2097485077.mp3"))
         assertTrue(isJvmPlayableAudioUri("file:/C:/Music/RedefineNCM/2097485077.flac"))
