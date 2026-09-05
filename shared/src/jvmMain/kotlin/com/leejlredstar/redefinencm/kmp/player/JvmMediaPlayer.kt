@@ -71,7 +71,7 @@ class JvmMediaPlayer(
     @Volatile private var resolveJob: Job? = null
     @Volatile private var playbackThread: Thread? = null
     @Volatile private var line: SourceDataLine? = null
-    @Volatile private var audioStream: AudioInputStream? = null
+    @Volatile private var audioSource: FfmpegAudioSource? = null
     @Volatile private var pauseRequested = false
 
     @Volatile private var playStartNano = 0L
@@ -173,11 +173,11 @@ class JvmMediaPlayer(
 
     private fun stopPlaybackLocked() {
         val threadToStop = playbackThread
-        val streamToClose = audioStream
+        val sourceToClose = audioSource
         val lineToClose = line
 
         playbackThread = null
-        audioStream = null
+        audioSource = null
         line = null
         pauseRequested = false
 
@@ -191,7 +191,7 @@ class JvmMediaPlayer(
         } catch (_: Exception) {
         }
         try {
-            streamToClose?.close()
+            sourceToClose?.close()
         } catch (_: Exception) {
         }
         playStartNano = 0L
@@ -245,73 +245,55 @@ class JvmMediaPlayer(
     }
 
     private fun runPlayback(generation: Long, streamUrl: String, startMs: Long) {
-        var rawStream: AudioInputStream? = null
-        var stream: AudioInputStream? = null
+        var source: FfmpegAudioSource? = null
         var audioLine: SourceDataLine? = null
         var completedNaturally = false
 
         try {
-            val url = URI(streamUrl).toURL()
-            rawStream = AudioSystem.getAudioInputStream(url)
-            val baseFormat = rawStream.format
-
-            // MP3(MPEG) 帧不能直接喂 SourceDataLine —— 必须经 mp3spi 转成 PCM_SIGNED
-            val fmt: AudioFormat
-            stream = if (baseFormat.encoding == AudioFormat.Encoding.PCM_SIGNED ||
-                baseFormat.encoding == AudioFormat.Encoding.PCM_UNSIGNED
-            ) {
-                fmt = baseFormat
-                rawStream
-            } else {
-                fmt = AudioFormat(
-                    AudioFormat.Encoding.PCM_SIGNED,
-                    baseFormat.sampleRate,
-                    16,
-                    baseFormat.channels,
-                    baseFormat.channels * 2,
-                    baseFormat.sampleRate,
-                    false,
-                )
-                AudioSystem.getAudioInputStream(fmt, rawStream)
-            }
-
             // 每次开流都重新读设置：换设备后当前这首也要跟着走，而不是等下一首。
-            audioLine = openAudioOutputLine(
-                fmt,
-                settings.getString(
-                    SettingKeys.AUDIO_OUTPUT_DEVICE,
-                    SYSTEM_DEFAULT_AUDIO_OUTPUT_ID,
-                ),
+            val deviceId = settings.getString(
+                SettingKeys.AUDIO_OUTPUT_DEVICE,
+                SYSTEM_DEFAULT_AUDIO_OUTPUT_ID,
             )
+            // FFmpeg seeks the decoder itself, so the old "discard PCM bytes at the head of the
+            // stream" approximation is gone along with the channel-misalignment it could cause.
+            var decoded = FfmpegAudioSource.open(streamUrl, startMs)
+            source = decoded
+            audioLine = try {
+                openAudioOutputLine(decoded.format, deviceId)
+            } catch (rateRefused: Exception) {
+                if (rateRefused !is LineUnavailableException &&
+                    rateRefused !is IllegalArgumentException
+                ) {
+                    throw rateRefused
+                }
+                // A master can carry a rate no output line will take. Resampling costs one
+                // reopen and keeps the track playing; failing here would look like silence.
+                System.err.println(
+                    "JvmMediaPlayer: no line for ${decoded.format}, " +
+                        "resampling to ${FfmpegAudioSource.FallbackSampleRate} Hz",
+                )
+                decoded.close()
+                decoded = FfmpegAudioSource.open(
+                    streamUrl,
+                    startMs,
+                    FfmpegAudioSource.FallbackSampleRate,
+                )
+                source = decoded
+                openAudioOutputLine(decoded.format, deviceId)
+            }
             applyVolumeToLine(audioLine)
 
             synchronized(playbackLock) {
                 if (generation != playbackGeneration) return
                 line = audioLine
-                audioStream = stream
+                audioSource = decoded
             }
 
-            val totalFrames = stream.frameLength
-            if (totalFrames > 0 && fmt.frameRate > 0) {
-                val durMs = (totalFrames * 1_000L / fmt.frameRate.toLong()).coerceAtLeast(0)
-                _duration.value = durMs
-            }
-
-            // 跳到 seek 位置：按 PCM 字节率丢弃解码流前段（VBR 无帧索引，近似即可）
-            if (startMs > 0 && fmt.frameRate > 0 && fmt.frameSize > 0) {
-                var toSkip = (startMs * fmt.frameRate.toLong() * fmt.frameSize / 1000L)
-                // 对齐帧边界，避免声道错位产生噪音
-                toSkip -= toSkip % fmt.frameSize
-                while (toSkip > 0 && !Thread.currentThread().isInterrupted && isPlaybackCurrent(generation)) {
-                    val skipped = stream.skip(toSkip)
-                    if (skipped <= 0) break
-                    toSkip -= skipped
-                }
-            }
+            decoded.durationMs.takeIf { it > 0L }?.let { _duration.value = it }
 
             if (!isPlaybackCurrent(generation)) return
 
-            val buf = ByteArray(4096)
             audioLine.start()
             playStartNano = System.nanoTime()
             seekOffsetMs = startMs
@@ -340,13 +322,13 @@ class JvmMediaPlayer(
                     playStartNano = System.nanoTime()
                 }
                 if (shouldStop) break
-                val read = stream.read(buf)
-                if (read < 0) {
+                val block = decoded.read()
+                if (block == null) {
                     completedNaturally = true
                     break
                 }
                 if (!isPlaybackCurrent(generation)) break
-                audioLine.write(buf, 0, read)
+                audioLine.write(block, 0, block.size)
             }
 
             if (completedNaturally && isPlaybackCurrent(generation)) {
@@ -371,19 +353,13 @@ class JvmMediaPlayer(
             } catch (_: Exception) {
             }
             try {
-                stream?.close()
+                source?.close()
             } catch (_: Exception) {
-            }
-            if (stream !== rawStream) {
-                try {
-                    rawStream?.close()
-                } catch (_: Exception) {
-                }
             }
             synchronized(playbackLock) {
                 if (generation == playbackGeneration) {
                     if (line === audioLine) line = null
-                    if (audioStream === stream) audioStream = null
+                    if (audioSource === source) audioSource = null
                     if (playbackThread === Thread.currentThread()) playbackThread = null
                 }
             }

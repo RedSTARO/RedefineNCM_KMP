@@ -737,7 +737,7 @@ latest require the live verification pass described under Goal #4.
 | Images | Coil `3.5.0`: coil-compose (group `io.coil-kt.coil3`) | commonMain |
 | Web runtime | `kotlinx-browser 0.5.0` + Ktor JS engine `3.5.0` | wasmJsMain |
 | Desktop native APIs | JNA `5.14.0` + dbus-java `5.2.0` | jvmMain |
-| Desktop dynamic video | JavaCV `1.5.13` + FFmpeg `8.0.1-1.5.13` (host classifier only) | jvmMain |
+| Desktop audio + dynamic video | JavaCV `1.5.13` + FFmpeg `8.0.1-1.5.13` (host classifier only) — decodes playback audio and dynamic-cover frames; output stays `javax.sound.sampled` | jvmMain |
 | Android settings | `androidx.datastore:datastore-preferences 1.2.0` | androidMain |
 | Android audio | `media3-exoplayer 1.10.1` + `media3-session 1.10.1` | androidMain + :androidApp |
 

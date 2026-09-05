@@ -279,8 +279,6 @@ kotlin {
                 // OkHttp 而非 CIO：目标服务器 DNS 有黑洞 A 记录，CIO 不做多地址回退会连环
                 // ConnectTimeout；OkHttp 的 RouteSelector 会自动换下一个 IP（与 Android 端一致）
                 implementation(libs.ktor.client.okhttp)
-                // Real desktop audio playback (MP3 via mp3spi + javax.sound.sampled)
-                implementation(libs.mp3spi)
                 // Dispatchers.Main for JVM (needed by DesktopFloatingWindowController + jvmTest)
                 implementation(libs.kotlinx.coroutinesSwing)
                 implementation(libs.sqldelight.sqlite.driver)
@@ -297,8 +295,10 @@ kotlin {
                 // Linux desktop transport controls: a real MPRIS service on the session D-Bus.
                 implementation(libs.dbus.java.core)
                 runtimeOnly(libs.dbus.java.native.unixsocket)
-                // Decode MP4 dynamic-cover frames into Compose ImageBitmap. javacv is kept
-                // non-transitive so camera/OpenCV/Tesseract presets are not dragged into the app.
+                // Decodes both the dynamic-cover MP4 frames and all playback audio, so the
+                // desktop player reaches FLAC and the Hi-Res tiers Java Sound's own SPI could
+                // not. javacv is kept non-transitive so camera/OpenCV/Tesseract presets are not
+                // dragged into the app.
                 implementation("org.bytedeco:javacv:${libs.versions.javacv.get()}") {
                     isTransitive = false
                 }

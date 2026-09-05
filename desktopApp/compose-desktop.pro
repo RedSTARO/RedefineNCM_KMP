@@ -82,22 +82,22 @@
 -keep class org.slf4j.spi.SLF4JServiceProvider { *; }
 -keep class org.slf4j.simple.SimpleServiceProvider { *; }
 -keep class org.sqlite.JDBC { *; }
--keep class javazoom.spi.mpeg.sampled.file.MpegAudioFileReader { *; }
--keep class javazoom.spi.mpeg.sampled.convert.MpegFormatConversionProvider { *; }
-
-# JLayer reads its decoder tables through JavaLayerUtils.getResourceAsStream(), which is a
-# package-relative Class.getResourceAsStream(): renaming the package to javazoom.a.a sends the
-# lookup to javazoom/a/a/sfd.ser while the resource stays at javazoom/jl/decoder/sfd.ser.
-# The MP3 file reader and the format converter both resolve fine without this, so the release
-# build reached PLAYING and then died on the first decoded read with
-# `ExceptionInInitializerError: unable to load resource 'sfd.ser'` — audible as no sound at all.
--keepnames class javazoom.jl.decoder.**
 
 # JavaCPP resolves generated FFmpeg wrapper classes, native method names, annotations, and
 # bundled JNI resources reflectively. Keep only the JavaCV classes used by the dynamic-cover
 # decoder while preserving the complete generated JavaCPP/FFmpeg JNI surface.
 -keep class org.bytedeco.javacv.Frame { *; }
+# Frame.Type is an enum JavaCV switches on while seeking. ProGuard renamed it to Frame$a and
+# unboxed it into a plain class, so setAudioTimestamp() threw
+# `ClassCastException: org.bytedeco.javacv.Frame$a not an enum` — caught by decoding against the
+# release jar, not the development classpath, which is the only place this ever reproduces.
+-keep class org.bytedeco.javacv.Frame$** { *; }
+-keep enum org.bytedeco.javacv.** { *; }
 -keep class org.bytedeco.javacv.FrameGrabber { *; }
+# FrameGrabber$** covers the nested SampleMode enum the audio decoder selects and the
+# nested Exception it throws. `-keep class FrameGrabber { *; }` keeps neither: a nested
+# type is its own class, and dropping SampleMode leaves the decoder unable to start.
+-keep class org.bytedeco.javacv.FrameGrabber$** { *; }
 -keep class org.bytedeco.javacv.FrameConverter { *; }
 -keep class org.bytedeco.javacv.FFmpegFrameGrabber { *; }
 -keep class org.bytedeco.javacv.FFmpegFrameGrabber$** { *; }

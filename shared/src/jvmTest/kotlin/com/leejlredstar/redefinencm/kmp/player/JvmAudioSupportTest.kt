@@ -14,20 +14,24 @@ import kotlin.concurrent.thread
 class JvmAudioSupportTest {
 
     @Test
-    fun highResolutionQualitiesAreMappedToMp3Level() {
-        assertEquals("standard", jvmPlaybackQualityLevel(SoundQuality.STANDARD))
-        assertEquals("higher", jvmPlaybackQualityLevel(SoundQuality.HIGHER))
-        assertEquals("exhigh", jvmPlaybackQualityLevel(SoundQuality.EXHIGH))
-        assertEquals("exhigh", jvmPlaybackQualityLevel(SoundQuality.LOSSLESS))
-        assertEquals("exhigh", jvmPlaybackQualityLevel(SoundQuality.JYMASTER))
+    fun everyQualityTierIsRequestedAsChosen() {
+        // FFmpeg decodes the whole ladder, so nothing is downgraded on the way to the CDN.
+        SoundQuality.entries.forEach { quality ->
+            assertEquals(quality.name.lowercase(), jvmPlaybackQualityLevel(quality))
+        }
+        assertEquals("jymaster", jvmPlaybackQualityLevel(SoundQuality.JYMASTER))
+        assertEquals("lossless", jvmPlaybackQualityLevel(SoundQuality.LOSSLESS))
     }
 
     @Test
-    fun localResolverOnlyAcceptsJvmDecodableAudio() {
+    fun localResolverAcceptsTheLosslessDownloadsItUsedToSkip() {
         assertTrue(isJvmPlayableAudioUri("file:/C:/Music/RedefineNCM/2097485077.mp3"))
+        assertTrue(isJvmPlayableAudioUri("file:/C:/Music/RedefineNCM/2097485077.flac"))
+        assertTrue(isJvmPlayableAudioUri("https://example.com/audio/track.m4a"))
         assertTrue(isJvmPlayableAudioUri("https://example.com/audio/track.wav?token=abc"))
-        assertFalse(isJvmPlayableAudioUri("file:/C:/Music/RedefineNCM/2097485077.flac"))
-        assertFalse(isJvmPlayableAudioUri("https://example.com/audio/track.m4a"))
+        // Still an allowlist: a sidecar sitting beside the audio must not enter the queue.
+        assertFalse(isJvmPlayableAudioUri("file:/C:/Music/RedefineNCM/2097485077.lyric.line.lrc"))
+        assertFalse(isJvmPlayableAudioUri("file:/C:/Music/RedefineNCM/2097485077.cover.jpg"))
     }
 
     @Test

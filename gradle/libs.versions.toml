@@ -18,7 +18,6 @@ ktor = "3.5.0"
 material3 = "1.11.0-alpha07"
 media3 = "1.10.1"
 slf4j = "2.0.16"
-mp3spi = "1.9.5.4"
 sqldelight = "2.3.2"
 dbus-java = "5.2.0"
 jna = "5.14.0"
@@ -47,8 +46,6 @@ kotlinx-coroutinesSwing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-s
 # Media3 / ExoPlayer (Android audio playback)
 androidx-media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }
 androidx-media3-session = { module = "androidx.media3:media3-session", version.ref = "media3" }
-# MP3 decoding SPI for the desktop audio player (pure-JVM: pulls jlayer + tritonus-share)
-mp3spi = { module = "com.googlecode.soundlibs:mp3spi", version.ref = "mp3spi" }
 # Fixed JitPack commit. The Desktop Legacy renderer extracts its bundled WebView2 native host.
 webview-java = { module = "com.github.webview.webview_java:core", version.ref = "webview-java" }
 # Direct native dependencies for Windows SMTC and macOS media APIs.
