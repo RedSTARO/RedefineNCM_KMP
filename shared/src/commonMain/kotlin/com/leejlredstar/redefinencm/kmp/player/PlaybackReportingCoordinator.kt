@@ -109,8 +109,25 @@ class PlaybackReportingCoordinator(
         }
     }
 
+    private var credential: PlaybackCredential? = null
+
+    /**
+     * The cookie is sampled with every position emission. Cleaning it and hashing it into the
+     * credential key are repeated only when the stored string actually changes.
+     */
+    private fun currentCredential(): PlaybackCredential {
+        val rawCookie = settings.getString(SettingKeys.COOKIE, "")
+        credential?.takeIf { it.rawCookie == rawCookie }?.let { return it }
+        val cookie = HttpClientFactory.cleanCookie(rawCookie)
+        return PlaybackCredential(
+            rawCookie = rawCookie,
+            cookie = cookie,
+            key = playbackCredentialKey(cookie),
+        ).also { credential = it }
+    }
+
     private fun currentObservation(): PlaybackReportingObservation {
-        val cookie = HttpClientFactory.cleanCookie(settings.getString(SettingKeys.COOKIE, ""))
+        val credential = currentCredential()
         return PlaybackReportingObservation(
             occurrence = player.playbackOccurrence.value,
             media = player.currentMedia.value,
@@ -125,8 +142,8 @@ class PlaybackReportingCoordinator(
                     SoundQuality.EXHIGH.name,
                 ),
             ),
-            credentialKey = playbackCredentialKey(cookie),
-            credentialCookie = cookie.takeIf(String::isNotEmpty),
+            credentialKey = credential.key,
+            credentialCookie = credential.cookie.takeIf(String::isNotEmpty),
         )
     }
 
@@ -431,6 +448,12 @@ internal data class PlaybackReportingObservation(
     val qualityLevel: String,
     val credentialKey: Long?,
     val credentialCookie: String?,
+)
+
+private class PlaybackCredential(
+    val rawCookie: String,
+    val cookie: String,
+    val key: Long?,
 )
 
 internal enum class PlaybackReportingSignal {
