@@ -105,12 +105,6 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "com.leejlredstar.redefinencm.kmp.MainKt"
-        // Apply before Skiko classes load. main() repeats these defaults for direct JVM launches.
-        jvmArgs += listOf(
-            "-Dskiko.vsync.enabled=false",
-            "-Dskiko.vsync.framelimit.fallback.enabled=false",
-        )
-
         buildTypes.release.proguard {
             // Release packaging is the Desktop/JVM equivalent of the Android R8 pipeline:
             // remove unreachable bytecode, run ProGuard's optimizer, obfuscate symbols, and

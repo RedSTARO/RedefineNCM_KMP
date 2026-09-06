@@ -53,7 +53,6 @@ import org.koin.core.context.GlobalContext
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
-    configureUncappedDesktopRendering()
     initKoin()
     val settings = GlobalContext.get().get<PlatformSettings>()
     startFromTheSystemAudioOutput(settings::getString, settings::setString)
@@ -91,17 +90,6 @@ internal fun startFromTheSystemAudioOutput(
         System.err.println(
             "Could not clear the pinned audio output device, keeping '$pinned': ${error.message}",
         )
-    }
-}
-
-internal fun configureUncappedDesktopRendering() {
-    // Skiko reads these before constructing its first SkiaLayer. Keep the 60 Hz lyric sampler
-    // independent from the renderer: active Compose animation frames have no fixed FPS ceiling.
-    if (System.getProperty("skiko.vsync.enabled") == null) {
-        System.setProperty("skiko.vsync.enabled", "false")
-    }
-    if (System.getProperty("skiko.vsync.framelimit.fallback.enabled") == null) {
-        System.setProperty("skiko.vsync.framelimit.fallback.enabled", "false")
     }
 }
 

@@ -90,9 +90,6 @@ private val WikiBackdropCssEase = CubicBezierEasing(0.25f, 0.10f, 0.25f, 1.00f)
  * page is gone; desktop shows the same island as Android and follows the same timing.
  */
 private const val AmllControllerAutoHideMillis = 3_600L
-internal const val AmllPresentationRefreshHz = 60L
-internal const val AmllPresentationFrameIntervalNanos =
-    1_000_000_000L / AmllPresentationRefreshHz
 
 /**
  * One native AMLL-style full-screen player shared by Android, iOS, Desktop, and Web.
@@ -444,6 +441,16 @@ private fun AmllTopActions(
     }
 }
 
+/**
+ * The lyric clock: the player's position sample, advanced by the platform frame clock between
+ * samples.
+ *
+ * AMLL's word animations are Web Animations on the document timeline, so they move on every
+ * display refresh whatever the host's `timeupdate` cadence. The player publishes a sample only
+ * every 100 ms; this clock therefore anchors to the newest sample and publishes a position on
+ * every frame, so masks, floats and emphasis glows advance at the refresh rate — on a high-refresh
+ * desktop as well as on a 60 Hz phone.
+ */
 @Composable
 private fun rememberPresentationPosition(
     sampledPositionMs: Long,
@@ -466,7 +473,6 @@ private fun rememberPresentationPosition(
         var observedSample = latestSampledPosition.value
         var anchoredSample = coerceAmllPresentationPosition(observedSample, durationMs)
         var anchorFrameNanos: Long? = null
-        val frameGate = AmllPresentationFrameGate()
         while (true) {
             val frameTimeNanos = withFrameNanos { it }
             val currentSample = latestSampledPosition.value
@@ -476,7 +482,6 @@ private fun rememberPresentationPosition(
                 anchorFrameNanos = frameTimeNanos
             }
 
-            if (!frameGate.shouldPublish(frameTimeNanos)) continue
             value = amllPresentationPositionAt(
                 anchoredSampleMs = anchoredSample,
                 anchorFrameNanos = checkNotNull(anchorFrameNanos),
@@ -484,20 +489,6 @@ private fun rememberPresentationPosition(
                 durationMs = durationMs,
             )
         }
-    }
-}
-
-internal fun amllPresentationFrameBucket(frameTimeNanos: Long): Long =
-    frameTimeNanos.coerceAtLeast(0L) / AmllPresentationFrameIntervalNanos
-
-internal class AmllPresentationFrameGate {
-    private var lastPublishedBucket = Long.MIN_VALUE
-
-    fun shouldPublish(frameTimeNanos: Long): Boolean {
-        val bucket = amllPresentationFrameBucket(frameTimeNanos)
-        if (bucket <= lastPublishedBucket) return false
-        lastPublishedBucket = bucket
-        return true
     }
 }
 

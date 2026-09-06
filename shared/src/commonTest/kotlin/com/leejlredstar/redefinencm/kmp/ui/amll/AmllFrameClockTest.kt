@@ -13,70 +13,56 @@ import kotlin.test.assertTrue
 class AmllFrameClockTest {
 
     @Test
-    fun presentationClockPublishesAtMostSixtyTimesPerSecondOnHighRefreshInput() {
-        assertEquals(30, countPresentationPublishes(inputHz = 30))
-        assertEquals(60, countPresentationPublishes(inputHz = 60))
-        assertEquals(60, countPresentationPublishes(inputHz = 90))
-        assertEquals(60, countPresentationPublishes(inputHz = 120))
-        assertEquals(60, countPresentationPublishes(inputHz = 144))
-        assertEquals(60, countPresentationPublishes(inputHz = 240))
-    }
-
-    @Test
-    fun presentationClockSkipsCatchUpBurstsAfterAStall() {
-        val frameGate = AmllPresentationFrameGate()
-        assertTrue(frameGate.shouldPublish(0L))
-
-        assertTrue(frameGate.shouldPublish(100_000_000L))
-        assertTrue(!frameGate.shouldPublish(100_000_000L))
-    }
-
-    @Test
-    fun hundredMillisecondPlayerSamplesDoNotRestartThePresentationCadence() {
-        for (inputHz in listOf(30, 60, 90, 120, 144, 240)) {
-            val publishTimes = simulatePresentationPublishes(
-                inputHz = inputHz,
-                seconds = 2,
-            )
-            val targetPublishes = minOf(inputHz, AmllPresentationRefreshHz.toInt()) * 2
-            assertTrue(
-                publishTimes.size in (targetPublishes - 1)..(targetPublishes + 1),
-                "inputHz=$inputHz publishes=${publishTimes.size}",
-            )
-
-            val maximumGapNanos = publishTimes
-                .zipWithNext { previous, current -> current - previous }
-                .maxOrNull() ?: 0L
-            val inputFrameNanos = (1_000_000_000L + inputHz - 1L) / inputHz
-            assertTrue(
-                maximumGapNanos <= AmllPresentationFrameIntervalNanos + inputFrameNanos,
-                "inputHz=$inputHz maximumGapNanos=$maximumGapNanos",
-            )
+    fun presentationClockPublishesOnEveryFrameAtAnyRefreshRate() {
+        for (inputHz in listOf(30, 60, 90, 120, 144, 200, 240)) {
+            val positions = simulatePresentationPositions(inputHz = inputHz, seconds = 2)
+            assertEquals(inputHz * 2, positions.size, "inputHz=$inputHz")
         }
     }
 
-    private fun countPresentationPublishes(inputHz: Int): Int {
-        val frameGate = AmllPresentationFrameGate()
-        var publishes = 0
-        for (frame in 0 until inputHz) {
-            val frameNanos = frame * 1_000_000_000L / inputHz
-            if (frameGate.shouldPublish(frameNanos)) {
-                publishes += 1
+    @Test
+    fun hundredMillisecondPlayerSamplesDoNotMoveThePresentationClockBackwards() {
+        for (inputHz in listOf(30, 60, 90, 120, 144, 200, 240)) {
+            val positions = simulatePresentationPositions(inputHz = inputHz, seconds = 2)
+            positions.zipWithNext { previous, current ->
+                assertTrue(
+                    current >= previous,
+                    "inputHz=$inputHz previous=$previous current=$current",
+                )
+            }
+            val inputFrameMs = (1_000L + inputHz - 1L) / inputHz
+            positions.forEachIndexed { frame, positionMs ->
+                val frameMs = frame * 1_000L / inputHz
+                assertTrue(
+                    positionMs in (frameMs - inputFrameMs)..frameMs,
+                    "inputHz=$inputHz frame=$frame frameMs=$frameMs position=$positionMs",
+                )
             }
         }
-        return publishes
     }
 
-    private fun simulatePresentationPublishes(
+    @Test
+    fun presentationPositionNeverPassesTheTrackDuration() {
+        assertEquals(
+            5_000L,
+            amllPresentationPositionAt(
+                anchoredSampleMs = 4_990L,
+                anchorFrameNanos = 0L,
+                frameTimeNanos = 50_000_000L,
+                durationMs = 5_000L,
+            ),
+        )
+    }
+
+    /** The player publishes a sample every 100 ms; the clock anchors to it and extrapolates. */
+    private fun simulatePresentationPositions(
         inputHz: Int,
         seconds: Int,
     ): List<Long> {
-        val frameGate = AmllPresentationFrameGate()
-        val publishTimes = mutableListOf<Long>()
+        val positions = mutableListOf<Long>()
         var sampleWindow = -1L
         var anchoredSampleMs = 0L
         var anchorFrameNanos = 0L
-        var previousPositionMs = 0L
 
         for (frame in 0 until (inputHz * seconds)) {
             val frameTimeNanos = frame * 1_000_000_000L / inputHz
@@ -86,21 +72,13 @@ class AmllFrameClockTest {
                 anchoredSampleMs = currentSampleWindow * 100L
                 anchorFrameNanos = frameTimeNanos
             }
-            if (!frameGate.shouldPublish(frameTimeNanos)) continue
-
-            val positionMs = amllPresentationPositionAt(
+            positions += amllPresentationPositionAt(
                 anchoredSampleMs = anchoredSampleMs,
                 anchorFrameNanos = anchorFrameNanos,
                 frameTimeNanos = frameTimeNanos,
                 durationMs = 0L,
             )
-            assertTrue(
-                positionMs >= previousPositionMs,
-                "inputHz=$inputHz previous=$previousPositionMs current=$positionMs",
-            )
-            previousPositionMs = positionMs
-            publishTimes += frameTimeNanos
         }
-        return publishTimes
+        return positions
     }
 }
