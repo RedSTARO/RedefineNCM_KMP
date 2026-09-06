@@ -96,10 +96,36 @@ object AppIcons {
     val VolumeUp: ImageVector by lazy {
         symbol("VolumeUp", "M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 127-78 224.5T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320Z")
     }
+    /** Apple Music's lyrics affordance: a pair of English closing quotation marks. */
+    val FormatQuote: ImageVector by lazy {
+        classic("FormatQuote", "M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z")
+    }
+    val SkipPrevious: ImageVector by lazy {
+        classic("SkipPrevious", "M6 6h2v12H6zm3.5 6l8.5 6V6z", autoMirror = true)
+    }
+    val SkipNext: ImageVector by lazy {
+        classic("SkipNext", "M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z", autoMirror = true)
+    }
     val QrCode2: ImageVector by lazy {
         symbol("QrCode2", "M520-120v-80h80v80h-80Zm-80-80v-200h80v200h-80Zm320-120v-160h80v160h-80Zm-80-160v-80h80v80h-80Zm-480 80v-80h80v80h-80Zm-80-80v-80h80v80h-80Zm360-280v-80h80v80h-80ZM180-660h120v-120H180v120Zm-60 60v-240h240v240H120Zm60 420h120v-120H180v120Zm-60 60v-240h240v240H120Zm540-540h120v-120H660v120Zm-60 60v-240h240v240H600Zm80 480v-120h-80v-80h160v120h80v80H680ZM520-400v-80h160v80H520Zm-160 0v-80h-80v-80h240v80h-80v80h-80Zm40-200v-160h80v80h80v80H400Zm-190-90v-60h60v60h-60Zm0 480v-60h60v60h-60Zm480-480v-60h60v60h-60Z")
     }
 }
+
+/**
+ * Classic Material Icons (24px grid, filled). Used only where Material Symbols has no
+ * equivalent glyph in the app's chosen family; silhouettes match the symbols set.
+ */
+private fun classic(name: String, pathData: String, autoMirror: Boolean = false): ImageVector =
+    ImageVector.Builder(
+        name = name,
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+        autoMirror = autoMirror,
+    ).apply {
+        addPath(pathData = addPathNodes(pathData), fill = SolidColor(Color.Black))
+    }.build()
 
 private fun symbol(name: String, pathData: String, autoMirror: Boolean = false): ImageVector =
     ImageVector.Builder(

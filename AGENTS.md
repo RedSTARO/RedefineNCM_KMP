@@ -144,8 +144,9 @@ every target. **There is no WebView anywhere in this project.** The Legacy AMLL 
 `amllAssets/amll/player.html` bundle it drove, the `AmllBridge.*` argument encoding, the
 `androidApp/amll-builder/` Node builder, the `useNativeAmllRenderer` setting and its backup
 field were all removed on 2026-09-06. Do not reintroduce a WebView, an HTML lyric host, a
-renderer preference, or a second full-screen destination. `FullLyricScreen` and
-`NowPlayingScreen` remain removed.
+renderer preference, or a second *lyric* destination. The pre-migration `FullLyricScreen` and
+`NowPlayingScreen` stay removed; the Now Playing entry page below is a new surface, not their
+return.
 
 The lyric engine lives in a **separate repository**,
 [`RedSTARO/AMLL_Jetpack_Compose`](https://github.com/RedSTARO/AMLL_Jetpack_Compose), vendored as
@@ -607,10 +608,17 @@ or cross-directory `file:` paths.
 Pending/backup files stay hidden and are excluded from scans. Web audio discovery accepts only
 the single-extension audio shape and explicitly excludes `.lyric.*` and `.cover.*`.
 
-The only full-screen playback destination is `AmllPlayerScreen`. `MiniNowPlayingBar`, the
-Desktop playback strip, and OS/deep-link now-playing requests open that destination directly.
-It renders `NativeAmllScreen` on every platform; there is no renderer preference to resolve.
-`FullLyricScreen` and `NowPlayingScreen` must not be restored.
+Playback has two stacked full-screen surfaces and one lyric renderer. `MiniNowPlayingBar`, the
+Desktop rail's now-playing action, and OS/deep-link now-playing requests open
+`PushedDest.NowPlaying` → `ui/screen/NowPlayingScreen.kt`: the Apple-Music-shaped entry page
+(artwork, title, wavy seek track, transport, floating toolbar). Its toolbar action button —
+the English quotation marks, `AppIcons.FormatQuote` — pushes `PushedDest.FullLyric` →
+`AmllPlayerScreen` → `NativeAmllScreen`, which renders lyrics on every platform. Back from the
+lyric page returns to Now Playing; back from Now Playing returns to the app. Both surfaces are
+`focusOrPush` destinations, hide the mini player, rise as one sheet over the tabs and cross-fade
+between each other (`isPlayerSurface` in `App.kt`). There is no renderer preference to resolve.
+Do not add lyric rendering to the Now Playing page, and do not route any entry point straight
+to the lyric page.
 
 The renderer exposes the top-right song-details affordance and requests `/song/wiki/summary`
 through `Repository` for the current song. They render only the
@@ -861,7 +869,13 @@ Applies to all platforms, and the original Android repo is kept aligned (goal #3
 - **Use the real Expressive APIs** (`MaterialExpressiveTheme`, motion scheme) provided by the
   pinned `material3` version; custom shapes and page palettes extend that theme rather than
   replacing it.
-- **Per-screen:** Full-screen player (`AmllPlayerScreen` → `NativeAmllScreen`, native Compose
+- **Per-screen:** Now Playing entry page (`NowPlayingScreen`: artwork-derived page gradient,
+  `ExpressiveArtwork` press morph that also settles to 86% while paused, Black headline with
+  marquee, a `Slider` whose track is `LinearWavyProgressIndicator` with amplitude tied to
+  playback, a wide extra-large `FilledIconToggleButton` play/pause with `toggleableShapes()`,
+  large tonal skip buttons with `IconButtonDefaults.shapes()`, and a `HorizontalFloatingToolbar`
+  whose vibrant FAB is the quotation-mark lyrics button; two columns at ≥840dp landscape);
+  Full-screen lyric player (`AmllPlayerScreen` → `NativeAmllScreen`, native Compose
   on every target, with the auto-hiding control island);
   Playlist detail (album-color gradient header, play-all/download-all as one
   `SplitButtonLayout`, connected rows with download indicators); User page (blurred hero +
@@ -1000,8 +1014,10 @@ feature gap; platform integrations use target-specific actuals:
       site was gated on the Legacy renderer being active.
 - [x] The lyric engine and lyric model live in the `AMLL_Jetpack_Compose` submodule
       (github.com/RedSTARO/AMLL_Jetpack_Compose) and are consumed through `includeBuild`.
-- [x] `AmllPlayerScreen` renders `NativeAmllScreen` on all four targets. `FullLyricScreen` and
-      `NowPlayingScreen` remain removed.
+- [x] `AmllPlayerScreen` renders `NativeAmllScreen` on all four targets. The pre-migration
+      `FullLyricScreen` / `NowPlayingScreen` remain removed.
+- [x] `ui/screen/NowPlayingScreen.kt` (added 2026-09-06) is the Now Playing entry page every
+      player entry point opens; its quotation-mark toolbar action opens the lyric page.
 - [x] `USE_NATIVE_AMLL_RENDERER` is dropped from `SettingKeys`, the Settings UI and the backup
       schema; backups written while the setting existed still import.
 - [x] The control island is one common surface on all four targets with Android's 3.6-second

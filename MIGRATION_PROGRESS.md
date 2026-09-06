@@ -48,6 +48,7 @@ media3 1.10.1 ・ androidx.palette 1.0.0 ・ compileSdk/targetSdk 36 / minSdk 24
 | replacePlaylist 设置（单曲点击：单曲队列 vs 整单队列） | ✅ |
 | playlistUpdatePlaycount 上报 | ✅ |
 | 全屏播放器（单一路由、原生 Compose） | ✅（四端同一份 `NativeAmllScreen`；无渲染器选项） |
+| Now Playing 入口页（M3 Expressive：封面变形、波形进度 Slider、宽版播放切换、浮动工具栏 + 引号按钮进歌词页） | ✅（2026-09-06 新增 `ui/screen/NowPlayingScreen.kt`；所有播放入口先到此页，引号按钮再进 AMLL） |
 | 随机播放不变量（播放顺序队列 + 高亮同源重建） | ✅（ExoPlayer 按 timeline 播放顺序重建 + skipToIndex 映射窗口索引；VM 实时订阅） |
 | 播放状态持久化（队列/索引/进度/shuffle，onPause 存、启动恢复不自动播） | ✅（PlayerStatus.sq + PlatformPlayer.restoreQueue） |
 | 歌单批量下载（5 首/批，跳过已存在） | ✅（common 编排；Android MediaStore/JVM 文件系统/iOS NSURLSession/Web OPFS） |

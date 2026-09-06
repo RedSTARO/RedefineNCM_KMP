@@ -54,8 +54,10 @@ AMLL TTML 按当前网易云歌曲 ID 精确查询
 [`amll-dev/amll-ttml-db`](https://github.com/amll-dev/amll-ttml-db)，不自动套用模糊标题
 结果。该请求使用独立无凭证客户端，只发送歌曲 ID，不会把网易云 Cookie、`realIP` 或后端
 地址发给第三方。Android、iOS、Desktop/JVM 与 Web/WASM 都使用同一个
-`NowPlayingViewModel` 歌词状态与来源策略。全屏播放页在四端都是同一份原生 Compose
-实现 `commonMain/ui/amll/NativeAmllScreen.kt`；项目内已无任何 WebView。
+`NowPlayingViewModel` 歌词状态与来源策略。迷你播放条、桌面侧栏和系统的「正在播放」入口先打开
+`ui/screen/NowPlayingScreen.kt`——Material 3 Expressive 风格的 Now Playing 页（封面、标题、波形进度、
+变形的播放控件、浮动工具栏）；工具栏上的英文引号按钮进入全屏歌词页。歌词页在四端都是同一份原生
+Compose 实现 `commonMain/ui/amll/NativeAmllScreen.kt`；项目内已无任何 WebView。
 
 歌词引擎是独立仓库 [AMLL_Jetpack_Compose](https://github.com/RedSTARO/AMLL_Jetpack_Compose)，
 以 git 子模块的形式放在本仓库的 `AMLL_Jetpack_Compose/` 目录，并由 `settings.gradle.kts` 的
