@@ -36,20 +36,11 @@ include(":androidApp")
 include(":desktopApp")
 include(":shared")
 
-// The native AMLL renderer lives in its own repository so it can be consumed on its own.
-// Composite build rather than a published artifact: edits on either side stay live, and
+// The native AMLL renderer is the AMLL_Jetpack_Compose git submodule, included as a composite
+// build rather than consumed as a published artifact: edits on either side stay live, and
 // TYPESAFE_PROJECT_ACCESSORS does not generate accessors for included builds, so :shared
 // depends on the "com.leejlredstar.amll:amll-compose" coordinate and Gradle substitutes it.
-//
-// A sibling checkout is the default. CI cannot place a second repository outside the
-// workspace, so the location is overridable through -PamllComposePath or AMLL_COMPOSE_PATH.
-val amllComposePath: String =
-    (settings.providers.gradleProperty("amllComposePath").orNull
-        ?: settings.providers.environmentVariable("AMLL_COMPOSE_PATH").orNull
-        ?: "../AMLLJetpackCompose")
-val amllComposeDir = file(amllComposePath)
-require(amllComposeDir.resolve("settings.gradle.kts").isFile) {
-    "AMLLJetpackCompose not found at ${amllComposeDir.absolutePath}. Clone it beside this " +
-        "repository, or point -PamllComposePath / AMLL_COMPOSE_PATH at your checkout."
+require(file("AMLL_Jetpack_Compose/settings.gradle.kts").isFile) {
+    "The AMLL_Jetpack_Compose submodule is empty. Run: git submodule update --init"
 }
-includeBuild(amllComposeDir)
+includeBuild("AMLL_Jetpack_Compose")

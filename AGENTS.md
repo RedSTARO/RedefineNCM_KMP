@@ -148,10 +148,14 @@ renderer preference, or a second full-screen destination. `FullLyricScreen` and
 `NowPlayingScreen` remain removed.
 
 The lyric engine lives in a **separate repository**,
-[`RedSTARO/AMLL_Jetpack_Compose`](https://github.com/RedSTARO/AMLL_Jetpack_Compose), checked out
-locally as `AMLLJetpackCompose` and consumed as a Gradle composite build. `settings.gradle.kts` calls `includeBuild` on `../AMLLJetpackCompose` by
-default, overridable with `-PamllComposePath` or `AMLL_COMPOSE_PATH`; `:shared` depends on the
-`com.leejlredstar.amll:amll-compose` coordinate and Gradle substitutes the local project.
+[`RedSTARO/AMLL_Jetpack_Compose`](https://github.com/RedSTARO/AMLL_Jetpack_Compose), vendored as
+the git submodule `AMLL_Jetpack_Compose/` and consumed as a Gradle composite build:
+`settings.gradle.kts` calls `includeBuild("AMLL_Jetpack_Compose")` and `:shared` depends on the
+`com.leejlredstar.amll:amll-compose` coordinate, which Gradle substitutes with the local project.
+A fresh clone needs `git submodule update --init`; the settings script fails with that hint when
+the directory is empty. Changes to the engine are made *inside* the submodule, committed and
+pushed there, and then the new submodule pointer is committed here — never edit the engine
+through this repository's history.
 `TYPESAFE_PROJECT_ACCESSORS` does not generate accessors for included builds, so that coordinate
 — not a `projects.*` accessor — is the dependency notation. Kotlin, Compose Multiplatform, AGP
 and the target set must stay identical in both catalogs: an included build only substitutes when
@@ -492,6 +496,7 @@ RedefineNCM_KMP/
 │       │                  recognition/WasmMicrophoneRecorder.kt
 │       ├── commonTest/   Shared business, API, player, recognition and UI regression tests
 │       └── jvmTest/      JVM database, media-control and platform integration tests
+├── AMLL_Jetpack_Compose/   # git submodule — the AMLL lyric engine + renderer (own Gradle build, includeBuild)
 ├── androidApp/    AGP application; MainActivity; PlaybackService (MediaSessionService);
 │                  RedefineNCMApp; depends on :shared + media3 directly
 ├── desktopApp/    Compose Desktop app; main.kt; depends on :shared
@@ -879,6 +884,8 @@ macOS only), IntelliJ IDEA / Android Studio with the KMP plugin. Web browser tes
 locally available Chrome/Chromium-compatible headless browser.
 
 ```sh
+# First clone only: fetch the AMLL renderer submodule
+git submodule update --init
 # Android
 ./gradlew :androidApp:assembleDebug
 # Desktop
@@ -991,8 +998,8 @@ feature gap; platform integrations use target-specific actuals:
       ProGuard keep rules, and the `compose.layers.type=COMPONENT` startup workaround.
 - [x] `DesktopOverlayWindow` and its `ProvideDesktopOverlayOwner` owner went with it; every call
       site was gated on the Legacy renderer being active.
-- [x] The lyric engine and lyric model live in the standalone `AMLLJetpackCompose` repository and
-      are consumed through `includeBuild`.
+- [x] The lyric engine and lyric model live in the `AMLL_Jetpack_Compose` submodule
+      (github.com/RedSTARO/AMLL_Jetpack_Compose) and are consumed through `includeBuild`.
 - [x] `AmllPlayerScreen` renders `NativeAmllScreen` on all four targets. `FullLyricScreen` and
       `NowPlayingScreen` remain removed.
 - [x] `USE_NATIVE_AMLL_RENDERER` is dropped from `SettingKeys`, the Settings UI and the backup

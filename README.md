@@ -57,15 +57,16 @@ AMLL TTML 按当前网易云歌曲 ID 精确查询
 `NowPlayingViewModel` 歌词状态与来源策略。全屏播放页在四端都是同一份原生 Compose
 实现 `commonMain/ui/amll/NativeAmllScreen.kt`；项目内已无任何 WebView。
 
-歌词引擎在独立仓库 [AMLLJetpackCompose](../AMLLJetpackCompose) 中，通过
-`settings.gradle.kts` 的 `includeBuild` 以 composite build 方式接入（坐标
-`com.leejlredstar.amll:amll-compose`）。默认从同级目录 `../AMLLJetpackCompose` 解析，
-可用 `-PamllComposePath` 或 `AMLL_COMPOSE_PATH` 指向其他位置。它按源码固定翻译
+歌词引擎是独立仓库 [AMLL_Jetpack_Compose](https://github.com/RedSTARO/AMLL_Jetpack_Compose)，
+以 git 子模块的形式放在本仓库的 `AMLL_Jetpack_Compose/` 目录，并由 `settings.gradle.kts` 的
+`includeBuild` 作为 composite build 接入（坐标 `com.leejlredstar.amll:amll-compose`）。首次克隆后
+运行 `git submodule update --init`。修改歌词引擎时在子模块内提交并推送，再在本仓库提交新的子模块
+指针。它按源码固定翻译
 `@applemusic-like-lyrics/core 0.5.2`、`@applemusic-like-lyrics/lyric 1.0.2` 与
 `@applemusic-like-lyrics/ttml 1.0.1`。修改歌词解析、布局、弹簧或逐字渲染后运行：
 
 ```sh
-cd ../AMLLJetpackCompose && ./gradlew :amll-compose:jvmTest
+cd AMLL_Jetpack_Compose && ./gradlew :amll-compose:jvmTest
 ./gradlew :shared:jvmTest
 ./gradlew :shared:testAndroidHostTest
 ./gradlew :shared:wasmJsBrowserTest
@@ -74,7 +75,7 @@ cd ../AMLLJetpackCompose && ./gradlew :amll-compose:jvmTest
 CI 验证 TTML → 公共歌词模型 → Compose 渲染字段链路，并校验应用内许可证资源与仓库
 声明一致。宿主侧映射见
 [`docs/AMLL_NATIVE_TRANSLATION.md`](docs/AMLL_NATIVE_TRANSLATION.md)；歌词引擎的逐符号
-映射与平台 API 边界以 AMLLJetpackCompose 仓库内的同名文档为准。
+映射与平台 API 边界以子模块 `AMLL_Jetpack_Compose/docs/AMLL_NATIVE_TRANSLATION.md` 为准。
 
 AMLL 包声明为 `AGPL-3.0-only`；完整文本和上游版本/源码定位见
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。仓库当前没有项目级 `LICENSE`，因此发布

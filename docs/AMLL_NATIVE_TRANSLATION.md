@@ -5,7 +5,7 @@
 2026-09-06 删除。
 
 歌词引擎本身（解析、优化器、弹簧、时间线、布局、字级遮罩与强调、分词、减少动态效果、
-封面背景）已抽出到独立仓库 **AMLLJetpackCompose**（Gradle 坐标
+封面背景）已抽出到独立仓库 **AMLL_Jetpack_Compose**（本仓库的同名 git 子模块；Gradle 坐标
 `com.leejlredstar.amll:amll-compose`）。**逐符号的 TypeScript / CSS → Kotlin 映射表、
 以及有意保留的平台 API 差异清单，以该仓库的 `docs/AMLL_NATIVE_TRANSLATION.md`
 为准**，本文件不再重复。

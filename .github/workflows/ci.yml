@@ -10,11 +10,6 @@ on:
 permissions:
   contents: read
 
-env:
-  # settings.gradle.kts includes ../AMLLJetpackCompose by default; on CI both repositories
-  # have to live inside the workspace.
-  AMLL_COMPOSE_PATH: ${{ github.workspace }}/amll-jetpack-compose
-
 jobs:
   # ─── Tests ──────────────────────────────────────────────────────────────────
   test:
@@ -30,14 +25,8 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
+          submodules: recursive
           fetch-depth: 0
-
-      - name: Check out the AMLL Compose renderer
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          repository: ${{ github.repository_owner }}/AMLL_Jetpack_Compose
-          path: amll-jetpack-compose
-
       - name: Fetch tags
         run: git fetch --force --tags
 
@@ -136,14 +125,8 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
+          submodules: recursive
           fetch-depth: 0
-
-      - name: Check out the AMLL Compose renderer
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          repository: ${{ github.repository_owner }}/AMLL_Jetpack_Compose
-          path: amll-jetpack-compose
-
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
           java-version: '17'
@@ -186,14 +169,8 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
+          submodules: recursive
           fetch-depth: 0
-
-      - name: Check out the AMLL Compose renderer
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          repository: ${{ github.repository_owner }}/AMLL_Jetpack_Compose
-          path: amll-jetpack-compose
-
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
           java-version: '17'
@@ -295,14 +272,8 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
+          submodules: recursive
           fetch-depth: 0
-
-      - name: Check out the AMLL Compose renderer
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          repository: ${{ github.repository_owner }}/AMLL_Jetpack_Compose
-          path: amll-jetpack-compose
-
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
           java-version: '17'
@@ -342,14 +313,8 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
+          submodules: recursive
           fetch-depth: 0
-
-      - name: Check out the AMLL Compose renderer
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          repository: ${{ github.repository_owner }}/AMLL_Jetpack_Compose
-          path: amll-jetpack-compose
-
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
           java-version: '17'
@@ -411,14 +376,8 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
+          submodules: recursive
           fetch-depth: 0
-
-      - name: Check out the AMLL Compose renderer
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          repository: ${{ github.repository_owner }}/AMLL_Jetpack_Compose
-          path: amll-jetpack-compose
-
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
           java-version: '17'
@@ -469,14 +428,8 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
+          submodules: recursive
           fetch-depth: 0
-
-      - name: Check out the AMLL Compose renderer
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          repository: ${{ github.repository_owner }}/AMLL_Jetpack_Compose
-          path: amll-jetpack-compose
-
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
           java-version: '17'
@@ -538,6 +491,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
+          submodules: recursive
           fetch-depth: 0
       - name: Count commits since last tag
         id: commitcount
@@ -630,6 +584,7 @@ jobs:
 
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
+          submodules: recursive
           fetch-depth: 0
       - name: Build changelog since last tag
         id: changelog

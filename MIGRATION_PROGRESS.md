@@ -1,6 +1,6 @@
 # RedefineNCM → KMP 迁移进度
 
-> 最后更新：2026-09-06　｜　状态：**四目标均已启用；全屏播放器为单一路由、单一原生 Compose 渲染器**。项目内已无任何 WebView；歌词引擎在独立仓库 `AMLLJetpackCompose` 中，以 Gradle composite build 接入。
+> 最后更新：2026-09-06　｜　状态：**四目标均已启用；全屏播放器为单一路由、单一原生 Compose 渲染器**。项目内已无任何 WebView；歌词引擎是子模块 `AMLL_Jetpack_Compose/`（独立仓库），以 Gradle composite build 接入。
 > 权威细节与"目标规范 vs 现状差异清单"见 `AGENTS.md`（本仓库）与 `../RedefineNCM/AGENTS.md`（原始仓库，已冻结）。
 > 本文件只做"全步骤 / 已完成 / 剩余"的进度总览。
 
@@ -124,10 +124,11 @@ WebView2 子 HWND 永远压在轻量 Compose 层之上，所有调用点都以 L
 渲染 `NativeAmllScreen`，没有渲染器选项。
 
 歌词引擎（解析、优化器、弹簧、时间线、布局、字级遮罩与强调、分词、减少动态效果、封面
-背景）已于 2026-09-06 抽出到独立仓库 `AMLLJetpackCompose`，坐标
-`com.leejlredstar.amll:amll-compose`，通过 `settings.gradle.kts` 的 `includeBuild` 接入；
-默认解析同级目录 `../AMLLJetpackCompose`，可用 `-PamllComposePath` / `AMLL_COMPOSE_PATH`
-覆盖。两侧的 Kotlin / Compose / AGP 版本和目标集必须保持一致。
+背景）已于 2026-09-06 抽出到独立仓库 `RedSTARO/AMLL_Jetpack_Compose`，坐标
+`com.leejlredstar.amll:amll-compose`，以 git 子模块 `AMLL_Jetpack_Compose/` 放在本仓库内，
+由 `settings.gradle.kts` 的 `includeBuild("AMLL_Jetpack_Compose")` 接入。首次克隆需
+`git submodule update --init`；引擎改动在子模块内提交推送后再更新本仓库的子模块指针。两侧的
+Kotlin / Compose / AGP 版本和目标集必须保持一致。
 
 | 项目 | 当前状态 |
 |---|---|

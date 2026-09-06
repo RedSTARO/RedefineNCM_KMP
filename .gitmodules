@@ -1,0 +1,3 @@
+[submodule "AMLL_Jetpack_Compose"]
+	path = AMLL_Jetpack_Compose
+	url = https://github.com/RedSTARO/AMLL_Jetpack_Compose
