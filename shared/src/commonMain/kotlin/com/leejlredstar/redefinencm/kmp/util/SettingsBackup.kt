@@ -2,6 +2,7 @@ package com.leejlredstar.redefinencm.kmp.util
 
 import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
+import com.leejlredstar.redefinencm.kmp.notification.LyricSurfaceAlignment
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -25,6 +26,10 @@ data class SettingsBackupData(
     val searchPrediction: Boolean = true,
     val showDownloadStatus: Boolean = false,
     val adaptOriginalAndroidLyric: Boolean = false,
+    /** The desktop lyric window's lock; false where there is no such window to lock. */
+    val desktopLyricLocked: Boolean = false,
+    /** Null keeps the current choice when importing a backup made before the window had one. */
+    val desktopLyricAlignment: String? = null,
     val showTranslatedLyric: Boolean = false,
     val showRomanLyric: Boolean = false,
     /** Null keeps the current choice when importing a backup made before lyric-source support. */
@@ -59,6 +64,10 @@ internal fun encodeSettingsBackup(
         searchPrediction = getBoolean(SettingKeys.SEARCH_PREDICTION, true),
         showDownloadStatus = getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false),
         adaptOriginalAndroidLyric = getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false),
+        desktopLyricLocked = getBoolean(SettingKeys.DESKTOP_LYRIC_LOCKED, false),
+        desktopLyricAlignment = LyricSurfaceAlignment.fromWireValueOrDefault(
+            getString(SettingKeys.DESKTOP_LYRIC_ALIGNMENT, ""),
+        ).wireValue,
         showTranslatedLyric = getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false),
         showRomanLyric = getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false),
         lyricSourceMode = LyricSourceMode.fromStoredWireValue(
@@ -85,6 +94,9 @@ internal fun applySettingsBackup(
     val lyricSourceMode = data.lyricSourceMode?.let { stored ->
         LyricSourceMode.fromWireValueOrNull(stored) ?: return false
     }
+    val desktopLyricAlignment = data.desktopLyricAlignment?.let { stored ->
+        LyricSurfaceAlignment.fromWireValueOrNull(stored) ?: return false
+    }
     if (data.server.isNotEmpty()) setString(SettingKeys.SERVER, data.server)
     setBoolean(SettingKeys.QQ_ENABLED, data.qqEnabled)
     if (data.qqServer.isNotEmpty()) setString(SettingKeys.QQ_SERVER, data.qqServer)
@@ -96,6 +108,8 @@ internal fun applySettingsBackup(
     setBoolean(SettingKeys.SEARCH_PREDICTION, data.searchPrediction)
     setBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, data.showDownloadStatus)
     setBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, data.adaptOriginalAndroidLyric)
+    setBoolean(SettingKeys.DESKTOP_LYRIC_LOCKED, data.desktopLyricLocked)
+    desktopLyricAlignment?.let { setString(SettingKeys.DESKTOP_LYRIC_ALIGNMENT, it.wireValue) }
     setBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, data.showTranslatedLyric)
     setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, data.showRomanLyric)
     lyricSourceMode?.let { setString(SettingKeys.LYRIC_SOURCE_MODE, it.wireValue) }

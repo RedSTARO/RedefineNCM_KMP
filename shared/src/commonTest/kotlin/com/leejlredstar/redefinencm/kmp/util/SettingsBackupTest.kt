@@ -2,6 +2,7 @@ package com.leejlredstar.redefinencm.kmp.util
 
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -128,6 +129,52 @@ class SettingsBackupTest {
             ),
         )
         assertTrue(writtenBooleans[SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE] == true)
+    }
+
+    @Test
+    fun desktopLyricWindowLayoutRoundTripsAndOlderBackupsKeepTheCurrentAlignment() {
+        val legacyStrings = mutableMapOf<String, String>()
+        val legacyBooleans = mutableMapOf<String, Boolean>()
+        assertTrue(
+            applySettingsBackup(
+                json = "{}",
+                setString = { key, value -> legacyStrings[key] = value },
+                setBoolean = { key, value -> legacyBooleans[key] = value },
+            ),
+        )
+        assertFalse(legacyBooleans.getValue(SettingKeys.DESKTOP_LYRIC_LOCKED))
+        assertFalse(legacyStrings.containsKey(SettingKeys.DESKTOP_LYRIC_ALIGNMENT))
+
+        val exported = encodeSettingsBackup(
+            getString = { key, default ->
+                if (key == SettingKeys.DESKTOP_LYRIC_ALIGNMENT) "end" else default
+            },
+            getBoolean = { key, default ->
+                if (key == SettingKeys.DESKTOP_LYRIC_LOCKED) true else default
+            },
+        )
+        assertTrue(exported.contains("\"desktopLyricLocked\":true"))
+        assertTrue(exported.contains("\"desktopLyricAlignment\":\"end\""))
+
+        val strings = mutableMapOf<String, String>()
+        val booleans = mutableMapOf<String, Boolean>()
+        assertTrue(
+            applySettingsBackup(
+                json = exported,
+                setString = { key, value -> strings[key] = value },
+                setBoolean = { key, value -> booleans[key] = value },
+            ),
+        )
+        assertTrue(booleans.getValue(SettingKeys.DESKTOP_LYRIC_LOCKED))
+        assertEquals("end", strings[SettingKeys.DESKTOP_LYRIC_ALIGNMENT])
+
+        assertFalse(
+            applySettingsBackup(
+                json = "{\"desktopLyricAlignment\":\"diagonal\"}",
+                setString = { _, _ -> },
+                setBoolean = { _, _ -> },
+            ),
+        )
     }
 
     @Test

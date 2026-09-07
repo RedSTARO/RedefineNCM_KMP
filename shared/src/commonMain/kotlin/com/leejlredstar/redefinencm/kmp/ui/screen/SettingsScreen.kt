@@ -78,6 +78,7 @@ import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
 import com.leejlredstar.redefinencm.kmp.lyric.supportsDynamicNowPlayingCover
 import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
+import com.leejlredstar.redefinencm.kmp.notification.LyricSurfaceAlignment
 import com.leejlredstar.redefinencm.kmp.player.AudioOutputDevice
 import com.leejlredstar.redefinencm.kmp.player.SYSTEM_DEFAULT_AUDIO_OUTPUT_ID
 import com.leejlredstar.redefinencm.kmp.player.audioOutputDeviceName
@@ -135,6 +136,10 @@ fun SettingsScreen(
     var searchPrediction by remember(settings) { mutableStateOf(true) }
     var showDownloadStatus by remember(settings) { mutableStateOf(false) }
     var extraLyricSurfaceEnabled by remember(settings) { mutableStateOf(false) }
+    var desktopLyricLocked by remember(settings) { mutableStateOf(false) }
+    var desktopLyricAlignment by remember(settings) {
+        mutableStateOf(LyricSurfaceAlignment.DEFAULT)
+    }
     var showTranslatedLyric by remember(settings) { mutableStateOf(false) }
     var showRomanLyric by remember(settings) { mutableStateOf(false) }
     var lyricSourceMode by remember(settings) {
@@ -172,6 +177,12 @@ fun SettingsScreen(
         showDownloadStatus = settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false)
         extraLyricSurfaceEnabled = settings.getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false)
         LyricNotificationController.setOptionalSurfaceEnabled(extraLyricSurfaceEnabled)
+        desktopLyricLocked = settings.getBoolean(SettingKeys.DESKTOP_LYRIC_LOCKED, false)
+        desktopLyricAlignment = LyricSurfaceAlignment.fromWireValueOrDefault(
+            settings.getString(SettingKeys.DESKTOP_LYRIC_ALIGNMENT, ""),
+        )
+        LyricNotificationController.setOptionalSurfaceLocked(desktopLyricLocked)
+        LyricNotificationController.setOptionalSurfaceAlignment(desktopLyricAlignment)
         showTranslatedLyric = settings.getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
         showRomanLyric = settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)
         lyricSourceMode = LyricSourceMode.fromStoredWireValue(
@@ -248,6 +259,12 @@ fun SettingsScreen(
             showDownloadStatus = settings.getBooleanAsync(SettingKeys.SHOW_DOWNLOAD_STATUS, false)
             extraLyricSurfaceEnabled = settings.getBooleanAsync(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false)
             LyricNotificationController.setOptionalSurfaceEnabled(extraLyricSurfaceEnabled)
+            desktopLyricLocked = settings.getBooleanAsync(SettingKeys.DESKTOP_LYRIC_LOCKED, false)
+            desktopLyricAlignment = LyricSurfaceAlignment.fromWireValueOrDefault(
+                settings.getStringAsync(SettingKeys.DESKTOP_LYRIC_ALIGNMENT, ""),
+            )
+            LyricNotificationController.setOptionalSurfaceLocked(desktopLyricLocked)
+            LyricNotificationController.setOptionalSurfaceAlignment(desktopLyricAlignment)
             showTranslatedLyric = settings.getBooleanAsync(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
             showRomanLyric = settings.getBooleanAsync(SettingKeys.SHOW_ROMAN_LYRIC, false)
             lyricSourceMode = LyricSourceMode.fromStoredWireValue(
@@ -625,8 +642,9 @@ fun SettingsScreen(
                 }
 
                 SettingsSectionLabel("歌词", settingsPalette)
-                val lyricSettingCount =
-                    if (LyricNotificationController.supportsOptionalSurfaceControl) 4 else 3
+                val surfaceRows = if (LyricNotificationController.supportsOptionalSurfaceControl) 1 else 0
+                val surfaceLayoutRows = if (LyricNotificationController.supportsOptionalSurfaceLayout) 2 else 0
+                val lyricSettingCount = 3 + surfaceRows + surfaceLayoutRows
                 LyricSourceDropdown(
                     selectedWireValue = lyricSourceMode,
                     accentPalette = settingsPalette,
@@ -664,6 +682,44 @@ fun SettingsScreen(
                             write = { settings.setBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, enabled) },
                             onWritten = {
                                 LyricNotificationController.setOptionalSurfaceEnabled(enabled)
+                            },
+                        )
+                    }
+                }
+                if (LyricNotificationController.supportsOptionalSurfaceLayout) {
+                    SettingsSwitch(
+                        desktopLyricLocked,
+                        "锁定桌面歌词",
+                        settingsPalette,
+                        index = 1 + surfaceRows,
+                        count = lyricSettingCount,
+                        supportingText = "锁定后窗口固定在原处，不能拖动或调整大小；" +
+                            "Windows 上鼠标会穿透到下面的窗口。解锁只能在这里进行。",
+                    ) { locked ->
+                        desktopLyricLocked = locked
+                        persistSettings(
+                            write = { settings.setBoolean(SettingKeys.DESKTOP_LYRIC_LOCKED, locked) },
+                            onWritten = {
+                                LyricNotificationController.setOptionalSurfaceLocked(locked)
+                            },
+                        )
+                    }
+                    LyricSurfaceAlignmentDropdown(
+                        selected = desktopLyricAlignment,
+                        accentPalette = settingsPalette,
+                        index = 2 + surfaceRows,
+                        count = lyricSettingCount,
+                    ) { alignment ->
+                        desktopLyricAlignment = alignment
+                        persistSettings(
+                            write = {
+                                settings.setString(
+                                    SettingKeys.DESKTOP_LYRIC_ALIGNMENT,
+                                    alignment.wireValue,
+                                )
+                            },
+                            onWritten = {
+                                LyricNotificationController.setOptionalSurfaceAlignment(alignment)
                             },
                         )
                     }
@@ -1171,6 +1227,68 @@ private fun AudioOutputDeviceDropdown(
                 DropdownMenuItem(
                     text = { Text(device.displayName) },
                     onClick = { expanded = false; onUpdate(device.id) },
+                )
+            }
+        }
+    }
+}
+
+/** Where the desktop lyric window's two lines sit: the row reads like [SettingsDropdown]. */
+@Composable
+private fun LyricSurfaceAlignmentDropdown(
+    selected: LyricSurfaceAlignment,
+    accentPalette: ContentAccentPalette,
+    index: Int,
+    count: Int,
+    onUpdate: (LyricSurfaceAlignment) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    Surface(
+        onClick = { expanded = true },
+        shape = rememberConnectedListItemShape(index, count, interactionSource),
+        color = accentPalette.quietContainer,
+        contentColor = accentPalette.onQuietContainer,
+        interactionSource = interactionSource,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = ExpressiveLayout.ConnectedItemGap),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = ExpressiveLayout.MinimumTouchTarget)
+                .padding(start = 20.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "桌面歌词对齐",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(16.dp))
+            Text(
+                text = selected.displayName,
+                style = MaterialTheme.typography.bodyMedium,
+                color = accentPalette.secondaryOnQuietContainer,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Icon(
+                AppIcons.KeyboardArrowRight,
+                contentDescription = null,
+                tint = accentPalette.secondaryOnQuietContainer,
+                modifier = Modifier.padding(start = 4.dp),
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            LyricSurfaceAlignment.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.displayName) },
+                    onClick = {
+                        expanded = false
+                        onUpdate(option)
+                    },
                 )
             }
         }

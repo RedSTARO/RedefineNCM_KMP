@@ -13,7 +13,8 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 actual object LyricNotificationController {
     actual val supportsOptionalSurfaceControl: Boolean = true
-    actual val optionalSurfaceSettingLabel: String = "启用桌面歌词"
+    actual val optionalSurfaceSettingLabel: String = "显示桌面歌词"
+    actual val supportsOptionalSurfaceLayout: Boolean = true
 
     private val _floatingLyricData = MutableStateFlow<FloatingLyricData?>(null)
     val floatingLyricData: StateFlow<FloatingLyricData?> = _floatingLyricData.asStateFlow()
@@ -23,6 +24,14 @@ actual object LyricNotificationController {
 
     private val _isWindowVisible = MutableStateFlow(false)
     val isWindowVisible: StateFlow<Boolean> = _isWindowVisible.asStateFlow()
+
+    private val _isWindowLocked = MutableStateFlow(false)
+    /** Whether the window ignores the pointer and stays where it is. Settings toggles it. */
+    val isWindowLocked: StateFlow<Boolean> = _isWindowLocked.asStateFlow()
+
+    private val _windowAlignment = MutableStateFlow(LyricSurfaceAlignment.DEFAULT)
+    /** How the two lyric lines sit inside the window. */
+    val windowAlignment: StateFlow<LyricSurfaceAlignment> = _windowAlignment.asStateFlow()
     private var currentTrackKey: String? = null
     private var dismissedTrackKey: String? = null
     private var optionalSurfaceEnabled = false
@@ -37,6 +46,14 @@ actual object LyricNotificationController {
         } else {
             clearDisplayedState()
         }
+    }
+
+    actual fun setOptionalSurfaceLocked(locked: Boolean) {
+        _isWindowLocked.value = locked
+    }
+
+    actual fun setOptionalSurfaceAlignment(alignment: LyricSurfaceAlignment) {
+        _windowAlignment.value = alignment
     }
 
     @Synchronized

@@ -25,6 +25,22 @@ expect object LyricNotificationController {
     fun setOptionalSurfaceEnabled(enabled: Boolean)
 
     /**
+     * Whether the optional surface is a window of its own that can be locked in place and have
+     * its lines aligned. Only the desktop's floating window is; a notification has no such
+     * layout, so Settings shows the lock and alignment rows only where this is true.
+     */
+    val supportsOptionalSurfaceLayout: Boolean
+
+    /**
+     * A locked surface stays where it is: it cannot be dragged or resized, and where the host
+     * allows it the pointer falls through to whatever is underneath. Settings is the way back.
+     */
+    fun setOptionalSurfaceLocked(locked: Boolean)
+
+    /** How the surface's lyric lines sit inside it. */
+    fun setOptionalSurfaceAlignment(alignment: LyricSurfaceAlignment)
+
+    /**
      * Update the displayed lyric content.
      * @param title Song title
      * @param artist Song artist
@@ -48,4 +64,22 @@ expect object LyricNotificationController {
 
     /** Reset internal state. */
     fun reset()
+}
+
+/** Horizontal placement of the optional lyric surface's lines, persisted by its wire value. */
+enum class LyricSurfaceAlignment(val wireValue: String, val displayName: String) {
+    START("start", "左对齐"),
+    CENTER("center", "居中"),
+    END("end", "右对齐"),
+    ;
+
+    companion object {
+        val DEFAULT = CENTER
+
+        fun fromWireValueOrNull(value: String): LyricSurfaceAlignment? =
+            entries.firstOrNull { it.wireValue == value.trim().lowercase() }
+
+        fun fromWireValueOrDefault(value: String): LyricSurfaceAlignment =
+            fromWireValueOrNull(value) ?: DEFAULT
+    }
 }

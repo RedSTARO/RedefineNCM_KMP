@@ -9,6 +9,12 @@ actual object LyricNotificationController {
 
     actual fun setOptionalSurfaceEnabled(enabled: Boolean) = Unit
 
+    actual val supportsOptionalSurfaceLayout: Boolean = false
+
+    actual fun setOptionalSurfaceLocked(locked: Boolean) = Unit
+
+    actual fun setOptionalSurfaceAlignment(alignment: LyricSurfaceAlignment) = Unit
+
     actual fun updateLyric(
         title: String?,
         artist: String?,

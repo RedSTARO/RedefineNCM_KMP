@@ -40,7 +40,9 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.leejlredstar.redefinencm.kmp.di.initKoin
+import com.leejlredstar.redefinencm.kmp.notification.DesktopFloatingWindowNative
 import com.leejlredstar.redefinencm.kmp.notification.FloatingLyricData
+import com.leejlredstar.redefinencm.kmp.notification.LyricSurfaceAlignment
 import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.SYSTEM_DEFAULT_AUDIO_OUTPUT_ID
@@ -58,6 +60,14 @@ fun main() {
     startFromTheSystemAudioOutput(settings::getString, settings::setString)
     LyricNotificationController.setOptionalSurfaceEnabled(
         settings.getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false),
+    )
+    LyricNotificationController.setOptionalSurfaceLocked(
+        settings.getBoolean(SettingKeys.DESKTOP_LYRIC_LOCKED, false),
+    )
+    LyricNotificationController.setOptionalSurfaceAlignment(
+        LyricSurfaceAlignment.fromWireValueOrDefault(
+            settings.getString(SettingKeys.DESKTOP_LYRIC_ALIGNMENT, ""),
+        ),
     )
     launchDesktopApplication()
 }
@@ -168,6 +178,8 @@ private fun ApplicationScope.FloatingLyricWindow() {
     if (!visible) return
 
     val data by LyricNotificationController.floatingLyricData.collectAsState()
+    val locked by LyricNotificationController.isWindowLocked.collectAsState()
+    val alignment by LyricNotificationController.windowAlignment.collectAsState()
 
     Window(
         onCloseRequest = { LyricNotificationController.hide() },
@@ -176,11 +188,21 @@ private fun ApplicationScope.FloatingLyricWindow() {
         undecorated = true,   // frameless
         transparent = true,   // translucent (requires undecorated)
         alwaysOnTop = true,
-        resizable = true,
+        resizable = !locked,
     ) {
+        // A locked window is parked: no drag area, no resize, and on Windows no pointer at all —
+        // clicks fall through to what is underneath. Settings is the only way to unlock it.
+        DisposableEffect(window, locked) {
+            DesktopFloatingWindowNative.setClickThrough(window, locked)
+            onDispose { }
+        }
         RedefineNCMTheme {
-            WindowDraggableArea(modifier = Modifier.fillMaxSize()) {
-                FloatingLyricContent(data)
+            if (locked) {
+                FloatingLyricContent(data, alignment)
+            } else {
+                WindowDraggableArea(modifier = Modifier.fillMaxSize()) {
+                    FloatingLyricContent(data, alignment)
+                }
             }
         }
     }
@@ -200,19 +222,31 @@ private fun ApplicationScope.FloatingLyricWindow() {
  * window with almost nothing to grab.
  */
 @Composable
-private fun FloatingLyricContent(data: FloatingLyricData?) {
+private fun FloatingLyricContent(
+    data: FloatingLyricData?,
+    alignment: LyricSurfaceAlignment,
+) {
     val lyricShadow = Shadow(
         color = Color.Black.copy(alpha = 0.75f),
         offset = Offset(0f, 2f),
         blurRadius = 8f,
     )
+    val textAlign = when (alignment) {
+        LyricSurfaceAlignment.START -> TextAlign.Start
+        LyricSurfaceAlignment.CENTER -> TextAlign.Center
+        LyricSurfaceAlignment.END -> TextAlign.End
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .semantics { paneTitle = "桌面歌词" },
         verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        horizontalAlignment = when (alignment) {
+            LyricSurfaceAlignment.START -> Alignment.Start
+            LyricSurfaceAlignment.CENTER -> Alignment.CenterHorizontally
+            LyricSurfaceAlignment.END -> Alignment.End
+        },
     ) {
         Crossfade(
             targetState = data?.currentLyric?.ifBlank { data.title }.orEmpty(),
@@ -226,7 +260,7 @@ private fun FloatingLyricContent(data: FloatingLyricData?) {
                 text = lyric.ifBlank { "暂无歌词" },
                 style = MaterialTheme.typography.headlineSmall.copy(shadow = lyricShadow),
                 color = Color.White,
-                textAlign = TextAlign.Center,
+                textAlign = textAlign,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
@@ -239,7 +273,7 @@ private fun FloatingLyricContent(data: FloatingLyricData?) {
                 ?: "下一句歌词将在这里显示",
             style = MaterialTheme.typography.bodyMedium.copy(shadow = lyricShadow),
             color = Color.White.copy(alpha = 0.72f),
-            textAlign = TextAlign.Center,
+            textAlign = textAlign,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.fillMaxWidth(),

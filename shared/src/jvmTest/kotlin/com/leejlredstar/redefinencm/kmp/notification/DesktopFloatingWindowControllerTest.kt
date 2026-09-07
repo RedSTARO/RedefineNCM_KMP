@@ -54,6 +54,32 @@ class DesktopFloatingWindowControllerTest {
     }
 
     @Test
+    fun windowLayoutIsItsOwnStateAndSurvivesTheSurfaceBeingDisabled() {
+        assertFalse(LyricNotificationController.isWindowLocked.value)
+        assertEquals(LyricSurfaceAlignment.CENTER, LyricNotificationController.windowAlignment.value)
+
+        LyricNotificationController.setOptionalSurfaceLocked(true)
+        LyricNotificationController.setOptionalSurfaceAlignment(LyricSurfaceAlignment.END)
+        LyricNotificationController.setOptionalSurfaceEnabled(false)
+        LyricNotificationController.reset()
+
+        assertTrue(LyricNotificationController.isWindowLocked.value)
+        assertEquals(LyricSurfaceAlignment.END, LyricNotificationController.windowAlignment.value)
+
+        LyricNotificationController.setOptionalSurfaceLocked(false)
+        LyricNotificationController.setOptionalSurfaceAlignment(LyricSurfaceAlignment.DEFAULT)
+    }
+
+    @Test
+    fun clickThroughStyleAddsAndRemovesOnlyTheTransparentBit() {
+        val layeredOnly = 0x00080000
+        val locked = clickThroughExtendedStyle(0x00000100, enabled = true)
+        assertEquals(0x00000100 or 0x00000020 or layeredOnly, locked)
+        assertEquals(0x00000100 or layeredOnly, clickThroughExtendedStyle(locked, enabled = false))
+        assertEquals(locked, clickThroughExtendedStyle(locked, enabled = true))
+    }
+
+    @Test
     fun dismissedTrackStaysHiddenUntilTrackChanges() {
         LyricNotificationController.setOptionalSurfaceEnabled(true)
         publish(title = "First", lyric = "line one")

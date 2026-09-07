@@ -24,6 +24,13 @@ actual object LyricNotificationController {
     actual val supportsOptionalSurfaceControl: Boolean = true
     actual val optionalSurfaceSettingLabel: String = "启用额外 Live Update 歌词"
 
+    // A notification has no window to lock or align.
+    actual val supportsOptionalSurfaceLayout: Boolean = false
+
+    actual fun setOptionalSurfaceLocked(locked: Boolean) = Unit
+
+    actual fun setOptionalSurfaceAlignment(alignment: LyricSurfaceAlignment) = Unit
+
     private var latestPayload: AndroidLyricPayload? = null
     private var lastPostedPayload: AndroidLyricPayload? = null
     private var optionalSurfaceEnabled = false

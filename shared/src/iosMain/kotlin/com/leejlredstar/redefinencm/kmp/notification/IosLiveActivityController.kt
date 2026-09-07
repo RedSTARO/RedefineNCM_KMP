@@ -29,6 +29,12 @@ actual object LyricNotificationController {
 
     actual fun setOptionalSurfaceEnabled(enabled: Boolean) = Unit
 
+    actual val supportsOptionalSurfaceLayout: Boolean = false
+
+    actual fun setOptionalSurfaceLocked(locked: Boolean) = Unit
+
+    actual fun setOptionalSurfaceAlignment(alignment: LyricSurfaceAlignment) = Unit
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private val _liveActivityData = MutableStateFlow<LiveActivityData?>(null)

@@ -34,6 +34,10 @@ object SettingKeys {
     const val SEARCH_PREDICTION = "searchPrediction"
     // Keep the legacy persisted key so existing preferences and exported backups remain valid.
     const val ENABLE_EXTRA_LYRIC_SURFACE = "adaptOriginalAndroidLyric"
+    // The desktop lyric window's own layout: whether it ignores the pointer, and how its two
+    // lines sit inside it. Only the desktop reads them; they are backed up with the rest.
+    const val DESKTOP_LYRIC_LOCKED = "desktopLyricLocked"
+    const val DESKTOP_LYRIC_ALIGNMENT = "desktopLyricAlignment"
     const val SHOW_TRANSLATED_LYRIC = "showTranslatedLyric"
     const val SHOW_ROMAN_LYRIC = "showRomanLyric"
     const val LYRIC_SOURCE_MODE = "lyricSourceMode"
