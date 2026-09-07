@@ -31,8 +31,8 @@ actual object LyricNotificationController {
 
     actual fun setOptionalSurfaceAlignment(alignment: LyricSurfaceAlignment) = Unit
 
-    private var latestPayload: AndroidLyricPayload? = null
-    private var lastPostedPayload: AndroidLyricPayload? = null
+    private var latestPayload: LyricPayload? = null
+    private var lastPostedPayload: LyricPayload? = null
     private var optionalSurfaceEnabled = false
     private var appContext: Context? = null
 
@@ -65,24 +65,21 @@ actual object LyricNotificationController {
         positionMs: Long,
         durationMs: Long,
     ) {
-        val normalizedTitle = title?.trim().orEmpty()
-        val lyric = currentLyric?.trim().orEmpty().ifEmpty { normalizedTitle }
-        if (lyric.isEmpty()) return
-        val payload = AndroidLyricPayload(
-            title = normalizedTitle,
-            artist = artist?.trim().orEmpty(),
-            currentLyric = lyric,
-            nextLyric = nextLyric?.trim().orEmpty(),
-            artworkUri = artworkUri?.trim().orEmpty(),
+        val payload = lyricPayloadOf(
+            title = title,
+            artist = artist,
+            currentLyric = currentLyric,
+            nextLyric = nextLyric,
+            artworkUri = artworkUri,
             isPlaying = isPlaying,
-            positionMs = positionMs.coerceAtLeast(0L),
+            positionMs = positionMs,
             durationMs = durationMs,
-        )
+        ).asSingleLineSurface() ?: return
         latestPayload = payload
         postPayload(payload)
     }
 
-    private fun postPayload(payload: AndroidLyricPayload) {
+    private fun postPayload(payload: LyricPayload) {
         if (!optionalSurfaceEnabled) return
         val context = appContext ?: return
         if (!canPostNotifications(context)) return
@@ -188,13 +185,4 @@ actual object LyricNotificationController {
 
 }
 
-private data class AndroidLyricPayload(
-    val title: String,
-    val artist: String,
-    val currentLyric: String,
-    val nextLyric: String,
-    val artworkUri: String,
-    val isPlaying: Boolean,
-    val positionMs: Long,
-    val durationMs: Long,
-)
+

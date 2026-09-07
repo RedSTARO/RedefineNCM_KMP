@@ -25,15 +25,28 @@ actual object LyricNotificationController {
         positionMs: Long,
         durationMs: Long,
     ) {
-        updateBrowserLyricSurface(
-            title = title.orEmpty(),
-            artist = artist.orEmpty(),
-            currentLyric = currentLyric.orEmpty(),
-            nextLyric = nextLyric.orEmpty(),
-            artworkUri = artworkUri.orEmpty(),
+        // Was the one target that passed these through untrimmed, with a negative position
+        // reaching the DOM. Like the desktop window, the browser surface has separate lines, so
+        // a blank lyric stays blank rather than repeating the title.
+        val payload = lyricPayloadOf(
+            title = title,
+            artist = artist,
+            currentLyric = currentLyric,
+            nextLyric = nextLyric,
+            artworkUri = artworkUri,
             isPlaying = isPlaying,
-            positionMs = positionMs.toDouble(),
-            durationMs = durationMs.toDouble(),
+            positionMs = positionMs,
+            durationMs = durationMs,
+        )
+        updateBrowserLyricSurface(
+            title = payload.title,
+            artist = payload.artist,
+            currentLyric = payload.currentLyric,
+            nextLyric = payload.nextLyric,
+            artworkUri = payload.artworkUri,
+            isPlaying = payload.isPlaying,
+            positionMs = payload.positionMs.toDouble(),
+            durationMs = payload.durationMs.toDouble(),
         )
     }
 

@@ -67,18 +67,31 @@ actual object LyricNotificationController {
         positionMs: Long,
         durationMs: Long,
     ) {
-        val data = FloatingLyricData(
-            title = title?.trim().orEmpty(),
-            artist = artist?.trim().orEmpty(),
-            currentLyric = currentLyric?.trim().orEmpty(),
-            nextLyric = nextLyric?.trim().orEmpty(),
-            artworkUri = artworkUri?.trim().orEmpty(),
+        // Deliberately not asSingleLineSurface(): this window draws the title, the artist and
+        // the lyric on separate lines, so substituting the title for a blank lyric line would
+        // show it twice. A blank line between lyrics is what the window is supposed to show.
+        val payload = lyricPayloadOf(
+            title = title,
+            artist = artist,
+            currentLyric = currentLyric,
+            nextLyric = nextLyric,
+            artworkUri = artworkUri,
             isPlaying = isPlaying,
+            positionMs = positionMs,
+            durationMs = durationMs,
+        )
+        val data = FloatingLyricData(
+            title = payload.title,
+            artist = payload.artist,
+            currentLyric = payload.currentLyric,
+            nextLyric = payload.nextLyric,
+            artworkUri = payload.artworkUri,
+            isPlaying = payload.isPlaying,
         )
         latestLyricData = data
         latestProgress = FloatingLyricProgress(
-            positionMs = positionMs.coerceAtLeast(0L),
-            durationMs = durationMs,
+            positionMs = payload.positionMs,
+            durationMs = payload.durationMs,
         )
         if (!optionalSurfaceEnabled) return
         publish(data, latestProgress)
