@@ -11,7 +11,6 @@ import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.FileOutputStream
 import java.io.InputStream
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
@@ -170,7 +169,7 @@ actual object LocalMediaAssetStorage {
                     val files = legacyAssetFiles(songId, ::isLocalLyricSidecarFileName) +
                         legacyAssetFiles(songId, ::isLocalArtworkSidecarFileName) +
                         legacyAssetFiles(songId, ::isLocalMediaAssetTransactionFileName)
-                    files.forEach(::deleteLegacyAssetOrThrow)
+                    files.forEach(::deleteLocalMediaAssetOrThrow)
                     files.isNotEmpty()
                 }
                 deletePrivateArtworkAssets(context, songId) || sharedDeleted
@@ -233,39 +232,16 @@ private fun replacePrivateArtwork(
     fileName: String,
     bytes: ByteArray,
 ) {
-    val directory = ensureAndroidPrivateArtworkDirectory(
-        context.getExternalFilesDir(null) ?: context.filesDir,
+    replaceLocalMediaAssetFiles(
+        directory = ensureAndroidPrivateArtworkDirectory(
+            context.getExternalFilesDir(null) ?: context.filesDir,
+        ),
+        replacements = listOf(LocalMediaAssetWrite(fileName, bytes)),
+        // Not one directory listing: a cover written before the app moved to external storage
+        // is still in the internal files directory, and both have to be displaced.
+        displaced = privateArtworkFiles(context, songId),
+        move = ::renameLegacyAsset,
     )
-    val temporary = temporaryLegacyAssetFile(directory, fileName)
-    val backups = mutableListOf<Pair<File, File>>()
-    var published: File? = null
-    try {
-        writeLegacyAsset(temporary, bytes)
-        privateArtworkFiles(context, songId).forEach { original ->
-            val backup = backupLegacyAssetFile(original.parentFile, original.name)
-            check(original.renameTo(backup)) {
-                "无法备份 Android 应用专属封面：${original.name}"
-            }
-            backups += backup to original
-        }
-        val target = File(directory, fileName)
-        check(temporary.renameTo(target)) {
-            "无法发布 Android 应用专属封面：$fileName"
-        }
-        published = target
-        backups.forEach { (backup, _) -> backup.delete() }
-    } catch (failure: Throwable) {
-        temporary.delete()
-        published?.delete()
-        backups.forEach { (backup, original) ->
-            if (backup.exists() && !backup.renameTo(original)) {
-                failure.addSuppressed(
-                    IllegalStateException("无法恢复 Android 应用专属封面：${original.name}")
-                )
-            }
-        }
-        throw failure
-    }
 }
 
 private fun deleteSharedArtwork(
@@ -277,7 +253,7 @@ private fun deleteSharedArtwork(
     } else {
         val files = legacyAssetFiles(songId, ::isLocalArtworkSidecarFileName)
         val deletedPaths = files.map { it.absolutePath }.toTypedArray()
-        files.forEach(::deleteLegacyAssetOrThrow)
+        files.forEach(::deleteLocalMediaAssetOrThrow)
         if (deletedPaths.isNotEmpty()) {
             MediaScannerConnection.scanFile(context, deletedPaths, null, null)
         }
@@ -336,7 +312,7 @@ private fun deletePrivateArtworkAssets(
                 isLocalMediaAssetTransactionFileName(songId, it.name)
         }
         .toList()
-    files.forEach(::deleteLegacyAssetOrThrow)
+    files.forEach(::deleteLocalMediaAssetOrThrow)
     return files.isNotEmpty()
 }
 
@@ -618,69 +594,43 @@ private fun replaceLegacyLyrics(
     songId: Long,
     files: List<LocalTextMediaAsset>,
 ) {
-    val directory = ensureLegacyAssetDirectory()
-    val staged = mutableListOf<Pair<File, File>>()
-    val backups = mutableListOf<Pair<File, File>>()
-    val published = mutableListOf<File>()
-    try {
-        files.forEach { file ->
-            val target = File(directory, file.fileName)
-            val temporary = temporaryLegacyAssetFile(directory, file.fileName)
-            staged += temporary to target
-            writeLegacyAsset(temporary, file.content.encodeToByteArray())
-        }
-        legacyAssetFiles(songId, ::isLocalLyricSidecarFileName).forEach { original ->
-            val backup = backupLegacyAssetFile(directory, original.name)
-            check(original.renameTo(backup)) {
-                "无法备份 Android 本地歌词：${original.name}"
-            }
-            backups += backup to original
-        }
-        staged.forEach { (temporary, target) ->
-            check(temporary.renameTo(target)) {
-                "无法发布本地歌词：${target.name}"
-            }
-            published += target
-        }
-        backups.forEach { (backup, _) -> backup.delete() }
-    } catch (failure: Throwable) {
-        staged.forEach { (temporary, _) -> temporary.delete() }
-        published.forEach { it.delete() }
-        backups.forEach { (backup, original) ->
-            if (backup.exists() && !backup.renameTo(original)) {
-                failure.addSuppressed(
-                    IllegalStateException("无法恢复 Android 本地歌词：${original.name}")
-                )
-            }
-        }
-        throw failure
+    replaceLocalMediaAssetFiles(
+        directory = ensureLegacyAssetDirectory(),
+        replacements = files.map {
+            LocalMediaAssetWrite(it.fileName, it.content.encodeToByteArray())
+        },
+        displaced = legacyAssetFiles(songId, ::isLocalLyricSidecarFileName),
+        move = ::renameLegacyAsset,
+    )
+}
+
+/**
+ * The pre-Android 10 publish step.
+ *
+ * Desktop moves atomically through `java.nio.file`, which needs API 26 while this module's
+ * minSdk is 24, so the legacy path renames. Same directory, same filesystem, so the rename is a
+ * metadata update rather than a copy either way.
+ */
+private fun renameLegacyAsset(source: File, target: File) {
+    check(source.renameTo(target)) {
+        "无法移动 Android 本地媒体边车：${source.name}"
     }
 }
 
-private fun legacyAssetFileNames(): List<String> {
-    val directory = legacyAssetDirectory()
-    if (!directory.exists()) return emptyList()
-    check(directory.isDirectory) { "Android 下载路径不是目录：$directory" }
-    return checkNotNull(directory.listFiles()) { "无法读取 Android 下载目录：$directory" }
-        .asSequence()
-        .filter(File::isFile)
-        .map { it.name }
-        .toList()
-}
+private const val LEGACY_DOWNLOAD_DIRECTORY_LABEL = "Android 下载路径"
+
+private fun legacyAssetFileNames(): List<String> =
+    localMediaAssetFileNames(legacyAssetDirectory(), LEGACY_DOWNLOAD_DIRECTORY_LABEL)
 
 private fun legacyAssetFiles(
     songId: Long,
     predicate: (Long, String) -> Boolean,
-): List<File> {
-    val directory = legacyAssetDirectory()
-    if (!directory.exists()) return emptyList()
-    check(directory.isDirectory) { "Android 下载路径不是目录：$directory" }
-    return checkNotNull(directory.listFiles()) { "无法读取 Android 下载目录：$directory" }
-        .asSequence()
-        .filter(File::isFile)
-        .filter { predicate(songId, it.name) }
-        .toList()
-}
+): List<File> = localMediaAssetFiles(
+    directory = legacyAssetDirectory(),
+    songId = songId,
+    label = LEGACY_DOWNLOAD_DIRECTORY_LABEL,
+    predicate = predicate,
+)
 
 private fun legacyAssetDirectory(): File =
     Environment.getExternalStoragePublicDirectory(
@@ -688,30 +638,7 @@ private fun legacyAssetDirectory(): File =
     )
 
 private fun ensureLegacyAssetDirectory(): File =
-    legacyAssetDirectory().also { directory ->
-        check(directory.isDirectory || directory.mkdirs()) {
-            "无法创建 Android 下载目录：$directory"
-        }
-    }
-
-private fun temporaryLegacyAssetFile(directory: File, targetName: String): File =
-    File(directory, ".$targetName.${UUID.randomUUID()}.asset-pending")
-
-private fun backupLegacyAssetFile(directory: File, targetName: String): File =
-    File(directory, ".$targetName.${UUID.randomUUID()}.asset-backup")
-
-private fun writeLegacyAsset(file: File, bytes: ByteArray) {
-    FileOutputStream(file, false).use { output ->
-        output.write(bytes)
-        output.fd.sync()
-    }
-}
-
-private fun deleteLegacyAssetOrThrow(file: File) {
-    check(!file.exists() || file.delete() || !file.exists()) {
-        "无法删除本地媒体边车：${file.name}"
-    }
-}
+    ensureLocalMediaAssetDirectory(legacyAssetDirectory(), LEGACY_DOWNLOAD_DIRECTORY_LABEL)
 
 private const val ANDROID_NO_MEDIA_FILE_NAME = ".nomedia"
 private const val MAX_MIGRATED_ARTWORK_BYTES = 16 * 1024 * 1024

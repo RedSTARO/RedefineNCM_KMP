@@ -217,6 +217,17 @@ kotlin {
         iosMain.get().dependsOn(nonDesktopMain)
         wasmJsMain.get().dependsOn(nonDesktopMain)
 
+        // Desktop and Android are the two targets with java.io.File. The local-media sidecar
+        // transaction — stage to a temp name, move the old file aside, publish, drop the
+        // backup, and roll every step back on failure — was written once per target, and the
+        // two copies had already drifted in how they restore a backup. It lives here now.
+        // iOS and the browser are outside: neither has a filesystem of this shape.
+        val javaIoMain by creating {
+            dependsOn(commonMain.get())
+        }
+        jvmMain.get().dependsOn(javaIoMain)
+        androidMain.get().dependsOn(javaIoMain)
+
         androidMain.dependencies {
             implementation(libs.sqldelight.android.driver)
             implementation(libs.compose.uiToolingPreview)

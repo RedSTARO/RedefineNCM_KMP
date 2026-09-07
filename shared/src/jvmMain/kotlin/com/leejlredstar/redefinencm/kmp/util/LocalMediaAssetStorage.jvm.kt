@@ -1,11 +1,9 @@
 package com.leejlredstar.redefinencm.kmp.util
 
 import java.io.File
-import java.io.FileOutputStream
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
-import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -22,38 +20,14 @@ actual object LocalMediaAssetStorage {
         mutex.withLock {
             withContext(Dispatchers.IO) {
                 val directory = ensureJvmAssetDirectory()
-                val staged = mutableListOf<Pair<File, File>>()
-                val backups = mutableListOf<Pair<File, File>>()
-                val published = mutableListOf<File>()
-                try {
-                    validated.forEach { asset ->
-                        val target = File(directory, asset.fileName)
-                        val temporary = temporaryAssetFile(directory, asset.fileName)
-                        staged += temporary to target
-                        writeAndSync(temporary, asset.content.encodeToByteArray())
-                    }
-                    directory.assetFiles(songId, ::isLocalLyricSidecarFileName).forEach { original ->
-                        val backup = backupAssetFile(directory, original.name)
-                        moveAssetFile(original, backup)
-                        backups += backup to original
-                    }
-                    staged.forEach { (temporary, target) ->
-                        moveAssetFile(temporary, target)
-                        published += target
-                    }
-                    backups.forEach { (backup, _) -> backup.delete() }
-                } catch (failure: Throwable) {
-                    staged.forEach { (temporary, _) -> temporary.delete() }
-                    published.forEach { it.delete() }
-                    backups.forEach { (backup, original) ->
-                        if (backup.exists()) {
-                            runCatching { moveAssetFile(backup, original) }
-                                .exceptionOrNull()
-                                ?.let(failure::addSuppressed)
-                        }
-                    }
-                    throw failure
-                }
+                replaceLocalMediaAssetFiles(
+                    directory = directory,
+                    replacements = validated.map {
+                        LocalMediaAssetWrite(it.fileName, it.content.encodeToByteArray())
+                    },
+                    displaced = jvmAssetFiles(directory, songId, ::isLocalLyricSidecarFileName),
+                    move = ::moveAssetFile,
+                )
             }
         }
     }
@@ -69,7 +43,7 @@ actual object LocalMediaAssetStorage {
                 if (!directory.exists()) {
                     emptyList()
                 } else {
-                    directory.assetFiles(songId, ::isLocalLyricSidecarFileName)
+                    jvmAssetFiles(directory, songId, ::isLocalLyricSidecarFileName)
                         .filter { it.name in validatedNames }
                         .sortedBy { it.name }
                         .map { file ->
@@ -95,33 +69,13 @@ actual object LocalMediaAssetStorage {
         return mutex.withLock {
             withContext(Dispatchers.IO) {
                 val directory = ensureJvmAssetDirectory()
-                val temporary = temporaryAssetFile(directory, fileName)
-                val backups = mutableListOf<Pair<File, File>>()
-                var published: File? = null
-                try {
-                    writeAndSync(temporary, bytes)
-                    directory.assetFiles(songId, ::isLocalArtworkSidecarFileName).forEach { original ->
-                        val backup = backupAssetFile(directory, original.name)
-                        moveAssetFile(original, backup)
-                        backups += backup to original
-                    }
-                    val target = File(directory, fileName)
-                    moveAssetFile(temporary, target)
-                    published = target
-                    backups.forEach { (backup, _) -> backup.delete() }
-                    fileName
-                } catch (failure: Throwable) {
-                    temporary.delete()
-                    published?.delete()
-                    backups.forEach { (backup, original) ->
-                        if (backup.exists()) {
-                            runCatching { moveAssetFile(backup, original) }
-                                .exceptionOrNull()
-                                ?.let(failure::addSuppressed)
-                        }
-                    }
-                    throw failure
-                }
+                replaceLocalMediaAssetFiles(
+                    directory = directory,
+                    replacements = listOf(LocalMediaAssetWrite(fileName, bytes)),
+                    displaced = jvmAssetFiles(directory, songId, ::isLocalArtworkSidecarFileName),
+                    move = ::moveAssetFile,
+                )
+                fileName
             }
         }
     }
@@ -130,7 +84,7 @@ actual object LocalMediaAssetStorage {
         requireLocalMediaSongId(songId)
         return mutex.withLock {
             withContext(Dispatchers.IO) {
-                localMediaAssetSnapshot(songId, assetFileNames(jvmDownloadDirectory()))
+                localMediaAssetSnapshot(songId, jvmAssetFileNames(jvmDownloadDirectory()))
             }
         }
     }
@@ -140,7 +94,7 @@ actual object LocalMediaAssetStorage {
         if (songIds.isEmpty()) return emptyMap()
         return mutex.withLock {
             withContext(Dispatchers.IO) {
-                localMediaAssetSnapshots(songIds, assetFileNames(jvmDownloadDirectory()))
+                localMediaAssetSnapshots(songIds, jvmAssetFileNames(jvmDownloadDirectory()))
             }
         }
     }
@@ -150,7 +104,7 @@ actual object LocalMediaAssetStorage {
         return mutex.withLock {
             withContext(Dispatchers.IO) {
                 val directory = jvmDownloadDirectory()
-                val snapshot = localMediaAssetSnapshot(songId, assetFileNames(directory))
+                val snapshot = localMediaAssetSnapshot(songId, jvmAssetFileNames(directory))
                 snapshot.artworkFileName
                     ?.let { File(directory, it) }
                     ?.takeIf(File::isFile)
@@ -170,10 +124,14 @@ actual object LocalMediaAssetStorage {
                 if (!directory.exists()) {
                     false
                 } else {
-                    val assets = directory.assetFiles(songId, ::isLocalLyricSidecarFileName) +
-                        directory.assetFiles(songId, ::isLocalArtworkSidecarFileName) +
-                        directory.assetFiles(songId, ::isLocalMediaAssetTransactionFileName)
-                    assets.forEach(::deleteAssetFileOrThrow)
+                    val assets = listOf(
+                        ::isLocalLyricSidecarFileName,
+                        ::isLocalArtworkSidecarFileName,
+                        ::isLocalMediaAssetTransactionFileName,
+                    ).flatMap { predicate ->
+                        jvmAssetFiles(directory, songId, predicate)
+                    }
+                    assets.forEach(::deleteLocalMediaAssetOrThrow)
                     assets.isNotEmpty()
                 }
             }
@@ -181,48 +139,19 @@ actual object LocalMediaAssetStorage {
     }
 }
 
+private const val JVM_DOWNLOAD_DIRECTORY_LABEL = "桌面下载路径"
+
 private fun ensureJvmAssetDirectory(): File =
-    jvmDownloadDirectory().also { directory ->
-        check(directory.isDirectory || directory.mkdirs()) {
-            "无法创建桌面下载目录：$directory"
-        }
-    }
+    ensureLocalMediaAssetDirectory(jvmDownloadDirectory(), JVM_DOWNLOAD_DIRECTORY_LABEL)
 
-private fun assetFileNames(directory: File): List<String> {
-    if (!directory.exists()) return emptyList()
-    check(directory.isDirectory) { "下载路径不是目录：$directory" }
-    return checkNotNull(directory.listFiles()) { "无法读取下载目录：$directory" }
-        .asSequence()
-        .filter(File::isFile)
-        .map { it.name }
-        .toList()
-}
+private fun jvmAssetFileNames(directory: File): List<String> =
+    localMediaAssetFileNames(directory, JVM_DOWNLOAD_DIRECTORY_LABEL)
 
-private fun File.assetFiles(
+private fun jvmAssetFiles(
+    directory: File,
     songId: Long,
     predicate: (Long, String) -> Boolean,
-): List<File> {
-    if (!exists()) return emptyList()
-    check(isDirectory) { "下载路径不是目录：$this" }
-    return checkNotNull(listFiles()) { "无法读取下载目录：$this" }
-        .asSequence()
-        .filter(File::isFile)
-        .filter { predicate(songId, it.name) }
-        .toList()
-}
-
-private fun temporaryAssetFile(directory: File, targetName: String): File =
-    File(directory, ".$targetName.${UUID.randomUUID()}.asset-pending")
-
-private fun backupAssetFile(directory: File, targetName: String): File =
-    File(directory, ".$targetName.${UUID.randomUUID()}.asset-backup")
-
-private fun writeAndSync(file: File, bytes: ByteArray) {
-    FileOutputStream(file, false).use { output ->
-        output.write(bytes)
-        output.fd.sync()
-    }
-}
+): List<File> = localMediaAssetFiles(directory, songId, JVM_DOWNLOAD_DIRECTORY_LABEL, predicate)
 
 private fun moveAssetFile(source: File, target: File) {
     try {
@@ -238,11 +167,5 @@ private fun moveAssetFile(source: File, target: File) {
             target.toPath(),
             StandardCopyOption.REPLACE_EXISTING,
         )
-    }
-}
-
-private fun deleteAssetFileOrThrow(file: File) {
-    check(!file.exists() || file.delete() || !file.exists()) {
-        "无法删除本地媒体边车：${file.name}"
     }
 }
