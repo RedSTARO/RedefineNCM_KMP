@@ -1078,24 +1078,44 @@ private fun SettingsSwitch(
     }
 }
 
+/**
+ * A settings row that opens a menu.
+ *
+ * Setting name leading, current value trailing — the M3 list-item arrangement. The old
+ * label-over-value stack with a caret read as a filled text field, so those rows looked like
+ * inputs sitting among the switch rows instead of like the same kind of row.
+ *
+ * Every dropdown in this screen draws through here. Four of them had their own copy of the
+ * surface, the row and the menu, and the copies had drifted: one still used the rejected stacked
+ * arrangement, sat on the pre-morph shape helper, and had no minimum touch target.
+ *
+ * @param valueLabel what the row shows for the current choice. The caller supplies it because a
+ *   choice is not always one of [options] — a saved audio device can be gone.
+ * @param menuLabel the menu has room to say what the compact row cannot.
+ * @param onExpandedChange for options that are enumerated fresh each time the menu opens.
+ */
 @Composable
-private fun SettingsDropdown(
-    selectedName: String,
+private fun <T> SettingsDropdownRow(
     label: String,
-    options: List<SoundQuality>,
+    valueLabel: String,
+    options: List<T>,
+    optionLabel: (T) -> String,
     accentPalette: ContentAccentPalette,
     index: Int,
     count: Int,
-    onUpdate: (SoundQuality) -> Unit,
+    supportingText: List<String> = emptyList(),
+    menuLabel: (T) -> String = optionLabel,
+    onExpandedChange: (Boolean) -> Unit = {},
+    onUpdate: (T) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val current = options.find { it.name == selectedName } ?: options.first()
+    fun setExpanded(open: Boolean) {
+        expanded = open
+        onExpandedChange(open)
+    }
     val interactionSource = remember { MutableInteractionSource() }
-    // Setting name leading, current value trailing — the M3 list-item arrangement. The old
-    // label-over-value stack with a caret read as a filled text field, so these rows looked
-    // like inputs sitting among the switch rows instead of like the same kind of row.
     Surface(
-        onClick = { expanded = true },
+        onClick = { setExpanded(true) },
         shape = rememberConnectedListItemShape(index, count, interactionSource),
         color = accentPalette.quietContainer,
         contentColor = accentPalette.onQuietContainer,
@@ -1111,14 +1131,19 @@ private fun SettingsDropdown(
                 .padding(start = 20.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f),
-            )
+            Column(Modifier.weight(1f)) {
+                Text(text = label, style = MaterialTheme.typography.bodyLarge)
+                supportingText.forEach { note ->
+                    Text(
+                        text = note,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = accentPalette.secondaryOnQuietContainer,
+                    )
+                }
+            }
             Spacer(Modifier.width(16.dp))
             Text(
-                text = current.toString(),
+                text = valueLabel,
                 style = MaterialTheme.typography.bodyMedium,
                 color = accentPalette.secondaryOnQuietContainer,
                 maxLines = 1,
@@ -1131,15 +1156,41 @@ private fun SettingsDropdown(
                 modifier = Modifier.padding(start = 4.dp),
             )
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            options.forEach { opt ->
+        DropdownMenu(expanded = expanded, onDismissRequest = { setExpanded(false) }) {
+            options.forEach { option ->
                 DropdownMenuItem(
-                    text = { Text(opt.toString()) },
-                    onClick = { expanded = false; onUpdate(opt) },
+                    text = { Text(menuLabel(option)) },
+                    onClick = {
+                        setExpanded(false)
+                        onUpdate(option)
+                    },
                 )
             }
         }
     }
+}
+
+@Composable
+private fun SettingsDropdown(
+    selectedName: String,
+    label: String,
+    options: List<SoundQuality>,
+    accentPalette: ContentAccentPalette,
+    index: Int,
+    count: Int,
+    onUpdate: (SoundQuality) -> Unit,
+) {
+    val current = options.find { it.name == selectedName } ?: options.first()
+    SettingsDropdownRow(
+        label = label,
+        valueLabel = current.toString(),
+        options = options,
+        optionLabel = { it.toString() },
+        accentPalette = accentPalette,
+        index = index,
+        count = count,
+        onUpdate = onUpdate,
+    )
 }
 
 /** Shown for the "no explicit choice" entry and whenever the chosen device cannot be resolved. */
@@ -1163,11 +1214,13 @@ private fun AudioOutputDeviceDropdown(
     count: Int,
     onUpdate: (String) -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
     // null until the first enumeration lands, so an unresolved id is not mistaken for a
     // missing device while the list is still empty.
     var devices by remember { mutableStateOf<List<AudioOutputDevice>?>(null) }
-    LaunchedEffect(expanded) {
+    // The list is re-read whenever the menu opens or closes: a headset or USB DAC can appear
+    // between one glance at this row and the next.
+    var enumerations by remember { mutableIntStateOf(0) }
+    LaunchedEffect(enumerations) {
         devices = withContext(Dispatchers.Default) { availableAudioOutputDevices() }
     }
     val known = devices
@@ -1180,60 +1233,35 @@ private fun AudioOutputDeviceDropdown(
         // instead of showing a name that nothing is coming out of.
         else -> "${audioOutputDeviceName(selectedId)}（不可用）"
     }
-    val interactionSource = remember { MutableInteractionSource() }
-    Surface(
-        onClick = { expanded = true },
-        shape = rememberConnectedListItemShape(index, count, interactionSource),
-        color = accentPalette.quietContainer,
-        contentColor = accentPalette.onQuietContainer,
-        interactionSource = interactionSource,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = ExpressiveLayout.ConnectedItemGap),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = ExpressiveLayout.MinimumTouchTarget)
-                .padding(start = 20.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "音频输出设备",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(Modifier.width(16.dp))
-            Text(
-                text = selectedLabel,
-                style = MaterialTheme.typography.bodyMedium,
-                color = accentPalette.secondaryOnQuietContainer,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Icon(
-                AppIcons.KeyboardArrowRight,
-                contentDescription = null,
-                tint = accentPalette.secondaryOnQuietContainer,
-                modifier = Modifier.padding(start = 4.dp),
-            )
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text(DefaultAudioOutputMenuLabel) },
-                onClick = { expanded = false; onUpdate(SYSTEM_DEFAULT_AUDIO_OUTPUT_ID) },
-            )
-            known.orEmpty().forEach { device ->
-                DropdownMenuItem(
-                    text = { Text(device.displayName) },
-                    onClick = { expanded = false; onUpdate(device.id) },
-                )
+    SettingsDropdownRow(
+        label = "音频输出设备",
+        valueLabel = selectedLabel,
+        options = listOf(SYSTEM_DEFAULT_AUDIO_OUTPUT_ID) + known.orEmpty().map { it.id },
+        optionLabel = { id ->
+            if (id == SYSTEM_DEFAULT_AUDIO_OUTPUT_ID) {
+                DefaultAudioOutputLabel
+            } else {
+                known.orEmpty().firstOrNull { it.id == id }?.displayName
+                    ?: audioOutputDeviceName(id)
             }
-        }
-    }
+        },
+        menuLabel = { id ->
+            if (id == SYSTEM_DEFAULT_AUDIO_OUTPUT_ID) {
+                DefaultAudioOutputMenuLabel
+            } else {
+                known.orEmpty().firstOrNull { it.id == id }?.displayName
+                    ?: audioOutputDeviceName(id)
+            }
+        },
+        accentPalette = accentPalette,
+        index = index,
+        count = count,
+        onExpandedChange = { enumerations += 1 },
+        onUpdate = onUpdate,
+    )
 }
 
-/** Where the desktop lyric window's two lines sit: the row reads like [SettingsDropdown]. */
+/** Where the desktop lyric window's two lines sit. */
 @Composable
 private fun LyricSurfaceAlignmentDropdown(
     selected: LyricSurfaceAlignment,
@@ -1242,57 +1270,16 @@ private fun LyricSurfaceAlignmentDropdown(
     count: Int,
     onUpdate: (LyricSurfaceAlignment) -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    val interactionSource = remember { MutableInteractionSource() }
-    Surface(
-        onClick = { expanded = true },
-        shape = rememberConnectedListItemShape(index, count, interactionSource),
-        color = accentPalette.quietContainer,
-        contentColor = accentPalette.onQuietContainer,
-        interactionSource = interactionSource,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = ExpressiveLayout.ConnectedItemGap),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = ExpressiveLayout.MinimumTouchTarget)
-                .padding(start = 20.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "桌面歌词对齐",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(Modifier.width(16.dp))
-            Text(
-                text = selected.displayName,
-                style = MaterialTheme.typography.bodyMedium,
-                color = accentPalette.secondaryOnQuietContainer,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Icon(
-                AppIcons.KeyboardArrowRight,
-                contentDescription = null,
-                tint = accentPalette.secondaryOnQuietContainer,
-                modifier = Modifier.padding(start = 4.dp),
-            )
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            LyricSurfaceAlignment.entries.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option.displayName) },
-                    onClick = {
-                        expanded = false
-                        onUpdate(option)
-                    },
-                )
-            }
-        }
-    }
+    SettingsDropdownRow(
+        label = "桌面歌词对齐",
+        valueLabel = selected.displayName,
+        options = LyricSurfaceAlignment.entries,
+        optionLabel = LyricSurfaceAlignment::displayName,
+        accentPalette = accentPalette,
+        index = index,
+        count = count,
+        onUpdate = onUpdate,
+    )
 }
 
 @Composable
@@ -1303,58 +1290,20 @@ private fun LyricSourceDropdown(
     count: Int,
     onUpdate: (LyricSourceMode) -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    val current = LyricSourceMode.fromWireValue(selectedWireValue)
-    Surface(
-        onClick = { expanded = true },
-        shape = connectedListItemShape(index, count),
-        color = accentPalette.quietContainer,
-        contentColor = accentPalette.onQuietContainer,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 1.5.dp),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 20.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = "歌词来源",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = accentPalette.secondaryOnQuietContainer,
-                )
-                Text(text = current.displayName, style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    text = "AMLL TTML 会按网易云歌曲 ID 请求第三方 AMLL DB；不会发送网易云 Cookie。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = accentPalette.secondaryOnQuietContainer,
-                )
-                Text(
-                    text = "AMLL 渲染与解析组件：AGPL-3.0-only；许可证全文随应用资源提供。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = accentPalette.secondaryOnQuietContainer,
-                )
-            }
-            Icon(
-                AppIcons.ArrowDropDown,
-                contentDescription = null,
-                tint = accentPalette.accent,
-                modifier = Modifier.padding(12.dp),
-            )
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            LyricSourceMode.entries.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option.displayName) },
-                    onClick = {
-                        expanded = false
-                        onUpdate(option)
-                    },
-                )
-            }
-        }
-    }
+    SettingsDropdownRow(
+        label = "歌词来源",
+        valueLabel = LyricSourceMode.fromWireValue(selectedWireValue).displayName,
+        options = LyricSourceMode.entries,
+        optionLabel = LyricSourceMode::displayName,
+        accentPalette = accentPalette,
+        index = index,
+        count = count,
+        supportingText = listOf(
+            "AMLL TTML 会按网易云歌曲 ID 请求第三方 AMLL DB；不会发送网易云 Cookie。",
+            "AMLL 渲染与解析组件：AGPL-3.0-only；许可证全文随应用资源提供。",
+        ),
+        onUpdate = onUpdate,
+    )
 }
 
 @Composable
