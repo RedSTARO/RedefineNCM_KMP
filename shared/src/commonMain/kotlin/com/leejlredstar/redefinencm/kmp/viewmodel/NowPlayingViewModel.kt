@@ -16,7 +16,7 @@ import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceModeGate
 import com.leejlredstar.redefinencm.kmp.lyric.supportsDynamicNowPlayingCover
 import com.leejlredstar.redefinencm.kmp.notification.lyricSurface
 import com.leejlredstar.redefinencm.kmp.player.*
-import com.leejlredstar.redefinencm.kmp.smtc.MediaControlsIntegrator
+import com.leejlredstar.redefinencm.kmp.smtc.osMediaControls
 import com.leejlredstar.amll.compose.lyric.LyricParser
 import com.leejlredstar.redefinencm.kmp.util.DownloadScanResult
 import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
@@ -190,19 +190,19 @@ class NowPlayingViewModel(
         scope.launch {
             player.isPlaying.collect { playing ->
                 isPlaying.value = playing
-                MediaControlsIntegrator.updateMetadata(isPlaying = playing)
+                osMediaControls.updateMetadata(isPlaying = playing)
             }
         }
         scope.launch {
             player.position.collect { pos ->
                 currentPosition.value = pos
-                MediaControlsIntegrator.updateMetadata(position = pos)
+                osMediaControls.updateMetadata(position = pos)
             }
         }
         scope.launch {
             player.duration.collect { dur ->
                 songLength.value = dur
-                MediaControlsIntegrator.updateMetadata(duration = dur)
+                osMediaControls.updateMetadata(duration = dur)
             }
         }
         scope.launch {
@@ -273,7 +273,7 @@ class NowPlayingViewModel(
                         media.copy(artworkUri = resolvedArtwork)
                     }
                     currentMedia.value = effectiveMedia
-                    MediaControlsIntegrator.updateMetadata(
+                    osMediaControls.updateMetadata(
                         title = effectiveMedia.title,
                         artist = effectiveMedia.artist,
                         album = effectiveMedia.albumTitle,
@@ -282,7 +282,7 @@ class NowPlayingViewModel(
                     )
                 } else {
                     clearLyrics()
-                    MediaControlsIntegrator.clear()
+                    osMediaControls.clear()
                     lyricSurface.clearFocus()
                 }
             }

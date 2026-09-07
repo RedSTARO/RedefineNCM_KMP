@@ -1,9 +1,5 @@
 package com.leejlredstar.redefinencm.kmp.smtc
 
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-
 /**
  * Platform-agnostic now-playing metadata for OS media controls
  * (Windows SMTC, macOS MPNowPlayingInfoCenter, Linux MPRIS, Android MediaSession).
@@ -19,36 +15,35 @@ data class MediaControlMetadata(
 )
 
 /**
- * Shared state holder feeding OS media-control integrations. The playback layer calls
- * [updateMetadata] (see `NowPlayingViewModel`); each platform's media-controls binding observes
- * [metadata] and pushes it to the OS. The data model is platform-agnostic — only the OS push is
- * platform-specific (e.g. `jvmMain/smtc/WindowsMediaControls`).
+ * Where the playback layer sends what the OS transport should show.
+ *
+ * Only the desktop has one. Android's MediaSession, iOS's `MPNowPlayingInfoCenter` and the
+ * browser's Media Session are all driven from inside those targets' players, which hold the
+ * state first-hand; the desktop's JVM player has no OS transport of its own, so a separate
+ * binding observes this instead.
+ *
+ * It used to be one shared object that every target wrote to on every position tick while only
+ * the desktop read it, so three targets allocated and published a metadata value per tick that
+ * nothing consumed. The three that publish from inside their players now have a sink that does
+ * nothing, and it is a type rather than a comment nobody was reading.
+ *
+ * Every argument is null-for-unchanged, so a caller can update the position without restating
+ * the track.
  */
-object MediaControlsIntegrator {
-    private val _metadata = MutableStateFlow(MediaControlMetadata())
-    val metadata: StateFlow<MediaControlMetadata> = _metadata.asStateFlow()
-
+interface MediaControlsSink {
     fun updateMetadata(
-        title: String = _metadata.value.title,
-        artist: String = _metadata.value.artist,
-        album: String = _metadata.value.album,
-        artworkUri: String = _metadata.value.artworkUri,
-        duration: Long = _metadata.value.duration,
-        position: Long = _metadata.value.position,
-        isPlaying: Boolean = _metadata.value.isPlaying,
-    ) {
-        _metadata.value = MediaControlMetadata(
-            title = title,
-            artist = artist,
-            album = album,
-            artworkUri = artworkUri,
-            duration = duration,
-            position = position,
-            isPlaying = isPlaying,
-        )
-    }
+        title: String? = null,
+        artist: String? = null,
+        album: String? = null,
+        artworkUri: String? = null,
+        duration: Long? = null,
+        position: Long? = null,
+        isPlaying: Boolean? = null,
+    )
 
-    fun clear() {
-        _metadata.value = MediaControlMetadata()
-    }
+    /** Nothing is playing: take the entry out of the OS transport. */
+    fun clear()
 }
+
+/** This target's OS transport, if it has one fed from here. */
+expect val osMediaControls: MediaControlsSink

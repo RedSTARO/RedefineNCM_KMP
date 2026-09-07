@@ -108,33 +108,56 @@ The Home/user-playlist profile hero follows the same cache-then-network contract
 detail and level data render immediately in the status surface below the avatar, remain visible
 while the network refresh runs, and are replaced only by a valid network response.
 
-### D4 — Notification / now-playing surfaces are one common contract, four platform actuals
+### D4 — The lyric surface is a capability interface; the transport surface is not shared — **(updated 2026-09-08)**
 
-`commonMain` owns the contract; each platform renders it natively:
+The two surfaces are wired differently, and the old wording here described both as "one common
+contract, four platform actuals". That was true of neither.
 
-- **`notification/LyricNotificationController`** — `expect object` with
-  `updateLyric(title, artist, currentLyric, nextLyric, artworkUri, isPlaying, positionMs, durationMs)`, `clearFocus()`,
-  `reset()`. This is the **lyric display** surface.
-- **`smtc/MediaControlsIntegrator`** — common `object` holding `MediaControlMetadata`
-  (title/artist/album/artwork/duration/position/isPlaying) for OS media controls. This is
-  the **transport controls** surface. Windows-specific WinRT code lives separately in
-  `jvmMain/smtc/WindowsMediaControls.kt`.
+**Lyric display — `notification/LyricSurface`.** `commonMain` owns three interfaces, and a
+target implements the one matching what it can do:
 
-Platform actuals:
+- `LyricSurface` — `updateLyric(...)`, `clearFocus()`, `reset()`. Every target.
+- `OptionalLyricSurface` — adds `settingLabel` and `setEnabled()`, for a surface Settings can
+  switch off. Android's extra notification and the desktop window.
+- `WindowedLyricSurface` — adds `setLocked()` and `setAlignment()`, for a surface that is a
+  window of its own. Desktop only.
 
-| Platform | Lyric surface (`LyricNotificationController`) | Transport surface |
+`expect val lyricSurface: LyricSurface` is the entry point; Settings tests it with `as?`. This
+replaced an `expect object` carrying every capability, which forced three targets to declare
+stub members for what they cannot do. **Do not add a capability to `LyricSurface` that only one
+target has** — that is how the stubs came back last time. Add an interface.
+
+Each target's own extras stay off the interfaces and on its object: `DesktopLyricWindow` owns
+the window's visibility, lock and alignment flows, `AndroidLyricNotification` owns `init()`, and
+`IosLiveActivity` owns `liveActivityData` and its observer.
+
+**Transport controls — not one contract.** Android, iOS and the browser drive the OS transport
+from inside their own players, because that is where the playback state is first-hand: ExoPlayer
+keeps its `MediaSession`, `IosAVPlayer` writes `MPNowPlayingInfoCenter` and installs
+`MPRemoteCommandCenter` targets, and `WebPlatformPlayer` writes the Media Session and installs
+its action handlers. Only the desktop needs a channel, because its JVM player has no OS
+transport: `jvmMain/smtc/MediaControlsIntegrator` holds `MediaControlMetadata` and
+`DesktopMediaControls` picks the host's backend to observe it.
+
+`commonMain/smtc/MediaControlsSink` and `expect val osMediaControls` express that: the desktop's
+is the integrator, and `nonDesktopMain`'s does nothing. The view model calls it unconditionally
+and only the desktop acts on it.
+
+| Platform | Lyric surface | Transport surface |
 |---|---|---|
-| Android | Live-update `Notification` (MediaStyle / custom RemoteViews) on a channel | Media3 `MediaSession` |
-| iOS | ActivityKit **Live Activity** → Dynamic Island + Lock Screen | `MPNowPlayingInfoCenter` / `MPRemoteCommandCenter` |
-| Desktop (JVM) | Frameless, always-on-top **Compose floating window** | **Windows SMTC** (JNA/COM); **MPRIS** (D-Bus) on Linux |
-| Web (WASM) | In-page lyric pill + document title; system notification when permission is already granted | Browser Media Session metadata/actions + `HTMLAudioElement` |
+| Android | `AndroidLyricNotification` — live-update `Notification` on a channel (`OptionalLyricSurface`) | Media3 `MediaSession`, inside `ExoPlayerPlatformPlayer` |
+| iOS | `IosLiveActivity` — ActivityKit Live Activity → Dynamic Island + Lock Screen (`LyricSurface`) | `MPNowPlayingInfoCenter` / `MPRemoteCommandCenter`, inside `IosAVPlayer` |
+| Desktop (JVM) | `DesktopLyricWindow` — frameless, always-on-top Compose window (`WindowedLyricSurface`) | Windows SMTC (JNA/COM), MPRIS (D-Bus), macOS now-playing — all observing `MediaControlsIntegrator` |
+| Web (WASM) | `WebLyricSurface` — in-page lyric element (`LyricSurface`) | Browser Media Session metadata/actions, inside `WebPlatformPlayer` |
 
 **iOS bridge pattern (updated decision, 2026-07-10):** Kotlin does **not** call ActivityKit
-directly. `LyricNotificationController` exposes `LiveActivityData` to the Swift main-app
-bridge, which serially starts/updates/ends the ActivityKit activity. The `LyricWidget`
-extension renders the resulting `ContentState`; it is wired into the Xcode project. Text does
-not require an App Group. An App Group is only needed if artwork is later shared with the
-extension through a file cache.
+directly. `IosLiveActivity` exposes `LiveActivityData` to the Swift main-app bridge, which
+serially starts/updates/ends the ActivityKit activity. The `LyricWidget` extension renders the
+resulting `ContentState`. Its `LyricActivityAttributes` lives in `iosApp/LiveActivityShared/`,
+a synchronized folder in **both** Xcode targets — the app and the extension must agree on
+`ContentState` field for field, and it used to be hand-mirrored in two files. Text does not
+require an App Group. An App Group is only needed if artwork is later shared with the extension
+through a file cache.
 
 ### D5 — Full-screen AMLL is one route with one native Compose renderer — **DONE (updated 2026-09-06)**
 
