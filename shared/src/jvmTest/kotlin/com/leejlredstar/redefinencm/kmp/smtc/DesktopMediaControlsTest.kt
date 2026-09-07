@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.smtc
 
+import com.leejlredstar.redefinencm.kmp.DesktopOs
 import com.leejlredstar.redefinencm.kmp.player.InMemoryPlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import java.awt.EventQueue
@@ -15,17 +16,8 @@ import org.freedesktop.dbus.types.Variant
 
 class DesktopMediaControlsTest {
     @Test
-    fun selectsTheNativeBackendForEverySupportedDesktopOs() {
-        assertEquals(DesktopTransportKind.WindowsSmtc, desktopTransportKind("Windows 11"))
-        assertEquals(DesktopTransportKind.LinuxMpris, desktopTransportKind("Linux"))
-        assertEquals(DesktopTransportKind.MacOsNowPlaying, desktopTransportKind("Mac OS X"))
-        assertEquals(DesktopTransportKind.MacOsNowPlaying, desktopTransportKind("Darwin"))
-        assertEquals(DesktopTransportKind.Unsupported, desktopTransportKind("FreeBSD"))
-    }
-
-    @Test
     fun windowsSmtcCreatesANativeSessionForARealTopLevelWindow() {
-        if (desktopTransportKind(System.getProperty("os.name")) != DesktopTransportKind.WindowsSmtc) return
+        if (DesktopOs.current != DesktopOs.Windows) return
 
         val player = InMemoryPlatformPlayer(tickerIntervalMs = 60_000L)
         val frame = createOffscreenTestFrame()
@@ -75,7 +67,7 @@ class DesktopMediaControlsTest {
 
     @Test
     fun exportsMprisPropertiesAndRoutesRemoteCommandsWhenSessionBusIsAvailable() {
-        if (!System.getProperty("os.name").contains("Linux", ignoreCase = true)) return
+        if (DesktopOs.current != DesktopOs.Linux) return
         if (System.getenv("DBUS_SESSION_BUS_ADDRESS").isNullOrBlank()) return
 
         val player = InMemoryPlatformPlayer(tickerIntervalMs = 60_000L)
@@ -150,8 +142,7 @@ class DesktopMediaControlsTest {
 
     @Test
     fun macOsNativeBridgeStartsAndPublishesMetadataOnMacHost() {
-        val osName = System.getProperty("os.name")
-        if (!osName.contains("Mac", ignoreCase = true) && !osName.contains("Darwin", ignoreCase = true)) return
+        if (DesktopOs.current != DesktopOs.MacOs) return
 
         val player = InMemoryPlatformPlayer(tickerIntervalMs = 60_000L)
         val backend = MacOsMediaControls(player)

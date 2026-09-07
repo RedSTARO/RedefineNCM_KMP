@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.smtc
 
+import com.leejlredstar.redefinencm.kmp.DesktopOs
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.sun.jna.CallbackReference
 import com.sun.jna.Function
@@ -69,7 +70,7 @@ class WindowsMediaControls(
         _lastError.value = null
         lastPublishedMetadataRef.set(null)
         if (!isWindows()) {
-            _lastError.value = "Windows SMTC is unavailable on ${System.getProperty("os.name")}"
+            _lastError.value = "Windows SMTC is unavailable on ${DesktopOs.currentName}"
             _status.value = IntegrationStatus.UnsupportedHost
             return
         }
@@ -165,8 +166,7 @@ class WindowsMediaControls(
         }
     }
 
-    private fun isWindows(): Boolean =
-        desktopTransportKind(System.getProperty("os.name")) == DesktopTransportKind.WindowsSmtc
+    private fun isWindows(): Boolean = DesktopOs.current == DesktopOs.Windows
 
     private fun closeNativeSession() {
         val currentSession = session

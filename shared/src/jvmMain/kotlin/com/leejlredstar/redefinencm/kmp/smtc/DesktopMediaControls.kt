@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.smtc
 
+import com.leejlredstar.redefinencm.kmp.DesktopOs
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import java.awt.Window
 import kotlinx.coroutines.CoroutineScope
@@ -14,7 +15,7 @@ import kotlinx.coroutines.launch
 /** Runtime-selected desktop transport surface. */
 class DesktopMediaControls(
     private val player: PlatformPlayer,
-    private val osName: String = System.getProperty("os.name").orEmpty(),
+    private val osName: String = DesktopOs.currentName,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _status = MutableStateFlow(DesktopMediaControlsStatus.NotStarted)
@@ -33,11 +34,11 @@ class DesktopMediaControls(
      */
     fun start(window: Window) {
         stop()
-        val selected = when (desktopTransportKind(osName)) {
-            DesktopTransportKind.WindowsSmtc -> WindowsMediaControlsBackend(player)
-            DesktopTransportKind.LinuxMpris -> LinuxMprisMediaControls(player)
-            DesktopTransportKind.MacOsNowPlaying -> MacOsMediaControls(player)
-            DesktopTransportKind.Unsupported -> UnsupportedMediaControlsBackend(osName)
+        val selected = when (DesktopOs.of(osName)) {
+            DesktopOs.Windows -> WindowsMediaControlsBackend(player)
+            DesktopOs.Linux -> LinuxMprisMediaControls(player)
+            DesktopOs.MacOs -> MacOsMediaControls(player)
+            DesktopOs.Other -> UnsupportedMediaControlsBackend(osName)
         }
         backend = selected
         statusJob = scope.launch { selected.status.collect { _status.value = it } }
@@ -62,21 +63,6 @@ enum class DesktopMediaControlsStatus {
     UnsupportedHost,
     Forwarding,
     NativeError,
-}
-
-internal enum class DesktopTransportKind {
-    WindowsSmtc,
-    LinuxMpris,
-    MacOsNowPlaying,
-    Unsupported,
-}
-
-internal fun desktopTransportKind(osName: String): DesktopTransportKind = when {
-    osName.contains("Windows", ignoreCase = true) -> DesktopTransportKind.WindowsSmtc
-    osName.contains("Linux", ignoreCase = true) -> DesktopTransportKind.LinuxMpris
-    osName.contains("Mac", ignoreCase = true) || osName.contains("Darwin", ignoreCase = true) ->
-        DesktopTransportKind.MacOsNowPlaying
-    else -> DesktopTransportKind.Unsupported
 }
 
 internal interface DesktopMediaControlsBackend {

@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.notification
 
+import com.leejlredstar.redefinencm.kmp.DesktopOs
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.platform.win32.User32
@@ -18,8 +19,7 @@ import java.awt.Window
  */
 object DesktopFloatingWindowNative {
     /** Whether [setClickThrough] can do anything on this host. */
-    val supportsClickThrough: Boolean =
-        System.getProperty("os.name").orEmpty().lowercase().contains("windows")
+    val supportsClickThrough: Boolean = DesktopOs.current == DesktopOs.Windows
 
     /**
      * Makes [window] ignore the pointer when [enabled], or take it again when not.
