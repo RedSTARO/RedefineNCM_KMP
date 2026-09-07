@@ -105,10 +105,9 @@ import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackSeekBar
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
 import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
-import com.leejlredstar.redefinencm.kmp.ui.component.CommentBottomSheet
-import com.leejlredstar.redefinencm.kmp.ui.component.QueueBottomSheet
 import com.leejlredstar.redefinencm.kmp.ui.component.TransportSheets
 import com.leejlredstar.redefinencm.kmp.ui.component.formatPlaybackDuration
+import com.leejlredstar.redefinencm.kmp.ui.component.rememberSeekDragState
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberTransportSheetsState
 import com.leejlredstar.redefinencm.kmp.ui.screen.DownloadManagementScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
@@ -825,14 +824,9 @@ private fun DesktopNowPlayingStrip(
     val totalDuration = nowPlaying.totalDuration
     val progress = nowPlaying.progress
     val sheets = rememberTransportSheetsState()
-    var isDragging by remember(media?.id) { mutableStateOf(false) }
-    var dragProgress by remember(media?.id) { mutableStateOf(progress) }
-    val displayedProgress = if (isDragging) dragProgress else progress
-    val displayedPosition = if (isDragging) {
-        (dragProgress * totalDuration).toLong().coerceIn(0L, totalDuration)
-    } else {
-        safePosition.coerceAtMost(totalDuration.takeIf { it > 0L } ?: safePosition)
-    }
+    val seek = rememberSeekDragState(media?.id)
+    val displayedProgress = seek.progressFor(progress)
+    val displayedPosition = seek.positionFor(safePosition, totalDuration)
 
     Box(Modifier.fillMaxWidth()) {
         Surface(
@@ -910,27 +904,12 @@ private fun DesktopNowPlayingStrip(
                 }
 
                 PlaybackSeekBar(
-                    value = displayedProgress.coerceIn(0f, 1f),
+                    state = seek,
+                    progress = progress,
+                    totalDuration = totalDuration,
                     enabled = hasMedia && totalDuration > 0L,
                     accentPalette = accentPalette,
-                    onInteractionStart = { isDragging = true },
-                    onPreview = { percent ->
-                        isDragging = true
-                        dragProgress = percent.coerceIn(0f, 1f)
-                    },
-                    onCommit = { percent ->
-                        dragProgress = percent.coerceIn(0f, 1f)
-                        if (totalDuration > 0L) {
-                            viewModel.onPositionSeekClick(
-                                (dragProgress * totalDuration).toLong().coerceIn(0L, totalDuration),
-                            )
-                        }
-                        isDragging = false
-                    },
-                    onCancel = {
-                        dragProgress = progress
-                        isDragging = false
-                    },
+                    onSeek = viewModel::onPositionSeekClick,
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                 )
 

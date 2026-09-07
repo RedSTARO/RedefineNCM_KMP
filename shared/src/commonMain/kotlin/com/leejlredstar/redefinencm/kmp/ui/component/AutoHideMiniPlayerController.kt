@@ -663,14 +663,9 @@ private fun ExpandedPlaybackCard(
     onNext: () -> Unit,
     onLyricDetailsExpandedChange: (Boolean) -> Unit,
 ) {
-    var isDragging by remember(media?.id) { mutableStateOf(false) }
-    var dragValue by remember(media?.id) { mutableStateOf(progress) }
-    val sliderValue = if (isDragging) dragValue else progress
-    val displayPosition = if (isDragging) {
-        (dragValue * totalDuration).toLong()
-    } else {
-        position
-    }
+    val seek = rememberSeekDragState(media?.id)
+    val sliderValue = seek.progressFor(progress)
+    val displayPosition = seek.positionFor(position, totalDuration)
 
     Surface(
         modifier = Modifier
@@ -769,29 +764,13 @@ private fun ExpandedPlaybackCard(
                     }
                 }
                 PlaybackSeekBar(
-                    value = sliderValue.coerceIn(0f, 1f),
+                    state = seek,
+                    progress = progress,
+                    totalDuration = totalDuration,
                     enabled = hasMedia && totalDuration > 0L,
                     accentPalette = accentPalette,
+                    onSeek = onSeek,
                     onInteractionStart = onReveal,
-                    onPreview = { percent ->
-                        isDragging = true
-                        dragValue = percent.coerceIn(0f, 1f)
-                    },
-                    onCommit = { percent ->
-                        dragValue = percent.coerceIn(0f, 1f)
-                        if (totalDuration > 0L) {
-                            onSeek((dragValue * totalDuration).toLong().coerceIn(0L, totalDuration))
-                        }
-                        isDragging = false
-                    },
-                    onCancel = {
-                        dragValue = if (totalDuration > 0L) {
-                            (position.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
-                        } else {
-                            0f
-                        }
-                        isDragging = false
-                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp),
@@ -857,61 +836,6 @@ private fun ExpandedPlaybackCard(
             }
         }
     }
-}
-
-@Composable
-internal fun PlaybackSeekBar(
-    value: Float,
-    enabled: Boolean,
-    accentPalette: ContentAccentPalette,
-    onInteractionStart: () -> Unit,
-    onPreview: (Float) -> Unit,
-    onCommit: (Float) -> Unit,
-    onCancel: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var pendingValue by remember { mutableStateOf(value.coerceIn(0f, 1f)) }
-    var interactionActive by remember { mutableStateOf(false) }
-    LaunchedEffect(value) {
-        if (!interactionActive) pendingValue = value.coerceIn(0f, 1f)
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            if (interactionActive) onCancel()
-        }
-    }
-
-    Slider(
-        value = pendingValue.coerceIn(0f, 1f),
-        onValueChange = { updated ->
-            if (!interactionActive) {
-                interactionActive = true
-                onInteractionStart()
-            }
-            pendingValue = updated.coerceIn(0f, 1f)
-            onPreview(pendingValue)
-        },
-        onValueChangeFinished = {
-            if (interactionActive) {
-                onCommit(pendingValue)
-                interactionActive = false
-            }
-        },
-        enabled = enabled,
-        valueRange = 0f..1f,
-        modifier = Modifier
-            .heightIn(min = ExpressiveLayout.MinimumTouchTarget)
-            .then(modifier),
-        colors = SliderDefaults.colors(
-            thumbColor = accentPalette.onContainer,
-            activeTrackColor = accentPalette.onContainer,
-            inactiveTrackColor = accentPalette.onContainer.copy(alpha = 0.22f),
-            disabledThumbColor = accentPalette.onContainer.copy(alpha = 0.38f),
-            disabledActiveTrackColor = accentPalette.onContainer.copy(alpha = 0.28f),
-            disabledInactiveTrackColor = accentPalette.onContainer.copy(alpha = 0.12f),
-        ),
-    )
 }
 
 @Composable

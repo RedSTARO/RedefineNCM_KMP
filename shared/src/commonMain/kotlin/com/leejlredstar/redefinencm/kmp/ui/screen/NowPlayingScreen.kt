@@ -41,9 +41,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -62,14 +60,13 @@ import androidx.compose.ui.unit.dp
 import com.leejlredstar.amll.compose.rememberReducedMotionEnabled
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
-import com.leejlredstar.redefinencm.kmp.ui.component.CommentBottomSheet
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveArtwork
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.NowPlayingUiState
-import com.leejlredstar.redefinencm.kmp.ui.component.QueueBottomSheet
 import com.leejlredstar.redefinencm.kmp.ui.component.TransportSheets
 import com.leejlredstar.redefinencm.kmp.ui.component.formatPlaybackClock
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberNowPlayingUiState
+import com.leejlredstar.redefinencm.kmp.ui.component.rememberSeekDragState
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberTransportSheetsState
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
@@ -422,15 +419,13 @@ private fun NowPlayingProgress(
     reducedMotion: Boolean,
     onSeek: (Long) -> Unit,
 ) {
-    val mediaId = nowPlaying.media?.id
-    var dragFraction by remember(mediaId) { mutableStateOf<Float?>(null) }
+    val seek = rememberSeekDragState(nowPlaying.media?.id)
     val totalDuration = nowPlaying.totalDuration
     val seekable = nowPlaying.hasMedia && totalDuration > 0L
-    val sliderValue = dragFraction ?: nowPlaying.progress
-    val displayPosition = dragFraction?.let { (it * totalDuration).toLong() }
-        ?: nowPlaying.safePosition
+    val sliderValue = seek.progressFor(nowPlaying.progress)
+    val displayPosition = seek.positionFor(nowPlaying.safePosition, totalDuration)
     val amplitude by animateFloatAsState(
-        targetValue = if (nowPlaying.isPlaying && dragFraction == null) 1f else 0f,
+        targetValue = if (nowPlaying.isPlaying && !seek.isDragging) 1f else 0f,
         animationSpec = if (reducedMotion) snap() else MaterialTheme.motionScheme.slowEffectsSpec(),
         label = "nowPlayingWaveAmplitude",
     )
@@ -443,11 +438,8 @@ private fun NowPlayingProgress(
     Column(Modifier.fillMaxWidth()) {
         Slider(
             value = sliderValue,
-            onValueChange = { dragFraction = it },
-            onValueChangeFinished = {
-                dragFraction?.let { fraction -> onSeek((fraction * totalDuration).toLong()) }
-                dragFraction = null
-            },
+            onValueChange = seek::preview,
+            onValueChangeFinished = { seek.commit(totalDuration)?.let(onSeek) },
             enabled = seekable,
             interactionSource = interactionSource,
             modifier = Modifier
