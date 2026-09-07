@@ -68,6 +68,27 @@ abstract class BasePlatformPlayer(
         _shuffleEnabled.value = snapshot.shuffleEnabled
     }
 
+    /**
+     * Publishes [model] as the queue every surface reads, and returns what was published.
+     *
+     * The three copies of this — iOS, Web and the in-memory player, the backends that own a
+     * [PlayQueue] rather than reading a native timeline — each derived the visible items, the
+     * highlight position and the current track from the model in the same three lines. Deriving
+     * them together from one model on every publish is the shuffle invariant; a fourth backend
+     * written by copying is how it would be lost.
+     */
+    protected fun publishQueue(model: PlayQueue<MediaInfo>): PlayerQueueSnapshot {
+        val snapshot = PlayerQueueSnapshot(
+            items = model.itemsInPlayOrder,
+            currentIndex = model.positionInPlayOrder,
+            currentMedia = model.currentItem,
+            shuffleEnabled = model.shuffleEnabled,
+        )
+        publishQueueSnapshot(snapshot)
+        publishDurationFromMedia(snapshot.currentMedia)
+        return snapshot
+    }
+
     /** Publishes the queue's own idea of the duration, or -1 for "not known yet". */
     protected fun publishDurationFromMedia(media: MediaInfo?) {
         _duration.value = media?.duration?.takeIf { it > 0L } ?: -1L

@@ -102,6 +102,16 @@ class PlayQueue<T> private constructor(
         return copy(currentIndex = playOrder[prevPos])
     }
 
+    /**
+     * Jump to the item at [position] in play order.
+     *
+     * This is the index a queue list hands back, and under shuffle it is not an index into
+     * [items] — translating between the two is exactly where a cached highlight used to drift.
+     * Out of range leaves the queue alone.
+     */
+    fun skipToPlayOrderPosition(position: Int): PlayQueue<T> =
+        playOrder.getOrNull(position)?.let(::skipTo) ?: this
+
     /** Jump to a specific item (index into [items]). Does NOT reshuffle the play order. */
     fun skipTo(index: Int): PlayQueue<T> {
         if (index !in items.indices) return this

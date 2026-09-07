@@ -147,4 +147,31 @@ class PlayQueueTest {
         assertEquals(a.playOrder, b.playOrder)
         a.assertInvariant()
     }
+
+    @Test
+    fun skippingByPlayOrderPositionSelectsWhatTheQueueListShows() {
+        // The queue list renders itemsInPlayOrder and hands back a position in that list, which
+        // under shuffle is not an index into items. Every player used to translate it by hand.
+        val shuffled = PlayQueue.of(tracks, startIndex = 0, shuffle = true, rng = Random(7))
+        for (position in shuffled.playOrder.indices) {
+            val jumped = shuffled.skipToPlayOrderPosition(position)
+            assertEquals(shuffled.itemsInPlayOrder[position], jumped.currentItem)
+            assertEquals(position, jumped.positionInPlayOrder)
+            jumped.assertInvariant()
+        }
+    }
+
+    @Test
+    fun skippingByPlayOrderPositionMatchesTheListWithoutShuffle() {
+        val natural = PlayQueue.of(tracks, startIndex = 0)
+        assertEquals("d", natural.skipToPlayOrderPosition(3).currentItem)
+    }
+
+    @Test
+    fun skippingOutsideThePlayOrderLeavesTheQueueAlone() {
+        val q = PlayQueue.of(tracks, startIndex = 2)
+        assertEquals(q.currentItem, q.skipToPlayOrderPosition(-1).currentItem)
+        assertEquals(q.currentItem, q.skipToPlayOrderPosition(tracks.size).currentItem)
+        assertNull(PlayQueue.empty<String>().skipToPlayOrderPosition(0).currentItem)
+    }
 }

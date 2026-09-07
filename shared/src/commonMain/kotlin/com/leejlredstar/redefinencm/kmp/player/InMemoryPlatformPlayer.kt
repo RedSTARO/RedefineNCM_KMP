@@ -46,15 +46,7 @@ class InMemoryPlatformPlayer(
 
     /** Mirror the lock-protected [PlayQueue] state into the public StateFlows. */
     private fun publishQueueLocked() {
-        val model = queueModel
-        val snapshot = PlayerQueueSnapshot(
-            items = model.itemsInPlayOrder,
-            currentIndex = model.positionInPlayOrder,
-            currentMedia = model.currentItem,
-            shuffleEnabled = model.shuffleEnabled,
-        )
-        publishQueueSnapshot(snapshot)
-        publishDurationFromMedia(snapshot.currentMedia)
+        publishQueue(queueModel)
     }
 
     override fun play() {
@@ -126,8 +118,7 @@ class InMemoryPlatformPlayer(
 
     override fun skipToIndex(index: Int) {
         withStateLock {
-            val originalIndex = queueModel.playOrder.getOrNull(index) ?: return@withStateLock
-            val selected = queueModel.skipTo(originalIndex)
+            val selected = queueModel.skipToPlayOrderPosition(index)
             if (selected.currentIndex == queueModel.currentIndex) return@withStateLock
             queueModel = selected
             onTrackChangedLocked()

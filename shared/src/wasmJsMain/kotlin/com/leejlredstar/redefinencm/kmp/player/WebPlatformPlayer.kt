@@ -180,14 +180,7 @@ class WebPlatformPlayer(
 
     /** Publish the visible play order, its current index, and current media as one snapshot. */
     private fun publishQueue() {
-        val snapshot = PlayerQueueSnapshot(
-            items = queueModel.itemsInPlayOrder,
-            currentIndex = queueModel.positionInPlayOrder,
-            currentMedia = queueModel.currentItem,
-            shuffleEnabled = queueModel.shuffleEnabled,
-        )
-        publishQueueSnapshot(snapshot)
-        publishDurationFromMedia(snapshot.currentMedia)
+        val snapshot = publishQueue(queueModel)
         lastMediaSessionPositionSecond = -1L
         if (snapshot.currentMedia == null) {
             clearWebMediaSession()
@@ -533,10 +526,10 @@ class WebPlatformPlayer(
 
     override fun skipToIndex(index: Int) {
         if (released) return
-        val itemIndex = queueModel.playOrder.getOrNull(index) ?: return
-        if (itemIndex == queueModel.currentIndex) return
+        val selected = queueModel.skipToPlayOrderPosition(index)
+        if (selected.currentIndex == queueModel.currentIndex) return
         val autoplay = playRequested || _isPlaying.value || _state.value == PlayerState.BUFFERING
-        queueModel = queueModel.skipTo(itemIndex)
+        queueModel = selected
         selectCurrentTrack(autoplay = autoplay)
     }
 
