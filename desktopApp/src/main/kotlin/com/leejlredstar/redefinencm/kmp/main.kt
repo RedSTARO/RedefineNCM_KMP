@@ -43,7 +43,7 @@ import com.leejlredstar.redefinencm.kmp.di.initKoin
 import com.leejlredstar.redefinencm.kmp.notification.DesktopFloatingWindowNative
 import com.leejlredstar.redefinencm.kmp.notification.FloatingLyricData
 import com.leejlredstar.redefinencm.kmp.notification.LyricSurfaceAlignment
-import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
+import com.leejlredstar.redefinencm.kmp.notification.DesktopLyricWindow
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.SYSTEM_DEFAULT_AUDIO_OUTPUT_ID
 import com.leejlredstar.redefinencm.kmp.smtc.DesktopMediaControls
@@ -58,13 +58,13 @@ fun main() {
     initKoin()
     val settings = GlobalContext.get().get<PlatformSettings>()
     startFromTheSystemAudioOutput(settings::getString, settings::setString)
-    LyricNotificationController.setOptionalSurfaceEnabled(
+    DesktopLyricWindow.setEnabled(
         settings.getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false),
     )
-    LyricNotificationController.setOptionalSurfaceLocked(
+    DesktopLyricWindow.setLocked(
         settings.getBoolean(SettingKeys.DESKTOP_LYRIC_LOCKED, false),
     )
-    LyricNotificationController.setOptionalSurfaceAlignment(
+    DesktopLyricWindow.setAlignment(
         LyricSurfaceAlignment.fromWireValueOrDefault(
             settings.getString(SettingKeys.DESKTOP_LYRIC_ALIGNMENT, ""),
         ),
@@ -163,26 +163,26 @@ private fun launchDesktopApplication() = application {
 
     // Desktop floating-lyrics window (goal #2: the desktop equivalent of the Android
     // notification / iOS Live Activity). It is a second, frameless, always-on-top window
-    // driven entirely by the shared LyricNotificationController (JVM actual): the playback
+    // driven entirely by DesktopLyricWindow: the playback
     // pipeline calls updateLyric(...) + show(), and this window mirrors that state.
     FloatingLyricWindow()
 }
 
 @Composable
 private fun ApplicationScope.FloatingLyricWindow() {
-    val visible by LyricNotificationController.isWindowVisible.collectAsState()
+    val visible by DesktopLyricWindow.isWindowVisible.collectAsState()
     val windowState = rememberWindowState(
         size = DpSize(760.dp, 96.dp),
         position = WindowPosition(Alignment.BottomCenter),
     )
     if (!visible) return
 
-    val data by LyricNotificationController.floatingLyricData.collectAsState()
-    val locked by LyricNotificationController.isWindowLocked.collectAsState()
-    val alignment by LyricNotificationController.windowAlignment.collectAsState()
+    val data by DesktopLyricWindow.floatingLyricData.collectAsState()
+    val locked by DesktopLyricWindow.isWindowLocked.collectAsState()
+    val alignment by DesktopLyricWindow.windowAlignment.collectAsState()
 
     Window(
-        onCloseRequest = { LyricNotificationController.hide() },
+        onCloseRequest = { DesktopLyricWindow.hide() },
         state = windowState,
         title = "桌面歌词",
         undecorated = true,   // frameless

@@ -14,7 +14,7 @@ import com.leejlredstar.redefinencm.kmp.lyric.LyricSource
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceModeGate
 import com.leejlredstar.redefinencm.kmp.lyric.supportsDynamicNowPlayingCover
-import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
+import com.leejlredstar.redefinencm.kmp.notification.lyricSurface
 import com.leejlredstar.redefinencm.kmp.player.*
 import com.leejlredstar.redefinencm.kmp.smtc.MediaControlsIntegrator
 import com.leejlredstar.amll.compose.lyric.LyricParser
@@ -283,7 +283,7 @@ class NowPlayingViewModel(
                 } else {
                     clearLyrics()
                     MediaControlsIntegrator.clear()
-                    LyricNotificationController.clearFocus()
+                    lyricSurface.clearFocus()
                 }
             }
         }
@@ -359,9 +359,9 @@ class NowPlayingViewModel(
                 lyricIndex.value = payload.index
                 val media = payload.media
                 if (media == null) {
-                    LyricNotificationController.clearFocus()
+                    lyricSurface.clearFocus()
                 } else {
-                    LyricNotificationController.updateLyric(
+                    lyricSurface.updateLyric(
                         title = media.title,
                         artist = media.artist,
                         currentLyric = payload.currentLyric,

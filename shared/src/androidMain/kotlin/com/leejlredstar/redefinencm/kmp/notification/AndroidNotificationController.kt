@@ -17,19 +17,12 @@ import com.leejlredstar.redefinencm.kmp.util.canPostNotifications
  * （PlaybackService 的 MediaSession + DefaultMediaNotificationProvider），
  * 两个通知各司其职，与原版行为一致。
  */
-actual object LyricNotificationController {
+/** Android's lyric surface: a live-update notification the user can switch off. */
+object AndroidLyricNotification : OptionalLyricSurface {
     private const val CHANNEL_ID = "live_update_lyric"
     private const val NOTIFICATION_ID = 0x4C595243 // "LYRC"
 
-    actual val supportsOptionalSurfaceControl: Boolean = true
-    actual val optionalSurfaceSettingLabel: String = "启用额外 Live Update 歌词"
-
-    // A notification has no window to lock or align.
-    actual val supportsOptionalSurfaceLayout: Boolean = false
-
-    actual fun setOptionalSurfaceLocked(locked: Boolean) = Unit
-
-    actual fun setOptionalSurfaceAlignment(alignment: LyricSurfaceAlignment) = Unit
+    override val settingLabel: String = "启用额外 Live Update 歌词"
 
     private var latestPayload: LyricPayload? = null
     private var lastPostedPayload: LyricPayload? = null
@@ -44,7 +37,7 @@ actual object LyricNotificationController {
     }
 
     @Synchronized
-    actual fun setOptionalSurfaceEnabled(enabled: Boolean) {
+    override fun setEnabled(enabled: Boolean) {
         optionalSurfaceEnabled = enabled
         if (enabled) {
             latestPayload?.let(::postPayload)
@@ -55,7 +48,7 @@ actual object LyricNotificationController {
     }
 
     @Synchronized
-    actual fun updateLyric(
+    override fun updateLyric(
         title: String?,
         artist: String?,
         currentLyric: String?,
@@ -147,14 +140,14 @@ actual object LyricNotificationController {
     }
 
     @Synchronized
-    actual fun clearFocus() {
+    override fun clearFocus() {
         latestPayload = null
         lastPostedPayload = null
         appContext?.let { NotificationManagerCompat.from(it).cancel(NOTIFICATION_ID) }
     }
 
     @Synchronized
-    actual fun reset() {
+    override fun reset() {
         latestPayload = null
         lastPostedPayload = null
     }
@@ -185,4 +178,4 @@ actual object LyricNotificationController {
 
 }
 
-
+actual val lyricSurface: LyricSurface = AndroidLyricNotification

@@ -3,7 +3,7 @@ package com.leejlredstar.redefinencm.kmp.notification
 /**
  * What a lyric surface was handed, in the form every surface actually wants it.
  *
- * [LyricNotificationController.updateLyric] takes eight nullable, untrimmed arguments straight
+ * [LyricSurface.updateLyric] takes eight nullable, untrimmed arguments straight
  * from the view model. Each of the four targets turned them into the same non-null trimmed shape
  * before doing anything with them, and Android and iOS had grown a private data class for it that
  * was identical field for field. The copies had drifted: Web did not trim at all and let a

@@ -5,16 +5,21 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Desktop actual implementation of LyricNotificationController.
+ * Desktop lyric surface.
  *
  * Instead of a notification, this drives a floating desktop lyrics window.
  * The window is created by the desktop app's main.kt using Compose Desktop.
  * This controller manages the state that the window renders.
  */
-actual object LyricNotificationController {
-    actual val supportsOptionalSurfaceControl: Boolean = true
-    actual val optionalSurfaceSettingLabel: String = "显示桌面歌词"
-    actual val supportsOptionalSurfaceLayout: Boolean = true
+/**
+ * The desktop's lyric surface: a floating always-on-top window.
+ *
+ * The only [WindowedLyricSurface] — it is the one surface with a position and a layout of its
+ * own, which is why locking and alignment are its interface rather than members every target has
+ * to answer for. Its window state below is desktop-only and deliberately not on any interface.
+ */
+object DesktopLyricWindow : WindowedLyricSurface {
+    override val settingLabel: String = "显示桌面歌词"
 
     private val _floatingLyricData = MutableStateFlow<FloatingLyricData?>(null)
     val floatingLyricData: StateFlow<FloatingLyricData?> = _floatingLyricData.asStateFlow()
@@ -39,7 +44,7 @@ actual object LyricNotificationController {
     private var latestProgress = FloatingLyricProgress()
 
     @Synchronized
-    actual fun setOptionalSurfaceEnabled(enabled: Boolean) {
+    override fun setEnabled(enabled: Boolean) {
         optionalSurfaceEnabled = enabled
         if (enabled) {
             latestLyricData?.let { publish(it, latestProgress) }
@@ -48,16 +53,16 @@ actual object LyricNotificationController {
         }
     }
 
-    actual fun setOptionalSurfaceLocked(locked: Boolean) {
+    override fun setLocked(locked: Boolean) {
         _isWindowLocked.value = locked
     }
 
-    actual fun setOptionalSurfaceAlignment(alignment: LyricSurfaceAlignment) {
+    override fun setAlignment(alignment: LyricSurfaceAlignment) {
         _windowAlignment.value = alignment
     }
 
     @Synchronized
-    actual fun updateLyric(
+    override fun updateLyric(
         title: String?,
         artist: String?,
         currentLyric: String?,
@@ -109,14 +114,14 @@ actual object LyricNotificationController {
     }
 
     @Synchronized
-    actual fun clearFocus() {
+    override fun clearFocus() {
         latestLyricData = null
         latestProgress = FloatingLyricProgress()
         clearDisplayedState()
     }
 
     @Synchronized
-    actual fun reset() {
+    override fun reset() {
         latestLyricData = null
         latestProgress = FloatingLyricProgress()
         clearDisplayedState()
@@ -144,6 +149,8 @@ actual object LyricNotificationController {
     @Synchronized
     fun toggle() { if (_isWindowVisible.value) hide() else show() }
 }
+
+actual val lyricSurface: LyricSurface = DesktopLyricWindow
 
 data class FloatingLyricData(
     val title: String,

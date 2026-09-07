@@ -12,62 +12,62 @@ import kotlin.test.assertTrue
 class DesktopFloatingWindowControllerTest {
     @BeforeTest
     fun setUp() {
-        LyricNotificationController.setOptionalSurfaceEnabled(false)
-        LyricNotificationController.reset()
+        DesktopLyricWindow.setEnabled(false)
+        DesktopLyricWindow.reset()
     }
 
     @AfterTest
     fun tearDown() {
-        LyricNotificationController.setOptionalSurfaceEnabled(false)
-        LyricNotificationController.reset()
+        DesktopLyricWindow.setEnabled(false)
+        DesktopLyricWindow.reset()
     }
 
     @Test
     fun optionalDesktopLyricsGateUpdatesImmediately() {
         publish(title = "First", lyric = "disabled payload")
-        assertNull(LyricNotificationController.floatingLyricData.value)
-        assertFalse(LyricNotificationController.isWindowVisible.value)
+        assertNull(DesktopLyricWindow.floatingLyricData.value)
+        assertFalse(DesktopLyricWindow.isWindowVisible.value)
 
-        LyricNotificationController.setOptionalSurfaceEnabled(true)
+        DesktopLyricWindow.setEnabled(true)
         assertEquals(
             "disabled payload",
-            LyricNotificationController.floatingLyricData.value?.currentLyric,
+            DesktopLyricWindow.floatingLyricData.value?.currentLyric,
         )
-        assertTrue(LyricNotificationController.isWindowVisible.value)
+        assertTrue(DesktopLyricWindow.isWindowVisible.value)
 
-        LyricNotificationController.setOptionalSurfaceEnabled(false)
-        assertNull(LyricNotificationController.floatingLyricData.value)
-        assertFalse(LyricNotificationController.isWindowVisible.value)
+        DesktopLyricWindow.setEnabled(false)
+        assertNull(DesktopLyricWindow.floatingLyricData.value)
+        assertFalse(DesktopLyricWindow.isWindowVisible.value)
 
         publish(title = "Second", lyric = "new disabled payload")
-        LyricNotificationController.show()
-        LyricNotificationController.toggle()
-        assertNull(LyricNotificationController.floatingLyricData.value)
-        assertFalse(LyricNotificationController.isWindowVisible.value)
+        DesktopLyricWindow.show()
+        DesktopLyricWindow.toggle()
+        assertNull(DesktopLyricWindow.floatingLyricData.value)
+        assertFalse(DesktopLyricWindow.isWindowVisible.value)
 
-        LyricNotificationController.setOptionalSurfaceEnabled(true)
+        DesktopLyricWindow.setEnabled(true)
         assertEquals(
             "new disabled payload",
-            LyricNotificationController.floatingLyricData.value?.currentLyric,
+            DesktopLyricWindow.floatingLyricData.value?.currentLyric,
         )
-        assertTrue(LyricNotificationController.isWindowVisible.value)
+        assertTrue(DesktopLyricWindow.isWindowVisible.value)
     }
 
     @Test
     fun windowLayoutIsItsOwnStateAndSurvivesTheSurfaceBeingDisabled() {
-        assertFalse(LyricNotificationController.isWindowLocked.value)
-        assertEquals(LyricSurfaceAlignment.CENTER, LyricNotificationController.windowAlignment.value)
+        assertFalse(DesktopLyricWindow.isWindowLocked.value)
+        assertEquals(LyricSurfaceAlignment.CENTER, DesktopLyricWindow.windowAlignment.value)
 
-        LyricNotificationController.setOptionalSurfaceLocked(true)
-        LyricNotificationController.setOptionalSurfaceAlignment(LyricSurfaceAlignment.END)
-        LyricNotificationController.setOptionalSurfaceEnabled(false)
-        LyricNotificationController.reset()
+        DesktopLyricWindow.setLocked(true)
+        DesktopLyricWindow.setAlignment(LyricSurfaceAlignment.END)
+        DesktopLyricWindow.setEnabled(false)
+        DesktopLyricWindow.reset()
 
-        assertTrue(LyricNotificationController.isWindowLocked.value)
-        assertEquals(LyricSurfaceAlignment.END, LyricNotificationController.windowAlignment.value)
+        assertTrue(DesktopLyricWindow.isWindowLocked.value)
+        assertEquals(LyricSurfaceAlignment.END, DesktopLyricWindow.windowAlignment.value)
 
-        LyricNotificationController.setOptionalSurfaceLocked(false)
-        LyricNotificationController.setOptionalSurfaceAlignment(LyricSurfaceAlignment.DEFAULT)
+        DesktopLyricWindow.setLocked(false)
+        DesktopLyricWindow.setAlignment(LyricSurfaceAlignment.DEFAULT)
     }
 
     @Test
@@ -81,24 +81,24 @@ class DesktopFloatingWindowControllerTest {
 
     @Test
     fun dismissedTrackStaysHiddenUntilTrackChanges() {
-        LyricNotificationController.setOptionalSurfaceEnabled(true)
+        DesktopLyricWindow.setEnabled(true)
         publish(title = "First", lyric = "line one")
-        LyricNotificationController.hide()
+        DesktopLyricWindow.hide()
 
         publish(title = "First", lyric = "line two")
-        assertFalse(LyricNotificationController.isWindowVisible.value)
+        assertFalse(DesktopLyricWindow.isWindowVisible.value)
 
         publish(title = "Second", lyric = "next track")
-        assertTrue(LyricNotificationController.isWindowVisible.value)
+        assertTrue(DesktopLyricWindow.isWindowVisible.value)
     }
 
     @Test
     fun positionUpdatesDoNotRepublishWindowContent() {
-        LyricNotificationController.setOptionalSurfaceEnabled(true)
+        DesktopLyricWindow.setEnabled(true)
         publish(title = "First", lyric = "line one")
-        val content = LyricNotificationController.floatingLyricData.value
+        val content = DesktopLyricWindow.floatingLyricData.value
 
-        LyricNotificationController.updateLyric(
+        DesktopLyricWindow.updateLyric(
             title = "First",
             artist = "Artist",
             currentLyric = "line one",
@@ -109,13 +109,13 @@ class DesktopFloatingWindowControllerTest {
             durationMs = 120_000L,
         )
 
-        assertSame(content, LyricNotificationController.floatingLyricData.value)
-        assertEquals(42_000L, LyricNotificationController.playbackProgress.value.positionMs)
-        assertEquals(0.35f, LyricNotificationController.playbackProgress.value.fraction)
+        assertSame(content, DesktopLyricWindow.floatingLyricData.value)
+        assertEquals(42_000L, DesktopLyricWindow.playbackProgress.value.positionMs)
+        assertEquals(0.35f, DesktopLyricWindow.playbackProgress.value.fraction)
     }
 
     private fun publish(title: String, lyric: String) {
-        LyricNotificationController.updateLyric(
+        DesktopLyricWindow.updateLyric(
             title = title,
             artist = "Artist",
             currentLyric = lyric,

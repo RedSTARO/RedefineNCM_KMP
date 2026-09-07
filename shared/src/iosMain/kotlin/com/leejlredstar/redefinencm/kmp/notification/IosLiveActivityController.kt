@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import platform.posix.time
 
 /**
- * iOS actual implementation of LyricNotificationController.
+ * iOS lyric surface.
  *
  * On iOS, this bridges to ActivityKit Live Activities for 灵动岛 (Dynamic Island)
  * and Lock Screen lyric display via a shared data mechanism.
@@ -23,18 +23,13 @@ import platform.posix.time
  * - Text flows via ActivityKit ContentState (no App Group needed). Album artwork inside the
  *   Live Activity would require App-Group image caching (TODO).
  */
-actual object LyricNotificationController {
-    actual val supportsOptionalSurfaceControl: Boolean = false
-    actual val optionalSurfaceSettingLabel: String = ""
-
-    actual fun setOptionalSurfaceEnabled(enabled: Boolean) = Unit
-
-    actual val supportsOptionalSurfaceLayout: Boolean = false
-
-    actual fun setOptionalSurfaceLocked(locked: Boolean) = Unit
-
-    actual fun setOptionalSurfaceAlignment(alignment: LyricSurfaceAlignment) = Unit
-
+/**
+ * iOS's lyric surface: a Live Activity on the Lock Screen and in the Dynamic Island.
+ *
+ * Plain [LyricSurface]. ActivityKit owns whether it appears, so there is nothing for Settings to
+ * switch and it had carried six stub members saying so.
+ */
+object IosLiveActivity : LyricSurface {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private val _liveActivityData = MutableStateFlow<LiveActivityData?>(null)
@@ -61,7 +56,7 @@ actual object LyricNotificationController {
         observerJob = null
     }
 
-    actual fun updateLyric(
+    override fun updateLyric(
         title: String?,
         artist: String?,
         currentLyric: String?,
@@ -97,12 +92,12 @@ actual object LyricNotificationController {
         )
     }
 
-    actual fun clearFocus() {
+    override fun clearFocus() {
         lastPayload = null
         _liveActivityData.value = null
     }
 
-    actual fun reset() {
+    override fun reset() {
         lastPayload = null
         _liveActivityData.value = null
     }
@@ -115,6 +110,8 @@ actual object LyricNotificationController {
  * Data class for Live Activity content.
  * Mirrored in Swift as a Codable struct for ActivityKit.
  */
+actual val lyricSurface: LyricSurface = IosLiveActivity
+
 data class LiveActivityData(
     val title: String,
     val artist: String,

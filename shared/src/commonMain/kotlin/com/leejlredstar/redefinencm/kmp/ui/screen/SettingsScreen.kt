@@ -77,7 +77,9 @@ import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
 import com.leejlredstar.redefinencm.kmp.lyric.supportsDynamicNowPlayingCover
-import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
+import com.leejlredstar.redefinencm.kmp.notification.OptionalLyricSurface
+import com.leejlredstar.redefinencm.kmp.notification.WindowedLyricSurface
+import com.leejlredstar.redefinencm.kmp.notification.lyricSurface
 import com.leejlredstar.redefinencm.kmp.notification.LyricSurfaceAlignment
 import com.leejlredstar.redefinencm.kmp.player.AudioOutputDevice
 import com.leejlredstar.redefinencm.kmp.player.SYSTEM_DEFAULT_AUDIO_OUTPUT_ID
@@ -112,6 +114,18 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+
+/**
+ * The lyric surface's capabilities, as this target actually has them.
+ *
+ * Settings used to ask the surface two booleans about itself and then call members every target
+ * had to declare. A capability is a type now: a target that cannot switch its lyric surface off
+ * simply is not an [OptionalLyricSurface], and these are null there.
+ */
+private val optionalLyricSurface: OptionalLyricSurface? = lyricSurface as? OptionalLyricSurface
+
+private val windowedLyricSurface: WindowedLyricSurface? = lyricSurface as? WindowedLyricSurface
+
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -176,13 +190,13 @@ fun SettingsScreen(
         searchPrediction = settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true)
         showDownloadStatus = settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false)
         extraLyricSurfaceEnabled = settings.getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false)
-        LyricNotificationController.setOptionalSurfaceEnabled(extraLyricSurfaceEnabled)
+        optionalLyricSurface?.setEnabled(extraLyricSurfaceEnabled)
         desktopLyricLocked = settings.getBoolean(SettingKeys.DESKTOP_LYRIC_LOCKED, false)
         desktopLyricAlignment = LyricSurfaceAlignment.fromWireValueOrDefault(
             settings.getString(SettingKeys.DESKTOP_LYRIC_ALIGNMENT, ""),
         )
-        LyricNotificationController.setOptionalSurfaceLocked(desktopLyricLocked)
-        LyricNotificationController.setOptionalSurfaceAlignment(desktopLyricAlignment)
+        windowedLyricSurface?.setLocked(desktopLyricLocked)
+        windowedLyricSurface?.setAlignment(desktopLyricAlignment)
         showTranslatedLyric = settings.getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
         showRomanLyric = settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)
         lyricSourceMode = LyricSourceMode.fromStoredWireValue(
@@ -258,13 +272,13 @@ fun SettingsScreen(
             searchPrediction = settings.getBooleanAsync(SettingKeys.SEARCH_PREDICTION, true)
             showDownloadStatus = settings.getBooleanAsync(SettingKeys.SHOW_DOWNLOAD_STATUS, false)
             extraLyricSurfaceEnabled = settings.getBooleanAsync(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false)
-            LyricNotificationController.setOptionalSurfaceEnabled(extraLyricSurfaceEnabled)
+            optionalLyricSurface?.setEnabled(extraLyricSurfaceEnabled)
             desktopLyricLocked = settings.getBooleanAsync(SettingKeys.DESKTOP_LYRIC_LOCKED, false)
             desktopLyricAlignment = LyricSurfaceAlignment.fromWireValueOrDefault(
                 settings.getStringAsync(SettingKeys.DESKTOP_LYRIC_ALIGNMENT, ""),
             )
-            LyricNotificationController.setOptionalSurfaceLocked(desktopLyricLocked)
-            LyricNotificationController.setOptionalSurfaceAlignment(desktopLyricAlignment)
+            windowedLyricSurface?.setLocked(desktopLyricLocked)
+            windowedLyricSurface?.setAlignment(desktopLyricAlignment)
             showTranslatedLyric = settings.getBooleanAsync(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
             showRomanLyric = settings.getBooleanAsync(SettingKeys.SHOW_ROMAN_LYRIC, false)
             lyricSourceMode = LyricSourceMode.fromStoredWireValue(
@@ -642,8 +656,8 @@ fun SettingsScreen(
                 }
 
                 SettingsSectionLabel("歌词", settingsPalette)
-                val surfaceRows = if (LyricNotificationController.supportsOptionalSurfaceControl) 1 else 0
-                val surfaceLayoutRows = if (LyricNotificationController.supportsOptionalSurfaceLayout) 2 else 0
+                val surfaceRows = if (optionalLyricSurface != null) 1 else 0
+                val surfaceLayoutRows = if (windowedLyricSurface != null) 2 else 0
                 val lyricSettingCount = 3 + surfaceRows + surfaceLayoutRows
                 LyricSourceDropdown(
                     selectedWireValue = lyricSourceMode,
@@ -669,10 +683,10 @@ fun SettingsScreen(
                         },
                     )
                 }
-                if (LyricNotificationController.supportsOptionalSurfaceControl) {
+                if (optionalLyricSurface != null) {
                     SettingsSwitch(
                         extraLyricSurfaceEnabled,
-                        LyricNotificationController.optionalSurfaceSettingLabel,
+                        optionalLyricSurface.settingLabel,
                         settingsPalette,
                         index = 1,
                         count = lyricSettingCount,
@@ -681,12 +695,12 @@ fun SettingsScreen(
                         persistSettings(
                             write = { settings.setBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, enabled) },
                             onWritten = {
-                                LyricNotificationController.setOptionalSurfaceEnabled(enabled)
+                                optionalLyricSurface.setEnabled(enabled)
                             },
                         )
                     }
                 }
-                if (LyricNotificationController.supportsOptionalSurfaceLayout) {
+                if (windowedLyricSurface != null) {
                     SettingsSwitch(
                         desktopLyricLocked,
                         "锁定桌面歌词",
@@ -700,7 +714,7 @@ fun SettingsScreen(
                         persistSettings(
                             write = { settings.setBoolean(SettingKeys.DESKTOP_LYRIC_LOCKED, locked) },
                             onWritten = {
-                                LyricNotificationController.setOptionalSurfaceLocked(locked)
+                                windowedLyricSurface.setLocked(locked)
                             },
                         )
                     }
@@ -719,7 +733,7 @@ fun SettingsScreen(
                                 )
                             },
                             onWritten = {
-                                LyricNotificationController.setOptionalSurfaceAlignment(alignment)
+                                windowedLyricSurface.setAlignment(alignment)
                             },
                         )
                     }

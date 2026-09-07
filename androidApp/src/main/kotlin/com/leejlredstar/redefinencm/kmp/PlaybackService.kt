@@ -4,7 +4,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
-import com.leejlredstar.redefinencm.kmp.notification.LyricNotificationController
+import com.leejlredstar.redefinencm.kmp.notification.AndroidLyricNotification
 import com.leejlredstar.redefinencm.kmp.notification.createNowPlayingPendingIntent
 import com.leejlredstar.redefinencm.kmp.player.AndroidMediaSessionInitializationState
 import com.leejlredstar.redefinencm.kmp.player.ExoPlayerPlatformPlayer
@@ -86,7 +86,7 @@ class PlaybackService : MediaSessionService() {
         mediaSession?.release()
         mediaSession = null
         serviceScope.cancel()
-        LyricNotificationController.clearFocus()
+        AndroidLyricNotification.clearFocus()
         super.onDestroy()
     }
 }

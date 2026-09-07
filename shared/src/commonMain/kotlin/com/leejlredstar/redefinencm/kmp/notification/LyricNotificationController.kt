@@ -1,52 +1,25 @@
 package com.leejlredstar.redefinencm.kmp.notification
 
 /**
- * Platform-specific lyric notification / live activity controller.
+ * Where a target shows the current lyric line outside the app's own player screen.
  *
- * - Android: Shows a live-update notification with current lyric
- * - iOS: Updates Live Activities (灵动岛 + Lock Screen)
- * - Desktop: Updates floating window / desktop lyrics
- * - Web: No-op (stub)
+ * - Android: a live-update notification
+ * - iOS: a Live Activity (灵动岛 + Lock Screen)
+ * - Desktop: a floating always-on-top window
+ * - Web: a fixed element in the page
+ *
+ * This was one `expect object` carrying every capability any target had. Because an expect
+ * declaration must be implemented in full everywhere, a feature only the desktop window could
+ * offer cost three stub members on the other three, and adding the lock and alignment controls
+ * took the stub count to fifteen. A capability is an interface here instead, so a target
+ * declares what it can do and writes nothing for what it cannot.
  */
-expect object LyricNotificationController {
-    /** Whether this target exposes an optional, extra lyric surface in Settings. */
-    val supportsOptionalSurfaceControl: Boolean
-
-    /** Platform-specific Settings label for the optional lyric surface. */
-    val optionalSurfaceSettingLabel: String
-
+interface LyricSurface {
     /**
-     * Enable or disable the optional lyric surface.
+     * Show [currentLyric] for the track described by the other arguments.
      *
-     * Android maps this to the extra Live Update notification and Desktop maps it to the
-     * floating desktop-lyrics window. iOS Live Activity and Web lyrics are intentionally not
-     * controlled by this setting.
-     */
-    fun setOptionalSurfaceEnabled(enabled: Boolean)
-
-    /**
-     * Whether the optional surface is a window of its own that can be locked in place and have
-     * its lines aligned. Only the desktop's floating window is; a notification has no such
-     * layout, so Settings shows the lock and alignment rows only where this is true.
-     */
-    val supportsOptionalSurfaceLayout: Boolean
-
-    /**
-     * A locked surface stays where it is: it cannot be dragged or resized, and where the host
-     * allows it the pointer falls through to whatever is underneath. Settings is the way back.
-     */
-    fun setOptionalSurfaceLocked(locked: Boolean)
-
-    /** How the surface's lyric lines sit inside it. */
-    fun setOptionalSurfaceAlignment(alignment: LyricSurfaceAlignment)
-
-    /**
-     * Update the displayed lyric content.
-     * @param title Song title
-     * @param artist Song artist
-     * @param currentLyric Current lyric line
-     * @param nextLyric Next lyric line (for preview)
-     * @param artworkUri Album art URI
+     * @param nextLyric the line after this one, for surfaces with room to preview it.
+     * @param durationMs -1 when the length is not known yet.
      */
     fun updateLyric(
         title: String?,
@@ -59,14 +32,52 @@ expect object LyricNotificationController {
         durationMs: Long = -1L,
     )
 
-    /** Remove the lyric display. */
+    /** Take the lyric display down. */
     fun clearFocus()
 
-    /** Reset internal state. */
+    /** Forget everything, so the next update starts from nothing. */
     fun reset()
 }
 
-/** Horizontal placement of the optional lyric surface's lines, persisted by its wire value. */
+/**
+ * A lyric surface the user can turn off in Settings.
+ *
+ * Android's extra notification and the desktop window are; iOS's Live Activity and the browser
+ * surface are part of playback itself and have no setting of their own.
+ */
+interface OptionalLyricSurface : LyricSurface {
+    /** What Settings calls this surface. Each target names its own. */
+    val settingLabel: String
+
+    fun setEnabled(enabled: Boolean)
+}
+
+/**
+ * A lyric surface that is a window of its own, so it has a position and a layout.
+ *
+ * Only the desktop window is. A notification has neither, which is why these two are not on
+ * [OptionalLyricSurface].
+ */
+interface WindowedLyricSurface : OptionalLyricSurface {
+    /**
+     * A locked window stays where it is: it cannot be dragged or resized, and where the host
+     * allows it the pointer falls through to whatever is underneath. Settings is the way back.
+     */
+    fun setLocked(locked: Boolean)
+
+    /** How the lyric lines sit inside the window. */
+    fun setAlignment(alignment: LyricSurfaceAlignment)
+}
+
+/**
+ * This target's lyric surface.
+ *
+ * Test it with `as?` for the capability you need rather than asking a boolean first: a target
+ * that cannot lock its surface does not implement [WindowedLyricSurface] at all.
+ */
+expect val lyricSurface: LyricSurface
+
+/** Horizontal placement of a windowed lyric surface's lines, persisted by its wire value. */
 enum class LyricSurfaceAlignment(val wireValue: String, val displayName: String) {
     START("start", "左对齐"),
     CENTER("center", "居中"),

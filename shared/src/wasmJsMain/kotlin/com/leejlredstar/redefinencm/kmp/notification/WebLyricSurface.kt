@@ -3,19 +3,14 @@
 package com.leejlredstar.redefinencm.kmp.notification
 
 /** Browser lyric surface: a live DOM pill, tab title, and an optional granted notification. */
-actual object LyricNotificationController {
-    actual val supportsOptionalSurfaceControl: Boolean = false
-    actual val optionalSurfaceSettingLabel: String = ""
-
-    actual fun setOptionalSurfaceEnabled(enabled: Boolean) = Unit
-
-    actual val supportsOptionalSurfaceLayout: Boolean = false
-
-    actual fun setOptionalSurfaceLocked(locked: Boolean) = Unit
-
-    actual fun setOptionalSurfaceAlignment(alignment: LyricSurfaceAlignment) = Unit
-
-    actual fun updateLyric(
+/**
+ * The browser's lyric surface: a fixed element in the page.
+ *
+ * Plain [LyricSurface]. It is part of playback rather than something to switch on, so it had
+ * carried six stub members for capabilities it does not have.
+ */
+object WebLyricSurface : LyricSurface {
+    override fun updateLyric(
         title: String?,
         artist: String?,
         currentLyric: String?,
@@ -50,14 +45,16 @@ actual object LyricNotificationController {
         )
     }
 
-    actual fun clearFocus() {
+    override fun clearFocus() {
         clearBrowserLyricSurface()
     }
 
-    actual fun reset() {
+    override fun reset() {
         clearBrowserLyricSurface()
     }
 }
+
+actual val lyricSurface: LyricSurface = WebLyricSurface
 
 private fun updateBrowserLyricSurface(
     title: String,
