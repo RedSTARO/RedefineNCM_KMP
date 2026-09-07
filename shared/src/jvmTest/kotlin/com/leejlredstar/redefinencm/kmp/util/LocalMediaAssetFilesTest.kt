@@ -84,6 +84,27 @@ class LocalMediaAssetFilesTest {
     }
 
     @Test
+    fun removesTheStagedFileWhenParkingTheOldSidecarFails() {
+        val old = write("1.lrc", "old")
+        // The first move parks the displaced sidecar, and staging has already happened by then.
+        val failOnPark = { _: File, _: File -> error("park failed") }
+
+        assertFailsWith<IllegalStateException> {
+            replaceLocalMediaAssetFiles(
+                directory = directory,
+                replacements = listOf(LocalMediaAssetWrite("1.lrc", "new".encodeToByteArray())),
+                displaced = listOf(old),
+                move = failOnPark,
+            )
+        }
+
+        assertEquals(listOf("1.lrc"), visibleNames())
+        assertEquals("old", File(directory, "1.lrc").readText())
+        // Nothing staged is left behind, hidden or not.
+        assertTrue(directory.listFiles().orEmpty().none { it.name.contains("asset-pending") })
+    }
+
+    @Test
     fun aFailureWhileStagingNeverTouchesWhatIsAlreadyOnDisk() {
         write("1.lrc", "old")
         // A directory where a staged file wants to be makes the write fail.
