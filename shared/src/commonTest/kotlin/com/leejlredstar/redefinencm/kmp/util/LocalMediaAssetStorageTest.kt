@@ -92,6 +92,48 @@ class LocalMediaAssetStorageTest {
     }
 
     @Test
+    fun batchInspectionMatchesPerSongInspectionFromOneListing() {
+        val listing = listOf(
+            "42.mp3",
+            "42.lyric.translation.lrc",
+            "42.lyric.yrc",
+            "42.cover.webp",
+            "42.cover.jpg",
+            "43.lyric.ttml",
+            "43.flac",
+            "44.flac",
+            "notes.txt",
+            ".42.lyric.ttml.1234.asset-pending",
+            "0042.lyric.lrc",
+            "-1.lyric.lrc",
+        )
+        val songIds = listOf(42L, 43L, 44L, 45L)
+
+        val batch = localMediaAssetSnapshots(songIds, listing)
+
+        assertEquals(songIds.toSet(), batch.keys)
+        songIds.forEach { songId ->
+            assertEquals(localMediaAssetSnapshot(songId, listing), batch.getValue(songId))
+        }
+        assertEquals("42.cover.jpg", batch.getValue(42L).artworkFileName)
+        assertEquals(LocalLyricFormat.TTML, batch.getValue(43L).lyricFormat)
+        assertEquals(LocalMediaAssetSnapshot(), batch.getValue(44L))
+        assertEquals(LocalMediaAssetSnapshot(), batch.getValue(45L))
+    }
+
+    @Test
+    fun batchInspectionRejectsInvalidSongIdsAndAcceptsNoIds() {
+        assertFailsWith<IllegalArgumentException> {
+            localMediaAssetSnapshots(listOf(1L, 0L), listOf("1.lyric.lrc"))
+        }
+        assertEquals(emptyMap(), localMediaAssetSnapshots(emptyList(), listOf("1.lyric.lrc")))
+        assertEquals(42L, leadingLocalMediaSongId("42.lyric.ttml"))
+        assertNull(leadingLocalMediaSongId(".42.lyric.ttml.x.asset-pending"))
+        assertNull(leadingLocalMediaSongId("cover.jpg"))
+        assertNull(leadingLocalMediaSongId("0.lyric.lrc"))
+    }
+
+    @Test
     fun inspectionPrefersTtmlWhenDamagedStorageContainsMultiplePrimaryFiles() {
         val snapshot = localMediaAssetSnapshot(
             songId = 77L,

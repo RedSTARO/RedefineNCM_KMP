@@ -175,15 +175,27 @@ actual object LocalMediaAssetStorage {
         requireLocalMediaSongId(songId)
         return mutex.withLock {
             withContext(Dispatchers.Default) {
-                val directory = iosDownloadDirectoryPath()
-                val manager = NSFileManager.defaultManager
-                val names = if (manager.fileExistsAtPath(directory)) {
-                    iosAssetFileNames(directory)
-                } else {
-                    emptyList()
-                }
-                localMediaAssetSnapshot(songId, names)
+                localMediaAssetSnapshot(songId, existingIosAssetFileNames())
             }
+        }
+    }
+
+    actual suspend fun inspectAll(songIds: Collection<Long>): Map<Long, LocalMediaAssetSnapshot> {
+        songIds.forEach(::requireLocalMediaSongId)
+        if (songIds.isEmpty()) return emptyMap()
+        return mutex.withLock {
+            withContext(Dispatchers.Default) {
+                localMediaAssetSnapshots(songIds, existingIosAssetFileNames())
+            }
+        }
+    }
+
+    private fun existingIosAssetFileNames(): List<String> {
+        val directory = iosDownloadDirectoryPath()
+        return if (NSFileManager.defaultManager.fileExistsAtPath(directory)) {
+            iosAssetFileNames(directory)
+        } else {
+            emptyList()
         }
     }
 

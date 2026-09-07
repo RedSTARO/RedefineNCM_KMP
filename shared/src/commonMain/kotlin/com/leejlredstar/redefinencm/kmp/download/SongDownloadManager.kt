@@ -26,7 +26,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -256,15 +255,9 @@ class SongDownloadManager(
                 is DownloadScanResult.Success -> scan.snapshots.associateBy { it.id }
                 is DownloadScanResult.Failure -> DownloadedSongsCache.snapshot()
             }
-            val localAssets = supervisorScope {
-                acceptedSongs.mapNotNull { song ->
-                    if (song.id !in localFiles) return@mapNotNull null
-                    async {
-                        song.id to runCatching { localMediaAssets.inspect(song.id) }
-                            .getOrDefault(LocalMediaAssetSnapshot())
-                    }
-                }.awaitAll().toMap()
-            }
+            val localAssets = inspectLocalAssets(
+                acceptedSongs.mapNotNull { song -> song.id.takeIf { it in localFiles } },
+            )
             val newTasks = acceptedSongs.map {
                 it.toDownloadTask(playlistId, localFiles, localAssets)
             }
@@ -765,14 +758,7 @@ class SongDownloadManager(
         } else {
             repo.getSongDetails(localOnlyIds).associateBy { it.id }
         }
-        val localAssets = supervisorScope {
-            localFiles.keys.map { songId ->
-                async {
-                    songId to runCatching { localMediaAssets.inspect(songId) }
-                        .getOrDefault(LocalMediaAssetSnapshot())
-                }
-            }.awaitAll().toMap()
-        }
+        val localAssets = inspectLocalAssets(localFiles.keys)
         _tasks.update { tasks ->
             reconcileDownloadTasksWithLocalLibrary(
                 tasks = tasks,
@@ -782,6 +768,18 @@ class SongDownloadManager(
             )
         }
         return null
+    }
+
+    /**
+     * One listing for every song; a store that cannot be read leaves each song with an empty
+     * snapshot, the same outcome a failed per-song inspection used to have.
+     */
+    private suspend fun inspectLocalAssets(
+        songIds: Collection<Long>,
+    ): Map<Long, LocalMediaAssetSnapshot> {
+        if (songIds.isEmpty()) return emptyMap()
+        return runCatching { localMediaAssets.inspectAll(songIds) }
+            .getOrElse { songIds.associateWith { LocalMediaAssetSnapshot() } }
     }
 
     private fun ensureWorker() {

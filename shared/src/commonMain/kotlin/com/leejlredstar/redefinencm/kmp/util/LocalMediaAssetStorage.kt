@@ -42,6 +42,16 @@ expect object LocalMediaAssetStorage {
 
     suspend fun inspect(songId: Long): LocalMediaAssetSnapshot
 
+    /**
+     * [inspect] for every id in [songIds] from one listing of the store.
+     *
+     * Reconciling the download queue with the local library inspects every local song. Doing
+     * that one song at a time listed the whole download directory once per song: with a few
+     * hundred songs beside a couple of thousand sidecars that was over a million directory
+     * entries materialised per sync, several seconds of I/O and half a gigabyte of garbage.
+     */
+    suspend fun inspectAll(songIds: Collection<Long>): Map<Long, LocalMediaAssetSnapshot>
+
     suspend fun resolveArtworkUri(songId: Long): String?
 
     fun releaseArtworkUri(uri: String)
@@ -152,6 +162,35 @@ internal fun localMediaAssetSnapshot(
         lyricFileName = primaryLyric?.second,
         artworkFileName = artwork,
     )
+}
+
+/**
+ * [localMediaAssetSnapshot] for every id in [songIds] against one listing.
+ *
+ * Every sidecar name starts with its song id, so the listing is bucketed by that leading
+ * segment once and each song only looks at its own names. N songs cost O(N + files) here
+ * instead of the O(N × files) of N separate calls. Ids without files map to an empty snapshot.
+ */
+internal fun localMediaAssetSnapshots(
+    songIds: Collection<Long>,
+    fileNames: Iterable<String>,
+): Map<Long, LocalMediaAssetSnapshot> {
+    songIds.forEach(::requireLocalMediaSongId)
+    val namesBySong = HashMap<Long, MutableList<String>>()
+    for (fileName in fileNames) {
+        val songId = leadingLocalMediaSongId(fileName) ?: continue
+        namesBySong.getOrPut(songId) { ArrayList(2) } += fileName
+    }
+    return songIds.associateWith { songId ->
+        localMediaAssetSnapshot(songId, namesBySong[songId].orEmpty())
+    }
+}
+
+/** The `<songId>` segment a sidecar or audio file name starts with, or null for other names. */
+internal fun leadingLocalMediaSongId(fileName: String): Long? {
+    val dot = fileName.indexOf('.')
+    if (dot <= 0) return null
+    return fileName.substring(0, dot).toLongOrNull()?.takeIf { it > 0L }
 }
 
 private val LOCAL_LYRIC_SUFFIXES = setOf(

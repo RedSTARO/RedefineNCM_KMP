@@ -119,6 +119,17 @@ actual object LocalMediaAssetStorage {
         }
     }
 
+    actual suspend fun inspectAll(songIds: Collection<Long>): Map<Long, LocalMediaAssetSnapshot> {
+        songIds.forEach(::requireLocalMediaSongId)
+        // The OPFS bridge filters the directory by song id on the JavaScript side, so one lock
+        // spans the calls but each song still lists its own names.
+        return webLocalMediaAssetMutex.withLock {
+            songIds.distinct().associateWith { songId ->
+                localMediaAssetSnapshot(songId, listWebAssetNames(songId))
+            }
+        }
+    }
+
     actual suspend fun resolveArtworkUri(songId: Long): String? {
         requireLocalMediaSongId(songId)
         return webLocalMediaAssetMutex.withLock {

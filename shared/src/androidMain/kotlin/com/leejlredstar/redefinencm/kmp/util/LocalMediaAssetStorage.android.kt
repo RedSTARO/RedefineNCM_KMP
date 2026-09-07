@@ -108,6 +108,31 @@ actual object LocalMediaAssetStorage {
         }
     }
 
+    actual suspend fun inspectAll(songIds: Collection<Long>): Map<Long, LocalMediaAssetSnapshot> {
+        songIds.forEach(::requireLocalMediaSongId)
+        if (songIds.isEmpty()) return emptyMap()
+        return mutex.withLock {
+            withContext(Dispatchers.IO) {
+                val context = KoinPlatform.getKoin().get<Context>()
+                val ids = songIds.toSet()
+                var sharedNames = sharedAssetFileNames(context)
+                // `inspect` moves artwork out of shared storage for every song it looks at;
+                // one listing says which songs still keep artwork there, so only those pay for
+                // the migration and its per-song MediaStore query.
+                val stillShared = sharedNames
+                    .mapNotNullTo(HashSet()) { fileName ->
+                        leadingLocalMediaSongId(fileName)
+                            ?.takeIf { it in ids && isLocalArtworkSidecarFileName(it, fileName) }
+                    }
+                if (stillShared.isNotEmpty()) {
+                    stillShared.forEach { migrateSharedArtworkToPrivate(context, it) }
+                    sharedNames = sharedAssetFileNames(context)
+                }
+                localMediaAssetSnapshots(ids, sharedNames + privateArtworkFileNames(context))
+            }
+        }
+    }
+
     actual suspend fun resolveArtworkUri(songId: Long): String? {
         requireLocalMediaSongId(songId)
         return mutex.withLock {
@@ -273,6 +298,14 @@ private fun privateArtworkFiles(
         .filter(File::isFile)
         .filter { isLocalArtworkSidecarFileName(songId, it.name) }
         .toList()
+
+/** Every non-pending name in shared storage; transaction files start with `.` and carry no id. */
+private fun sharedAssetFileNames(context: Context): List<String> =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        queryAllMediaStoreRows(context).map { it.fileName }
+    } else {
+        legacyAssetFileNames()
+    }
 
 private fun privateArtworkFileNames(context: Context): List<String> =
     privateArtworkDirectories(context)

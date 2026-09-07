@@ -145,6 +145,9 @@ class LocalMediaAssets(
     suspend fun inspect(songId: Long): LocalMediaAssetSnapshot =
         LocalMediaAssetStorage.inspect(songId)
 
+    suspend fun inspectAll(songIds: Collection<Long>): Map<Long, LocalMediaAssetSnapshot> =
+        LocalMediaAssetStorage.inspectAll(songIds)
+
     suspend fun resolveArtworkUri(songId: Long): String? =
         LocalMediaAssetStorage.resolveArtworkUri(songId)
 

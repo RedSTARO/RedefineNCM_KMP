@@ -135,6 +135,16 @@ actual object LocalMediaAssetStorage {
         }
     }
 
+    actual suspend fun inspectAll(songIds: Collection<Long>): Map<Long, LocalMediaAssetSnapshot> {
+        songIds.forEach(::requireLocalMediaSongId)
+        if (songIds.isEmpty()) return emptyMap()
+        return mutex.withLock {
+            withContext(Dispatchers.IO) {
+                localMediaAssetSnapshots(songIds, assetFileNames(jvmDownloadDirectory()))
+            }
+        }
+    }
+
     actual suspend fun resolveArtworkUri(songId: Long): String? {
         requireLocalMediaSongId(songId)
         return mutex.withLock {
