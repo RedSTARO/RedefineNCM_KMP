@@ -179,7 +179,10 @@ scoped to the current media ID.
 
 The playback control island (`AutoHideMiniPlayerController`) is one common Compose surface on all
 four targets, and the Android presentation is the baseline: the same 3.6-second auto-hide on
-every platform. Desktop's former 30-second timeout belonged to the in-page `#desktop-console`,
+every platform. Its one desktop-only element is the output volume row of the expanded island,
+a slider dedicated to volume between the playback card and the action pill: phones leave
+volume to the hardware keys and the system panel, while the full-screen lyric page covers the
+desktop main window's volume strip. Desktop's former 30-second timeout belonged to the in-page `#desktop-console`,
 which existed only because Compose could not draw above the WebView2 child HWND; it went with
 the page. `DesktopOverlayWindow` was that same workaround and is removed — desktop uses normal
 Compose transitions, the in-scene snackbar host, and `ModalWideNavigationRail`.
@@ -1021,7 +1024,7 @@ feature gap; platform integrations use target-specific actuals:
 - [x] `USE_NATIVE_AMLL_RENDERER` is dropped from `SettingKeys`, the Settings UI and the backup
       schema; backups written while the setting existed still import.
 - [x] The control island is one common surface on all four targets with Android's 3.6-second
-      auto-hide everywhere.
+      auto-hide everywhere; desktop adds a dedicated output volume slider to the expanded island.
 - [x] This branch passes `:shared:jvmTest`, `:desktopApp:compileKotlin`,
       `:shared:compileAndroidMain`, `:androidApp:assembleDebug`,
       `:shared:compileKotlinWasmJs`, `:shared:wasmJsBrowserTest`, and

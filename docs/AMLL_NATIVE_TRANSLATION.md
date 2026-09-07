@@ -47,7 +47,7 @@
 | `player.html`：`setSongDetails`、`setSongWiki*`、media-id guard | `NativeAmllScreen` 的 `SongWikiUiState.scopedTo` 及 `NowPlayingViewModel` 的歌曲详情状态 | 不再经过 JavaScript bridge；仍以当前媒体 ID 丢弃过期结果，切歌关闭详情。 |
 | `player.html`：`playWikiDynamicCover()`、`pauseWikiDynamicCover()` | `NativeAmllScreen`：`shouldPlayAmllDynamicBackground` | 正常动效下全屏视频持续播放到详情视频呈现首帧为止；只有减少动态效果会立即暂停。 |
 | `player.html`：`#dynamic-bg` 的视频元素 | `ui/component/NativeDynamicCoverLayer.kt` 及各平台 actual | 库的 `AmllBackground` 通过 `AmllDynamicCoverLayer` 槽位取帧；http(s) 判定、overscan、模糊、缩放、亮度和遮罩仍由库计算。Android 用 Media3 + `TextureView`，iOS 用 `AVPlayerLayer` / `UIKitView`，Desktop 用 FFmpeg 解码为 `ImageBitmap`，Web 用 `HTMLVideoElement`。 |
-| `player.html`：`#desktop-console` 与全部 `console-*` 元素 | `ui/component/AutoHideMiniPlayerController.kt` | 桌面端曾把播放控制做进 WebView 页内，因为 Compose 层无法盖住 WebView2 子 HWND。现在四端统一使用 Android 的控制岛屿：标题/艺人、进度与拖动、上一首/播放暂停/下一首、收藏、随机、队列、评论，另有折叠态与歌词详情展开。自动收起延时四端统一为 `3600 ms`（Android 基准），桌面端 30 秒特例已随页内控制台一同删除。 |
+| `player.html`：`#desktop-console` 与全部 `console-*` 元素 | `ui/component/AutoHideMiniPlayerController.kt` | 桌面端曾把播放控制做进 WebView 页内，因为 Compose 层无法盖住 WebView2 子 HWND。现在四端统一使用 Android 的控制岛屿：标题/艺人、进度与拖动、上一首/播放暂停/下一首、收藏、随机、队列、评论，另有折叠态与歌词详情展开；桌面端展开态另有独占的输出音量滑块（手机端音量由硬件键与系统面板负责）。自动收起延时四端统一为 `3600 ms`（Android 基准），桌面端 30 秒特例已随页内控制台一同删除。 |
 | `entry.js`：`LyricPlayer` 初始化、`setCurrentTime`、`setPlaying` | `NativeAmllScreen` 与库的 `AmllPlayerEngine` | Compose 生命周期和 `withFrameNanos` 替代脚本加载、`requestAnimationFrame` 与 bridge 初始化。 |
 | `player.html`：`loadEngine`、`signalReady`、`showError`、`setStatus`、`#loading` | `lyric/LyricStateOverlay.kt` | bundle 加载状态不再存在；剩下的加载 / 空 / 错误 / 重试状态由公共 Compose overlay 呈现。 |
 | `player.html`：`applyViewportSize()` | `NativeAmllScreen` 的 `BoxWithConstraints` | DOM 显式尺寸写入由 Compose 约束替代。 |

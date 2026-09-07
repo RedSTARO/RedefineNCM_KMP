@@ -18,6 +18,9 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -77,9 +80,11 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.leejlredstar.redefinencm.kmp.getPlatform
 import com.leejlredstar.redefinencm.kmp.lyric.LyricCapabilityLevel
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSource
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
@@ -93,6 +98,7 @@ import com.leejlredstar.redefinencm.kmp.viewmodel.lyricCapabilityLevel
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 @Composable
 fun AutoHideMiniPlayerController(
@@ -107,10 +113,17 @@ fun AutoHideMiniPlayerController(
     onOverlayVisibilityChanged: (Boolean) -> Unit = {},
     onSheetVisibilityChanged: (Boolean) -> Unit = {},
     onExpandedChanged: (Boolean) -> Unit = {},
+    /**
+     * Whether the expanded island carries the output volume row. Phones hand volume to the
+     * hardware keys and the system panel; the desktop's only other control is the main
+     * window's strip, which the full-screen lyric page covers.
+     */
+    showOutputVolume: Boolean = remember { getPlatform().isDesktop },
     viewModel: NowPlayingViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
 ) {
     val nowPlaying = rememberNowPlayingUiState(player, viewModel)
+    val outputVolume by player.volume.collectAsState()
     val media = nowPlaying.media
     val isPlaying = nowPlaying.isPlaying
     val position = nowPlaying.position
@@ -131,6 +144,8 @@ fun AutoHideMiniPlayerController(
     var showQueue by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
     var showLyricDetails by remember { mutableStateOf(false) }
+    // A held volume thumb keeps the island open; the auto-hide timer restarts on release.
+    var adjustingOutputVolume by remember { mutableStateOf(false) }
 
     val hasMedia = nowPlaying.hasMedia
     val isFavorite = nowPlaying.isFavorite
@@ -180,9 +195,12 @@ fun AutoHideMiniPlayerController(
         showQueue,
         showComments,
         showLyricDetails,
+        adjustingOutputVolume,
         autoHideDelayMillis,
     ) {
-        if (!visible || showQueue || showComments || showLyricDetails) return@LaunchedEffect
+        if (!visible || showQueue || showComments || showLyricDetails || adjustingOutputVolume) {
+            return@LaunchedEffect
+        }
         delay(autoHideDelayMillis.coerceAtLeast(0L))
         if (!showQueue && !showComments && !showLyricDetails) collapse()
     }
@@ -288,6 +306,12 @@ fun AutoHideMiniPlayerController(
                     onLyricDetailsExpandedChange = { expanded ->
                         if (expanded) reveal()
                         showLyricDetails = expanded
+                    },
+                    showOutputVolume = showOutputVolume,
+                    outputVolume = outputVolume,
+                    onOutputVolumeChange = player::setVolume,
+                    onOutputVolumeAdjustingChange = { adjusting ->
+                        adjustingOutputVolume = adjusting
                     },
                 )
             } else if (showCollapsedWhenHidden) {
@@ -408,6 +432,10 @@ private fun FullLyricControlConsole(
     onComments: () -> Unit,
     onShuffle: () -> Unit,
     onLyricDetailsExpandedChange: (Boolean) -> Unit,
+    showOutputVolume: Boolean,
+    outputVolume: Float,
+    onOutputVolumeChange: (Float) -> Unit,
+    onOutputVolumeAdjustingChange: (Boolean) -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -435,6 +463,15 @@ private fun FullLyricControlConsole(
             onNext = onNext,
             onLyricDetailsExpandedChange = onLyricDetailsExpandedChange,
         )
+        if (showOutputVolume) {
+            OutputVolumeControl(
+                volume = outputVolume,
+                accentPalette = accentPalette,
+                forceOpaqueSurface = forceOpaqueSurfaces,
+                onVolumeChange = onOutputVolumeChange,
+                onAdjustingChange = onOutputVolumeAdjustingChange,
+            )
+        }
         Surface(
             modifier = Modifier
                 .padding(horizontal = 16.dp)
@@ -518,6 +555,116 @@ private fun FullLyricControlConsole(
         }
     }
 }
+
+/**
+ * The output volume row of the expanded island: one slider that does nothing but volume.
+ *
+ * It sits between the playback card and the action pill, in the pill's quiet colours, and
+ * writes straight to the player so the level is audible while the thumb moves. The icon
+ * follows the level; the label states it.
+ */
+@Composable
+private fun OutputVolumeControl(
+    volume: Float,
+    accentPalette: ContentAccentPalette,
+    forceOpaqueSurface: Boolean,
+    onVolumeChange: (Float) -> Unit,
+    onAdjustingChange: (Boolean) -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val dragged by interactionSource.collectIsDraggedAsState()
+    val pressed by interactionSource.collectIsPressedAsState()
+    val adjusting = dragged || pressed
+    LaunchedEffect(adjusting) {
+        onAdjustingChange(adjusting)
+    }
+    DisposableEffect(Unit) {
+        onDispose { onAdjustingChange(false) }
+    }
+    val level = outputVolumeLevel(volume)
+    val label = formatOutputVolumePercent(volume)
+
+    Surface(
+        modifier = Modifier
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 8.dp)
+            .widthIn(max = 620.dp)
+            .fillMaxWidth()
+            .height(56.dp),
+        shape = CircleShape,
+        color = accentPalette.quietContainer.copy(
+            alpha = if (forceOpaqueSurface) 1f else 0.88f,
+        ),
+        contentColor = accentPalette.onQuietContainer,
+        tonalElevation = 0.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 20.dp, end = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = when (level) {
+                    OutputVolumeLevel.MUTED -> AppIcons.VolumeOff
+                    OutputVolumeLevel.LOW -> AppIcons.VolumeDown
+                    OutputVolumeLevel.HIGH -> AppIcons.VolumeUp
+                },
+                contentDescription = null,
+                tint = accentPalette.secondaryOnQuietContainer,
+                modifier = Modifier.size(20.dp),
+            )
+            Slider(
+                value = volume.coerceIn(0f, 1f),
+                onValueChange = { updated -> onVolumeChange(updated.coerceIn(0f, 1f)) },
+                valueRange = 0f..1f,
+                interactionSource = interactionSource,
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = ExpressiveLayout.MinimumTouchTarget)
+                    .semantics { contentDescription = "输出音量 $label" },
+                colors = SliderDefaults.colors(
+                    thumbColor = accentPalette.onQuietContainer,
+                    activeTrackColor = accentPalette.onQuietContainer,
+                    inactiveTrackColor = accentPalette.onQuietContainer.copy(alpha = 0.22f),
+                ),
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                color = accentPalette.secondaryOnQuietContainer,
+                textAlign = TextAlign.End,
+                maxLines = 1,
+                modifier = Modifier.widthIn(min = 40.dp),
+            )
+        }
+    }
+}
+
+internal enum class OutputVolumeLevel {
+    MUTED,
+    LOW,
+    HIGH,
+}
+
+/**
+ * Which of the three speaker glyphs represents [volume]. It follows the whole percentage the
+ * label shows and the player persists, so a level that reads `0%` is drawn muted rather than
+ * as a faint sound, and the outer wave appears from `50%`.
+ */
+internal fun outputVolumeLevel(volume: Float): OutputVolumeLevel {
+    val percent = outputVolumePercent(volume)
+    return when {
+        percent == 0 -> OutputVolumeLevel.MUTED
+        percent < 50 -> OutputVolumeLevel.LOW
+        else -> OutputVolumeLevel.HIGH
+    }
+}
+
+/** The level as the whole percentage the player persists, e.g. `72%`. */
+internal fun formatOutputVolumePercent(volume: Float): String = "${outputVolumePercent(volume)}%"
+
+private fun outputVolumePercent(volume: Float): Int =
+    if (volume.isNaN()) 0 else (volume.coerceIn(0f, 1f) * 100f).roundToInt()
 
 @Composable
 private fun ExpandedPlaybackCard(

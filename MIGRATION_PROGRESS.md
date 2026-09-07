@@ -136,7 +136,7 @@ Kotlin / Compose / AGP 版本和目标集必须保持一致。
 | 响应式 AMLL 布局 | ✅ 全部由 common Compose 负责 |
 | 歌词 | ✅ 共用逐行/逐字时序、翻译与罗马音、点击 seek、自动跟随与手动滚动恢复 |
 | 视觉与动效 | ✅ 共用专辑色渐变、模糊封面、焦点行层级、无障碍与减少动态效果 |
-| 控制岛屿 | ✅ `AutoHideMiniPlayerController` 四端同一份，统一按 Android 基准 3600 ms 自动收起 |
+| 控制岛屿 | ✅ `AutoHideMiniPlayerController` 四端同一份，统一按 Android 基准 3600 ms 自动收起；桌面端展开态额外有独占的输出音量滑块 |
 | 音乐百科 | ✅ `SongWikiDetailsButton` + `SongWikiDetailsSheet` 为共用响应式 Compose surface，并保留 media-ID 防串歌约束 |
 | 动态封面 | ✅ 只保留 `NativeDynamicCoverLayer` 小型平台叶子；Android=Media3/TextureView、iOS=AVPlayerLayer/UIKitView、Desktop=FFmpeg 帧转 Compose ImageBitmap、Web=HTMLVideoElement/CanvasKit 互操作 |
 | Desktop 层级 | ✅ 与其他端一致的普通 Compose 层级；顶层 overlay 窗口已随 WebView2 删除 |
