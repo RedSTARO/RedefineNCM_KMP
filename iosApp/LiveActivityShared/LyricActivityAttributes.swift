@@ -4,7 +4,7 @@ import Foundation
 /// Live Activity attributes for the now-playing lyric (灵动岛 / Dynamic Island + Lock Screen).
 ///
 /// `ContentState` is the per-update dynamic data; it mirrors the Kotlin `LiveActivityData`
-/// produced by the shared `LyricNotificationController`. The static part (`appName`) is set once
+/// produced by the shared `IosLiveActivity` surface. The static part (`appName`) is set once
 /// when the activity starts.
 ///
 /// This file is the single declaration of the type. It lives in its own synchronized folder so

@@ -22,9 +22,6 @@ import platform.posix.time
  * - The `LyricWidget` extension renders the ContentState on the Lock Screen + Dynamic Island.
  * - Text flows via ActivityKit ContentState (no App Group needed). Album artwork inside the
  *   Live Activity would require App-Group image caching (TODO).
- */
-/**
- * iOS's lyric surface: a Live Activity on the Lock Screen and in the Dynamic Island.
  *
  * Plain [LyricSurface]. ActivityKit owns whether it appears, so there is nothing for Settings to
  * switch and it had carried six stub members saying so.

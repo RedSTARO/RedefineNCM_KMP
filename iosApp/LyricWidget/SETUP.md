@@ -12,11 +12,11 @@ target, and renders the ActivityKit `ContentState` pushed by `LiveActivityManage
 | `LyricWidget/LyricLiveActivity.swift` | widget | Lock Screen + Dynamic Island UI (`ActivityConfiguration`) |
 | `LyricWidget/LyricWidgetBundle.swift` | widget | `@main WidgetBundle` entry point |
 | `LyricWidget/Info.plist` | widget | `NSExtensionPointIdentifier = com.apple.widgetkit-extension` |
-| `iosApp/LiveActivityManager.swift` | app | App-side `ActivityAttributes`; observes Kotlin `LyricNotificationController` → `Activity.request/update/end` |
+| `iosApp/LiveActivityManager.swift` | app | App-side `ActivityAttributes`; observes Kotlin `IosLiveActivity` → `Activity.request/update/end` |
 | `iosApp/iOSApp.swift` (edited) | app | Calls `LiveActivityManager.shared.startObserving()` at launch |
 | `iosApp/Info.plist` (edited) | app | `NSSupportsLiveActivities = true` |
 
-Kotlin side: `LyricNotificationController` (iosMain) now exposes `startObserving(onChange:)` /
+Kotlin side: `IosLiveActivity` (iosMain) exposes `startObserving(onChange:)` /
 `stopObserving()` and the playback/lyric pipeline feeds it through `updateLyric(...)`.
 
 ## macOS validation

@@ -479,7 +479,7 @@ RedefineNCM_KMP/
 │       │   │   ├── PlatformPlayer.kt    # interface + PlayerState enum + MediaInfo + StreamUrlResolver
 │       │   │   └── LyricBus.kt          # Shared lyric/position event bus (MutableStateFlow)
 │       │   ├── notification/
-│       │   │   └── LyricNotificationController.kt   # expect object (lyric display surface)
+│       │   │   └── LyricNotificationController.kt   # LyricSurface interfaces + expect val
 │       │   ├── recognition/
 │       │   │   ├── AudioFingerprint.kt   # Pure-Kotlin fingerprint extractor + codec
 │       │   │   ├── MicrophoneRecorder.kt # common capture contract
@@ -566,7 +566,7 @@ account-data retries or an in-process login, and is cancelled if the account is 
    currentMedia, queue, currentIndex, shuffleEnabled) to the UI.
 4. Lyric pipeline: `PlatformPlayer.currentMedia` → `LyricResolver` applies the persisted source
    policy → common timed lines → `PlatformPlayer.position` matches the current line → UI scroll **and**
-   `LyricNotificationController.updateLyric(...)` (notification / Dynamic Island / floating
+   `lyricSurface.updateLyric(...)` (notification / Dynamic Island / floating
    window).
 
 ### Lyric source contract
@@ -913,7 +913,7 @@ Applies to all platforms, and the original Android repo is kept aligned (goal #3
   actions); Mini-player FAB (image-derived color w/ adaptive content luminance via
   `contrastingTextColor()`, oversized rounded shape).
 - **Desktop floating window:** frameless/translucent, blur-behind, current lyric + mini art +
-  compact controls, always-on-top toggle (part of the JVM `LyricNotificationController`).
+  compact controls, always-on-top toggle (part of `DesktopLyricWindow`).
 - **iOS Live Activity:** Lock Screen + Dynamic Island — artwork thumbnail, title, artist,
   current lyric, synced to position.
 
@@ -1162,7 +1162,7 @@ feature gap; platform integrations use target-specific actuals:
         ExoPlayer in a `MediaSession` for OS media controls; registered in `AndroidManifest.xml`
         with `foregroundServiceType="mediaPlayback"` + required foreground-service permissions.
       - Lyric sync added to `NowPlayingViewModel.initLyricSync()` — combines `currentPosition` +
-        `lyricMap` → `lyricIndex` + calls `LyricNotificationController.updateLyric(...)`.
+        `lyricMap` → `lyricIndex` + calls `lyricSurface.updateLyric(...)`.
       - **Build-verified:** `:shared:compileAndroidMain`, `:androidApp:compileDebugKotlin`,
         `:androidApp:assembleDebug` (APK), `:shared:compileKotlinJvm`, `:shared:jvmTest` all green.
 - [x] **Desktop native media controls are implemented.** Windows SMTC uses direct JNA/COM WinRT

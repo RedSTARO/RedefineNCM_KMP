@@ -16,8 +16,10 @@ import com.leejlredstar.redefinencm.kmp.util.canPostNotifications
  * 进度条/封面/上一首/播放/下一首由 Media3 的原生 MediaStyle 媒体通知提供
  * （PlaybackService 的 MediaSession + DefaultMediaNotificationProvider），
  * 两个通知各司其职，与原版行为一致。
+ *
+ * An [OptionalLyricSurface]: Settings can switch this one off, and the Media3 notification
+ * stays either way.
  */
-/** Android's lyric surface: a live-update notification the user can switch off. */
 object AndroidLyricNotification : OptionalLyricSurface {
     private const val CHANNEL_ID = "live_update_lyric"
     private const val NOTIFICATION_ID = 0x4C595243 // "LYRC"

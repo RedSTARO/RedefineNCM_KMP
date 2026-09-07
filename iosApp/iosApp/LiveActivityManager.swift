@@ -2,7 +2,7 @@ import ActivityKit
 import Foundation
 import Shared
 
-/// Bridges the shared Kotlin `LyricNotificationController` (iOS actual) to ActivityKit.
+/// Bridges the shared Kotlin `IosLiveActivity` surface to ActivityKit.
 ///
 /// Observes the lyric data stream from Kotlin and starts / updates / ends the Live Activity that
 /// the `LyricWidget` extension renders on the Lock Screen and in the Dynamic Island (灵动岛).
@@ -36,13 +36,13 @@ final class LiveActivityManager {
     func startObserving() {
         stopped = false
         startWorkerIfNeeded()
-        LyricNotificationController.shared.startObserving { [weak self] data in
+        IosLiveActivity.shared.startObserving { [weak self] data in
             Task { @MainActor [weak self] in self?.handle(data) }
         }
     }
 
     func stopObserving() {
-        LyricNotificationController.shared.stopObserving()
+        IosLiveActivity.shared.stopObserving()
         stopped = true
         generation &+= 1
         pendingUpdate = nil
