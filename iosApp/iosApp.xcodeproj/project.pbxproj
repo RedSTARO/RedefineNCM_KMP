@@ -65,6 +65,11 @@
 			path = Configuration;
 			sourceTree = "<group>";
 		};
+		A1B2C3D4E5F60718293A4B60 /* LiveActivityShared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = LiveActivityShared;
+			sourceTree = "<group>";
+		};
 		A1B2C3D4E5F60718293A4B55 /* LyricWidget */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -114,6 +119,7 @@
 			isa = PBXGroup;
 			children = (
 				1FE32CD77B15EC595D029593 /* Configuration */,
+				A1B2C3D4E5F60718293A4B60 /* LiveActivityShared */,
 				E88BE7FD370ED99EC0288AE4 /* iosApp */,
 				A1B2C3D4E5F60718293A4B55 /* LyricWidget */,
 				AM11A55E7500000000AMLL001 /* amll */,
@@ -141,6 +147,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				E88BE7FD370ED99EC0288AE4 /* iosApp */,
+				A1B2C3D4E5F60718293A4B60 /* LiveActivityShared */,
 			);
 			name = iosApp;
 			packageProductDependencies = (
@@ -163,6 +170,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				A1B2C3D4E5F60718293A4B55 /* LyricWidget */,
+				A1B2C3D4E5F60718293A4B60 /* LiveActivityShared */,
 			);
 			name = LyricWidget;
 			packageProductDependencies = (

@@ -8,7 +8,7 @@ target, and renders the ActivityKit `ContentState` pushed by `LiveActivityManage
 
 | File | Target it belongs to | Purpose |
 |---|---|---|
-| `LyricWidget/LyricActivityAttributes.swift` | widget | Widget-side `ActivityAttributes` + `ContentState` (mirrors Kotlin `LiveActivityData`) |
+| `LiveActivityShared/LyricActivityAttributes.swift` | app + widget | Widget-side `ActivityAttributes` + `ContentState` (mirrors Kotlin `LiveActivityData`) |
 | `LyricWidget/LyricLiveActivity.swift` | widget | Lock Screen + Dynamic Island UI (`ActivityConfiguration`) |
 | `LyricWidget/LyricWidgetBundle.swift` | widget | `@main WidgetBundle` entry point |
 | `LyricWidget/Info.plist` | widget | `NSExtensionPointIdentifier = com.apple.widgetkit-extension` |

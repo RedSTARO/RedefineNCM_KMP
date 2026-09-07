@@ -7,9 +7,11 @@ import Foundation
 /// produced by the shared `LyricNotificationController`. The static part (`appName`) is set once
 /// when the activity starts.
 ///
-/// This file belongs to the widget target. The app target keeps a structurally identical mirror
-/// in `LiveActivityManager.swift`; the two targets compile in separate products and therefore
-/// cannot share a Swift source declaration directly.
+/// This file is the single declaration of the type. It lives in its own synchronized folder so
+/// that both the app target and the widget extension compile it: ActivityKit matches the app's
+/// `Activity<LyricActivityAttributes>` against the widget's `ActivityConfiguration(for:)` by the
+/// shape of `ContentState`, so a hand-mirrored second copy that drifts stops the Live Activity
+/// from rendering with nothing at compile time to say so.
 struct LyricActivityAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
         var title: String
