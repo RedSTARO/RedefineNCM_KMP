@@ -4,7 +4,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -62,7 +61,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.key.Key
@@ -91,8 +89,7 @@ import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
-import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
-import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
+import com.leejlredstar.redefinencm.kmp.ui.theme.rememberArtworkAccent
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.lyricCapabilityLevel
 import kotlinx.coroutines.delay
@@ -141,8 +138,7 @@ fun AutoHideMiniPlayerController(
 
     var visible by remember { mutableStateOf(initialExpanded) }
     var revealRequest by remember { mutableIntStateOf(0) }
-    var showQueue by remember { mutableStateOf(false) }
-    var showComments by remember { mutableStateOf(false) }
+    val sheets = rememberTransportSheetsState()
     var showLyricDetails by remember { mutableStateOf(false) }
     // A held volume thumb keeps the island open; the auto-hide timer restarts on release.
     var adjustingOutputVolume by remember { mutableStateOf(false) }
@@ -157,17 +153,13 @@ fun AutoHideMiniPlayerController(
     val totalDuration = nowPlaying.totalDuration
     val progress = nowPlaying.progress
 
-    val defaultAccentColor = MaterialTheme.colorScheme.primaryContainer
-    var rawAccentColor by remember(media?.artworkUri, defaultAccentColor) {
-        mutableStateOf(defaultAccentColor)
-    }
-    val accentColor by animateColorAsState(
-        targetValue = rawAccentColor,
-        animationSpec = if (reducedMotion) snap() else spring(),
+    val artworkAccent = rememberArtworkAccent(
+        requestKey = media?.artworkUri,
         label = "fullLyricControlAccent",
     )
-    val accentPalette = contentAccentPalette(accentColor)
-    val extractAccent = rememberThemeColorExtractor(media?.artworkUri) { rawAccentColor = it }
+    val accentColor = artworkAccent.color
+    val accentPalette = artworkAccent.palette
+    val extractAccent = artworkAccent.extract
 
     fun setExpanded(expanded: Boolean) {
         onExpandedChanged(expanded)
@@ -192,21 +184,21 @@ fun AutoHideMiniPlayerController(
     LaunchedEffect(
         visible,
         revealRequest,
-        showQueue,
-        showComments,
+        sheets.showQueue,
+        sheets.showComments,
         showLyricDetails,
         adjustingOutputVolume,
         autoHideDelayMillis,
     ) {
-        if (!visible || showQueue || showComments || showLyricDetails || adjustingOutputVolume) {
+        if (!visible || sheets.anyOpen || showLyricDetails || adjustingOutputVolume) {
             return@LaunchedEffect
         }
         delay(autoHideDelayMillis.coerceAtLeast(0L))
-        if (!showQueue && !showComments && !showLyricDetails) collapse()
+        if (!sheets.anyOpen && !showLyricDetails) collapse()
     }
 
     val drawsController = visible || showCollapsedWhenHidden
-    val sheetVisible = showQueue || showComments
+    val sheetVisible = sheets.anyOpen
     val interactionSurfaceVisible = sheetVisible || showLyricDetails
     val overlayActive = drawsController || interactionSurfaceVisible
     DisposableEffect(overlayActive) {
@@ -222,9 +214,6 @@ fun AutoHideMiniPlayerController(
         }
     }
 
-    LaunchedEffect(showComments, media?.id) {
-        if (showComments) viewModel.getComments()
-    }
     LaunchedEffect(media?.id) {
         showLyricDetails = false
     }
@@ -293,11 +282,11 @@ fun AutoHideMiniPlayerController(
                     onQueue = {
                         reveal()
                         viewModel.onPlaylistClick()
-                        showQueue = true
+                        sheets.openQueue()
                     },
                     onComments = {
                         reveal()
-                        showComments = true
+                        sheets.openComments()
                     },
                     onShuffle = {
                         reveal()
@@ -334,31 +323,16 @@ fun AutoHideMiniPlayerController(
             }
         }
 
-        if (showQueue) {
-            QueueBottomSheet(
-                playlist = playList,
-                currentIndex = currentIndex,
-                accentPalette = accentPalette,
-                onDismiss = { showQueue = false },
-                onSeekClick = { index ->
-                    viewModel.onSeekClick(index)
-                    reveal()
-                },
-            )
-        }
-
-        if (showComments) {
-            CommentBottomSheet(
-                comments = comments?.hotComments?.ifEmpty { comments?.comments } ?: emptyList(),
-                hasLoadedData = comments != null,
-                accentPalette = accentPalette,
-                onDismiss = { showComments = false },
-                isLoading = commentsLoading,
-                isFromCache = commentsFromCache,
-                errorMessage = commentsLoadError,
-                onRetry = viewModel::getComments,
-            )
-        }
+        TransportSheets(
+            state = sheets,
+            nowPlaying = nowPlaying,
+            accentPalette = accentPalette,
+            viewModel = viewModel,
+            onSeekClick = { index ->
+                viewModel.onSeekClick(index)
+                reveal()
+            },
+        )
     }
 }
 
@@ -1138,11 +1112,4 @@ private fun CollapsedProgressController(
             )
         }
     }
-}
-
-internal fun formatPlaybackDuration(millis: Long): String {
-    val totalSeconds = millis.coerceAtLeast(0L) / 1000L
-    val minutes = totalSeconds / 60L
-    val seconds = totalSeconds % 60L
-    return "$minutes:${seconds.toString().padStart(2, '0')}"
 }

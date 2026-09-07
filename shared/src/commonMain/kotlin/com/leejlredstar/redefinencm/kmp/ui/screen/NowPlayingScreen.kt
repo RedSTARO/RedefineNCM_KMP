@@ -1,6 +1,5 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -26,7 +25,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconToggleButton
@@ -69,11 +67,13 @@ import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveArtwork
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.NowPlayingUiState
 import com.leejlredstar.redefinencm.kmp.ui.component.QueueBottomSheet
+import com.leejlredstar.redefinencm.kmp.ui.component.TransportSheets
+import com.leejlredstar.redefinencm.kmp.ui.component.formatPlaybackClock
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberNowPlayingUiState
+import com.leejlredstar.redefinencm.kmp.ui.component.rememberTransportSheetsState
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
-import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
-import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
+import com.leejlredstar.redefinencm.kmp.ui.theme.rememberArtworkAccent
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import org.koin.compose.koinInject
 
@@ -105,21 +105,16 @@ fun NowPlayingScreen(
     val reducedMotion = rememberReducedMotionEnabled()
     val motionScheme = MaterialTheme.motionScheme
 
-    val defaultAccent = MaterialTheme.colorScheme.primaryContainer
-    var rawAccent by remember(media?.artworkUri, defaultAccent) { mutableStateOf(defaultAccent) }
-    val accent by animateColorAsState(
-        targetValue = rawAccent,
-        animationSpec = if (reducedMotion) snap() else motionScheme.slowEffectsSpec(),
+    val artworkAccent = rememberArtworkAccent(
+        requestKey = media?.artworkUri,
+        animationSpec = motionScheme.slowEffectsSpec(),
         label = "nowPlayingAccent",
     )
-    val palette = contentAccentPalette(accent)
-    val extractAccent = rememberThemeColorExtractor(media?.artworkUri) { rawAccent = it }
+    val accent = artworkAccent.color
+    val palette = artworkAccent.palette
+    val extractAccent = artworkAccent.extract
 
-    var showQueue by remember { mutableStateOf(false) }
-    var showComments by remember { mutableStateOf(false) }
-    LaunchedEffect(showComments, media?.id) {
-        if (showComments) viewModel.getComments()
-    }
+    val sheets = rememberTransportSheetsState()
 
     Box(
         modifier = Modifier
@@ -187,9 +182,9 @@ fun NowPlayingScreen(
                     onShuffle = { enabled -> viewModel.onShuffleClick(enabled) },
                     onQueue = {
                         viewModel.onPlaylistClick()
-                        showQueue = true
+                        sheets.openQueue()
                     },
-                    onComments = { showComments = true },
+                    onComments = sheets::openComments,
                     onLyrics = onOpenLyrics,
                 )
             }
@@ -256,28 +251,12 @@ fun NowPlayingScreen(
         }
     }
 
-    if (showQueue) {
-        QueueBottomSheet(
-            playlist = nowPlaying.playList,
-            currentIndex = nowPlaying.currentIndex,
-            accentPalette = palette,
-            onDismiss = { showQueue = false },
-            onSeekClick = viewModel::onSeekClick,
-        )
-    }
-    if (showComments) {
-        CommentBottomSheet(
-            comments = nowPlaying.comments?.hotComments?.ifEmpty { nowPlaying.comments?.comments }
-                ?: emptyList(),
-            hasLoadedData = nowPlaying.comments != null,
-            accentPalette = palette,
-            onDismiss = { showComments = false },
-            isLoading = nowPlaying.commentsLoading,
-            isFromCache = nowPlaying.commentsFromCache,
-            errorMessage = nowPlaying.commentsLoadError,
-            onRetry = viewModel::getComments,
-        )
-    }
+    TransportSheets(
+        state = sheets,
+        nowPlaying = nowPlaying,
+        accentPalette = palette,
+        viewModel = viewModel,
+    )
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -495,13 +474,13 @@ private fun NowPlayingProgress(
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
             val clockStyle = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum")
             Text(
-                text = formatNowPlayingClock(displayPosition),
+                text = formatPlaybackClock(displayPosition),
                 style = clockStyle,
                 color = palette.secondaryOnPageMiddle,
             )
             Spacer(Modifier.weight(1f))
             Text(
-                text = formatNowPlayingClock(totalDuration),
+                text = formatPlaybackClock(totalDuration),
                 style = clockStyle,
                 color = palette.secondaryOnPageMiddle,
             )
@@ -669,18 +648,4 @@ private fun NowPlayingToolbar(
             }
         },
     )
-}
-
-/** `m:ss`, or `h:mm:ss` past an hour — the clock format the other transport surfaces use. */
-internal fun formatNowPlayingClock(positionMs: Long): String {
-    val totalSeconds = positionMs.coerceAtLeast(0L) / 1_000L
-    val hours = totalSeconds / 3_600L
-    val minutes = (totalSeconds % 3_600L) / 60L
-    val seconds = totalSeconds % 60L
-    val paddedSeconds = seconds.toString().padStart(2, '0')
-    return if (hours > 0L) {
-        "$hours:${minutes.toString().padStart(2, '0')}:$paddedSeconds"
-    } else {
-        "$minutes:$paddedSeconds"
-    }
 }

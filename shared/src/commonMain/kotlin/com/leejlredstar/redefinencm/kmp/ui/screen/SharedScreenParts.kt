@@ -1,7 +1,5 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,8 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.remember
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,9 +28,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -63,8 +56,7 @@ import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
-import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
-import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
+import com.leejlredstar.redefinencm.kmp.ui.theme.rememberArtworkAccent
 import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
@@ -94,17 +86,13 @@ fun SongRow(
 ) {
     val settings = koinInject<PlatformSettings>()
     val downloadManager = koinInject<SongDownloadManager>()
-    val fallbackAccent = MaterialTheme.colorScheme.primaryContainer
-    var imageAccent by remember(artworkUri, accentColor, fallbackAccent) {
-        mutableStateOf(accentColor ?: fallbackAccent)
-    }
-    val extractAccent = rememberThemeColorExtractor(artworkUri) { imageAccent = it }
-    val animatedAccent by animateColorAsState(
-        targetValue = accentColor ?: imageAccent,
-        animationSpec = spring(),
+    val artworkAccent = rememberArtworkAccent(
+        requestKey = artworkUri,
+        override = accentColor,
         label = "songRowAccent",
     )
-    val accentPalette = contentAccentPalette(animatedAccent)
+    val extractAccent = artworkAccent.extract
+    val accentPalette = artworkAccent.palette
     // Shared with the cover below so a row press morphs the artwork silhouette.
     val interactionSource = remember { MutableInteractionSource() }
     Surface(
@@ -233,18 +221,14 @@ fun CarouselItemScope.RecommendSquareCard(
 ) {
     // Fully opaque while the tile is near full width, gone by the time it is a sliver.
     val overlayAlpha = ((expandedFraction - 0.45f) / 0.35f).coerceIn(0f, 1f)
-    val fallbackAccent = MaterialTheme.colorScheme.tertiaryContainer
-    var imageAccent by remember(picUrl, fallbackAccent) { mutableStateOf(fallbackAccent) }
-    val extractAccent = rememberThemeColorExtractor(picUrl) { extracted ->
-        imageAccent = extracted
-        onAccentColor?.invoke(extracted)
-    }
-    val animatedAccent by animateColorAsState(
-        targetValue = imageAccent,
-        animationSpec = spring(),
+    val artworkAccent = rememberArtworkAccent(
+        requestKey = picUrl,
+        fallback = MaterialTheme.colorScheme.tertiaryContainer,
         label = "recommendCardAccent",
+        onAccentColor = onAccentColor,
     )
-    val accentPalette = contentAccentPalette(animatedAccent)
+    val extractAccent = artworkAccent.extract
+    val accentPalette = artworkAccent.palette
     // Shared with the artwork below so pressing the card morphs the cover's silhouette rather
     // than only rippling the container.
     val interactionSource = remember { MutableInteractionSource() }
@@ -419,19 +403,14 @@ fun PlaylistCard(
     onSpecialClick: (() -> Unit)? = null,
     specialActionLoading: Boolean = false,
 ) {
-    val fallbackAccent = MaterialTheme.colorScheme.tertiaryContainer
-    var imageAccent by remember(userPlaylistEach.coverImgUrl, specialCard, accentColor, fallbackAccent) {
-        mutableStateOf(accentColor ?: fallbackAccent)
-    }
-    val extractAccent = rememberThemeColorExtractor(
+    val artworkAccent = rememberArtworkAccent(
         requestKey = userPlaylistEach.coverImgUrl to specialCard,
-    ) { imageAccent = it }
-    val animatedAccent by animateColorAsState(
-        targetValue = accentColor ?: imageAccent,
-        animationSpec = spring(),
+        fallback = MaterialTheme.colorScheme.tertiaryContainer,
+        override = accentColor,
         label = "playlistCardAccent",
     )
-    val accentPalette = contentAccentPalette(animatedAccent)
+    val extractAccent = artworkAccent.extract
+    val accentPalette = artworkAccent.palette
     Surface(
         onClick = onClick,
         modifier = Modifier

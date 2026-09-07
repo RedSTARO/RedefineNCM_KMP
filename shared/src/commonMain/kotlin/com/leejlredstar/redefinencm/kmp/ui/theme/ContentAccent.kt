@@ -1,18 +1,27 @@
 package com.leejlredstar.redefinencm.kmp.ui.theme
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import coil3.Image
+import com.leejlredstar.amll.compose.rememberReducedMotionEnabled
 import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -39,6 +48,67 @@ data class ContentAccentPalette(
     val onPageEnd: Color,
     val secondaryOnPageEnd: Color,
 )
+
+/**
+ * One artwork-derived accent: the animated colour, the palette built from it, and the extractor
+ * that produces it.
+ *
+ * Every surface that tints itself from cover art needs the same four things wired in the same
+ * order — a colour that survives recomposition, an extractor bound to the artwork's request key,
+ * an animation between the old colour and the new one, and a palette derived from the result.
+ * Written out per surface that came to eight near-copies which had already drifted: some honoured
+ * reduced motion, some did not. [rememberArtworkAccent] is the one place it lives now.
+ */
+@Stable
+class ArtworkAccent internal constructor(
+    /** The animated accent. Use for tints that are not part of [palette]. */
+    val color: Color,
+    /** The full role set derived from [color]. */
+    val palette: ContentAccentPalette,
+    /** Hand to the artwork composable that loads [requestKey]; it feeds the extraction. */
+    val extract: (Image) -> Unit,
+)
+
+/**
+ * Remembers the accent for the artwork at [requestKey], falling back to [fallback] until the
+ * image resolves, or pinning [override] when the caller already knows the colour.
+ *
+ * Reduced motion snaps instead of animating. That is checked here rather than at each call site,
+ * so a new surface cannot forget it.
+ *
+ * @param requestKey identifies the artwork; changing it resets the accent to [fallback].
+ * @param override when non-null, used instead of the extracted colour, which is still extracted
+ *   and still reported through [onAccentColor].
+ * @param onAccentColor notified with each newly extracted colour, for callers that lift the
+ *   accent to a parent.
+ * @param scheme the scheme the palette is derived against. Pass a fixed one for a surface that
+ *   does not follow the app theme.
+ */
+@Composable
+fun rememberArtworkAccent(
+    requestKey: Any?,
+    fallback: Color = MaterialTheme.colorScheme.primaryContainer,
+    override: Color? = null,
+    animationSpec: AnimationSpec<Color> = spring(),
+    label: String = "artworkAccent",
+    scheme: ColorScheme = MaterialTheme.colorScheme,
+    onAccentColor: ((Color) -> Unit)? = null,
+): ArtworkAccent {
+    var raw by remember(requestKey, fallback) { mutableStateOf(fallback) }
+    val latestOnAccentColor = rememberUpdatedState(onAccentColor)
+    val extract = rememberThemeColorExtractor(requestKey) { extracted ->
+        raw = extracted
+        latestOnAccentColor.value?.invoke(extracted)
+    }
+    val reducedMotion = rememberReducedMotionEnabled()
+    val color by animateColorAsState(
+        targetValue = override ?: raw,
+        animationSpec = if (reducedMotion) snap() else animationSpec,
+        label = label,
+    )
+    val palette = remember(color, scheme) { buildContentAccentPalette(color, scheme) }
+    return remember(color, palette, extract) { ArtworkAccent(color, palette, extract) }
+}
 
 @Composable
 fun contentAccentPalette(source: Color): ContentAccentPalette {

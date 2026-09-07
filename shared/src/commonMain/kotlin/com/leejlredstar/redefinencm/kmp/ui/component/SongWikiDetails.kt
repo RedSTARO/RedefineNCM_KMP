@@ -9,14 +9,12 @@
  */
 package com.leejlredstar.redefinencm.kmp.ui.component
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -62,11 +60,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -91,6 +87,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -118,9 +116,8 @@ import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.data.SongWikiSection
 import com.leejlredstar.amll.compose.nextAmllArtworkUriAfterFailure
 import com.leejlredstar.redefinencm.kmp.ui.theme.DarkColors
-import com.leejlredstar.redefinencm.kmp.ui.theme.buildContentAccentPalette
-import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
+import com.leejlredstar.redefinencm.kmp.ui.theme.rememberArtworkAccent
 import com.leejlredstar.redefinencm.kmp.viewmodel.SongWikiUiState
 import kotlinx.coroutines.delay
 import kotlin.math.PI
@@ -312,14 +309,14 @@ fun SongWikiDetailsSheet(
     // The primary roles and the tonal surfaces are rebuilt from the artwork, so the panel now
     // picks up the song's colour the same way every other page does.
     val artworkAccentSource = artworkUri ?: fallbackArtworkUri
-    var rawWikiAccent by remember(artworkAccentSource) { mutableStateOf(DarkColors.primary) }
-    val extractWikiAccent = rememberThemeColorExtractor(artworkAccentSource) { rawWikiAccent = it }
-    val wikiAccent by animateColorAsState(
-        targetValue = rawWikiAccent,
-        animationSpec = spring(),
+    val artworkAccent = rememberArtworkAccent(
+        requestKey = artworkAccentSource,
+        fallback = DarkColors.primary,
         label = "wiki-accent",
+        scheme = DarkColors,
     )
-    val wikiPalette = remember(wikiAccent) { buildContentAccentPalette(wikiAccent, DarkColors) }
+    val extractWikiAccent = artworkAccent.extract
+    val wikiPalette = artworkAccent.palette
     val wikiScheme = remember(wikiPalette) {
         DarkColors.copy(
             primary = wikiPalette.accent,
@@ -728,7 +725,7 @@ private fun WikiHero(
                     album = albumTitle?.trim().takeUnless { it.isNullOrEmpty() } ?: "未知专辑",
                     duration = durationMs
                         ?.takeIf { it > 0L }
-                        ?.let(::formatSongDuration)
+                        ?.let(::formatPlaybackClock)
                         ?: "未知时长",
                 )
             }
@@ -1407,15 +1404,3 @@ private fun Color.withBrightness(factor: Float): Color = copy(
     green = (green * factor).coerceIn(0f, 1f),
     blue = (blue * factor).coerceIn(0f, 1f),
 )
-
-private fun formatSongDuration(durationMs: Long): String {
-    val totalSeconds = durationMs.coerceAtLeast(0) / 1_000
-    val hours = totalSeconds / 3_600
-    val minutes = (totalSeconds % 3_600) / 60
-    val seconds = totalSeconds % 60
-    return if (hours > 0) {
-        "$hours:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}"
-    } else {
-        "$minutes:${seconds.toString().padStart(2, '0')}"
-    }
-}

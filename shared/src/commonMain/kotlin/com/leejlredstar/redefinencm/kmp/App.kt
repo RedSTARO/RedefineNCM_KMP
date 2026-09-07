@@ -107,7 +107,9 @@ import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
 import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
 import com.leejlredstar.redefinencm.kmp.ui.component.CommentBottomSheet
 import com.leejlredstar.redefinencm.kmp.ui.component.QueueBottomSheet
+import com.leejlredstar.redefinencm.kmp.ui.component.TransportSheets
 import com.leejlredstar.redefinencm.kmp.ui.component.formatPlaybackDuration
+import com.leejlredstar.redefinencm.kmp.ui.component.rememberTransportSheetsState
 import com.leejlredstar.redefinencm.kmp.ui.screen.DownloadManagementScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.LoginScreen
@@ -822,8 +824,7 @@ private fun DesktopNowPlayingStrip(
     val safePosition = nowPlaying.safePosition
     val totalDuration = nowPlaying.totalDuration
     val progress = nowPlaying.progress
-    var showQueue by remember { mutableStateOf(false) }
-    var showComments by remember { mutableStateOf(false) }
+    val sheets = rememberTransportSheetsState()
     var isDragging by remember(media?.id) { mutableStateOf(false) }
     var dragProgress by remember(media?.id) { mutableStateOf(progress) }
     val displayedProgress = if (isDragging) dragProgress else progress
@@ -833,9 +834,6 @@ private fun DesktopNowPlayingStrip(
         safePosition.coerceAtMost(totalDuration.takeIf { it > 0L } ?: safePosition)
     }
 
-    LaunchedEffect(showComments, media?.id) {
-        if (showComments) viewModel.getComments()
-    }
     Box(Modifier.fillMaxWidth()) {
         Surface(
             shape = MaterialTheme.shapes.extraLarge,
@@ -1033,7 +1031,7 @@ private fun DesktopNowPlayingStrip(
                     FilledTonalIconButton(
                         onClick = {
                             viewModel.onPlaylistClick()
-                            showQueue = true
+                            sheets.openQueue()
                         },
                         enabled = hasMedia,
                         shape = MaterialTheme.shapes.large,
@@ -1075,7 +1073,7 @@ private fun DesktopNowPlayingStrip(
                         )
                     }
                     FilledTonalIconButton(
-                        onClick = { showComments = true },
+                        onClick = sheets::openComments,
                         enabled = hasMedia,
                         modifier = Modifier.weight(1f),
                         shape = CircleShape,
@@ -1087,28 +1085,12 @@ private fun DesktopNowPlayingStrip(
             }
         }
 
-        if (showQueue) {
-            QueueBottomSheet(
-                playlist = playList,
-                currentIndex = currentIndex,
-                accentPalette = accentPalette,
-                onDismiss = { showQueue = false },
-                onSeekClick = { index -> viewModel.onSeekClick(index) },
-            )
-        }
-
-        if (showComments) {
-            CommentBottomSheet(
-                comments = comments?.hotComments?.ifEmpty { comments?.comments } ?: emptyList(),
-                hasLoadedData = comments != null,
-                accentPalette = accentPalette,
-                onDismiss = { showComments = false },
-                isLoading = commentsLoading,
-                isFromCache = commentsFromCache,
-                errorMessage = commentsLoadError,
-                onRetry = viewModel::getComments,
-            )
-        }
+        TransportSheets(
+            state = sheets,
+            nowPlaying = nowPlaying,
+            accentPalette = accentPalette,
+            viewModel = viewModel,
+        )
     }
 }
 

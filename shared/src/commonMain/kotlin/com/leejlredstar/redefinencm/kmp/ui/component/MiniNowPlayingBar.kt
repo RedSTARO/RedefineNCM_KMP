@@ -1,7 +1,5 @@
 package com.leejlredstar.redefinencm.kmp.ui.component
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,15 +15,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,9 +33,8 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
-import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentColorFor
-import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
+import com.leejlredstar.redefinencm.kmp.ui.theme.rememberArtworkAccent
 import org.koin.compose.koinInject
 
 /**
@@ -68,20 +61,16 @@ fun MiniNowPlayingBar(
         0f
     }
 
-    val defaultContainerColor = MaterialTheme.colorScheme.primaryContainer
-    var themeColor by remember(media?.artworkUri, defaultContainerColor) {
-        mutableStateOf(defaultContainerColor)
-    }
-    val extractThemeColor = rememberThemeColorExtractor(media?.artworkUri) { extracted ->
-        themeColor = extracted
-        onAccentColor(extracted)
-    }
-    val accentPalette = contentAccentPalette(themeColor)
-    val containerColor by animateColorAsState(
-        targetValue = accentPalette.container,
-        animationSpec = spring(),
+    // The accent animates and the whole palette follows, rather than animating the container
+    // alone: every role then moves together instead of the container arriving ahead of the rest.
+    val artworkAccent = rememberArtworkAccent(
+        requestKey = media?.artworkUri,
         label = "miniPlayerColor",
+        onAccentColor = onAccentColor,
     )
+    val extractThemeColor = artworkAccent.extract
+    val accentPalette = artworkAccent.palette
+    val containerColor = accentPalette.container
     val contentColor = contentColorFor(containerColor)
 
     Surface(

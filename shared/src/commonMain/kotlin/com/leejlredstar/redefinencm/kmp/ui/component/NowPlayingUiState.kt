@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusic
+import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusicComments
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlayerQueueSnapshot
@@ -37,6 +38,16 @@ internal data class NowPlayingUiState(
     val shuffleEnabled: Boolean get() = queueSnapshot.shuffleEnabled
 
     val hasMedia: Boolean get() = media != null
+
+    /**
+     * What the comment sheet shows: the hot comments, or the plain ones when there are no hot
+     * ones. Each transport surface used to spell this fallback out at its own call site.
+     */
+    val displayComments: List<CommentMusicComments>
+        get() = comments?.hotComments?.ifEmpty { comments?.comments } ?: emptyList()
+
+    /** Whether a comment fetch has ever completed, which the sheet shows differently from empty. */
+    val hasLoadedComments: Boolean get() = comments != null
 
     val isFavorite: Boolean
         get() = favoriteState.mediaId == media?.id && favoriteState.isLiked
