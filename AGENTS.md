@@ -182,7 +182,9 @@ four targets, and the Android presentation is the baseline: the same 3.6-second 
 every platform. Its one desktop-only element is the output volume row of the expanded island,
 a slider dedicated to volume between the playback card and the action pill: phones leave
 volume to the hardware keys and the system panel, while the full-screen lyric page covers the
-desktop main window's volume strip. Desktop's former 30-second timeout belonged to the in-page `#desktop-console`,
+desktop main window's volume strip. Clicking a lyric line seeks and nothing else; the island
+expands on a click or tap between lines, on keyboard input, and from its own collapsed bar.
+Desktop's former 30-second timeout belonged to the in-page `#desktop-console`,
 which existed only because Compose could not draw above the WebView2 child HWND; it went with
 the page. `DesktopOverlayWindow` was that same workaround and is removed — desktop uses normal
 Compose transitions, the in-scene snackbar host, and `ModalWideNavigationRail`.
@@ -1025,6 +1027,8 @@ feature gap; platform integrations use target-specific actuals:
       schema; backups written while the setting existed still import.
 - [x] The control island is one common surface on all four targets with Android's 3.6-second
       auto-hide everywhere; desktop adds a dedicated output volume slider to the expanded island.
+- [x] The desktop lyric window has its own settings: show or hide, lock (no drag or resize, and
+      click-through on Windows), and left, centre or right alignment of its two lines.
 - [x] This branch passes `:shared:jvmTest`, `:desktopApp:compileKotlin`,
       `:shared:compileAndroidMain`, `:androidApp:assembleDebug`,
       `:shared:compileKotlinWasmJs`, `:shared:wasmJsBrowserTest`, and
