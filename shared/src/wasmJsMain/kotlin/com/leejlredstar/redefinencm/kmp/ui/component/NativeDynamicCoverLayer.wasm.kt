@@ -14,10 +14,7 @@
 
 package com.leejlredstar.redefinencm.kmp.ui.component
 
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -26,7 +23,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
@@ -71,13 +67,7 @@ internal actual fun NativeDynamicCoverLayer(
         node.setPlaying(play)
     }
     val visible by node.visible.collectAsState()
-    val latestOnVisibilityChanged by rememberUpdatedState(onVisibilityChanged)
-    LaunchedEffect(visible) {
-        latestOnVisibilityChanged(visible)
-    }
-    DisposableEffect(Unit) {
-        onDispose { latestOnVisibilityChanged(false) }
-    }
+    ReportNativeDynamicCoverVisibility(visible, onVisibilityChanged)
 
     if (showBadge) {
         // HTML interop is suitable for the bounded wiki artwork slot. The node owns
@@ -112,19 +102,7 @@ internal actual fun NativeDynamicCoverLayer(
         key(node) {
             val underlayBlend by animateFloatAsState(
                 targetValue = if (underlayReady) 1f else 0f,
-                animationSpec = if (reducedMotion) {
-                    snap()
-                } else {
-                    tween(
-                        durationMillis = visualSpec.fadeDurationMillis,
-                        easing = CubicBezierEasing(
-                            visualSpec.easingX1,
-                            visualSpec.easingY1,
-                            visualSpec.easingX2,
-                            visualSpec.easingY2,
-                        ),
-                    )
-                },
+                animationSpec = nativeDynamicCoverFadeSpec(visualSpec, reducedMotion),
                 label = "wasm-dynamic-cover-underlay",
             )
             Box(

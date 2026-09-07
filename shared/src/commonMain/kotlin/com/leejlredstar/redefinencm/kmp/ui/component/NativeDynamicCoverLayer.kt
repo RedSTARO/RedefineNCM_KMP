@@ -9,11 +9,24 @@
  */
 package com.leejlredstar.redefinencm.kmp.ui.component
 
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -95,6 +108,99 @@ internal expect fun NativeDynamicCoverLayer(
     reducedMotion: Boolean = false,
     onVisibilityChanged: (Boolean) -> Unit = {},
 )
+
+/**
+ * The source's `opacity <n>ms ease` transition, as a Compose spec.
+ *
+ * Every target faded its video surface with this, spelled out in full each time.
+ */
+@Composable
+internal fun nativeDynamicCoverFadeSpec(
+    visualSpec: NativeDynamicCoverVisualSpec,
+    reducedMotion: Boolean,
+): AnimationSpec<Float> = remember(visualSpec, reducedMotion) {
+    if (reducedMotion) {
+        snap()
+    } else {
+        tween(
+            durationMillis = visualSpec.fadeDurationMillis,
+            easing = CubicBezierEasing(
+                visualSpec.easingX1,
+                visualSpec.easingY1,
+                visualSpec.easingX2,
+                visualSpec.easingY2,
+            ),
+        )
+    }
+}
+
+/**
+ * Reports [visible] to the host, and reports false once this layer goes away.
+ *
+ * The teardown report is the part worth sharing: without it the host keeps dimming its own
+ * artwork for a video that is no longer on screen.
+ */
+@Composable
+internal fun ReportNativeDynamicCoverVisibility(
+    visible: Boolean,
+    onVisibilityChanged: (Boolean) -> Unit,
+) {
+    val latestOnVisibilityChanged by rememberUpdatedState(onVisibilityChanged)
+    LaunchedEffect(visible) {
+        latestOnVisibilityChanged(visible)
+    }
+    DisposableEffect(Unit) {
+        onDispose { latestOnVisibilityChanged(false) }
+    }
+}
+
+/**
+ * The frame around a platform video surface: the fade, the visibility report and the badge slot.
+ *
+ * Android, iOS and Desktop each held their own copy of all three. Android's copy had also
+ * inlined [DynamicCoverBadge] rather than calling it, so the badge existed twice despite the
+ * shared one documenting itself as the single definition.
+ *
+ * The browser layer does not use this. Its video is a DOM node that owns its own badge and
+ * reports its own visibility, so it shares [nativeDynamicCoverFadeSpec] and
+ * [ReportNativeDynamicCoverVisibility] but not the Compose surface around them.
+ *
+ * @param videoSurface receives the animated opacity to apply however the platform view wants it.
+ */
+@Composable
+internal fun NativeDynamicCoverScaffold(
+    modifier: Modifier,
+    visualSpec: NativeDynamicCoverVisualSpec,
+    hasPresentedFrame: Boolean,
+    play: Boolean,
+    showBadge: Boolean,
+    reducedMotion: Boolean,
+    onVisibilityChanged: (Boolean) -> Unit,
+    videoSurface: @Composable BoxScope.(videoAlpha: Float) -> Unit,
+) {
+    val visible = nativeDynamicCoverIsVisible(
+        hasPresentedFrame = hasPresentedFrame,
+        play = play,
+        showBadge = showBadge,
+    )
+    // `setDynamicBackgroundSuppressed(true)` in player.html pauses `#dynamic-bg` without
+    // removing its `.visible` class, so a paused full-screen background keeps its last frame
+    // on screen — for instance while the song-wiki dialog is open.
+    val videoAlpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = nativeDynamicCoverFadeSpec(visualSpec, reducedMotion),
+        label = "native-dynamic-cover",
+    )
+    ReportNativeDynamicCoverVisibility(visible, onVisibilityChanged)
+    Box(modifier = modifier) {
+        videoSurface(videoAlpha)
+        if (showBadge && hasPresentedFrame && play) {
+            DynamicCoverBadge(
+                modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
+            )
+        }
+    }
+}
 
 /**
  * The "动态封面" pill AMLL shows over `#wiki-cover-video`.

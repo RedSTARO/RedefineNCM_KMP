@@ -14,26 +14,15 @@
 
 package com.leejlredstar.redefinencm.kmp.ui.component
 
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.UIKitInteropProperties
 import androidx.compose.ui.viewinterop.UIKitView
 import kotlinx.coroutines.delay
@@ -109,37 +98,15 @@ internal actual fun NativeDynamicCoverLayer(
         videoView.setPlaying(play)
     }
 
-    val visible = nativeDynamicCoverIsVisible(
+    NativeDynamicCoverScaffold(
+        modifier = modifier,
+        visualSpec = visualSpec,
         hasPresentedFrame = firstFrameRendered,
         play = play,
         showBadge = showBadge,
-    )
-    val videoAlpha by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = if (reducedMotion) {
-            snap()
-        } else {
-            tween(
-                durationMillis = visualSpec.fadeDurationMillis,
-                easing = CubicBezierEasing(
-                    visualSpec.easingX1,
-                    visualSpec.easingY1,
-                    visualSpec.easingX2,
-                    visualSpec.easingY2,
-                ),
-            )
-        },
-        label = "ios-native-dynamic-cover",
-    )
-    val latestOnVisibilityChanged by rememberUpdatedState(onVisibilityChanged)
-    LaunchedEffect(visible) {
-        latestOnVisibilityChanged(visible)
-    }
-    DisposableEffect(Unit) {
-        onDispose { latestOnVisibilityChanged(false) }
-    }
-
-    Box(modifier = modifier) {
+        reducedMotion = reducedMotion,
+        onVisibilityChanged = onVisibilityChanged,
+    ) { videoAlpha ->
         key(videoView) {
             UIKitView(
                 factory = { videoView },
@@ -153,11 +120,6 @@ internal actual fun NativeDynamicCoverLayer(
                     isNativeAccessibilityEnabled = false,
                 ),
                 modifier = Modifier.fillMaxSize(),
-            )
-        }
-        if (showBadge && firstFrameRendered && play) {
-            DynamicCoverBadge(
-                modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
             )
         }
     }
