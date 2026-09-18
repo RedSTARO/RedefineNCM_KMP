@@ -55,7 +55,7 @@
 | C2 | 点击一条结果：用这一首替换播放队列 + 立即播放 + 关闭搜索页。重新打开搜索时会 `clearSearch()`，结果和关键词都没了；想试听另一条结果需要重新输入。 | 全平台 | 摩擦 | `SearchScreen.kt:84`，`SearchScreen.kt:203-207` |
 | C3 | 没有搜索历史、热搜；空状态只有一段说明文字。【已验证】 | 全平台 | 摩擦 | `SearchScreen.kt:309-317` |
 | C4 | 输入后只出联想词，需按键盘搜索键 / 回车才真正搜索；界面上没有搜索按钮。提示文案「按键盘搜索键查找」面向移动端。 | 全平台（文案：桌面） | 摩擦 | `SearchScreen.kt:145-146`，`SearchScreen.kt:301-307` |
-| C5 | 结果 `LazyColumn` 没有底部内边距。【已验证，412dp 宽】第 30 条结果被浮动导航压住且无法滚出，第 29 条右侧的状态标记被迷你条盖住。宽窗口下因内容整体靠左（见 K5），与右下角迷你条不重叠。 | 移动、桌面紧凑窗口 | 摩擦 | `SearchScreen.kt:209` |
+| C5 | 结果 `LazyColumn` 没有底部内边距。【已验证，412dp 宽】滚到底时第 30 条紧贴视口底边，第 29 条右侧的状态标记被迷你条盖住且无法再往上滚开；浮动导航出现时同样叠在最后几条上（源码推出）。宽窗口下因内容整体靠左（见 K5），与右下角迷你条不重叠。 | 移动、桌面紧凑窗口 | 摩擦 | `SearchScreen.kt:209` |
 | C6 | 结果固定 30 条，没有分页或「加载更多」。【已验证】 | 全平台 | 摩擦 | `NCMApi.kt:348` |
 | C7 | 合并模式下，每条结果上方单独一行小字标注平台来源。 | 全平台（启用 QQ 时） | 打磨 | `SearchScreen.kt:350-357` |
 | C8 | 搜索结果行未传 `accentColor`，每行按各自封面取色。【已验证】「secret base」的结果行依次是棕、藏青、橄榄、藏青、紫红、藏青、青、灰等不同底色。 | 全平台 | 打磨 | `SearchScreen.kt:358-366`，`SharedScreenParts.kt:89-95` |
@@ -98,18 +98,18 @@
 | F4 | 歌手、专辑文字不可点击（应用内也没有歌手页、专辑页）。 | 全平台 | 摩擦 | `NowPlayingScreen.kt:367-386` |
 | F5 | 红心按钮的文案为「收藏 / 已收藏」；网易云的术语里红心是「喜欢」，「收藏」指加入歌单或订阅歌单。 | 全平台 | 一致性 | `NowPlayingScreen.kt:403`，`AutoHideMiniPlayerController.kt:486`，`App.kt:1051` |
 | F6 | 上一首 / 下一首图标不统一：正在播放页用 SkipPrevious / SkipNext；桌面侧栏播放卡和歌词页控制岛用左右尖括号（KeyboardArrowLeft / Right）。【已验证】 | 全平台 | 一致性 | `NowPlayingScreen.kt:532-571`，`App.kt:973-1008`，`AutoHideMiniPlayerController.kt:804-833` |
-| F7 | 正在播放页的歌词按钮（引号 FAB）用 `VibrantFloatingActionButton` 的默认色，即主题的 tertiaryContainer（深色主题下是棕红色），不跟随封面取色；页面其余控件都是封面色。【已验证】淡紫色页面上只有这一个棕红色按钮。 | 全平台 | 一致性 | `NowPlayingScreen.kt:595-602` |
+| F7 | 正在播放页的歌词按钮（引号 FAB）不跟随封面取色：代码在 `FloatingToolbarColors` 里指定了 `fabContainerColor = palette.accent`，但 `VibrantFloatingActionButton` 用的是它自己的 `containerColor` 默认值（主题 tertiaryContainer，深色主题下是棕红色），该指定不生效。【已验证】淡紫色页面上只有这一个棕红色按钮。 | 全平台 | 一致性 | `NowPlayingScreen.kt:595-608` |
 | F8 | 正在播放页顶栏只显示「正在播放」，不显示播放来源（哪个歌单 / 每日推荐 / 搜索）。 | 全平台 | 打磨 | `NowPlayingScreen.kt:289-297` |
 | F9 | 歌词页控制岛 3.6 秒后自动收起。收起态只有标题、时间、进度：播放 / 暂停要双击，切歌要左右滑，均无可见提示；单击展开要等双击判定超时。【已验证】收起态。 | 全平台 | 摩擦 | `NativeAmllScreen.kt:92`，`AutoHideMiniPlayerController.kt:184-198`，`AutoHideMiniPlayerController.kt:909-943` |
 | F10 | 控制岛展开态中，点击封面或歌名 = 收起控制岛。 | 全平台 | 摩擦 | `AutoHideMiniPlayerController.kt:687-739` |
 | F11 | 桌面端鼠标移动不会唤出控制岛（只有点击空白处或触碰歌词才唤出）；指针停在控制岛上时仍按计时收起。【已验证】移动鼠标后控制岛保持收起。 | 桌面 | 摩擦 | `NativeAmllScreen.kt:259-271`，`AutoHideMiniPlayerController.kt:184-198` |
-| F12 | 歌词行的点击区域横跨整行宽度：在一行歌词右侧的空白处单击，会跳转到该行开头。【已验证】在歌词右侧空白处单击，进度从 1:33 变为 1:32。与「单击空白处唤出控制岛」的交互重叠。 | 全平台 | 摩擦 | `NativeAmllScreen.kt:259-285` |
+| F12 | 歌词行的点击区域横跨整行宽度：在一行歌词右侧的空白处单击，会跳转到该行开头，而不是唤出控制岛。【已验证】当前行在 1:32 时，单击画面下方另一行歌词文字右侧约 500px 的空白处：进度跳到 1:42，该行成为当前行，控制岛保持收起。歌词铺满画面时，「单击空白处唤出控制岛」几乎找不到可点的空白。 | 全平台 | 摩擦 | `NativeAmllScreen.kt:259-285` |
 | F13 | 歌词页首行歌词与左上角返回按钮重叠：歌词视口铺满全屏，顶部操作直接叠在上面，没有顶部留白或渐隐。【已验证】返回按钮的「‹」与首行第一个字叠在一起。 | 全平台 | 打磨 | `NativeAmllScreen.kt:273-310`，`NativeAmllScreen.kt:394-429` |
 | F14 | 歌词只有文本、没有时间戳时，不显示歌词内容，只显示「歌词无时间戳 / 检测到歌词文本，但没有可用于同步的时间戳」。 | 全平台 | 阻断（看不到这类歌的歌词） | `LyricStateOverlay.kt:48-62` |
-| F15 | 歌词页的加载 / 暂无 / 失败状态面板使用应用主题的容器色（浅色主题下是浅色卡片），叠在固定 `#0A0A0A` 的深色歌词背景上。【待运行验证】 | 全平台 | 打磨 | `LyricStateOverlay.kt:24-27`，`NativeAmllScreen.kt:216` |
+| F15 | 歌词页的加载 / 暂无 / 失败状态面板用应用主题的 `surfaceContainerHigh` 作底色，而歌词背景固定为 `#0A0A0A`：浅色主题下是一张 `#E7EAE4` 的近白卡片压在黑色歌词页中间（本次运行为深色主题，未截到该状态）。 | 全平台（浅色主题） | 打磨 | `LyricStateOverlay.kt:24-27`，`Expressive.kt:249-258`，`Color.kt:36`，`NativeAmllScreen.kt:216` |
 | F16 | 控制岛上的歌词能力徽章四个等级都只显示同一个「词」字，等级只靠颜色区分，界面上没有颜色含义说明（点开后才列出「NCM YRC 逐字」「TTML 完全支持」及来源、endpoint 如 `local-sidecar`）。【已验证】 | 全平台 | 打磨 | `LyricCapabilityBadge.kt:60-102`，`LyricCapabilityBadge.kt:139-200` |
 | F17 | 同一个波浪进度在两处表达不同状态：正在播放页的波浪只在播放时出现，暂停时拉平；歌词页收起态控制岛在暂停时仍是波浪。【已验证】 | 全平台 | 一致性 | `NowPlayingScreen.kt:427-431`，`AutoHideMiniPlayerController.kt:1029-1036` |
-| F18 | 音量只出现在歌词页控制岛和「≥900 高 + 侧栏展开」的桌面播放卡里；正在播放页、迷你条没有音量或静音指示。侧栏播放卡的音量图标固定为 VolumeUp，控制岛的图标随音量变化。【已验证】当前偏好音量为 0%：控制岛显示静音图标和「0%」，侧栏播放卡显示 VolumeUp，正在播放页无任何提示。 | 桌面 | 一致性 | `App.kt:921-937`，`AutoHideMiniPlayerController.kt:580-589` |
+| F18 | 音量只出现在歌词页控制岛和「≥900 高 + 侧栏展开」的桌面播放卡里；正在播放页、迷你条没有音量或静音指示。侧栏播放卡的音量图标固定为 VolumeUp，控制岛的图标随音量变化。【已验证】本次运行所用的隔离偏好副本里音量为 0%（不是用户实际设置）：控制岛显示静音图标和「0%」，侧栏播放卡显示 VolumeUp，正在播放页无任何提示。 | 桌面 | 一致性 | `App.kt:921-937`，`AutoHideMiniPlayerController.kt:580-589` |
 | F19 | 音乐百科（歌曲详情）入口只在歌词页右上角；正在播放页没有。 | 全平台 | 一致性 | `NativeAmllScreen.kt:431-440` |
 | F20 | 播放队列面板只支持点击某首播放；不能移除、拖动排序、清空、另存为歌单。 | 全平台 | 摩擦 | `PlaybackBottomSheets.kt:57-191` |
 | F21 | 评论面板只请求 `/comment/music` 默认的第一页，无加载更多、热门 / 最新切换、点赞、回复、发表；副标题「共 N 条评论」是已加载条数。【已验证】所看歌曲的热评里提到该曲评论数达「16.2w」，面板副标题显示「共 15 条评论」。 | 全平台 | 摩擦 | `PlaybackBottomSheets.kt:228-237`，`NCMApi.kt:397-398` |
@@ -176,6 +176,8 @@
 | K3 | 没有应用内主题选项，只跟随系统深浅色；没有接入 Android 12+ 动态取色（`Color.kt` 注释写「Dynamic colour is preferred」，`Theme.kt` 注释写未接入）。 | 全平台 / Android | 摩擦 | `Theme.kt:36-41`，`Color.kt:5-6` |
 | K4 | 加载态是带文字的整块卡片（`ExpressiveLoadingState`），没有骨架占位；数据到达后布局整体跳变。 | 全平台 | 打磨 | `Expressive.kt:306-337` |
 | K5 | `ExpressivePage` 在宽窗口中把限宽内容放在左侧而不是居中（内层 `BoxWithConstraints` 默认 TopStart，外层的 TopCenter 对它不起作用）。【已验证】1280 宽窗口下，设置、搜索、登录（840dp 限宽）的右侧留出约 340dp 空白；设置页折叠顶栏和登录页头部渐变只覆盖左侧一列，右侧出现明显的色块边界。1200dp 限宽的页面（首页、我的、歌单、下载）在更宽窗口（如最大化）下同样靠左。 | 桌面 / Web / 平板 | 打磨 | `Expressive.kt:199-235` |
+| K6 | 所有界面文字都是代码里的中文字面量（`commonMain` 中约 600 处，分布在 41 个文件），`composeResources` 下没有字符串资源，应用只有中文一种语言。 | 全平台 | 摩擦（非中文用户） | `shared/src/commonMain/composeResources/`（仅 `files/`） |
+| K7 | 「我的」页头图是固定 320dp 高的容器，里面自下而上排着 112dp 头像、昵称、等级摘要、下一级门槛、进度文字和进度条，按 1.0 字号计算已占约 304dp；系统字号放大到约 1.3 倍时总高度超过 320dp，底部的文字 / 进度条会被挤压或裁切。【待运行验证】 | Android / iOS | 打磨 | `UserPlaylistScreen.kt:328-441` |
 
 ### L. 桌面端
 
