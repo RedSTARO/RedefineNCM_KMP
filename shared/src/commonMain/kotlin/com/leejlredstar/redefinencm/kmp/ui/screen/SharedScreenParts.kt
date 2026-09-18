@@ -462,6 +462,8 @@ fun CarouselItemScope.RecommendSquareCard(
     text: String,
     onAccentColor: ((Color) -> Unit)? = null,
     subtitle: String? = null,
+    isCurrent: Boolean = false,
+    isPlaying: Boolean = false,
     onClick: () -> Unit,
 ) {
     // Fully opaque while the tile is near full width, gone by the time it is a sliver.
@@ -553,6 +555,34 @@ fun CarouselItemScope.RecommendSquareCard(
                             color = Color.White.copy(alpha = 0.82f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+            // The song that is playing, marked the way a SongRow marks it.
+            if (isCurrent) {
+                Surface(
+                    shape = CircleShape,
+                    color = accentPalette.container,
+                    contentColor = accentPalette.onContainer,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(12.dp)
+                        .graphicsLayer { alpha = overlayAlpha },
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) AppIcons.GraphicEq else AppIcons.Pause,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = if (isPlaying) "正在播放" else "已暂停",
+                            style = MaterialTheme.typography.labelSmall,
                         )
                     }
                 }

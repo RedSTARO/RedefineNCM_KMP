@@ -306,7 +306,7 @@ private fun launchDesktopApplication(settings: PlatformSettings) = application {
     // notification / iOS Live Activity). It is a second, frameless, always-on-top window
     // driven entirely by DesktopLyricWindow: the playback
     // pipeline calls updateLyric(...) + show(), and this window mirrors that state.
-    FloatingLyricWindow(settings)
+    FloatingLyricWindow(settings, player)
 }
 
 /**
@@ -409,7 +409,7 @@ private val TrayIcon: ImageVector by lazy {
 }
 
 @Composable
-private fun ApplicationScope.FloatingLyricWindow(settings: PlatformSettings) {
+private fun ApplicationScope.FloatingLyricWindow(settings: PlatformSettings, player: PlatformPlayer) {
     val visible by DesktopLyricWindow.isWindowVisible.collectAsState()
     val savedBounds = remember { settings.savedBounds(SettingKeys.DESKTOP_LYRIC_WINDOW_BOUNDS) }
     // Where the user last dragged and sized it, instead of back to the bottom centre every launch.
@@ -460,6 +460,8 @@ private fun ApplicationScope.FloatingLyricWindow(settings: PlatformSettings) {
                         modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
                     ) {
                         FloatingLyricToolbar(
+                            onPrevious = player::seekToPrevious,
+                            onNext = player::seekToNext,
                             onSmaller = { setDesktopLyricTextScale(settings, textScale - 0.1f) },
                             onLarger = { setDesktopLyricTextScale(settings, textScale + 0.1f) },
                             onLock = { setDesktopLyricLocked(settings, true) },
@@ -474,6 +476,8 @@ private fun ApplicationScope.FloatingLyricWindow(settings: PlatformSettings) {
 
 @Composable
 private fun FloatingLyricToolbar(
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
     onSmaller: () -> Unit,
     onLarger: () -> Unit,
     onLock: () -> Unit,
@@ -485,6 +489,8 @@ private fun FloatingLyricToolbar(
         contentColor = Color.White,
     ) {
         Row {
+            ToolbarButton(AppIcons.SkipPrevious, "上一首", onPrevious)
+            ToolbarButton(AppIcons.SkipNext, "下一首", onNext)
             ToolbarButton(AppIcons.Remove, "缩小歌词", onSmaller)
             ToolbarButton(AppIcons.Add, "放大歌词", onLarger)
             ToolbarButton(AppIcons.Lock, "锁定桌面歌词（可在托盘菜单解锁）", onLock)

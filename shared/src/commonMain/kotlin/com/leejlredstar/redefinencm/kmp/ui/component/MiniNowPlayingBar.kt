@@ -50,7 +50,10 @@ fun MiniNowPlayingBar(
     val isPlaying by player.isPlaying.collectAsState()
     val position by player.position.collectAsState()
     val duration by player.duration.collectAsState()
+    val volume by player.volume.collectAsState()
     val hasMedia = media != null
+    // Silence with the pill looking the same as ever was the one sign-free state it had.
+    val muted = hasMedia && volume <= 0.001f
     val totalDuration = duration
         .takeIf { it > 0 }
         ?: media?.duration?.takeIf { it > 0 }
@@ -84,7 +87,8 @@ fun MiniNowPlayingBar(
             .width(116.dp)
             .height(60.dp)
             .semantics {
-                contentDescription = "打开${media?.title ?: "当前歌曲"}播放页"
+                contentDescription = "打开${media?.title ?: "当前歌曲"}播放页" +
+                    if (muted) "（已静音）" else ""
             },
         shape = CircleShape,
         color = containerColor,
@@ -97,29 +101,45 @@ fun MiniNowPlayingBar(
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Surface(
-                        modifier = Modifier.size(48.dp),
-                        shape = CircleShape,
-                        color = contentColor.copy(alpha = 0.16f),
-                        contentColor = contentColor,
-                    ) {
-                        if (hasMedia) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(LocalPlatformContext.current)
-                                    .data(media?.artworkUri)
-                                    .crossfade(true)
-                                    .build(),
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize().clip(CircleShape),
-                                onSuccess = { state -> extractThemeColor(state.result.image) },
-                            )
-                        } else {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = AppIcons.MusicNote,
+                    Box(Modifier.size(48.dp)) {
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            shape = CircleShape,
+                            color = contentColor.copy(alpha = 0.16f),
+                            contentColor = contentColor,
+                        ) {
+                            if (hasMedia) {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(LocalPlatformContext.current)
+                                        .data(media?.artworkUri)
+                                        .crossfade(true)
+                                        .build(),
                                     contentDescription = null,
-                                    modifier = Modifier.size(22.dp),
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                    onSuccess = { state -> extractThemeColor(state.result.image) },
+                                )
+                            } else {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = AppIcons.MusicNote,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(22.dp),
+                                    )
+                                }
+                            }
+                        }
+                        if (muted) {
+                            Surface(
+                                modifier = Modifier.align(Alignment.BottomEnd).size(20.dp),
+                                shape = CircleShape,
+                                color = containerColor,
+                                contentColor = contentColor,
+                            ) {
+                                Icon(
+                                    imageVector = AppIcons.VolumeOff,
+                                    contentDescription = null,
+                                    modifier = Modifier.padding(3.dp),
                                 )
                             }
                         }

@@ -124,6 +124,8 @@ fun HomeScreen(
     val userDetail by viewModel.userDetail.collectAsState()
     val dailySongs = recommend?.data?.dailySongs ?: emptyList()
     val dailyQueue = remember(dailySongs) { dailySongs.map { it.toMediaInfo() } }
+    val currentMedia by player.currentMedia.collectAsState()
+    val isPlaying by player.isPlaying.collectAsState()
     val playWholeList = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false) }
     val resources = recommendResource?.recommend ?: emptyList()
     var showSearch by rememberSaveable { mutableStateOf(false) }
@@ -309,10 +311,14 @@ fun HomeScreen(
                                 }
                             },
                             itemContent = { song ->
+                                val queueIndex = dailySongs.indexOf(song)
                                 RecommendSquareCard(
                                     picUrl = song.al.picUrl,
                                     text = song.name,
                                     subtitle = song.ar.joinToString(" / ") { it.name },
+                                    isCurrent = currentMedia != null &&
+                                        currentMedia?.id == dailyQueue.getOrNull(queueIndex)?.id,
+                                    isPlaying = isPlaying,
                                     onAccentColor = if (song.al.picUrl == pageAccentSource) {
                                         { color -> rawPageAccent = color }
                                     } else {
@@ -324,7 +330,7 @@ fun HomeScreen(
                                         playFromList(
                                             player,
                                             dailyQueue,
-                                            dailySongs.indexOf(song),
+                                            queueIndex,
                                             playWholeList,
                                             source = DailySource,
                                         )
