@@ -114,6 +114,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
+import com.leejlredstar.redefinencm.kmp.di.DEFAULT_NCM_SERVER as DefaultNcmServer
 
 /**
  * The lyric surface's capabilities, as this target actually has them.
@@ -151,6 +158,16 @@ fun SettingsScreen(
     var showDownloadStatus by remember(settings) { mutableStateOf(false) }
     var extraLyricSurfaceEnabled by remember(settings) { mutableStateOf(false) }
     var desktopLyricLocked by remember(settings) { mutableStateOf(false) }
+    // The lyric window's own toolbar and the tray menu also close and lock it; the switches
+    // follow the window, not only what was stored when this page opened.
+    if (windowedLyricSurface != null) {
+        LaunchedEffect(windowedLyricSurface) {
+            windowedLyricSurface.isEnabled.collect { extraLyricSurfaceEnabled = it }
+        }
+        LaunchedEffect(windowedLyricSurface) {
+            windowedLyricSurface.isWindowLocked.collect { desktopLyricLocked = it }
+        }
+    }
     var desktopLyricAlignment by remember(settings) {
         mutableStateOf(LyricSurfaceAlignment.DEFAULT)
     }
@@ -163,7 +180,6 @@ fun SettingsScreen(
     var audioOutputDeviceId by remember(settings) {
         mutableStateOf(SYSTEM_DEFAULT_AUDIO_OUTPUT_ID)
     }
-    var importStatus by remember { mutableStateOf<String?>(null) }
     var serverCheckStatus by remember { mutableStateOf<String?>(null) }
     var settingsLoaded by remember(settings) { mutableStateOf(false) }
     var settingsLoadError by remember(settings) { mutableStateOf<String?>(null) }
@@ -172,11 +188,24 @@ fun SettingsScreen(
     var lyricSourceWriteGeneration by remember { mutableIntStateOf(0) }
     var lyricDisplayWriteGeneration by remember { mutableIntStateOf(0) }
     var showImportConfirmation by remember { mutableStateOf(false) }
+    var showLogoutConfirmation by remember { mutableStateOf(false) }
+    var showCookieField by remember { mutableStateOf(false) }
+    val userDetail by mainViewModel.userDetail.collectAsState()
+    // Results of saving, importing and exporting appear at the bottom, beside the controls that
+    // cause them; a banner at the top of the page was off screen by the time the backup buttons
+    // were reached.
+    val snackbarHostState = remember { SnackbarHostState() }
+    var settingsMessage by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(settingsMessage) {
+        val message = settingsMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        settingsMessage = null
+    }
     val scope = rememberCoroutineScope()
 
     fun reloadSettingsSnapshot() {
         cookie = settings.getString(SettingKeys.COOKIE, "")
-        server = settings.getString(SettingKeys.SERVER, "")
+        server = settings.getString(SettingKeys.SERVER, DefaultNcmServer)
         qqEnabled = settings.getBoolean(SettingKeys.QQ_ENABLED, false)
         qqServer = settings.getString(SettingKeys.QQ_SERVER, SettingKeys.QQ_SERVER_DEFAULT)
         qqCookie = settings.getString(SettingKeys.QQ_COOKIE, "")
@@ -231,7 +260,7 @@ fun SettingsScreen(
                 .onSuccess { onPersisted() }
                 .onFailure { error ->
                     onFailure()
-                    importStatus = "✗ 设置保存失败：${error.message ?: "未知错误"}"
+                    settingsMessage = "设置保存失败：${error.message ?: "未知错误"}"
                 }
         }
     }
@@ -242,11 +271,10 @@ fun SettingsScreen(
         onPersisted: () -> Unit = {},
         onFailure: () -> Unit = ::reloadSettingsSnapshot,
     ) {
-        importStatus = null
         val writeResult = runCatching(write)
         if (writeResult.isFailure) {
             onFailure()
-            importStatus = "✗ 设置保存失败：${writeResult.exceptionOrNull()?.message ?: "未知错误"}"
+            settingsMessage = "设置保存失败：${writeResult.exceptionOrNull()?.message ?: "未知错误"}"
             return
         }
         onWritten()
@@ -258,7 +286,7 @@ fun SettingsScreen(
         settingsLoadError = null
         try {
             cookie = settings.getStringAsync(SettingKeys.COOKIE, "")
-            server = settings.getStringAsync(SettingKeys.SERVER, "")
+            server = settings.getStringAsync(SettingKeys.SERVER, DefaultNcmServer)
             qqEnabled = settings.getBooleanAsync(SettingKeys.QQ_ENABLED, false)
             qqServer = settings.getStringAsync(SettingKeys.QQ_SERVER, SettingKeys.QQ_SERVER_DEFAULT)
             qqCookie = settings.getStringAsync(SettingKeys.QQ_COOKIE, "")
@@ -315,18 +343,18 @@ fun SettingsScreen(
                 val persisted = runCatching { settings.flush() }
                 if (persisted.isFailure) {
                     reloadSettingsSnapshot()
-                    importStatus = "✗ 设置保存失败：${persisted.exceptionOrNull()?.message ?: "未知错误"}"
+                    settingsMessage = "设置保存失败：${persisted.exceptionOrNull()?.message ?: "未知错误"}"
                     return@launch
                 }
                 reloadSettingsSnapshot()
-                importStatus = "✓ 导入成功"
+                settingsMessage = "设置已导入"
             } else {
                 lyricSourceWriteGeneration += 1
                 lyricDisplayWriteGeneration += 1
                 // A platform write can fail after earlier backup fields were already applied.
                 // Re-read the process snapshot so a partial source change is never left latent.
                 reloadSettingsSnapshot()
-                importStatus = "✗ 导入失败，请检查文件格式"
+                settingsMessage = "导入失败：文件不是有效的设置备份"
             }
         }
     }
@@ -350,7 +378,7 @@ fun SettingsScreen(
             topBar = {
                 LargeFlexibleTopAppBar(
                     title = { Text("设置") },
-                    subtitle = { Text("账号、播放、歌词与备份") },
+                    subtitle = { Text("账号、播放、歌词、下载与服务器") },
                     scrollBehavior = appBarScrollBehavior,
                     colors = TopAppBarDefaults.largeTopAppBarColors(
                         // Transparent while expanded so ExpressivePage's gradient reads through,
@@ -395,32 +423,291 @@ fun SettingsScreen(
                 )
             } else {
                 Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                importStatus?.let { status ->
-                    val isSuccess = status.startsWith("✓")
-                    Surface(
-                        shape = MaterialTheme.shapes.large,
-                        color = if (isSuccess) {
-                            settingsPalette.container
-                        } else {
-                            MaterialTheme.colorScheme.errorContainer
+                // Account first: who is signed in and how to change that are what people open
+                // settings for most. The raw cookie is still here, folded away as an advanced
+                // option instead of sitting in the open where one stray keystroke replaced it.
+                SettingsSectionLabel("账号", settingsPalette)
+                AccountCard(
+                    loggedIn = cookie.isNotBlank(),
+                    nickname = userDetail?.profile?.nickname,
+                    avatarUrl = userDetail?.profile?.avatarUrl,
+                    accentPalette = settingsPalette,
+                    onLogin = onOpenLogin,
+                    onLogout = { showLogoutConfirmation = true },
+                )
+                SettingsExpanderRow(
+                    label = "手动填写 Cookie",
+                    supportingText = "高级：已有登录 Cookie 时可以直接粘贴",
+                    expanded = showCookieField,
+                    accentPalette = settingsPalette,
+                    onToggle = { showCookieField = !showCookieField },
+                )
+                if (showCookieField) {
+                    SettingsTextField(
+                        value = cookie,
+                        label = "Cookie",
+                        obscureText = true,
+                        accentPalette = settingsPalette,
+                        index = 1,
+                        count = 2,
+                        onDraftChange = { cookie = it },
+                        onCommit = { raw ->
+                            val normalized = raw.trim()
+                            cookie = normalized
+                            persistSettings(
+                                write = { settings.setString(SettingKeys.COOKIE, normalized) },
+                                // Stop old-account work as soon as the process cookie changes. The
+                                // refresh waits on the same settings barrier before resolving UID.
+                                onWritten = { mainViewModel.refreshAccount() },
+                                onFailure = {
+                                    reloadSettingsSnapshot()
+                                    mainViewModel.refreshAccount()
+                                },
+                            )
                         },
-                        contentColor = if (isSuccess) {
-                            settingsPalette.onContainer
-                        } else {
-                            MaterialTheme.colorScheme.onErrorContainer
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 16.dp)
-                            .semantics { liveRegion = LiveRegionMode.Polite },
-                    ) {
-                        Text(
-                            text = status,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    )
+                }
+
+                SettingsSectionLabel("播放", settingsPalette)
+                // The output-device row sits with the quality dropdowns because it is the other
+                // half of "what comes out of the speakers", not a behaviour toggle.
+                val outputDeviceRows = if (supportsAudioOutputDeviceSelection) 1 else 0
+                val dynamicCoverRows = if (supportsDynamicNowPlayingCover) 1 else 0
+                val playbackSettingCount = 2 + outputDeviceRows + dynamicCoverRows
+                SettingsDropdown(
+                    onlineQuality,
+                    "在线播放音质",
+                    SoundQuality.entries,
+                    settingsPalette,
+                    index = 0,
+                    count = playbackSettingCount,
+                    supportingText = QualityAvailabilityNote,
+                ) { v ->
+                    onlineQuality = v.name
+                    persistSettings({ settings.setString(SettingKeys.ONLINE_PLAY_QUALITY, v.name) })
+                }
+                if (supportsAudioOutputDeviceSelection) {
+                    AudioOutputDeviceDropdown(
+                        selectedId = audioOutputDeviceId,
+                        accentPalette = settingsPalette,
+                        index = 1,
+                        count = playbackSettingCount,
+                    ) { deviceId ->
+                        audioOutputDeviceId = deviceId
+                        persistSettings(
+                            write = {
+                                settings.setString(SettingKeys.AUDIO_OUTPUT_DEVICE, deviceId)
+                            },
+                            // Move the track that is playing now, not just the next one.
+                            onWritten = { nowPlayingViewModel.reopenAudioOutput() },
                         )
                     }
                 }
+                // Both states replace the queue; what differs is how much of the list goes in, so
+                // that is what the label says. It applies to every list: playlists, the daily
+                // recommendation, search results and downloads.
+                SettingsSwitch(
+                    replacePlaylist,
+                    "点击列表中的歌曲时播放整个列表",
+                    settingsPalette,
+                    index = 1 + outputDeviceRows,
+                    count = playbackSettingCount,
+                    supportingText = "关闭时只播放点中的那一首",
+                ) { v ->
+                    replacePlaylist = v
+                    persistSettings({ settings.setBoolean(SettingKeys.REPLACE_PLAYLIST, v) })
+                }
+                if (supportsDynamicNowPlayingCover) {
+                    SettingsSwitch(
+                        useDynamicCover,
+                        "播放页使用歌曲动态封面",
+                        settingsPalette,
+                        index = 2 + outputDeviceRows,
+                        count = playbackSettingCount,
+                    ) { enabled ->
+                        useDynamicCover = enabled
+                        persistSettings(
+                            write = { settings.setBoolean(SettingKeys.USE_DYNAMIC_COVER, enabled) },
+                            onWritten = { nowPlayingViewModel.setUseDynamicCover(enabled) },
+                        )
+                    }
+                }
+
+                SettingsSectionLabel("歌词", settingsPalette)
+                val surfaceRows = if (optionalLyricSurface != null) 1 else 0
+                val surfaceLayoutRows = if (windowedLyricSurface != null) 2 else 0
+                val lyricSettingCount = 3 + surfaceRows + surfaceLayoutRows
+                LyricSourceDropdown(
+                    selectedWireValue = lyricSourceMode,
+                    accentPalette = settingsPalette,
+                    index = 0,
+                    count = lyricSettingCount,
+                ) { mode ->
+                    val writeGeneration = ++lyricSourceWriteGeneration
+                    lyricSourceMode = mode.wireValue
+                    persistSettings(
+                        write = {
+                            settings.setString(SettingKeys.LYRIC_SOURCE_MODE, mode.wireValue)
+                        },
+                        onWritten = {
+                            if (writeGeneration == lyricSourceWriteGeneration) {
+                                nowPlayingViewModel.setLyricSourceMode(mode)
+                            }
+                        },
+                        onFailure = {
+                            if (writeGeneration == lyricSourceWriteGeneration) {
+                                reloadSettingsSnapshot()
+                            }
+                        },
+                    )
+                }
+                if (optionalLyricSurface != null) {
+                    SettingsSwitch(
+                        extraLyricSurfaceEnabled,
+                        optionalLyricSurface.settingLabel,
+                        settingsPalette,
+                        index = 1,
+                        count = lyricSettingCount,
+                    ) { enabled ->
+                        extraLyricSurfaceEnabled = enabled
+                        persistSettings(
+                            write = { settings.setBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, enabled) },
+                            onWritten = {
+                                optionalLyricSurface.setEnabled(enabled)
+                            },
+                        )
+                    }
+                }
+                if (windowedLyricSurface != null) {
+                    SettingsSwitch(
+                        desktopLyricLocked,
+                        "锁定桌面歌词",
+                        settingsPalette,
+                        index = 1 + surfaceRows,
+                        count = lyricSettingCount,
+                        supportingText = "锁定后窗口固定在原处，不能拖动或调整大小；Windows 上鼠标会穿透到下面的窗口。" +
+                            "解锁可以在这里，也可以在系统托盘图标的菜单里。",
+                    ) { locked ->
+                        desktopLyricLocked = locked
+                        persistSettings(
+                            write = { settings.setBoolean(SettingKeys.DESKTOP_LYRIC_LOCKED, locked) },
+                            onWritten = {
+                                windowedLyricSurface.setLocked(locked)
+                            },
+                        )
+                    }
+                    LyricSurfaceAlignmentDropdown(
+                        selected = desktopLyricAlignment,
+                        accentPalette = settingsPalette,
+                        index = 2 + surfaceRows,
+                        count = lyricSettingCount,
+                    ) { alignment ->
+                        desktopLyricAlignment = alignment
+                        persistSettings(
+                            write = {
+                                settings.setString(
+                                    SettingKeys.DESKTOP_LYRIC_ALIGNMENT,
+                                    alignment.wireValue,
+                                )
+                            },
+                            onWritten = {
+                                windowedLyricSurface.setAlignment(alignment)
+                            },
+                        )
+                    }
+                }
+                SettingsSwitch(
+                    showTranslatedLyric,
+                    "显示翻译歌词",
+                    settingsPalette,
+                    index = lyricSettingCount - 2,
+                    count = lyricSettingCount,
+                ) { v ->
+                    val writeGeneration = ++lyricDisplayWriteGeneration
+                    showTranslatedLyric = v
+                    persistSettings(
+                        write = {
+                            settings.setBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, v)
+                        },
+                        onPersisted = {
+                            if (writeGeneration == lyricDisplayWriteGeneration) {
+                                nowPlayingViewModel.setLyricDisplayOptions(
+                                    showTranslation = v,
+                                    showRomanization = showRomanLyric,
+                                )
+                            }
+                        },
+                    )
+                }
+                SettingsSwitch(
+                    showRomanLyric,
+                    "显示罗马音歌词",
+                    settingsPalette,
+                    index = lyricSettingCount - 1,
+                    count = lyricSettingCount,
+                    supportingText = "日语等歌曲的读音标注",
+                ) { v ->
+                    val writeGeneration = ++lyricDisplayWriteGeneration
+                    showRomanLyric = v
+                    persistSettings(
+                        write = { settings.setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, v) },
+                        onPersisted = {
+                            if (writeGeneration == lyricDisplayWriteGeneration) {
+                                nowPlayingViewModel.setLyricDisplayOptions(
+                                    showTranslation = showTranslatedLyric,
+                                    showRomanization = v,
+                                )
+                            }
+                        },
+                    )
+                }
+
+                SettingsSectionLabel("下载", settingsPalette)
+                SettingsDropdown(
+                    dlQuality,
+                    "下载音质",
+                    SoundQuality.entries,
+                    settingsPalette,
+                    index = 0,
+                    count = 2,
+                    supportingText = QualityAvailabilityNote,
+                ) { v ->
+                    dlQuality = v.name
+                    persistSettings({ settings.setString(SettingKeys.DOWNLOAD_QUALITY, v.name) })
+                }
+                SettingsSwitch(
+                    showDownloadStatus,
+                    "在歌曲列表中标出下载状态",
+                    settingsPalette,
+                    index = 1,
+                    count = 2,
+                    supportingText = "已下载、正在下载和下载失败的歌曲会带标记",
+                ) { v ->
+                    showDownloadStatus = v
+                    persistSettings({ settings.setBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, v) })
+                }
+
+                SettingsSectionLabel("通用", settingsPalette)
+                SettingsSwitch(
+                    searchPrediction,
+                    "搜索联想",
+                    settingsPalette,
+                    index = 0,
+                    count = 3,
+                    supportingText = "输入时显示搜索建议",
+                ) { v ->
+                    searchPrediction = v
+                    persistSettings({ settings.setBoolean(SettingKeys.SEARCH_PREDICTION, v) })
+                }
+                SettingsSwitch(checkUpdate, "启动时检查更新", settingsPalette, index = 1, count = 3) { v ->
+                    checkUpdate = v
+                    persistSettings({ settings.setBoolean(SettingKeys.CHECK_UPDATE, v) })
+                }
+                SettingsButton("立即检查更新", settingsPalette, index = 2, count = 3) {
+                    mainViewModel.checkForUpdatesNow()
+                }
+
+                // A one-time technical setup, so it comes after everything used day to day.
                 SettingsSectionLabel("服务器", settingsPalette)
                 SettingsTextField(
                     value = server,
@@ -428,15 +715,21 @@ fun SettingsScreen(
                     accentPalette = settingsPalette,
                     index = 0,
                     count = 2,
+                    supportingText = "修改后需要重启应用才会生效；清空则恢复默认服务器",
                     onDraftChange = {
                         server = it
                         serverCheckGeneration += 1
                         serverCheckStatus = null
                     },
                     onCommit = { raw ->
-                        val normalized = normalizeServerInput(raw)
+                        // An empty address is not a setting: it left every request without a
+                        // host after the next launch. Clearing the field means "the default".
+                        val normalized = normalizeServerInput(raw).ifEmpty { DefaultNcmServer }
                         server = normalized
-                        persistSettings({ settings.setString(SettingKeys.SERVER, normalized) })
+                        persistSettings(
+                            write = { settings.setString(SettingKeys.SERVER, normalized) },
+                            onPersisted = { settingsMessage = "服务器地址已保存，重启应用后生效" },
+                        )
                     },
                 )
                 // 原版 ServerItem：调 /inner/version/ 校验服务器可用性并显示版本
@@ -452,11 +745,12 @@ fun SettingsScreen(
                         val resultStatus = try {
                             val result = api.innerVersion("${checkedServer}inner/version/")
                             if (result.code == 200) "服务器可用，版本：${result.data.version}"
-                            else "服务器不可用（code ${result.code}）"
+                            else "服务器有响应，但返回了错误（代码 ${result.code}）"
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (e: Exception) {
-                            "服务器不可用：${e.message}"
+                            // The raw exception names a socket or parser, not what to do about it.
+                            "无法连接到这个服务器，请检查地址是否正确、服务是否在运行"
                         }
                         if (
                             checkGeneration == serverCheckGeneration &&
@@ -563,239 +857,6 @@ fun SettingsScreen(
                         })
                     }
                 }
-                SettingsSectionLabel("账号", settingsPalette)
-                SettingsButton(
-                    label = if (cookie.isBlank()) "扫码 / 登录" else "重新登录 / 换号",
-                    leadingIcon = AppIcons.QrCode2,
-                    accentPalette = settingsPalette,
-                    index = 0,
-                    count = 2,
-                    onClick = onOpenLogin,
-                )
-                SettingsTextField(
-                    value = cookie,
-                    label = "Cookie",
-                    obscureText = true,
-                    accentPalette = settingsPalette,
-                    index = 1,
-                    count = 2,
-                    onDraftChange = { cookie = it },
-                    onCommit = { raw ->
-                        val normalized = raw.trim()
-                        cookie = normalized
-                        persistSettings(
-                            write = { settings.setString(SettingKeys.COOKIE, normalized) },
-                            // Stop old-account work as soon as the process cookie changes. The
-                            // refresh waits on the same settings barrier before resolving UID.
-                            onWritten = { mainViewModel.refreshAccount() },
-                            onFailure = {
-                                reloadSettingsSnapshot()
-                                mainViewModel.refreshAccount()
-                            },
-                        )
-                    },
-                )
-
-                SettingsSectionLabel("播放", settingsPalette)
-                // The output-device row sits with the quality dropdowns because it is the other
-                // half of "what comes out of the speakers", not a behaviour toggle.
-                val outputDeviceRows = if (supportsAudioOutputDeviceSelection) 1 else 0
-                val playbackSettingCount =
-                    5 + outputDeviceRows + if (supportsDynamicNowPlayingCover) 1 else 0
-                SettingsDropdown(onlineQuality, "在线播放音质", SoundQuality.entries, settingsPalette, index = 0, count = playbackSettingCount) { v ->
-                    onlineQuality = v.name
-                    persistSettings({ settings.setString(SettingKeys.ONLINE_PLAY_QUALITY, v.name) })
-                }
-                SettingsDropdown(dlQuality, "下载音质", SoundQuality.entries, settingsPalette, index = 1, count = playbackSettingCount) { v ->
-                    dlQuality = v.name
-                    persistSettings({ settings.setString(SettingKeys.DOWNLOAD_QUALITY, v.name) })
-                }
-                if (supportsAudioOutputDeviceSelection) {
-                    AudioOutputDeviceDropdown(
-                        selectedId = audioOutputDeviceId,
-                        accentPalette = settingsPalette,
-                        index = 2,
-                        count = playbackSettingCount,
-                    ) { deviceId ->
-                        audioOutputDeviceId = deviceId
-                        persistSettings(
-                            write = {
-                                settings.setString(SettingKeys.AUDIO_OUTPUT_DEVICE, deviceId)
-                            },
-                            // Move the track that is playing now, not just the next one.
-                            onWritten = { nowPlayingViewModel.reopenAudioOutput() },
-                        )
-                    }
-                }
-                SettingsSwitch(replacePlaylist, "点击单曲时替换播放队列", settingsPalette, index = 2 + outputDeviceRows, count = playbackSettingCount) { v ->
-                    replacePlaylist = v
-                    persistSettings({ settings.setBoolean(SettingKeys.REPLACE_PLAYLIST, v) })
-                }
-                SettingsSwitch(searchPrediction, "搜索联想", settingsPalette, index = 3 + outputDeviceRows, count = playbackSettingCount) { v ->
-                    searchPrediction = v
-                    persistSettings({ settings.setBoolean(SettingKeys.SEARCH_PREDICTION, v) })
-                }
-                SettingsSwitch(showDownloadStatus, "显示下载状态", settingsPalette, index = 4 + outputDeviceRows, count = playbackSettingCount) { v ->
-                    showDownloadStatus = v
-                    persistSettings({ settings.setBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, v) })
-                }
-                if (supportsDynamicNowPlayingCover) {
-                    SettingsSwitch(
-                        useDynamicCover,
-                        "播放页使用歌曲动态封面",
-                        settingsPalette,
-                        index = 5 + outputDeviceRows,
-                        count = playbackSettingCount,
-                    ) { enabled ->
-                        useDynamicCover = enabled
-                        persistSettings(
-                            write = { settings.setBoolean(SettingKeys.USE_DYNAMIC_COVER, enabled) },
-                            onWritten = { nowPlayingViewModel.setUseDynamicCover(enabled) },
-                        )
-                    }
-                }
-
-                SettingsSectionLabel("歌词", settingsPalette)
-                val surfaceRows = if (optionalLyricSurface != null) 1 else 0
-                val surfaceLayoutRows = if (windowedLyricSurface != null) 2 else 0
-                val lyricSettingCount = 3 + surfaceRows + surfaceLayoutRows
-                LyricSourceDropdown(
-                    selectedWireValue = lyricSourceMode,
-                    accentPalette = settingsPalette,
-                    index = 0,
-                    count = lyricSettingCount,
-                ) { mode ->
-                    val writeGeneration = ++lyricSourceWriteGeneration
-                    lyricSourceMode = mode.wireValue
-                    persistSettings(
-                        write = {
-                            settings.setString(SettingKeys.LYRIC_SOURCE_MODE, mode.wireValue)
-                        },
-                        onWritten = {
-                            if (writeGeneration == lyricSourceWriteGeneration) {
-                                nowPlayingViewModel.setLyricSourceMode(mode)
-                            }
-                        },
-                        onFailure = {
-                            if (writeGeneration == lyricSourceWriteGeneration) {
-                                reloadSettingsSnapshot()
-                            }
-                        },
-                    )
-                }
-                if (optionalLyricSurface != null) {
-                    SettingsSwitch(
-                        extraLyricSurfaceEnabled,
-                        optionalLyricSurface.settingLabel,
-                        settingsPalette,
-                        index = 1,
-                        count = lyricSettingCount,
-                    ) { enabled ->
-                        extraLyricSurfaceEnabled = enabled
-                        persistSettings(
-                            write = { settings.setBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, enabled) },
-                            onWritten = {
-                                optionalLyricSurface.setEnabled(enabled)
-                            },
-                        )
-                    }
-                }
-                if (windowedLyricSurface != null) {
-                    SettingsSwitch(
-                        desktopLyricLocked,
-                        "锁定桌面歌词",
-                        settingsPalette,
-                        index = 1 + surfaceRows,
-                        count = lyricSettingCount,
-                        supportingText = "锁定后窗口固定在原处，不能拖动或调整大小；" +
-                            "Windows 上鼠标会穿透到下面的窗口。解锁只能在这里进行。",
-                    ) { locked ->
-                        desktopLyricLocked = locked
-                        persistSettings(
-                            write = { settings.setBoolean(SettingKeys.DESKTOP_LYRIC_LOCKED, locked) },
-                            onWritten = {
-                                windowedLyricSurface.setLocked(locked)
-                            },
-                        )
-                    }
-                    LyricSurfaceAlignmentDropdown(
-                        selected = desktopLyricAlignment,
-                        accentPalette = settingsPalette,
-                        index = 2 + surfaceRows,
-                        count = lyricSettingCount,
-                    ) { alignment ->
-                        desktopLyricAlignment = alignment
-                        persistSettings(
-                            write = {
-                                settings.setString(
-                                    SettingKeys.DESKTOP_LYRIC_ALIGNMENT,
-                                    alignment.wireValue,
-                                )
-                            },
-                            onWritten = {
-                                windowedLyricSurface.setAlignment(alignment)
-                            },
-                        )
-                    }
-                }
-                SettingsSwitch(
-                    showTranslatedLyric,
-                    "显示翻译歌词",
-                    settingsPalette,
-                    index = lyricSettingCount - 2,
-                    count = lyricSettingCount,
-                ) { v ->
-                    val writeGeneration = ++lyricDisplayWriteGeneration
-                    showTranslatedLyric = v
-                    persistSettings(
-                        write = {
-                            settings.setBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, v)
-                        },
-                        onPersisted = {
-                            if (writeGeneration == lyricDisplayWriteGeneration) {
-                                nowPlayingViewModel.setLyricDisplayOptions(
-                                    showTranslation = v,
-                                    showRomanization = showRomanLyric,
-                                )
-                            }
-                        },
-                    )
-                }
-                SettingsSwitch(
-                    showRomanLyric,
-                    "显示五十音 / 罗马音歌词",
-                    settingsPalette,
-                    index = lyricSettingCount - 1,
-                    count = lyricSettingCount,
-                ) { v ->
-                    val writeGeneration = ++lyricDisplayWriteGeneration
-                    showRomanLyric = v
-                    persistSettings(
-                        write = { settings.setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, v) },
-                        onPersisted = {
-                            if (writeGeneration == lyricDisplayWriteGeneration) {
-                                nowPlayingViewModel.setLyricDisplayOptions(
-                                    showTranslation = showTranslatedLyric,
-                                    showRomanization = v,
-                                )
-                            }
-                        },
-                    )
-                }
-
-                SettingsSectionLabel("通用", settingsPalette)
-                SettingsSwitch(checkUpdate, "启动时检查更新", settingsPalette, index = 0, count = 1) { v ->
-                    checkUpdate = v
-                    persistSettings({ settings.setBoolean(SettingKeys.CHECK_UPDATE, v) })
-                }
-
-                SettingsSectionLabel("应用", settingsPalette)
-                SettingsValue(
-                    label = "版本",
-                    value = BuildInfo.VERSION_NAME,
-                    supportingText = "Build ${BuildInfo.VERSION_CODE}",
-                    accentPalette = settingsPalette,
-                )
 
                 SettingsSectionLabel("备份", settingsPalette)
                 // Deliberately two buttons, not a ButtonGroup. ButtonGroupScope.clickableItem
@@ -808,11 +869,62 @@ fun SettingsScreen(
                     showImportConfirmation = true
                 }
 
+                SettingsSectionLabel("关于", settingsPalette)
+                SettingsValue(
+                    label = "版本",
+                    value = BuildInfo.VERSION_NAME,
+                    supportingText = "Build ${BuildInfo.VERSION_CODE}",
+                    accentPalette = settingsPalette,
+                    index = 0,
+                    count = 2,
+                )
+                SettingsValue(
+                    label = "开源许可",
+                    value = "AMLL 歌词渲染与解析组件",
+                    supportingText = "以 AGPL-3.0-only 发布；许可证全文随应用资源提供。",
+                    accentPalette = settingsPalette,
+                    index = 1,
+                    count = 2,
+                )
+
                     Spacer(Modifier.height(48.dp))
                 }
                 }
             }
         }
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = scaffoldPadding.calculateBottomPadding()),
+        )
+    }
+
+    if (showLogoutConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showLogoutConfirmation = false },
+            icon = { Icon(AppIcons.Logout, contentDescription = null) },
+            title = { Text("退出登录？") },
+            text = {
+                Text("退出后「我的」、每日推荐和喜欢等功能将不可用，已下载的歌曲会保留。")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showLogoutConfirmation = false
+                        cookie = ""
+                        persistSettings(
+                            write = { settings.setString(SettingKeys.COOKIE, "") },
+                            onWritten = { mainViewModel.refreshAccount() },
+                            onPersisted = { settingsMessage = "已退出登录" },
+                        )
+                    },
+                ) { Text("退出登录") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutConfirmation = false }) { Text("取消") }
+            },
+        )
     }
 
     if (showImportConfirmation) {
@@ -820,7 +932,7 @@ fun SettingsScreen(
             onDismissRequest = { showImportConfirmation = false },
             title = { Text("导入并覆盖当前设置？") },
             text = {
-                Text("导入文件会覆盖账号 Cookie、服务器地址、播放与歌词偏好。建议先导出当前设置作为备份。")
+                Text("导入文件会覆盖服务器地址、播放与歌词偏好；登录状态不在备份里，不受影响。建议先导出当前设置作为备份。")
             },
             confirmButton = {
                 TextButton(
@@ -907,6 +1019,7 @@ private fun SettingsTextField(
     accentPalette: ContentAccentPalette,
     index: Int,
     count: Int,
+    supportingText: String? = null,
     onDraftChange: (String) -> Unit,
     onCommit: (String) -> Unit,
 ) {
@@ -947,6 +1060,7 @@ private fun SettingsTextField(
             onDraftChange(it)
         },
         label = { Text(label) },
+        supportingText = supportingText?.let { { Text(it) } },
         singleLine = true,
         visualTransformation = if (obscureText && !revealText) {
             PasswordVisualTransformation()
@@ -1003,9 +1117,11 @@ private fun SettingsValue(
     value: String,
     supportingText: String,
     accentPalette: ContentAccentPalette,
+    index: Int = 0,
+    count: Int = 1,
 ) {
     Surface(
-        shape = connectedListItemShape(index = 0, count = 1),
+        shape = connectedListItemShape(index = index, count = count),
         color = accentPalette.quietContainer,
         contentColor = accentPalette.onQuietContainer,
         modifier = Modifier
@@ -1163,11 +1279,13 @@ private fun <T> SettingsDropdownRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            // Up/down arrows: this row opens a menu in place. A right chevron promised a new
+            // page and then opened a menu.
             Icon(
-                AppIcons.KeyboardArrowRight,
+                AppIcons.UnfoldMore,
                 contentDescription = null,
                 tint = accentPalette.secondaryOnQuietContainer,
-                modifier = Modifier.padding(start = 4.dp),
+                modifier = Modifier.padding(start = 4.dp).size(20.dp),
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { setExpanded(false) }) {
@@ -1192,6 +1310,7 @@ private fun SettingsDropdown(
     accentPalette: ContentAccentPalette,
     index: Int,
     count: Int,
+    supportingText: String? = null,
     onUpdate: (SoundQuality) -> Unit,
 ) {
     val current = options.find { it.name == selectedName } ?: options.first()
@@ -1203,9 +1322,16 @@ private fun SettingsDropdown(
         accentPalette = accentPalette,
         index = index,
         count = count,
+        supportingText = listOfNotNull(supportingText),
         onUpdate = onUpdate,
     )
 }
+
+/**
+ * What a quality above the account's entitlement does. The list offers every tier; without this
+ * the VIP-only ones looked like they would simply play.
+ */
+private const val QualityAvailabilityNote = "账号没有对应权限时，会得到能播放的最高音质"
 
 /** Shown for the "no explicit choice" entry and whenever the chosen device cannot be resolved. */
 private const val DefaultAudioOutputLabel = "系统默认"
@@ -1313,8 +1439,7 @@ private fun LyricSourceDropdown(
         index = index,
         count = count,
         supportingText = listOf(
-            "AMLL TTML 会按网易云歌曲 ID 请求第三方 AMLL DB；不会发送网易云 Cookie。",
-            "AMLL 渲染与解析组件：AGPL-3.0-only；许可证全文随应用资源提供。",
+            "AMLL 歌词库由社区维护，逐字歌词更全；只按歌曲 ID 查询，不会发送账号信息。",
         ),
         onUpdate = onUpdate,
     )
@@ -1346,5 +1471,134 @@ private fun SettingsButton(
             Spacer(Modifier.width(8.dp))
         }
         Text(label)
+    }
+}
+
+/** Who is signed in, and the two things to do about it. */
+@Composable
+private fun AccountCard(
+    loggedIn: Boolean,
+    nickname: String?,
+    avatarUrl: String?,
+    accentPalette: ContentAccentPalette,
+    onLogin: () -> Unit,
+    onLogout: () -> Unit,
+) {
+    Surface(
+        shape = connectedListItemShape(index = 0, count = 2),
+        color = accentPalette.quietContainer,
+        contentColor = accentPalette.onQuietContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = ExpressiveLayout.ConnectedItemGap),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = accentPalette.container,
+                contentColor = accentPalette.onContainer,
+                modifier = Modifier.size(44.dp),
+            ) {
+                if (loggedIn && !avatarUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = avatarUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(AppIcons.Person, contentDescription = null)
+                    }
+                }
+            }
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = when {
+                        !loggedIn -> "未登录"
+                        nickname.isNullOrBlank() -> "已登录"
+                        else -> nickname
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = if (loggedIn) "网易云音乐账号" else "登录后可以查看歌单、每日推荐和喜欢的音乐",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = accentPalette.secondaryOnQuietContainer,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            if (loggedIn) {
+                TextButton(onClick = onLogin) { Text("切换账号") }
+                TextButton(onClick = onLogout) { Text("退出") }
+            } else {
+                FilledTonalButton(
+                    onClick = onLogin,
+                    shape = CircleShape,
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = accentPalette.container,
+                        contentColor = accentPalette.onContainer,
+                    ),
+                ) {
+                    Icon(AppIcons.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("登录")
+                }
+            }
+        }
+    }
+}
+
+/** A row that shows or hides an advanced setting beneath it. */
+@Composable
+private fun SettingsExpanderRow(
+    label: String,
+    supportingText: String,
+    expanded: Boolean,
+    accentPalette: ContentAccentPalette,
+    onToggle: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Surface(
+        onClick = onToggle,
+        shape = rememberConnectedListItemShape(
+            index = if (expanded) 1 else 1,
+            count = if (expanded) 3 else 2,
+            interactionSource = interactionSource,
+        ),
+        color = accentPalette.quietContainer,
+        contentColor = accentPalette.onQuietContainer,
+        interactionSource = interactionSource,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = ExpressiveLayout.ConnectedItemGap),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = ExpressiveLayout.MinimumTouchTarget)
+                .padding(start = 20.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(text = label, style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = supportingText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = accentPalette.secondaryOnQuietContainer,
+                )
+            }
+            Icon(
+                imageVector = if (expanded) AppIcons.KeyboardArrowDown else AppIcons.KeyboardArrowRight,
+                contentDescription = if (expanded) "收起" else "展开",
+                tint = accentPalette.secondaryOnQuietContainer,
+            )
+        }
     }
 }

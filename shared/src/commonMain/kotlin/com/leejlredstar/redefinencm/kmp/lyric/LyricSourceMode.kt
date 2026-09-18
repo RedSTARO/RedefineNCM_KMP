@@ -23,22 +23,22 @@ enum class LyricSourceMode(
 ) {
     TTML_PREFERRED(
         wireValue = "ttml_preferred",
-        displayName = "AMLL TTML 优先（后端回退）",
+        displayName = "优先用 AMLL 歌词库（找不到时用网易云）",
         sourceOrder = listOf(LyricSource.AMLL_TTML, LyricSource.NCM_BACKEND),
     ),
     BACKEND_PREFERRED(
         wireValue = "backend_preferred",
-        displayName = "现有后端优先（TTML 回退）",
+        displayName = "优先用网易云歌词（找不到时用 AMLL 歌词库）",
         sourceOrder = listOf(LyricSource.NCM_BACKEND, LyricSource.AMLL_TTML),
     ),
     TTML_ONLY(
         wireValue = "ttml_only",
-        displayName = "仅 AMLL TTML",
+        displayName = "只用 AMLL 歌词库",
         sourceOrder = listOf(LyricSource.AMLL_TTML),
     ),
     BACKEND_ONLY(
         wireValue = "backend_only",
-        displayName = "仅现有后端",
+        displayName = "只用网易云歌词",
         sourceOrder = listOf(LyricSource.NCM_BACKEND),
     );
 

@@ -38,6 +38,12 @@ object SettingKeys {
     // lines sit inside it. Only the desktop reads them; they are backed up with the rest.
     const val DESKTOP_LYRIC_LOCKED = "desktopLyricLocked"
     const val DESKTOP_LYRIC_ALIGNMENT = "desktopLyricAlignment"
+    /** Text size of the desktop lyric window, as a multiple of its default. */
+    const val DESKTOP_LYRIC_TEXT_SCALE = "desktopLyricTextScale"
+    // Where the desktop windows were left, so a launch opens them there again. They describe one
+    // machine's screens, so like AUDIO_OUTPUT_DEVICE they are not part of the settings backup.
+    const val DESKTOP_WINDOW_BOUNDS = "desktopWindowBounds"
+    const val DESKTOP_LYRIC_WINDOW_BOUNDS = "desktopLyricWindowBounds"
     const val SHOW_TRANSLATED_LYRIC = "showTranslatedLyric"
     const val SHOW_ROMAN_LYRIC = "showRomanLyric"
     const val LYRIC_SOURCE_MODE = "lyricSourceMode"

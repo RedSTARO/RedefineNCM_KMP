@@ -26,9 +26,17 @@ object DesktopLyricWindow : WindowedLyricSurface {
     private val _isWindowVisible = MutableStateFlow(false)
     val isWindowVisible: StateFlow<Boolean> = _isWindowVisible.asStateFlow()
 
+    private val _isEnabled = MutableStateFlow(false)
+    /** Whether the user has the desktop lyric turned on, for the tray menu to reflect. */
+    override val isEnabled: StateFlow<Boolean> = _isEnabled.asStateFlow()
+
+    private val _textScale = MutableStateFlow(1f)
+    /** The lyric text size relative to the default, adjusted from the window itself. */
+    val textScale: StateFlow<Float> = _textScale.asStateFlow()
+
     private val _isWindowLocked = MutableStateFlow(false)
-    /** Whether the window ignores the pointer and stays where it is. Settings toggles it. */
-    val isWindowLocked: StateFlow<Boolean> = _isWindowLocked.asStateFlow()
+    /** Whether the window ignores the pointer and stays where it is. */
+    override val isWindowLocked: StateFlow<Boolean> = _isWindowLocked.asStateFlow()
 
     private val _windowAlignment = MutableStateFlow(LyricSurfaceAlignment.DEFAULT)
     /** How the two lyric lines sit inside the window. */
@@ -42,6 +50,7 @@ object DesktopLyricWindow : WindowedLyricSurface {
     @Synchronized
     override fun setEnabled(enabled: Boolean) {
         optionalSurfaceEnabled = enabled
+        _isEnabled.value = enabled
         if (enabled) {
             latestLyricData?.let { publish(it, latestProgress) }
         } else {
@@ -56,6 +65,13 @@ object DesktopLyricWindow : WindowedLyricSurface {
     override fun setAlignment(alignment: LyricSurfaceAlignment) {
         _windowAlignment.value = alignment
     }
+
+    fun setTextScale(scale: Float) {
+        _textScale.value = scale.coerceIn(MinTextScale, MaxTextScale)
+    }
+
+    const val MinTextScale = 0.7f
+    const val MaxTextScale = 2.0f
 
     @Synchronized
     override fun updateLyric(

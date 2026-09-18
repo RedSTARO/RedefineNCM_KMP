@@ -10,22 +10,27 @@ import kotlin.test.assertNull
 
 class LyricCapabilityBadgeTest {
     @Test
-    fun fourLevelsKeepOneGlyphAndDistinctColorRoles() {
+    fun fourLevelsNameThemselvesAndKeepDistinctColorRoles() {
         val specs = LyricCapabilityLevel.entries.map(::lyricCapabilityBadgeSpec)
 
-        assertEquals(setOf("词"), specs.map { it.visibleText }.toSet())
+        assertEquals(listOf("文本", "逐行", "逐字", "TTML"), specs.map { it.visibleText })
         assertEquals(4, specs.map { it.tone }.toSet().size)
         assertEquals(
             listOf(
-                "歌词等级：无时间戳",
-                "歌词等级：普通逐行",
-                "歌词等级：NCM YRC",
-                "歌词等级：TTML 完全支持",
+                "歌词等级：纯文本",
+                "歌词等级：逐行同步",
+                "歌词等级：逐字同步",
+                "歌词等级：逐字同步，含和声与对唱",
             ),
             specs.map { it.contentDescription },
         )
         assertEquals(
-            listOf("无时间戳", "普通逐行", "NCM YRC 逐字", "TTML 完全支持"),
+            listOf(
+                "纯文本（没有时间轴）",
+                "逐行同步",
+                "逐字同步（网易云逐字歌词）",
+                "逐字同步，含和声与对唱（AMLL TTML）",
+            ),
             specs.map { it.levelLabel },
         )
     }
@@ -33,11 +38,11 @@ class LyricCapabilityBadgeTest {
     @Test
     fun sourceLabelDistinguishesProviderAndLocalSidecar() {
         assertEquals(
-            "AMLL TTML",
+            "AMLL 歌词库",
             lyricSourceDisplayName(LyricSource.AMLL_TTML, "stevexmh-exact"),
         )
         assertEquals(
-            "网易云歌词后端 · 本地歌词文件",
+            "网易云 · 本地歌词文件",
             lyricSourceDisplayName(LyricSource.NCM_BACKEND, "local-sidecar"),
         )
         assertEquals("未知", lyricSourceDisplayName(null, ""))

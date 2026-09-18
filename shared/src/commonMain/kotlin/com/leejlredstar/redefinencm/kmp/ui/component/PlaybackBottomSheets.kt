@@ -43,6 +43,7 @@ import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusicComments
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.screen.compactCount
 
 private data class QueueSheetEntry(
     val key: String,
@@ -201,6 +202,8 @@ fun CommentBottomSheet(
     isFromCache: Boolean = false,
     errorMessage: String? = null,
     onRetry: (() -> Unit)? = null,
+    totalCount: Long = 0L,
+    showingHot: Boolean = false,
 ) {
     val showInitialLoading = isLoading && !hasLoadedData
     val commentEntries = remember(comments) {
@@ -231,7 +234,13 @@ fun CommentBottomSheet(
                 showInitialLoading -> "正在加载评论"
                 errorMessage != null -> "评论暂时无法加载"
                 comments.isEmpty() -> "暂无评论"
-                else -> "共 ${comments.size} 条评论"
+                // The list is one page; say which page and how many there are in all, instead of
+                // presenting the page's length as the song's comment count.
+                else -> buildString {
+                    append(if (showingHot) "热门评论" else "最新评论")
+                    append(" ${comments.size} 条")
+                    if (totalCount > comments.size) append(" · 共 ${compactCount(totalCount)} 条")
+                }
             },
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
         )

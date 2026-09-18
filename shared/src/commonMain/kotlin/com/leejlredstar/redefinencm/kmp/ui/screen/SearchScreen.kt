@@ -61,6 +61,9 @@ import org.koin.compose.koinInject
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun SearchScreen(
+    bottomPadding: androidx.compose.ui.unit.Dp,
+    query: String,
+    onQueryChange: (String) -> Unit,
     onBack: () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
@@ -75,13 +78,13 @@ fun SearchScreen(
     val loading by viewModel.searchLoading.collectAsState()
     val submittedQuery by viewModel.searchSubmittedQuery.collectAsState()
     val searchError by viewModel.searchError.collectAsState()
-    var query by remember { mutableStateOf("") }
     val keyboard = LocalSoftwareKeyboardController.current
     val focusRequester = remember { FocusRequester() }
     val searchPrediction = remember { settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true) }
     val searchPalette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
 
-    LaunchedEffect(Unit) { viewModel.clearSearch() }
+    // The last query and its results are kept when the search closes, so trying another result
+    // after playing one does not mean typing the query again.
     LaunchedEffect(Unit) {
         delay(220)
         if (runCatching { focusRequester.requestFocus() }.isSuccess) {
@@ -99,10 +102,12 @@ fun SearchScreen(
     }
 
     fun submit(text: String) {
-        query = text
+        if (text.isBlank()) return
+        onQueryChange(text)
         keyboard?.hide()
         viewModel.search(text)
     }
+    val playWholeList = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false) }
     val submittedMatchesQuery = submittedQuery != null && submittedQuery == query.trim()
 
     ExpressivePage(
@@ -131,14 +136,24 @@ fun SearchScreen(
             with(sharedTransitionScope) {
                 TextField(
                     value = query,
-                    onValueChange = { query = it },
-                    placeholder = { Text("搜索歌曲、歌手") },
+                    onValueChange = onQueryChange,
+                    placeholder = { Text(SearchPlaceholder) },
                     singleLine = true,
                     leadingIcon = { Icon(AppIcons.Search, contentDescription = null) },
                     trailingIcon = {
                         if (query.isNotEmpty()) {
-                            IconButton(onClick = { query = ""; viewModel.clearSearch() }) {
-                                Icon(AppIcons.Clear, contentDescription = "清除")
+                            Row {
+                                IconButton(onClick = { onQueryChange(""); viewModel.clearSearch() }) {
+                                    Icon(AppIcons.Clear, contentDescription = "清除")
+                                }
+                                // The keyboard's search key was the only way to run a search.
+                                IconButton(onClick = { submit(query) }) {
+                                    Icon(
+                                        AppIcons.Search,
+                                        contentDescription = "搜索",
+                                        tint = searchPalette.accent,
+                                    )
+                                }
                             }
                         }
                     },
@@ -200,13 +215,24 @@ fun SearchScreen(
                     groups.size > 1
                 val showProviderBadge = groups.size > 1 && !perProvider
 
-                fun play(track: ProviderTrack) {
-                    player.setQueue(listOf(track.toMediaInfo()), 0)
+                // Playing keeps the results on screen: the next result is one tap away.
+                fun play(list: List<ProviderTrack>, index: Int) {
+                    playFromList(
+                        player,
+                        list.map { it.toMediaInfo() },
+                        index,
+                        playWholeList,
+                        source = "搜索「${submittedQuery ?: query}」",
+                    )
                     player.play()
-                    onBack()
                 }
 
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                // Bottom clearance so the last results can be scrolled clear of the floating
+                // navigation and the mini player.
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = bottomPadding),
+                ) {
                     searchError?.let { partialFailure ->
                         item(key = "partial-failure") {
                             SearchProviderHeader(
@@ -232,7 +258,7 @@ fun SearchScreen(
                                     track = track,
                                     count = group.tracks.size,
                                     showProviderBadge = false,
-                                    onClick = { play(track) },
+                                    onClick = { play(group.tracks, index) },
                                 )
                             }
                         }
@@ -246,7 +272,7 @@ fun SearchScreen(
                                 track = track,
                                 count = results.size,
                                 showProviderBadge = showProviderBadge,
-                                onClick = { play(track) },
+                                onClick = { play(results, index) },
                             )
                         }
                     }
@@ -255,14 +281,17 @@ fun SearchScreen(
             submittedMatchesQuery -> {
                 ExpressiveStatePanel(
                     title = "没有找到结果",
-                    message = "没有找到与“$submittedQuery”匹配的歌曲，试试更短的关键词。",
+                    message = "没有找到与“$submittedQuery”匹配的歌曲，试试更短的关键词或只输入歌手名。",
                     icon = AppIcons.Search,
                     accentPalette = searchPalette,
                     modifier = Modifier.padding(top = 24.dp),
                 )
             }
             query.isNotBlank() && searchPrediction && suggestions.isNotEmpty() -> {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = bottomPadding),
+                ) {
                     itemsIndexed(
                         items = suggestions,
                         key = { _, keyword -> keyword },
@@ -301,7 +330,7 @@ fun SearchScreen(
             query.isNotBlank() -> {
                 ExpressiveStatePanel(
                     title = "准备搜索",
-                    message = "按键盘搜索键查找“$query”。",
+                    message = "点搜索按钮或按回车键，查找与“$query”相关的歌曲。",
                     icon = AppIcons.Search,
                     accentPalette = searchPalette,
                 )
@@ -309,7 +338,7 @@ fun SearchScreen(
             else -> {
                 ExpressiveStatePanel(
                     title = "发现想听的音乐",
-                    message = "输入歌曲名、歌手或专辑开始搜索。",
+                    message = "输入歌名、歌手或专辑名，查找相关的歌曲。",
                     icon = AppIcons.Search,
                     accentPalette = searchPalette,
                     modifier = Modifier.padding(top = 24.dp),
@@ -346,23 +375,50 @@ private fun SearchTrackRow(
     showProviderBadge: Boolean,
     onClick: () -> Unit,
 ) {
-    Column {
-        if (showProviderBadge) {
-            Text(
-                text = track.provider.displayName,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 16.dp, top = 6.dp),
+    val media = remember(track) { track.toMediaInfo() }
+    // One accent for the whole result list. Tinting each row from its own cover striped the list
+    // in unrelated colours. The provider, when several are mixed, is a chip in the row rather than
+    // a line of its own above it.
+    SongRow(
+        index = index,
+        title = track.title,
+        artist = track.artistLine,
+        artworkUri = track.artworkUrl,
+        shape = connectedListItemShape(index, count),
+        onClick = onClick,
+        songId = track.id.neteaseIdOrNull,
+        accentColor = MaterialTheme.colorScheme.primaryContainer,
+        mediaId = media.id,
+        durationMs = track.durationMillis,
+        album = track.album?.name.orEmpty(),
+        badge = track.provider.displayName.takeIf { showProviderBadge },
+        actions = rememberSongRowActions(
+            media = media,
+            neteaseSong = remember(track) { track.toNeteaseSongOrNull() },
+        ),
+    )
+}
+
+/** The same words wherever search is offered: it finds songs, matched by title, artist or album. */
+internal const val SearchPlaceholder = "搜索歌曲"
+
+/** A NetEase search hit in the DTO shape the downloader takes; null for other providers. */
+internal fun ProviderTrack.toNeteaseSongOrNull(): com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs? {
+    val songId = id.neteaseIdOrNull ?: return null
+    return com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs(
+        id = songId,
+        name = title,
+        ar = artists.map {
+            com.leejlredstar.redefinencm.kmp.data.api.dto.SongArtist(
+                id = it.id?.neteaseIdOrNull ?: 0L,
+                name = it.name,
             )
-        }
-        SongRow(
-            index = index,
-            title = track.title,
-            artist = track.artistLine,
-            artworkUri = track.artworkUrl,
-            shape = connectedListItemShape(index, count),
-            onClick = onClick,
-            songId = track.id.neteaseIdOrNull,
-        )
-    }
+        },
+        al = com.leejlredstar.redefinencm.kmp.data.api.dto.SongAlbum(
+            id = album?.id?.neteaseIdOrNull ?: 0L,
+            name = album?.name.orEmpty(),
+            picUrl = artworkUrl,
+        ),
+        dt = durationMillis,
+    )
 }

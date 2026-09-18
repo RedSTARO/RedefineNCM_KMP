@@ -220,7 +220,9 @@ fun ExpressivePage(
             ),
         contentAlignment = Alignment.TopCenter,
     ) {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
+        // The alignment has to be on this box: it fills the page, so the outer box's TopCenter
+        // never had anything to center and the bounded pane sat against the left edge.
+        BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             val boundedWidth = minOf(maxWidth, maxContentWidth)
             Box(
                 modifier = Modifier

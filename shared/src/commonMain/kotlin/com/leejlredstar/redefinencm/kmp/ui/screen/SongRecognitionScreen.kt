@@ -54,10 +54,15 @@ import com.leejlredstar.redefinencm.kmp.viewmodel.RecognizedSongMatch
 import com.leejlredstar.redefinencm.kmp.viewmodel.SongRecognitionUiState
 import com.leejlredstar.redefinencm.kmp.viewmodel.SongRecognitionViewModel
 import org.koin.compose.koinInject
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.graphicsLayer
+import com.leejlredstar.redefinencm.kmp.viewmodel.MaxRecognitionAttempts
 
 @Composable
 fun SongRecognitionScreen(
     onBack: () -> Unit,
+    onOpenPlayer: () -> Unit = onBack,
+    scaffoldPadding: PaddingValues = PaddingValues(),
     viewModel: SongRecognitionViewModel = koinInject(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -79,6 +84,11 @@ fun SongRecognitionScreen(
     }
 
     BackHandler { leave() }
+    // The entry is already a request to identify a song; listening starts on arrival instead of
+    // after a second tap on this page.
+    LaunchedEffect(Unit) {
+        if (state is SongRecognitionUiState.Idle) requestRecognition()
+    }
     DisposableEffect(viewModel) {
         onDispose { viewModel.close() }
     }
@@ -86,7 +96,11 @@ fun SongRecognitionScreen(
     ExpressivePage(
         accentPalette = accentPalette,
         maxContentWidth = ExpressiveLayout.ReadingContentMaxWidth,
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            bottom = scaffoldPadding.calculateBottomPadding() + 16.dp,
+        ),
     ) {
         LazyColumn(modifier = Modifier.fillMaxSize()) {
             item(key = "recognition-header") {
@@ -111,6 +125,7 @@ fun SongRecognitionScreen(
                     RecognitionListeningPanel(
                         elapsedMillis = current.elapsedMillis,
                         level = current.level,
+                        attempt = current.attempt,
                         accentPalette = accentPalette,
                         onCancel = viewModel::cancelRecognition,
                     )
@@ -143,7 +158,7 @@ fun SongRecognitionScreen(
                             accentPalette = accentPalette,
                             onPlay = {
                                 viewModel.play(match)
-                                onBack()
+                                onOpenPlayer()
                             },
                             onAddToQueue = {
                                 viewModel.addToQueue(match)
@@ -165,8 +180,8 @@ fun SongRecognitionScreen(
                 is SongRecognitionUiState.NoMatch -> item(key = "recognition-no-match") {
                     ExpressiveStatePanel(
                         title = "没有识别到歌曲",
-                        message = "请靠近音源，并选择较清晰的音乐片段后重试。",
-                        icon = AppIcons.GraphicEq,
+                        message = "已经听了 ${MaxRecognitionAttempts * 3} 秒仍未找到。请靠近音源，在音乐清晰的段落再试。",
+                        icon = AppIcons.MusicNote,
                         accentPalette = accentPalette,
                         actionLabel = "重新识别",
                         onAction = ::requestRecognition,
@@ -177,7 +192,7 @@ fun SongRecognitionScreen(
                     ExpressiveStatePanel(
                         title = "需要麦克风权限",
                         message = "请在系统或浏览器的站点设置中允许麦克风，然后返回此页重新检查。听歌识曲只处理本次三秒录音。",
-                        icon = AppIcons.GraphicEq,
+                        icon = AppIcons.Mic,
                         tone = ExpressiveStateTone.Error,
                         actionLabel = "重新检查",
                         onAction = ::requestRecognition,
@@ -188,7 +203,7 @@ fun SongRecognitionScreen(
                     ExpressiveStatePanel(
                         title = "麦克风不可用",
                         message = current.message,
-                        icon = AppIcons.GraphicEq,
+                        icon = AppIcons.Mic,
                         tone = ExpressiveStateTone.Error,
                         actionLabel = if (current.canRetry) "重试" else null,
                         onAction = if (current.canRetry) ::requestRecognition else null,
@@ -281,7 +296,7 @@ private fun RecognitionIdlePanel(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        imageVector = AppIcons.GraphicEq,
+                        imageVector = AppIcons.Mic,
                         contentDescription = null,
                         modifier = Modifier.size(52.dp),
                     )
@@ -293,12 +308,12 @@ private fun RecognitionIdlePanel(
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = "开始后会暂停当前播放，录制完成后不会自动恢复。",
+                text = "识别时会暂停正在播放的音乐，离开这一页后自动继续。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = accentPalette.secondaryOnQuietContainer,
             )
             FilledTonalButton(onClick = onStart, shape = CircleShape) {
-                Icon(AppIcons.GraphicEq, contentDescription = null)
+                Icon(AppIcons.Mic, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text("开始识别")
             }
@@ -326,6 +341,7 @@ private fun RecognitionLoadingPanel(
 private fun RecognitionListeningPanel(
     elapsedMillis: Long,
     level: Float,
+    attempt: Int,
     accentPalette: ContentAccentPalette,
     onCancel: () -> Unit,
 ) {
@@ -343,22 +359,32 @@ private fun RecognitionListeningPanel(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Surface(
-                shape = CircleShape,
-                color = accentPalette.container,
-                contentColor = accentPalette.onContainer,
-                modifier = Modifier.size((88 + level * 24).dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = AppIcons.GraphicEq,
-                        contentDescription = null,
-                        modifier = Modifier.size(44.dp),
-                    )
+            // A fixed box with the circle scaled inside it: resizing the circle itself moved
+            // everything below it up and down with every level sample.
+            Box(Modifier.size(112.dp), contentAlignment = Alignment.Center) {
+                Surface(
+                    shape = CircleShape,
+                    color = accentPalette.container,
+                    contentColor = accentPalette.onContainer,
+                    modifier = Modifier
+                        .size(112.dp)
+                        .graphicsLayer {
+                            val scale = (88f + level * 24f) / 112f
+                            scaleX = scale
+                            scaleY = scale
+                        },
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = AppIcons.GraphicEq,
+                            contentDescription = null,
+                            modifier = Modifier.size(44.dp),
+                        )
+                    }
                 }
             }
             Text(
-                text = "正在聆听…",
+                text = if (attempt > 1) "再听一会儿…（第 $attempt 次）" else "正在聆听…",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
             )
@@ -401,7 +427,7 @@ private fun RecognitionResultCard(
                     model = song.al.picUrl,
                     contentDescription = null,
                     modifier = Modifier.size(72.dp),
-                    shape = MaterialTheme.shapes.large,
+                    shape = MaterialTheme.shapes.medium,
                     containerColor = accentPalette.container,
                     contentColor = accentPalette.onContainer,
                 )

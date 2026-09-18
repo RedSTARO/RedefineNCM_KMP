@@ -39,7 +39,7 @@ fun ExpressiveArtwork(
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHighest,
     contentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     contentScale: ContentScale = ContentScale.Crop,
-    placeholderIcon: ImageVector = AppIcons.GraphicEq,
+    placeholderIcon: ImageVector = AppIcons.MusicNote,
     pressInteractionSource: InteractionSource? = null,
     morphPair: ExpressiveMorphPair = ExpressiveMorphPair.ArtworkBloom,
     onImageLoaded: (Image) -> Unit = {},

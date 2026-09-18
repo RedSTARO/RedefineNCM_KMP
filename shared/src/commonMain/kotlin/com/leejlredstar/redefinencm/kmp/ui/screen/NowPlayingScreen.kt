@@ -73,6 +73,15 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberArtworkAccent
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import org.koin.compose.koinInject
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateOf
+import com.leejlredstar.redefinencm.kmp.player.PlaybackSource
+import com.leejlredstar.redefinencm.kmp.ui.amll.scopedToMedia
+import com.leejlredstar.redefinencm.kmp.ui.amll.shouldRequestSongWikiOnOpen
+import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsSheet
 
 /**
  * The Now Playing entry page — what the mini player, the desktop rail and every OS
@@ -112,6 +121,11 @@ fun NowPlayingScreen(
     val extractAccent = artworkAccent.extract
 
     val sheets = rememberTransportSheetsState()
+    val playbackSource by PlaybackSource.label.collectAsState()
+    val songWikiState by viewModel.songWikiUiState.collectAsState()
+    val outputVolume by player.volume.collectAsState()
+    var showSongWiki by remember { mutableStateOf(false) }
+    LaunchedEffect(media?.id) { showSongWiki = false }
 
     Box(
         modifier = Modifier
@@ -160,6 +174,13 @@ fun NowPlayingScreen(
                     reducedMotion = reducedMotion,
                     onSeek = player::seekTo,
                 )
+                // Silence with no sign of why: a muted app volume showed nowhere on this page.
+                if (outputVolume <= 0.001f && nowPlaying.hasMedia) {
+                    MutedChip(
+                        palette = palette,
+                        onUnmute = { player.setVolume(0.5f) },
+                    )
+                }
                 Spacer(Modifier.height(20.dp))
                 NowPlayingTransport(
                     isPlaying = nowPlaying.isPlaying,
@@ -242,7 +263,15 @@ fun NowPlayingScreen(
 
             NowPlayingTopBar(
                 palette = palette,
+                source = playbackSource,
+                wikiEnabled = nowPlaying.hasMedia,
                 onBack = onBack,
+                onOpenDetails = {
+                    showSongWiki = true
+                    if (shouldRequestSongWikiOnOpen(songWikiState, media?.id)) {
+                        viewModel.getSongWikiSummary()
+                    }
+                },
                 modifier = Modifier.align(Alignment.TopStart),
             )
         }
@@ -254,13 +283,33 @@ fun NowPlayingScreen(
         accentPalette = palette,
         viewModel = viewModel,
     )
+
+    // The song's details were reachable only from the lyric page's corner.
+    SongWikiDetailsSheet(
+        visible = showSongWiki,
+        songTitle = media?.title,
+        songArtist = media?.artist,
+        albumTitle = media?.albumTitle,
+        artworkUri = media?.artworkUri,
+        fallbackArtworkUri = null,
+        durationMs = media?.duration,
+        artworkOverlay = null,
+        state = songWikiState.scopedToMedia(media?.id),
+        onDismiss = { showSongWiki = false },
+        onRetry = viewModel::getSongWikiSummary,
+        reducedMotion = reducedMotion,
+        returnFocusRequester = null,
+    )
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun NowPlayingTopBar(
     palette: ContentAccentPalette,
+    source: String?,
+    wikiEnabled: Boolean,
     onBack: () -> Unit,
+    onOpenDetails: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -286,15 +335,60 @@ private fun NowPlayingTopBar(
                 modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
             )
         }
-        Spacer(Modifier.weight(1f))
-        Text(
-            text = "正在播放",
-            style = MaterialTheme.typography.labelLarge,
-            color = palette.secondaryOnPageStart,
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = "正在播放",
+                style = MaterialTheme.typography.labelLarge,
+                color = palette.secondaryOnPageStart,
+            )
+            // Where this queue came from, when the page that started it said.
+            source?.let {
+                Text(
+                    text = "来自$it",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = palette.secondaryOnPageStart,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        FilledTonalIconButton(
+            onClick = onOpenDetails,
+            enabled = wikiEnabled,
+            shapes = IconButtonDefaults.shapes(),
+            modifier = Modifier.size(IconButtonDefaults.mediumContainerSize()),
+            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = palette.container.copy(alpha = 0.72f),
+                contentColor = palette.onContainer,
+            ),
+        ) {
+            Icon(imageVector = AppIcons.Info, contentDescription = "歌曲详细信息")
+        }
+    }
+}
+
+@Composable
+private fun MutedChip(
+    palette: ContentAccentPalette,
+    onUnmute: () -> Unit,
+) {
+    Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
+        AssistChip(
+            onClick = onUnmute,
+            label = { Text("已静音 · 点按恢复音量") },
+            leadingIcon = {
+                Icon(AppIcons.VolumeOff, contentDescription = null, modifier = Modifier.size(18.dp))
+            },
+            colors = AssistChipDefaults.assistChipColors(
+                containerColor = palette.container.copy(alpha = 0.72f),
+                labelColor = palette.onContainer,
+                leadingIconContentColor = palette.onContainer,
+            ),
+            border = null,
         )
-        Spacer(Modifier.weight(1f))
-        // Keeps the label centred against the leading button.
-        Spacer(Modifier.size(IconButtonDefaults.mediumContainerSize()))
     }
 }
 
@@ -400,7 +494,7 @@ private fun NowPlayingTitle(
         ) {
             Icon(
                 imageVector = if (isFavorite) AppIcons.Favorite else AppIcons.FavoriteBorder,
-                contentDescription = if (isFavorite) "已收藏" else "收藏",
+                contentDescription = "喜欢",
                 modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
             )
         }
@@ -593,9 +687,13 @@ private fun NowPlayingToolbar(
     HorizontalFloatingToolbar(
         expanded = true,
         floatingActionButton = {
+            // The toolbar's fabContainerColor below does not reach this button: the FAB reads its
+            // own containerColor default (tertiaryContainer), so the artwork accent is passed here.
             FloatingToolbarDefaults.VibrantFloatingActionButton(
                 onClick = onLyrics,
                 modifier = Modifier.semantics { contentDescription = "歌词" },
+                containerColor = palette.accent,
+                contentColor = palette.onAccent,
             ) {
                 Icon(imageVector = AppIcons.FormatQuote, contentDescription = null)
             }

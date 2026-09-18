@@ -79,3 +79,8 @@ private fun String.toDownloadedSongSnapshot(dir: String): DownloadedSongSnapshot
         lastModifiedEpochMillis = null,
     )
 }
+
+// Downloads already land in a folder the user can open.
+actual val downloadsNeedExport: Boolean = false
+
+actual suspend fun exportDownloadedSong(fileName: String, displayName: String) = Unit

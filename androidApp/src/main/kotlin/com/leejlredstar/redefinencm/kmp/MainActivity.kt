@@ -24,6 +24,10 @@ import com.leejlredstar.redefinencm.kmp.util.requiresLegacyDownloadWritePermissi
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.get
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.leejlredstar.redefinencm.kmp.ui.component.StartupPermissionRationale
 
 class MainActivity : ComponentActivity() {
 
@@ -37,6 +41,9 @@ class MainActivity : ComponentActivity() {
      * 只为生命周期而存在。
      */
     private var controllerFuture: ListenableFuture<MediaController>? = null
+
+    /** Permissions waiting on the in-app explanation; empty when nothing is being asked. */
+    private var pendingPermissions by mutableStateOf<List<String>>(emptyList())
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) {
@@ -69,7 +76,25 @@ class MainActivity : ComponentActivity() {
 
             requestRuntimePermissions()
             handleNavigationIntent(intent)
-            setContent { App() }
+            setContent {
+                App()
+                val pending = pendingPermissions
+                if (pending.isNotEmpty()) {
+                    StartupPermissionRationale(
+                        needsNotifications = Manifest.permission.POST_NOTIFICATIONS in pending,
+                        needsAudioLibrary = pending.any { it != Manifest.permission.POST_NOTIFICATIONS },
+                        onContinue = {
+                            markPermissionRationaleAnswered()
+                            pendingPermissions = emptyList()
+                            permissionLauncher.launch(pending.toTypedArray())
+                        },
+                        onLater = {
+                            markPermissionRationaleAnswered()
+                            pendingPermissions = emptyList()
+                        },
+                    )
+                }
+            }
         }
     }
 
@@ -135,8 +160,21 @@ class MainActivity : ComponentActivity() {
             }
         }
         if (permissions.isEmpty()) return
+        // Explained once, in the app's words, and then left to the user: after an answer the
+        // prompts do not come back at every launch. System settings can still grant them.
+        if (startupPreferences().getBoolean(KEY_PERMISSION_RATIONALE_ANSWERED, false)) return
+        pendingPermissions = permissions
+    }
 
-        permissionLauncher.launch(permissions.toTypedArray())
+    private fun startupPreferences() = getSharedPreferences(STARTUP_PREFERENCES, MODE_PRIVATE)
+
+    private fun markPermissionRationaleAnswered() {
+        startupPreferences().edit().putBoolean(KEY_PERMISSION_RATIONALE_ANSWERED, true).apply()
+    }
+
+    private companion object {
+        const val STARTUP_PREFERENCES = "startup"
+        const val KEY_PERMISSION_RATIONALE_ANSWERED = "permissionRationaleAnswered"
     }
 
     private fun hasPermission(permission: String): Boolean =

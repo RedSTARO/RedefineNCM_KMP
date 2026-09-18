@@ -284,6 +284,8 @@ kotlin {
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
             implementation(libs.sqldelight.native.driver)
+            // Back navigation from the system edge-swipe gesture; see BackHandler.ios.kt.
+            implementation(libs.navigationevent.compose)
         }
         jvmMain {
             dependencies {
@@ -292,6 +294,8 @@ kotlin {
                 implementation(libs.ktor.client.okhttp)
                 // Dispatchers.Main for JVM (needed by DesktopFloatingWindowController + jvmTest)
                 implementation(libs.kotlinx.coroutinesSwing)
+                // Back navigation from Esc and the mouse back button; see BackHandler.jvm.kt.
+                implementation(libs.navigationevent.compose)
                 implementation(libs.sqldelight.sqlite.driver)
                 // Windows SMTC and macOS now-playing bindings call native APIs through JNA.
                 implementation(libs.jna)

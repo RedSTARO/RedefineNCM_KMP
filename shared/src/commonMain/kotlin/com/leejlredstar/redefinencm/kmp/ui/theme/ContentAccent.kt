@@ -16,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
@@ -27,6 +28,18 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/**
+ * Saves a page's extracted accent across the page leaving composition.
+ *
+ * Pages keep their scroll position when the user switches tabs now, so the artwork a page
+ * extracts its colour from (a hero, a first carousel card) can be off screen when it returns and
+ * never reload. Without this the page came back in the default colour.
+ */
+val AccentColorSaver: Saver<Color, Long> = Saver(
+    save = { it.value.toLong() },
+    restore = { Color(it.toULong()) },
+)
 
 @Immutable
 data class ContentAccentPalette(

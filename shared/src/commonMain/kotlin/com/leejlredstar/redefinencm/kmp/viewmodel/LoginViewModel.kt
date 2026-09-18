@@ -9,6 +9,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.leejlredstar.redefinencm.kmp.di.DEFAULT_NCM_SERVER
 
 /**
  * LoginViewModel with QR login support and cookie/server management.
@@ -47,12 +48,17 @@ class LoginViewModel(
     private val _qrSuccess = MutableStateFlow(false)
     val qrSuccess: StateFlow<Boolean> = _qrSuccess.asStateFlow()
 
+    // Expired is a state of its own: the old code only changed the status text, so the dead code
+    // stayed on screen with a "取消" button beneath it.
+    private val _qrExpired = MutableStateFlow(false)
+    val qrExpired: StateFlow<Boolean> = _qrExpired.asStateFlow()
+
     private var qrLoginJob: Job? = null
 
     init {
         scope.launch {
             settings.awaitLoaded()
-            _server.value = settings.getStringAsync(SettingKeys.SERVER, "https://ncm.tryagain.icu/")
+            _server.value = settings.getStringAsync(SettingKeys.SERVER, DEFAULT_NCM_SERVER)
             _cookie.value = settings.getStringAsync(SettingKeys.COOKIE, "")
         }
     }
@@ -94,6 +100,7 @@ class LoginViewModel(
             try {
                 _qrLoading.value = true
                 _qrError.value = ""
+                _qrExpired.value = false
                 _qrSuccess.value = false
                 _qrScanStatus.value = "正在生成二维码…"
                 _qrDataUri.value = ""
@@ -133,6 +140,7 @@ class LoginViewModel(
                         val checkResult = safeApiCall { api.loginQrCheck(key) }
                         when (checkResult?.code) {
                             800 -> {
+                                _qrExpired.value = true
                                 _qrScanStatus.value = "二维码已过期，请重新生成"
                                 return@withTimeoutOrNull true
                             }
@@ -167,6 +175,7 @@ class LoginViewModel(
                     false
                 }
                 if (finished == null && currentCoroutineContext().isActive) {
+                    _qrExpired.value = true
                     _qrScanStatus.value = "二维码已过期，请重新生成"
                 }
             } catch (e: CancellationException) {
@@ -186,6 +195,7 @@ class LoginViewModel(
         _qrDataUri.value = ""
         _qrBitmapBytes.value = null
         _qrScanStatus.value = "点击生成二维码"
+        _qrExpired.value = false
         _qrLoading.value = false
         _qrError.value = ""
     }

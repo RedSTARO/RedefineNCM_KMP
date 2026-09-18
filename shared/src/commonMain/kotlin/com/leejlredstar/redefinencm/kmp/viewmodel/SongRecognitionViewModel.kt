@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.leejlredstar.redefinencm.kmp.player.PlaybackSource
 
 data class RecognizedSongMatch(
     val startTimeMs: Long,
@@ -41,6 +42,8 @@ sealed interface SongRecognitionUiState {
     data class Listening(
         val elapsedMillis: Long,
         val level: Float,
+        /** 1 for the first three seconds; later numbers are the automatic retries. */
+        val attempt: Int = 1,
     ) : SongRecognitionUiState
     data object Recognizing : SongRecognitionUiState
     data class Results(val matches: List<RecognizedSongMatch>) : SongRecognitionUiState
@@ -130,6 +133,9 @@ class SongRecognitionViewModel internal constructor(
     private val recognitionGeneration = MutableStateFlow(0L)
     private var recognitionJob: Job? = null
     private var closed = false
+    // Playback this screen paused to hear the room. It is given back when the user leaves or
+    // cancels without choosing a result; the page used to say it would simply stay paused.
+    private var pausedForRecognition = false
 
     fun beginPermissionRequest() {
         if (closed) return
@@ -151,10 +157,13 @@ class SongRecognitionViewModel internal constructor(
         if (closed) return
         invalidateActiveRecognition()
         _uiState.value = SongRecognitionUiState.Idle
+        resumePausedPlayback()
     }
 
     fun play(match: RecognizedSongMatch) {
         if (closed) return
+        pausedForRecognition = false
+        PlaybackSource.set("听歌识曲")
         player.setQueue(listOf(match.song.toPlayerMediaInfo()), 0)
         player.play()
     }
@@ -168,46 +177,65 @@ class SongRecognitionViewModel internal constructor(
         if (closed) return
         closed = true
         invalidateActiveRecognition()
+        resumePausedPlayback()
         scope.cancel()
     }
 
+    private fun resumePausedPlayback() {
+        if (!pausedForRecognition) return
+        pausedForRecognition = false
+        player.play()
+    }
+
     private fun startRecognition() {
+        if (player.isPlaying.value) pausedForRecognition = true
         player.pause()
         recognitionJob?.cancel()
         val generation = recognitionGeneration.updateAndGet { it + 1L }
         val job = scope.launch(start = CoroutineStart.LAZY) {
             try {
-                _uiState.value = SongRecognitionUiState.Listening(0L, 0f)
-                val captured = recorder.capture(
-                    durationMillis = AudioFingerprint.DURATION_MILLIS,
-                    onProgress = { elapsedMillis, level ->
-                        if (recognitionGeneration.value == generation) {
-                            _uiState.value = SongRecognitionUiState.Listening(
-                                elapsedMillis = elapsedMillis.coerceIn(
-                                    minimumValue = 0L,
-                                    maximumValue = AudioFingerprint.DURATION_MILLIS,
-                                ),
-                                level = level.coerceIn(0f, 1f),
-                            )
-                        }
-                    },
-                )
-                if (recognitionGeneration.value != generation) return@launch
-                _uiState.value = SongRecognitionUiState.Recognizing
+                // Three seconds is one fingerprint. A miss usually means the sample caught a quiet
+                // or noisy moment, so it listens again on its own a couple of times before
+                // reporting no match.
+                var attempt = 1
+                var outcome: AudioMatchOutcome
+                while (true) {
+                    _uiState.value = SongRecognitionUiState.Listening(0L, 0f, attempt)
+                    val currentAttempt = attempt
+                    val captured = recorder.capture(
+                        durationMillis = AudioFingerprint.DURATION_MILLIS,
+                        onProgress = { elapsedMillis, level ->
+                            if (recognitionGeneration.value == generation) {
+                                _uiState.value = SongRecognitionUiState.Listening(
+                                    elapsedMillis = elapsedMillis.coerceIn(
+                                        minimumValue = 0L,
+                                        maximumValue = AudioFingerprint.DURATION_MILLIS,
+                                    ),
+                                    level = level.coerceIn(0f, 1f),
+                                    attempt = currentAttempt,
+                                )
+                            }
+                        },
+                    )
+                    if (recognitionGeneration.value != generation) return@launch
+                    _uiState.value = SongRecognitionUiState.Recognizing
 
-                val fingerprint = withContext(processingDispatcher) {
-                    val samples = prepareSamples(captured, AudioFingerprint.DURATION_MILLIS)
-                    generateFingerprint(samples)
+                    val fingerprint = withContext(processingDispatcher) {
+                        val samples = prepareSamples(captured, AudioFingerprint.DURATION_MILLIS)
+                        generateFingerprint(samples)
+                    }
+                    if (recognitionGeneration.value != generation) return@launch
+
+                    outcome = classifyAudioMatch(
+                        matchAudio(
+                            (AudioFingerprint.DURATION_MILLIS / 1_000L).toInt(),
+                            fingerprint,
+                        ),
+                    )
+                    if (recognitionGeneration.value != generation) return@launch
+                    if (outcome !is AudioMatchOutcome.NoMatch || attempt >= MaxRecognitionAttempts) break
+                    attempt += 1
                 }
-                if (recognitionGeneration.value != generation) return@launch
-
-                val outcome = classifyAudioMatch(
-                    matchAudio(
-                        (AudioFingerprint.DURATION_MILLIS / 1_000L).toInt(),
-                        fingerprint,
-                    ),
-                )
-                if (recognitionGeneration.value != generation) return@launch
                 _uiState.value = when (outcome) {
                     is AudioMatchOutcome.Results -> SongRecognitionUiState.Results(outcome.matches)
                     is AudioMatchOutcome.NoMatch -> SongRecognitionUiState.NoMatch(outcome.reason)
@@ -265,3 +293,6 @@ class SongRecognitionViewModel internal constructor(
         recognitionJob = null
     }
 }
+
+/** One try plus two automatic retries: nine seconds of listening at most. */
+internal const val MaxRecognitionAttempts = 3

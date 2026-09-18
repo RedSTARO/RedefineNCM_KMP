@@ -96,6 +96,8 @@ import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 
 @Composable
 fun AutoHideMiniPlayerController(
@@ -142,6 +144,9 @@ fun AutoHideMiniPlayerController(
     var showLyricDetails by remember { mutableStateOf(false) }
     // A held volume thumb keeps the island open; the auto-hide timer restarts on release.
     var adjustingOutputVolume by remember { mutableStateOf(false) }
+    // So does a mouse resting on it: the island used to vanish from under the pointer.
+    val islandHoverSource = remember { MutableInteractionSource() }
+    val islandHovered by islandHoverSource.collectIsHoveredAsState()
 
     val hasMedia = nowPlaying.hasMedia
     val isFavorite = nowPlaying.isFavorite
@@ -188,9 +193,16 @@ fun AutoHideMiniPlayerController(
         sheets.showComments,
         showLyricDetails,
         adjustingOutputVolume,
+        islandHovered,
         autoHideDelayMillis,
     ) {
-        if (!visible || sheets.anyOpen || showLyricDetails || adjustingOutputVolume) {
+        if (
+            !visible ||
+            sheets.anyOpen ||
+            showLyricDetails ||
+            adjustingOutputVolume ||
+            islandHovered
+        ) {
             return@LaunchedEffect
         }
         delay(autoHideDelayMillis.coerceAtLeast(0L))
@@ -230,7 +242,8 @@ fun AutoHideMiniPlayerController(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 8.dp),
+                .padding(bottom = 8.dp)
+                .hoverable(islandHoverSource),
             contentAlignment = Alignment.BottomCenter,
             transitionSpec = {
                 fullLyricControllerTransform(
@@ -483,7 +496,7 @@ private fun FullLyricControlConsole(
                 ) {
                     Icon(
                         imageVector = if (isFavorite) AppIcons.Favorite else AppIcons.FavoriteBorder,
-                        contentDescription = if (isFavorite) "已收藏" else "收藏",
+                        contentDescription = if (isFavorite) "已喜欢" else "喜欢",
                     )
                 }
                 FilledTonalIconButton(
@@ -690,28 +703,19 @@ private fun ExpandedPlaybackCard(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .size(72.dp)
-                        .clip(MaterialTheme.shapes.large)
-                        .clickable(
-                            onClickLabel = "收起播放控制",
-                            onClick = onCollapse,
-                        ),
+                        .clip(MaterialTheme.shapes.large),
                     onSuccess = { state -> onArtworkLoaded(state.result.image) },
                 )
             } else {
                 Surface(
-                    modifier = Modifier
-                        .size(72.dp)
-                        .clickable(
-                            onClickLabel = "收起播放控制",
-                            onClick = onCollapse,
-                        ),
+                    modifier = Modifier.size(72.dp),
                     shape = MaterialTheme.shapes.large,
                     color = accentPalette.onContainer.copy(alpha = 0.16f),
                     contentColor = accentPalette.onContainer,
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            imageVector = AppIcons.GraphicEq,
+                            imageVector = AppIcons.MusicNote,
                             contentDescription = null,
                             modifier = Modifier.size(32.dp),
                         )
@@ -729,14 +733,7 @@ private fun ExpandedPlaybackCard(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable(
-                                onClickLabel = "收起播放控制",
-                                onClick = onCollapse,
-                            ),
-                    ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = media?.title?.takeIf { it.isNotBlank() } ?: "未播放",
                             style = MaterialTheme.typography.titleMedium,
@@ -761,6 +758,11 @@ private fun ExpandedPlaybackCard(
                             onDetailsExpandedChange = onLyricDetailsExpandedChange,
                             modifier = Modifier.padding(start = 8.dp),
                         )
+                    }
+                    // Collapsing is its own control. It used to be a tap on the cover or the
+                    // title, which people tap expecting something about the song.
+                    IconButton(onClick = onCollapse) {
+                        Icon(AppIcons.KeyboardArrowDown, contentDescription = "收起播放控制")
                     }
                 }
                 PlaybackSeekBar(
@@ -806,7 +808,7 @@ private fun ExpandedPlaybackCard(
                             enabled = hasMedia,
                             modifier = Modifier.size(48.dp),
                         ) {
-                            Icon(AppIcons.KeyboardArrowLeft, contentDescription = "上一首")
+                            Icon(AppIcons.SkipPrevious, contentDescription = "上一首")
                         }
                         FilledIconButton(
                             onClick = onPlayPause,
@@ -829,7 +831,7 @@ private fun ExpandedPlaybackCard(
                             enabled = hasMedia,
                             modifier = Modifier.size(48.dp),
                         ) {
-                            Icon(AppIcons.KeyboardArrowRight, contentDescription = "下一首")
+                            Icon(AppIcons.SkipNext, contentDescription = "下一首")
                         }
                     }
                 }
@@ -1025,7 +1027,27 @@ private fun CollapsedProgressController(
                     modifier = Modifier.padding(start = 10.dp),
                     maxLines = 1,
                 )
+                // Play/pause in sight. It was only a double tap on the pill, which nothing on
+                // screen hinted at.
+                IconButton(
+                    onClick = onTogglePlayPause,
+                    enabled = hasMedia,
+                    modifier = Modifier.size(36.dp),
+                ) {
+                    Icon(
+                        imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
+                        contentDescription = if (isPlaying) "暂停" else "播放",
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
             }
+            // Flat while paused, the same rule the Now Playing slider follows: the wave reads as
+            // "audio is moving", so it must not ripple over a stopped track.
+            val waveAmplitude by animateFloatAsState(
+                targetValue = if (isPlaying) 1f else 0f,
+                animationSpec = if (reducedMotion) snap() else spring(),
+                label = "collapsedControllerWave",
+            )
             ExpressiveWavyProgress(
                 progress = { progress },
                 modifier = Modifier
@@ -1033,6 +1055,7 @@ private fun CollapsedProgressController(
                     .fillMaxWidth(),
                 color = accentPalette.accent,
                 trackColor = accentPalette.onQuietContainer.copy(alpha = 0.20f),
+                amplitude = { waveAmplitude },
             )
         }
     }

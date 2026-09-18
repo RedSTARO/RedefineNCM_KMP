@@ -153,13 +153,29 @@ fun ExpressiveWavyProgress(
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primary,
     trackColor: Color = MaterialTheme.colorScheme.surfaceContainerHighest,
+    /**
+     * Wave height for a given progress, `0f` lying flat. Playback surfaces pass one tied to
+     * whether audio is moving, so the wave means "playing" wherever a track position is drawn;
+     * null keeps Material's default taper for work progress.
+     */
+    amplitude: ((Float) -> Float)? = null,
 ) {
-    LinearWavyProgressIndicator(
-        progress = progress,
-        modifier = modifier,
-        color = color,
-        trackColor = trackColor,
-    )
+    if (amplitude == null) {
+        LinearWavyProgressIndicator(
+            progress = progress,
+            modifier = modifier,
+            color = color,
+            trackColor = trackColor,
+        )
+    } else {
+        LinearWavyProgressIndicator(
+            progress = progress,
+            modifier = modifier,
+            color = color,
+            trackColor = trackColor,
+            amplitude = amplitude,
+        )
+    }
 }
 
 /** Indeterminate wavy progress, for work with no measurable completion fraction. */

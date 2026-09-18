@@ -26,6 +26,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,9 +50,14 @@ import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.theme.AccentColorSaver
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import org.koin.compose.koinInject
 import kotlin.math.roundToInt
 
@@ -104,6 +110,8 @@ internal fun userLevelDisplay(response: UserLevelResponse?): UserLevelDisplay? {
 fun UserPlaylistScreen(
     scaffoldPadding: PaddingValues,
     onOpenPlaylist: (Long) -> Unit,
+    onOpenLogin: () -> Unit = {},
+    onOpenDownloads: () -> Unit = {},
     viewModel: MainViewModel = koinInject(),
 ) {
     val userDetail by viewModel.userDetail.collectAsState()
@@ -128,10 +136,11 @@ fun UserPlaylistScreen(
             userPlaylistsFromCache
     val hasAccountContent = userDetail != null || playlistsLoaded
     val defaultAccentColor = MaterialTheme.colorScheme.primaryContainer
-    var rawAccentColor by remember(
+    var rawAccentColor by rememberSaveable(
         userDetail?.profile?.backgroundUrl,
         userDetail?.profile?.avatarUrl,
         defaultAccentColor,
+        stateSaver = AccentColorSaver,
     ) {
         mutableStateOf(defaultAccentColor)
     }
@@ -148,7 +157,7 @@ fun UserPlaylistScreen(
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             // contentPadding, not container padding, so rows scroll under the floating toolbar.
-            contentPadding = PaddingValues(bottom = scaffoldPadding.calculateBottomPadding()),
+            contentPadding = PaddingValues(bottom = scaffoldPadding.calculateBottomPadding() + 16.dp),
         ) {
             userDetail?.let { detail ->
                 item(key = "user-hero") {
@@ -173,6 +182,17 @@ fun UserPlaylistScreen(
                     )
                 }
             }
+            // Downloads live on the device, so the way to them does not depend on being signed
+            // in. On phones this is the only way to them outside a download notification.
+            item(key = "library-downloads") {
+                LibraryShortcut(
+                    title = "下载管理",
+                    subtitle = "已下载的歌曲与下载进度",
+                    icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Download,
+                    accentPalette = accentPalette,
+                    onClick = onOpenDownloads,
+                )
+            }
             when {
                 (accountLoadError != null || userDetailLoadError != null) && !hasAccountContent -> item(
                     key = "account-error",
@@ -196,7 +216,15 @@ fun UserPlaylistScreen(
                     )
                 }
                 uid == 0L -> item(key = "login-hint") {
-                    LoginMovedHint(accentPalette)
+                    ExpressiveStatePanel(
+                        title = "登录后查看你的歌单",
+                        message = "登录网易云音乐账号，这里会显示你创建和收藏的歌单。",
+                        icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Person,
+                        accentPalette = accentPalette,
+                        actionLabel = "登录",
+                        onAction = onOpenLogin,
+                        modifier = Modifier.padding(16.dp),
+                    )
                 }
                 !hasAccountContent -> item(key = "profile-unavailable") {
                     ExpressiveStatePanel(
@@ -211,13 +239,6 @@ fun UserPlaylistScreen(
                     )
                 }
                 else -> {
-                    item(key = "playlist-heading") {
-                        ExpressiveSectionTitle(
-                            text = "我的歌单",
-                            supportingText = "收藏与创建的歌单",
-                            modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 12.dp),
-                        )
-                    }
                     if (intelligenceError != null) {
                         item(key = "intelligence-error") {
                             ExpressiveStatePanel(
@@ -259,48 +280,69 @@ fun UserPlaylistScreen(
                         item(key = "playlist-empty") {
                             ExpressiveStatePanel(
                                 title = "还没有歌单",
-                                message = "登录后的收藏与创建歌单会显示在这里。",
+                                message = "你创建或收藏的歌单会显示在这里。",
                                 modifier = Modifier.padding(horizontal = 16.dp),
                                 accentPalette = accentPalette,
                             )
                         }
                     } else {
-                        itemsIndexed(
-                            items = playlists,
-                            key = { _, playlist -> playlist.id },
-                        ) { index, pl ->
-                            val isFavorite = isFavoritePlaylist(
-                                specialType = pl.specialType,
-                                name = pl.name,
-                                creatorUserId = pl.creator.userId,
-                                currentUserId = uid,
-                            )
-                            PlaylistCard(
-                                userPlaylistEach = pl,
-                                specialCard = when {
-                                    isFavorite -> "fav"
-                                    pl.name.contains("私人雷达") -> "radar"
-                                    else -> "no"
-                                },
-                                index = index,
-                                count = playlists.size,
-                                accentColor = animatedAccentColor,
-                                onClick = { onOpenPlaylist(pl.id) },
-                                onSpecialClick = if (isFavorite) {
-                                    {
-                                        lastIntelligencePlaylistId = pl.id
-                                        viewModel.startIntelligenceMode(pl.id)
-                                    }
-                                } else {
-                                    null
-                                },
-                                specialActionLoading = intelligenceLoadingPlaylistId == pl.id,
-                            )
+                        // Created and collected playlists are different things to look for, so
+                        // they get a heading each instead of one interleaved list.
+                        val (created, collected) = playlists.partition { it.creator.userId == uid }
+                        listOf(
+                            "创建的歌单" to created,
+                            "收藏的歌单" to collected,
+                        ).forEach { (heading, group) ->
+                            if (group.isEmpty()) return@forEach
+                            item(key = "playlist-heading-$heading") {
+                                ExpressiveSectionTitle(
+                                    text = heading,
+                                    supportingText = "${group.size} 个",
+                                    modifier = Modifier.padding(
+                                        start = 24.dp,
+                                        end = 24.dp,
+                                        top = 20.dp,
+                                        bottom = 12.dp,
+                                    ),
+                                )
+                            }
+                            itemsIndexed(
+                                items = group,
+                                key = { _, playlist -> playlist.id },
+                            ) { index, pl ->
+                                val isFavorite = isFavoritePlaylist(
+                                    specialType = pl.specialType,
+                                    name = pl.name,
+                                    creatorUserId = pl.creator.userId,
+                                    currentUserId = uid,
+                                )
+                                PlaylistCard(
+                                    userPlaylistEach = pl,
+                                    specialCard = when {
+                                        isFavorite -> "fav"
+                                        pl.name.contains("私人雷达") -> "radar"
+                                        else -> "no"
+                                    },
+                                    index = index,
+                                    count = group.size,
+                                    accentColor = animatedAccentColor,
+                                    onClick = { onOpenPlaylist(pl.id) },
+                                    onSpecialClick = if (isFavorite) {
+                                        {
+                                            lastIntelligencePlaylistId = pl.id
+                                            viewModel.startIntelligenceMode(pl.id)
+                                        }
+                                    } else {
+                                        null
+                                    },
+                                    specialActionLoading = intelligenceLoadingPlaylistId == pl.id,
+                                    showCreator = pl.creator.userId != uid,
+                                )
+                            }
                         }
                     }
                 }
             }
-            item { Spacer(Modifier.height(96.dp)) }
         }
     }
 }
@@ -325,25 +367,19 @@ private fun UserPlaylistHero(
     LaunchedEffect(backgroundAccent, avatarAccent) {
         (backgroundAccent ?: avatarAccent)?.let(onAccentColor)
     }
+    // Avatar beside the name rather than stacked above it, and a height that follows the content:
+    // the old fixed 320dp block pushed the playlists below the first screen and had no room left
+    // for a larger system font.
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(320.dp)
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        accentPalette.pageStart,
-                        accentPalette.pageMiddle,
-                        Color.Transparent,
-                    ),
-                ),
-            ),
+            .heightIn(min = 180.dp),
     ) {
         AsyncImage(
             model = backgroundUrl,
             contentDescription = null,
             modifier = Modifier
-                .fillMaxSize()
+                .matchParentSize()
                 .blur(3.dp)
                 .drawWithContent {
                     drawContent()
@@ -351,8 +387,8 @@ private fun UserPlaylistHero(
                         brush = Brush.verticalGradient(
                             colors = listOf(
                                 accentPalette.pageStart.copy(alpha = 0.78f),
-                                accentPalette.pageMiddle.copy(alpha = 0.38f),
-                                Color.Transparent,
+                                accentPalette.pageMiddle.copy(alpha = 0.52f),
+                                accentPalette.pageStart,
                             ),
                         ),
                     )
@@ -361,78 +397,72 @@ private fun UserPlaylistHero(
             onSuccess = { state -> extractBackgroundAccent(state.result.image) },
         )
 
-        Column(
+        Row(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(horizontal = 24.dp, vertical = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .align(Alignment.BottomStart)
+                .statusBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             AsyncImage(
                 model = avatarUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .size(112.dp)
+                    .size(80.dp)
                     .clip(CircleShape)
-                    .border(4.dp, accentPalette.container, CircleShape),
+                    .border(3.dp, accentPalette.container, CircleShape),
                 onSuccess = { state -> extractAvatarAccent(state.result.image) },
             )
-            Spacer(Modifier.height(12.dp))
-            Surface(
-                shape = MaterialTheme.shapes.extraLarge,
-                color = accentPalette.quietContainer.copy(alpha = 0.86f),
-                contentColor = accentPalette.onQuietContainer,
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
-                ) {
-                    Text(
-                        text = nickname,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = levelDisplay?.summary ?: if (levelLoading) {
-                            "正在加载等级信息…"
-                        } else {
-                            "等级信息暂不可用"
-                        },
-                        style = MaterialTheme.typography.labelLarge,
-                        color = accentPalette.secondaryOnQuietContainer,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (levelLoadFailed) {
-                        TextButton(onClick = onRetryLevel) {
-                            Text("重试")
-                        }
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = nickname,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = accentPalette.onPageStart,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = levelDisplay?.summary ?: if (levelLoading) {
+                        "正在加载等级信息…"
+                    } else {
+                        "等级信息暂不可用"
+                    },
+                    style = MaterialTheme.typography.labelLarge,
+                    color = accentPalette.secondaryOnPageStart,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (levelLoadFailed) {
+                    TextButton(onClick = onRetryLevel) {
+                        Text("重试")
                     }
-                    levelDisplay?.let { display ->
-                        Spacer(Modifier.height(4.dp))
-                        display.nextLevelLabel?.let { label ->
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = accentPalette.secondaryOnQuietContainer,
-                                textAlign = TextAlign.Center,
-                                maxLines = 2,
-                            )
-                            Spacer(Modifier.height(2.dp))
-                        }
+                }
+                levelDisplay?.let { display ->
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ExpressiveWavyProgress(
+                            progress = { display.progress },
+                            modifier = Modifier.weight(1f),
+                            color = accentPalette.accent,
+                            trackColor = accentPalette.onPageStart.copy(alpha = 0.14f),
+                        )
+                        Spacer(Modifier.width(8.dp))
                         Text(
                             text = display.progressLabel,
                             style = MaterialTheme.typography.labelSmall,
-                            color = accentPalette.secondaryOnQuietContainer,
+                            color = accentPalette.secondaryOnPageStart,
+                            maxLines = 1,
                         )
-                        Spacer(Modifier.height(4.dp))
-                        ExpressiveWavyProgress(
-                            progress = { display.progress },
-                            modifier = Modifier.fillMaxWidth(),
-                            color = accentPalette.accent,
-                            trackColor = accentPalette.onQuietContainer.copy(alpha = 0.14f),
+                    }
+                    display.nextLevelLabel?.let { label ->
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = accentPalette.secondaryOnPageStart,
+                            maxLines = 2,
                         )
                     }
                 }
@@ -441,19 +471,52 @@ private fun UserPlaylistHero(
     }
 }
 
+/** A tappable row for a destination inside the library, such as the downloaded songs. */
 @Composable
-private fun LoginMovedHint(accentPalette: ContentAccentPalette) {
+private fun LibraryShortcut(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    accentPalette: ContentAccentPalette,
+    onClick: () -> Unit,
+) {
     Surface(
+        onClick = onClick,
         shape = MaterialTheme.shapes.extraLarge,
         color = accentPalette.quietContainer,
         contentColor = accentPalette.onQuietContainer,
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
-        Text(
-            text = "请在设置页登录后查看歌单",
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(24.dp),
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = accentPalette.container,
+                contentColor = accentPalette.onContainer,
+                modifier = Modifier.size(44.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    androidx.compose.material3.Icon(icon, contentDescription = null)
+                }
+            }
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = accentPalette.secondaryOnQuietContainer,
+                )
+            }
+            androidx.compose.material3.Icon(
+                com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.KeyboardArrowRight,
+                contentDescription = null,
+                tint = accentPalette.secondaryOnQuietContainer,
+            )
+        }
     }
 }

@@ -38,6 +38,7 @@ import androidx.compose.foundation.shape.CircleShape
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.Scaffold
@@ -47,6 +48,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -70,11 +72,15 @@ import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
+import com.leejlredstar.redefinencm.kmp.ui.theme.AccentColorSaver
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
+import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
+import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import org.koin.compose.koinInject
+import com.leejlredstar.redefinencm.kmp.player.PlaybackSource
 
 /** 共享元素 key（原版 SharedKeys）。 */
 object SharedKeys {
@@ -86,6 +92,7 @@ internal fun replaceQueueWithDailyRecommendations(
     songs: List<SongDetailSongs>,
 ) {
     if (songs.isEmpty()) return
+    PlaybackSource.set(DailySource)
     player.setQueue(songs.map { it.toMediaInfo() }, 0)
 }
 
@@ -100,8 +107,12 @@ fun HomeScreen(
     onOpenPlaylist: (Long) -> Unit,
     onOpenMy: () -> Unit,
     onOpenRecognition: () -> Unit,
+    onOpenDailySongs: () -> Unit = {},
+    /** Incremented by the shell to open search from outside the page (Ctrl/⌘+F). */
+    searchRequest: Int = 0,
     viewModel: MainViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
+    settings: PlatformSettings = koinInject(),
 ) {
     val recommend by viewModel.recommendSongs.collectAsState()
     val recommendResource by viewModel.recommendResource.collectAsState()
@@ -112,15 +123,22 @@ fun HomeScreen(
     val songsFromCache by viewModel.recommendSongsFromCache.collectAsState()
     val userDetail by viewModel.userDetail.collectAsState()
     val dailySongs = recommend?.data?.dailySongs ?: emptyList()
+    val dailyQueue = remember(dailySongs) { dailySongs.map { it.toMediaInfo() } }
+    val playWholeList = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false) }
     val resources = recommendResource?.recommend ?: emptyList()
     var showSearch by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
     val defaultPageAccent = MaterialTheme.colorScheme.primaryContainer
     val avatarUrl = userDetail?.profile?.avatarUrl
     val nickname = userDetail?.profile?.nickname ?: "我的"
     val pageAccentSource = resources.firstOrNull()?.picUrl
         ?: dailySongs.firstOrNull()?.al?.picUrl
         ?: avatarUrl
-    var rawPageAccent by remember(pageAccentSource, defaultPageAccent) {
+    var rawPageAccent by rememberSaveable(
+        pageAccentSource,
+        defaultPageAccent,
+        stateSaver = AccentColorSaver,
+    ) {
         mutableStateOf(defaultPageAccent)
     }
     val pageAccent by animateColorAsState(
@@ -131,6 +149,9 @@ fun HomeScreen(
     val pagePalette = contentAccentPalette(pageAccent)
 
     BackHandler(enabled = showSearch) { showSearch = false }
+    LaunchedEffect(searchRequest) {
+        if (searchRequest > 0) showSearch = true
+    }
 
     ExpressivePage(
         accentPalette = pagePalette,
@@ -171,9 +192,6 @@ fun HomeScreen(
                     topBar = {
                         LargeFlexibleTopAppBar(
                             title = { Text("推荐") },
-                            subtitle = {
-                                Text("${dailySongs.size} 首每日歌曲 · ${resources.size} 张歌单")
-                            },
                             actions = {
                                 HomeAccountAvatar(
                                     avatarUrl = avatarUrl,
@@ -206,27 +224,20 @@ fun HomeScreen(
                         start = 16.dp,
                         end = 16.dp,
                         top = appBarPadding.calculateTopPadding(),
-                        // coerce, not add: the 96dp was the mini-player FAB's clearance and the
-                        // scaffold clearance covers the toolbar. Summing them stacks two gaps and
-                        // leaves a dead band at the end of the list.
-                        bottom = scaffoldPadding.calculateBottomPadding().coerceAtLeast(96.dp),
+                        // The shell's clearance already covers the toolbar and the mini player.
+                        bottom = scaffoldPadding.calculateBottomPadding() + 16.dp,
                     ),
                 ) {
                     item(key = "search") {
                         SearchBox(
+                            // The pill shows the last query, which reopening search restores.
+                            label = searchQuery.ifBlank { SearchPlaceholder },
                             onClick = { showSearch = true },
                             accentColor = pageAccent,
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope,
                         )
                         Spacer(Modifier.height(4.dp))
-                    }
-
-                    item(key = "music-tools") {
-                        RecognitionToolSection(
-                            accentColor = pageAccent,
-                            onOpenRecognition = onOpenRecognition,
-                        )
                     }
 
                     item {
@@ -288,26 +299,48 @@ fun HomeScreen(
                                     Spacer(Modifier.size(8.dp))
                                     Text("播放全部")
                                 }
+                                // The carousel shows covers; the whole list, with artists and
+                                // durations, is one tap away.
+                                TextButton(
+                                    onClick = onOpenDailySongs,
+                                    enabled = dailySongs.isNotEmpty(),
+                                ) {
+                                    Text("全部 ${dailySongs.size} 首")
+                                }
                             },
                             itemContent = { song ->
                                 RecommendSquareCard(
                                     picUrl = song.al.picUrl,
                                     text = song.name,
+                                    subtitle = song.ar.joinToString(" / ") { it.name },
                                     onAccentColor = if (song.al.picUrl == pageAccentSource) {
                                         { color -> rawPageAccent = color }
                                     } else {
                                         null
                                     },
                                     onClick = {
-                                        // 原版 onPlaySingleSongClick：单曲独立队列
-                                        player.setQueue(listOf(song.toMediaInfo()), 0)
+                                        // Same rule as a playlist: the whole daily list from this
+                                        // song, or the song alone, per the setting.
+                                        playFromList(
+                                            player,
+                                            dailyQueue,
+                                            dailySongs.indexOf(song),
+                                            playWholeList,
+                                            source = DailySource,
+                                        )
                                     },
                                 )
                             },
                         )
                     }
 
-                    item { Spacer(Modifier.height(96.dp)) }
+                    // A tool, not a recommendation: it sits after the personal content.
+                    item(key = "music-tools") {
+                        RecognitionToolSection(
+                            accentColor = pageAccent,
+                            onOpenRecognition = onOpenRecognition,
+                        )
+                    }
                 }
                 }
             }
@@ -333,6 +366,9 @@ fun HomeScreen(
                     ),
             ) {
                 SearchScreen(
+                    bottomPadding = scaffoldPadding.calculateBottomPadding() + 16.dp,
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
                     onBack = { showSearch = false },
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = this,
@@ -388,7 +424,7 @@ private fun RecognitionToolCard(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        imageVector = AppIcons.GraphicEq,
+                        imageVector = AppIcons.Mic,
                         contentDescription = null,
                         modifier = Modifier.size(24.dp),
                     )
@@ -466,6 +502,7 @@ private fun HomeAccountAvatar(
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun SearchBox(
+    label: String,
     onClick: () -> Unit,
     accentColor: Color,
     sharedTransitionScope: SharedTransitionScope,
@@ -497,7 +534,7 @@ private fun SearchBox(
                 )
                 Spacer(Modifier.size(12.dp))
                 Text(
-                    text = "搜索歌曲、歌单...",
+                    text = label,
                     style = MaterialTheme.typography.bodyLarge,
                 color = searchPalette.secondaryOnQuietContainer,
                 )
@@ -505,3 +542,5 @@ private fun SearchBox(
         }
     }
 }
+
+internal const val DailySource = "每日推荐"

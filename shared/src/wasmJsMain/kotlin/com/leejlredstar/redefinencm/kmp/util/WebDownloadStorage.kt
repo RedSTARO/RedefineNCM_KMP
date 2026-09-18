@@ -115,6 +115,23 @@ internal object WebDownloadStorage {
     fun revokeObjectUrl(url: String) {
         revokeWebObjectUrl(url)
     }
+
+    /** Hands a stored song to the browser as a file download, which lands in its Downloads folder. */
+    suspend fun export(fileName: String, downloadName: String): Unit =
+        suspendCancellableCoroutine { continuation ->
+            exportWebDownload(
+                fileName = fileName,
+                downloadName = downloadName,
+                onSuccess = success@{
+                    if (continuation.isActive) continuation.resume(Unit)
+                },
+                onError = failure@{ message ->
+                    if (continuation.isActive) {
+                        continuation.resumeWithException(IllegalStateException(message))
+                    }
+                },
+            )
+        }
 }
 
 private fun newWebDownloadToken(): String = js(
@@ -322,3 +339,37 @@ private fun createWebDownloadObjectUrl(
 )
 
 private fun revokeWebObjectUrl(url: String): Unit = js("URL.revokeObjectURL(url)")
+
+private fun exportWebDownload(
+    fileName: String,
+    downloadName: String,
+    onSuccess: () -> Unit,
+    onError: (String) -> Unit,
+): Unit = js(
+    """{
+        (async () => {
+            if (!fileName || fileName.includes("/") || fileName.includes("\\")) {
+                throw new Error("无效的下载文件名");
+            }
+            const root = await navigator.storage.getDirectory();
+            const directory = await root.getDirectoryHandle("RedefineNCM");
+            const file = await (await directory.getFileHandle(fileName)).getFile();
+            const url = URL.createObjectURL(file);
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = downloadName;
+            anchor.style.display = "none";
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            // The browser reads the file after the click returns; a song is large enough that
+            // releasing the URL at once can cut the save short, so it is kept for a minute.
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+            onSuccess();
+        })().catch(error => onError(
+            error?.name === "NotFoundError"
+                ? "浏览器里已经没有这首歌的文件"
+                : (error?.message || String(error))
+        ));
+    }""",
+)

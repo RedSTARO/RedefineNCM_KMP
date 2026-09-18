@@ -73,12 +73,19 @@ fun MiniNowPlayingBar(
     val containerColor = accentPalette.container
     val contentColor = contentColorFor(containerColor)
 
+    // The whole pill opens the player; only the play button does something else. It used to be
+    // the cover alone, with the rest of the pill doing nothing when tapped.
     Surface(
+        onClick = onExpand,
+        enabled = hasMedia,
         modifier = Modifier
             .padding(end = 2.dp, bottom = 2.dp)
             // FAB slot 没有高度约束，使用固定小尺寸贴右下角，避免覆盖列表主体。
             .width(116.dp)
-            .height(60.dp),
+            .height(60.dp)
+            .semantics {
+                contentDescription = "打开${media?.title ?: "当前歌曲"}播放页"
+            },
         shape = CircleShape,
         color = containerColor,
         contentColor = contentColor,
@@ -91,12 +98,7 @@ fun MiniNowPlayingBar(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Surface(
-                        onClick = onExpand,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .semantics {
-                                contentDescription = "打开${media?.title ?: "当前歌曲"}播放页"
-                            },
+                        modifier = Modifier.size(48.dp),
                         shape = CircleShape,
                         color = contentColor.copy(alpha = 0.16f),
                         contentColor = contentColor,
@@ -115,7 +117,7 @@ fun MiniNowPlayingBar(
                         } else {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
-                                    imageVector = AppIcons.GraphicEq,
+                                    imageVector = AppIcons.MusicNote,
                                     contentDescription = null,
                                     modifier = Modifier.size(22.dp),
                                 )

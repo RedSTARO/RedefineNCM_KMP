@@ -83,12 +83,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.semantics
@@ -109,6 +111,7 @@ import com.leejlredstar.redefinencm.kmp.ui.component.TransportSheets
 import com.leejlredstar.redefinencm.kmp.ui.component.formatPlaybackDuration
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberSeekDragState
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberTransportSheetsState
+import com.leejlredstar.redefinencm.kmp.ui.screen.DailySongsScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.DownloadManagementScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.LoginScreen
@@ -128,6 +131,8 @@ import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import com.leejlredstar.redefinencm.kmp.ui.component.OutputVolumeLevel
+import com.leejlredstar.redefinencm.kmp.ui.component.outputVolumeLevel
 
 private sealed interface TabDest {
     data object Home : TabDest
@@ -141,6 +146,7 @@ private sealed interface PushedDest {
     data object FullLyric : PushedDest
     data object Downloads : PushedDest
     data object SongRecognition : PushedDest
+    data object DailySongs : PushedDest
     data class Playlist(val id: Long) : PushedDest
 }
 
@@ -180,6 +186,7 @@ private fun encodePushedDestination(destination: PushedDest): String = when (des
     PushedDest.FullLyric -> "full-lyric"
     PushedDest.Downloads -> "downloads"
     PushedDest.SongRecognition -> "song-recognition"
+    PushedDest.DailySongs -> "daily-songs"
     is PushedDest.Playlist -> "playlist:${destination.id}"
 }
 
@@ -190,6 +197,7 @@ private fun decodePushedDestination(saved: String): PushedDest? = when (saved) {
     "full-lyric" -> PushedDest.FullLyric
     "downloads" -> PushedDest.Downloads
     "song-recognition" -> PushedDest.SongRecognition
+    "daily-songs" -> PushedDest.DailySongs
     else -> saved.removePrefix("playlist:")
         .takeIf { saved.startsWith("playlist:") }
         ?.toLongOrNull()
@@ -323,16 +331,41 @@ private fun AppContent(
                     if (initialCookie.isBlank()) add(PushedDest.Login)
                 }
             }
+            // Every destination keeps its saved state (scroll offsets, carousel positions, a
+            // search left open) while it is off screen, so switching tabs returns to where the
+            // user was instead of to the top. A popped page's state is dropped with it.
+            val saveableStateHolder = rememberSaveableStateHolder()
+            fun forgetPushed(fromDepth: Int) {
+                for (depth in pushedStack.size downTo fromDepth) {
+                    saveableStateHolder.removeState(pushedStateKey(pushedStack[depth - 1], depth))
+                }
+            }
             fun push(dest: PushedDest) = pushedStack.add(dest)
-            fun back() { if (pushedStack.isNotEmpty()) pushedStack.removeAt(pushedStack.lastIndex) }
+            fun back() {
+                if (pushedStack.isEmpty()) return
+                forgetPushed(fromDepth = pushedStack.size)
+                pushedStack.removeAt(pushedStack.lastIndex)
+            }
+            fun clearPushed() {
+                if (pushedStack.isEmpty()) return
+                forgetPushed(fromDepth = 1)
+                pushedStack.clear()
+            }
+            fun focusOrPushTracked(dest: PushedDest) {
+                val existingIndex = pushedStack.lastIndexOf(dest)
+                if (existingIndex >= 0 && existingIndex < pushedStack.lastIndex) {
+                    forgetPushed(fromDepth = existingIndex + 2)
+                }
+                pushedStack.focusOrPush(dest)
+            }
             fun openDownloads() {
-                pushedStack.focusOrPush(PushedDest.Downloads)
+                focusOrPushTracked(PushedDest.Downloads)
             }
             fun openNowPlaying() {
-                pushedStack.focusOrPush(PushedDest.NowPlaying)
+                focusOrPushTracked(PushedDest.NowPlaying)
             }
             fun openFullLyric() {
-                pushedStack.focusOrPush(PushedDest.FullLyric)
+                focusOrPushTracked(PushedDest.FullLyric)
             }
 
             BackHandler(enabled = pushedStack.isNotEmpty()) { back() }
@@ -341,6 +374,16 @@ private fun AppContent(
                 AppNavigationRequests.openDownloadsRequestId.collect { requestId ->
                     if (AppNavigationRequests.consumeOpenDownloadsRequest(requestId)) {
                         openDownloads()
+                    }
+                }
+            }
+            var searchRequest by remember { mutableStateOf(0) }
+            LaunchedEffect(Unit) {
+                AppNavigationRequests.openSearchRequestId.collect { requestId ->
+                    if (AppNavigationRequests.consumeOpenSearchRequest(requestId)) {
+                        clearPushed()
+                        currentTab = TabDest.Home
+                        searchRequest += 1
                     }
                 }
             }
@@ -415,10 +458,21 @@ private fun AppContent(
                     } else {
                         0.dp
                     }
-                    val screenPadding = PaddingValues(bottom = contentBottomInset)
+                    // One bottom clearance for every page: the floating toolbar (when shown) plus
+                    // the mini player that floats above it. Pages used to add their own trailing
+                    // spacers on top of this, which left a dead band at the end of some lists and
+                    // none at all under search results.
+                    val miniPlayerClearance = if (showMiniPlayer) MiniPlayerClearance else 0.dp
+                    val screenPadding = PaddingValues(bottom = contentBottomInset + miniPlayerClearance)
                     val toolbarScrollBehavior = FloatingToolbarDefaults.exitAlwaysScrollBehavior(
                         exitDirection = FloatingToolbarExitDirection.Bottom,
                     )
+                    // The toolbar's scrolled-away state belongs to the page that scrolled it.
+                    // Without this reset a page reached by navigation opened with no navigation
+                    // bar until the user happened to scroll.
+                    LaunchedEffect(rootDest) {
+                        toolbarScrollBehavior.state.offset = 0f
+                    }
 
                     Scaffold(
                         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -432,7 +486,25 @@ private fun AppContent(
                             ) {
                                 // Scaffold no longer reserves the toolbar's height, so the FAB
                                 // has to step over the floating pill itself.
-                                Box(Modifier.padding(bottom = contentBottomInset)) {
+                                Box(
+                                    Modifier
+                                        .padding(bottom = contentBottomInset)
+                                        .graphicsLayer {
+                                            // Follow the toolbar down as it scrolls away, so no
+                                            // empty band is left where it used to be.
+                                            if (bottomNavVisible) {
+                                                val state = toolbarScrollBehavior.state
+                                                val limit = state.offsetLimit
+                                                val hidden = if (limit != 0f) {
+                                                    (state.offset / limit).coerceIn(0f, 1f)
+                                                } else {
+                                                    0f
+                                                }
+                                                translationY =
+                                                    hidden * ExpressiveLayout.FloatingNavClearance.toPx()
+                                            }
+                                        },
+                                ) {
                                     MiniNowPlayingBar(
                                         onExpand = ::openNowPlaying,
                                         onAccentColor = { rawChromeAccent = it },
@@ -465,10 +537,15 @@ private fun AppContent(
                                     player = player,
                                     showFullPlayer = showDesktopFullPlayer,
                                     onSelectTab = {
-                                        pushedStack.clear()
+                                        clearPushed()
                                         currentTab = it
                                     },
                                     onOpenDownloads = ::openDownloads,
+                                    recognitionSelected = rootDest is RootDest.Pushed &&
+                                        rootDest.dest is PushedDest.SongRecognition,
+                                    onOpenRecognition = {
+                                        focusOrPushTracked(PushedDest.SongRecognition)
+                                    },
                                     onChromeAccent = { rawChromeAccent = it },
                                     onOpenNowPlaying = ::openNowPlaying,
                                 )
@@ -511,6 +588,7 @@ private fun AppContent(
                                     modifier = Modifier.weight(1f).fillMaxSize(),
                                     label = "AppPageTransition",
                                 ) { target ->
+                                    saveableStateHolder.SaveableStateProvider(target.stateKey()) {
                                     when (target) {
                                         is RootDest.Pushed -> when (val dest = target.dest) {
                                             is PushedDest.Login -> LoginScreen(onBack = ::back)
@@ -523,14 +601,27 @@ private fun AppContent(
                                             )
                                             is PushedDest.Downloads -> DownloadManagementScreen(
                                                 scaffoldPadding = screenPadding,
-                                                onBack = if (platform.isDesktop) ::back else null,
+                                                onBack = ::back,
                                             )
                                             is PushedDest.SongRecognition -> SongRecognitionScreen(
+                                                scaffoldPadding = screenPadding,
                                                 onBack = ::back,
+                                                // Playing a match goes to the player, not back
+                                                // to wherever recognition was opened from.
+                                                onOpenPlayer = {
+                                                    back()
+                                                    openNowPlaying()
+                                                },
+                                            )
+                                            is PushedDest.DailySongs -> DailySongsScreen(
+                                                onBack = ::back,
+                                                scaffoldPadding = screenPadding,
                                             )
                                             is PushedDest.Playlist -> PlaylistDetailScreen(
                                                 playlistId = dest.id,
+                                                scaffoldPadding = screenPadding,
                                                 onBack = ::back,
+                                                onOpenDownloads = ::openDownloads,
                                             )
                                         }
                                         is RootDest.Tab -> when (target.tab) {
@@ -539,16 +630,21 @@ private fun AppContent(
                                                 onOpenPlaylist = { push(PushedDest.Playlist(it)) },
                                                 onOpenMy = { currentTab = TabDest.My },
                                                 onOpenRecognition = { push(PushedDest.SongRecognition) },
+                                                onOpenDailySongs = { push(PushedDest.DailySongs) },
+                                                searchRequest = searchRequest,
                                             )
                                             is TabDest.My -> UserPlaylistScreen(
                                                 scaffoldPadding = screenPadding,
                                                 onOpenPlaylist = { push(PushedDest.Playlist(it)) },
+                                                onOpenLogin = { push(PushedDest.Login) },
+                                                onOpenDownloads = ::openDownloads,
                                             )
                                             is TabDest.Settings -> SettingsScreen(
                                                 scaffoldPadding = screenPadding,
                                                 onOpenLogin = { push(PushedDest.Login) },
                                             )
                                         }
+                                    }
                                     }
                                 }
                             }
@@ -583,7 +679,8 @@ private fun AppContent(
                                         ExpressiveNavToggle(
                                             label = "下载",
                                             icon = AppIcons.Download,
-                                            selected = false,
+                                            selected = rootDest is RootDest.Pushed &&
+                                                rootDest.dest is PushedDest.Downloads,
                                             palette = chromePalette,
                                             onSelect = ::openDownloads,
                                         )
@@ -609,6 +706,8 @@ private fun DesktopExpandableSidebar(
     showFullPlayer: Boolean,
     onSelectTab: (TabDest) -> Unit,
     onOpenDownloads: () -> Unit,
+    recognitionSelected: Boolean,
+    onOpenRecognition: () -> Unit,
     onChromeAccent: (Color) -> Unit,
     onOpenNowPlaying: () -> Unit,
 ) {
@@ -672,6 +771,8 @@ private fun DesktopExpandableSidebar(
             onToggle = ::toggleRail,
             onSelectTab = { collapseAfter { onSelectTab(it) } },
             onOpenDownloads = { collapseAfter(onOpenDownloads) },
+            recognitionSelected = recognitionSelected,
+            onOpenRecognition = { collapseAfter(onOpenRecognition) },
             onChromeAccent = onChromeAccent,
             onOpenNowPlaying = { collapseAfter(onOpenNowPlaying) },
         )
@@ -693,6 +794,8 @@ private fun DesktopSidebarContent(
     onToggle: () -> Unit,
     onSelectTab: (TabDest) -> Unit,
     onOpenDownloads: () -> Unit,
+    recognitionSelected: Boolean,
+    onOpenRecognition: () -> Unit,
     onChromeAccent: (Color) -> Unit,
     onOpenNowPlaying: () -> Unit,
 ) {
@@ -703,6 +806,9 @@ private fun DesktopSidebarContent(
         unselectedIconColor = accentPalette.secondaryOnQuietContainer,
         unselectedTextColor = accentPalette.secondaryOnQuietContainer,
     )
+    // Expanded, an item is a pill as wide as its label; filling the width centred it, out of
+    // line with the app name and the section title above. Collapsed, it centres in the rail.
+    val railItemModifier = if (expandedContentVisible) Modifier else Modifier.fillMaxWidth()
 
     Column(modifier = Modifier.fillMaxHeight()) {
         Column(
@@ -712,7 +818,11 @@ private fun DesktopSidebarContent(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                // 24dp centres the menu button in the collapsed rail and puts its icon over the
+                // item icons of the expanded one.
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 24.dp, end = 20.dp, top = 12.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 FilledTonalIconButton(
@@ -732,23 +842,14 @@ private fun DesktopSidebarContent(
                 }
                 if (expandedContentVisible) {
                     Spacer(Modifier.width(14.dp))
-                    Column {
-                        Text(
-                            text = "RedefineNCM",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = accentPalette.onQuietContainer,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = "Desktop",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = accentPalette.secondaryOnQuietContainer,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                    Text(
+                        text = "RedefineNCM",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = accentPalette.onQuietContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
             tabs.forEach { item ->
@@ -758,27 +859,40 @@ private fun DesktopSidebarContent(
                     icon = { Icon(item.icon, contentDescription = null) },
                     label = { Text(item.label) },
                     railExpanded = railExpanded,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = railItemModifier,
                     colors = itemColors,
                 )
             }
+            // The tools stay reachable with the rail collapsed. They used to exist only in the
+            // expanded rail, so downloads took two clicks and a scrim from any page.
             if (expandedContentVisible) {
                 Text(
                     text = "工具",
                     style = MaterialTheme.typography.labelLarge,
                     color = accentPalette.secondaryOnQuietContainer,
-                    modifier = Modifier.padding(start = 24.dp, top = 8.dp),
-                )
-                WideNavigationRailItem(
-                    selected = downloadsSelected,
-                    onClick = onOpenDownloads,
-                    icon = { Icon(AppIcons.Download, contentDescription = null) },
-                    label = { Text("下载管理") },
-                    railExpanded = railExpanded,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = itemColors,
+                    // In line with the item icons: an expanded item starts its pill 20dp in and
+                    // its icon 16dp further.
+                    modifier = Modifier.padding(start = 36.dp, top = 8.dp),
                 )
             }
+            WideNavigationRailItem(
+                selected = downloadsSelected,
+                onClick = onOpenDownloads,
+                icon = { Icon(AppIcons.Download, contentDescription = null) },
+                label = { Text("下载管理") },
+                railExpanded = railExpanded,
+                modifier = railItemModifier,
+                colors = itemColors,
+            )
+            WideNavigationRailItem(
+                selected = recognitionSelected,
+                onClick = onOpenRecognition,
+                icon = { Icon(AppIcons.Mic, contentDescription = null) },
+                label = { Text("听歌识曲") },
+                railExpanded = railExpanded,
+                modifier = railItemModifier,
+                colors = itemColors,
+            )
         }
         if (showFullPlayer && expandedContentVisible) {
             Box(
@@ -868,7 +982,7 @@ private fun DesktopNowPlayingStrip(
                             )
                         } else {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Icon(AppIcons.GraphicEq, contentDescription = null, modifier = Modifier.size(30.dp))
+                                Icon(AppIcons.MusicNote, contentDescription = null, modifier = Modifier.size(30.dp))
                             }
                         }
                     }
@@ -919,7 +1033,11 @@ private fun DesktopNowPlayingStrip(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        imageVector = AppIcons.VolumeUp,
+                        imageVector = when (outputVolumeLevel(volume)) {
+                            OutputVolumeLevel.MUTED -> AppIcons.VolumeOff
+                            OutputVolumeLevel.LOW -> AppIcons.VolumeDown
+                            OutputVolumeLevel.HIGH -> AppIcons.VolumeUp
+                        },
                         contentDescription = "音量",
                         tint = accentPalette.secondaryOnContainer,
                         modifier = Modifier.size(18.dp),
@@ -971,7 +1089,7 @@ private fun DesktopNowPlayingStrip(
                         colors = desktopSecondaryButtonColors(accentPalette),
                     ) {
                         Icon(
-                            imageVector = AppIcons.KeyboardArrowLeft,
+                            imageVector = AppIcons.SkipPrevious,
                             contentDescription = "上一首",
                             modifier = Modifier.size(22.dp),
                         )
@@ -1002,7 +1120,7 @@ private fun DesktopNowPlayingStrip(
                         colors = desktopSecondaryButtonColors(accentPalette),
                     ) {
                         Icon(
-                            imageVector = AppIcons.KeyboardArrowRight,
+                            imageVector = AppIcons.SkipNext,
                             contentDescription = "下一首",
                             modifier = Modifier.size(22.dp),
                         )
@@ -1048,7 +1166,7 @@ private fun DesktopNowPlayingStrip(
                     ) {
                         Icon(
                             imageVector = if (isFavorite) AppIcons.Favorite else AppIcons.FavoriteBorder,
-                            contentDescription = if (isFavorite) "已收藏" else "收藏",
+                            contentDescription = if (isFavorite) "已喜欢" else "喜欢",
                         )
                     }
                     FilledTonalIconButton(
@@ -1090,10 +1208,8 @@ private fun pageTransition(
         isPlayerSurface(initial) && isPlayerSurface(target) -> fadeThroughTransition()
         isPlayerSurface(initial) || isPlayerSurface(target) ->
             sheetTransition(showingSheet = isPlayerSurface(target))
-        initial is RootDest.Tab && target is RootDest.Tab -> {
-            val forward = tabIndex(target.tab) > tabIndex(initial.tab)
-            horizontalTransition(forward = forward, fullDistance = false)
-        }
+        // Tabs are peers, not a sequence: a short fade-through, no travel and no scale.
+        initial is RootDest.Tab && target is RootDest.Tab -> tabFadeThrough()
         target.stackDepth > initial.stackDepth -> horizontalTransition(forward = true, fullDistance = true)
         target.stackDepth < initial.stackDepth -> horizontalTransition(forward = false, fullDistance = true)
         else -> fadeThroughTransition()
@@ -1223,11 +1339,30 @@ private fun isPlayerSurface(dest: RootDest): Boolean =
 private fun isPlayerSurface(dest: PushedDest?): Boolean =
     dest is PushedDest.NowPlaying || dest is PushedDest.FullLyric
 
-private fun tabIndex(tab: TabDest): Int =
-    when (tab) {
-        is TabDest.Home -> 0
-        is TabDest.My -> 1
-        is TabDest.Settings -> 2
+private fun tabFadeThrough(): ContentTransform =
+    fadeIn(
+        animationSpec = tween(
+            ExpressiveMotion.QuickMillis,
+            delayMillis = ExpressiveMotion.EnterDelayMillis,
+            easing = LinearOutSlowInEasing,
+        ),
+    ) togetherWith fadeOut(
+        animationSpec = tween(ExpressiveMotion.EnterDelayMillis + 30, easing = LinearOutSlowInEasing),
+    )
+
+private fun RootDest.stateKey(): String = when (this) {
+    is RootDest.Tab -> "tab:" + when (tab) {
+        is TabDest.Home -> "home"
+        is TabDest.My -> "my"
+        is TabDest.Settings -> "settings"
     }
+    is RootDest.Pushed -> pushedStateKey(dest, stackDepth)
+}
+
+private fun pushedStateKey(dest: PushedDest, depth: Int): String =
+    "push:$depth:${encodePushedDestination(dest)}"
+
+/** FAB-slot mini player (60dp + its 2dp inset) plus the Scaffold's 16dp FAB margin and air. */
+private val MiniPlayerClearance = 88.dp
 
 private const val PageTransitionMillis = ExpressiveMotion.LongMillis

@@ -88,6 +88,8 @@ internal fun TransportSheets(
             isFromCache = nowPlaying.commentsFromCache,
             errorMessage = nowPlaying.commentsLoadError,
             onRetry = viewModel::getComments,
+            totalCount = nowPlaying.comments?.total ?: 0L,
+            showingHot = nowPlaying.comments?.hotComments?.isNotEmpty() == true,
         )
     }
 }

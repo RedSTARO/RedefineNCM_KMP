@@ -32,3 +32,15 @@ expect suspend fun scanDownloadedSongs(): DownloadScanResult
 
 /** Deletes local audio files for [songId] from the RedefineNCM download folder. */
 expect suspend fun deleteDownloadedSongFile(songId: Long): Boolean
+
+/**
+ * Whether downloads are kept where the user cannot open them — the browser's private storage —
+ * so the download page offers [exportDownloadedSong] to save a copy out.
+ */
+expect val downloadsNeedExport: Boolean
+
+/**
+ * Saves a copy of the downloaded song stored as [fileName] where the user can open it, named
+ * [displayName] plus the file's extension. Only called where [downloadsNeedExport] is true.
+ */
+expect suspend fun exportDownloadedSong(fileName: String, displayName: String)

@@ -184,6 +184,19 @@ class MainViewModel(
         }
     }
 
+    /** Checks for a newer release now and always reports the outcome, whatever the setting. */
+    fun checkForUpdatesNow() {
+        scope.launch(Dispatchers.Default) {
+            val current = currentReleaseVersion()
+            val latest = fetchLatestReleaseTag()
+            updateMessage.value = when {
+                latest == null -> "检查更新失败，请稍后再试"
+                isNewerReleaseVersion(latest, current) -> "发现新版本：$latest"
+                else -> "已是最新版本（$current）"
+            }
+        }
+    }
+
     fun consumeUpdateMessage() {
         updateMessage.value = null
     }

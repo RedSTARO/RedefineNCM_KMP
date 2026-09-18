@@ -1,5 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.notification
 
+import kotlinx.coroutines.flow.StateFlow
+
 /**
  * Where a target shows the current lyric line outside the app's own player screen.
  *
@@ -60,8 +62,16 @@ interface OptionalLyricSurface : LyricSurface {
  */
 interface WindowedLyricSurface : OptionalLyricSurface {
     /**
+     * Whether the window is turned on, and whether it is locked, as they are now. Its own
+     * toolbar and the tray menu change both, so Settings follows these rather than a copy.
+     */
+    val isEnabled: StateFlow<Boolean>
+    val isWindowLocked: StateFlow<Boolean>
+
+    /**
      * A locked window stays where it is: it cannot be dragged or resized, and where the host
-     * allows it the pointer falls through to whatever is underneath. Settings is the way back.
+     * allows it the pointer falls through to whatever is underneath. Settings and the tray menu
+     * are the way back.
      */
     fun setLocked(locked: Boolean)
 

@@ -61,30 +61,30 @@ internal fun lyricCapabilityBadgeSpec(
     level: LyricCapabilityLevel,
 ): LyricCapabilityBadgeSpec = when (level) {
     LyricCapabilityLevel.UNSYNCED -> LyricCapabilityBadgeSpec(
-        visibleText = "词",
-        levelLabel = "无时间戳",
-        contentDescription = "歌词等级：无时间戳",
+        visibleText = "文本",
+        levelLabel = "纯文本（没有时间轴）",
+        contentDescription = "歌词等级：纯文本",
         tone = LyricCapabilityBadgeTone.NEUTRAL,
         shape = { MaterialShapes.Square },
     )
     LyricCapabilityLevel.LINE_SYNCED -> LyricCapabilityBadgeSpec(
-        visibleText = "词",
-        levelLabel = "普通逐行",
-        contentDescription = "歌词等级：普通逐行",
+        visibleText = "逐行",
+        levelLabel = "逐行同步",
+        contentDescription = "歌词等级：逐行同步",
         tone = LyricCapabilityBadgeTone.PRIMARY,
         shape = { MaterialShapes.Circle },
     )
     LyricCapabilityLevel.NCM_YRC -> LyricCapabilityBadgeSpec(
-        visibleText = "词",
-        levelLabel = "NCM YRC 逐字",
-        contentDescription = "歌词等级：NCM YRC",
+        visibleText = "逐字",
+        levelLabel = "逐字同步（网易云逐字歌词）",
+        contentDescription = "歌词等级：逐字同步",
         tone = LyricCapabilityBadgeTone.SECONDARY,
         shape = { MaterialShapes.Cookie6Sided },
     )
     LyricCapabilityLevel.TTML_FULL -> LyricCapabilityBadgeSpec(
-        visibleText = "词",
-        levelLabel = "TTML 完全支持",
-        contentDescription = "歌词等级：TTML 完全支持",
+        visibleText = "TTML",
+        levelLabel = "逐字同步，含和声与对唱（AMLL TTML）",
+        contentDescription = "歌词等级：逐字同步，含和声与对唱",
         tone = LyricCapabilityBadgeTone.TERTIARY,
         shape = { MaterialShapes.Clover4Leaf },
     )
@@ -95,8 +95,8 @@ internal fun lyricSourceDisplayName(
     endpoint: String,
 ): String {
     val provider = when (source) {
-        LyricSource.AMLL_TTML -> "AMLL TTML"
-        LyricSource.NCM_BACKEND -> "网易云歌词后端"
+        LyricSource.AMLL_TTML -> "AMLL 歌词库"
+        LyricSource.NCM_BACKEND -> "网易云"
         null -> "未知"
     }
     return if (endpoint == "local-sidecar") "$provider · 本地歌词文件" else provider
@@ -150,10 +150,13 @@ internal fun LyricCapabilityBadge(
             tonalElevation = 0.dp,
         ) {
             Box(contentAlignment = Alignment.Center) {
+                // The level in words, not one glyph shared by all four: the silhouette alone
+                // asked the reader to learn what a clover or a cookie meant.
                 Text(
                     text = spec.visibleText,
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
                 )
             }
         }

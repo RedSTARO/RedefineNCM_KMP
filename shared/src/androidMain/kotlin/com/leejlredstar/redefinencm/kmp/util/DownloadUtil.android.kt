@@ -268,3 +268,8 @@ private fun isRedefineDownloadPath(path: String): Boolean {
         normalized.endsWith("/$DOWNLOAD_RELATIVE_PATH") ||
         normalized.contains("/${Environment.DIRECTORY_DOWNLOADS}/$DOWNLOAD_SUBDIR/")
 }
+
+// Downloads already land in a folder the user can open.
+actual val downloadsNeedExport: Boolean = false
+
+actual suspend fun exportDownloadedSong(fileName: String, displayName: String) = Unit

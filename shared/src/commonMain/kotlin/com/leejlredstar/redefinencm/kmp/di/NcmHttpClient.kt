@@ -18,5 +18,6 @@ internal fun createNcmHttpClient(
     cookieTransport = cookieTransport,
 )
 
-private const val DEFAULT_NCM_SERVER = "https://ncm.tryagain.icu/"
+/** The server requests go to until the user saves another. Settings and login show it. */
+internal const val DEFAULT_NCM_SERVER = "https://ncm.tryagain.icu/"
 private const val DEFAULT_REAL_IP = "192.168.1.1"

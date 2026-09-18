@@ -791,7 +791,7 @@ private fun WikiArtwork(
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            imageVector = AppIcons.GraphicEq,
+            imageVector = AppIcons.MusicNote,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(38.dp).alpha(0.72f),

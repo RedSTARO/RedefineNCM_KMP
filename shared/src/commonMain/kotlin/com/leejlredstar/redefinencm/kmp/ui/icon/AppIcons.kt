@@ -113,14 +113,65 @@ object AppIcons {
     val SkipNext: ImageVector by lazy {
         classic("SkipNext", "M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z", autoMirror = true)
     }
+    /** Artwork placeholder and "a song" in empty states; GraphicEq stays for listening. */
+    val MusicNote: ImageVector by lazy {
+        classic("MusicNote", "M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z")
+    }
+    val Mic: ImageVector by lazy {
+        classic("Mic", "M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z")
+    }
+    val MoreVert: ImageVector by lazy {
+        classic("MoreVert", "M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z")
+    }
+    val ErrorOutline: ImageVector by lazy {
+        classic("ErrorOutline", "M11 15h2v2h-2zm0-8h2v6h-2zm.99-5C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z")
+    }
+    /** Trailing affordance of a row that opens a menu in place, as opposed to a chevron. */
+    val UnfoldMore: ImageVector by lazy {
+        classic("UnfoldMore", "M12 5.83L15.17 9l1.41-1.41L12 3 7.41 7.59 8.83 9 12 5.83zm0 12.34L8.83 15l-1.41 1.41L12 21l4.59-4.59L15.17 15 12 18.17z")
+    }
+    val Logout: ImageVector by lazy {
+        classic("Logout", "M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z", autoMirror = true)
+    }
+    val FolderOpen: ImageVector by lazy {
+        classic("FolderOpen", "M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z")
+    }
+    val Image: ImageVector by lazy {
+        classic("Image", "M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z")
+    }
+    val PlaylistAdd: ImageVector by lazy {
+        classic("PlaylistAdd", "M14 10H2v2h12v-2zm0-4H2v2h12V6zm4 8v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM2 16h8v-2H2v2z")
+    }
+    val Link: ImageVector by lazy {
+        classic("Link", "M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z")
+    }
+    val DownloadDone: ImageVector by lazy {
+        classic("DownloadDone", "M5 18h14v2H5v-2zm4.6-2.7L5 10.7l2-1.9 2.6 2.6L17 4l2 2-9.4 9.3z")
+    }
+    val OpenInNew: ImageVector by lazy {
+        classic("OpenInNew", "M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z")
+    }
+    val Lock: ImageVector by lazy {
+        classic("Lock", "M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z")
+    }
+    val LockOpen: ImageVector by lazy {
+        classic("LockOpen", "M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h1.9c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm0 12H6V10h12v10z")
+    }
+    val Add: ImageVector by lazy {
+        classic("Add", "M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z")
+    }
+    val Remove: ImageVector by lazy {
+        classic("Remove", "M19 13H5v-2h14v2z")
+    }
     val QrCode2: ImageVector by lazy {
         symbol("QrCode2", "M520-120v-80h80v80h-80Zm-80-80v-200h80v200h-80Zm320-120v-160h80v160h-80Zm-80-160v-80h80v80h-80Zm-480 80v-80h80v80h-80Zm-80-80v-80h80v80h-80Zm360-280v-80h80v80h-80ZM180-660h120v-120H180v120Zm-60 60v-240h240v240H120Zm60 420h120v-120H180v120Zm-60 60v-240h240v240H120Zm540-540h120v-120H660v120Zm-60 60v-240h240v240H600Zm80 480v-120h-80v-80h160v120h80v80H680ZM520-400v-80h160v80H520Zm-160 0v-80h-80v-80h240v80h-80v80h-80Zm40-200v-160h80v80h80v80H400Zm-190-90v-60h60v60h-60Zm0 480v-60h60v60h-60Zm480-480v-60h60v60h-60Z")
     }
 }
 
 /**
- * Classic Material Icons (24px grid, filled). Used only where Material Symbols has no
- * equivalent glyph in the app's chosen family; silhouettes match the symbols set.
+ * Classic Material Icons (24px grid, filled), from the same google/material-design-icons
+ * repository. Used where the app needed a glyph whose Symbols path is not vendored here;
+ * the filled silhouettes sit alongside the fill=1 symbols without a visible style break.
  */
 private fun classic(name: String, pathData: String, autoMirror: Boolean = false): ImageVector =
     ImageVector.Builder(

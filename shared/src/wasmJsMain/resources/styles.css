@@ -47,3 +47,42 @@ canvas {
 @keyframes boot-spin {
     to { transform: rotate(360deg); }
 }
+
+.boot-progress {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+}
+
+.boot-progress[hidden] {
+    display: none;
+}
+
+.boot-progress progress {
+    width: 220px;
+    height: 4px;
+    appearance: none;
+    border: none;
+    border-radius: 2px;
+    overflow: hidden;
+    background: rgba(119, 210, 181, .22);
+}
+
+.boot-progress progress::-webkit-progress-bar {
+    background: rgba(119, 210, 181, .22);
+}
+
+.boot-progress progress::-webkit-progress-value {
+    background: #77d2b5;
+}
+
+.boot-progress progress::-moz-progress-bar {
+    background: #77d2b5;
+}
+
+#redefineNcmBootBytes {
+    font-size: 13px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    color: #9fb3ab;
+}

@@ -19,7 +19,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.window.WindowDraggableArea
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -114,7 +116,19 @@ internal fun WindowScope.Win10WindowChrome(
                             lastPrimaryPressPosition = pressPosition
                         }
                     },
-            ) {}
+            ) {
+                // The window's name, where every desktop app shows one; the strip used to be a
+                // blank band above the content.
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
+                    Text(
+                        text = "RedefineNCM",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        modifier = Modifier.padding(start = 12.dp),
+                    )
+                }
+            }
             Row(Modifier.fillMaxHeight()) {
                 if (showMinimize) {
                     Win10CaptionButton(

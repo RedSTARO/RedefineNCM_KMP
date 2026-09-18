@@ -1,12 +1,8 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -25,44 +21,51 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.ToggleButton
-import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.download.DownloadArtworkStatus
-import com.leejlredstar.redefinencm.kmp.download.DownloadQueueSummary
 import com.leejlredstar.redefinencm.kmp.download.DownloadLyricStatus
 import com.leejlredstar.redefinencm.kmp.download.DownloadTaskStatus
 import com.leejlredstar.redefinencm.kmp.download.LocalLibrarySyncState
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadTask
+import com.leejlredstar.redefinencm.kmp.player.MediaInfo
+import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveWavyProgress
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
@@ -72,29 +75,36 @@ import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
-import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
+import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
+import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
+import com.leejlredstar.redefinencm.kmp.util.downloadsNeedExport
+import com.leejlredstar.redefinencm.kmp.util.exportDownloadedSong
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
+/**
+ * The views the list can be narrowed to. Each maps to exactly one task status family, and the
+ * label is the one the status itself shows, so a filter and the rows it keeps say the same word.
+ */
 private enum class DownloadFilter(val label: String) {
     All("全部"),
-    Active("进行中"),
+    Active("下载中"),
     Paused("已暂停"),
-    Completed("已完成"),
-    Deleted("已删除"),
+    Completed("已下载"),
     Failed("失败"),
+    Cancelled("已取消"),
+    Deleted("文件已删除"),
 }
 
-private data class DownloadInfoBadge(
-    val text: String,
-    val tone: DownloadInfoBadgeTone = DownloadInfoBadgeTone.Neutral,
-)
-
-private enum class DownloadInfoBadgeTone {
-    Neutral,
-    Accent,
-    Success,
-    Error,
+private fun DownloadFilter.matches(task: SongDownloadTask): Boolean = when (this) {
+    DownloadFilter.All -> true
+    DownloadFilter.Active -> task.isActive
+    DownloadFilter.Paused -> task.status == DownloadTaskStatus.Paused
+    DownloadFilter.Completed -> task.status == DownloadTaskStatus.Completed
+    DownloadFilter.Failed -> task.status == DownloadTaskStatus.Failed
+    DownloadFilter.Cancelled -> task.status == DownloadTaskStatus.Cancelled
+    DownloadFilter.Deleted -> task.status == DownloadTaskStatus.Deleted
 }
 
 private sealed interface DownloadDestructiveAction {
@@ -105,52 +115,51 @@ private sealed interface DownloadDestructiveAction {
     data class DeleteSong(val id: Long, val title: String) : DownloadDestructiveAction
 }
 
+/** One labelled entry of a row's or the page's overflow menu. */
+private data class DownloadMenuAction(
+    val label: String,
+    val icon: ImageVector,
+    val destructive: Boolean = false,
+    val onClick: () -> Unit,
+)
+
 @Composable
 fun DownloadManagementScreen(
     scaffoldPadding: PaddingValues,
     onBack: (() -> Unit)? = null,
     downloadManager: SongDownloadManager = koinInject(),
+    player: PlatformPlayer = koinInject(),
+    settings: PlatformSettings = koinInject(),
 ) {
     val tasks by downloadManager.tasks.collectAsState()
-    val summary by downloadManager.summary.collectAsState()
     val localLibrarySyncState by downloadManager.localLibrarySyncState.collectAsState()
     val persistenceError by downloadManager.persistenceError.collectAsState()
     var filter by remember { mutableStateOf(DownloadFilter.All) }
     var pendingDestructiveAction by remember { mutableStateOf<DownloadDestructiveAction?>(null) }
-    val representativeTask = remember(tasks) {
-        tasks.firstOrNull { it.isActive } ?: tasks.firstOrNull()
-    }
-    val defaultAccent = MaterialTheme.colorScheme.tertiaryContainer
-    var rawAccent by remember(representativeTask?.artworkUri, defaultAccent) {
-        mutableStateOf(defaultAccent)
-    }
-    val pageAccent by animateColorAsState(
-        targetValue = rawAccent,
-        animationSpec = spring(),
-        label = "downloadPageAccent",
-    )
-    val palette = contentAccentPalette(pageAccent)
+    val palette = contentAccentPalette(MaterialTheme.colorScheme.tertiaryContainer)
+    val playWholeList = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false) }
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(downloadManager) {
         downloadManager.syncWithLocalLibrary()
     }
 
-    val visibleTasks = remember(tasks, filter) {
-        tasks.filter { task ->
-            when (filter) {
-                DownloadFilter.All -> true
-                DownloadFilter.Active -> task.status == DownloadTaskStatus.Queued ||
-                    task.status == DownloadTaskStatus.Resolving ||
-                    task.status == DownloadTaskStatus.Downloading ||
-                    task.status == DownloadTaskStatus.SavingLyrics
-                DownloadFilter.Paused -> task.status == DownloadTaskStatus.Paused
-                DownloadFilter.Completed -> task.status == DownloadTaskStatus.Completed
-                DownloadFilter.Deleted -> task.status == DownloadTaskStatus.Deleted
-                DownloadFilter.Failed -> task.status == DownloadTaskStatus.Failed ||
-                    task.status == DownloadTaskStatus.Cancelled
-            }
-        }
+    val counts = remember(tasks) {
+        DownloadFilter.entries.associateWith { f -> tasks.count { f.matches(it) } }
     }
+    // An empty category is not offered as a filter: six always-present chips crowded the header
+    // and most were zero.
+    val offeredFilters = remember(counts) {
+        DownloadFilter.entries.filter { it == DownloadFilter.All || (counts[it] ?: 0) > 0 }
+    }
+    LaunchedEffect(offeredFilters) {
+        if (filter !in offeredFilters) filter = DownloadFilter.All
+    }
+    val visibleTasks = remember(tasks, filter) { tasks.filter { filter.matches(it) } }
+    // The downloaded songs, in list order, as a queue: tapping one plays from the downloads.
+    val completedTasks = remember(tasks) { tasks.filter { it.status == DownloadTaskStatus.Completed } }
+    val completedQueue = remember(completedTasks) { completedTasks.map { it.toMediaInfo() } }
 
     ExpressivePage(
         accentPalette = palette,
@@ -159,34 +168,37 @@ fun DownloadManagementScreen(
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                bottom = scaffoldPadding.calculateBottomPadding().coerceAtLeast(96.dp),
+                bottom = scaffoldPadding.calculateBottomPadding() + 16.dp,
             ),
         ) {
-            item {
-                DownloadHero(
-                    summary = summary,
-                    representativeTask = representativeTask,
+            item(key = "download-header") {
+                DownloadHeader(
+                    counts = counts,
                     accentPalette = palette,
-                    onAccentColor = { rawAccent = it },
+                    localLibrarySyncState = localLibrarySyncState,
+                    storedInBrowser = downloadsNeedExport,
+                    onBack = onBack,
                     onPauseAll = downloadManager::pauseAll,
                     onResumeAll = downloadManager::resumeAll,
+                    onSyncLocalLibrary = downloadManager::syncWithLocalLibrary,
                     onCancelAll = {
                         pendingDestructiveAction = DownloadDestructiveAction.CancelAll
                     },
                     onClearFinished = {
                         pendingDestructiveAction = DownloadDestructiveAction.ClearFinished
                     },
-                    localLibrarySyncState = localLibrarySyncState,
-                    onSyncLocalLibrary = downloadManager::syncWithLocalLibrary,
-                    onBack = onBack,
                 )
             }
-            item {
-                DownloadFilterRow(
-                    selected = filter,
-                    onSelected = { filter = it },
-                    accentPalette = palette,
-                )
+            if (offeredFilters.size > 2) {
+                item(key = "download-filters") {
+                    DownloadFilterRow(
+                        filters = offeredFilters,
+                        counts = counts,
+                        selected = filter,
+                        onSelected = { filter = it },
+                        accentPalette = palette,
+                    )
+                }
             }
             if (localLibrarySyncState is LocalLibrarySyncState.Error) {
                 item(key = "local-library-sync-error") {
@@ -236,6 +248,35 @@ fun DownloadManagementScreen(
                         task = task,
                         shape = connectedListItemShape(index, visibleTasks.size),
                         accentPalette = palette,
+                        onPlay = if (task.status == DownloadTaskStatus.Completed) {
+                            {
+                                val queueIndex = completedTasks.indexOfFirst { it.id == task.id }
+                                playFromList(
+                                    player,
+                                    completedQueue,
+                                    queueIndex,
+                                    playWholeList,
+                                    source = "下载",
+                                )
+                            }
+                        } else {
+                            null
+                        },
+                        onExport = task.fileName
+                            ?.takeIf { downloadsNeedExport && task.status == DownloadTaskStatus.Completed }
+                            ?.let { fileName ->
+                                {
+                                    scope.launch {
+                                        runCatching {
+                                            exportDownloadedSong(fileName, "${task.artist} - ${task.title}")
+                                        }.onFailure { error ->
+                                            snackbarHostState.showSnackbar(
+                                                "没能保存「${task.title}」：${error.message ?: "未知错误"}",
+                                            )
+                                        }
+                                    }
+                                }
+                            },
                         onPause = { downloadManager.pause(task.id) },
                         onResume = { downloadManager.resume(task.id) },
                         onCancel = {
@@ -253,8 +294,13 @@ fun DownloadManagementScreen(
                     )
                 }
             }
-            item { Spacer(Modifier.height(24.dp)) }
         }
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = scaffoldPadding.calculateBottomPadding()),
+        )
     }
 
     pendingDestructiveAction?.let { action ->
@@ -275,210 +321,134 @@ fun DownloadManagementScreen(
     }
 }
 
+/** A downloaded song as the player takes it; the player prefers the local file for this id. */
+private fun SongDownloadTask.toMediaInfo(): MediaInfo = MediaInfo(
+    id = id.toString(),
+    title = title,
+    artist = artist,
+    artworkUri = artworkUri,
+    placeholderUri = "redefinencm://playbackPlaceHolder?id=$id",
+)
+
 @Composable
-private fun DownloadHero(
-    summary: DownloadQueueSummary,
-    representativeTask: SongDownloadTask?,
+private fun DownloadHeader(
+    counts: Map<DownloadFilter, Int>,
     accentPalette: ContentAccentPalette,
-    onAccentColor: (Color) -> Unit,
+    localLibrarySyncState: LocalLibrarySyncState,
+    storedInBrowser: Boolean,
+    onBack: (() -> Unit)?,
     onPauseAll: () -> Unit,
     onResumeAll: () -> Unit,
+    onSyncLocalLibrary: () -> Unit,
     onCancelAll: () -> Unit,
     onClearFinished: () -> Unit,
-    localLibrarySyncState: LocalLibrarySyncState,
-    onSyncLocalLibrary: () -> Unit,
-    onBack: (() -> Unit)?,
 ) {
-    val extractAccent = rememberThemeColorExtractor(
-        requestKey = representativeTask?.artworkUri,
-        onAccentColor = onAccentColor,
-    )
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        accentPalette.pageStart,
-                        accentPalette.pageMiddle,
-                        Color.Transparent,
-                    ),
-                ),
-            ),
-    ) {
-        val compact = maxWidth < 520.dp
-        val showArtwork = maxWidth >= 360.dp
-        val contentPadding = if (compact) 16.dp else 24.dp
-        val artworkSize = if (compact) 72.dp else 112.dp
-        val headerSpacing = if (compact) 12.dp else 18.dp
+    val active = counts[DownloadFilter.Active] ?: 0
+    val paused = counts[DownloadFilter.Paused] ?: 0
+    val completed = counts[DownloadFilter.Completed] ?: 0
+    val failed = counts[DownloadFilter.Failed] ?: 0
+    val finished = completed + failed +
+        (counts[DownloadFilter.Cancelled] ?: 0) + (counts[DownloadFilter.Deleted] ?: 0)
+    var menuOpen by remember { mutableStateOf(false) }
+    val syncing = localLibrarySyncState is LocalLibrarySyncState.Syncing
+    val menu = buildList {
+        add(
+            DownloadMenuAction("重新扫描已下载的文件", AppIcons.Refresh) {
+                if (!syncing) onSyncLocalLibrary()
+            },
+        )
+        if (active > 0 || paused > 0) {
+            add(DownloadMenuAction("取消全部下载", AppIcons.Clear, destructive = true, onClick = onCancelAll))
+        }
+        if (finished > 0) {
+            add(DownloadMenuAction("从列表清除已结束的记录", AppIcons.Delete, onClick = onClearFinished))
+        }
+    }
 
-        Column(
-            modifier = Modifier.padding(horizontal = contentPadding, vertical = contentPadding),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(headerSpacing),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                onBack?.let {
-                    FilledTonalIconButton(
-                        onClick = it,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = accentPalette.quietContainer,
-                            contentColor = accentPalette.onQuietContainer,
-                        ),
-                    ) {
-                        Icon(AppIcons.ArrowBack, contentDescription = "返回")
-                    }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            onBack?.let {
+                FilledTonalIconButton(
+                    onClick = it,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = accentPalette.quietContainer,
+                        contentColor = accentPalette.onQuietContainer,
+                    ),
+                ) {
+                    Icon(AppIcons.ArrowBack, contentDescription = "返回")
                 }
-                if (showArtwork) {
-                    Surface(
-                        modifier = Modifier.size(artworkSize),
-                        shape = MaterialTheme.shapes.extraLarge,
-                        color = accentPalette.container,
-                        contentColor = accentPalette.onContainer,
-                    ) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Icon(
-                                AppIcons.Download,
-                                contentDescription = null,
-                                modifier = Modifier.size(if (compact) 28.dp else 36.dp),
-                            )
-                            if (!representativeTask?.artworkUri.isNullOrBlank()) {
-                                AsyncImage(
-                                    model = representativeTask.artworkUri,
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize(),
-                                    onSuccess = { state -> extractAccent(state.result.image) },
-                                )
-                            }
-                        }
-                    }
-                }
-                Column(Modifier.weight(1f)) {
+                Spacer(Modifier.width(12.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "下载管理",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = accentPalette.onPageStart,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = buildList {
+                        add("已下载 $completed 首")
+                        if (active > 0) add("正在下载 $active 首")
+                        if (paused > 0) add("已暂停 $paused 首")
+                        if (failed > 0) add("$failed 首失败")
+                    }.joinToString(" · "),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = accentPalette.secondaryOnPageStart,
+                )
+                if (storedInBrowser && completed > 0) {
                     Text(
-                        text = "下载管理",
-                        style = if (compact) {
-                            MaterialTheme.typography.headlineMedium
-                        } else {
-                            MaterialTheme.typography.displaySmall
-                        },
-                        fontWeight = FontWeight.ExtraBold,
-                        color = accentPalette.onPageMiddle,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        text = "歌曲存放在浏览器里，不在系统的「下载」文件夹；" +
+                            "要得到音频文件，在歌曲的「更多操作」里选「保存到本机」。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = accentPalette.secondaryOnPageStart,
+                        modifier = Modifier.padding(top = 4.dp),
                     )
-                    Text(
-                        text = "队列、进度和失败项都在这里处理",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = accentPalette.secondaryOnPageMiddle,
-                        maxLines = if (compact) 2 else 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    representativeTask?.let { task ->
-                        Text(
-                            text = if (task.isActive) "正在处理 · ${task.title}" else "最近任务 · ${task.title}",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = accentPalette.onPageMiddle,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 8.dp),
-                        )
-                    }
                 }
             }
-            Spacer(Modifier.height(20.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                item { DownloadStatPill("全部", summary.total, accentPalette) }
-                item { DownloadStatPill("进行中", summary.active, accentPalette) }
-                item { DownloadStatPill("完成", summary.completed, accentPalette) }
-                item { DownloadStatPill("已删除", summary.deleted, accentPalette) }
-                item { DownloadStatPill("失败", summary.failed, accentPalette) }
+            if (syncing) {
+                LoadingIndicator(color = accentPalette.accent, modifier = Modifier.size(32.dp))
             }
-            Spacer(Modifier.height(16.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                item {
-                    Button(
+            Box {
+                IconButton(onClick = { menuOpen = true }) {
+                    Icon(AppIcons.MoreVert, contentDescription = "更多操作")
+                }
+                DownloadMenu(expanded = menuOpen, actions = menu, onDismiss = { menuOpen = false })
+            }
+        }
+        // Only the bulk actions that apply now, and in words: the old row of bare icons put
+        // "cancel everything" and "clear the list" one mis-tap from each other.
+        if (active > 0 || paused > 0) {
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (active > 0) {
+                    FilledTonalButton(
                         onClick = onPauseAll,
-                        enabled = summary.active > 0,
-                        modifier = Modifier.height(48.dp),
                         shape = CircleShape,
-                        contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = accentPalette.accent,
-                            contentColor = accentPalette.onAccent,
-                        ),
-                    ) {
-                        Icon(AppIcons.Pause, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("暂停")
-                    }
-                }
-                item {
-                    Button(
-                        onClick = onResumeAll,
-                        enabled = summary.paused > 0,
-                        modifier = Modifier.height(48.dp),
-                        shape = CircleShape,
-                        contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                        colors = ButtonDefaults.buttonColors(
+                        colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = accentPalette.container,
                             contentColor = accentPalette.onContainer,
                         ),
                     ) {
-                        Icon(AppIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Icon(AppIcons.Pause, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("继续")
+                        Text("全部暂停")
                     }
                 }
-                item {
-                    FilledTonalIconButton(
-                        onClick = onSyncLocalLibrary,
-                        enabled = localLibrarySyncState !is LocalLibrarySyncState.Syncing,
-                        modifier = Modifier.size(48.dp),
-                        shape = MaterialTheme.shapes.large,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = accentPalette.quietContainer,
-                            contentColor = accentPalette.onQuietContainer,
+                if (paused > 0) {
+                    FilledTonalButton(
+                        onClick = onResumeAll,
+                        shape = CircleShape,
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = accentPalette.container,
+                            contentColor = accentPalette.onContainer,
                         ),
                     ) {
-                        if (localLibrarySyncState is LocalLibrarySyncState.Syncing) {
-                            LoadingIndicator(
-                                color = accentPalette.onQuietContainer,
-                                modifier = Modifier.size(24.dp),
-                            )
-                        } else {
-                            Icon(AppIcons.Refresh, contentDescription = "同步本地库")
-                        }
-                    }
-                }
-                item {
-                    FilledTonalIconButton(
-                        onClick = onCancelAll,
-                        enabled = summary.active > 0 || summary.paused > 0,
-                        modifier = Modifier.size(48.dp),
-                        shape = MaterialTheme.shapes.large,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = accentPalette.quietContainer,
-                            contentColor = accentPalette.onQuietContainer,
-                        ),
-                    ) {
-                        Icon(AppIcons.Clear, contentDescription = "取消全部")
-                    }
-                }
-                item {
-                    FilledTonalIconButton(
-                        onClick = onClearFinished,
-                        enabled = summary.completed > 0 || summary.failed > 0,
-                        modifier = Modifier.size(48.dp),
-                        shape = MaterialTheme.shapes.large,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = accentPalette.quietContainer,
-                            contentColor = accentPalette.onQuietContainer,
-                        ),
-                    ) {
-                        Icon(AppIcons.Delete, contentDescription = "清理已结束")
+                        Icon(AppIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("全部继续")
                     }
                 }
             }
@@ -487,45 +457,54 @@ private fun DownloadHero(
 }
 
 @Composable
-private fun DownloadStatPill(
-    label: String,
-    value: Int,
-    accentPalette: ContentAccentPalette,
+private fun DownloadMenu(
+    expanded: Boolean,
+    actions: List<DownloadMenuAction>,
+    onDismiss: () -> Unit,
 ) {
-    Surface(
-        shape = CircleShape,
-        color = accentPalette.quietContainer,
-        contentColor = accentPalette.onQuietContainer,
-    ) {
-        Text(
-            text = "$label $value",
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-        )
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        actions.forEach { action ->
+            val tint = if (action.destructive) MaterialTheme.colorScheme.error else Color.Unspecified
+            DropdownMenuItem(
+                text = { Text(action.label, color = tint) },
+                leadingIcon = {
+                    Icon(
+                        action.icon,
+                        contentDescription = null,
+                        tint = if (action.destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
+                onClick = {
+                    onDismiss()
+                    action.onClick()
+                },
+            )
+        }
     }
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun DownloadFilterRow(
+    filters: List<DownloadFilter>,
+    counts: Map<DownloadFilter, Int>,
     selected: DownloadFilter,
     onSelected: (DownloadFilter) -> Unit,
     accentPalette: ContentAccentPalette,
 ) {
+    // The counts live on the filters themselves; they used to be a second row of pills that
+    // repeated the filters under slightly different names.
     LazyRow(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        // ToggleButton rather than ButtonGroup: six filters cannot fit a non-scrollable group on
-        // a phone, so the row stays lazy and horizontally scrollable while each button still
-        // carries the expressive shape morph on press and selection.
-        items(DownloadFilter.entries) { filter ->
+        items(filters) { filter ->
             val isSelected = selected == filter
             ToggleButton(
                 checked = isSelected,
                 onCheckedChange = { onSelected(filter) },
-                modifier = Modifier.heightIn(min = 48.dp),
+                modifier = Modifier.heightIn(min = 40.dp),
                 shapes = ToggleButtonDefaults.shapes(),
                 colors = ToggleButtonDefaults.toggleButtonColors(
                     containerColor = accentPalette.quietContainer,
@@ -534,11 +513,7 @@ private fun DownloadFilterRow(
                     checkedContentColor = accentPalette.onContainer,
                 ),
             ) {
-                if (isSelected) {
-                    Icon(AppIcons.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                }
-                Text(filter.label)
+                Text("${filter.label} ${counts[filter] ?: 0}")
             }
         }
     }
@@ -549,6 +524,8 @@ private fun DownloadTaskRow(
     task: SongDownloadTask,
     shape: androidx.compose.foundation.shape.RoundedCornerShape,
     accentPalette: ContentAccentPalette,
+    onPlay: (() -> Unit)?,
+    onExport: (() -> Unit)?,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onCancel: () -> Unit,
@@ -558,345 +535,203 @@ private fun DownloadTaskRow(
     onRemove: () -> Unit,
     onDeleteSong: () -> Unit,
 ) {
+    var menuOpen by remember { mutableStateOf(false) }
+    // One visible action for the state the task is in; everything else is named in the menu.
+    val primary: Pair<ImageVector, Pair<String, () -> Unit>>? = when (task.status) {
+        DownloadTaskStatus.Queued,
+        DownloadTaskStatus.Resolving,
+        DownloadTaskStatus.Downloading -> AppIcons.Pause to ("暂停" to onPause)
+        DownloadTaskStatus.Paused -> AppIcons.PlayArrow to ("继续下载" to onResume)
+        DownloadTaskStatus.Failed,
+        DownloadTaskStatus.Cancelled -> AppIcons.Refresh to ("重试" to onRetry)
+        DownloadTaskStatus.Deleted -> AppIcons.Download to ("重新下载" to onRetry)
+        DownloadTaskStatus.SavingLyrics,
+        DownloadTaskStatus.Completed -> null
+    }
+    val menu = buildList {
+        when (task.status) {
+            DownloadTaskStatus.Queued,
+            DownloadTaskStatus.Resolving,
+            DownloadTaskStatus.Downloading,
+            DownloadTaskStatus.Paused -> add(
+                DownloadMenuAction("取消下载", AppIcons.Clear, destructive = true, onClick = onCancel),
+            )
+            DownloadTaskStatus.Completed -> {
+                val savingLocalAsset = task.lyricStatus == DownloadLyricStatus.Saving ||
+                    task.artworkStatus == DownloadArtworkStatus.Saving
+                onExport?.let { add(DownloadMenuAction("保存到本机", AppIcons.Download, onClick = it)) }
+                if (!savingLocalAsset) {
+                    add(
+                        DownloadMenuAction(
+                            if (task.lyricStatus == DownloadLyricStatus.Saved) "按当前歌词来源重新保存歌词" else "保存歌词文件",
+                            AppIcons.FormatQuote,
+                            onClick = onSaveLyrics,
+                        ),
+                    )
+                    add(
+                        DownloadMenuAction(
+                            if (task.artworkStatus == DownloadArtworkStatus.Saved) "重新保存封面" else "保存封面图片",
+                            AppIcons.Image,
+                            onClick = onSaveArtwork,
+                        ),
+                    )
+                }
+                add(DownloadMenuAction("删除已下载的文件", AppIcons.Delete, destructive = true, onClick = onDeleteSong))
+                add(DownloadMenuAction("从列表中移除（保留文件）", AppIcons.Clear, onClick = onRemove))
+            }
+            DownloadTaskStatus.Deleted -> {
+                if (task.lyricFileName != null || task.artworkFileName != null) {
+                    add(DownloadMenuAction("清理残留的歌词与封面", AppIcons.Delete, destructive = true, onClick = onDeleteSong))
+                }
+                add(DownloadMenuAction("从列表中移除", AppIcons.Clear, onClick = onRemove))
+            }
+            DownloadTaskStatus.Failed,
+            DownloadTaskStatus.Cancelled -> add(DownloadMenuAction("从列表中移除", AppIcons.Clear, onClick = onRemove))
+            DownloadTaskStatus.SavingLyrics -> Unit
+        }
+    }
+
     Surface(
+        onClick = { onPlay?.invoke() },
+        enabled = onPlay != null,
         shape = shape,
         color = accentPalette.quietContainer,
         contentColor = accentPalette.onQuietContainer,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 1.5.dp),
     ) {
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val compact = maxWidth < 520.dp
-            val showArtwork = !compact || maxWidth >= 300.dp
-
-            if (compact) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (showArtwork) {
-                            DownloadTaskArtwork(task, 48.dp)
-                            Spacer(Modifier.width(12.dp))
-                        }
-                        DownloadTaskDetails(
-                            task = task,
-                            accentPalette = accentPalette,
-                            showStatus = false,
-                            modifier = Modifier.weight(1f),
+        Row(
+            modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AsyncImage(
+                model = task.artworkUri,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(48.dp).clip(MaterialTheme.shapes.small),
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = task.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = task.artist,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = accentPalette.secondaryOnQuietContainer,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                DownloadTaskStatusLine(task, accentPalette)
+            }
+            primary?.let { (icon, action) ->
+                IconButton(onClick = action.second) {
+                    Icon(icon, contentDescription = action.first, tint = accentPalette.onQuietContainer)
+                }
+            }
+            if (menu.isNotEmpty()) {
+                Box {
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(
+                            AppIcons.MoreVert,
+                            contentDescription = "更多操作",
+                            tint = accentPalette.secondaryOnQuietContainer,
                         )
                     }
-                    Spacer(Modifier.height(10.dp))
-                    LazyRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        item { DownloadStatusPill(task.status) }
-                        item {
-                            DownloadActions(
-                                task = task,
-                                accentPalette = accentPalette,
-                                horizontal = true,
-                                onPause = onPause,
-                                onResume = onResume,
-                                onCancel = onCancel,
-                                onRetry = onRetry,
-                                onSaveLyrics = onSaveLyrics,
-                                onSaveArtwork = onSaveArtwork,
-                                onRemove = onRemove,
-                                onDeleteSong = onDeleteSong,
-                            )
-                        }
-                    }
+                    DownloadMenu(expanded = menuOpen, actions = menu, onDismiss = { menuOpen = false })
                 }
             } else {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    DownloadTaskArtwork(task, 56.dp)
-                    Spacer(Modifier.width(14.dp))
-                    DownloadTaskDetails(
-                        task = task,
-                        accentPalette = accentPalette,
-                        showStatus = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    DownloadActions(
-                        task = task,
-                        accentPalette = accentPalette,
-                        onPause = onPause,
-                        onResume = onResume,
-                        onCancel = onCancel,
-                        onRetry = onRetry,
-                        onSaveLyrics = onSaveLyrics,
-                        onSaveArtwork = onSaveArtwork,
-                        onRemove = onRemove,
-                        onDeleteSong = onDeleteSong,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun DownloadTaskArtwork(task: SongDownloadTask, size: androidx.compose.ui.unit.Dp) {
-    AsyncImage(
-        model = task.artworkUri,
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        modifier = Modifier.size(size).clip(MaterialTheme.shapes.large),
-    )
-}
-
-@Composable
-private fun DownloadTaskDetails(
-    task: SongDownloadTask,
-    accentPalette: ContentAccentPalette,
-    showStatus: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = task.title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            if (showStatus) {
                 Spacer(Modifier.width(8.dp))
-                DownloadStatusPill(task.status)
             }
         }
-        Text(
-            text = task.artist,
-            style = MaterialTheme.typography.bodyMedium,
-            color = accentPalette.secondaryOnQuietContainer,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Spacer(Modifier.height(8.dp))
-        // Wavy indicators carry their own stroke and amplitude, so the height is left
-        // unconstrained here — clamping it to the old 4dp bar would flatten the wave away.
-        if (task.status == DownloadTaskStatus.Downloading && task.totalBytes == null) {
-            ExpressiveWavyProgress(
-                modifier = Modifier.fillMaxWidth(),
-                color = accentPalette.accent,
-                trackColor = accentPalette.onQuietContainer.copy(alpha = 0.12f),
-            )
-        } else {
-            ExpressiveWavyProgress(
-                progress = { task.progressFraction },
-                modifier = Modifier.fillMaxWidth(),
-                color = progressColor(task.status, accentPalette),
-                trackColor = accentPalette.onQuietContainer.copy(alpha = 0.12f),
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-        DownloadInfoBadges(task, accentPalette)
     }
 }
 
+/**
+ * What a task is doing, in words: a progress bar only while bytes are moving, and for finished
+ * songs the quality and whether the lyrics and cover were kept.
+ */
 @Composable
-private fun DownloadInfoBadges(
+private fun DownloadTaskStatusLine(
     task: SongDownloadTask,
     accentPalette: ContentAccentPalette,
 ) {
-    val badges = task.infoBadges()
-    if (badges.isEmpty()) return
-
-    LazyRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        items(badges) { badge ->
-            DownloadInfoBadgeSurface(badge, accentPalette)
+    val secondary = accentPalette.secondaryOnQuietContainer
+    when (task.status) {
+        DownloadTaskStatus.Downloading,
+        DownloadTaskStatus.Paused -> {
+            Spacer(Modifier.height(6.dp))
+            if (task.status == DownloadTaskStatus.Downloading && task.totalBytes == null) {
+                ExpressiveWavyProgress(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = accentPalette.accent,
+                    trackColor = accentPalette.onQuietContainer.copy(alpha = 0.12f),
+                )
+            } else {
+                ExpressiveWavyProgress(
+                    progress = { task.progressFraction },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = if (task.status == DownloadTaskStatus.Paused) secondary else accentPalette.accent,
+                    trackColor = accentPalette.onQuietContainer.copy(alpha = 0.12f),
+                )
+            }
+            Text(
+                text = buildString {
+                    append(if (task.status == DownloadTaskStatus.Paused) "已暂停 · " else "")
+                    append(task.progressText())
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = secondary,
+            )
+        }
+        else -> {
+            val (text, isError) = task.statusSummary()
+            if (text.isNotEmpty()) {
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isError) MaterialTheme.colorScheme.error else secondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
 
-@Composable
-private fun DownloadInfoBadgeSurface(
-    badge: DownloadInfoBadge,
-    accentPalette: ContentAccentPalette,
-) {
-    val containerColor = when (badge.tone) {
-        DownloadInfoBadgeTone.Accent -> accentPalette.container
-        DownloadInfoBadgeTone.Success -> MaterialTheme.colorScheme.primaryContainer
-        DownloadInfoBadgeTone.Error -> MaterialTheme.colorScheme.errorContainer
-        DownloadInfoBadgeTone.Neutral -> accentPalette.onQuietContainer.copy(alpha = 0.08f)
-    }
-    val contentColor = when (badge.tone) {
-        DownloadInfoBadgeTone.Accent -> accentPalette.onContainer
-        DownloadInfoBadgeTone.Success -> MaterialTheme.colorScheme.onPrimaryContainer
-        DownloadInfoBadgeTone.Error -> MaterialTheme.colorScheme.onErrorContainer
-                DownloadInfoBadgeTone.Neutral -> accentPalette.secondaryOnQuietContainer
-    }
-
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        color = containerColor,
-        contentColor = contentColor,
-        border = BorderStroke(1.dp, contentColor.copy(alpha = 0.10f)),
-    ) {
-        Text(
-            text = badge.text,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-        )
-    }
-}
-
-@Composable
-private fun DownloadStatusPill(status: DownloadTaskStatus) {
-    val color = when (status) {
-        DownloadTaskStatus.Completed -> MaterialTheme.colorScheme.primaryContainer
-        DownloadTaskStatus.Deleted -> MaterialTheme.colorScheme.secondaryContainer
-        DownloadTaskStatus.Failed,
-        DownloadTaskStatus.Cancelled -> MaterialTheme.colorScheme.errorContainer
-        DownloadTaskStatus.Paused -> MaterialTheme.colorScheme.secondaryContainer
-        DownloadTaskStatus.SavingLyrics -> MaterialTheme.colorScheme.tertiaryContainer
-        else -> MaterialTheme.colorScheme.tertiaryContainer
-    }
-    val contentColor = when (status) {
-        DownloadTaskStatus.Completed -> MaterialTheme.colorScheme.onPrimaryContainer
-        DownloadTaskStatus.Deleted -> MaterialTheme.colorScheme.onSecondaryContainer
-        DownloadTaskStatus.Failed,
-        DownloadTaskStatus.Cancelled -> MaterialTheme.colorScheme.onErrorContainer
-        DownloadTaskStatus.Paused -> MaterialTheme.colorScheme.onSecondaryContainer
-        DownloadTaskStatus.SavingLyrics -> MaterialTheme.colorScheme.onTertiaryContainer
-        else -> MaterialTheme.colorScheme.onTertiaryContainer
-    }
-    Surface(shape = CircleShape, color = color, contentColor = contentColor) {
-        Text(
-            text = status.label(),
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        )
-    }
-}
-
-@Composable
-private fun DownloadActions(
-    task: SongDownloadTask,
-    accentPalette: ContentAccentPalette,
-    horizontal: Boolean = false,
-    onPause: () -> Unit,
-    onResume: () -> Unit,
-    onCancel: () -> Unit,
-    onRetry: () -> Unit,
-    onSaveLyrics: () -> Unit,
-    onSaveArtwork: () -> Unit,
-    onRemove: () -> Unit,
-    onDeleteSong: () -> Unit,
-) {
-    val content: @Composable () -> Unit = {
-        when (task.status) {
-            DownloadTaskStatus.Queued,
-            DownloadTaskStatus.Resolving,
-            DownloadTaskStatus.Downloading -> {
-                SmallDownloadAction(AppIcons.Pause, "暂停", accentPalette, onPause)
-                SmallDownloadAction(AppIcons.Clear, "取消", accentPalette, onCancel)
-            }
-            DownloadTaskStatus.SavingLyrics -> Unit
-            DownloadTaskStatus.Paused -> {
-                SmallDownloadAction(AppIcons.PlayArrow, "继续", accentPalette, onResume)
-                SmallDownloadAction(AppIcons.Clear, "取消", accentPalette, onCancel)
-            }
-            DownloadTaskStatus.Failed,
-            DownloadTaskStatus.Cancelled -> {
-                SmallDownloadAction(AppIcons.Refresh, "重试", accentPalette, onRetry)
-                SmallDownloadAction(AppIcons.Clear, "移除任务", accentPalette, onRemove)
-            }
-            DownloadTaskStatus.Deleted -> {
-                if (task.lyricFileName != null || task.artworkFileName != null) {
-                    SmallDownloadAction(
-                        AppIcons.Delete,
-                        "再次清理歌词与封面",
-                        accentPalette,
-                        onDeleteSong,
-                        isDestructive = true,
-                    )
-                }
-                SmallDownloadAction(AppIcons.Refresh, "重新下载", accentPalette, onRetry)
-                SmallDownloadAction(AppIcons.Clear, "移除任务", accentPalette, onRemove)
-            }
-            DownloadTaskStatus.Completed -> {
-                val savingLocalAsset =
-                    task.lyricStatus == DownloadLyricStatus.Saving ||
-                        task.artworkStatus == DownloadArtworkStatus.Saving
-                if (!savingLocalAsset) {
-                    SmallDownloadAction(
-                        AppIcons.GraphicEq,
-                        if (task.lyricStatus == DownloadLyricStatus.Saved) {
-                            "按当前歌词源重新保存歌词"
-                        } else {
-                            "单独保存歌词"
-                        },
-                        accentPalette,
-                        onSaveLyrics,
-                    )
-                    SmallDownloadAction(
-                        AppIcons.Download,
-                        if (task.artworkStatus == DownloadArtworkStatus.Saved) {
-                            "重新保存封面"
-                        } else {
-                            "单独保存封面"
-                        },
-                        accentPalette,
-                        onSaveArtwork,
-                    )
-                }
-                SmallDownloadAction(AppIcons.Delete, "删除歌曲", accentPalette, onDeleteSong, isDestructive = true)
-                SmallDownloadAction(AppIcons.Clear, "移除任务", accentPalette, onRemove)
-            }
-        }
-    }
-    if (horizontal) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), content = { content() })
-    } else {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp), content = { content() })
-    }
-}
-
-@Composable
-private fun SmallDownloadAction(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
-    accentPalette: ContentAccentPalette,
-    onClick: () -> Unit,
-    isDestructive: Boolean = false,
-) {
-    FilledTonalIconButton(
-        onClick = onClick,
-        modifier = Modifier.size(48.dp),
-        shape = MaterialTheme.shapes.large,
-        colors = IconButtonDefaults.filledTonalIconButtonColors(
-            containerColor = if (isDestructive) {
-                MaterialTheme.colorScheme.errorContainer
-            } else {
-                accentPalette.container
+/** A one-line account of a task that is not transferring, and whether it is a failure. */
+private fun SongDownloadTask.statusSummary(): Pair<String, Boolean> = when (status) {
+    DownloadTaskStatus.Queued -> "等待下载" to false
+    DownloadTaskStatus.Resolving -> "正在获取下载地址" to false
+    DownloadTaskStatus.SavingLyrics -> "正在保存歌词和封面" to false
+    DownloadTaskStatus.Failed -> ("下载失败" + (errorMessage?.let { "：$it" } ?: "")) to true
+    DownloadTaskStatus.Cancelled -> "已取消" to false
+    DownloadTaskStatus.Deleted -> (errorMessage ?: "文件已删除") to false
+    DownloadTaskStatus.Completed -> buildList {
+        qualityDisplayName(actualQuality)?.let(::add)
+        add(
+            when (lyricStatus) {
+                DownloadLyricStatus.Saved -> lyricFormat?.name?.let { "歌词（$it）" } ?: "歌词"
+                DownloadLyricStatus.NoLyric -> "无歌词"
+                DownloadLyricStatus.Failed -> "歌词保存失败"
+                DownloadLyricStatus.Saving -> "正在保存歌词"
+                DownloadLyricStatus.NotStarted -> "未保存歌词"
             },
-            contentColor = if (isDestructive) {
-                MaterialTheme.colorScheme.onErrorContainer
-            } else {
-                accentPalette.onContainer
+        )
+        add(
+            when (artworkStatus) {
+                DownloadArtworkStatus.Saved -> "封面"
+                DownloadArtworkStatus.NoArtwork -> "无封面"
+                DownloadArtworkStatus.Failed -> "封面保存失败"
+                DownloadArtworkStatus.Saving -> "正在保存封面"
+                DownloadArtworkStatus.NotStarted -> "未保存封面"
             },
-        ),
-    ) {
-        Icon(icon, contentDescription = contentDescription, modifier = Modifier.size(20.dp))
-    }
+        )
+    }.joinToString(" · ") to false
+    DownloadTaskStatus.Downloading,
+    DownloadTaskStatus.Paused -> progressText() to false
 }
 
 @Composable
@@ -905,16 +740,12 @@ private fun DownloadEmptyState(
     accentPalette: ContentAccentPalette,
 ) {
     val title = when (filter) {
-        DownloadFilter.All -> "暂无下载任务"
-        DownloadFilter.Active -> "没有正在进行的任务"
-        DownloadFilter.Paused -> "没有暂停的任务"
-        DownloadFilter.Completed -> "没有已完成任务"
-        DownloadFilter.Deleted -> "没有已删除任务"
-        DownloadFilter.Failed -> "没有失败或取消的任务"
+        DownloadFilter.All -> "还没有下载过歌曲"
+        else -> "没有「${filter.label}」的歌曲"
     }
     val message = when (filter) {
-        DownloadFilter.All -> "从歌单或歌曲页面发起下载后，进度会显示在这里。"
-        else -> "当前筛选条件下没有任务，可以切换上方筛选项查看其他下载。"
+        DownloadFilter.All -> "在歌单页点「下载全部」，或在歌曲的更多菜单里选「下载」。"
+        else -> "切换到其他筛选查看。"
     }
     ExpressiveStatePanel(
         title = title,
@@ -937,28 +768,28 @@ private fun DownloadDestructiveConfirmationDialog(
     when (action) {
         DownloadDestructiveAction.CancelAll -> {
             title = "取消全部下载？"
-            message = "进行中和已暂停的任务将标记为已取消，已完成的下载不受影响。"
+            message = "正在下载和已暂停的歌曲都会停止，之后可以在「已取消」里重试。已下载的歌曲不受影响。"
             confirmLabel = "取消全部"
         }
         DownloadDestructiveAction.ClearFinished -> {
-            title = "清理已结束任务？"
-            message = "已完成、失败、取消和已删除的任务记录会从列表移除，本地歌曲不会被删除。"
-            confirmLabel = "清理"
+            title = "清除已结束的记录？"
+            message = "已下载、失败、已取消的记录会从这个列表里移除。已下载的歌曲文件不会被删除。"
+            confirmLabel = "清除记录"
         }
         is DownloadDestructiveAction.CancelTask -> {
-            title = "取消「${action.title}」？"
-            message = "这个下载会停止，并保留为可重试的已取消任务。"
+            title = "取消下载「${action.title}」？"
+            message = "下载会停止，之后可以在「已取消」里重试。"
             confirmLabel = "取消下载"
         }
         is DownloadDestructiveAction.RemoveTask -> {
-            title = "移除「${action.title}」？"
-            message = "只移除任务记录，不会删除已经保存的本地歌曲。"
+            title = "从列表中移除「${action.title}」？"
+            message = "只移除这条记录，已下载的歌曲文件会保留。"
             confirmLabel = "移除"
         }
         is DownloadDestructiveAction.DeleteSong -> {
-            title = "删除「${action.title}」？"
-            message = "本地音频文件将被永久删除；之后仍可从任务列表重新下载。"
-            confirmLabel = "删除歌曲"
+            title = "删除「${action.title}」的文件？"
+            message = "本地音频文件会被永久删除，之后仍可重新下载。"
+            confirmLabel = "删除文件"
         }
     }
 
@@ -987,62 +818,6 @@ private fun DownloadDestructiveConfirmationDialog(
             }
         },
     )
-}
-
-@Composable
-private fun progressColor(
-    status: DownloadTaskStatus,
-    accentPalette: ContentAccentPalette,
-): Color = when (status) {
-    DownloadTaskStatus.Completed -> MaterialTheme.colorScheme.primary
-    DownloadTaskStatus.Deleted -> MaterialTheme.colorScheme.secondary
-    DownloadTaskStatus.Failed,
-    DownloadTaskStatus.Cancelled -> MaterialTheme.colorScheme.error
-    DownloadTaskStatus.Paused -> MaterialTheme.colorScheme.secondary
-    DownloadTaskStatus.SavingLyrics -> accentPalette.accent
-    else -> accentPalette.accent
-}
-
-private fun DownloadTaskStatus.label(): String = when (this) {
-    DownloadTaskStatus.Queued -> "排队"
-    DownloadTaskStatus.Resolving -> "解析"
-    DownloadTaskStatus.Downloading -> "下载"
-    DownloadTaskStatus.SavingLyrics -> "资源"
-    DownloadTaskStatus.Paused -> "暂停"
-    DownloadTaskStatus.Completed -> "完成"
-    DownloadTaskStatus.Deleted -> "已删除"
-    DownloadTaskStatus.Failed -> "失败"
-    DownloadTaskStatus.Cancelled -> "取消"
-}
-
-private fun SongDownloadTask.infoBadges(): List<DownloadInfoBadge> = when (status) {
-    DownloadTaskStatus.Failed -> listOf(
-        DownloadInfoBadge(errorMessage ?: "下载失败", DownloadInfoBadgeTone.Error),
-    )
-    DownloadTaskStatus.Cancelled -> listOf(DownloadInfoBadge("已取消", DownloadInfoBadgeTone.Error))
-    DownloadTaskStatus.Deleted -> listOf(
-        DownloadInfoBadge(errorMessage ?: "本地文件已删除", DownloadInfoBadgeTone.Neutral),
-    )
-    DownloadTaskStatus.Completed -> buildList {
-        qualityBadge(actualQuality)?.let(::add)
-        add(lyricStatusBadge())
-        add(artworkStatusBadge())
-        add(DownloadInfoBadge("音频已存", DownloadInfoBadgeTone.Success))
-    }
-    DownloadTaskStatus.Queued -> listOf(DownloadInfoBadge("等待", DownloadInfoBadgeTone.Neutral))
-    DownloadTaskStatus.Resolving -> buildList {
-        add(DownloadInfoBadge("解析直链", DownloadInfoBadgeTone.Accent))
-        qualityBadge(requestedQuality)?.let(::add)
-    }
-    DownloadTaskStatus.Paused -> listOf(DownloadInfoBadge("可继续", DownloadInfoBadgeTone.Neutral))
-    DownloadTaskStatus.SavingLyrics -> buildList {
-        qualityBadge(actualQuality)?.let(::add)
-        add(DownloadInfoBadge("保存歌词与封面", DownloadInfoBadgeTone.Accent))
-    }
-    DownloadTaskStatus.Downloading -> buildList {
-        qualityBadge(actualQuality)?.let(::add)
-        add(DownloadInfoBadge(progressText(), DownloadInfoBadgeTone.Neutral))
-    }
 }
 
 private fun qualityDisplayName(level: String?): String? {
@@ -1074,28 +849,6 @@ private fun qualityDisplayName(level: String?): String? {
         .firstOrNull { it.name.equals(normalized, ignoreCase = true) }
         ?.displayName
         ?: normalized.uppercase()
-}
-
-private fun SongDownloadTask.qualityBadge(level: String?): DownloadInfoBadge? =
-    qualityDisplayName(level)?.let { DownloadInfoBadge(it, DownloadInfoBadgeTone.Accent) }
-
-private fun SongDownloadTask.lyricStatusBadge(): DownloadInfoBadge = when (lyricStatus) {
-    DownloadLyricStatus.NotStarted -> DownloadInfoBadge("歌词待存", DownloadInfoBadgeTone.Neutral)
-    DownloadLyricStatus.Saving -> DownloadInfoBadge("保存歌词", DownloadInfoBadgeTone.Accent)
-    DownloadLyricStatus.Saved -> DownloadInfoBadge(
-        text = lyricFormat?.name?.let { "歌词已存 · $it" } ?: "歌词已存",
-        tone = DownloadInfoBadgeTone.Success,
-    )
-    DownloadLyricStatus.NoLyric -> DownloadInfoBadge("无歌词", DownloadInfoBadgeTone.Neutral)
-    DownloadLyricStatus.Failed -> DownloadInfoBadge("歌词失败", DownloadInfoBadgeTone.Error)
-}
-
-private fun SongDownloadTask.artworkStatusBadge(): DownloadInfoBadge = when (artworkStatus) {
-    DownloadArtworkStatus.NotStarted -> DownloadInfoBadge("封面待存", DownloadInfoBadgeTone.Neutral)
-    DownloadArtworkStatus.Saving -> DownloadInfoBadge("保存封面", DownloadInfoBadgeTone.Accent)
-    DownloadArtworkStatus.Saved -> DownloadInfoBadge("封面已存", DownloadInfoBadgeTone.Success)
-    DownloadArtworkStatus.NoArtwork -> DownloadInfoBadge("无封面", DownloadInfoBadgeTone.Neutral)
-    DownloadArtworkStatus.Failed -> DownloadInfoBadge("封面失败", DownloadInfoBadgeTone.Error)
 }
 
 private fun SongDownloadTask.progressText(): String {

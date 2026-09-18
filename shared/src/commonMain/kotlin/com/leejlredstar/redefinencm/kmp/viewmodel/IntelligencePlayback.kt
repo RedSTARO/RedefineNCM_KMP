@@ -5,6 +5,7 @@ import com.leejlredstar.redefinencm.kmp.data.toPlayerMediaInfo
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import kotlin.random.Random
+import com.leejlredstar.redefinencm.kmp.player.PlaybackSource
 
 internal fun selectIntelligenceSeed(
     ids: Iterable<Long>,
@@ -44,6 +45,7 @@ internal fun replaceQueueWithIntelligenceList(
     queue: List<MediaInfo>,
 ) {
     require(queue.isNotEmpty()) { "Intelligence queue must not be empty" }
+    PlaybackSource.set("心动模式")
     player.setShuffleEnabled(false)
     player.setQueue(queue, startIndex = 0)
     player.play()

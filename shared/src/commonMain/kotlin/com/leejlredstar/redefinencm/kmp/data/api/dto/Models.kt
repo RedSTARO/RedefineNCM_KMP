@@ -261,6 +261,8 @@ data class SongDetailSongs(
     @SerialName("al") val al: SongAlbum = SongAlbum(),
     val dt: Long = 0,
     val mv: Long = 0,
+    /** NetEase's fee class: 1 is VIP-only, 4 is sold by album; 0 and 8 are free to play. */
+    val fee: Int = 0,
 )
 
 @Serializable
@@ -548,6 +550,8 @@ data class CommentMusic(
     val moreHot: Boolean = false,
     val hotComments: List<CommentMusicComments> = emptyList(),
     val comments: List<CommentMusicComments> = emptyList(),
+    /** All comments on the song, of which the response carries one page. */
+    val total: Long = 0,
 )
 
 @Serializable

@@ -13,12 +13,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.window.ComposeViewport
 import com.leejlredstar.redefinencm.kmp.di.initKoin
+import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.image.configureWebArtworkImageLoader
 import com.leejlredstar.amll.compose.LocalAmllPlatformEventBridge
 import com.leejlredstar.amll.compose.WebAmllPlatformEventBridge
 import com.leejlredstar.redefinencm.kmp.ui.theme.webBundledFontFamily
 import com.leejlredstar.redefinencm.kmp.ui.theme.LocalPreloadedFontFamily
 import kotlinx.coroutines.delay
+import org.koin.mp.KoinPlatform
 import kotlin.JsFun
 
 /** Browser entry point for the shared Compose application. */
@@ -30,6 +32,8 @@ fun main() {
         ComposeViewport(viewportContainerId = "redefineNcmApp") {
             WebAppAfterFontPreload()
         }
+        // After the viewport, so Compose sees each key first and can claim it.
+        installWebKeyboardShortcuts(KoinPlatform.getKoin().get<PlatformPlayer>())
     }
 }
 

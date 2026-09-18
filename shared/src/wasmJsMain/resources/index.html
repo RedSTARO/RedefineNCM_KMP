@@ -10,19 +10,60 @@
 <body>
     <div id="redefineNcmBoot" role="status" aria-live="polite">
         <div class="boot-spinner" aria-hidden="true"></div>
-        <span>正在加载 Web 应用…</span>
+        <span id="redefineNcmBootLabel">正在加载 Web 应用…</span>
+        <div id="redefineNcmBootProgress" class="boot-progress" hidden>
+            <progress id="redefineNcmBootBar" max="1" aria-label="字体下载进度"></progress>
+            <span id="redefineNcmBootBytes" aria-hidden="true"></span>
+        </div>
     </div>
     <div id="redefineNcmApp"></div>
     <script>
-        globalThis.__redefineNcmFontReady = fetch(
-            "composeResources/redefinencm_kmp.shared.generated.resources/font/noto_sans_sc_variable.ttf",
-            { cache: "force-cache" }
-        ).then(response => {
+        globalThis.__redefineNcmFontReady = (async () => {
+            const response = await fetch(
+                "composeResources/redefinencm_kmp.shared.generated.resources/font/noto_sans_sc_variable.ttf",
+                { cache: "force-cache" }
+            );
             if (!response.ok) throw new Error("字体加载失败：HTTP " + response.status);
-            // Fully consume the response so the browser cache is warm, but do not retain the
-            // 17 MB ArrayBuffer as the resolved value of the page-lifetime readiness promise.
-            return response.arrayBuffer().then(() => undefined);
-        });
+            // Read the body through so the browser cache is warm, without keeping the 17 MB of it
+            // as the resolved value of the page-lifetime readiness promise.
+            const reader = response.body?.getReader();
+            if (!reader) {
+                await response.arrayBuffer();
+                return;
+            }
+            // Content-Length counts the bytes on the wire; a compressed response decodes to more
+            // than that, so the total is only shown when nothing was compressed.
+            const total = response.headers.get("Content-Encoding")
+                ? 0
+                : Number(response.headers.get("Content-Length")) || 0;
+            const label = document.getElementById("redefineNcmBootLabel");
+            const progress = document.getElementById("redefineNcmBootProgress");
+            const bar = document.getElementById("redefineNcmBootBar");
+            const bytes = document.getElementById("redefineNcmBootBytes");
+            const megabytes = count => (count / 1e6).toFixed(1);
+            // A cached font reads through in a moment; only a real download shows the progress,
+            // so a returning visit does not flash it.
+            const reveal = setTimeout(() => {
+                label.textContent = "首次打开需要下载中文字体";
+                progress.hidden = false;
+            }, 400);
+            let loaded = 0;
+            try {
+                for (;;) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    loaded += value.byteLength;
+                    if (total > 0) bar.value = Math.min(loaded / total, 1);
+                    bytes.textContent = total > 0
+                        ? megabytes(loaded) + " / " + megabytes(total) + " MB"
+                        : megabytes(loaded) + " MB";
+                }
+            } finally {
+                clearTimeout(reveal);
+                progress.hidden = true;
+                label.textContent = "正在启动…";
+            }
+        })();
     </script>
     <script src="redefinencm.js"></script>
 </body>

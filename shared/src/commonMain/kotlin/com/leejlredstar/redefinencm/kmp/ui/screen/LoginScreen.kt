@@ -77,6 +77,7 @@ fun LoginScreen(
     val qrLoading by viewModel.qrLoading.collectAsState()
     val qrError by viewModel.qrError.collectAsState()
     val qrSuccess by viewModel.qrSuccess.collectAsState()
+    val qrExpired by viewModel.qrExpired.collectAsState()
     val cookiePersistError by viewModel.cookiePersistError.collectAsState()
 
     var serverField by remember(server) { mutableStateOf(server) }
@@ -115,20 +116,13 @@ fun LoginScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState()),
         ) {
-        // Header
+        // Header. No gradient of its own: ExpressivePage already paints one across the whole
+        // window, and a second one bounded to the content column ended in a hard vertical edge
+        // on wide windows.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(204.dp)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            loginPalette.pageStart,
-                            loginPalette.container,
-                            Color.Transparent,
-                        ),
-                    ),
-                ),
+                .height(204.dp),
         ) {
             IconButton(
                 onClick = onBack,
@@ -149,15 +143,37 @@ fun LoginScreen(
                     )
                 }
             }
-            Text(
-                text = "RedefineNCM",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.ExtraBold,
-                color = loginPalette.onPageStart,
+            // Say what this is and what signing in is for, and that it can wait: the page
+            // opens by itself on the first launch. Someone already signed in came here to
+            // switch accounts, and for them the back arrow says it.
+            if (cookie.isBlank()) {
+                TextButton(
+                    onClick = onBack,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        .padding(8.dp),
+                ) {
+                    Text("稍后登录")
+                }
+            }
+            Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(horizontal = 24.dp, vertical = 16.dp),
-            )
+            ) {
+                Text(
+                    text = "登录网易云音乐",
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = loginPalette.onPageStart,
+                )
+                Text(
+                    text = "RedefineNCM 是第三方网易云音乐客户端。登录后可以使用你的歌单、每日推荐和喜欢的音乐；不登录也可以搜索和播放。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = loginPalette.secondaryOnPageStart,
+                )
+            }
         }
 
         // QR Login section
@@ -197,6 +213,25 @@ fun LoginScreen(
                             modifier = Modifier.fillMaxSize().padding(12.dp),
                             contentScale = ContentScale.Fit,
                         )
+                        if (qrExpired) {
+                            // A dead code is covered and becomes the refresh button itself.
+                            Surface(
+                                onClick = { viewModel.startQrLogin() },
+                                color = loginPalette.quietContainer.copy(alpha = 0.92f),
+                                contentColor = loginPalette.onQuietContainer,
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center,
+                                ) {
+                                    Icon(AppIcons.Refresh, contentDescription = null)
+                                    Spacer(Modifier.height(8.dp))
+                                    Text("二维码已过期", style = MaterialTheme.typography.titleSmall)
+                                    Text("点按刷新", style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
                     } else if (qrDecodeFailed) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -263,7 +298,7 @@ fun LoginScreen(
                 Spacer(Modifier.height(12.dp))
 
                 // Buttons
-                if ((qrDataUri.isEmpty() || qrDecodeFailed) && !qrLoading) {
+                if ((qrDataUri.isEmpty() || qrDecodeFailed || qrExpired) && !qrLoading) {
                     Button(
                         onClick = { viewModel.startQrLogin() },
                         modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -273,7 +308,7 @@ fun LoginScreen(
                             contentColor = loginPalette.onAccent,
                         ),
                     ) {
-                        Text(if (qrDecodeFailed) "重新生成二维码" else "生成二维码")
+                        Text(if (qrDecodeFailed || qrExpired) "重新生成二维码" else "生成二维码")
                     }
                 } else {
 

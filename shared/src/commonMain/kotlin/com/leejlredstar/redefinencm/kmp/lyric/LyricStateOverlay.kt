@@ -13,9 +13,23 @@ import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
+import com.leejlredstar.redefinencm.kmp.ui.theme.DarkColors
 
 @Composable
 internal fun BoxScope.LyricStateOverlay(
+    state: LyricUiState,
+    hasMedia: Boolean,
+    isPlayerRestoring: Boolean,
+    onRetry: () -> Unit,
+) {
+    // The lyric page is dark whatever the app theme is; its panels follow the page.
+    MaterialTheme(colorScheme = DarkColors) {
+        LyricStateOverlayPanels(state, hasMedia, isPlayerRestoring, onRetry)
+    }
+}
+
+@Composable
+private fun BoxScope.LyricStateOverlayPanels(
     state: LyricUiState,
     hasMedia: Boolean,
     isPlayerRestoring: Boolean,
@@ -36,7 +50,7 @@ internal fun BoxScope.LyricStateOverlay(
             ExpressiveStatePanel(
                 title = "还没有播放音乐",
                 message = "选择一首歌曲后，歌词会显示在这里。",
-                icon = AppIcons.GraphicEq,
+                icon = AppIcons.MusicNote,
                 accentPalette = statePalette,
                 modifier = stateModifier,
             )
@@ -57,7 +71,7 @@ internal fun BoxScope.LyricStateOverlay(
             } else {
                 "这首歌曲暂时没有可用歌词。"
             },
-            icon = AppIcons.GraphicEq,
+            icon = AppIcons.FormatQuote,
             accentPalette = statePalette,
             modifier = stateModifier,
         )
