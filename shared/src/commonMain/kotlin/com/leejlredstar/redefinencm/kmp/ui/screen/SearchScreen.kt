@@ -107,7 +107,7 @@ fun SearchScreen(
         keyboard?.hide()
         viewModel.search(text)
     }
-    val playWholeList = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false) }
+    val playWholeList = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT) }
     val submittedMatchesQuery = submittedQuery != null && submittedQuery == query.trim()
 
     ExpressivePage(

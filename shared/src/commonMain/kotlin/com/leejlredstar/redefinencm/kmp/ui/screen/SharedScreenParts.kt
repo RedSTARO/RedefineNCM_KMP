@@ -320,7 +320,7 @@ fun SongRow(
                         modifier = Modifier.weight(0.7f),
                     )
                 }
-                if (songId != null && settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false)) {
+                if (songId != null && settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, SettingKeys.SHOW_DOWNLOAD_STATUS_DEFAULT)) {
                     // A fixed slot on wide rows, so the album column lines up whether or not a
                     // row carries a download mark.
                     Box(

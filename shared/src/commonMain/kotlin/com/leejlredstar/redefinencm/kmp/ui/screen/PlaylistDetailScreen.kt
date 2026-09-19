@@ -95,7 +95,7 @@ fun PlaylistDetailScreen(
     val songs = tracks?.songs.orEmpty()
     val hasCachedContent = detailFromCache || songsFromCache
     // 原版 ShowPlaylistDetailPage：点单曲时按 replacePlaylist 设置决定替换整单还是单曲队列
-    val replacePlaylist = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false) }
+    val replacePlaylist = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT) }
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()

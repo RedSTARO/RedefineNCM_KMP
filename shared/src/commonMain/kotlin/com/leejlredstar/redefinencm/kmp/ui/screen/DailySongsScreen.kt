@@ -62,7 +62,7 @@ fun DailySongsScreen(
     val loadError by viewModel.recommendSongsLoadError.collectAsState()
     val songs = recommend?.data?.dailySongs.orEmpty()
     val queue = remember(songs) { songs.map { it.toMediaInfo() } }
-    val playWholeList = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false) }
+    val playWholeList = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT) }
     val palette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
 
     ExpressivePage(

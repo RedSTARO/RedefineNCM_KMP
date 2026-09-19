@@ -137,7 +137,7 @@ fun DownloadManagementScreen(
     var filter by remember { mutableStateOf(DownloadFilter.All) }
     var pendingDestructiveAction by remember { mutableStateOf<DownloadDestructiveAction?>(null) }
     val palette = contentAccentPalette(MaterialTheme.colorScheme.tertiaryContainer)
-    val playWholeList = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false) }
+    val playWholeList = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT) }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 

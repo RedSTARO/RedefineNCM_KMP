@@ -152,10 +152,10 @@ fun SettingsScreen(
     var aggregationMode by remember(settings) { mutableStateOf(LibraryAggregationMode.Default) }
     var onlineQuality by remember(settings) { mutableStateOf(SoundQuality.STANDARD.name) }
     var dlQuality by remember(settings) { mutableStateOf(SoundQuality.STANDARD.name) }
-    var replacePlaylist by remember(settings) { mutableStateOf(false) }
+    var replacePlaylist by remember(settings) { mutableStateOf(SettingKeys.REPLACE_PLAYLIST_DEFAULT) }
     var checkUpdate by remember(settings) { mutableStateOf(false) }
     var searchPrediction by remember(settings) { mutableStateOf(true) }
-    var showDownloadStatus by remember(settings) { mutableStateOf(false) }
+    var showDownloadStatus by remember(settings) { mutableStateOf(SettingKeys.SHOW_DOWNLOAD_STATUS_DEFAULT) }
     var extraLyricSurfaceEnabled by remember(settings) { mutableStateOf(false) }
     var desktopLyricLocked by remember(settings) { mutableStateOf(false) }
     // The lyric window's own toolbar and the tray menu also close and lock it; the switches
@@ -171,7 +171,7 @@ fun SettingsScreen(
     var desktopLyricAlignment by remember(settings) {
         mutableStateOf(LyricSurfaceAlignment.DEFAULT)
     }
-    var showTranslatedLyric by remember(settings) { mutableStateOf(false) }
+    var showTranslatedLyric by remember(settings) { mutableStateOf(SettingKeys.SHOW_TRANSLATED_LYRIC_DEFAULT) }
     var showRomanLyric by remember(settings) { mutableStateOf(false) }
     var lyricSourceMode by remember(settings) {
         mutableStateOf(LyricSourceMode.DEFAULT.wireValue)
@@ -214,10 +214,10 @@ fun SettingsScreen(
         )
         onlineQuality = settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name)
         dlQuality = settings.getString(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name)
-        replacePlaylist = settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false)
+        replacePlaylist = settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT)
         checkUpdate = settings.getBoolean(SettingKeys.CHECK_UPDATE, false)
         searchPrediction = settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true)
-        showDownloadStatus = settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, false)
+        showDownloadStatus = settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, SettingKeys.SHOW_DOWNLOAD_STATUS_DEFAULT)
         extraLyricSurfaceEnabled = settings.getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false)
         optionalLyricSurface?.setEnabled(extraLyricSurfaceEnabled)
         desktopLyricLocked = settings.getBoolean(SettingKeys.DESKTOP_LYRIC_LOCKED, false)
@@ -226,7 +226,7 @@ fun SettingsScreen(
         )
         windowedLyricSurface?.setLocked(desktopLyricLocked)
         windowedLyricSurface?.setAlignment(desktopLyricAlignment)
-        showTranslatedLyric = settings.getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
+        showTranslatedLyric = settings.getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, SettingKeys.SHOW_TRANSLATED_LYRIC_DEFAULT)
         showRomanLyric = settings.getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false)
         lyricSourceMode = LyricSourceMode.fromStoredWireValue(
             settings.getString(
@@ -295,10 +295,10 @@ fun SettingsScreen(
             )
             onlineQuality = settings.getStringAsync(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name)
             dlQuality = settings.getStringAsync(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name)
-            replacePlaylist = settings.getBooleanAsync(SettingKeys.REPLACE_PLAYLIST, false)
+            replacePlaylist = settings.getBooleanAsync(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT)
             checkUpdate = settings.getBooleanAsync(SettingKeys.CHECK_UPDATE, false)
             searchPrediction = settings.getBooleanAsync(SettingKeys.SEARCH_PREDICTION, true)
-            showDownloadStatus = settings.getBooleanAsync(SettingKeys.SHOW_DOWNLOAD_STATUS, false)
+            showDownloadStatus = settings.getBooleanAsync(SettingKeys.SHOW_DOWNLOAD_STATUS, SettingKeys.SHOW_DOWNLOAD_STATUS_DEFAULT)
             extraLyricSurfaceEnabled = settings.getBooleanAsync(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false)
             optionalLyricSurface?.setEnabled(extraLyricSurfaceEnabled)
             desktopLyricLocked = settings.getBooleanAsync(SettingKeys.DESKTOP_LYRIC_LOCKED, false)
@@ -307,7 +307,7 @@ fun SettingsScreen(
             )
             windowedLyricSurface?.setLocked(desktopLyricLocked)
             windowedLyricSurface?.setAlignment(desktopLyricAlignment)
-            showTranslatedLyric = settings.getBooleanAsync(SettingKeys.SHOW_TRANSLATED_LYRIC, false)
+            showTranslatedLyric = settings.getBooleanAsync(SettingKeys.SHOW_TRANSLATED_LYRIC, SettingKeys.SHOW_TRANSLATED_LYRIC_DEFAULT)
             showRomanLyric = settings.getBooleanAsync(SettingKeys.SHOW_ROMAN_LYRIC, false)
             lyricSourceMode = LyricSourceMode.fromStoredWireValue(
                 settings.getStringAsync(

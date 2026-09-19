@@ -434,7 +434,7 @@ class NowPlayingViewModel(
                 )
                 val showTranslation = settings.getBooleanAsync(
                     SettingKeys.SHOW_TRANSLATED_LYRIC,
-                    false,
+                    SettingKeys.SHOW_TRANSLATED_LYRIC_DEFAULT,
                 )
                 val showRoman = settings.getBooleanAsync(
                     SettingKeys.SHOW_ROMAN_LYRIC,

@@ -29,8 +29,12 @@ object SettingKeys {
     const val ONLINE_PLAY_QUALITY = "onlinePlayQuality"
     const val DOWNLOAD_QUALITY = "downloadQuality"
     const val REPLACE_PLAYLIST = "replacePlaylist"
+    // Every read of these three uses the constant, so a screen cannot disagree with its switch.
+    // Tapping a song plays the list from it; one song and silence afterwards was the old default.
+    const val REPLACE_PLAYLIST_DEFAULT = true
     const val CHECK_UPDATE = "checkUpdate"
     const val SHOW_DOWNLOAD_STATUS = "showDownloadStatus"
+    const val SHOW_DOWNLOAD_STATUS_DEFAULT = true
     const val SEARCH_PREDICTION = "searchPrediction"
     // Keep the legacy persisted key so existing preferences and exported backups remain valid.
     const val ENABLE_EXTRA_LYRIC_SURFACE = "adaptOriginalAndroidLyric"
@@ -45,6 +49,7 @@ object SettingKeys {
     const val DESKTOP_WINDOW_BOUNDS = "desktopWindowBounds"
     const val DESKTOP_LYRIC_WINDOW_BOUNDS = "desktopLyricWindowBounds"
     const val SHOW_TRANSLATED_LYRIC = "showTranslatedLyric"
+    const val SHOW_TRANSLATED_LYRIC_DEFAULT = true
     const val SHOW_ROMAN_LYRIC = "showRomanLyric"
     const val LYRIC_SOURCE_MODE = "lyricSourceMode"
     const val USE_DYNAMIC_COVER = "useDynamicCover"

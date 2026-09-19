@@ -126,7 +126,7 @@ fun HomeScreen(
     val dailyQueue = remember(dailySongs) { dailySongs.map { it.toMediaInfo() } }
     val currentMedia by player.currentMedia.collectAsState()
     val isPlaying by player.isPlaying.collectAsState()
-    val playWholeList = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, false) }
+    val playWholeList = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT) }
     val resources = recommendResource?.recommend ?: emptyList()
     var showSearch by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
