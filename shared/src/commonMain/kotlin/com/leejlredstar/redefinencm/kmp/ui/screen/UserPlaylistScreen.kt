@@ -2,7 +2,6 @@ package com.leejlredstar.redefinencm.kmp.ui.screen
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +19,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -37,7 +38,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -112,6 +112,7 @@ fun UserPlaylistScreen(
     onOpenPlaylist: (Long) -> Unit,
     onOpenLogin: () -> Unit = {},
     onOpenDownloads: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     viewModel: MainViewModel = koinInject(),
 ) {
     val userDetail by viewModel.userDetail.collectAsState()
@@ -159,6 +160,31 @@ fun UserPlaylistScreen(
             // contentPadding, not container padding, so rows scroll under the floating toolbar.
             contentPadding = PaddingValues(bottom = scaffoldPadding.calculateBottomPadding() + 16.dp),
         ) {
+            // The page's title and, since settings left the tab bar, the way to them.
+            item(key = "library-header") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "我的",
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = accentPalette.onPageStart,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(
+                            imageVector = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Settings,
+                            contentDescription = "设置",
+                            tint = accentPalette.onPageStart,
+                        )
+                    }
+                }
+            }
             userDetail?.let { detail ->
                 item(key = "user-hero") {
                     UserPlaylistHero(

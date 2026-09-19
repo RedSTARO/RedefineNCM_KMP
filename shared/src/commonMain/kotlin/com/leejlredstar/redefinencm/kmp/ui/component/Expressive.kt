@@ -32,6 +32,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.layoutId
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -136,6 +139,10 @@ fun rememberConnectedListItemShape(
 
 /**
  * Expressive section title — used as a heading above content groups.
+ *
+ * The [action] sits beside the title when both fit on one line and moves under it when they do
+ * not. Side by side regardless, a wide action on a narrow window squeezed the title into a
+ * column one character wide.
  */
 @Composable
 fun ExpressiveSectionTitle(
@@ -144,33 +151,82 @@ fun ExpressiveSectionTitle(
     supportingText: String? = null,
     action: (@Composable () -> Unit)? = null,
 ) {
-    Row(
+    Layout(
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .semantics(mergeDescendants = true) { heading() },
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
+        content = {
+            Column(
+                modifier = Modifier
+                    .layoutId(SectionTitleId)
+                    .semantics(mergeDescendants = true) { heading() },
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                supportingText?.let { supporting ->
+                    Text(
+                        text = supporting,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            // The title's one-line width alone, to judge whether the action fits beside it; the
+            // supporting line may wrap, so it does not count.
             Text(
                 text = text,
                 style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                // Never placed, and hidden from screen readers so the heading is not read twice.
+                modifier = Modifier
+                    .layoutId(SectionTitleProbeId)
+                    .clearAndSetSemantics {},
             )
-            supportingText?.let { supporting ->
-                Text(
-                    text = supporting,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            if (action != null) {
+                Box(Modifier.layoutId(SectionActionId)) { action() }
+            }
+        },
+    ) { measurables, constraints ->
+        val gap = 16.dp.roundToPx()
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val actionPlaceable = measurables.firstOrNull { it.layoutId == SectionActionId }?.measure(loose)
+        val titleWidth = measurables.first { it.layoutId == SectionTitleProbeId }
+            .maxIntrinsicWidth(constraints.maxHeight)
+        val titleMeasurable = measurables.first { it.layoutId == SectionTitleId }
+        val sideBySide = actionPlaceable == null ||
+            titleWidth + gap + actionPlaceable.width <= constraints.maxWidth
+        if (sideBySide) {
+            val titlePlaceable = titleMeasurable.measure(
+                loose.copy(
+                    maxWidth = (constraints.maxWidth - (actionPlaceable?.width?.plus(gap) ?: 0))
+                        .coerceAtLeast(0),
+                ),
+            )
+            val height = maxOf(titlePlaceable.height, actionPlaceable?.height ?: 0)
+            layout(constraints.maxWidth, height) {
+                titlePlaceable.place(0, (height - titlePlaceable.height) / 2)
+                actionPlaceable?.place(
+                    constraints.maxWidth - actionPlaceable.width,
+                    (height - actionPlaceable.height) / 2,
                 )
             }
+        } else {
+            val titlePlaceable = titleMeasurable.measure(loose)
+            val spacing = 8.dp.roundToPx()
+            val height = titlePlaceable.height + spacing + actionPlaceable!!.height
+            layout(constraints.maxWidth, height) {
+                titlePlaceable.place(0, 0)
+                actionPlaceable.place(0, titlePlaceable.height + spacing)
+            }
         }
-        action?.invoke()
     }
 }
+
+private const val SectionTitleId = "section-title"
+private const val SectionTitleProbeId = "section-title-probe"
+private const val SectionActionId = "section-action"
 
 /** Small provenance hint shown while visible content still comes from SQLDelight. */
 @Composable

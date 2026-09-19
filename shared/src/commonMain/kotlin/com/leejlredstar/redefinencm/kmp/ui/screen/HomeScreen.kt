@@ -1,24 +1,11 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
-import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -31,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
@@ -48,7 +34,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,34 +43,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.theme.AccentColorSaver
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
-import com.leejlredstar.redefinencm.kmp.util.BackHandler
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import org.koin.compose.koinInject
 import com.leejlredstar.redefinencm.kmp.player.PlaybackSource
-
-/** 共享元素 key（原版 SharedKeys）。 */
-object SharedKeys {
-    fun search() = "search-bar"
-}
 
 internal fun replaceQueueWithDailyRecommendations(
     player: PlatformPlayer,
@@ -108,8 +83,8 @@ fun HomeScreen(
     onOpenMy: () -> Unit,
     onOpenRecognition: () -> Unit,
     onOpenDailySongs: () -> Unit = {},
-    /** Incremented by the shell to open search from outside the page (Ctrl/⌘+F). */
-    searchRequest: Int = 0,
+    /** The search pill: search is a tab of its own now, so this switches to it. */
+    onOpenSearch: () -> Unit = {},
     viewModel: MainViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
     settings: PlatformSettings = koinInject(),
@@ -128,8 +103,6 @@ fun HomeScreen(
     val isPlaying by player.isPlaying.collectAsState()
     val playWholeList = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT) }
     val resources = recommendResource?.recommend ?: emptyList()
-    var showSearch by rememberSaveable { mutableStateOf(false) }
-    var searchQuery by rememberSaveable { mutableStateOf("") }
     val defaultPageAccent = MaterialTheme.colorScheme.primaryContainer
     val avatarUrl = userDetail?.profile?.avatarUrl
     val nickname = userDetail?.profile?.nickname ?: "我的"
@@ -150,236 +123,175 @@ fun HomeScreen(
     )
     val pagePalette = contentAccentPalette(pageAccent)
 
-    BackHandler(enabled = showSearch) { showSearch = false }
-    LaunchedEffect(searchRequest) {
-        if (searchRequest > 0) showSearch = true
-    }
-
     ExpressivePage(
         accentPalette = pagePalette,
         contentWindowInsets = WindowInsets.statusBars,
     ) {
-        SharedTransitionLayout {
-            val sharedTransitionScope = this
-
-            AnimatedVisibility(
-                visible = !showSearch,
-                enter = fadeIn(
-                    animationSpec = tween(ExpressiveMotion.ShortMillis, easing = LinearOutSlowInEasing),
-                ) +
-                    scaleIn(
-                        initialScale = 0.985f,
-                        animationSpec = tween(ExpressiveMotion.MediumMillis, easing = FastOutSlowInEasing),
-                    ),
-                exit = fadeOut(
-                    animationSpec = tween(ExpressiveMotion.FastMillis, easing = LinearOutSlowInEasing),
-                ) +
-                    scaleOut(
-                        targetScale = 0.985f,
-                        animationSpec = tween(ExpressiveMotion.ShortMillis, easing = FastOutSlowInEasing),
-                    ),
-            ) {
-                val animatedVisibilityScope = this
-                // The page title, the counts and the avatar are a real collapsing app bar now.
-                // They used to be a Surface inside the list that scrolled away like content;
-                // as a top bar they collapse to a pinned compact title instead, and the search
-                // pill is left as the first actual row of the page.
-                val appBarScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-                Scaffold(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .nestedScroll(appBarScrollBehavior.nestedScrollConnection),
-                    containerColor = Color.Transparent,
-                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
-                    topBar = {
-                        LargeFlexibleTopAppBar(
-                            title = { Text("推荐") },
-                            actions = {
-                                HomeAccountAvatar(
-                                    avatarUrl = avatarUrl,
-                                    nickname = nickname,
-                                    accentColor = pageAccent,
-                                    onOpenMy = onOpenMy,
-                                    onAccentColor = if (pageAccentSource == avatarUrl) {
-                                        { color -> rawPageAccent = color }
-                                    } else {
-                                        null
-                                    },
-                                )
-                                Spacer(Modifier.width(8.dp))
+        // The page title, the counts and the avatar are a real collapsing app bar now.
+        // They used to be a Surface inside the list that scrolled away like content;
+        // as a top bar they collapse to a pinned compact title instead, and the search
+        // pill is left as the first actual row of the page.
+        val appBarScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+        Scaffold(
+            modifier = Modifier
+                .fillMaxSize()
+                .nestedScroll(appBarScrollBehavior.nestedScrollConnection),
+            containerColor = Color.Transparent,
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            topBar = {
+                LargeFlexibleTopAppBar(
+                    title = { Text("推荐") },
+                    actions = {
+                        HomeAccountAvatar(
+                            avatarUrl = avatarUrl,
+                            nickname = nickname,
+                            accentColor = pageAccent,
+                            onOpenMy = onOpenMy,
+                            onAccentColor = if (pageAccentSource == avatarUrl) {
+                                { color -> rawPageAccent = color }
+                            } else {
+                                null
                             },
-                            scrollBehavior = appBarScrollBehavior,
-                            colors = TopAppBarDefaults.largeTopAppBarColors(
-                                containerColor = Color.Transparent,
-                                scrolledContainerColor = pagePalette.pageStart,
-                                titleContentColor = pagePalette.onPageStart,
-                            ),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    },
+                    scrollBehavior = appBarScrollBehavior,
+                    colors = TopAppBarDefaults.largeTopAppBarColors(
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = pagePalette.pageStart,
+                        titleContentColor = pagePalette.onPageStart,
+                    ),
+                )
+            },
+        ) { appBarPadding ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            // Bottom clearance belongs on the LazyColumn, not on ExpressivePage:
+            // container padding shrinks the viewport so items stop above the floating
+            // toolbar, while contentPadding lets them scroll underneath it.
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = appBarPadding.calculateTopPadding(),
+                // The shell's clearance already covers the toolbar and the mini player.
+                bottom = scaffoldPadding.calculateBottomPadding() + 16.dp,
+            ),
+        ) {
+            item(key = "search") {
+                SearchBox(
+                    label = SearchPlaceholder,
+                    onClick = onOpenSearch,
+                    accentColor = pageAccent,
+                )
+                Spacer(Modifier.height(4.dp))
+            }
+
+            item {
+                SectionWithCarousel(
+                    title = "推荐歌单",
+                    items = resources,
+                    isLoading = accountLoading && recommendResource == null,
+                    isFromCache = resourceFromCache,
+                    isRefreshing = accountLoading,
+                    errorMessage = resourceLoadError,
+                    onRetry = viewModel::retryAccountData,
+                    key = { resource -> resource.id },
+                    itemContent = { res ->
+                        RecommendSquareCard(
+                            picUrl = res.picUrl,
+                            text = res.name,
+                            onAccentColor = if (res.picUrl == pageAccentSource) {
+                                { color -> rawPageAccent = color }
+                            } else {
+                                null
+                            },
+                            onClick = { onOpenPlaylist(res.id) },
                         )
                     },
-                ) { appBarPadding ->
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    // Bottom clearance belongs on the LazyColumn, not on ExpressivePage:
-                    // container padding shrinks the viewport so items stop above the floating
-                    // toolbar, while contentPadding lets them scroll underneath it.
-                    contentPadding = PaddingValues(
-                        start = 16.dp,
-                        end = 16.dp,
-                        top = appBarPadding.calculateTopPadding(),
-                        // The shell's clearance already covers the toolbar and the mini player.
-                        bottom = scaffoldPadding.calculateBottomPadding() + 16.dp,
-                    ),
-                ) {
-                    item(key = "search") {
-                        SearchBox(
-                            // The pill shows the last query, which reopening search restores.
-                            label = searchQuery.ifBlank { SearchPlaceholder },
-                            onClick = { showSearch = true },
-                            accentColor = pageAccent,
-                            sharedTransitionScope = sharedTransitionScope,
-                            animatedVisibilityScope = animatedVisibilityScope,
-                        )
-                        Spacer(Modifier.height(4.dp))
-                    }
-
-                    item {
-                        SectionWithCarousel(
-                            title = "推荐歌单",
-                            items = resources,
-                            isLoading = accountLoading && recommendResource == null,
-                            isFromCache = resourceFromCache,
-                            isRefreshing = accountLoading,
-                            errorMessage = resourceLoadError,
-                            onRetry = viewModel::retryAccountData,
-                            key = { resource -> resource.id },
-                            itemContent = { res ->
-                                RecommendSquareCard(
-                                    picUrl = res.picUrl,
-                                    text = res.name,
-                                    onAccentColor = if (res.picUrl == pageAccentSource) {
-                                        { color -> rawPageAccent = color }
-                                    } else {
-                                        null
-                                    },
-                                    onClick = { onOpenPlaylist(res.id) },
-                                )
-                            },
-                        )
-                    }
-
-                    item {
-                        SectionWithCarousel(
-                            title = "每日推荐",
-                            items = dailySongs,
-                            isLoading = accountLoading && recommend == null,
-                            isFromCache = songsFromCache,
-                            isRefreshing = accountLoading,
-                            errorMessage = songsLoadError,
-                            onRetry = viewModel::retryAccountData,
-                            key = { song -> song.id },
-                            action = {
-                                FilledTonalButton(
-                                    onClick = {
-                                        replaceQueueWithDailyRecommendations(player, dailySongs)
-                                    },
-                                    enabled = dailySongs.isNotEmpty(),
-                                    shape = CircleShape,
-                                    contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                                    // Default tonal colours land on secondaryContainer, which in
-                                    // this scheme is a yellow — the one loud element left on an
-                                    // otherwise artwork-tinted page. Follow the page accent.
-                                    colors = ButtonDefaults.filledTonalButtonColors(
-                                        containerColor = pagePalette.container,
-                                        contentColor = pagePalette.onContainer,
-                                    ),
-                                ) {
-                                    Icon(
-                                        imageVector = AppIcons.PlayArrow,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                    Spacer(Modifier.size(8.dp))
-                                    Text("播放全部")
-                                }
-                                // The carousel shows covers; the whole list, with artists and
-                                // durations, is one tap away.
-                                TextButton(
-                                    onClick = onOpenDailySongs,
-                                    enabled = dailySongs.isNotEmpty(),
-                                ) {
-                                    Text("全部 ${dailySongs.size} 首")
-                                }
-                            },
-                            itemContent = { song ->
-                                val queueIndex = dailySongs.indexOf(song)
-                                RecommendSquareCard(
-                                    picUrl = song.al.picUrl,
-                                    text = song.name,
-                                    subtitle = song.ar.joinToString(" / ") { it.name },
-                                    isCurrent = currentMedia != null &&
-                                        currentMedia?.id == dailyQueue.getOrNull(queueIndex)?.id,
-                                    isPlaying = isPlaying,
-                                    onAccentColor = if (song.al.picUrl == pageAccentSource) {
-                                        { color -> rawPageAccent = color }
-                                    } else {
-                                        null
-                                    },
-                                    onClick = {
-                                        // Same rule as a playlist: the whole daily list from this
-                                        // song, or the song alone, per the setting.
-                                        playFromList(
-                                            player,
-                                            dailyQueue,
-                                            queueIndex,
-                                            playWholeList,
-                                            source = DailySource,
-                                        )
-                                    },
-                                )
-                            },
-                        )
-                    }
-
-                    // A tool, not a recommendation: it sits after the personal content.
-                    item(key = "music-tools") {
-                        RecognitionToolSection(
-                            accentColor = pageAccent,
-                            onOpenRecognition = onOpenRecognition,
-                        )
-                    }
-                }
-                }
-            }
-
-            AnimatedVisibility(
-                visible = showSearch,
-                enter = fadeIn(
-                    animationSpec = tween(
-                        ExpressiveMotion.ShortMillis,
-                        delayMillis = ExpressiveMotion.EnterDelayMillis,
-                        easing = LinearOutSlowInEasing,
-                    ),
-                ) + slideInVertically(
-                    animationSpec = tween(ExpressiveMotion.EmphasizedMillis, easing = FastOutSlowInEasing),
-                    initialOffsetY = { it / 10 },
-                ),
-                exit = fadeOut(
-                    animationSpec = tween(ExpressiveMotion.FastMillis, easing = LinearOutSlowInEasing),
-                ) +
-                    slideOutVertically(
-                        animationSpec = tween(ExpressiveMotion.ShortMillis, easing = FastOutSlowInEasing),
-                        targetOffsetY = { it / 12 },
-                    ),
-            ) {
-                SearchScreen(
-                    bottomPadding = scaffoldPadding.calculateBottomPadding() + 16.dp,
-                    query = searchQuery,
-                    onQueryChange = { searchQuery = it },
-                    onBack = { showSearch = false },
-                    sharedTransitionScope = sharedTransitionScope,
-                    animatedVisibilityScope = this,
                 )
             }
+
+            item {
+                SectionWithCarousel(
+                    title = "每日推荐",
+                    items = dailySongs,
+                    isLoading = accountLoading && recommend == null,
+                    isFromCache = songsFromCache,
+                    isRefreshing = accountLoading,
+                    errorMessage = songsLoadError,
+                    onRetry = viewModel::retryAccountData,
+                    key = { song -> song.id },
+                    action = {
+                        FilledTonalButton(
+                            onClick = {
+                                replaceQueueWithDailyRecommendations(player, dailySongs)
+                            },
+                            enabled = dailySongs.isNotEmpty(),
+                            shape = CircleShape,
+                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                            // Default tonal colours land on secondaryContainer, which in
+                            // this scheme is a yellow — the one loud element left on an
+                            // otherwise artwork-tinted page. Follow the page accent.
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = pagePalette.container,
+                                contentColor = pagePalette.onContainer,
+                            ),
+                        ) {
+                            Icon(
+                                imageVector = AppIcons.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Spacer(Modifier.size(8.dp))
+                            Text("播放全部")
+                        }
+                        // The carousel shows covers; the whole list, with artists and
+                        // durations, is one tap away.
+                        TextButton(
+                            onClick = onOpenDailySongs,
+                            enabled = dailySongs.isNotEmpty(),
+                        ) {
+                            Text("全部 ${dailySongs.size} 首")
+                        }
+                    },
+                    itemContent = { song ->
+                        val queueIndex = dailySongs.indexOf(song)
+                        RecommendSquareCard(
+                            picUrl = song.al.picUrl,
+                            text = song.name,
+                            subtitle = song.ar.joinToString(" / ") { it.name },
+                            isCurrent = currentMedia != null &&
+                                currentMedia?.id == dailyQueue.getOrNull(queueIndex)?.id,
+                            isPlaying = isPlaying,
+                            onAccentColor = if (song.al.picUrl == pageAccentSource) {
+                                { color -> rawPageAccent = color }
+                            } else {
+                                null
+                            },
+                            onClick = {
+                                // Same rule as a playlist: the whole daily list from this
+                                // song, or the song alone, per the setting.
+                                playFromList(
+                                    player,
+                                    dailyQueue,
+                                    queueIndex,
+                                    playWholeList,
+                                    source = DailySource,
+                                )
+                            },
+                        )
+                    },
+                )
+            }
+
+            // A tool, not a recommendation: it sits after the personal content.
+            item(key = "music-tools") {
+                RecognitionToolSection(
+                    accentColor = pageAccent,
+                    onOpenRecognition = onOpenRecognition,
+                )
+            }
+        }
         }
     }
 }
@@ -504,47 +416,38 @@ private fun HomeAccountAvatar(
     }
 }
 
-/** 搜索入口药丸（原版 SearchBox），与搜索页输入框共享 sharedBounds。 */
-@OptIn(ExperimentalSharedTransitionApi::class)
+/** 搜索入口药丸（原版 SearchBox）：打开搜索 Tab。 */
 @Composable
 private fun SearchBox(
     label: String,
     onClick: () -> Unit,
     accentColor: Color,
-    sharedTransitionScope: SharedTransitionScope,
-    animatedVisibilityScope: AnimatedVisibilityScope,
 ) {
     val searchPalette = contentAccentPalette(accentColor)
-    with(sharedTransitionScope) {
-        Surface(
-            onClick = onClick,
-            shape = CircleShape,
-            color = searchPalette.quietContainer,
-            contentColor = searchPalette.onQuietContainer,
-            modifier = Modifier
-                .sharedBounds(
-                    rememberSharedContentState(SharedKeys.search()),
-                    animatedVisibilityScope,
-                )
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = searchPalette.quietContainer,
+        contentColor = searchPalette.onQuietContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = AppIcons.Search,
-                    contentDescription = null,
-                    tint = searchPalette.accent,
-                )
-                Spacer(Modifier.size(12.dp))
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.bodyLarge,
+            Icon(
+                imageVector = AppIcons.Search,
+                contentDescription = null,
+                tint = searchPalette.accent,
+            )
+            Spacer(Modifier.size(12.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
                 color = searchPalette.secondaryOnQuietContainer,
-                )
-            }
+            )
         }
     }
 }

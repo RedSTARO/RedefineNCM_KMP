@@ -1,18 +1,17 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
-import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -32,6 +31,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
@@ -58,15 +59,18 @@ import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
 
-@OptIn(ExperimentalSharedTransitionApi::class)
+/**
+ * The search tab. It used to be an overlay inside the recommendations page, reachable from
+ * there only; as a tab it is one tap from anywhere and keeps its query while the user is away.
+ *
+ * @param focusRequest raised by the home page's search pill and Ctrl/⌘+F: put the cursor in the
+ *   field and bring up the keyboard. Switching to the tab by itself does not.
+ */
 @Composable
 fun SearchScreen(
     bottomPadding: androidx.compose.ui.unit.Dp,
-    query: String,
-    onQueryChange: (String) -> Unit,
-    onBack: () -> Unit,
-    sharedTransitionScope: SharedTransitionScope,
-    animatedVisibilityScope: AnimatedVisibilityScope,
+    focusRequest: Int = 0,
+    onFocusRequestHandled: () -> Unit = {},
     viewModel: MainViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
     settings: PlatformSettings = koinInject(),
@@ -83,13 +87,16 @@ fun SearchScreen(
     val searchPrediction = remember { settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true) }
     val searchPalette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
 
-    // The last query and its results are kept when the search closes, so trying another result
-    // after playing one does not mean typing the query again.
-    LaunchedEffect(Unit) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val onQueryChange: (String) -> Unit = { query = it }
+
+    LaunchedEffect(focusRequest) {
+        if (focusRequest <= 0) return@LaunchedEffect
         delay(220)
         if (runCatching { focusRequester.requestFocus() }.isSuccess) {
             keyboard?.show()
         }
+        onFocusRequestHandled()
     }
 
     LaunchedEffect(query) {
@@ -113,74 +120,63 @@ fun SearchScreen(
     ExpressivePage(
         accentPalette = searchPalette,
         maxContentWidth = com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout.ReadingContentMaxWidth,
+        contentWindowInsets = WindowInsets.statusBars,
         contentPadding = PaddingValues(horizontal = 16.dp),
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
+        Text(
+            text = "搜索",
+            style = MaterialTheme.typography.headlineLarge,
+            fontWeight = FontWeight.ExtraBold,
+            color = searchPalette.onPageStart,
+            modifier = Modifier.padding(start = 4.dp, top = 24.dp, bottom = 12.dp),
+        )
         Row(
-            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+            modifier = Modifier.padding(bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onBack) {
-                Surface(
-                    shape = CircleShape,
-                    color = searchPalette.quietContainer,
-                    contentColor = searchPalette.onQuietContainer,
-                ) {
-                    Icon(
-                        AppIcons.ArrowBack,
-                        contentDescription = "返回",
-                        modifier = Modifier.padding(10.dp),
-                    )
-                }
-            }
-            with(sharedTransitionScope) {
-                TextField(
-                    value = query,
-                    onValueChange = onQueryChange,
-                    placeholder = { Text(SearchPlaceholder) },
-                    singleLine = true,
-                    leadingIcon = { Icon(AppIcons.Search, contentDescription = null) },
-                    trailingIcon = {
-                        if (query.isNotEmpty()) {
-                            Row {
-                                IconButton(onClick = { onQueryChange(""); viewModel.clearSearch() }) {
-                                    Icon(AppIcons.Clear, contentDescription = "清除")
-                                }
-                                // The keyboard's search key was the only way to run a search.
-                                IconButton(onClick = { submit(query) }) {
-                                    Icon(
-                                        AppIcons.Search,
-                                        contentDescription = "搜索",
-                                        tint = searchPalette.accent,
-                                    )
-                                }
+            TextField(
+                value = query,
+                onValueChange = onQueryChange,
+                placeholder = { Text(SearchPlaceholder) },
+                singleLine = true,
+                leadingIcon = { Icon(AppIcons.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        Row {
+                            IconButton(onClick = { onQueryChange(""); viewModel.clearSearch() }) {
+                                Icon(AppIcons.Clear, contentDescription = "清除")
+                            }
+                            // The keyboard's search key was the only way to run a search.
+                            IconButton(onClick = { submit(query) }) {
+                                Icon(
+                                    AppIcons.Search,
+                                    contentDescription = "搜索",
+                                    tint = searchPalette.accent,
+                                )
                             }
                         }
-                    },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { submit(query) }),
-                    shape = CircleShape,
-                    modifier = Modifier
-                        .sharedBounds(
-                            rememberSharedContentState(SharedKeys.search()),
-                            animatedVisibilityScope,
-                        )
-                        .focusRequester(focusRequester)
-                        .fillMaxWidth(),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = searchPalette.quietContainer,
-                        unfocusedContainerColor = searchPalette.quietContainer,
-                        focusedTextColor = searchPalette.onQuietContainer,
-                        unfocusedTextColor = searchPalette.onQuietContainer,
-                        focusedLeadingIconColor = searchPalette.accent,
-                        unfocusedLeadingIconColor = searchPalette.secondaryOnQuietContainer,
-                        focusedTrailingIconColor = searchPalette.onQuietContainer,
-                        unfocusedTrailingIconColor = searchPalette.onQuietContainer,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                    ),
-                )
-            }
+                    }
+                },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { submit(query) }),
+                shape = CircleShape,
+                modifier = Modifier
+                    .focusRequester(focusRequester)
+                    .fillMaxWidth(),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = searchPalette.quietContainer,
+                    unfocusedContainerColor = searchPalette.quietContainer,
+                    focusedTextColor = searchPalette.onQuietContainer,
+                    unfocusedTextColor = searchPalette.onQuietContainer,
+                    focusedLeadingIconColor = searchPalette.accent,
+                    unfocusedLeadingIconColor = searchPalette.secondaryOnQuietContainer,
+                    focusedTrailingIconColor = searchPalette.onQuietContainer,
+                    unfocusedTrailingIconColor = searchPalette.onQuietContainer,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                ),
+            )
         }
 
         Spacer(Modifier.height(8.dp))

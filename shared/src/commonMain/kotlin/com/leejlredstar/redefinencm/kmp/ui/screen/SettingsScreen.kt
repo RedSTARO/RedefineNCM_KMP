@@ -48,13 +48,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.Modifier
@@ -118,6 +116,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.di.DEFAULT_NCM_SERVER as DefaultNcmServer
@@ -140,6 +140,8 @@ private val windowedLyricSurface: WindowedLyricSurface? = lyricSurface as? Windo
 fun SettingsScreen(
     scaffoldPadding: PaddingValues,
     onOpenLogin: () -> Unit,
+    /** Settings is a page opened from the library and the sidebar, so it has a way back. */
+    onBack: (() -> Unit)? = null,
     settings: PlatformSettings = koinInject(),
     api: NCMApi = koinInject(),
     mainViewModel: MainViewModel = koinInject(),
@@ -387,6 +389,13 @@ fun SettingsScreen(
                 LargeFlexibleTopAppBar(
                     title = { Text("设置") },
                     subtitle = { Text("账号、播放、歌词、下载与服务器") },
+                    navigationIcon = {
+                        onBack?.let {
+                            IconButton(onClick = it) {
+                                Icon(AppIcons.ArrowBack, contentDescription = "返回")
+                            }
+                        }
+                    },
                     scrollBehavior = appBarScrollBehavior,
                     colors = TopAppBarDefaults.largeTopAppBarColors(
                         // Transparent while expanded so ExpressivePage's gradient reads through,
@@ -1301,12 +1310,15 @@ private fun <T> SettingsDropdownRow(
                 }
             }
             Spacer(Modifier.width(16.dp))
+            // Weighted as well, so a long value is cut short instead of squeezing the label into
+            // a column one character wide on a narrow window.
             Text(
                 text = valueLabel,
                 style = MaterialTheme.typography.bodyMedium,
                 color = accentPalette.secondaryOnQuietContainer,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(0.6f, fill = false),
             )
             // Up/down arrows: this row opens a menu in place. A right chevron promised a new
             // page and then opened a menu.

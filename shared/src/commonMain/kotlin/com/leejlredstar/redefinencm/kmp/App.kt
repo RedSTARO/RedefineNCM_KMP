@@ -116,6 +116,7 @@ import com.leejlredstar.redefinencm.kmp.ui.screen.DownloadManagementScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.LoginScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.PlaylistDetailScreen
+import com.leejlredstar.redefinencm.kmp.ui.screen.SearchScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.NowPlayingScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.SettingsScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.SongRecognitionScreen
@@ -134,10 +135,15 @@ import org.koin.compose.koinInject
 import com.leejlredstar.redefinencm.kmp.ui.component.OutputVolumeLevel
 import com.leejlredstar.redefinencm.kmp.ui.component.outputVolumeLevel
 
+/**
+ * The three tabs: recommendations, search and the library. Settings used to take the third slot
+ * while search was reachable from the recommendations page only; settings is a page now, opened
+ * from the library and from the foot of the desktop sidebar.
+ */
 private sealed interface TabDest {
     data object Home : TabDest
+    data object Search : TabDest
     data object My : TabDest
-    data object Settings : TabDest
 }
 
 private sealed interface PushedDest {
@@ -147,6 +153,7 @@ private sealed interface PushedDest {
     data object Downloads : PushedDest
     data object SongRecognition : PushedDest
     data object DailySongs : PushedDest
+    data object Settings : PushedDest
     data class Playlist(val id: Long) : PushedDest
 }
 
@@ -154,14 +161,15 @@ private val tabDestSaver = Saver<TabDest, String>(
     save = { destination ->
         when (destination) {
             TabDest.Home -> "home"
+            TabDest.Search -> "search"
             TabDest.My -> "my"
-            TabDest.Settings -> "settings"
         }
     },
     restore = { saved ->
         when (saved) {
-            "my" -> TabDest.My
-            "settings" -> TabDest.Settings
+            "search" -> TabDest.Search
+            // Settings was a tab; state saved then comes back to the library it now hangs off.
+            "my", "settings" -> TabDest.My
             else -> TabDest.Home
         }
     },
@@ -187,6 +195,7 @@ private fun encodePushedDestination(destination: PushedDest): String = when (des
     PushedDest.Downloads -> "downloads"
     PushedDest.SongRecognition -> "song-recognition"
     PushedDest.DailySongs -> "daily-songs"
+    PushedDest.Settings -> "settings"
     is PushedDest.Playlist -> "playlist:${destination.id}"
 }
 
@@ -198,6 +207,7 @@ private fun decodePushedDestination(saved: String): PushedDest? = when (saved) {
     "downloads" -> PushedDest.Downloads
     "song-recognition" -> PushedDest.SongRecognition
     "daily-songs" -> PushedDest.DailySongs
+    "settings" -> PushedDest.Settings
     else -> saved.removePrefix("playlist:")
         .takeIf { saved.startsWith("playlist:") }
         ?.toLongOrNull()
@@ -377,14 +387,18 @@ private fun AppContent(
                     }
                 }
             }
-            var searchRequest by remember { mutableStateOf(0) }
+            fun selectTab(tab: TabDest) {
+                clearPushed()
+                currentTab = tab
+            }
+            var searchFocusRequest by remember { mutableStateOf(0) }
+            fun openSearch() {
+                selectTab(TabDest.Search)
+                searchFocusRequest += 1
+            }
             LaunchedEffect(Unit) {
                 AppNavigationRequests.openSearchRequestId.collect { requestId ->
-                    if (AppNavigationRequests.consumeOpenSearchRequest(requestId)) {
-                        clearPushed()
-                        currentTab = TabDest.Home
-                        searchRequest += 1
-                    }
+                    if (AppNavigationRequests.consumeOpenSearchRequest(requestId)) openSearch()
                 }
             }
             LaunchedEffect(Unit) {
@@ -411,12 +425,15 @@ private fun AppContent(
                 mainViewModel.consumeUpdateMessage()
             }
 
-            val showTabs = pushedStack.isEmpty()
+            // The navigation stays on the pages opened from a tab; it used to vanish on every one,
+            // so changing tabs meant backing out first. The player, the lyrics and sign-in are
+            // full-screen and still hide it.
+            val showTabs = !hidesNavigation(pushedStack.lastOrNull())
             val tabs = remember {
                 listOf(
                     NavigationItem("推荐", AppIcons.Home, TabDest.Home),
+                    NavigationItem("搜索", AppIcons.Search, TabDest.Search),
                     NavigationItem("我的", AppIcons.Person, TabDest.My),
-                    NavigationItem("设置", AppIcons.Settings, TabDest.Settings),
                 )
             }
 
@@ -524,8 +541,7 @@ private fun AppContent(
                                     state = desktopRailState,
                                     tabs = tabs,
                                     selectedTab = if (
-                                        rootDest is RootDest.Pushed &&
-                                        rootDest.dest is PushedDest.Downloads
+                                        rootDest is RootDest.Pushed && isToolPage(rootDest.dest)
                                     ) {
                                         null
                                     } else {
@@ -536,16 +552,16 @@ private fun AppContent(
                                     accentPalette = chromePalette,
                                     player = player,
                                     showFullPlayer = showDesktopFullPlayer,
-                                    onSelectTab = {
-                                        clearPushed()
-                                        currentTab = it
-                                    },
+                                    onSelectTab = ::selectTab,
                                     onOpenDownloads = ::openDownloads,
                                     recognitionSelected = rootDest is RootDest.Pushed &&
                                         rootDest.dest is PushedDest.SongRecognition,
                                     onOpenRecognition = {
                                         focusOrPushTracked(PushedDest.SongRecognition)
                                     },
+                                    settingsSelected = rootDest is RootDest.Pushed &&
+                                        rootDest.dest is PushedDest.Settings,
+                                    onOpenSettings = { focusOrPushTracked(PushedDest.Settings) },
                                     onChromeAccent = { rawChromeAccent = it },
                                     onOpenNowPlaying = ::openNowPlaying,
                                 )
@@ -561,7 +577,7 @@ private fun AppContent(
                                         tabs.forEach { item ->
                                             NavigationRailItem(
                                                 selected = currentTab == item.dest,
-                                                onClick = { currentTab = item.dest },
+                                                onClick = { selectTab(item.dest) },
                                                 icon = { Icon(item.icon, contentDescription = null) },
                                                 label = { Text(item.label) },
                                                 colors = NavigationRailItemDefaults.colors(
@@ -617,6 +633,11 @@ private fun AppContent(
                                                 onBack = ::back,
                                                 scaffoldPadding = screenPadding,
                                             )
+                                            is PushedDest.Settings -> SettingsScreen(
+                                                scaffoldPadding = screenPadding,
+                                                onOpenLogin = { push(PushedDest.Login) },
+                                                onBack = ::back,
+                                            )
                                             is PushedDest.Playlist -> PlaylistDetailScreen(
                                                 playlistId = dest.id,
                                                 scaffoldPadding = screenPadding,
@@ -631,17 +652,19 @@ private fun AppContent(
                                                 onOpenMy = { currentTab = TabDest.My },
                                                 onOpenRecognition = { push(PushedDest.SongRecognition) },
                                                 onOpenDailySongs = { push(PushedDest.DailySongs) },
-                                                searchRequest = searchRequest,
+                                                onOpenSearch = ::openSearch,
+                                            )
+                                            is TabDest.Search -> SearchScreen(
+                                                bottomPadding = screenPadding.calculateBottomPadding() + 16.dp,
+                                                focusRequest = searchFocusRequest,
+                                                onFocusRequestHandled = { searchFocusRequest = 0 },
                                             )
                                             is TabDest.My -> UserPlaylistScreen(
                                                 scaffoldPadding = screenPadding,
                                                 onOpenPlaylist = { push(PushedDest.Playlist(it)) },
                                                 onOpenLogin = { push(PushedDest.Login) },
                                                 onOpenDownloads = ::openDownloads,
-                                            )
-                                            is TabDest.Settings -> SettingsScreen(
-                                                scaffoldPadding = screenPadding,
-                                                onOpenLogin = { push(PushedDest.Login) },
+                                                onOpenSettings = { push(PushedDest.Settings) },
                                             )
                                         }
                                     }
@@ -672,7 +695,7 @@ private fun AppContent(
                                             icon = item.icon,
                                             selected = currentTab == item.dest,
                                             palette = chromePalette,
-                                            onSelect = { currentTab = item.dest },
+                                            onSelect = { selectTab(item.dest) },
                                         )
                                     }
                                     if (desktopCompact) {
@@ -708,6 +731,8 @@ private fun DesktopExpandableSidebar(
     onOpenDownloads: () -> Unit,
     recognitionSelected: Boolean,
     onOpenRecognition: () -> Unit,
+    settingsSelected: Boolean,
+    onOpenSettings: () -> Unit,
     onChromeAccent: (Color) -> Unit,
     onOpenNowPlaying: () -> Unit,
 ) {
@@ -773,6 +798,8 @@ private fun DesktopExpandableSidebar(
             onOpenDownloads = { collapseAfter(onOpenDownloads) },
             recognitionSelected = recognitionSelected,
             onOpenRecognition = { collapseAfter(onOpenRecognition) },
+            settingsSelected = settingsSelected,
+            onOpenSettings = { collapseAfter(onOpenSettings) },
             onChromeAccent = onChromeAccent,
             onOpenNowPlaying = { collapseAfter(onOpenNowPlaying) },
         )
@@ -796,6 +823,8 @@ private fun DesktopSidebarContent(
     onOpenDownloads: () -> Unit,
     recognitionSelected: Boolean,
     onOpenRecognition: () -> Unit,
+    settingsSelected: Boolean,
+    onOpenSettings: () -> Unit,
     onChromeAccent: (Color) -> Unit,
     onOpenNowPlaying: () -> Unit,
 ) {
@@ -894,6 +923,16 @@ private fun DesktopSidebarContent(
                 colors = itemColors,
             )
         }
+        // Settings stand apart from the places, at the foot of the rail.
+        WideNavigationRailItem(
+            selected = settingsSelected,
+            onClick = onOpenSettings,
+            icon = { Icon(AppIcons.Settings, contentDescription = null) },
+            label = { Text("设置") },
+            railExpanded = railExpanded,
+            modifier = railItemModifier.padding(vertical = 8.dp),
+            colors = itemColors,
+        )
         if (showFullPlayer && expandedContentVisible) {
             Box(
                 modifier = Modifier.width(320.dp).padding(horizontal = 12.dp, vertical = 8.dp),
@@ -1339,6 +1378,14 @@ private fun isPlayerSurface(dest: RootDest): Boolean =
 private fun isPlayerSurface(dest: PushedDest?): Boolean =
     dest is PushedDest.NowPlaying || dest is PushedDest.FullLyric
 
+/** Full-screen pages, which cover the tab navigation; every other page keeps it. */
+private fun hidesNavigation(dest: PushedDest?): Boolean =
+    isPlayerSurface(dest) || dest is PushedDest.Login
+
+/** The pages the desktop sidebar lists by themselves; while one is open no tab is lit. */
+private fun isToolPage(dest: PushedDest): Boolean =
+    dest is PushedDest.Downloads || dest is PushedDest.SongRecognition || dest is PushedDest.Settings
+
 private fun tabFadeThrough(): ContentTransform =
     fadeIn(
         animationSpec = tween(
@@ -1353,8 +1400,8 @@ private fun tabFadeThrough(): ContentTransform =
 private fun RootDest.stateKey(): String = when (this) {
     is RootDest.Tab -> "tab:" + when (tab) {
         is TabDest.Home -> "home"
+        is TabDest.Search -> "search"
         is TabDest.My -> "my"
-        is TabDest.Settings -> "settings"
     }
     is RootDest.Pushed -> pushedStateKey(dest, stackDepth)
 }
