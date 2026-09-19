@@ -3,6 +3,7 @@ package com.leejlredstar.redefinencm.kmp.util
 import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
 import com.leejlredstar.redefinencm.kmp.notification.LyricSurfaceAlignment
+import com.leejlredstar.redefinencm.kmp.ui.theme.ThemeMode
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -36,6 +37,9 @@ data class SettingsBackupData(
     /** Null keeps the current choice when importing a backup made before lyric-source support. */
     val lyricSourceMode: String? = null,
     val useDynamicCover: Boolean = false,
+    /** Null keeps the current choice when importing a backup made before the theme setting. */
+    val themeMode: String? = null,
+    val dynamicColor: Boolean = false,
 )
 
 private val backupJson = Json { ignoreUnknownKeys = true; coerceInputValues = true }
@@ -79,6 +83,8 @@ internal fun encodeSettingsBackup(
             getString(SettingKeys.LYRIC_SOURCE_MODE, LyricSourceMode.DEFAULT.wireValue),
         ).wireValue,
         useDynamicCover = getBoolean(SettingKeys.USE_DYNAMIC_COVER, false),
+        themeMode = ThemeMode.fromWireValue(getString(SettingKeys.THEME_MODE, "")).wireValue,
+        dynamicColor = getBoolean(SettingKeys.DYNAMIC_COLOR, false),
     )
 )
 
@@ -120,6 +126,8 @@ internal fun applySettingsBackup(
     setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, data.showRomanLyric)
     lyricSourceMode?.let { setString(SettingKeys.LYRIC_SOURCE_MODE, it.wireValue) }
     setBoolean(SettingKeys.USE_DYNAMIC_COVER, data.useDynamicCover)
+    data.themeMode?.let { setString(SettingKeys.THEME_MODE, ThemeMode.fromWireValue(it).wireValue) }
+    setBoolean(SettingKeys.DYNAMIC_COLOR, data.dynamicColor)
     true
 } catch (_: Exception) {
     false

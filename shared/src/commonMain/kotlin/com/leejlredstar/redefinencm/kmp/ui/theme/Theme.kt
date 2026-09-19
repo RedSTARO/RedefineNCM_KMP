@@ -7,6 +7,8 @@ import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 
@@ -35,23 +37,31 @@ private val ExpressiveShapes = Shapes(
  * component inherits the expressive [MotionScheme] — spirited, physics-based animation
  * specs — in addition to the expressive color/shape/type scales defined here.
  *
- * Dynamic color (Android 12+ wallpaper extraction, or album-art–derived schemes) is NOT
- * wired here yet: it needs an expect/actual color-scheme provider, since
- * `dynamicColorScheme` is Android/Context-only and unavailable in commonMain. Until then,
- * the static [LightColors] / [DarkColors] schemes are used on every platform. Album-art
+ * Light or dark follows [ThemePreferences] (the system's setting unless the user picked one).
+ * Android 12+ wallpaper colours come through [rememberDynamicColorScheme] when the user turns
+ * them on; everywhere else the static [LightColors] / [DarkColors] schemes are used. Album-art
  * accent colors are extracted from Coil images and applied locally through [ContentAccentPalette],
  * not through the global scheme.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun RedefineNCMTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    /** Forces light or dark; null follows the user's choice in [ThemePreferences]. */
+    darkTheme: Boolean? = null,
     content: @Composable () -> Unit,
 ) {
+    val mode by ThemePreferences.mode.collectAsState()
+    val useDynamicColor by ThemePreferences.dynamicColor.collectAsState()
+    val dark = darkTheme ?: when (mode) {
+        ThemeMode.System -> isSystemInDarkTheme()
+        ThemeMode.Light -> false
+        ThemeMode.Dark -> true
+    }
+    val dynamicScheme = if (useDynamicColor) rememberDynamicColorScheme(dark) else null
     val fontFamily = LocalPreloadedFontFamily.current ?: FontFamily.Default
     val typography = ExpressiveTypography.withFontFamily(fontFamily)
     MaterialExpressiveTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
+        colorScheme = dynamicScheme ?: if (dark) DarkColors else LightColors,
         motionScheme = MotionScheme.expressive(),
         shapes = ExpressiveShapes,
         typography = typography,

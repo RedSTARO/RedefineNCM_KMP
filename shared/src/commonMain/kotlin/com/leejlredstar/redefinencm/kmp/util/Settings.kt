@@ -36,6 +36,10 @@ object SettingKeys {
     const val SHOW_DOWNLOAD_STATUS = "showDownloadStatus"
     const val SHOW_DOWNLOAD_STATUS_DEFAULT = true
     const val SEARCH_PREDICTION = "searchPrediction"
+    /** Light, dark or the system's; see ThemeMode. */
+    const val THEME_MODE = "themeMode"
+    /** Android 12+ wallpaper colours instead of the app's own scheme. */
+    const val DYNAMIC_COLOR = "dynamicColor"
     /** Recent searches, newest first, one per line. Kept on the device, not in the backup. */
     const val SEARCH_HISTORY = "searchHistory"
     // Keep the legacy persisted key so existing preferences and exported backups remain valid.

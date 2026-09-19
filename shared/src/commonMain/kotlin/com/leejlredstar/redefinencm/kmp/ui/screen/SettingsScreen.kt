@@ -8,6 +8,8 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -122,6 +124,9 @@ import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.di.DEFAULT_NCM_SERVER as DefaultNcmServer
 import com.leejlredstar.redefinencm.kmp.getPlatform
+import com.leejlredstar.redefinencm.kmp.ui.theme.ThemeMode
+import com.leejlredstar.redefinencm.kmp.ui.theme.ThemePreferences
+import com.leejlredstar.redefinencm.kmp.ui.theme.dynamicColorSupported
 
 /**
  * The lyric surface's capabilities, as this target actually has them.
@@ -160,6 +165,8 @@ fun SettingsScreen(
     var searchPrediction by remember(settings) { mutableStateOf(true) }
     var showDownloadStatus by remember(settings) { mutableStateOf(SettingKeys.SHOW_DOWNLOAD_STATUS_DEFAULT) }
     var closeToTray by remember(settings) { mutableStateOf(SettingKeys.DESKTOP_CLOSE_TO_TRAY_DEFAULT) }
+    val themeMode by ThemePreferences.mode.collectAsState()
+    val dynamicColor by ThemePreferences.dynamicColor.collectAsState()
     val isDesktop = remember { getPlatform().isDesktop }
     var extraLyricSurfaceEnabled by remember(settings) { mutableStateOf(false) }
     var desktopLyricLocked by remember(settings) { mutableStateOf(false) }
@@ -706,12 +713,39 @@ fun SettingsScreen(
 
                 SettingsSectionLabel("通用", settingsPalette)
                 val trayRows = if (isDesktop) 1 else 0
-                val generalCount = 3 + trayRows
+                val themeRows = if (dynamicColorSupported) 2 else 1
+                val generalCount = 3 + trayRows + themeRows
+                // The app followed the system's light or dark setting with no say in it.
+                SettingsDropdownRow(
+                    label = "主题",
+                    valueLabel = themeMode.displayName,
+                    options = ThemeMode.entries,
+                    optionLabel = ThemeMode::displayName,
+                    accentPalette = settingsPalette,
+                    index = 0,
+                    count = generalCount,
+                ) { mode ->
+                    ThemePreferences.setMode(mode)
+                    persistSettings({ settings.setString(SettingKeys.THEME_MODE, mode.wireValue) })
+                }
+                if (dynamicColorSupported) {
+                    SettingsSwitch(
+                        dynamicColor,
+                        "使用壁纸颜色",
+                        settingsPalette,
+                        index = 1,
+                        count = generalCount,
+                        supportingText = "界面配色取自系统壁纸（Android 12 及以上）",
+                    ) { v ->
+                        ThemePreferences.setDynamicColor(v)
+                        persistSettings({ settings.setBoolean(SettingKeys.DYNAMIC_COLOR, v) })
+                    }
+                }
                 SettingsSwitch(
                     searchPrediction,
                     "搜索联想",
                     settingsPalette,
-                    index = 0,
+                    index = themeRows,
                     count = generalCount,
                     supportingText = "输入时显示搜索建议",
                 ) { v ->
@@ -723,7 +757,7 @@ fun SettingsScreen(
                         closeToTray,
                         "关闭主窗口时留在托盘",
                         settingsPalette,
-                        index = 1,
+                        index = themeRows + 1,
                         count = generalCount,
                         supportingText = "播放不会中断；点托盘图标重新打开窗口，在托盘菜单里选「退出」才会退出",
                     ) { v ->
@@ -735,13 +769,18 @@ fun SettingsScreen(
                     checkUpdate,
                     "启动时检查更新",
                     settingsPalette,
-                    index = 1 + trayRows,
+                    index = themeRows + 1 + trayRows,
                     count = generalCount,
                 ) { v ->
                     checkUpdate = v
                     persistSettings({ settings.setBoolean(SettingKeys.CHECK_UPDATE, v) })
                 }
-                SettingsButton("立即检查更新", settingsPalette, index = 2 + trayRows, count = generalCount) {
+                SettingsButton(
+                    "立即检查更新",
+                    settingsPalette,
+                    index = themeRows + 2 + trayRows,
+                    count = generalCount,
+                ) {
                     mainViewModel.checkForUpdatesNow()
                 }
 
@@ -1292,6 +1331,10 @@ private fun <T> SettingsDropdownRow(
             .fillMaxWidth()
             .padding(vertical = ExpressiveLayout.ConnectedItemGap),
     ) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // At most four tenths of the row for the value, so a long value is cut short instead of
+        // squeezing the label into a column one character wide on a narrow window.
+        val valueMaxWidth = maxWidth * 0.4f
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1310,15 +1353,13 @@ private fun <T> SettingsDropdownRow(
                 }
             }
             Spacer(Modifier.width(16.dp))
-            // Weighted as well, so a long value is cut short instead of squeezing the label into
-            // a column one character wide on a narrow window.
             Text(
                 text = valueLabel,
                 style = MaterialTheme.typography.bodyMedium,
                 color = accentPalette.secondaryOnQuietContainer,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(0.6f, fill = false),
+                modifier = Modifier.widthIn(max = valueMaxWidth),
             )
             // Up/down arrows: this row opens a menu in place. A right chevron promised a new
             // page and then opened a menu.
@@ -1328,6 +1369,7 @@ private fun <T> SettingsDropdownRow(
                 tint = accentPalette.secondaryOnQuietContainer,
                 modifier = Modifier.padding(start = 4.dp).size(20.dp),
             )
+        }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { setExpanded(false) }) {
             options.forEach { option ->

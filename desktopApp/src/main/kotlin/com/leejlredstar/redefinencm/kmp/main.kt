@@ -82,6 +82,7 @@ import com.leejlredstar.redefinencm.kmp.smtc.DesktopMediaControls
 import com.leejlredstar.redefinencm.kmp.ui.component.DesktopDynamicCoverWindowLifecycle
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
+import com.leejlredstar.redefinencm.kmp.ui.theme.ThemePreferences
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.mouseBackNavigation
@@ -100,6 +101,7 @@ fun main() {
     DesktopLyricWindow.setEnabled(
         settings.getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false),
     )
+    ThemePreferences.load(settings)
     DesktopLyricWindow.setLocked(
         settings.getBoolean(SettingKeys.DESKTOP_LYRIC_LOCKED, false),
     )

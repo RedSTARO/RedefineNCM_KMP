@@ -115,6 +115,7 @@ import com.leejlredstar.redefinencm.kmp.ui.screen.SongRecognitionScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.UserPlaylistScreen
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
+import com.leejlredstar.redefinencm.kmp.ui.theme.ThemePreferences
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
@@ -253,6 +254,9 @@ fun App() {
         initialCookie = settings.getStringAsync(SettingKeys.COOKIE, "")
     }
 
+    // Before the first themed frame, so a stored light or dark choice never flashes the other.
+    remember(settings) { ThemePreferences.load(settings) }
+
     RedefineNCMTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
             initialCookie?.let { cookie ->
@@ -310,11 +314,11 @@ private fun AppContent(
             val currentMedia by player.currentMedia.collectAsState()
             val chromeAccentSource = currentMedia?.artworkUri
             val defaultChromeAccent = MaterialTheme.colorScheme.primaryContainer
-            var rawChromeAccent by remember(chromeAccentSource, defaultChromeAccent) {
-                mutableStateOf(defaultChromeAccent)
-            }
+            // Keyed on the artwork only: keyed on the theme's default as well, switching between
+            // light and dark threw away the colour taken from the cover until the next song.
+            var rawChromeAccent by remember(chromeAccentSource) { mutableStateOf<Color?>(null) }
             val chromeAccent by animateColorAsState(
-                targetValue = rawChromeAccent,
+                targetValue = rawChromeAccent ?: defaultChromeAccent,
                 animationSpec = spring(),
                 label = "appChromeAccent",
             )
