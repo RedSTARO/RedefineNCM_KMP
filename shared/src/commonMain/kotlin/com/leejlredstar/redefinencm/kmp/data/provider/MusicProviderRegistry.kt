@@ -84,12 +84,13 @@ class MusicProviderRegistry(
     suspend fun searchAll(
         keyword: String,
         limit: Int = MusicProvider.DefaultSearchLimit,
+        offset: Int = 0,
     ): List<ProviderSearchResults> = coroutineScope {
         if (keyword.isBlank()) return@coroutineScope emptyList()
         available()
             .map { provider ->
                 provider to async {
-                    runCatching { provider.search(keyword, limit) }
+                    runCatching { provider.search(keyword, limit, offset) }
                 }
             }
             .map { (provider, deferred) ->

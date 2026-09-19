@@ -20,7 +20,8 @@ class ProviderSearchFailureTest {
         private val result: () -> List<ProviderTrack>,
     ) : MusicProvider {
         override suspend fun isAvailable(): Boolean = available
-        override suspend fun search(keyword: String, limit: Int): List<ProviderTrack> = result()
+        override suspend fun search(keyword: String, limit: Int, offset: Int): List<ProviderTrack> =
+            result()
         override suspend fun playlistDetail(id: ProviderItemId): ProviderPlaylist? = null
         override suspend fun lyric(id: ProviderItemId): ProviderLyric? = null
         override suspend fun streamUrl(

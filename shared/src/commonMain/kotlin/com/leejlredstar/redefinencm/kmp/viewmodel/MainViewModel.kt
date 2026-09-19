@@ -9,6 +9,7 @@ import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
 import com.leejlredstar.redefinencm.kmp.data.api.dto.*
 import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
+import com.leejlredstar.redefinencm.kmp.data.provider.MusicProvider
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderSearchResults
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderTrack
@@ -126,6 +127,17 @@ class MainViewModel(
     val searchResults = MutableStateFlow<List<ProviderTrack>>(emptyList())
     val searchAggregationMode = MutableStateFlow(LibraryAggregationMode.Default)
     val searchSuggestions = MutableStateFlow<List<String>>(emptyList())
+    /** Whether a provider may have results after the pages shown. */
+    val searchHasMore = MutableStateFlow(false)
+    val searchLoadingMore = MutableStateFlow(false)
+    val searchMoreError = MutableStateFlow<String?>(null)
+    val searchHistory = MutableStateFlow(
+        settings.getString(SettingKeys.SEARCH_HISTORY, "").lines().filter(String::isNotBlank),
+    )
+    val hotSearches = MutableStateFlow<List<SearchHotItem>>(emptyList())
+    private var searchOffset = 0
+    private var searchMoreJob: Job? = null
+    private var hotSearchJob: Job? = null
     val searchLoading = MutableStateFlow(false)
     val searchSubmittedQuery = MutableStateFlow<String?>(null)
     val searchError = MutableStateFlow<String?>(null)
@@ -693,6 +705,8 @@ class MainViewModel(
         searchSuggestions.value = emptyList()
         searchSubmittedQuery.value = query
         searchError.value = null
+        rememberSearch(query)
+        resetSearchPaging()
         searchJob = scope.launch(Dispatchers.Default) {
             searchLoading.value = true
             try {
@@ -700,6 +714,7 @@ class MainViewModel(
                 val groups = providers.searchAll(query)
                 searchGroups.value = groups.filter { it.tracks.isNotEmpty() }
                 searchResults.value = groups.interleaved()
+                searchHasMore.value = groups.any { !it.failed && it.tracks.size >= SearchPageSize }
 
                 // "Nothing matched" and "the backend is down" are different answers, and with two
                 // providers configured a partial failure must not be reported as either.
@@ -726,6 +741,89 @@ class MainViewModel(
         }
     }
 
+    /**
+     * Appends the next page of every provider that may have one. Results already on screen keep
+     * their places: the new page is interleaved on its own and added after them.
+     */
+    fun loadMoreSearchResults() {
+        val query = searchSubmittedQuery.value ?: return
+        if (!searchHasMore.value || searchLoadingMore.value || searchLoading.value) return
+        val offset = searchOffset + SearchPageSize
+        searchLoadingMore.value = true
+        searchMoreError.value = null
+        searchMoreJob = scope.launch(Dispatchers.Default) {
+            try {
+                val groups = providers.searchAll(query, SearchPageSize, offset)
+                if (searchSubmittedQuery.value != query) return@launch
+                val shownIds = searchResults.value.mapTo(mutableSetOf()) { it.id }
+                val fresh = groups.map { group ->
+                    group.copy(tracks = group.tracks.filterNot { it.id in shownIds })
+                }
+                searchOffset = offset
+                searchResults.value = searchResults.value + fresh.interleaved()
+                searchGroups.value = mergeSearchGroups(searchGroups.value, fresh)
+                searchHasMore.value = groups.any { !it.failed && it.tracks.size >= SearchPageSize }
+                if (groups.isNotEmpty() && groups.all { it.failed }) {
+                    searchMoreError.value = "没能加载更多结果"
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                if (searchSubmittedQuery.value == query) searchMoreError.value = "没能加载更多结果"
+            } finally {
+                if (searchSubmittedQuery.value == query) searchLoadingMore.value = false
+            }
+        }
+    }
+
+    private fun mergeSearchGroups(
+        shown: List<ProviderSearchResults>,
+        page: List<ProviderSearchResults>,
+    ): List<ProviderSearchResults> {
+        val merged = shown.associateBy { it.provider }.toMutableMap()
+        page.filter { it.tracks.isNotEmpty() }.forEach { group ->
+            val existing = merged[group.provider]
+            merged[group.provider] = existing?.copy(tracks = existing.tracks + group.tracks) ?: group
+        }
+        // Registration order, as the first page had it.
+        val order = (shown + page).map { it.provider }.distinct()
+        return order.mapNotNull { merged[it] }
+    }
+
+    private fun resetSearchPaging() {
+        searchMoreJob?.cancel()
+        searchOffset = 0
+        searchHasMore.value = false
+        searchLoadingMore.value = false
+        searchMoreError.value = null
+    }
+
+    /** Most recent first, without repeats, at most [SearchHistoryLimit]. */
+    private fun rememberSearch(query: String) {
+        val entry = query.replace('\n', ' ').trim()
+        if (entry.isEmpty()) return
+        val updated = (listOf(entry) + searchHistory.value.filterNot { it == entry }).take(SearchHistoryLimit)
+        searchHistory.value = updated
+        scope.launch(Dispatchers.Default) {
+            runCatching { settings.setString(SettingKeys.SEARCH_HISTORY, updated.joinToString("\n")) }
+        }
+    }
+
+    fun clearSearchHistory() {
+        searchHistory.value = emptyList()
+        scope.launch(Dispatchers.Default) {
+            runCatching { settings.setString(SettingKeys.SEARCH_HISTORY, "") }
+        }
+    }
+
+    /** The hot-search chart, fetched once; an empty list when it could not be loaded. */
+    fun loadHotSearches() {
+        if (hotSearches.value.isNotEmpty() || hotSearchJob?.isActive == true) return
+        hotSearchJob = scope.launch(Dispatchers.Default) {
+            hotSearches.value = repo.searchHot().orEmpty().filter { it.searchWord.isNotBlank() }
+        }
+    }
+
     fun fetchSearchSuggestions(keyword: String) {
         val query = keyword.trim()
         suggestionJob?.cancel()
@@ -743,6 +841,7 @@ class MainViewModel(
     fun clearSearch() {
         searchJob?.cancel()
         suggestionJob?.cancel()
+        resetSearchPaging()
         searchGroups.value = emptyList()
         searchResults.value = emptyList()
         searchSuggestions.value = emptyList()
@@ -757,5 +856,7 @@ class MainViewModel(
 
     private companion object {
         const val PLAYER_POSITION_CHECKPOINT_MS = 30_000L
+        const val SearchPageSize = MusicProvider.DefaultSearchLimit
+        const val SearchHistoryLimit = 20
     }
 }

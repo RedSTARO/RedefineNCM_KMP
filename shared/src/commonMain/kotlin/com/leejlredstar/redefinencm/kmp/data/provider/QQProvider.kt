@@ -28,10 +28,11 @@ class QQProvider(
         settings.getBooleanAsync(SettingKeys.QQ_ENABLED, false) &&
             settings.getStringAsync(SettingKeys.QQ_SERVER, SettingKeys.QQ_SERVER_DEFAULT).isNotBlank()
 
-    override suspend fun search(keyword: String, limit: Int): List<ProviderTrack> {
+    override suspend fun search(keyword: String, limit: Int, offset: Int): List<ProviderTrack> {
         if (keyword.isBlank() || !isAvailable()) return emptyList()
         // Null is a transport failure, not an empty result set — see NeteaseProvider.search.
-        val response = api.search(keyword, limit)
+        // This backend pages by page number rather than by offset.
+        val response = api.search(keyword, limit, page = offset / limit.coerceAtLeast(1) + 1)
             ?: throw ProviderUnavailableException(id, "QQ音乐后端无响应")
         return response.data
             ?.song

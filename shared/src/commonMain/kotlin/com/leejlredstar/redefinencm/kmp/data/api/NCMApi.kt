@@ -345,11 +345,15 @@ class NCMApi(private val client: HttpClient) {
 
     // ── Search ──
 
-    suspend fun search(keywords: String, limit: Int = 30): SearchResult =
+    suspend fun search(keywords: String, limit: Int = 30, offset: Int = 0): SearchResult =
         client.get("/cloudsearch") {
             parameter("keywords", keywords)
             parameter("limit", limit)
+            if (offset > 0) parameter("offset", offset)
         }.body()
+
+    suspend fun searchHotDetail(): SearchHotDetail =
+        client.get("/search/hot/detail").body()
 
     suspend fun searchSuggest(keywords: String, type: String = "mobile"): SearchSuggest =
         client.get("/search/suggest") {

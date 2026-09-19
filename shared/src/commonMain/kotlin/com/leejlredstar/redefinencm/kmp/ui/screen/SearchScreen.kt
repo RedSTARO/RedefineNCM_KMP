@@ -58,6 +58,18 @@ import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
+import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
+import com.leejlredstar.redefinencm.kmp.data.api.dto.SearchHotItem
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.SuggestionChipDefaults
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 
 /**
  * The search tab. It used to be an overlay inside the recommendations page, reachable from
@@ -82,12 +94,18 @@ fun SearchScreen(
     val loading by viewModel.searchLoading.collectAsState()
     val submittedQuery by viewModel.searchSubmittedQuery.collectAsState()
     val searchError by viewModel.searchError.collectAsState()
+    val hasMore by viewModel.searchHasMore.collectAsState()
+    val loadingMore by viewModel.searchLoadingMore.collectAsState()
+    val moreError by viewModel.searchMoreError.collectAsState()
+    val history by viewModel.searchHistory.collectAsState()
+    val hotSearches by viewModel.hotSearches.collectAsState()
     val keyboard = LocalSoftwareKeyboardController.current
     val focusRequester = remember { FocusRequester() }
     val searchPrediction = remember { settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true) }
     val searchPalette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
 
     var query by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(Unit) { viewModel.loadHotSearches() }
     val onQueryChange: (String) -> Unit = { query = it }
 
     LaunchedEffect(focusRequest) {
@@ -272,6 +290,16 @@ fun SearchScreen(
                             )
                         }
                     }
+                    item(key = "results-footer") {
+                        SearchResultsFooter(
+                            hasMore = hasMore,
+                            loadingMore = loadingMore,
+                            moreError = moreError,
+                            shownCount = results.size,
+                            accent = searchPalette.secondaryOnQuietContainer,
+                            onLoadMore = viewModel::loadMoreSearchResults,
+                        )
+                    }
                 }
             }
             submittedMatchesQuery -> {
@@ -331,16 +359,162 @@ fun SearchScreen(
                     accentPalette = searchPalette,
                 )
             }
-            else -> {
-                ExpressiveStatePanel(
-                    title = "发现想听的音乐",
-                    message = "输入歌名、歌手或专辑名，查找相关的歌曲。",
-                    icon = AppIcons.Search,
-                    accentPalette = searchPalette,
-                    modifier = Modifier.padding(top = 24.dp),
+            else -> SearchStart(
+                history = history,
+                hotSearches = hotSearches,
+                accentPalette = searchPalette,
+                bottomPadding = bottomPadding,
+                onPick = ::submit,
+                onClearHistory = viewModel::clearSearchHistory,
+            )
+        }
+        }
+    }
+}
+
+/**
+ * What search offers before a query: the user's recent searches and today's hot-search chart.
+ * It used to be one line of instructions.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SearchStart(
+    history: List<String>,
+    hotSearches: List<SearchHotItem>,
+    accentPalette: ContentAccentPalette,
+    bottomPadding: androidx.compose.ui.unit.Dp,
+    onPick: (String) -> Unit,
+    onClearHistory: () -> Unit,
+) {
+    if (history.isEmpty() && hotSearches.isEmpty()) {
+        ExpressiveStatePanel(
+            title = "发现想听的音乐",
+            message = "输入歌名、歌手或专辑名，查找相关的歌曲。",
+            icon = AppIcons.Search,
+            accentPalette = accentPalette,
+            modifier = Modifier.padding(top = 24.dp),
+        )
+        return
+    }
+    val hot = hotSearches.take(HotSearchCount)
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = bottomPadding),
+    ) {
+        if (history.isNotEmpty()) {
+            item(key = "history-title") {
+                ExpressiveSectionTitle(
+                    text = "搜索历史",
+                    action = { TextButton(onClick = onClearHistory) { Text("清除") } },
+                    modifier = Modifier.padding(start = 4.dp, top = 8.dp),
                 )
             }
+            item(key = "history") {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
+                ) {
+                    history.forEach { word ->
+                        SuggestionChip(
+                            onClick = { onPick(word) },
+                            label = { Text(word, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            colors = SuggestionChipDefaults.suggestionChipColors(
+                                containerColor = accentPalette.quietContainer,
+                                labelColor = accentPalette.onQuietContainer,
+                            ),
+                            border = null,
+                        )
+                    }
+                }
+            }
         }
+        if (hot.isNotEmpty()) {
+            item(key = "hot-title") {
+                ExpressiveSectionTitle(
+                    text = "热门搜索",
+                    modifier = Modifier.padding(start = 4.dp, top = 16.dp, bottom = 8.dp),
+                )
+            }
+            itemsIndexed(
+                items = hot,
+                key = { index, item -> "hot-$index-${item.searchWord}" },
+            ) { index, item ->
+                Surface(
+                    onClick = { onPick(item.searchWord) },
+                    shape = connectedListItemShape(index, hot.size),
+                    color = accentPalette.quietContainer,
+                    contentColor = accentPalette.onQuietContainer,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = ExpressiveLayout.ConnectedItemGap),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "${index + 1}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (index < 3) accentPalette.accent else accentPalette.secondaryOnQuietContainer,
+                            modifier = Modifier.width(32.dp),
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = item.searchWord,
+                                style = MaterialTheme.typography.bodyLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (item.content.isNotBlank()) {
+                                Text(
+                                    text = item.content,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = accentPalette.secondaryOnQuietContainer,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The end of the results: the next page loading, a retry, or the word that there is no more. */
+@Composable
+private fun SearchResultsFooter(
+    hasMore: Boolean,
+    loadingMore: Boolean,
+    moreError: String?,
+    shownCount: Int,
+    accent: Color,
+    onLoadMore: () -> Unit,
+) {
+    Box(
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        when {
+            loadingMore -> Text(
+                text = "正在加载更多结果…",
+                style = MaterialTheme.typography.bodyMedium,
+                color = accent,
+            )
+            moreError != null -> TextButton(onClick = onLoadMore) { Text("$moreError，点按重试") }
+            hasMore -> {
+                // Reaching the end loads the next page; the button is there if that stalls.
+                LaunchedEffect(shownCount) { onLoadMore() }
+                TextButton(onClick = onLoadMore) { Text("加载更多") }
+            }
+            else -> Text(
+                text = "没有更多结果了",
+                style = MaterialTheme.typography.bodyMedium,
+                color = accent,
+            )
         }
     }
 }
@@ -418,3 +592,5 @@ internal fun ProviderTrack.toNeteaseSongOrNull(): com.leejlredstar.redefinencm.k
         dt = durationMillis,
     )
 }
+
+private const val HotSearchCount = 20

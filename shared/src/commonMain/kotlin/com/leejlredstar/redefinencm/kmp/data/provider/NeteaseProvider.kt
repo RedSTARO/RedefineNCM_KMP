@@ -33,12 +33,12 @@ class NeteaseProvider(
      */
     override suspend fun isAvailable(): Boolean = true
 
-    override suspend fun search(keyword: String, limit: Int): List<ProviderTrack> {
+    override suspend fun search(keyword: String, limit: Int, offset: Int): List<ProviderTrack> {
         if (keyword.isBlank()) return emptyList()
         // A search that matched nothing answers with code 200 and an empty song list; null means
         // the call itself failed. Flattening that to an empty list would report a dead backend as
         // "no results".
-        val response = repository.search(keyword)
+        val response = repository.search(keyword, limit = limit, offset = offset)
             ?: throw ProviderUnavailableException(id, "网易云音乐搜索请求失败")
         return response.result
             ?.songs

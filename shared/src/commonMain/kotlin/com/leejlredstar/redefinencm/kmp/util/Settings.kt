@@ -36,6 +36,8 @@ object SettingKeys {
     const val SHOW_DOWNLOAD_STATUS = "showDownloadStatus"
     const val SHOW_DOWNLOAD_STATUS_DEFAULT = true
     const val SEARCH_PREDICTION = "searchPrediction"
+    /** Recent searches, newest first, one per line. Kept on the device, not in the backup. */
+    const val SEARCH_HISTORY = "searchHistory"
     // Keep the legacy persisted key so existing preferences and exported backups remain valid.
     const val ENABLE_EXTRA_LYRIC_SURFACE = "adaptOriginalAndroidLyric"
     // The desktop lyric window's own layout: whether it ignores the pointer, and how its two

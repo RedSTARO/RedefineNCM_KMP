@@ -678,9 +678,15 @@ class Repository(
 
     // ── Search ──
 
-    suspend fun search(keyword: String): SearchResult? {
-        return safeApiCall { api.search(keyword) }?.takeIf { it.code == API_SUCCESS_CODE }
+    suspend fun search(keyword: String, limit: Int = 30, offset: Int = 0): SearchResult? {
+        return safeApiCall { api.search(keyword, limit, offset) }?.takeIf { it.code == API_SUCCESS_CODE }
     }
+
+    /** Today's most searched words; null when the request fails. */
+    suspend fun searchHot(): List<SearchHotItem>? =
+        safeApiCall { api.searchHotDetail() }
+            ?.takeIf { it.code == API_SUCCESS_CODE }
+            ?.data
 
     suspend fun searchSuggest(keyword: String): SearchSuggest? {
         return safeApiCall { api.searchSuggest(keyword) }?.takeIf { it.code == API_SUCCESS_CODE }

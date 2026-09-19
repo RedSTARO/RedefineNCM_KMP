@@ -98,8 +98,16 @@ interface MusicProvider {
      */
     suspend fun isAvailable(): Boolean
 
-    /** @throws ProviderUnavailableException when the backend could not be reached or errored. */
-    suspend fun search(keyword: String, limit: Int = DefaultSearchLimit): List<ProviderTrack>
+    /**
+     * One page of results: [limit] tracks after the first [offset] of this keyword's.
+     *
+     * @throws ProviderUnavailableException when the backend could not be reached or errored.
+     */
+    suspend fun search(
+        keyword: String,
+        limit: Int = DefaultSearchLimit,
+        offset: Int = 0,
+    ): List<ProviderTrack>
 
     suspend fun playlistDetail(id: ProviderItemId): ProviderPlaylist?
 

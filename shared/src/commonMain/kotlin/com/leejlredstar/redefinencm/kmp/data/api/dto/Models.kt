@@ -453,6 +453,21 @@ data class SearchResultData(
     val songCount: Long = 0,
 )
 
+/** The hot-search chart, from `/search/hot/detail`. */
+@Serializable
+data class SearchHotDetail(
+    val code: Int = 0,
+    val data: List<SearchHotItem> = emptyList(),
+)
+
+@Serializable
+data class SearchHotItem(
+    val searchWord: String = "",
+    val score: Long = 0,
+    /** A short line about why the word is hot; often empty. */
+    val content: String = "",
+)
+
 @Serializable
 data class SearchSuggest(
     val code: Int = 0,
