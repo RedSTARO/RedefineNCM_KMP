@@ -552,6 +552,17 @@ data class CommentMusic(
     val comments: List<CommentMusicComments> = emptyList(),
     /** All comments on the song, of which the response carries one page. */
     val total: Long = 0,
+    /** Whether there are latest comments after this page. */
+    val more: Boolean = false,
+)
+
+/** One page of a song's hot comments, from `/comment/hot`. */
+@Serializable
+data class CommentHot(
+    val code: Int = 0,
+    val hotComments: List<CommentMusicComments> = emptyList(),
+    val hasMore: Boolean = false,
+    val total: Long = 0,
 )
 
 @Serializable

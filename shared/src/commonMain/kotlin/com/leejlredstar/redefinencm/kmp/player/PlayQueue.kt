@@ -128,6 +128,50 @@ class PlayQueue<T> private constructor(
         )
     }
 
+    /**
+     * Remove the track at [position] in play order — the row the queue sheet shows there, which
+     * under shuffle is not [items]`[position]`. The rest keep their relative play order.
+     *
+     * Removing the current track makes the one after it in play order current, wrapping to the
+     * first when it was last; removing the only track leaves an empty queue. Out of range
+     * leaves the queue alone.
+     */
+    fun removeAtPlayOrderPosition(position: Int): PlayQueue<T> {
+        val index = playOrder.getOrNull(position) ?: return this
+        if (items.size == 1) {
+            return copy(items = emptyList(), currentIndex = -1, playOrder = emptyList())
+        }
+        val remainingItems = items.filterIndexed { i, _ -> i != index }
+        val remainingOrder = playOrder
+            .filterIndexed { i, _ -> i != position }
+            .map { if (it > index) it - 1 else it }
+        val newCurrent = when {
+            index < currentIndex -> currentIndex - 1
+            index > currentIndex -> currentIndex
+            else -> remainingOrder.getOrNull(position) ?: remainingOrder.first()
+        }
+        return copy(items = remainingItems, currentIndex = newCurrent, playOrder = remainingOrder)
+    }
+
+    /**
+     * Move the track at play-order position [from] to [to], keeping the current track current.
+     *
+     * Only while shuffle is off, where the play order is the item order itself; under shuffle
+     * this leaves the queue alone. Android's player cannot reorder a shuffled timeline, and a
+     * rule that held on some platforms only would show the same drag doing different things.
+     */
+    fun movePlayOrderPosition(from: Int, to: Int): PlayQueue<T> {
+        if (shuffleEnabled || from == to || from !in items.indices || to !in items.indices) return this
+        val movedItems = items.toMutableList().apply { add(to, removeAt(from)) }
+        val newCurrent = when {
+            currentIndex == from -> to
+            from < currentIndex && currentIndex <= to -> currentIndex - 1
+            to <= currentIndex && currentIndex < from -> currentIndex + 1
+            else -> currentIndex
+        }
+        return copy(items = movedItems, currentIndex = newCurrent)
+    }
+
     fun clear(): PlayQueue<T> = empty()
 
     companion object {

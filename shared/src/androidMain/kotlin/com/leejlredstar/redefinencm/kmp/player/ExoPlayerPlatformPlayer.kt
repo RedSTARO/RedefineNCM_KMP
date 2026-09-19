@@ -244,6 +244,22 @@ class ExoPlayerPlatformPlayer(
         val windowIndex = playOrderWindowIndices.getOrNull(index) ?: index
         exoPlayer.seekToDefaultPosition(windowIndex)
     }
+    override fun removeFromQueue(position: Int) {
+        // Same mapping as skipToIndex. The timeline callback then rebuilds the visible queue,
+        // the window map and the highlight together; nothing is patched here by hand.
+        val windowIndex = playOrderWindowIndices.getOrNull(position) ?: return
+        exoPlayer.removeMediaItem(windowIndex)
+    }
+
+    override fun moveInQueue(from: Int, to: Int) {
+        // PlayQueue's rule: no reordering under shuffle, where a window move would not change
+        // the order anything plays in.
+        if (exoPlayer.shuffleModeEnabled) return
+        val fromWindow = playOrderWindowIndices.getOrNull(from) ?: return
+        val toWindow = playOrderWindowIndices.getOrNull(to) ?: return
+        exoPlayer.moveMediaItem(fromWindow, toWindow)
+    }
+
     override fun setShuffleEnabled(enabled: Boolean) { exoPlayer.shuffleModeEnabled = enabled }
 
     override fun setVolume(volume: Float) {

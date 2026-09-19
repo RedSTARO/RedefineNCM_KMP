@@ -69,6 +69,16 @@ interface PlatformPlayer {
     fun skipToIndex(index: Int)
 
     /**
+     * Removes the track at [position] in play order — the position the queue sheet shows and
+     * [skipToIndex] takes, which under shuffle is not an index into the original list.
+     * Removing the current track moves to the next one, playing if playback was running.
+     */
+    fun removeFromQueue(position: Int)
+
+    /** Moves the track at play-order [from] to [to]. Ignored under shuffle; see [PlayQueue]. */
+    fun moveInQueue(from: Int, to: Int)
+
+    /**
      * 恢复上次的播放状态：装载队列并 seek 到上次位置，但**不**自动开始播放
      * （与原版 restorePlayerStatus 行为一致）。平台实现可覆写以避免默认的先播再暂停。
      */

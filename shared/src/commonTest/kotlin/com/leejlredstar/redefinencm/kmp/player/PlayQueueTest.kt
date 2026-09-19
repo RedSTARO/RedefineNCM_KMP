@@ -174,4 +174,87 @@ class PlayQueueTest {
         assertEquals(q.currentItem, q.skipToPlayOrderPosition(tracks.size).currentItem)
         assertNull(PlayQueue.empty<String>().skipToPlayOrderPosition(0).currentItem)
     }
+
+    @Test
+    fun removingARowBeforeTheCurrentKeepsTheCurrentTrack() {
+        val q = PlayQueue.of(tracks, startIndex = 3).removeAtPlayOrderPosition(1)
+        assertEquals(listOf("a", "c", "d", "e"), q.items)
+        assertEquals("d", q.currentItem)
+        q.assertInvariant()
+    }
+
+    @Test
+    fun removingTheCurrentTrackMovesToTheNextInPlayOrder() {
+        val q = PlayQueue.of(tracks, startIndex = 2).removeAtPlayOrderPosition(2)
+        assertEquals("d", q.currentItem)
+        q.assertInvariant()
+    }
+
+    @Test
+    fun removingTheLastTrackWhileCurrentWrapsToTheFirst() {
+        val q = PlayQueue.of(tracks, startIndex = 4).removeAtPlayOrderPosition(4)
+        assertEquals("a", q.currentItem)
+        q.assertInvariant()
+    }
+
+    @Test
+    fun removingByPlayOrderPositionUnderShuffleRemovesTheRowTheListShows() {
+        val shuffled = PlayQueue.of(tracks, startIndex = 0, shuffle = true, rng = Random(7))
+        for (position in shuffled.playOrder.indices) {
+            val shown = shuffled.itemsInPlayOrder
+            val removed = shuffled.removeAtPlayOrderPosition(position)
+            // Exactly that row is gone and the others keep their play order.
+            assertEquals(shown.filterIndexed { i, _ -> i != position }, removed.itemsInPlayOrder)
+            if (position != shuffled.positionInPlayOrder) {
+                assertEquals(shuffled.currentItem, removed.currentItem)
+            } else {
+                val expected = shown.getOrNull(position + 1) ?: shown.first()
+                assertEquals(expected, removed.currentItem)
+            }
+            assertTrue(removed.shuffleEnabled)
+            removed.assertInvariant()
+        }
+    }
+
+    @Test
+    fun removingTheOnlyTrackEmptiesTheQueue() {
+        val q = PlayQueue.of(listOf("a")).removeAtPlayOrderPosition(0)
+        assertTrue(q.isEmpty)
+        q.assertInvariant()
+    }
+
+    @Test
+    fun removingOutsideThePlayOrderLeavesTheQueueAlone() {
+        val q = PlayQueue.of(tracks, startIndex = 1)
+        assertEquals(q.items, q.removeAtPlayOrderPosition(-1).items)
+        assertEquals(q.items, q.removeAtPlayOrderPosition(tracks.size).items)
+    }
+
+    @Test
+    fun movingARowKeepsTheCurrentTrackCurrent() {
+        val start = PlayQueue.of(tracks, startIndex = 2)
+        val down = start.movePlayOrderPosition(0, 3)
+        assertEquals(listOf("b", "c", "d", "a", "e"), down.items)
+        assertEquals("c", down.currentItem)
+        down.assertInvariant()
+
+        val up = start.movePlayOrderPosition(4, 1)
+        assertEquals(listOf("a", "e", "b", "c", "d"), up.items)
+        assertEquals("c", up.currentItem)
+        up.assertInvariant()
+
+        val current = start.movePlayOrderPosition(2, 0)
+        assertEquals(listOf("c", "a", "b", "d", "e"), current.items)
+        assertEquals("c", current.currentItem)
+        assertEquals(0, current.positionInPlayOrder)
+        current.assertInvariant()
+    }
+
+    @Test
+    fun movingIsIgnoredUnderShuffle() {
+        val shuffled = PlayQueue.of(tracks, startIndex = 0, shuffle = true, rng = Random(7))
+        val moved = shuffled.movePlayOrderPosition(0, 3)
+        assertEquals(shuffled.itemsInPlayOrder, moved.itemsInPlayOrder)
+        assertEquals(shuffled.currentItem, moved.currentItem)
+    }
 }

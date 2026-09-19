@@ -383,6 +383,23 @@ class Repository(
         },
     )
 
+    /**
+     * A page of comments after the first, which [getCommentMusic] loads and caches: [offset] is
+     * how many of that ordering are already shown. Null when the request fails.
+     */
+    suspend fun getCommentPage(id: Long, hot: Boolean, offset: Int): CommentPage? {
+        require(offset >= 0) { "offset must not be negative" }
+        return if (hot) {
+            safeApiCall { api.commentHot(id, CommentPageSize, offset) }
+                ?.takeIf { it.code == API_SUCCESS_CODE }
+                ?.let { CommentPage(it.hotComments, it.hasMore) }
+        } else {
+            safeApiCall { api.commentMusicPage(id, CommentPageSize, offset) }
+                ?.takeIf { it.code == API_SUCCESS_CODE }
+                ?.let { CommentPage(it.comments, it.more) }
+        }
+    }
+
     // ── Song wiki ──
 
     suspend fun getSongWikiSummary(id: Long): SongWikiSummary? {
@@ -878,3 +895,11 @@ private data class CachedRecommendResourceEntry(
     val uid: Long,
     val value: RecommendResource,
 )
+
+/** One page of comments and whether another follows it. */
+data class CommentPage(
+    val comments: List<CommentMusicComments>,
+    val hasMore: Boolean,
+)
+
+private const val CommentPageSize = 20

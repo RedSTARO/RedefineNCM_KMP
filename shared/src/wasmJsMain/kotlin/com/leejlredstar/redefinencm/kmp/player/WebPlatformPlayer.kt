@@ -533,6 +533,32 @@ class WebPlatformPlayer(
         selectCurrentTrack(autoplay = autoplay)
     }
 
+    override fun removeFromQueue(position: Int) {
+        if (released) return
+        val itemIndex = queueModel.playOrder.getOrNull(position) ?: return
+        val remaining = queueModel.removeAtPlayOrderPosition(position)
+        if (remaining.isEmpty) {
+            clearQueue()
+            return
+        }
+        if (itemIndex != queueModel.currentIndex) {
+            queueModel = remaining
+            publishQueue()
+            return
+        }
+        val autoplay = playRequested || _isPlaying.value || _state.value == PlayerState.BUFFERING
+        queueModel = remaining
+        selectCurrentTrack(autoplay = autoplay)
+    }
+
+    override fun moveInQueue(from: Int, to: Int) {
+        if (released) return
+        val moved = queueModel.movePlayOrderPosition(from, to)
+        if (moved === queueModel) return
+        queueModel = moved
+        publishQueue()
+    }
+
     override fun setShuffleEnabled(enabled: Boolean) {
         if (released) return
         queueModel = queueModel.setShuffle(enabled)

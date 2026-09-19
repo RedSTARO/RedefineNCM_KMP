@@ -623,6 +623,27 @@ class JvmMediaPlayer(
         }
     }
 
+    override fun removeFromQueue(position: Int) {
+        synchronized(queueOperationLock) {
+            val previous = currentQueueModel()
+            val itemIndex = previous.playOrder.getOrNull(position) ?: return@synchronized
+            if (itemIndex != previous.currentIndex) {
+                // The current track keeps playing; only the rows around it change.
+                mutateQueue(invalidatesPlaybackClaim = false) { it.removeAtPlayOrderPosition(position) }
+                return@synchronized
+            }
+            val autoplay = _isPlaying.value || _state.value == PlayerState.BUFFERING
+            val claim = mutateQueue(invalidatesPlaybackClaim = true) { it.removeAtPlayOrderPosition(position) }
+            onTrackChanged(claim, autoplay && claim.model.currentItem != null)
+        }
+    }
+
+    override fun moveInQueue(from: Int, to: Int) {
+        synchronized(queueOperationLock) {
+            mutateQueue(invalidatesPlaybackClaim = false) { it.movePlayOrderPosition(from, to) }
+        }
+    }
+
     override fun setShuffleEnabled(enabled: Boolean) {
         synchronized(queueOperationLock) {
             mutateQueue(invalidatesPlaybackClaim = false) { it.setShuffle(enabled) }

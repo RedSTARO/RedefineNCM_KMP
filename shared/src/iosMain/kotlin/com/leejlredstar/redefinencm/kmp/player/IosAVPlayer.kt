@@ -302,6 +302,35 @@ class IosAVPlayer(
         if (selected.currentIndex == queueModel.currentIndex) return
         val autoplay = _isPlaying.value || _state.value == PlayerState.BUFFERING
         queueModel = selected
+        selectCurrentFromQueue(autoplay)
+    }
+
+    override fun removeFromQueue(position: Int) {
+        val itemIndex = queueModel.playOrder.getOrNull(position) ?: return
+        val remaining = queueModel.removeAtPlayOrderPosition(position)
+        if (remaining.isEmpty) {
+            clearQueue()
+            return
+        }
+        if (itemIndex != queueModel.currentIndex) {
+            queueModel = remaining
+            publishQueue()
+            return
+        }
+        val autoplay = _isPlaying.value || _state.value == PlayerState.BUFFERING
+        queueModel = remaining
+        selectCurrentFromQueue(autoplay)
+    }
+
+    override fun moveInQueue(from: Int, to: Int) {
+        val moved = queueModel.movePlayOrderPosition(from, to)
+        if (moved === queueModel) return
+        queueModel = moved
+        publishQueue()
+    }
+
+    /** Makes the queue's current track the one loaded: playing it, or paused at its start. */
+    private fun selectCurrentFromQueue(autoplay: Boolean) {
         if (autoplay) {
             playCurrentFromQueue(autoplay = true)
         } else {

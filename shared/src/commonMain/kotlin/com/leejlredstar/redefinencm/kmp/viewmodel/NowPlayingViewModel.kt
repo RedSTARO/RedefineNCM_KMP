@@ -5,6 +5,7 @@ import com.leejlredstar.redefinencm.kmp.util.getBooleanAsync
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.SongWikiSummary
 import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusic
+import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusicComments
 import com.leejlredstar.redefinencm.kmp.download.LocalMediaAssets
 import com.leejlredstar.redefinencm.kmp.lyric.LyricCapabilityLevel
 import com.leejlredstar.redefinencm.kmp.lyric.LyricQuery
@@ -156,6 +157,14 @@ class NowPlayingViewModel(
     val commentsLoadError = MutableStateFlow<String?>(null)
     val commentsFromCache = MutableStateFlow(false)
 
+    /** Hot or latest: the two orderings the comment sheet switches between. */
+    val commentsShowHot = MutableStateFlow(true)
+    /** Pages loaded after the first, for the ordering shown now. */
+    val moreComments = MutableStateFlow<List<CommentMusicComments>>(emptyList())
+    val moreCommentsAvailable = MutableStateFlow(false)
+    val moreCommentsLoading = MutableStateFlow(false)
+    val moreCommentsError = MutableStateFlow<String?>(null)
+
     // ── Song wiki ──
     val songWikiUiState = MutableStateFlow<SongWikiUiState>(SongWikiUiState.Idle)
 
@@ -232,6 +241,8 @@ class NowPlayingViewModel(
                 commentsLoading.value = false
                 commentsLoadError.value = null
                 commentsFromCache.value = false
+                commentsShowHot.value = !userPrefersLatestComments
+                resetMoreComments()
                 if (media != null) {
                     preparePendingLyricsForMedia(media)
                     val songId = media.id.toLongOrNull()?.takeIf { it > 0L }
@@ -517,6 +528,9 @@ class NowPlayingViewModel(
     private var lyricPrefetchJob: Job? = null
     private val lyricRequestGeneration = MutableStateFlow(0L)
     private var commentsFetchJob: Job? = null
+    private var moreCommentsJob: Job? = null
+    /** The ordering the user picked last; a song without hot comments shows latest regardless. */
+    private var userPrefersLatestComments = false
     private var songWikiFetchJob: Job? = null
     private var songWikiRequestGeneration = 0L
     private var favoriteActionJob: Job? = null
@@ -799,6 +813,9 @@ class NowPlayingViewModel(
                         emitted = true
                         comments.value = emission.value
                         commentsFromCache.value = emission.isFromCache
+                        // A song with no hot comments opens on its latest ones.
+                        if (emission.value.hotComments.isEmpty()) commentsShowHot.value = false
+                        resetMoreComments()
                     }
                 }
                 if (
@@ -825,6 +842,57 @@ class NowPlayingViewModel(
                     commentsLoading.value = false
                 }
             }
+        }
+    }
+
+    /** Switches the comment sheet between hot and latest; later pages start over. */
+    fun setCommentsShowHot(hot: Boolean) {
+        userPrefersLatestComments = !hot
+        if (commentsShowHot.value == hot) return
+        commentsShowHot.value = hot
+        resetMoreComments()
+    }
+
+    /** Appends the next page of the ordering shown now. */
+    fun loadMoreComments() {
+        if (moreCommentsLoading.value || !moreCommentsAvailable.value) return
+        val mediaId = currentMedia.value?.id ?: return
+        val id = mediaId.toLongOrNull() ?: return
+        val firstPage = comments.value ?: return
+        val hot = commentsShowHot.value
+        val shown = (if (hot) firstPage.hotComments else firstPage.comments).size + moreComments.value.size
+        moreCommentsLoading.value = true
+        moreCommentsError.value = null
+        moreCommentsJob = scope.launch(Dispatchers.Default) {
+            val page = try {
+                repo.getCommentPage(id, hot = hot, offset = shown)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            // A track change or a switch of ordering while this was in flight makes it stale.
+            if (currentMedia.value?.id != mediaId || commentsShowHot.value != hot) return@launch
+            if (page == null) {
+                moreCommentsError.value = "没能加载更多评论"
+            } else {
+                moreComments.value = moreComments.value + page.comments
+                moreCommentsAvailable.value = page.hasMore && page.comments.isNotEmpty()
+            }
+            moreCommentsLoading.value = false
+        }
+    }
+
+    private fun resetMoreComments() {
+        moreCommentsJob?.cancel()
+        moreComments.value = emptyList()
+        moreCommentsLoading.value = false
+        moreCommentsError.value = null
+        val firstPage = comments.value
+        moreCommentsAvailable.value = when {
+            firstPage == null -> false
+            commentsShowHot.value -> firstPage.moreHot
+            else -> firstPage.more
         }
     }
 
@@ -916,6 +984,13 @@ class NowPlayingViewModel(
     fun onPauseClick() = player.togglePlayPause()
     fun onNextClick() = player.seekToNext()
     fun onSeekClick(index: Int) = player.skipToIndex(index)
+
+    /** Queue edits from the queue sheet; positions are in play order, as the sheet shows them. */
+    fun removeFromQueue(position: Int) = player.removeFromQueue(position)
+
+    fun moveInQueue(from: Int, to: Int) = player.moveInQueue(from, to)
+
+    fun clearQueue() = player.clearQueue()
     fun onPositionSeekClick(newPosition: Long) = player.seekTo(newPosition)
 
     /**

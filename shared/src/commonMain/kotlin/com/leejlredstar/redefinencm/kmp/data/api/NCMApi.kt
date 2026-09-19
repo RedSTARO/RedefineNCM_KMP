@@ -397,6 +397,23 @@ class NCMApi(private val client: HttpClient) {
     suspend fun commentMusic(id: Long): CommentMusic =
         client.get("/comment/music") { parameter("id", id) }.body()
 
+    /** A later page of the latest comments; the first page comes with [commentMusic]. */
+    suspend fun commentMusicPage(id: Long, limit: Int, offset: Int): CommentMusic =
+        client.get("/comment/music") {
+            parameter("id", id)
+            parameter("limit", limit)
+            parameter("offset", offset)
+        }.body()
+
+    /** A page of hot comments; type 0 is a song. */
+    suspend fun commentHot(id: Long, limit: Int, offset: Int): CommentHot =
+        client.get("/comment/hot") {
+            parameter("id", id)
+            parameter("type", 0)
+            parameter("limit", limit)
+            parameter("offset", offset)
+        }.body()
+
     // ── Version ──
 
     suspend fun innerVersion(url: String): InnerVersion =

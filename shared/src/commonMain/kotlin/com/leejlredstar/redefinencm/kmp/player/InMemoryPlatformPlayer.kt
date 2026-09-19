@@ -116,6 +116,25 @@ class InMemoryPlatformPlayer(
         }
     }
 
+    override fun removeFromQueue(position: Int) {
+        withStateLock {
+            val removedCurrent = queueModel.playOrder.getOrNull(position) == queueModel.currentIndex
+            val remaining = queueModel.removeAtPlayOrderPosition(position)
+            if (remaining === queueModel) return@withStateLock
+            queueModel = remaining
+            if (removedCurrent) onTrackChangedLocked() else publishQueueLocked()
+        }
+    }
+
+    override fun moveInQueue(from: Int, to: Int) {
+        withStateLock {
+            val moved = queueModel.movePlayOrderPosition(from, to)
+            if (moved === queueModel) return@withStateLock
+            queueModel = moved
+            publishQueueLocked()
+        }
+    }
+
     override fun skipToIndex(index: Int) {
         withStateLock {
             val selected = queueModel.skipToPlayOrderPosition(index)
