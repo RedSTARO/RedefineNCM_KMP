@@ -29,7 +29,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -58,13 +60,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.ApplicationScope
+import androidx.compose.ui.window.Notification
 import androidx.compose.ui.window.Tray
+import androidx.compose.ui.window.TrayState
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowDecoration
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
+import androidx.compose.ui.window.rememberTrayState
 import androidx.compose.ui.window.rememberWindowState
 import com.leejlredstar.redefinencm.kmp.di.initKoin
 import com.leejlredstar.redefinencm.kmp.notification.DesktopFloatingWindowNative
@@ -232,9 +237,37 @@ private fun launchDesktopApplication(settings: PlatformSettings) = application {
     // other systems only.
     val systemChrome = remember { DesktopHost.usesSystemWindowChrome }
     val mainWindowHolder = remember { arrayOfNulls<ComposeWindow>(1) }
+    var mainWindowVisible by remember { mutableStateOf(true) }
+    var showWindowRequest by remember { mutableStateOf(0) }
+    val trayState = rememberTrayState()
+    var trayNoticeShown by remember { mutableStateOf(false) }
+    // Closing the window used to quit, music and all. With the setting on (the default) the app
+    // stays in the tray; the tray menu's 退出 is what quits.
+    val closeMainWindow: () -> Unit = {
+        val toTray = settings.getBoolean(
+            SettingKeys.DESKTOP_CLOSE_TO_TRAY,
+            SettingKeys.DESKTOP_CLOSE_TO_TRAY_DEFAULT,
+        )
+        if (toTray) {
+            mainWindowVisible = false
+            if (!trayNoticeShown) {
+                trayNoticeShown = true
+                trayState.sendNotification(
+                    Notification(
+                        title = "RedefineNCM 仍在运行",
+                        message = "点托盘图标打开窗口；在托盘菜单里选「退出」才会退出。",
+                        type = Notification.Type.Info,
+                    ),
+                )
+            }
+        } else {
+            exitApplication()
+        }
+    }
 
     Window(
-        onCloseRequest = ::exitApplication,
+        onCloseRequest = closeMainWindow,
+        visible = mainWindowVisible,
         state = mainWindowState,
         title = "RedefineNCM",
         decoration = if (systemChrome) WindowDecoration.SystemDefault else WindowDecoration.Undecorated(),
@@ -242,6 +275,12 @@ private fun launchDesktopApplication(settings: PlatformSettings) = application {
         onKeyEvent = { event -> handleDesktopShortcut(event, player) },
     ) {
         mainWindowHolder[0] = window
+        LaunchedEffect(showWindowRequest) {
+            if (showWindowRequest > 0) {
+                window.toFront()
+                window.requestFocus()
+            }
+        }
         val mediaControls = remember(player) { DesktopMediaControls(player) }
         DisposableEffect(window, mediaControls) {
             // Below this the layout has nowhere to go; the window used to shrink to nothing.
@@ -275,7 +314,7 @@ private fun launchDesktopApplication(settings: PlatformSettings) = application {
                             isMaximized = mainWindowState.placement == WindowPlacement.Maximized,
                             onMinimize = { mainWindowState.isMinimized = true },
                             onToggleMaximize = toggleMaximize,
-                            onClose = ::exitApplication,
+                            onClose = closeMainWindow,
                         )
                     }
                     Box(
@@ -294,10 +333,11 @@ private fun launchDesktopApplication(settings: PlatformSettings) = application {
     AppTray(
         player = player,
         settings = settings,
+        state = trayState,
         onShowWindow = {
+            mainWindowVisible = true
             mainWindowState.isMinimized = false
-            mainWindowHolder[0]?.toFront()
-            mainWindowHolder[0]?.requestFocus()
+            showWindowRequest++
         },
         onExit = ::exitApplication,
     )
@@ -332,6 +372,7 @@ private fun handleDesktopShortcut(event: KeyEvent, player: PlatformPlayer): Bool
 private fun ApplicationScope.AppTray(
     player: PlatformPlayer,
     settings: PlatformSettings,
+    state: TrayState,
     onShowWindow: () -> Unit,
     onExit: () -> Unit,
 ) {
@@ -341,6 +382,7 @@ private fun ApplicationScope.AppTray(
     val lyricLocked by DesktopLyricWindow.isWindowLocked.collectAsState()
     Tray(
         icon = rememberVectorPainter(TrayIcon),
+        state = state,
         tooltip = "RedefineNCM",
         onAction = onShowWindow,
         menu = {

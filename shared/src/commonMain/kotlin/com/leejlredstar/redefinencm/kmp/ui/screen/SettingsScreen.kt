@@ -121,6 +121,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.di.DEFAULT_NCM_SERVER as DefaultNcmServer
+import com.leejlredstar.redefinencm.kmp.getPlatform
 
 /**
  * The lyric surface's capabilities, as this target actually has them.
@@ -156,6 +157,8 @@ fun SettingsScreen(
     var checkUpdate by remember(settings) { mutableStateOf(false) }
     var searchPrediction by remember(settings) { mutableStateOf(true) }
     var showDownloadStatus by remember(settings) { mutableStateOf(SettingKeys.SHOW_DOWNLOAD_STATUS_DEFAULT) }
+    var closeToTray by remember(settings) { mutableStateOf(SettingKeys.DESKTOP_CLOSE_TO_TRAY_DEFAULT) }
+    val isDesktop = remember { getPlatform().isDesktop }
     var extraLyricSurfaceEnabled by remember(settings) { mutableStateOf(false) }
     var desktopLyricLocked by remember(settings) { mutableStateOf(false) }
     // The lyric window's own toolbar and the tray menu also close and lock it; the switches
@@ -218,6 +221,7 @@ fun SettingsScreen(
         checkUpdate = settings.getBoolean(SettingKeys.CHECK_UPDATE, false)
         searchPrediction = settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true)
         showDownloadStatus = settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, SettingKeys.SHOW_DOWNLOAD_STATUS_DEFAULT)
+        closeToTray = settings.getBoolean(SettingKeys.DESKTOP_CLOSE_TO_TRAY, SettingKeys.DESKTOP_CLOSE_TO_TRAY_DEFAULT)
         extraLyricSurfaceEnabled = settings.getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false)
         optionalLyricSurface?.setEnabled(extraLyricSurfaceEnabled)
         desktopLyricLocked = settings.getBoolean(SettingKeys.DESKTOP_LYRIC_LOCKED, false)
@@ -299,6 +303,10 @@ fun SettingsScreen(
             checkUpdate = settings.getBooleanAsync(SettingKeys.CHECK_UPDATE, false)
             searchPrediction = settings.getBooleanAsync(SettingKeys.SEARCH_PREDICTION, true)
             showDownloadStatus = settings.getBooleanAsync(SettingKeys.SHOW_DOWNLOAD_STATUS, SettingKeys.SHOW_DOWNLOAD_STATUS_DEFAULT)
+            closeToTray = settings.getBooleanAsync(
+                SettingKeys.DESKTOP_CLOSE_TO_TRAY,
+                SettingKeys.DESKTOP_CLOSE_TO_TRAY_DEFAULT,
+            )
             extraLyricSurfaceEnabled = settings.getBooleanAsync(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false)
             optionalLyricSurface?.setEnabled(extraLyricSurfaceEnabled)
             desktopLyricLocked = settings.getBooleanAsync(SettingKeys.DESKTOP_LYRIC_LOCKED, false)
@@ -688,22 +696,43 @@ fun SettingsScreen(
                 }
 
                 SettingsSectionLabel("通用", settingsPalette)
+                val trayRows = if (isDesktop) 1 else 0
+                val generalCount = 3 + trayRows
                 SettingsSwitch(
                     searchPrediction,
                     "搜索联想",
                     settingsPalette,
                     index = 0,
-                    count = 3,
+                    count = generalCount,
                     supportingText = "输入时显示搜索建议",
                 ) { v ->
                     searchPrediction = v
                     persistSettings({ settings.setBoolean(SettingKeys.SEARCH_PREDICTION, v) })
                 }
-                SettingsSwitch(checkUpdate, "启动时检查更新", settingsPalette, index = 1, count = 3) { v ->
+                if (isDesktop) {
+                    SettingsSwitch(
+                        closeToTray,
+                        "关闭主窗口时留在托盘",
+                        settingsPalette,
+                        index = 1,
+                        count = generalCount,
+                        supportingText = "播放不会中断；点托盘图标重新打开窗口，在托盘菜单里选「退出」才会退出",
+                    ) { v ->
+                        closeToTray = v
+                        persistSettings({ settings.setBoolean(SettingKeys.DESKTOP_CLOSE_TO_TRAY, v) })
+                    }
+                }
+                SettingsSwitch(
+                    checkUpdate,
+                    "启动时检查更新",
+                    settingsPalette,
+                    index = 1 + trayRows,
+                    count = generalCount,
+                ) { v ->
                     checkUpdate = v
                     persistSettings({ settings.setBoolean(SettingKeys.CHECK_UPDATE, v) })
                 }
-                SettingsButton("立即检查更新", settingsPalette, index = 2, count = 3) {
+                SettingsButton("立即检查更新", settingsPalette, index = 2 + trayRows, count = generalCount) {
                     mainViewModel.checkForUpdatesNow()
                 }
 

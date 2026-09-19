@@ -156,7 +156,7 @@ fun NowPlayingScreen(
                     isPlaying = nowPlaying.isPlaying,
                     reducedMotion = reducedMotion,
                     onArtworkLoaded = extractAccent,
-                    onToggle = { if (nowPlaying.hasMedia) player.togglePlayPause() },
+                    onOpenLyrics = { if (nowPlaying.hasMedia) onOpenLyrics() },
                     modifier = modifier,
                 )
             }
@@ -393,8 +393,9 @@ private fun MutedChip(
 }
 
 /**
- * The artwork. Held: the frame blooms into a cookie (`ExpressiveArtwork`'s press morph).
- * Paused: it settles to 86%, Apple Music's cue that nothing is moving.
+ * The artwork. Tapped: opens the lyrics. Held: the frame blooms into a cookie
+ * (`ExpressiveArtwork`'s press morph). Paused: it settles to 86%, Apple Music's cue that
+ * nothing is moving.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -403,7 +404,7 @@ private fun NowPlayingArtwork(
     isPlaying: Boolean,
     reducedMotion: Boolean,
     onArtworkLoaded: (coil3.Image) -> Unit,
-    onToggle: () -> Unit,
+    onOpenLyrics: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -437,8 +438,10 @@ private fun NowPlayingArtwork(
                 interactionSource = interactionSource,
                 indication = null,
                 enabled = media != null,
-                onClickLabel = if (isPlaying) "暂停" else "播放",
-                onClick = onToggle,
+                // The cover opens the lyrics, one tap instead of the quote button; play and pause
+                // have their own button right beside it.
+                onClickLabel = "打开歌词",
+                onClick = onOpenLyrics,
             ),
         shape = frameShape,
         pressInteractionSource = interactionSource,

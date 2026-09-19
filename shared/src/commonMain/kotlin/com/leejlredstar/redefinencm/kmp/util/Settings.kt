@@ -44,6 +44,9 @@ object SettingKeys {
     const val DESKTOP_LYRIC_ALIGNMENT = "desktopLyricAlignment"
     /** Text size of the desktop lyric window, as a multiple of its default. */
     const val DESKTOP_LYRIC_TEXT_SCALE = "desktopLyricTextScale"
+    /** Closing the desktop main window leaves the app in the tray instead of quitting it. */
+    const val DESKTOP_CLOSE_TO_TRAY = "desktopCloseToTray"
+    const val DESKTOP_CLOSE_TO_TRAY_DEFAULT = true
     // Where the desktop windows were left, so a launch opens them there again. They describe one
     // machine's screens, so like AUDIO_OUTPUT_DEVICE they are not part of the settings backup.
     const val DESKTOP_WINDOW_BOUNDS = "desktopWindowBounds"

@@ -30,6 +30,7 @@ data class SettingsBackupData(
     val desktopLyricLocked: Boolean = false,
     /** Null keeps the current choice when importing a backup made before the window had one. */
     val desktopLyricAlignment: String? = null,
+    val desktopCloseToTray: Boolean = SettingKeys.DESKTOP_CLOSE_TO_TRAY_DEFAULT,
     val showTranslatedLyric: Boolean = SettingKeys.SHOW_TRANSLATED_LYRIC_DEFAULT,
     val showRomanLyric: Boolean = false,
     /** Null keeps the current choice when importing a backup made before lyric-source support. */
@@ -68,6 +69,10 @@ internal fun encodeSettingsBackup(
         desktopLyricAlignment = LyricSurfaceAlignment.fromWireValueOrDefault(
             getString(SettingKeys.DESKTOP_LYRIC_ALIGNMENT, ""),
         ).wireValue,
+        desktopCloseToTray = getBoolean(
+            SettingKeys.DESKTOP_CLOSE_TO_TRAY,
+            SettingKeys.DESKTOP_CLOSE_TO_TRAY_DEFAULT,
+        ),
         showTranslatedLyric = getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, SettingKeys.SHOW_TRANSLATED_LYRIC_DEFAULT),
         showRomanLyric = getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false),
         lyricSourceMode = LyricSourceMode.fromStoredWireValue(
@@ -110,6 +115,7 @@ internal fun applySettingsBackup(
     setBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, data.adaptOriginalAndroidLyric)
     setBoolean(SettingKeys.DESKTOP_LYRIC_LOCKED, data.desktopLyricLocked)
     desktopLyricAlignment?.let { setString(SettingKeys.DESKTOP_LYRIC_ALIGNMENT, it.wireValue) }
+    setBoolean(SettingKeys.DESKTOP_CLOSE_TO_TRAY, data.desktopCloseToTray)
     setBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, data.showTranslatedLyric)
     setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, data.showRomanLyric)
     lyricSourceMode?.let { setString(SettingKeys.LYRIC_SOURCE_MODE, it.wireValue) }
