@@ -100,13 +100,18 @@ internal fun TransportSheets(
     // room to spare shows a panel; a drag-handled sheet rising from the bottom is a phone idiom.
     val sidePanels = remember { getPlatform().isDesktop }
     if (sidePanels) {
-        val comments = if (state.showComments) rememberComments(nowPlaying, viewModel) else null
+        val comments = rememberComments(nowPlaying, viewModel)
+        // Closing clears both flags in one frame; the panel that was open has to stay drawn
+        // while it slides away, or it leaves as an empty sheet.
+        val lastPanel = remember { LastSidePanel() }
+        if (state.anyOpen) lastPanel.queue = state.showQueue
+        val showingQueue = lastPanel.queue
         TransportSidePanel(
             visible = state.anyOpen,
             accentPalette = accentPalette,
             onDismiss = state::dismiss,
         ) {
-            if (state.showQueue) {
+            if (showingQueue) {
                 QueuePanelContent(
                     playlist = nowPlaying.playList,
                     currentIndex = nowPlaying.currentIndex,
@@ -115,7 +120,7 @@ internal fun TransportSheets(
                     actions = queueActions,
                     onSkipped = {},
                 )
-            } else if (comments != null) {
+            } else {
                 CommentPanelContent(
                     comments = comments.first,
                     hasLoadedData = nowPlaying.hasLoadedComments,
@@ -242,4 +247,9 @@ internal fun rememberComments(
         onLoadMore = viewModel::loadMoreComments,
     )
     return comments to paging
+}
+
+/** Which side panel was open last; a plain holder written while composing, not state. */
+private class LastSidePanel {
+    var queue: Boolean = true
 }

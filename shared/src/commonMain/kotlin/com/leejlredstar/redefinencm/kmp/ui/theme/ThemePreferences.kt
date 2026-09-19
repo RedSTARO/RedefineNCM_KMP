@@ -4,6 +4,8 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.runtime.Composable
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
+import com.leejlredstar.redefinencm.kmp.util.getBooleanAsync
+import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,10 +38,23 @@ object ThemePreferences {
     /** Android 12+ wallpaper colours in place of the app's own scheme. */
     val dynamicColor: StateFlow<Boolean> = _dynamicColor.asStateFlow()
 
-    /** Reads the stored choice; call once the settings are available, before the first frame. */
+    /**
+     * Reads the stored choice where settings answer at once (desktop, iOS, the browser); call
+     * before the first frame so a stored light or dark choice never flashes the other.
+     */
     fun load(settings: PlatformSettings) {
         _mode.value = ThemeMode.fromWireValue(settings.getString(SettingKeys.THEME_MODE, ""))
         _dynamicColor.value = settings.getBoolean(SettingKeys.DYNAMIC_COLOR, false)
+    }
+
+    /**
+     * Reads the stored choice once the settings have loaded. Android's settings live in
+     * DataStore, whose synchronous reads only see a cache that is empty at first composition,
+     * so [load] alone would bring every launch back to the system theme there.
+     */
+    suspend fun loadStored(settings: PlatformSettings) {
+        _mode.value = ThemeMode.fromWireValue(settings.getStringAsync(SettingKeys.THEME_MODE, ""))
+        _dynamicColor.value = settings.getBooleanAsync(SettingKeys.DYNAMIC_COLOR, false)
     }
 
     fun setMode(mode: ThemeMode) {

@@ -138,7 +138,7 @@ private sealed interface TabDest {
     data object My : TabDest
 }
 
-private sealed interface PushedDest {
+internal sealed interface PushedDest {
     data object Login : PushedDest
     data object NowPlaying : PushedDest
     data object FullLyric : PushedDest
@@ -182,7 +182,7 @@ private val pushedStackSaver = listSaver<SnapshotStateList<PushedDest>, String>(
     },
 )
 
-private fun encodePushedDestination(destination: PushedDest): String = when (destination) {
+internal fun encodePushedDestination(destination: PushedDest): String = when (destination) {
     PushedDest.Login -> "login"
     PushedDest.NowPlaying -> "now-playing"
     PushedDest.FullLyric -> "full-lyric"
@@ -195,7 +195,7 @@ private fun encodePushedDestination(destination: PushedDest): String = when (des
     is PushedDest.Album -> "album:${destination.id}"
 }
 
-private fun decodePushedDestination(saved: String): PushedDest? = when (saved) {
+internal fun decodePushedDestination(saved: String): PushedDest? = when (saved) {
     "login" -> PushedDest.Login
     // Migrate navigation state saved before the legacy KMP player was removed.
     "now-playing" -> PushedDest.NowPlaying
@@ -259,6 +259,7 @@ fun App() {
     val settings: PlatformSettings = koinInject()
     var initialCookie by remember(settings) { mutableStateOf<String?>(null) }
     LaunchedEffect(settings) {
+        ThemePreferences.loadStored(settings)
         initialCookie = settings.getStringAsync(SettingKeys.COOKIE, "")
     }
 

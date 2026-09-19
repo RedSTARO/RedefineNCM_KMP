@@ -131,10 +131,9 @@ class MainViewModel(
     val searchHasMore = MutableStateFlow(false)
     val searchLoadingMore = MutableStateFlow(false)
     val searchMoreError = MutableStateFlow<String?>(null)
-    val searchHistory = MutableStateFlow(
-        settings.getString(SettingKeys.SEARCH_HISTORY, "").lines().filter(String::isNotBlank),
-    )
+    val searchHistory = MutableStateFlow<List<String>>(emptyList())
     val hotSearches = MutableStateFlow<List<SearchHotItem>>(emptyList())
+    private val historyMutex = Mutex()
     private var searchOffset = 0
     private var searchMoreJob: Job? = null
     private var hotSearchJob: Job? = null
@@ -148,6 +147,9 @@ class MainViewModel(
     val updateMessage = MutableStateFlow<String?>(null)
 
     init {
+        scope.launch(Dispatchers.Default) {
+            historyMutex.withLock { searchHistory.value = storedSearchHistory() }
+        }
         loadAccount(
             clearPersistedAccount = false,
             claimVipGrowthPointsOnSuccess = true,
@@ -798,21 +800,34 @@ class MainViewModel(
         searchMoreError.value = null
     }
 
-    /** Most recent first, without repeats, at most [SearchHistoryLimit]. */
+    /**
+     * Most recent first, without repeats, at most [SearchHistoryLimit]. Read from the stored
+     * list rather than the one on screen: on Android the settings load after the view model
+     * starts, and adding to a list that had not loaded yet would overwrite the saved history.
+     */
     private fun rememberSearch(query: String) {
         val entry = query.replace('\n', ' ').trim()
         if (entry.isEmpty()) return
-        val updated = (listOf(entry) + searchHistory.value.filterNot { it == entry }).take(SearchHistoryLimit)
-        searchHistory.value = updated
+        searchHistory.value = (listOf(entry) + searchHistory.value.filterNot { it == entry }).take(SearchHistoryLimit)
         scope.launch(Dispatchers.Default) {
-            runCatching { settings.setString(SettingKeys.SEARCH_HISTORY, updated.joinToString("\n")) }
+            historyMutex.withLock {
+                val stored = storedSearchHistory()
+                val updated = (listOf(entry) + stored.filterNot { it == entry }).take(SearchHistoryLimit)
+                searchHistory.value = updated
+                runCatching { settings.setString(SettingKeys.SEARCH_HISTORY, updated.joinToString("\n")) }
+            }
         }
     }
+
+    private suspend fun storedSearchHistory(): List<String> =
+        settings.getStringAsync(SettingKeys.SEARCH_HISTORY, "").lines().filter(String::isNotBlank)
 
     fun clearSearchHistory() {
         searchHistory.value = emptyList()
         scope.launch(Dispatchers.Default) {
-            runCatching { settings.setString(SettingKeys.SEARCH_HISTORY, "") }
+            historyMutex.withLock {
+                runCatching { settings.setString(SettingKeys.SEARCH_HISTORY, "") }
+            }
         }
     }
 
