@@ -352,6 +352,24 @@ class NCMApi(private val client: HttpClient) {
             if (offset > 0) parameter("offset", offset)
         }.body()
 
+    // ── Artist and album ──
+
+    suspend fun artistDetail(id: Long): ArtistDetailResponse =
+        client.get("/artist/detail") { parameter("id", id) }.body()
+
+    suspend fun artistTopSongs(id: Long): ArtistTopSongs =
+        client.get("/artist/top/song") { parameter("id", id) }.body()
+
+    suspend fun artistAlbums(id: Long, limit: Int, offset: Int): ArtistAlbums =
+        client.get("/artist/album") {
+            parameter("id", id)
+            parameter("limit", limit)
+            parameter("offset", offset)
+        }.body()
+
+    suspend fun album(id: Long): AlbumDetail =
+        client.get("/album") { parameter("id", id) }.body()
+
     suspend fun searchHotDetail(): SearchHotDetail =
         client.get("/search/hot/detail").body()
 

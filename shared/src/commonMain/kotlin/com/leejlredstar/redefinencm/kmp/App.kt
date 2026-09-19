@@ -103,6 +103,8 @@ import com.leejlredstar.redefinencm.kmp.ui.component.TransportSheets
 import com.leejlredstar.redefinencm.kmp.ui.component.TransportSheetsState
 import com.leejlredstar.redefinencm.kmp.ui.component.DesktopPlayerBar
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberTransportSheetsState
+import com.leejlredstar.redefinencm.kmp.ui.screen.AlbumScreen
+import com.leejlredstar.redefinencm.kmp.ui.screen.ArtistScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.DailySongsScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.DownloadManagementScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
@@ -145,6 +147,8 @@ private sealed interface PushedDest {
     data object DailySongs : PushedDest
     data object Settings : PushedDest
     data class Playlist(val id: Long) : PushedDest
+    data class Artist(val id: Long) : PushedDest
+    data class Album(val id: Long) : PushedDest
 }
 
 private val tabDestSaver = Saver<TabDest, String>(
@@ -187,6 +191,8 @@ private fun encodePushedDestination(destination: PushedDest): String = when (des
     PushedDest.DailySongs -> "daily-songs"
     PushedDest.Settings -> "settings"
     is PushedDest.Playlist -> "playlist:${destination.id}"
+    is PushedDest.Artist -> "artist:${destination.id}"
+    is PushedDest.Album -> "album:${destination.id}"
 }
 
 private fun decodePushedDestination(saved: String): PushedDest? = when (saved) {
@@ -198,10 +204,12 @@ private fun decodePushedDestination(saved: String): PushedDest? = when (saved) {
     "song-recognition" -> PushedDest.SongRecognition
     "daily-songs" -> PushedDest.DailySongs
     "settings" -> PushedDest.Settings
-    else -> saved.removePrefix("playlist:")
-        .takeIf { saved.startsWith("playlist:") }
-        ?.toLongOrNull()
-        ?.let(PushedDest::Playlist)
+    else -> when {
+        saved.startsWith("playlist:") -> saved.removePrefix("playlist:").toLongOrNull()?.let(PushedDest::Playlist)
+        saved.startsWith("artist:") -> saved.removePrefix("artist:").toLongOrNull()?.let(PushedDest::Artist)
+        saved.startsWith("album:") -> saved.removePrefix("album:").toLongOrNull()?.let(PushedDest::Album)
+        else -> null
+    }
 }
 
 internal fun <T> MutableList<T>.focusOrPush(destination: T) {
@@ -392,6 +400,21 @@ private fun AppContent(
             LaunchedEffect(Unit) {
                 AppNavigationRequests.openSearchRequestId.collect { requestId ->
                     if (AppNavigationRequests.consumeOpenSearchRequest(requestId)) openSearch()
+                }
+            }
+            // Song menus and the player ask for artist and album pages from wherever they are.
+            LaunchedEffect(Unit) {
+                AppNavigationRequests.openArtistRequest.collect { request ->
+                    if (AppNavigationRequests.consumeOpenArtistRequest(request)) {
+                        focusOrPushTracked(PushedDest.Artist(request!!.id))
+                    }
+                }
+            }
+            LaunchedEffect(Unit) {
+                AppNavigationRequests.openAlbumRequest.collect { request ->
+                    if (AppNavigationRequests.consumeOpenAlbumRequest(request)) {
+                        focusOrPushTracked(PushedDest.Album(request!!.id))
+                    }
                 }
             }
             LaunchedEffect(Unit) {
@@ -632,6 +655,18 @@ private fun AppContent(
                                                 scaffoldPadding = screenPadding,
                                                 onOpenLogin = { push(PushedDest.Login) },
                                                 onBack = ::back,
+                                            )
+                                            is PushedDest.Artist -> ArtistScreen(
+                                                artistId = dest.id,
+                                                scaffoldPadding = screenPadding,
+                                                onBack = ::back,
+                                                onOpenAlbum = { focusOrPushTracked(PushedDest.Album(it)) },
+                                            )
+                                            is PushedDest.Album -> AlbumScreen(
+                                                albumId = dest.id,
+                                                scaffoldPadding = screenPadding,
+                                                onBack = ::back,
+                                                onOpenArtist = { focusOrPushTracked(PushedDest.Artist(it)) },
                                             )
                                             is PushedDest.Playlist -> PlaylistDetailScreen(
                                                 playlistId = dest.id,

@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
+import com.leejlredstar.redefinencm.kmp.AppNavigationRequests
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -159,6 +160,21 @@ fun rememberSongRowActions(
                         clipboard.setText(AnnotatedString(neteaseSongUrl(neteaseSong.id)))
                     },
                 )
+                // The names on a song lead to their pages now that there are pages.
+                neteaseSong.ar.filter { it.id != 0L }.take(MaxArtistActions).forEach { artist ->
+                    add(
+                        SongRowAction("歌手：${artist.name}", AppIcons.Person) {
+                            AppNavigationRequests.openArtist(artist.id)
+                        },
+                    )
+                }
+                if (neteaseSong.al.id != 0L) {
+                    add(
+                        SongRowAction("专辑：${neteaseSong.al.name}", AppIcons.Album) {
+                            AppNavigationRequests.openAlbum(neteaseSong.al.id)
+                        },
+                    )
+                }
             }
         }
     }
@@ -861,3 +877,5 @@ fun PlaylistCard(
         }
     }
 }
+
+private const val MaxArtistActions = 3

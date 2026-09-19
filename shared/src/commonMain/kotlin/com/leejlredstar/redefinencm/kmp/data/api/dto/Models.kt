@@ -453,6 +453,77 @@ data class SearchResultData(
     val songCount: Long = 0,
 )
 
+// ── Artist and album ──
+
+/** `/artist/detail`: who the artist is. Their songs and albums come from two other calls. */
+@Serializable
+data class ArtistDetailResponse(
+    val code: Int = 0,
+    val data: ArtistDetailData = ArtistDetailData(),
+)
+
+@Serializable
+data class ArtistDetailData(
+    val artist: ArtistProfile = ArtistProfile(),
+)
+
+@Serializable
+data class ArtistProfile(
+    val id: Long = 0,
+    val name: String = "",
+    val cover: String = "",
+    val avatar: String = "",
+    val briefDesc: String = "",
+    val albumSize: Int = 0,
+    val musicSize: Int = 0,
+    val alias: List<String> = emptyList(),
+    val transNames: List<String> = emptyList(),
+)
+
+/** `/artist/top/song`: the artist's fifty most played songs. */
+@Serializable
+data class ArtistTopSongs(
+    val code: Int = 0,
+    val songs: List<SongDetailSongs> = emptyList(),
+)
+
+/** `/artist/album`: one page of the artist's albums, newest first. */
+@Serializable
+data class ArtistAlbums(
+    val code: Int = 0,
+    val hotAlbums: List<AlbumSummary> = emptyList(),
+    val more: Boolean = false,
+)
+
+@Serializable
+data class AlbumSummary(
+    val id: Long = 0,
+    val name: String = "",
+    val picUrl: String = "",
+    val publishTime: Long = 0,
+    val size: Int = 0,
+)
+
+/** `/album`: the album and its songs. */
+@Serializable
+data class AlbumDetail(
+    val code: Int = 0,
+    val album: AlbumInfo = AlbumInfo(),
+    val songs: List<SongDetailSongs> = emptyList(),
+)
+
+@Serializable
+data class AlbumInfo(
+    val id: Long = 0,
+    val name: String = "",
+    val picUrl: String = "",
+    val publishTime: Long = 0,
+    val size: Int = 0,
+    val company: String? = null,
+    val description: String? = null,
+    val artists: List<SongArtist> = emptyList(),
+)
+
 /** The hot-search chart, from `/search/hot/detail`. */
 @Serializable
 data class SearchHotDetail(

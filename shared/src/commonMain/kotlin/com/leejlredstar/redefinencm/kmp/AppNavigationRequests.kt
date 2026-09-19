@@ -17,6 +17,38 @@ object AppNavigationRequests {
     val openNowPlayingRequestId: StateFlow<Int> = _openNowPlayingRequestId.asStateFlow()
     val openSearchRequestId: StateFlow<Int> = _openSearchRequestId.asStateFlow()
 
+    /** A request to open a page for one item, numbered so a repeat is told from a replay. */
+    data class ItemRequest(val serial: Int, val id: Long)
+
+    private val _openArtistRequest = MutableStateFlow<ItemRequest?>(null)
+    private var consumedOpenArtistSerial = 0
+    private val _openAlbumRequest = MutableStateFlow<ItemRequest?>(null)
+    private var consumedOpenAlbumSerial = 0
+
+    /** Song menus and the player open artists and albums from anywhere through these. */
+    val openArtistRequest: StateFlow<ItemRequest?> = _openArtistRequest.asStateFlow()
+    val openAlbumRequest: StateFlow<ItemRequest?> = _openAlbumRequest.asStateFlow()
+
+    fun openArtist(id: Long) {
+        _openArtistRequest.update { ItemRequest((it?.serial ?: 0) + 1, id) }
+    }
+
+    fun openAlbum(id: Long) {
+        _openAlbumRequest.update { ItemRequest((it?.serial ?: 0) + 1, id) }
+    }
+
+    fun consumeOpenArtistRequest(request: ItemRequest?): Boolean {
+        if (request == null || request.serial == consumedOpenArtistSerial) return false
+        consumedOpenArtistSerial = request.serial
+        return true
+    }
+
+    fun consumeOpenAlbumRequest(request: ItemRequest?): Boolean {
+        if (request == null || request.serial == consumedOpenAlbumSerial) return false
+        consumedOpenAlbumSerial = request.serial
+        return true
+    }
+
     fun openDownloads() {
         _openDownloadsRequestId.update { it + 1 }
     }

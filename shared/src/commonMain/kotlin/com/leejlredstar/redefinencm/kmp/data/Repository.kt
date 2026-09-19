@@ -682,6 +682,43 @@ class Repository(
         return safeApiCall { api.search(keyword, limit, offset) }?.takeIf { it.code == API_SUCCESS_CODE }
     }
 
+    // ── Artist and album ──
+
+    /**
+     * An artist's page: who they are, their top songs and the first page of their albums, fetched
+     * together. Null when the artist itself could not be loaded; the songs and albums may come
+     * back empty on their own.
+     */
+    suspend fun getArtistPage(id: Long): ArtistPage? = coroutineScope {
+        val detail = async { safeApiCall { api.artistDetail(id) }?.takeIf { it.code == API_SUCCESS_CODE } }
+        val songs = async { safeApiCall { api.artistTopSongs(id) }?.takeIf { it.code == API_SUCCESS_CODE } }
+        val albums = async { getArtistAlbums(id, offset = 0) }
+        val profile = detail.await()?.data?.artist?.takeIf { it.id != 0L } ?: return@coroutineScope null
+        val firstAlbums = albums.await()
+        ArtistPage(
+            profile = profile,
+            topSongs = songs.await()?.songs.orEmpty(),
+            albums = firstAlbums?.hotAlbums.orEmpty(),
+            moreAlbums = firstAlbums?.more == true,
+        )
+    }
+
+    /** A page of the artist's albums after the first [offset]. */
+    suspend fun getArtistAlbums(id: Long, offset: Int): ArtistAlbums? =
+        safeApiCall { api.artistAlbums(id, ArtistAlbumPageSize, offset) }
+            ?.takeIf { it.code == API_SUCCESS_CODE }
+
+    suspend fun getAlbum(id: Long): AlbumDetail? =
+        safeApiCall { api.album(id) }
+            ?.takeIf { it.code == API_SUCCESS_CODE && it.album.id != 0L }
+
+    /** One song's artists and album, for opening their pages from a song the player holds. */
+    suspend fun getSongCredits(id: Long): SongDetailSongs? =
+        safeApiCall { api.songDetail(listOf(id)) }
+            ?.takeIf { it.code == API_SUCCESS_CODE }
+            ?.songs
+            ?.firstOrNull()
+
     /** Today's most searched words; null when the request fails. */
     suspend fun searchHot(): List<SearchHotItem>? =
         safeApiCall { api.searchHotDetail() }
@@ -909,3 +946,13 @@ data class CommentPage(
 )
 
 private const val CommentPageSize = 20
+
+/** Everything an artist's page shows on opening. */
+data class ArtistPage(
+    val profile: ArtistProfile,
+    val topSongs: List<SongDetailSongs>,
+    val albums: List<AlbumSummary>,
+    val moreAlbums: Boolean,
+)
+
+private const val ArtistAlbumPageSize = 30

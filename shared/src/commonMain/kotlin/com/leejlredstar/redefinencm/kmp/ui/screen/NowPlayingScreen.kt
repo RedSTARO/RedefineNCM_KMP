@@ -82,6 +82,13 @@ import com.leejlredstar.redefinencm.kmp.player.PlaybackSource
 import com.leejlredstar.redefinencm.kmp.ui.amll.scopedToMedia
 import com.leejlredstar.redefinencm.kmp.ui.amll.shouldRequestSongWikiOnOpen
 import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsSheet
+import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
+import com.leejlredstar.redefinencm.kmp.data.Repository
+import com.leejlredstar.redefinencm.kmp.AppNavigationRequests
+import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.produceState
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 
 /**
  * The Now Playing entry page — what the mini player, the desktop rail and every OS
@@ -472,14 +479,7 @@ private fun NowPlayingTitle(
                 modifier = Modifier.basicMarquee(),
             )
             Spacer(Modifier.height(4.dp))
-            Text(
-                text = media?.artist?.takeIf(String::isNotBlank) ?: "从任意列表选一首歌开始",
-                style = MaterialTheme.typography.bodyLarge,
-                color = palette.secondaryOnPageMiddle,
-                maxLines = 1,
-                overflow = TextOverflow.Clip,
-                modifier = Modifier.basicMarquee(),
-            )
+            NowPlayingCredits(media = media, palette = palette)
         }
         Spacer(Modifier.width(12.dp))
         FilledIconToggleButton(
@@ -500,6 +500,63 @@ private fun NowPlayingTitle(
                 contentDescription = "喜欢",
                 modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
             )
+        }
+    }
+}
+
+/**
+ * The artist line, which opens a menu of the song's artists and its album. The player only
+ * carries the names, so the ids are looked up from the song when the menu opens.
+ */
+@Composable
+private fun NowPlayingCredits(
+    media: MediaInfo?,
+    palette: ContentAccentPalette,
+    repository: Repository = koinInject(),
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val songId = media?.id?.toLongOrNull()
+    val credits by produceState<SongDetailSongs?>(null, songId, expanded) {
+        if (expanded && songId != null && value?.id != songId) value = repository.getSongCredits(songId)
+    }
+    Box {
+        Text(
+            text = media?.artist?.takeIf(String::isNotBlank) ?: "从任意列表选一首歌开始",
+            style = MaterialTheme.typography.bodyLarge,
+            color = palette.secondaryOnPageMiddle,
+            maxLines = 1,
+            overflow = TextOverflow.Clip,
+            modifier = Modifier
+                .clip(MaterialTheme.shapes.small)
+                .clickable(enabled = songId != null, onClickLabel = "查看歌手与专辑") { expanded = true }
+                .basicMarquee(),
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            val song = credits?.takeIf { it.id == songId }
+            if (song == null) {
+                DropdownMenuItem(text = { Text("正在查找…") }, onClick = {}, enabled = false)
+            } else {
+                song.ar.filter { it.id != 0L }.forEach { artist ->
+                    DropdownMenuItem(
+                        text = { Text("歌手：${artist.name}") },
+                        leadingIcon = { Icon(AppIcons.Person, contentDescription = null) },
+                        onClick = {
+                            expanded = false
+                            AppNavigationRequests.openArtist(artist.id)
+                        },
+                    )
+                }
+                if (song.al.id != 0L) {
+                    DropdownMenuItem(
+                        text = { Text("专辑：${song.al.name}") },
+                        leadingIcon = { Icon(AppIcons.Album, contentDescription = null) },
+                        onClick = {
+                            expanded = false
+                            AppNavigationRequests.openAlbum(song.al.id)
+                        },
+                    )
+                }
+            }
         }
     }
 }
