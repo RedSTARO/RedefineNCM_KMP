@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,9 +52,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -85,17 +86,8 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.PointerType
 import com.leejlredstar.redefinencm.kmp.lyric.LyricCapabilityLevel
 import com.leejlredstar.redefinencm.kmp.viewmodel.lyricCapabilityLevel
-import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 
 private val WikiBackdropCssEase = CubicBezierEasing(0.25f, 0.10f, 0.25f, 1.00f)
 /**
@@ -241,25 +233,7 @@ fun NativeAmllScreen(
                     Modifier
                 },
             )
-            .semantics { contentDescription = "正在播放歌词" }
-            // A moving mouse brings the controls back, the way a desktop video or lyric view
-            // does; a tap on the background still works for touch. Observed on the initial pass
-            // so the lyric viewport underneath keeps its own gestures.
-            .pointerInput(Unit) {
-                var lastRevealMillis = 0L
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                        if (event.type != PointerEventType.Move) continue
-                        if (event.changes.none { it.type == PointerType.Mouse }) continue
-                        val now = event.changes.first().uptimeMillis
-                        if (now - lastRevealMillis > 500L) {
-                            lastRevealMillis = now
-                            controllerRevealRequest += 1
-                        }
-                    }
-                }
-            },
+            .semantics { contentDescription = "正在播放歌词" },
     ) {
         val mobileWikiPosition = maxWidth <= 600.dp
         val visualParameters = remember(maxWidth, maxHeight, reducedMotion) {
@@ -305,9 +279,6 @@ fun NativeAmllScreen(
                 },
         )
 
-        // Lines scroll up to the top actions and fade out there, rather than running under the
-        // back button.
-        val lyricTopInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 72.dp
         val untimedLyrics = lyricsBelongToCurrentMedia &&
             lyricUiState.lyricCapabilityLevel == LyricCapabilityLevel.UNSYNCED &&
             untimedLyricLines.isNotEmpty()
@@ -316,10 +287,7 @@ fun NativeAmllScreen(
             // so nothing was drawn. The text itself is still worth reading.
             UntimedLyrics(
                 lines = untimedLyricLines,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = lyricTopInset)
-                    .topFade(),
+                modifier = Modifier.fillMaxSize(),
             )
         } else if (document.lines.isNotEmpty() && metadata != null) {
             AmllLyricViewport(
@@ -332,10 +300,7 @@ fun NativeAmllScreen(
                 androidPresentation = platform.isAndroid,
                 onSeek = viewModel::onLyricLineClick,
                 onInteraction = { controllerRevealRequest += 1 },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = lyricTopInset)
-                    .topFade(),
+                modifier = Modifier.fillMaxSize(),
             )
         } else {
             LyricStateOverlay(
@@ -436,8 +401,10 @@ private fun AmllTopActions(
     onOpenDetails: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
     val safeEnd = WindowInsets.safeDrawing.asPaddingValues().calculateEndPadding(layoutDirection)
+    val backGlyphSize = with(density) { 32.dp.toSp() }
     Box(
         modifier = modifier
             .statusBarsPadding()
@@ -469,8 +436,14 @@ private fun AmllTopActions(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) {
-                // The same arrow as every other page's back button; this one was a "‹" glyph.
-                Icon(AppIcons.ArrowBack, contentDescription = null)
+                Text(
+                    text = "‹",
+                    color = Color.White.copy(alpha = 0.94f),
+                    fontSize = backGlyphSize,
+                    lineHeight = backGlyphSize,
+                    fontWeight = FontWeight.Normal,
+                    fontFamily = FontFamily.SansSerif,
+                )
             }
         }
 
@@ -575,20 +548,6 @@ private fun SongWikiUiState.scopedTo(mediaId: String?): SongWikiUiState {
     return if (stateMediaId == mediaId) this else SongWikiUiState.Idle
 }
 
-/** Fades content out over its top edge, so lines scrolling off do not end in a hard cut. */
-private fun Modifier.topFade(): Modifier = this
-    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-    .drawWithContent {
-        drawContent()
-        drawRect(
-            brush = Brush.verticalGradient(
-                0f to Color.Transparent,
-                (48.dp.toPx() / size.height).coerceIn(0f, 1f) to Color.Black,
-            ),
-            blendMode = BlendMode.DstIn,
-        )
-    }
-
 /** Lyrics that have text but no timing, shown as a plain scrollable column. */
 @Composable
 private fun UntimedLyrics(
@@ -597,7 +556,7 @@ private fun UntimedLyrics(
 ) {
     LazyColumn(
         modifier = modifier,
-        contentPadding = PaddingValues(start = 32.dp, end = 32.dp, top = 24.dp, bottom = 200.dp),
+        contentPadding = PaddingValues(start = 32.dp, end = 32.dp, top = 120.dp, bottom = 200.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item(key = "untimed-note") {

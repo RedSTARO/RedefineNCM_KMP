@@ -782,7 +782,6 @@ private fun ExpandedPlaybackCard(
                             endpoint = lyricEndpoint,
                             detailsExpanded = lyricDetailsExpanded,
                             onDetailsExpandedChange = onLyricDetailsExpandedChange,
-                            accentPalette = accentPalette,
                             modifier = Modifier.padding(start = 8.dp),
                         )
                     }
@@ -1054,27 +1053,7 @@ private fun CollapsedProgressController(
                     modifier = Modifier.padding(start = 10.dp),
                     maxLines = 1,
                 )
-                // Play/pause in sight. It was only a double tap on the pill, which nothing on
-                // screen hinted at.
-                IconButton(
-                    onClick = onTogglePlayPause,
-                    enabled = hasMedia,
-                    modifier = Modifier.size(36.dp),
-                ) {
-                    Icon(
-                        imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
-                        contentDescription = if (isPlaying) "暂停" else "播放",
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
             }
-            // Flat while paused, the same rule the Now Playing slider follows: the wave reads as
-            // "audio is moving", so it must not ripple over a stopped track.
-            val waveAmplitude by animateFloatAsState(
-                targetValue = if (isPlaying) 1f else 0f,
-                animationSpec = if (reducedMotion) snap() else spring(),
-                label = "collapsedControllerWave",
-            )
             ExpressiveWavyProgress(
                 progress = { progress },
                 modifier = Modifier
@@ -1082,7 +1061,6 @@ private fun CollapsedProgressController(
                     .fillMaxWidth(),
                 color = accentPalette.accent,
                 trackColor = accentPalette.onQuietContainer.copy(alpha = 0.20f),
-                amplitude = { waveAmplitude },
             )
         }
     }

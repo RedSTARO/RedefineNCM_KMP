@@ -22,7 +22,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -31,8 +30,6 @@ import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.RoundedPolygon
 import com.leejlredstar.redefinencm.kmp.lyric.LyricCapabilityLevel
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSource
-import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
-import com.leejlredstar.redefinencm.kmp.ui.theme.contentColorFor
 
 internal enum class LyricCapabilityBadgeTone {
     NEUTRAL,
@@ -64,30 +61,30 @@ internal fun lyricCapabilityBadgeSpec(
     level: LyricCapabilityLevel,
 ): LyricCapabilityBadgeSpec = when (level) {
     LyricCapabilityLevel.UNSYNCED -> LyricCapabilityBadgeSpec(
-        visibleText = "文本",
-        levelLabel = "纯文本（没有时间轴）",
-        contentDescription = "歌词等级：纯文本",
+        visibleText = "词",
+        levelLabel = "无时间戳",
+        contentDescription = "歌词等级：无时间戳",
         tone = LyricCapabilityBadgeTone.NEUTRAL,
         shape = { MaterialShapes.Square },
     )
     LyricCapabilityLevel.LINE_SYNCED -> LyricCapabilityBadgeSpec(
-        visibleText = "逐行",
-        levelLabel = "逐行同步",
-        contentDescription = "歌词等级：逐行同步",
+        visibleText = "词",
+        levelLabel = "普通逐行",
+        contentDescription = "歌词等级：普通逐行",
         tone = LyricCapabilityBadgeTone.PRIMARY,
         shape = { MaterialShapes.Circle },
     )
     LyricCapabilityLevel.NCM_YRC -> LyricCapabilityBadgeSpec(
-        visibleText = "逐字",
-        levelLabel = "逐字同步（网易云逐字歌词）",
-        contentDescription = "歌词等级：逐字同步",
+        visibleText = "词",
+        levelLabel = "NCM YRC 逐字",
+        contentDescription = "歌词等级：NCM YRC",
         tone = LyricCapabilityBadgeTone.SECONDARY,
         shape = { MaterialShapes.Cookie6Sided },
     )
     LyricCapabilityLevel.TTML_FULL -> LyricCapabilityBadgeSpec(
-        visibleText = "TTML",
-        levelLabel = "逐字同步，含和声与对唱（AMLL TTML）",
-        contentDescription = "歌词等级：逐字同步，含和声与对唱",
+        visibleText = "词",
+        levelLabel = "TTML 完全支持",
+        contentDescription = "歌词等级：TTML 完全支持",
         tone = LyricCapabilityBadgeTone.TERTIARY,
         shape = { MaterialShapes.Clover4Leaf },
     )
@@ -98,8 +95,8 @@ internal fun lyricSourceDisplayName(
     endpoint: String,
 ): String {
     val provider = when (source) {
-        LyricSource.AMLL_TTML -> "AMLL 歌词库"
-        LyricSource.NCM_BACKEND -> "网易云"
+        LyricSource.AMLL_TTML -> "AMLL TTML"
+        LyricSource.NCM_BACKEND -> "网易云歌词后端"
         null -> "未知"
     }
     return if (endpoint == "local-sidecar") "$provider · 本地歌词文件" else provider
@@ -112,16 +109,11 @@ internal fun LyricCapabilityBadge(
     endpoint: String,
     detailsExpanded: Boolean,
     onDetailsExpandedChange: (Boolean) -> Unit,
-    accentPalette: ContentAccentPalette,
     modifier: Modifier = Modifier,
 ) {
     val spec = lyricCapabilityBadgeSpec(level)
     val sourceLabel = lyricSourceDisplayName(source, endpoint)
-    val (containerColor, contentColor) = lyricCapabilityBadgeColors(
-        tone = spec.tone,
-        palette = accentPalette,
-        surface = MaterialTheme.colorScheme.surface,
-    )
+    val (containerColor, contentColor) = lyricCapabilityBadgeColors(spec.tone)
     val interactionSource = remember { MutableInteractionSource() }
     val morphProgress by rememberPressMorphProgress(interactionSource)
     // Morphs toward a single open shape from whichever silhouette this level rests at, so the
@@ -150,23 +142,18 @@ internal fun LyricCapabilityBadge(
     ) {
         // Square rather than the old 40x32 pill: MaterialShapes are normalised into a unit box,
         // so a non-square badge would stretch every silhouette out of recognisable proportion.
-        // 44dp, not 36: two CJK glyphs at labelSmall reach the edge of a 36dp circle, and the
-        // scalloped silhouettes enclose less than a circle does, so 逐字 touched their notches.
         Surface(
-            modifier = Modifier.size(44.dp),
+            modifier = Modifier.size(36.dp),
             shape = badgeShape,
             color = containerColor,
             contentColor = contentColor,
             tonalElevation = 0.dp,
         ) {
             Box(contentAlignment = Alignment.Center) {
-                // The level in words, not one glyph shared by all four: the silhouette alone
-                // asked the reader to learn what a clover or a cookie meant.
                 Text(
                     text = spec.visibleText,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
                 )
             }
         }
@@ -218,30 +205,15 @@ private fun LyricDetailRow(
     }
 }
 
-/**
- * The four tones as a rising ladder in the artwork's own hue.
- *
- * They used to be the scheme's primary/secondary/tertiary containers, which are fixed brand
- * colours: on a card tinted by the cover the badge came out as the one green — or yellow —
- * element on the screen. The level still reads as a rising intensity, now within the page.
- *
- * None of the four is [ContentAccentPalette.container] itself: the badge sits on the expanded
- * playback card, which is that colour, and a badge the colour of its own card is an unreadable
- * label floating on nothing. The ladder runs from the quiet container up to the full accent.
- */
-internal fun lyricCapabilityBadgeColors(
+@Composable
+private fun lyricCapabilityBadgeColors(
     tone: LyricCapabilityBadgeTone,
-    palette: ContentAccentPalette,
-    surface: Color,
 ): Pair<Color, Color> {
-    fun towardAccent(fraction: Float): Pair<Color, Color> {
-        val mixed = lerp(palette.container, palette.accent, fraction)
-        return mixed to contentColorFor(mixed, surface)
-    }
+    val colors = MaterialTheme.colorScheme
     return when (tone) {
-        LyricCapabilityBadgeTone.NEUTRAL -> palette.quietContainer to palette.onQuietContainer
-        LyricCapabilityBadgeTone.PRIMARY -> towardAccent(0.35f)
-        LyricCapabilityBadgeTone.SECONDARY -> towardAccent(0.70f)
-        LyricCapabilityBadgeTone.TERTIARY -> palette.accent to palette.onAccent
+        LyricCapabilityBadgeTone.NEUTRAL -> colors.surfaceVariant to colors.onSurfaceVariant
+        LyricCapabilityBadgeTone.PRIMARY -> colors.primaryContainer to colors.onPrimaryContainer
+        LyricCapabilityBadgeTone.SECONDARY -> colors.secondaryContainer to colors.onSecondaryContainer
+        LyricCapabilityBadgeTone.TERTIARY -> colors.tertiaryContainer to colors.onTertiaryContainer
     }
 }
