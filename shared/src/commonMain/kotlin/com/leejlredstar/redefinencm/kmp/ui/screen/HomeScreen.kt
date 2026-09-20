@@ -55,6 +55,7 @@ import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
 import com.leejlredstar.redefinencm.kmp.ui.theme.AccentColorSaver
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.theme.legibleAccentFor
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
@@ -122,6 +123,12 @@ fun HomeScreen(
         label = "homePageAccent",
     )
     val pagePalette = contentAccentPalette(pageAccent)
+    // The page's own hue, darkened only if the cover's accent would not carry label text on it.
+    val dailyLinkColor = legibleAccentFor(
+        accent = pagePalette.accent,
+        background = pagePalette.pageStart,
+        backdrop = MaterialTheme.colorScheme.surface,
+    )
 
     ExpressivePage(
         accentPalette = pagePalette,
@@ -250,6 +257,12 @@ fun HomeScreen(
                         TextButton(
                             onClick = onOpenDailySongs,
                             enabled = dailySongs.isNotEmpty(),
+                            // A text button defaults to the scheme's primary, which is this
+                            // app's brand green: beside a page tinted from the artwork it was
+                            // the only colour on screen with no relation to the cover.
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = dailyLinkColor,
+                            ),
                         ) {
                             Text("全部 ${dailySongs.size} 首")
                         }

@@ -1,12 +1,19 @@
 package com.leejlredstar.redefinencm.kmp.ui.component
 
+import androidx.compose.ui.graphics.Color
 import com.leejlredstar.redefinencm.kmp.lyric.LyricCapabilityLevel
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSource
+import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.theme.DarkColors
+import com.leejlredstar.redefinencm.kmp.ui.theme.LightColors
+import com.leejlredstar.redefinencm.kmp.ui.theme.buildContentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.theme.contrastRatio
 import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
 import com.leejlredstar.redefinencm.kmp.viewmodel.lyricCapabilityLevel
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class LyricCapabilityBadgeTest {
     @Test
@@ -33,6 +40,38 @@ class LyricCapabilityBadgeTest {
             ),
             specs.map { it.levelLabel },
         )
+    }
+
+    /**
+     * The badge sits on the expanded playback card, which is drawn in
+     * [ContentAccentPalette.container]. Every level has to be both readable in itself and
+     * distinguishable from that card — a badge the colour of its own card is a label floating
+     * on nothing, which is what the brand-coloured containers were replaced to avoid.
+     */
+    @Test
+    fun everyLevelCarriesItsOwnLabelAndStandsOffTheCard() {
+        listOf(0xFFFFE94A, 0xFF006B5B, 0xFFB03060, 0xFF3355FF, 0xFF9E9E9E)
+            .forEach { source ->
+                listOf("light" to LightColors, "dark" to DarkColors).forEach { (name, scheme) ->
+                    val palette = buildContentAccentPalette(Color(source), scheme)
+                    LyricCapabilityBadgeTone.entries.forEach { tone ->
+                        val (container, content) =
+                            lyricCapabilityBadgeColors(tone, palette, scheme.surface)
+                        val legibility = contrastRatio(content, container, scheme.surface)
+                        assertTrue(
+                            legibility >= 4.5f,
+                            "$tone label in $name for ${source.toString(16)} is $legibility",
+                        )
+                        val offTheCard =
+                            contrastRatio(container, palette.container, scheme.surface)
+                        assertTrue(
+                            offTheCard >= 1.15f,
+                            "$tone is the card's own colour in $name for " +
+                                "${source.toString(16)}: $offTheCard",
+                        )
+                    }
+                }
+            }
     }
 
     @Test

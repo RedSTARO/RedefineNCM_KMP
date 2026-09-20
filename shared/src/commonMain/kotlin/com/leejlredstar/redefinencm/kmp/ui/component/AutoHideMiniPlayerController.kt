@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -37,6 +38,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonGroup
+import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.FilledTonalIconButton
@@ -391,6 +396,7 @@ private fun fullLyricControllerTransform(
         )
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun FullLyricControlConsole(
     media: MediaInfo?,
@@ -459,85 +465,105 @@ private fun FullLyricControlConsole(
                 onAdjustingChange = onOutputVolumeAdjustingChange,
             )
         }
-        Surface(
+        // A connected button group, not four round buttons inside a fifth container. Nesting
+        // a 0.72 container inside a 0.88 one over a blurred cover left four faint lozenges
+        // floating in a larger lozenge; a button group is the expressive element for a row of
+        // peer actions, so the ends carry the capsule radius, the joins are square, and
+        // pressing one squeezes its neighbours.
+        val actionContainer = accentPalette.container.copy(
+            alpha = if (forceOpaqueSurfaces) 1f else 0.88f,
+        )
+        val favoriteInteraction = remember { MutableInteractionSource() }
+        val queueInteraction = remember { MutableInteractionSource() }
+        val commentsInteraction = remember { MutableInteractionSource() }
+        val shuffleInteraction = remember { MutableInteractionSource() }
+        // The overload that takes an overflow indicator builds its items itself, through
+        // `clickableItem`, which draws them in the scheme's own colours — the brand green this
+        // row exists to keep off an artwork-tinted page. Four buttons in a 620dp strip have
+        // nothing to overflow into anyway.
+        @Suppress("DEPRECATION")
+        ButtonGroup(
             modifier = Modifier
                 .padding(horizontal = 16.dp)
                 .widthIn(max = 620.dp)
                 .fillMaxWidth()
-                .height(64.dp),
-            shape = CircleShape,
-            color = accentPalette.quietContainer.copy(
-                alpha = if (forceOpaqueSurfaces) 1f else 0.88f,
-            ),
-            contentColor = accentPalette.onQuietContainer,
-            tonalElevation = 0.dp,
+                .height(56.dp),
+            horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            // The inner corners of a connected group: small, so the joins read as one strip.
+            val joinShape = RoundedCornerShape(8.dp)
+            FilledTonalIconButton(
+                onClick = onFavorite,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .animateWidth(favoriteInteraction),
+                shape = ButtonGroupDefaults.connectedLeadingButtonShape,
+                interactionSource = favoriteInteraction,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = if (isFavorite) accentPalette.accent else actionContainer,
+                    contentColor = if (isFavorite) {
+                        accentPalette.onAccent
+                    } else {
+                        accentPalette.onContainer
+                    },
+                ),
             ) {
-                FilledTonalIconButton(
-                    onClick = onFavorite,
-                    modifier = Modifier.weight(1f),
-                    shape = CircleShape,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = if (isFavorite) {
-                            accentPalette.accent
-                        } else {
-                            accentPalette.container.copy(alpha = 0.72f)
-                        },
-                        contentColor = if (isFavorite) {
-                            accentPalette.onAccent
-                        } else {
-                            accentPalette.onContainer
-                        },
-                    ),
-                ) {
-                    Icon(
-                        imageVector = if (isFavorite) AppIcons.Favorite else AppIcons.FavoriteBorder,
-                        contentDescription = if (isFavorite) "已喜欢" else "喜欢",
-                    )
-                }
-                FilledTonalIconButton(
-                    onClick = onQueue,
-                    modifier = Modifier.weight(1f),
-                    shape = CircleShape,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = accentPalette.container.copy(alpha = 0.72f),
-                        contentColor = accentPalette.onContainer,
-                    ),
-                ) {
-                    Icon(AppIcons.QueueMusic, contentDescription = "播放队列")
-                }
-                FilledTonalIconButton(
-                    onClick = onComments,
-                    modifier = Modifier.weight(1f),
-                    shape = CircleShape,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = accentPalette.container.copy(alpha = 0.72f),
-                        contentColor = accentPalette.onContainer,
-                    ),
-                ) {
-                    Icon(AppIcons.Comment, contentDescription = "评论")
-                }
-                FilledIconToggleButton(
-                    checked = shuffleEnabled,
-                    onCheckedChange = { onShuffle() },
-                    modifier = Modifier.weight(1f),
-                    shape = CircleShape,
-                    colors = IconButtonDefaults.filledIconToggleButtonColors(
-                        containerColor = accentPalette.container.copy(alpha = 0.72f),
-                        contentColor = accentPalette.onContainer,
-                        checkedContainerColor = accentPalette.accent,
-                        checkedContentColor = accentPalette.onAccent,
-                    ),
-                ) {
-                    Icon(
-                        imageVector = if (shuffleEnabled) AppIcons.ShuffleOn else AppIcons.Shuffle,
-                        contentDescription = "随机播放",
-                    )
-                }
+                Icon(
+                    imageVector = if (isFavorite) AppIcons.Favorite else AppIcons.FavoriteBorder,
+                    contentDescription = if (isFavorite) "已喜欢" else "喜欢",
+                )
+            }
+            FilledTonalIconButton(
+                onClick = onQueue,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .animateWidth(queueInteraction),
+                shape = joinShape,
+                interactionSource = queueInteraction,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = actionContainer,
+                    contentColor = accentPalette.onContainer,
+                ),
+            ) {
+                Icon(AppIcons.QueueMusic, contentDescription = "播放队列")
+            }
+            FilledTonalIconButton(
+                onClick = onComments,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .animateWidth(commentsInteraction),
+                shape = joinShape,
+                interactionSource = commentsInteraction,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = actionContainer,
+                    contentColor = accentPalette.onContainer,
+                ),
+            ) {
+                Icon(AppIcons.Comment, contentDescription = "评论")
+            }
+            FilledIconToggleButton(
+                checked = shuffleEnabled,
+                onCheckedChange = { onShuffle() },
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .animateWidth(shuffleInteraction),
+                shape = ButtonGroupDefaults.connectedTrailingButtonShape,
+                interactionSource = shuffleInteraction,
+                colors = IconButtonDefaults.filledIconToggleButtonColors(
+                    containerColor = actionContainer,
+                    contentColor = accentPalette.onContainer,
+                    checkedContainerColor = accentPalette.accent,
+                    checkedContentColor = accentPalette.onAccent,
+                ),
+            ) {
+                Icon(
+                    imageVector = if (shuffleEnabled) AppIcons.ShuffleOn else AppIcons.Shuffle,
+                    contentDescription = "随机播放",
+                )
             }
         }
     }
@@ -756,6 +782,7 @@ private fun ExpandedPlaybackCard(
                             endpoint = lyricEndpoint,
                             detailsExpanded = lyricDetailsExpanded,
                             onDetailsExpandedChange = onLyricDetailsExpandedChange,
+                            accentPalette = accentPalette,
                             modifier = Modifier.padding(start = 8.dp),
                         )
                     }

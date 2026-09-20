@@ -536,12 +536,17 @@ fun CarouselItemScope.RecommendSquareCard(
                             // Fractional stops, not a pixel startY: `startY = 120f` is 120 raw
                             // pixels, which is a third of the way down a 168dp tile on a 3.5x
                             // phone but almost the whole tile on a 1x one, so the scrim covered
-                            // a different amount of artwork on every density. Weighted to the
-                            // bottom so the title keeps contrast over busy covers.
+                            // a different amount of artwork on every density.
+                            //
+                            // Every stop darkens, and none of them is the artwork's accent. The
+                            // middle stop used to be `accent`, which is a *light* colour in a
+                            // dark scheme (tone 0.78) — and the title's own line sits inside
+                            // that band, so a pale cover was being lightened exactly where the
+                            // white text had to be read.
                             brush = Brush.verticalGradient(
-                                0.40f to Color.Transparent,
-                                0.72f to accentPalette.accent.copy(alpha = 0.38f * overlayAlpha),
-                                1f to Color.Black.copy(alpha = 0.88f * overlayAlpha),
+                                0.32f to Color.Transparent,
+                                0.62f to Color.Black.copy(alpha = 0.42f * overlayAlpha),
+                                1f to Color.Black.copy(alpha = 0.92f * overlayAlpha),
                             ),
                         ),
                 )

@@ -235,6 +235,36 @@ internal fun secondaryContentColorFor(
 }
 
 /**
+ * [accent] moved toward the foreground [background] would take, but only as far as it has to be
+ * to carry text at WCAG AA.
+ *
+ * The accent's tone is fixed per scheme while a page's tint follows the artwork, so a pale hue
+ * on the page it tinted — a yellow cover in the light theme — leaves the two about 4:1 apart.
+ * Blending the rest of the way keeps the album's hue on the label; falling back to the page's
+ * plain foreground would not.
+ */
+internal fun legibleAccentFor(
+    accent: Color,
+    background: Color,
+    backdrop: Color = Color.White,
+    minimumContrast: Float = 4.5f,
+): Color {
+    if (contrastRatio(accent, background, backdrop) >= minimumContrast) return accent
+    val target = contentColorFor(background, backdrop)
+    var failingMix = 0f
+    var passingMix = 1f
+    repeat(16) {
+        val mix = (passingMix + failingMix) / 2f
+        if (contrastRatio(lerp(accent, target, mix), background, backdrop) >= minimumContrast) {
+            passingMix = mix
+        } else {
+            failingMix = mix
+        }
+    }
+    return lerp(accent, target, passingMix).copy(alpha = 1f)
+}
+
+/**
  * WCAG contrast ratio after alpha-compositing both colors onto an opaque [backdrop].
  *
  * Kept internal so common tests can protect the palette's accessibility decisions without

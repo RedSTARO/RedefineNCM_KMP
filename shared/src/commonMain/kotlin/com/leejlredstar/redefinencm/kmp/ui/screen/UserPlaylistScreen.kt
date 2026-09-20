@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -31,7 +32,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
@@ -55,7 +55,6 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import org.koin.compose.koinInject
@@ -396,100 +395,121 @@ private fun UserPlaylistHero(
     // Avatar beside the name rather than stacked above it, and a height that follows the content:
     // the old fixed 320dp block pushed the playlists below the first screen and had no room left
     // for a larger system font.
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 180.dp),
-    ) {
-        AsyncImage(
-            model = backgroundUrl,
-            contentDescription = null,
+    //
+    // The height follows the width at 3:1 instead of being pinned at 180dp. A fixed 180dp box
+    // is a 6.6:1 slit at desktop width, and a centred crop of a portrait or 4:3 background
+    // through a slit that shape lands on whatever happens to cross the middle of the picture —
+    // a sleeve, a hem — never the subject. Anchored to the top, where a profile background
+    // puts it.
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val heroHeight = (maxWidth / 3f).coerceIn(180.dp, 260.dp)
+        Box(
             modifier = Modifier
-                .matchParentSize()
-                .blur(3.dp)
-                .drawWithContent {
-                    drawContent()
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                accentPalette.pageStart.copy(alpha = 0.78f),
-                                accentPalette.pageMiddle.copy(alpha = 0.52f),
-                                accentPalette.pageStart,
-                            ),
-                        ),
-                    )
-                },
-            contentScale = ContentScale.Crop,
-            onSuccess = { state -> extractBackgroundAccent(state.result.image) },
-        )
-
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .statusBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .fillMaxWidth()
+                .height(heroHeight),
         ) {
             AsyncImage(
-                model = avatarUrl,
+                model = backgroundUrl,
                 contentDescription = null,
-                contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .size(80.dp)
-                    .clip(CircleShape)
-                    .border(3.dp, accentPalette.container, CircleShape),
-                onSuccess = { state -> extractAvatarAccent(state.result.image) },
-            )
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = nickname,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = accentPalette.onPageStart,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = levelDisplay?.summary ?: if (levelLoading) {
-                        "正在加载等级信息…"
-                    } else {
-                        "等级信息暂不可用"
+                    .matchParentSize()
+                    .drawWithContent {
+                        drawContent()
+                        // Clear at the top so the picture is a picture; opaque by the bottom,
+                        // where the name and the level bar need a background they can be read
+                        // against and the hero has to meet the page. The 3dp blur that used to
+                        // stand in for this only softened it — and did nothing at all below
+                        // Android 12, where `blur` is a no-op.
+                        drawRect(color = accentPalette.pageStart.copy(alpha = 0.10f))
+                        // Measured up from the bottom rather than as a fraction of the hero:
+                        // the block of text is the same height whatever the hero is, so a
+                        // fractional scrim that closes above the name on a 260dp hero opens
+                        // under it on a 180dp one — where the name sits at 0.42 of the height
+                        // and a bright background photo would leave white text on white.
+                        val scrimHeight = 132.dp.toPx().coerceAtMost(size.height)
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                0f to Color.Transparent,
+                                0.18f to accentPalette.pageStart.copy(alpha = 0.80f),
+                                1f to accentPalette.pageStart,
+                                startY = size.height - scrimHeight,
+                                endY = size.height,
+                            ),
+                        )
                     },
-                    style = MaterialTheme.typography.labelLarge,
-                    color = accentPalette.secondaryOnPageStart,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+                alignment = Alignment.TopCenter,
+                contentScale = ContentScale.Crop,
+                onSuccess = { state -> extractBackgroundAccent(state.result.image) },
+            )
+
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .statusBarsPadding()
+                    .padding(horizontal = 20.dp, vertical = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AsyncImage(
+                    model = avatarUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(CircleShape)
+                        .border(3.dp, accentPalette.container, CircleShape),
+                    onSuccess = { state -> extractAvatarAccent(state.result.image) },
                 )
-                if (levelLoadFailed) {
-                    TextButton(onClick = onRetryLevel) {
-                        Text("重试")
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = nickname,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = accentPalette.onPageStart,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = levelDisplay?.summary ?: if (levelLoading) {
+                            "正在加载等级信息…"
+                        } else {
+                            "等级信息暂不可用"
+                        },
+                        style = MaterialTheme.typography.labelLarge,
+                        color = accentPalette.secondaryOnPageStart,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (levelLoadFailed) {
+                        TextButton(onClick = onRetryLevel) {
+                            Text("重试")
+                        }
                     }
-                }
-                levelDisplay?.let { display ->
-                    Spacer(Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        ExpressiveWavyProgress(
-                            progress = { display.progress },
-                            modifier = Modifier.weight(1f),
-                            color = accentPalette.accent,
-                            trackColor = accentPalette.onPageStart.copy(alpha = 0.14f),
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = display.progressLabel,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = accentPalette.secondaryOnPageStart,
-                            maxLines = 1,
-                        )
-                    }
-                    display.nextLevelLabel?.let { label ->
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = accentPalette.secondaryOnPageStart,
-                            maxLines = 2,
-                        )
+                    levelDisplay?.let { display ->
+                        Spacer(Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            ExpressiveWavyProgress(
+                                progress = { display.progress },
+                                modifier = Modifier.weight(1f),
+                                color = accentPalette.accent,
+                                trackColor = accentPalette.onPageStart.copy(alpha = 0.14f),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = display.progressLabel,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = accentPalette.secondaryOnPageStart,
+                                maxLines = 1,
+                            )
+                        }
+                        display.nextLevelLabel?.let { label ->
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = accentPalette.secondaryOnPageStart,
+                                maxLines = 2,
+                            )
+                        }
                     }
                 }
             }
