@@ -134,6 +134,7 @@ fun NowPlayingScreen(
     // The dynamic cover came with the details, and the details came here from the lyric page.
     val dynamicCoverUiState by viewModel.dynamicCoverUiState.collectAsState()
     val localArtworkActive by viewModel.localArtworkActive.collectAsState()
+    val remoteArtworkUri by viewModel.remoteArtworkUri.collectAsState()
     val outputVolume by player.volume.collectAsState()
     var showSongWiki by remember { mutableStateOf(false) }
     LaunchedEffect(media?.id) { showSongWiki = false }
@@ -303,6 +304,8 @@ fun NowPlayingScreen(
         songArtist = media?.artist,
         albumTitle = media?.albumTitle,
         artworkUri = media?.artworkUri,
+        fallbackArtworkUri = remoteArtworkUri
+            .takeIf { localArtworkActive && it.isNotBlank() && it != media?.artworkUri },
         durationMs = media?.duration,
         state = songWikiState.scopedToMedia(media?.id),
         accentPalette = palette,

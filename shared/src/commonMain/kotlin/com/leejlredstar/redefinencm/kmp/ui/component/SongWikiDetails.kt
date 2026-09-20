@@ -32,6 +32,10 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,6 +75,7 @@ fun SongWikiDetailsSheet(
     accentPalette: ContentAccentPalette,
     onDismiss: () -> Unit,
     onRetry: () -> Unit,
+    fallbackArtworkUri: String? = null,
     artworkOverlay: (@Composable BoxScope.() -> Unit)? = null,
 ) {
     if (!visible) return
@@ -84,6 +89,7 @@ fun SongWikiDetailsSheet(
             songArtist = songArtist,
             albumTitle = albumTitle,
             artworkUri = artworkUri,
+            fallbackArtworkUri = fallbackArtworkUri,
             durationMs = durationMs,
             state = state,
             accentPalette = accentPalette,
@@ -99,6 +105,7 @@ private fun SongWikiDetailsContent(
     songArtist: String?,
     albumTitle: String?,
     artworkUri: String?,
+    fallbackArtworkUri: String?,
     durationMs: Long?,
     state: SongWikiUiState,
     accentPalette: ContentAccentPalette,
@@ -116,6 +123,7 @@ private fun SongWikiDetailsContent(
                 songArtist = songArtist,
                 albumTitle = albumTitle,
                 artworkUri = artworkUri,
+                fallbackArtworkUri = fallbackArtworkUri,
                 durationMs = durationMs,
                 accentPalette = accentPalette,
                 artworkOverlay = artworkOverlay,
@@ -172,6 +180,7 @@ private fun SongWikiHeader(
     albumTitle: String?,
     durationMs: Long?,
     artworkUri: String?,
+    fallbackArtworkUri: String?,
     accentPalette: ContentAccentPalette,
     artworkOverlay: (@Composable BoxScope.() -> Unit)?,
 ) {
@@ -187,11 +196,21 @@ private fun SongWikiHeader(
                 .size(96.dp)
                 .clip(MaterialTheme.shapes.large),
         ) {
+            // A downloaded song's cover is a local file that can fail to resolve; the
+            // remote one is what it falls back to, as it does behind the lyrics.
+            var shownArtwork by remember(artworkUri, fallbackArtworkUri) {
+                mutableStateOf(artworkUri)
+            }
             AsyncImage(
-                model = artworkUri,
+                model = shownArtwork,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
+                onError = {
+                    if (fallbackArtworkUri != null && shownArtwork != fallbackArtworkUri) {
+                        shownArtwork = fallbackArtworkUri
+                    }
+                },
             )
             artworkOverlay?.invoke(this)
         }
