@@ -133,9 +133,20 @@ import org.koin.compose.koinInject
  * from the library and from the foot of the desktop sidebar.
  */
 private sealed interface TabDest {
-    data object Home : TabDest
-    data object Search : TabDest
-    data object My : TabDest
+    /** Left to right along the bar; the page transition travels the same way. */
+    val order: Int
+
+    data object Home : TabDest {
+        override val order: Int = 0
+    }
+
+    data object Search : TabDest {
+        override val order: Int = 1
+    }
+
+    data object My : TabDest {
+        override val order: Int = 2
+    }
 }
 
 internal sealed interface PushedDest {
@@ -990,8 +1001,8 @@ private fun pageTransition(
         isPlayerSurface(initial) && isPlayerSurface(target) -> fadeThroughTransition()
         isPlayerSurface(initial) || isPlayerSurface(target) ->
             sheetTransition(showingSheet = isPlayerSurface(target))
-        // Tabs are peers, not a sequence: a short fade-through, no travel and no scale.
-        initial is RootDest.Tab && target is RootDest.Tab -> tabFadeThrough()
+        initial is RootDest.Tab && target is RootDest.Tab ->
+            tabSharedAxis(forward = target.tab.order > initial.tab.order)
         target.stackDepth > initial.stackDepth -> horizontalTransition(forward = true, fullDistance = true)
         target.stackDepth < initial.stackDepth -> horizontalTransition(forward = false, fullDistance = true)
         else -> fadeThroughTransition()
@@ -1129,16 +1140,39 @@ private fun hidesNavigation(dest: PushedDest?): Boolean =
 private fun isToolPage(dest: PushedDest): Boolean =
     dest is PushedDest.Downloads || dest is PushedDest.SongRecognition || dest is PushedDest.Settings
 
-private fun tabFadeThrough(): ContentTransform =
-    fadeIn(
-        animationSpec = tween(
-            ExpressiveMotion.QuickMillis,
-            delayMillis = ExpressiveMotion.EnterDelayMillis,
-            easing = LinearOutSlowInEasing,
-        ),
-    ) togetherWith fadeOut(
-        animationSpec = tween(ExpressiveMotion.EnterDelayMillis + 30, easing = LinearOutSlowInEasing),
-    )
+/**
+ * Tabs travel along the bar: going right brings the next page in from the right and pushes the
+ * one leaving out to the left, and going back reverses it.
+ *
+ * It was a plain cross-fade — "tabs are peers, not a sequence" — which is true of the pages but
+ * not of the bar, where they sit in a fixed order the reader can see. A fade left every switch
+ * looking the same, so nothing said which way you had moved.
+ *
+ * Shared axis X: a twelfth of the width, not a page-width push, because these are still peers
+ * rather than a stack. The fade carries the change; the travel only gives it a direction.
+ */
+private fun tabSharedAxis(forward: Boolean): ContentTransform {
+    val direction = if (forward) 1 else -1
+    return (
+        slideInHorizontally(
+            animationSpec = tween(ExpressiveMotion.MediumMillis, easing = FastOutSlowInEasing),
+            initialOffsetX = { direction * it / 12 },
+        ) + fadeIn(
+            animationSpec = tween(
+                ExpressiveMotion.ShortMillis,
+                delayMillis = ExpressiveMotion.EnterDelayMillis,
+                easing = LinearOutSlowInEasing,
+            ),
+        )
+        ) togetherWith (
+        slideOutHorizontally(
+            animationSpec = tween(ExpressiveMotion.MediumMillis, easing = FastOutSlowInEasing),
+            targetOffsetX = { -direction * it / 12 },
+        ) + fadeOut(
+            animationSpec = tween(ExpressiveMotion.QuickMillis, easing = LinearOutSlowInEasing),
+        )
+        )
+}
 
 private fun RootDest.stateKey(): String = when (this) {
     is RootDest.Tab -> "tab:" + when (tab) {

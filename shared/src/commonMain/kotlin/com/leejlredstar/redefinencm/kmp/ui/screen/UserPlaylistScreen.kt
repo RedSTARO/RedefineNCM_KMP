@@ -55,6 +55,9 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import org.koin.compose.koinInject
@@ -159,32 +162,11 @@ fun UserPlaylistScreen(
             // contentPadding, not container padding, so rows scroll under the floating toolbar.
             contentPadding = PaddingValues(bottom = scaffoldPadding.calculateBottomPadding() + 16.dp),
         ) {
-            // The page's title and, since settings left the tab bar, the way to them.
-            item(key = "library-header") {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "我的",
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = accentPalette.onPageStart,
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(
-                            imageVector = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Settings,
-                            contentDescription = "设置",
-                            tint = accentPalette.onPageStart,
-                        )
-                    }
-                }
-            }
-            userDetail?.let { detail ->
+            // The title belongs to the hero when there is one. Drawn above it instead, the
+            // page ended in a hard horizontal cut: the page's own tint met the top edge of a
+            // photograph with nothing in between.
+            val detail = userDetail
+            if (detail != null) {
                 item(key = "user-hero") {
                     UserPlaylistHero(
                         backgroundUrl = detail.profile.backgroundUrl,
@@ -196,7 +178,34 @@ fun UserPlaylistScreen(
                         accentPalette = accentPalette,
                         onAccentColor = { rawAccentColor = it },
                         onRetryLevel = viewModel::retryAccountData,
+                        onOpenSettings = onOpenSettings,
                     )
+                }
+            } else {
+                // Signed out there is no hero to carry it, so the title stands on the page.
+                item(key = "library-header") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "我的",
+                            style = MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = accentPalette.onPageStart,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(onClick = onOpenSettings) {
+                            Icon(
+                                imageVector = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Settings,
+                                contentDescription = "设置",
+                                tint = accentPalette.onPageStart,
+                            )
+                        }
+                    }
                 }
             }
             if (hasCachedContent) {
@@ -383,6 +392,7 @@ private fun UserPlaylistHero(
     accentPalette: ContentAccentPalette,
     onAccentColor: (Color) -> Unit,
     onRetryLevel: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val levelDisplay = userLevelDisplay(userLevel)
     var backgroundAccent by remember(backgroundUrl) { mutableStateOf<Color?>(null) }
@@ -402,7 +412,11 @@ private fun UserPlaylistHero(
     // a sleeve, a hem — never the subject. Anchored to the top, where a profile background
     // puts it.
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        val heroHeight = (maxWidth / 3f).coerceIn(180.dp, 260.dp)
+        // The title row and the status bar are part of the hero, not a band above it, so the
+        // picture runs to the very top of the page and the only edge left is the one the
+        // gradient closes at the bottom.
+        val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        val heroHeight = topInset + HeroTitleRowHeight + (maxWidth / 3.4f).coerceIn(164.dp, 232.dp)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -436,6 +450,18 @@ private fun UserPlaylistHero(
                                 endY = size.height,
                             ),
                         )
+                        // The same treatment at the top, for the page title and the status bar
+                        // icons that now sit over the picture.
+                        val topScrim = (topInset + HeroTitleRowHeight).toPx()
+                            .coerceAtMost(size.height)
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                0f to accentPalette.pageStart.copy(alpha = 0.72f),
+                                1f to Color.Transparent,
+                                startY = 0f,
+                                endY = topScrim,
+                            ),
+                        )
                     },
                 alignment = Alignment.TopCenter,
                 contentScale = ContentScale.Crop,
@@ -444,8 +470,32 @@ private fun UserPlaylistHero(
 
             Row(
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
                     .statusBarsPadding()
+                    .height(HeroTitleRowHeight)
+                    .padding(start = 20.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "我的",
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = accentPalette.onPageStart,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = onOpenSettings) {
+                    Icon(
+                        imageVector = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Settings,
+                        contentDescription = "设置",
+                        tint = accentPalette.onPageStart,
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
                     .padding(horizontal = 20.dp, vertical = 20.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -516,6 +566,9 @@ private fun UserPlaylistHero(
         }
     }
 }
+
+/** The hero's own title row: the page title and the way to settings, over the picture. */
+private val HeroTitleRowHeight = 64.dp
 
 /** A tappable row for a destination inside the library, such as the downloaded songs. */
 @Composable

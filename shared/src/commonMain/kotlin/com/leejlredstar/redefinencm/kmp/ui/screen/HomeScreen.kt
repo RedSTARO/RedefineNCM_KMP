@@ -24,7 +24,6 @@ import androidx.compose.foundation.shape.CircleShape
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.Scaffold
@@ -55,7 +54,6 @@ import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
 import com.leejlredstar.redefinencm.kmp.ui.theme.AccentColorSaver
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
-import com.leejlredstar.redefinencm.kmp.ui.theme.legibleAccentFor
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
@@ -123,12 +121,6 @@ fun HomeScreen(
         label = "homePageAccent",
     )
     val pagePalette = contentAccentPalette(pageAccent)
-    // The page's own hue, darkened only if the cover's accent would not carry label text on it.
-    val dailyLinkColor = legibleAccentFor(
-        accent = pagePalette.accent,
-        background = pagePalette.pageStart,
-        backdrop = MaterialTheme.colorScheme.surface,
-    )
 
     ExpressivePage(
         accentPalette = pagePalette,
@@ -221,6 +213,13 @@ fun HomeScreen(
             item {
                 SectionWithCarousel(
                     title = "每日推荐",
+                    // The heading is the way into the full list, and the count is what the
+                    // heading is about. They used to be a second button beside the first,
+                    // labelled with the sentence "全部 33 首" — three controls on one line, one
+                    // of them a bare piece of text stating what the page already showed.
+                    supportingText = if (dailySongs.isEmpty()) null else "共 ${dailySongs.size} 首",
+                    onOpenAll = onOpenDailySongs.takeIf { dailySongs.isNotEmpty() },
+                    onOpenAllLabel = "查看每日推荐的全部歌曲",
                     items = dailySongs,
                     isLoading = accountLoading && recommend == null,
                     isFromCache = songsFromCache,
@@ -251,20 +250,6 @@ fun HomeScreen(
                             )
                             Spacer(Modifier.size(8.dp))
                             Text("播放全部")
-                        }
-                        // The carousel shows covers; the whole list, with artists and
-                        // durations, is one tap away.
-                        TextButton(
-                            onClick = onOpenDailySongs,
-                            enabled = dailySongs.isNotEmpty(),
-                            // A text button defaults to the scheme's primary, which is this
-                            // app's brand green: beside a page tinted from the artwork it was
-                            // the only colour on screen with no relation to the cover.
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = dailyLinkColor,
-                            ),
-                        ) {
-                            Text("全部 ${dailySongs.size} 首")
                         }
                     },
                     itemContent = { song ->

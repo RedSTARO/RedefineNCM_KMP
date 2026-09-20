@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.ButtonDefaults
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -53,6 +54,7 @@ import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberConnectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.theme.pageLinkColor
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
@@ -147,7 +149,11 @@ fun SearchScreen(
             style = MaterialTheme.typography.headlineLarge,
             fontWeight = FontWeight.ExtraBold,
             color = searchPalette.onPageStart,
-            modifier = Modifier.padding(start = 4.dp, top = 24.dp, bottom = 12.dp),
+            modifier = Modifier.padding(
+                start = SearchSpacing.Inset,
+                top = SearchSpacing.SectionGap,
+                bottom = SearchSpacing.TitleGap,
+            ),
         )
         Row(
             modifier = Modifier.padding(bottom = 4.dp),
@@ -204,7 +210,7 @@ fun SearchScreen(
                 ExpressiveLoadingState(
                     label = "正在搜索“${submittedQuery ?: query}”…",
                     accentColor = searchPalette.accent,
-                    modifier = Modifier.padding(top = 24.dp),
+                    modifier = Modifier.padding(top = SearchSpacing.SectionGap),
                 )
             }
             // Only a total failure replaces the results. With two providers configured, one being
@@ -219,7 +225,7 @@ fun SearchScreen(
                     accentPalette = searchPalette,
                     actionLabel = "重试",
                     onAction = { submit(submittedQuery ?: query) },
-                    modifier = Modifier.padding(top = 24.dp),
+                    modifier = Modifier.padding(top = SearchSpacing.SectionGap),
                 )
             }
             results.isNotEmpty() && submittedMatchesQuery -> {
@@ -297,6 +303,7 @@ fun SearchScreen(
                             moreError = moreError,
                             shownCount = results.size,
                             accent = searchPalette.secondaryOnQuietContainer,
+                            linkColor = searchPalette.pageLinkColor(),
                             onLoadMore = viewModel::loadMoreSearchResults,
                         )
                     }
@@ -308,7 +315,7 @@ fun SearchScreen(
                     message = "没有找到与“$submittedQuery”匹配的歌曲，试试更短的关键词或只输入歌手名。",
                     icon = AppIcons.Search,
                     accentPalette = searchPalette,
-                    modifier = Modifier.padding(top = 24.dp),
+                    modifier = Modifier.padding(top = SearchSpacing.SectionGap),
                 )
             }
             query.isNotBlank() && searchPrediction && suggestions.isNotEmpty() -> {
@@ -392,7 +399,7 @@ private fun SearchStart(
             message = "输入歌名、歌手或专辑名，查找相关的歌曲。",
             icon = AppIcons.Search,
             accentPalette = accentPalette,
-            modifier = Modifier.padding(top = 24.dp),
+            modifier = Modifier.padding(top = SearchSpacing.SectionGap),
         )
         return
     }
@@ -405,15 +412,26 @@ private fun SearchStart(
             item(key = "history-title") {
                 ExpressiveSectionTitle(
                     text = "搜索历史",
-                    action = { TextButton(onClick = onClearHistory) { Text("清除") } },
-                    modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+                    action = {
+                        TextButton(
+                            onClick = onClearHistory,
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = accentPalette.pageLinkColor(),
+                            ),
+                        ) { Text("清除") }
+                    },
+                    modifier = Modifier.padding(
+                        start = SearchSpacing.Inset,
+                        top = SearchSpacing.SectionGap,
+                        bottom = SearchSpacing.TitleGap,
+                    ),
                 )
             }
             item(key = "history") {
                 FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(SearchSpacing.ChipGap),
+                    verticalArrangement = Arrangement.spacedBy(SearchSpacing.ChipGap),
+                    modifier = Modifier.padding(start = SearchSpacing.Inset),
                 ) {
                     history.forEach { word ->
                         SuggestionChip(
@@ -433,7 +451,11 @@ private fun SearchStart(
             item(key = "hot-title") {
                 ExpressiveSectionTitle(
                     text = "热门搜索",
-                    modifier = Modifier.padding(start = 4.dp, top = 16.dp, bottom = 8.dp),
+                    modifier = Modifier.padding(
+                        start = SearchSpacing.Inset,
+                        top = SearchSpacing.SectionGap,
+                        bottom = SearchSpacing.TitleGap,
+                    ),
                 )
             }
             itemsIndexed(
@@ -492,6 +514,7 @@ private fun SearchResultsFooter(
     moreError: String?,
     shownCount: Int,
     accent: Color,
+    linkColor: Color,
     onLoadMore: () -> Unit,
 ) {
     Box(
@@ -504,11 +527,17 @@ private fun SearchResultsFooter(
                 style = MaterialTheme.typography.bodyMedium,
                 color = accent,
             )
-            moreError != null -> TextButton(onClick = onLoadMore) { Text("$moreError，点按重试") }
+            moreError != null -> TextButton(
+                onClick = onLoadMore,
+                colors = ButtonDefaults.textButtonColors(contentColor = linkColor),
+            ) { Text("$moreError，点按重试") }
             hasMore -> {
                 // Reaching the end loads the next page; the button is there if that stalls.
                 LaunchedEffect(shownCount) { onLoadMore() }
-                TextButton(onClick = onLoadMore) { Text("加载更多") }
+                TextButton(
+                    onClick = onLoadMore,
+                    colors = ButtonDefaults.textButtonColors(contentColor = linkColor),
+                ) { Text("加载更多") }
             }
             else -> Text(
                 text = "没有更多结果了",
@@ -526,7 +555,11 @@ private fun SearchProviderHeader(label: String, accent: Color) {
         text = label,
         style = MaterialTheme.typography.labelLarge,
         color = accent,
-        modifier = Modifier.padding(start = 4.dp, top = 16.dp, bottom = 8.dp),
+        modifier = Modifier.padding(
+            start = SearchSpacing.Inset,
+            top = SearchSpacing.SectionGap,
+            bottom = SearchSpacing.TitleGap,
+        ),
     )
 }
 
@@ -591,6 +624,28 @@ internal fun ProviderTrack.toNeteaseSongOrNull(): com.leejlredstar.redefinencm.k
         ),
         dt = durationMillis,
     )
+}
+
+/**
+ * One spacing scale for the page's sections.
+ *
+ * There were five: section titles 4dp inside the gutter with tops of 8, 16 and 24dp and bottoms
+ * of 0, 8 and 12dp; the history chips flush to the gutter while their own title was not; the hot
+ * list padded by a third value again. Nothing about a search result is special enough to earn
+ * its own rhythm, and side by side the page read as drifting rather than as sections.
+ */
+private object SearchSpacing {
+    /** Anything that is not a full-width row lines up with the page title, 4dp in. */
+    val Inset = 4.dp
+
+    /** Above a section title, and above a state panel that stands in for one. */
+    val SectionGap = 24.dp
+
+    /** Between a section title and the content under it. */
+    val TitleGap = 8.dp
+
+    /** Between chips, on both axes. */
+    val ChipGap = 8.dp
 }
 
 private const val HotSearchCount = 20

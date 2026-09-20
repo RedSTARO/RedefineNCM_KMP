@@ -235,6 +235,16 @@ internal fun secondaryContentColorFor(
 }
 
 /**
+ * The colour for a text button or a link on the page this palette tints.
+ *
+ * A text button defaults to the scheme's own primary, which is the app's brand green: on a page
+ * tinted from the artwork that is the one colour on screen with no relation to the cover.
+ */
+@Composable
+fun ContentAccentPalette.pageLinkColor(): Color =
+    legibleAccentFor(accent, pageStart, MaterialTheme.colorScheme.surface)
+
+/**
  * [accent] moved toward the foreground [background] would take, but only as far as it has to be
  * to carry text at WCAG AA.
  *

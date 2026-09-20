@@ -623,7 +623,10 @@ fun <T> SectionWithCarousel(
     errorMessage: String? = null,
     onRetry: (() -> Unit)? = null,
     key: ((T) -> Any)? = null,
+    supportingText: String? = null,
     action: (@Composable () -> Unit)? = null,
+    onOpenAll: (() -> Unit)? = null,
+    onOpenAllLabel: String? = null,
     itemContent: @Composable CarouselItemScope.(T) -> Unit,
 ) {
     val carouselState = rememberCarouselState { items.size }
@@ -632,6 +635,9 @@ fun <T> SectionWithCarousel(
         ExpressiveSectionTitle(
             text = title,
             modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+            supportingText = supportingText,
+            onClick = onOpenAll?.takeIf { carouselShown },
+            onClickLabel = onOpenAllLabel,
             action = if (action == null && !(showCarouselPager && carouselShown)) {
                 null
             } else {

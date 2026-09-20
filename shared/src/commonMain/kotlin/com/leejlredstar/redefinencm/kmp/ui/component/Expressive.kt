@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.ui.component
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,6 +31,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -43,6 +46,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 
 /** Shared dimensions for the app's Material 3 Expressive layout language. */
@@ -150,6 +154,8 @@ fun ExpressiveSectionTitle(
     modifier: Modifier = Modifier,
     supportingText: String? = null,
     action: (@Composable () -> Unit)? = null,
+    onClick: (() -> Unit)? = null,
+    onClickLabel: String? = null,
 ) {
     Layout(
         modifier = modifier.fillMaxWidth(),
@@ -157,14 +163,33 @@ fun ExpressiveSectionTitle(
             Column(
                 modifier = Modifier
                     .layoutId(SectionTitleId)
+                    .clip(MaterialTheme.shapes.small)
+                    .then(
+                        if (onClick == null) {
+                            Modifier
+                        } else {
+                            Modifier.clickable(onClickLabel = onClickLabel, onClick = onClick)
+                        },
+                    )
                     .semantics(mergeDescendants = true) { heading() },
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                Text(
-                    text = text,
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    // The whole heading opens the list, so it carries the chevron that says so.
+                    if (onClick != null) {
+                        Icon(
+                            imageVector = AppIcons.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 2.dp).size(SectionTitleChevron),
+                        )
+                    }
+                }
                 supportingText?.let { supporting ->
                     Text(
                         text = supporting,
@@ -192,8 +217,9 @@ fun ExpressiveSectionTitle(
         val gap = 16.dp.roundToPx()
         val loose = constraints.copy(minWidth = 0, minHeight = 0)
         val actionPlaceable = measurables.firstOrNull { it.layoutId == SectionActionId }?.measure(loose)
+        val chevron = if (onClick == null) 0 else (SectionTitleChevron + 2.dp).roundToPx()
         val titleWidth = measurables.first { it.layoutId == SectionTitleProbeId }
-            .maxIntrinsicWidth(constraints.maxHeight)
+            .maxIntrinsicWidth(constraints.maxHeight) + chevron
         val titleMeasurable = measurables.first { it.layoutId == SectionTitleId }
         val sideBySide = actionPlaceable == null ||
             titleWidth + gap + actionPlaceable.width <= constraints.maxWidth
@@ -223,6 +249,9 @@ fun ExpressiveSectionTitle(
         }
     }
 }
+
+/** The chevron that marks a heading as the way into its own list. */
+private val SectionTitleChevron = 22.dp
 
 private const val SectionTitleId = "section-title"
 private const val SectionTitleProbeId = "section-title-probe"

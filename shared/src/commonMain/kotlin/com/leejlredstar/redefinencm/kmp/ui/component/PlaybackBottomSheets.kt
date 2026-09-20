@@ -543,14 +543,21 @@ internal fun CommentPanelContent(
                         selected = paging.showHot == hot,
                         onClick = { paging.onShowHot(hot) },
                         shape = SegmentedButtonDefaults.itemShape(index = i, count = 2),
+                        // One quiet outline, the same on both halves. The unselected half used
+                        // to be outlined in `secondaryOnQuietContainer` — a near-white line at
+                        // full strength, which read as a stray border rather than as the edge
+                        // of a control, while the selected half's outline was invisible.
                         colors = SegmentedButtonDefaults.colors(
                             activeContainerColor = accentPalette.container,
                             activeContentColor = accentPalette.onContainer,
-                            activeBorderColor = accentPalette.container,
+                            activeBorderColor = accentPalette.onQuietContainer.copy(alpha = 0.18f),
                             inactiveContainerColor = accentPalette.pageEnd,
-                            inactiveContentColor = accentPalette.onQuietContainer,
-                            inactiveBorderColor = accentPalette.secondaryOnQuietContainer,
+                            inactiveContentColor = accentPalette.secondaryOnQuietContainer,
+                            inactiveBorderColor = accentPalette.onQuietContainer.copy(alpha = 0.18f),
                         ),
+                        // No check glyph: with two options the filled half already says which
+                        // one is showing, and the tick pushed a two-character label off centre.
+                        icon = {},
                     ) {
                         Text(label)
                     }
