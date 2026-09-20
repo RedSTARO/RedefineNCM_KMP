@@ -1,74 +1,15 @@
 package com.leejlredstar.redefinencm.kmp.ui.amll
 
 import com.leejlredstar.amll.compose.nextAmllArtworkUriAfterFailure
-import com.leejlredstar.redefinencm.kmp.viewmodel.SongWikiUiState
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
+/**
+ * The song's details moved to Now Playing, and with them the rule about when the full-screen
+ * dynamic cover paused — it paused for the details video, which never opens over this page any
+ * more. Those cases live in `SongWikiDetailsTest` or are gone.
+ */
 class NativeAmllScreenTest {
-    @Test
-    fun wikiPausesBackgroundOnlyAfterDetailVideoBecomesVisible() {
-        assertTrue(
-            shouldPlayAmllDynamicBackground(
-                songWikiVisible = true,
-                reducedMotion = false,
-                wikiDynamicCoverVisible = false,
-            ),
-        )
-        assertFalse(
-            shouldPlayAmllDynamicBackground(
-                songWikiVisible = true,
-                reducedMotion = false,
-                wikiDynamicCoverVisible = true,
-            ),
-        )
-    }
-
-    @Test
-    fun reducedMotionPausesBackgroundAsSoonAsWikiOpens() {
-        assertFalse(
-            shouldPlayAmllDynamicBackground(
-                songWikiVisible = true,
-                reducedMotion = true,
-                wikiDynamicCoverVisible = false,
-            ),
-        )
-        assertTrue(
-            shouldPlayAmllDynamicBackground(
-                songWikiVisible = false,
-                reducedMotion = true,
-                wikiDynamicCoverVisible = false,
-            ),
-        )
-    }
-
-    @Test
-    fun reopeningWikiRequestsOnlyTheDesktopHostsIdleState() {
-        assertTrue(
-            shouldRequestSongWikiOnOpen(
-                state = SongWikiUiState.Idle,
-                mediaId = "123",
-            ),
-        )
-        assertFalse(
-            shouldRequestSongWikiOnOpen(
-                state = SongWikiUiState.Error(
-                    mediaId = "123",
-                    message = "network",
-                ),
-                mediaId = "123",
-            ),
-        )
-        assertFalse(
-            shouldRequestSongWikiOnOpen(
-                state = SongWikiUiState.Idle,
-                mediaId = null,
-            ),
-        )
-    }
-
     @Test
     fun localArtworkFailureFallsBackOnceToTheRemoteArtwork() {
         assertEquals(

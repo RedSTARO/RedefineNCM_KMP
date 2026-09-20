@@ -9,10 +9,6 @@
  */
 package com.leejlredstar.redefinencm.kmp.ui.amll
 
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -21,7 +17,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -30,7 +25,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -45,10 +39,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.BlurredEdgeTreatment
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.dropShadow
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.input.pointer.pointerInput
@@ -71,25 +62,19 @@ import com.leejlredstar.redefinencm.kmp.player.PlayerState
 import com.leejlredstar.redefinencm.kmp.getPlatform
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeDynamicCoverLayer
-import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsButton
-import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsSheet
 import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
-import com.leejlredstar.redefinencm.kmp.viewmodel.SongWikiUiState
 import com.leejlredstar.redefinencm.kmp.player.PlayerStatusRestoreState
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import org.koin.compose.koinInject
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
 import com.leejlredstar.redefinencm.kmp.lyric.LyricCapabilityLevel
 import com.leejlredstar.redefinencm.kmp.viewmodel.lyricCapabilityLevel
 
-private val WikiBackdropCssEase = CubicBezierEasing(0.25f, 0.10f, 0.25f, 1.00f)
 /**
  * The Android control island's own timeout, now the timeout on every target.
  *
@@ -131,42 +116,10 @@ fun NativeAmllScreen(
     val songWikiState by viewModel.songWikiUiState.collectAsState()
     val untimedLyricLines by viewModel.untimedLyricLines.collectAsState()
 
-    var showSongWikiDetails by remember { mutableStateOf(false) }
-    var wikiDynamicCoverVisible by remember { mutableStateOf(false) }
-    var keepSongWikiBackdropBlur by remember { mutableStateOf(false) }
-    var songWikiBackdropOpen by remember { mutableStateOf(false) }
     var controllerRevealRequest by remember { mutableIntStateOf(0) }
-    val songWikiButtonFocusRequester = remember { FocusRequester() }
     val reducedMotion = rememberReducedMotionEnabled()
     val platform = remember { getPlatform() }
 
-    LaunchedEffect(metadata?.id) {
-        showSongWikiDetails = false
-        wikiDynamicCoverVisible = false
-    }
-    LaunchedEffect(showSongWikiDetails, reducedMotion) {
-        if (showSongWikiDetails) {
-            keepSongWikiBackdropBlur = true
-            songWikiBackdropOpen = false
-            if (!reducedMotion) withFrameNanos { }
-            songWikiBackdropOpen = true
-        } else if (keepSongWikiBackdropBlur) {
-            // `#wiki-overlay` stays in the DOM for its 180 ms close fade, so its
-            // backdrop-filter remains active until the delayed `hidden=true`.
-            songWikiBackdropOpen = false
-            if (!reducedMotion) delay(180L)
-            keepSongWikiBackdropBlur = false
-        }
-    }
-    val songWikiBackdropBlurRadius by animateDpAsState(
-        targetValue = if (songWikiBackdropOpen) 16.dp else 0.dp,
-        animationSpec = if (reducedMotion) {
-            snap()
-        } else {
-            tween(durationMillis = 180, easing = WikiBackdropCssEase)
-        },
-        label = "wiki-backdrop-blur",
-    )
 
     val lyricsBelongToCurrentMedia = metadata != null &&
         metadata?.id == lyricMediaId &&
@@ -200,42 +153,18 @@ fun NativeAmllScreen(
         advancing = isPlaying && playerState == PlayerState.PLAYING,
     )
 
-    // player.html keeps the full-screen dynamic cover available under reduced motion. The
-    // preference disables the song-wiki video and pauses the background immediately; in normal
-    // motion the background pauses only after the wiki video has presented a frame.
     val primaryArtworkUri = metadata?.artworkUri
     val fallbackArtworkUri = remoteArtworkUri
         .takeIf { localArtworkActive && it.isNotBlank() && it != primaryArtworkUri }
     val dynamicCoverUrl = dynamicCoverState
         .urlFor(metadata?.id)
         .takeUnless { localArtworkActive }
-    val scopedSongWikiState = songWikiState.scopedTo(metadata?.id)
-    LaunchedEffect(dynamicCoverUrl) {
-        wikiDynamicCoverVisible = false
-    }
-    val playDynamicBackground = shouldPlayAmllDynamicBackground(
-        songWikiVisible = showSongWikiDetails,
-        reducedMotion = reducedMotion,
-        wikiDynamicCoverVisible = wikiDynamicCoverVisible,
-    )
-
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF0A0A0A))
-            .then(
-                if (keepSongWikiBackdropBlur) {
-                    Modifier.blur(
-                        radius = songWikiBackdropBlurRadius,
-                        edgeTreatment = BlurredEdgeTreatment.Rectangle,
-                    )
-                } else {
-                    Modifier
-                },
-            )
             .semantics { contentDescription = "正在播放歌词" },
     ) {
-        val mobileWikiPosition = maxWidth <= 600.dp
         val visualParameters = remember(maxWidth, maxHeight, reducedMotion) {
             calculateAmllLyricVisualParameters(
                 viewportWidthDp = maxWidth.value,
@@ -248,7 +177,9 @@ fun NativeAmllScreen(
             artworkUri = primaryArtworkUri,
             fallbackArtworkUri = fallbackArtworkUri,
             dynamicCoverUrl = dynamicCoverUrl,
-            playDynamicCover = playDynamicBackground,
+            // Nothing pauses it any more: the song's details left this page for Now
+            // Playing, and they were the only thing that ever opened over it.
+            playDynamicCover = true,
             androidPresentation = platform.isAndroid,
             reducedMotion = reducedMotion,
             onArtworkLoaded = {},
@@ -312,20 +243,8 @@ fun NativeAmllScreen(
         }
 
         AmllTopActions(
-            mobileWikiPosition = mobileWikiPosition,
-            hasMedia = metadata != null,
-            reducedMotion = reducedMotion,
-            songWikiButtonFocusRequester = songWikiButtonFocusRequester,
             onBack = onBack,
-            onOpenDetails = {
-                showSongWikiDetails = true
-                if (shouldRequestSongWikiOnOpen(songWikiState, metadata?.id)) {
-                    viewModel.getSongWikiSummary()
-                }
-            },
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth(),
+            modifier = Modifier.align(Alignment.TopStart),
         )
 
         AutoHideMiniPlayerController(
@@ -336,69 +255,11 @@ fun NativeAmllScreen(
         )
     }
 
-    SongWikiDetailsSheet(
-        visible = showSongWikiDetails,
-        songTitle = metadata?.title,
-        songArtist = metadata?.artist,
-        albumTitle = metadata?.albumTitle,
-        artworkUri = primaryArtworkUri,
-        fallbackArtworkUri = fallbackArtworkUri,
-        durationMs = metadata?.duration,
-        artworkOverlay = dynamicCoverUrl
-            ?.takeUnless { reducedMotion }
-            ?.let { videoUrl ->
-            {
-                NativeDynamicCoverLayer(
-                    url = videoUrl,
-                    play = showSongWikiDetails,
-                    showBadge = true,
-                    reducedMotion = reducedMotion,
-                    onVisibilityChanged = { visible ->
-                        wikiDynamicCoverVisible = visible
-                    },
-                    modifier = Modifier.matchParentSize(),
-                )
-            }
-        },
-        state = scopedSongWikiState,
-        onDismiss = { showSongWikiDetails = false },
-        onRetry = viewModel::getSongWikiSummary,
-        reducedMotion = reducedMotion,
-        returnFocusRequester = songWikiButtonFocusRequester,
-    )
 }
-
-/**
- * Literal port of `playWikiDynamicCover()` in player.html.
- *
- * In normal motion the full-screen video keeps advancing until the detail video has
- * successfully presented its first frame. That avoids freezing the background when the
- * detail decoder fails. Reduced motion is the one source path that pauses it immediately.
- */
-internal fun shouldPlayAmllDynamicBackground(
-    songWikiVisible: Boolean,
-    reducedMotion: Boolean,
-    wikiDynamicCoverVisible: Boolean,
-): Boolean =
-    !songWikiVisible || (!reducedMotion && !wikiDynamicCoverVisible)
-
-/**
- * The former host page's `openSongWiki()` fetched only from its idle state. Closing and reopening an error
- * keeps that error visible; the explicit retry button is the retry path for the same track.
- */
-internal fun shouldRequestSongWikiOnOpen(
-    state: SongWikiUiState,
-    mediaId: String?,
-): Boolean = mediaId != null && state.scopedTo(mediaId) is SongWikiUiState.Idle
 
 @Composable
 private fun AmllTopActions(
-    mobileWikiPosition: Boolean,
-    hasMedia: Boolean,
-    reducedMotion: Boolean,
-    songWikiButtonFocusRequester: FocusRequester,
     onBack: () -> Unit,
-    onOpenDetails: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -446,17 +307,6 @@ private fun AmllTopActions(
                 )
             }
         }
-
-        SongWikiDetailsButton(
-            enabled = hasMedia,
-            onClick = onOpenDetails,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(end = safeEnd + if (mobileWikiPosition) 12.dp else 18.dp),
-            tint = Color.White.copy(alpha = 0.94f),
-            reducedMotion = reducedMotion,
-            focusRequester = songWikiButtonFocusRequester,
-        )
     }
 }
 
@@ -531,21 +381,6 @@ private fun coerceAmllPresentationPosition(
     } else {
         safePosition
     }
-}
-
-/** The wiki state for [mediaId], or idle when the state belongs to another song. */
-internal fun SongWikiUiState.scopedToMedia(mediaId: String?): SongWikiUiState = scopedTo(mediaId)
-
-private fun SongWikiUiState.scopedTo(mediaId: String?): SongWikiUiState {
-    if (mediaId == null) return SongWikiUiState.Idle
-    val stateMediaId = when (this) {
-        is SongWikiUiState.Idle -> return this
-        is SongWikiUiState.Loading -> this.mediaId
-        is SongWikiUiState.Content -> this.mediaId
-        is SongWikiUiState.Empty -> this.mediaId
-        is SongWikiUiState.Error -> this.mediaId
-    }
-    return if (stateMediaId == mediaId) this else SongWikiUiState.Idle
 }
 
 /** Lyrics that have text but no timing, shown as a plain scrollable column. */

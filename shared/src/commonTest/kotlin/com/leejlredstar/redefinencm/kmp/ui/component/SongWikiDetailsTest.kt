@@ -1,91 +1,71 @@
 package com.leejlredstar.redefinencm.kmp.ui.component
 
+import com.leejlredstar.redefinencm.kmp.data.SongWikiSummary
+import com.leejlredstar.redefinencm.kmp.viewmodel.SongWikiUiState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
+/**
+ * The details are a bottom sheet in the app's own colours now, so the dialog geometry and the
+ * CSS gradient axis the web host's overlay was measured against are gone with it. What is left
+ * to check is which song's state the panel is allowed to show, and when opening it fetches.
+ */
 class SongWikiDetailsTest {
-    @Test
-    fun cssOneHundredThirtyFiveDegreeGradientUsesMagicCornerGeometry() {
-        val square = cssLinearGradientAxis(
-            width = 100f,
-            height = 100f,
-            angleDegrees = 135f,
-        )
-        assertEquals(0f, square.start.x, absoluteTolerance = 0.001f)
-        assertEquals(0f, square.start.y, absoluteTolerance = 0.001f)
-        assertEquals(100f, square.end.x, absoluteTolerance = 0.001f)
-        assertEquals(100f, square.end.y, absoluteTolerance = 0.001f)
+    private val summary = SongWikiSummary(sections = emptyList())
 
-        val wideHero = cssLinearGradientAxis(
-            width = 720f,
-            height = 192f,
-            angleDegrees = 135f,
-        )
-        assertEquals(132f, wideHero.start.x, absoluteTolerance = 0.001f)
-        assertEquals(-132f, wideHero.start.y, absoluteTolerance = 0.001f)
-        assertEquals(588f, wideHero.end.x, absoluteTolerance = 0.001f)
-        assertEquals(324f, wideHero.end.y, absoluteTolerance = 0.001f)
+    @Test
+    fun stateBelongingToAnotherSongIsNotShown() {
+        val content = SongWikiUiState.Content(mediaId = "123", summary = summary)
+
+        assertEquals(content, content.scopedToMedia("123"))
+        assertEquals(SongWikiUiState.Idle, content.scopedToMedia("456"))
+        assertEquals(SongWikiUiState.Idle, content.scopedToMedia(null))
     }
 
     @Test
-    fun mobileGeometryIncludesOnlyTheSourceTopSafeArea() {
-        val geometry = songWikiDialogGeometry(
-            viewportWidthDp = 600f,
-            viewportHeightDp = 800f,
-            safeStartDp = 7f,
-            safeTopDp = 24f,
-            safeEndDp = 9f,
-            safeBottomDp = 20f,
+    fun everyStateIsScopedToTheSongItWasLoadedFor() {
+        val states = listOf(
+            SongWikiUiState.Loading(mediaId = "123"),
+            SongWikiUiState.Content(mediaId = "123", summary = summary),
+            SongWikiUiState.Empty(mediaId = "123"),
+            SongWikiUiState.Error(mediaId = "123", message = "network"),
         )
 
-        assertTrue(geometry.mobile)
-        assertFalse(geometry.lowHeight)
-        assertEquals(0f, geometry.overlayStartDp)
-        assertEquals(72f, geometry.overlayTopDp)
-        assertEquals(0f, geometry.overlayEndDp)
-        assertEquals(0f, geometry.overlayBottomDp)
-        assertEquals(728f, geometry.maxDialogHeightDp)
+        states.forEach { state ->
+            assertEquals(state, state.scopedToMedia("123"))
+            assertEquals(SongWikiUiState.Idle, state.scopedToMedia("456"))
+        }
     }
 
     @Test
-    fun lowHeightDesktopOverridesOnlyVerticalOverlayPadding() {
-        val geometry = songWikiDialogGeometry(
-            viewportWidthDp = 601f,
-            viewportHeightDp = 560f,
-            safeStartDp = 7f,
-            safeTopDp = 24f,
-            safeEndDp = 9f,
-            safeBottomDp = 20f,
+    fun openingFetchesOnlyFromIdle() {
+        assertTrue(
+            shouldRequestSongWikiOnOpen(
+                state = SongWikiUiState.Idle,
+                mediaId = "123",
+            ),
         )
-
-        assertFalse(geometry.mobile)
-        assertTrue(geometry.lowHeight)
-        assertEquals(25f, geometry.overlayStartDp)
-        assertEquals(10f, geometry.overlayTopDp)
-        assertEquals(27f, geometry.overlayEndDp)
-        assertEquals(10f, geometry.overlayBottomDp)
-        assertEquals(540f, geometry.maxDialogHeightDp)
-    }
-
-    @Test
-    fun desktopGeometryUsesSafeAreaAndEightySixViewportHeightCap() {
-        val geometry = songWikiDialogGeometry(
-            viewportWidthDp = 1_200f,
-            viewportHeightDp = 900f,
-            safeStartDp = 7f,
-            safeTopDp = 24f,
-            safeEndDp = 9f,
-            safeBottomDp = 20f,
+        // Reopening an error keeps the error on screen; its own retry is the way to try again.
+        assertFalse(
+            shouldRequestSongWikiOnOpen(
+                state = SongWikiUiState.Error(mediaId = "123", message = "network"),
+                mediaId = "123",
+            ),
         )
-
-        assertFalse(geometry.mobile)
-        assertFalse(geometry.lowHeight)
-        assertEquals(25f, geometry.overlayStartDp)
-        assertEquals(42f, geometry.overlayTopDp)
-        assertEquals(27f, geometry.overlayEndDp)
-        assertEquals(38f, geometry.overlayBottomDp)
-        assertEquals(774f, geometry.maxDialogHeightDp, absoluteTolerance = 0.001f)
+        assertFalse(
+            shouldRequestSongWikiOnOpen(
+                state = SongWikiUiState.Idle,
+                mediaId = null,
+            ),
+        )
+        // A state loaded for another song is idle for this one, so this one does fetch.
+        assertTrue(
+            shouldRequestSongWikiOnOpen(
+                state = SongWikiUiState.Content(mediaId = "456", summary = summary),
+                mediaId = "123",
+            ),
+        )
     }
 }

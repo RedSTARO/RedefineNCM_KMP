@@ -62,12 +62,15 @@ import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveArtwork
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
+import com.leejlredstar.redefinencm.kmp.ui.component.NativeDynamicCoverLayer
 import com.leejlredstar.redefinencm.kmp.ui.component.NowPlayingUiState
 import com.leejlredstar.redefinencm.kmp.ui.component.TransportSheets
 import com.leejlredstar.redefinencm.kmp.ui.component.formatPlaybackClock
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberNowPlayingUiState
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberSeekDragState
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberTransportSheetsState
+import com.leejlredstar.redefinencm.kmp.ui.component.scopedToMedia
+import com.leejlredstar.redefinencm.kmp.ui.component.shouldRequestSongWikiOnOpen
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberArtworkAccent
@@ -79,8 +82,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import com.leejlredstar.redefinencm.kmp.player.PlaybackSource
-import com.leejlredstar.redefinencm.kmp.ui.amll.scopedToMedia
-import com.leejlredstar.redefinencm.kmp.ui.amll.shouldRequestSongWikiOnOpen
 import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsSheet
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
 import com.leejlredstar.redefinencm.kmp.data.Repository
@@ -130,6 +131,9 @@ fun NowPlayingScreen(
     val sheets = rememberTransportSheetsState()
     val playbackSource by PlaybackSource.label.collectAsState()
     val songWikiState by viewModel.songWikiUiState.collectAsState()
+    // The dynamic cover came with the details, and the details came here from the lyric page.
+    val dynamicCoverUiState by viewModel.dynamicCoverUiState.collectAsState()
+    val localArtworkActive by viewModel.localArtworkActive.collectAsState()
     val outputVolume by player.volume.collectAsState()
     var showSongWiki by remember { mutableStateOf(false) }
     LaunchedEffect(media?.id) { showSongWiki = false }
@@ -291,21 +295,31 @@ fun NowPlayingScreen(
         viewModel = viewModel,
     )
 
-    // The song's details were reachable only from the lyric page's corner.
+    val dynamicCoverUrl = dynamicCoverUiState.urlFor(media?.id)
+        .takeUnless { localArtworkActive || reducedMotion }
     SongWikiDetailsSheet(
         visible = showSongWiki,
         songTitle = media?.title,
         songArtist = media?.artist,
         albumTitle = media?.albumTitle,
         artworkUri = media?.artworkUri,
-        fallbackArtworkUri = null,
         durationMs = media?.duration,
-        artworkOverlay = null,
         state = songWikiState.scopedToMedia(media?.id),
+        accentPalette = palette,
         onDismiss = { showSongWiki = false },
         onRetry = viewModel::getSongWikiSummary,
-        reducedMotion = reducedMotion,
-        returnFocusRequester = null,
+        artworkOverlay = dynamicCoverUrl?.let { videoUrl ->
+            {
+                NativeDynamicCoverLayer(
+                    url = videoUrl,
+                    play = showSongWiki,
+                    showBadge = true,
+                    reducedMotion = reducedMotion,
+                    onVisibilityChanged = {},
+                    modifier = Modifier.matchParentSize(),
+                )
+            }
+        },
     )
 }
 
