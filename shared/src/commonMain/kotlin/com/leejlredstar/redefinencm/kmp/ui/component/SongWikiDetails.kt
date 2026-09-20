@@ -43,6 +43,7 @@ import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.data.SongWikiSection
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.theme.legibleAccentFor
 import com.leejlredstar.redefinencm.kmp.viewmodel.SongWikiUiState
 
 /**
@@ -258,7 +259,13 @@ private fun SongWikiSectionRow(
                 text = section.title,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
-                color = accentPalette.accent,
+                // The accent's tone is fixed per scheme while the row's follows the artwork,
+                // so on a pale cover in the light theme the two can land within 4:1.
+                color = legibleAccentFor(
+                    accent = accentPalette.accent,
+                    background = accentPalette.quietContainer,
+                    backdrop = MaterialTheme.colorScheme.surface,
+                ),
             )
             if (section.values.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
