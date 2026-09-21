@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,14 +41,10 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.amll.compose.AmllBackground
 import com.leejlredstar.amll.compose.AmllLyricDocument
@@ -59,6 +57,7 @@ import com.leejlredstar.redefinencm.kmp.player.PlayerState
 import com.leejlredstar.redefinencm.kmp.getPlatform
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeDynamicCoverLayer
+import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import com.leejlredstar.redefinencm.kmp.player.PlayerStatusRestoreState
@@ -259,48 +258,29 @@ private fun AmllTopActions(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val density = LocalDensity.current
-    val backGlyphSize = with(density) { 32.dp.toSp() }
     Box(
         modifier = modifier
             .statusBarsPadding()
             .padding(top = 18.dp),
     ) {
-        Surface(
+        // Down, not back: the lyrics are the player opened up, and this puts them away — the
+        // same gesture and the same glyph as the Now Playing page it returns to. Nothing behind
+        // it: the artwork under the lyrics is blurred and darkened, so a filled circle was one
+        // more shape on a page whose whole point is the words.
+        IconButton(
             onClick = onBack,
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(start = 18.dp)
                 .size(48.dp)
-                .dropShadow(
-                    shape = CircleShape,
-                    shadow = Shadow(
-                        radius = 28.dp,
-                        color = Color.Black,
-                        spread = 0.dp,
-                        offset = DpOffset(x = 0.dp, y = 10.dp),
-                        alpha = 0.24f,
-                    ),
-                )
-                .semantics { contentDescription = "返回" },
-            shape = CircleShape,
-            color = Color(0xFF181919).copy(alpha = 0.72f),
-            contentColor = Color.White.copy(alpha = 0.94f),
-            shadowElevation = 0.dp,
+                .semantics { contentDescription = "收起歌词" },
         ) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "‹",
-                    color = Color.White.copy(alpha = 0.94f),
-                    fontSize = backGlyphSize,
-                    lineHeight = backGlyphSize,
-                    fontWeight = FontWeight.Normal,
-                    fontFamily = FontFamily.SansSerif,
-                )
-            }
+            Icon(
+                imageVector = AppIcons.KeyboardArrowDown,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.94f),
+                modifier = Modifier.size(32.dp),
+            )
         }
     }
 }

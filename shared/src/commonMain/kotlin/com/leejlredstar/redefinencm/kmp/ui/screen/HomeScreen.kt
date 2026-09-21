@@ -217,7 +217,7 @@ fun HomeScreen(
                     // heading is about. They used to be a second button beside the first,
                     // labelled with the sentence "全部 33 首" — three controls on one line, one
                     // of them a bare piece of text stating what the page already showed.
-                    supportingText = if (dailySongs.isEmpty()) null else "共 ${dailySongs.size} 首",
+                    supportingText = if (dailySongs.isEmpty()) null else "${dailySongs.size} 首",
                     onOpenAll = onOpenDailySongs.takeIf { dailySongs.isNotEmpty() },
                     onOpenAllLabel = "查看每日推荐的全部歌曲",
                     items = dailySongs,

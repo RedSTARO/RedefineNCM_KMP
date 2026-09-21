@@ -175,9 +175,9 @@ internal fun QueuePanelContent(
             text = "播放队列",
             supportingText = when {
                 playlist.isEmpty() -> "暂无待播放歌曲"
-                shuffleEnabled -> "共 ${playlist.size} 首 · 随机播放时不能调整顺序"
-                playlist.size > 1 -> "共 ${playlist.size} 首 · 拖动右侧手柄调整顺序"
-                else -> "共 1 首"
+                shuffleEnabled -> "${playlist.size} 首 · 随机播放时不能调整顺序"
+                playlist.size > 1 -> "${playlist.size} 首 · 拖动右侧手柄调整顺序"
+                else -> "1 首"
             },
             action = if (playlist.isNotEmpty()) {
                 { TextButton(onClick = { confirmClear = true }) { Text("清空") } }
@@ -528,7 +528,7 @@ internal fun CommentPanelContent(
             supportingText = when {
                 showInitialLoading -> "正在加载评论"
                 errorMessage != null -> "评论暂时无法加载"
-                totalCount > 0 -> "共 ${compactCount(totalCount)} 条"
+                totalCount > 0 -> "${compactCount(totalCount)} 条"
                 comments.isEmpty() -> "暂无评论"
                 else -> "${comments.size} 条"
             },

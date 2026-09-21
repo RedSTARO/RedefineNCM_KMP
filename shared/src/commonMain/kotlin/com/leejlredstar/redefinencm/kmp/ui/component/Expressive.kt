@@ -43,6 +43,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -193,7 +194,12 @@ fun ExpressiveSectionTitle(
                 supportingText?.let { supporting ->
                     Text(
                         text = supporting,
-                        style = MaterialTheme.typography.bodyMedium,
+                        // bodyLarge and Medium, not bodyMedium and Normal. At 14sp on a
+                        // dark surface the hinting drops a CJK glyph's thinnest strokes: 共
+                        // rendered with its upper bar missing wherever this line counted
+                        // something, and came back whole as soon as the size went up.
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
