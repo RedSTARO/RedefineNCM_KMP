@@ -1,70 +1,17 @@
 package com.leejlredstar.redefinencm.kmp.ui.theme
 
-import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.ColorScheme
 
-// Complete Material 3 colour schemes used as the non-dynamic fallback.
-// Dynamic colour is preferred on Android 12+ / iOS / supported desktop.
+/**
+ * The scheme with no cover behind it.
+ *
+ * These were two complete Material schemes written out as literals in a teal green — the app's
+ * brand colour. There is no brand colour now: the scheme is generated from the cover that is
+ * playing (see [artworkColorScheme]), and these are what it generates before anything has, which
+ * is grey. They are still named `LightColors` / `DarkColors` because that is what a fixed scheme
+ * is called wherever one is pinned deliberately — the lyric overlay, which is dark whatever the
+ * app's theme is — and what the palette tests measure against.
+ */
+val LightColors: ColorScheme = neutralColorScheme(dark = false)
 
-val LightColors = androidx.compose.material3.lightColorScheme(
-    primary = Color(0xFF006B5B),
-    onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFF9CF2DC),
-    onPrimaryContainer = Color(0xFF00201A),
-    secondary = Color(0xFF6B5F00),
-    onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFF8E36A),
-    onSecondaryContainer = Color(0xFF201C00),
-    tertiary = Color(0xFF8F4C38),
-    onTertiary = Color(0xFFFFFFFF),
-    tertiaryContainer = Color(0xFFFFDBD0),
-    onTertiaryContainer = Color(0xFF380D02),
-    error = Color(0xFFB3261E),
-    onError = Color(0xFFFFFFFF),
-    errorContainer = Color(0xFFF9DEDC),
-    onErrorContainer = Color(0xFF410E0B),
-    background = Color(0xFFF8FBF5),
-    onBackground = Color(0xFF191C1A),
-    surface = Color(0xFFF8FBF5),
-    onSurface = Color(0xFF191C1A),
-    surfaceVariant = Color(0xFFDCE5DE),
-    onSurfaceVariant = Color(0xFF404942),
-    outline = Color(0xFF707971),
-    outlineVariant = Color(0xFFC0C9C2),
-    surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFF2F5EF),
-    surfaceContainer = Color(0xFFECF0EA),
-    surfaceContainerHigh = Color(0xFFE7EAE4),
-    surfaceContainerHighest = Color(0xFFE1E5DE),
-)
-
-val DarkColors = androidx.compose.material3.darkColorScheme(
-    primary = Color(0xFF80D8C5),
-    onPrimary = Color(0xFF00382F),
-    primaryContainer = Color(0xFF005144),
-    onPrimaryContainer = Color(0xFF9CF2DC),
-    secondary = Color(0xFFDBC764),
-    onSecondary = Color(0xFF383100),
-    secondaryContainer = Color(0xFF514700),
-    onSecondaryContainer = Color(0xFFF8E36A),
-    tertiary = Color(0xFFFFB59E),
-    onTertiary = Color(0xFF55200F),
-    tertiaryContainer = Color(0xFF733523),
-    onTertiaryContainer = Color(0xFFFFDBD0),
-    error = Color(0xFFF2B8B5),
-    onError = Color(0xFF601410),
-    errorContainer = Color(0xFF8C1D18),
-    onErrorContainer = Color(0xFFF9DEDC),
-    background = Color(0xFF101410),
-    onBackground = Color(0xFFE1E5DE),
-    surface = Color(0xFF101410),
-    onSurface = Color(0xFFE1E5DE),
-    surfaceVariant = Color(0xFF404942),
-    onSurfaceVariant = Color(0xFFC0C9C2),
-    outline = Color(0xFF8A938B),
-    outlineVariant = Color(0xFF404942),
-    surfaceContainerLowest = Color(0xFF0B0F0C),
-    surfaceContainerLow = Color(0xFF191D19),
-    surfaceContainer = Color(0xFF1D211E),
-    surfaceContainerHigh = Color(0xFF282C29),
-    surfaceContainerHighest = Color(0xFF333733),
-)
+val DarkColors: ColorScheme = neutralColorScheme(dark = true)
