@@ -31,7 +31,6 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -164,7 +163,11 @@ fun ExpressiveSectionTitle(
             Column(
                 modifier = Modifier
                     .layoutId(SectionTitleId)
-                    .clip(MaterialTheme.shapes.small)
+                    // No rounded clip for the ripple: this scale's `small` is an 18dp radius,
+                    // and the bite it takes out of the lower-left corner lands exactly on the
+                    // first glyph of the supporting line — 共 lost its upper bar, then "33 首"
+                    // lost the left of its first digit. A heading is not a chip; the ripple can
+                    // be square.
                     .then(
                         if (onClick == null) {
                             Modifier
