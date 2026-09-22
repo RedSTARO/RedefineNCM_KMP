@@ -75,6 +75,50 @@ class QQQrLoginMethod(
     }
 }
 
+/**
+ * The gateway's SMS login: `/login/phone/authcode` texts a code (events 0 sent, 1 a slider captcha
+ * is wanted first, 2 too frequent, -1 other), `/login/phone/authorize` exchanges it for the
+ * gateway's credential. The captcha cannot be shown here, so that answer ends the attempt with a
+ * pointer to the QR methods.
+ */
+class QQPhoneCodeLoginMethod(private val api: QQMusicApi) : PhoneCodeLoginMethod {
+    override val id: String = "qq.phone"
+    override val provider: MusicProviderId = MusicProviderId.QQ
+    override val displayName: String = "手机验证码"
+    override val phoneHint: String = "中国大陆手机号（+86）"
+
+    override suspend fun sendCode(phone: String): PhoneCodeSend {
+        val number = phone.toLongOrNull() ?: return PhoneCodeSend.Failed("手机号格式不正确")
+        val answer = api.phoneSendCode(number) ?: throw LoginMethodException("QQ音乐后端无响应")
+        return when (answer.event) {
+            SendEventSent -> PhoneCodeSend.Sent
+            SendEventCaptcha -> PhoneCodeSend.Blocked("QQ 要求先完成滑块验证，应用内无法完成；请改用扫码登录")
+            SendEventFrequency -> PhoneCodeSend.Failed("验证码发送过于频繁，请稍后再试")
+            else -> PhoneCodeSend.Failed(
+                answer.info?.takeIf(String::isNotBlank) ?: "验证码发送失败 (${answer.event})",
+            )
+        }
+    }
+
+    override suspend fun verify(phone: String, code: String): PhoneCodeVerify {
+        val number = phone.toLongOrNull() ?: return PhoneCodeVerify.Failed("手机号格式不正确")
+        // The gateway answers a non-zero code for a wrong or stale code, which the client reports
+        // as null; a dead gateway reads the same way, so the message names both.
+        val credential = api.phoneAuthorize(number, code)
+            ?: return PhoneCodeVerify.Failed("验证码错误、已过期，或后端无响应")
+        return QQCredential.fromGateway(credential)
+            .takeIf { it.isSignedIn }
+            ?.let { PhoneCodeVerify.Confirmed(it.toCookieHeader()) }
+            ?: PhoneCodeVerify.Failed("后端未返回凭证")
+    }
+
+    private companion object {
+        const val SendEventSent = 0
+        const val SendEventCaptcha = 1
+        const val SendEventFrequency = 2
+    }
+}
+
 /** The gateway's credential, or a `y.qq.com` cookie, pasted by hand. */
 class QQCredentialTextLoginMethod : CredentialTextLoginMethod {
     override val id: String = "qq.credential"

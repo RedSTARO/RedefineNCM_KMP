@@ -99,7 +99,9 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.BuildInfo
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
+import com.leejlredstar.redefinencm.kmp.data.auth.CredentialStore
 import com.leejlredstar.redefinencm.kmp.data.auth.LoginMethodRegistry
+import com.leejlredstar.redefinencm.kmp.data.auth.ProviderLoginDescriptorRegistry
 import com.leejlredstar.redefinencm.kmp.data.auth.QQCredential
 import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
@@ -156,6 +158,8 @@ fun SettingsScreen(
     mainViewModel: MainViewModel = koinInject(),
     nowPlayingViewModel: NowPlayingViewModel = koinInject(),
     loginMethods: LoginMethodRegistry = koinInject(),
+    loginDescriptors: ProviderLoginDescriptorRegistry = koinInject(),
+    credentials: CredentialStore = koinInject(),
 ) {
     var cookie by remember(settings) { mutableStateOf("") }
     var server by remember(settings) { mutableStateOf("") }
@@ -211,6 +215,9 @@ fun SettingsScreen(
     // The pasted-credential method for QQ Music, if one is registered; it owns the field's label
     // and the rules for what pasted text is accepted.
     val qqCredentialMethod = remember(loginMethods) { loginMethods.textMethod(MusicProviderId.QQ) }
+    // What each account card and sign-out dialog says comes from the provider's descriptor.
+    val neteaseLogin = remember(loginDescriptors) { loginDescriptors.require(MusicProviderId.NETEASE) }
+    val qqLogin = remember(loginDescriptors) { loginDescriptors.require(MusicProviderId.QQ) }
     val userDetail by mainViewModel.userDetail.collectAsState()
     // Results of saving, importing and exporting appear at the bottom, beside the controls that
     // cause them; a banner at the top of the page was off screen by the time the backup buttons
@@ -464,8 +471,8 @@ fun SettingsScreen(
                     loggedIn = cookie.isNotBlank(),
                     nickname = userDetail?.profile?.nickname,
                     avatarUrl = userDetail?.profile?.avatarUrl,
-                    providerLabel = "网易云音乐账号",
-                    signedOutHint = "登录后可以查看歌单、每日推荐和喜欢的音乐",
+                    providerLabel = neteaseLogin.accountLabel,
+                    signedOutHint = neteaseLogin.signedOutHint,
                     accentPalette = settingsPalette,
                     onLogin = { onOpenLogin(MusicProviderId.NETEASE) },
                     onLogout = { logoutConfirmationFor = MusicProviderId.NETEASE },
@@ -941,8 +948,8 @@ fun SettingsScreen(
                         loggedIn = qqAccount != null,
                         nickname = qqAccount?.musicId?.toString(),
                         avatarUrl = null,
-                        providerLabel = "QQ 音乐账号",
-                        signedOutHint = "登录后搜索和播放使用你账号的权益",
+                        providerLabel = qqLogin.accountLabel,
+                        signedOutHint = qqLogin.signedOutHint,
                         accentPalette = settingsPalette,
                         onLogin = { onOpenLogin(MusicProviderId.QQ) },
                         onLogout = { logoutConfirmationFor = MusicProviderId.QQ },
@@ -1030,36 +1037,23 @@ fun SettingsScreen(
             onDismissRequest = { logoutConfirmationFor = null },
             icon = { Icon(AppIcons.Logout, contentDescription = null) },
             title = { Text("退出${provider.displayName}登录？") },
-            text = {
-                Text(
-                    when (provider) {
-                        MusicProviderId.NETEASE ->
-                            "退出后「我的」、每日推荐和喜欢等功能将不可用，已下载的歌曲会保留。"
-                        MusicProviderId.QQ ->
-                            "退出后 QQ 音乐按未登录状态搜索和播放。"
-                    },
-                )
-            },
+            text = { Text(loginDescriptors.require(provider).logoutWarning) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         logoutConfirmationFor = null
-                        when (provider) {
-                            MusicProviderId.NETEASE -> {
-                                cookie = ""
-                                persistSettings(
-                                    write = { settings.setString(SettingKeys.COOKIE, "") },
-                                    onWritten = { mainViewModel.refreshAccount() },
-                                    onPersisted = { settingsMessage = "已退出登录" },
-                                )
-                            }
-                            MusicProviderId.QQ -> {
-                                qqCookie = ""
-                                persistSettings(
-                                    write = { settings.setString(SettingKeys.QQ_COOKIE, "") },
-                                    onPersisted = { settingsMessage = "已退出 QQ 音乐" },
-                                )
-                            }
+                        // Signing out goes through the provider's credential slot, which applies
+                        // that provider's change rules (NetEase's restarts account work).
+                        scope.launch {
+                            credentials.require(provider).clear()
+                                .onSuccess {
+                                    reloadSettingsSnapshot()
+                                    settingsMessage = "已退出${provider.displayName}"
+                                }
+                                .onFailure { failure ->
+                                    reloadSettingsSnapshot()
+                                    settingsMessage = "退出失败：${failure.message ?: "未知错误"}"
+                                }
                         }
                     },
                 ) { Text("退出登录") }

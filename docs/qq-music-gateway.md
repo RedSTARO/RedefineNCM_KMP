@@ -35,7 +35,8 @@ enables `[credential]` it serves a pooled account to anyone who reaches it.
 | Playlist | `GET /songlist/{id}/detail?num=200&page=` | paged; `hasmore` flags the rest |
 | Lyrics | `GET /song/{mid}/lyric?trans=true&roma=true` | LRC; `qrc=true` gives word timing the lyric pipeline cannot parse yet |
 | Stream | `GET /song/{mid}/url?file_type=` | 7 FLAC, 12 MP3 320, 13 MP3 128, 15 AAC 96; returns a bare `purl` |
-| QR login | `GET /login/qrcode/{qq\|wx}`, then `GET /login/qrcode/{type}/status?identifier=` | events 0 done, 1 waiting, 2 scanned, 3 timeout, 4 refused |
+| QR login | `GET /login/qrcode/{qq\|wx}`, then `GET /login/qrcode/{type}/status?identifier=` | events 0 done, 1 waiting, 2 scanned, 3 timeout, 4 refused; the WeChat status route is a ~15 s long poll |
+| SMS login | `GET /login/phone/authcode?phone=&country_code=86`, then `GET /login/phone/authorize?phone=&auth_code=` | events 0 sent, 1 slider captcha wanted first (cannot be completed in-app), 2 too frequent; authorize answers a `Credential` |
 | Renewal | `GET /login/check_expired`, `GET /login/refresh_credential` | once per process before the first QQ call, when the stored account can be refreshed |
 
 Every answer is `{code, msg, data}`; `code == 0` is success; a route that needs an account answers

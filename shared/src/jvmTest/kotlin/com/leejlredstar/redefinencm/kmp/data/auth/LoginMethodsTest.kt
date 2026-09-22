@@ -189,6 +189,38 @@ class LoginMethodsTest {
     }
 
     @Test
+    fun qqPhoneCodeMapsTheGatewayEventsAndStoresTheCredentialInCookieForm() = runTest {
+        var event = 0
+        val api = QQMusicApi(
+            jsonClient { path, query ->
+                when {
+                    path.endsWith("/login/phone/authcode") ->
+                        """{"code":0,"msg":"ok","data":{"event":$event,"info":null}}"""
+                    path.endsWith("/login/phone/authorize") && query.contains("auth_code=123456") ->
+                        """{"code":0,"msg":"ok","data":{"musicid":7,"musickey":"Q_H_L_p","refresh_key":"rk"}}"""
+                    else -> """{"code":-1,"msg":"验证码错误"}"""
+                }
+            },
+            baseUrl = { "http://localhost:8080" },
+        )
+        val method = QQPhoneCodeLoginMethod(api)
+
+        assertEquals(PhoneCodeSend.Sent, method.sendCode("13800138000"))
+        event = 1
+        assertIs<PhoneCodeSend.Blocked>(method.sendCode("13800138000"))
+        event = 2
+        assertIs<PhoneCodeSend.Failed>(method.sendCode("13800138000"))
+        // A number that is not one never reaches the gateway.
+        assertIs<PhoneCodeSend.Failed>(method.sendCode("abc"))
+
+        assertEquals(
+            PhoneCodeVerify.Confirmed("musicid=7; musickey=Q_H_L_p; refresh_key=rk"),
+            method.verify("13800138000", "123456"),
+        )
+        assertIs<PhoneCodeVerify.Failed>(method.verify("13800138000", "000000"))
+    }
+
+    @Test
     fun registryGroupsByProviderAndRejectsDuplicateIds() {
         val ncmCookie = NeteaseCookieLoginMethod()
         val qqText = QQCredentialTextLoginMethod()

@@ -5,24 +5,28 @@ import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 /**
  * One way of signing in to one provider — a "login source".
  *
- * Every provider the app aggregates has its own idea of a credential and its own ways of obtaining
- * one, and the login page must not grow a branch per provider for each. Instead each way is an
- * object implementing one of the two shapes below, registered in [LoginMethodRegistry], and the
- * page renders whatever the registry holds for the provider it was opened for. Adding a login
- * method — WeChat for QQ Music, phone codes for NetEase, a third service altogether — is a new
- * implementation plus a registration, not an edit to the page.
+ * A login source is a plugin in two halves. This half, in the data layer, is the logic: what the
+ * provider's backend is asked and what its answers mean. The other half is a
+ * `ui/login/LoginMethodPresenter`, which knows how to draw a method of this shape and owns its
+ * on-screen state. The login page is only a host: it lists the methods registered for a provider
+ * in [LoginMethodRegistry], hands each to the presenter that supports it, and offers persistence
+ * and navigation through [LoginHost].
+ *
+ * So adding a login method of an existing shape (another app that scans a code) is one class plus
+ * a registration; adding a new shape (a code sent by SMS, a password) is a new sub-interface here,
+ * a presenter for it, and their registrations. Nothing in the page changes either way.
  *
  * The credential itself is an opaque string here. What it means (a NetEase `Cookie` header, a QQ
  * gateway credential) is the concern of the provider's [ProviderCredentialSlot], which is the only
  * thing that reads it back.
  */
-sealed interface LoginMethod {
-    /** Stable and unique across the registry: `ncm.qr`, `qq.qr.wx`. */
+interface LoginMethod {
+    /** Stable and unique across the registry: `ncm.qr`, `qq.qr.wx`, `qq.phone`. */
     val id: String
 
     val provider: MusicProviderId
 
-    /** The section or chip title: "扫码登录", "微信扫码", "手动输入". */
+    /** The section or chip title: "扫码登录", "微信扫码", "手机验证码", "手动输入". */
     val displayName: String
 }
 
@@ -100,6 +104,47 @@ interface CredentialTextLoginMethod : LoginMethod {
      * failure carries a message fit for the screen.
      */
     fun normalize(raw: String): Result<String>
+}
+
+/** A one-time code the provider texts to the user's phone, typed back in. */
+interface PhoneCodeLoginMethod : LoginMethod {
+    /** Under the phone field: which numbers the provider accepts. */
+    val phoneHint: String
+
+    /** Seconds the user is asked to wait before requesting another code. */
+    val resendIntervalSeconds: Int get() = DefaultResendIntervalSeconds
+
+    /**
+     * Asks the provider to text a code to [phone].
+     *
+     * @throws LoginMethodException when the provider could not be asked at all, with a message fit
+     *   for the screen. Transport failures propagate as whatever the client throws.
+     */
+    suspend fun sendCode(phone: String): PhoneCodeSend
+
+    /** Exchanges the code for a credential. Same failure contract as [sendCode]. */
+    suspend fun verify(phone: String, code: String): PhoneCodeVerify
+
+    companion object {
+        const val DefaultResendIntervalSeconds = 60
+    }
+}
+
+/** One answer to [PhoneCodeLoginMethod.sendCode]. */
+sealed interface PhoneCodeSend {
+    data object Sent : PhoneCodeSend
+
+    /** The provider wants a human check first, which this app cannot show; [message] says so. */
+    data class Blocked(val message: String) : PhoneCodeSend
+
+    data class Failed(val message: String) : PhoneCodeSend
+}
+
+/** One answer to [PhoneCodeLoginMethod.verify]. */
+sealed interface PhoneCodeVerify {
+    data class Confirmed(val credential: String) : PhoneCodeVerify
+
+    data class Failed(val message: String) : PhoneCodeVerify
 }
 
 /** A login method could not do what was asked; [message] is written for the screen. */

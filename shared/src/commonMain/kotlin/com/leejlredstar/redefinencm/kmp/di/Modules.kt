@@ -11,9 +11,17 @@ import com.leejlredstar.redefinencm.kmp.data.auth.LoginMethodRegistry
 import com.leejlredstar.redefinencm.kmp.data.auth.NeteaseCookieLoginMethod
 import com.leejlredstar.redefinencm.kmp.data.auth.NeteaseCredentialSlot
 import com.leejlredstar.redefinencm.kmp.data.auth.NeteaseQrLoginMethod
+import com.leejlredstar.redefinencm.kmp.data.auth.ProviderLoginDescriptor
+import com.leejlredstar.redefinencm.kmp.data.auth.ProviderLoginDescriptorRegistry
+import com.leejlredstar.redefinencm.kmp.data.auth.ProviderServerSetting
 import com.leejlredstar.redefinencm.kmp.data.auth.QQCredentialSlot
 import com.leejlredstar.redefinencm.kmp.data.auth.QQCredentialTextLoginMethod
+import com.leejlredstar.redefinencm.kmp.data.auth.QQPhoneCodeLoginMethod
 import com.leejlredstar.redefinencm.kmp.data.auth.QQQrLoginMethod
+import com.leejlredstar.redefinencm.kmp.ui.login.CredentialTextLoginPresenter
+import com.leejlredstar.redefinencm.kmp.ui.login.LoginPresenterRegistry
+import com.leejlredstar.redefinencm.kmp.ui.login.PhoneCodeLoginPresenter
+import com.leejlredstar.redefinencm.kmp.ui.login.QrLoginPresenter
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
 import com.leejlredstar.redefinencm.kmp.data.provider.NeteaseProvider
@@ -102,8 +110,43 @@ val sharedModule = module {
     single { QQCredentialSlot(get()) }
     single { CredentialStore(listOf(get<NeteaseCredentialSlot>(), get<QQCredentialSlot>())) }
 
-    // Login sources — the login page renders whatever is registered here for the provider it was
-    // opened for. Adding a way to sign in is an entry in this list.
+    // What the login and settings pages say about each provider. A new provider registers a
+    // descriptor here, a credential slot above, and its login methods below.
+    single {
+        ProviderLoginDescriptorRegistry(
+            listOf(
+                ProviderLoginDescriptor(
+                    provider = MusicProviderId.NETEASE,
+                    introduction = "RedefineNCM 是第三方网易云音乐客户端。登录后可以使用你的歌单、每日推荐和喜欢的音乐；不登录也可以搜索和播放。",
+                    accountLabel = "网易云音乐账号",
+                    signedOutHint = "登录后可以查看歌单、每日推荐和喜欢的音乐",
+                    logoutWarning = "退出后「我的」、每日推荐和喜欢等功能将不可用，已下载的歌曲会保留。",
+                    server = ProviderServerSetting(
+                        key = SettingKeys.SERVER,
+                        default = DEFAULT_NCM_SERVER,
+                        label = "服务器地址",
+                        appliesWhen = "服务器地址重启后生效",
+                    ),
+                ),
+                ProviderLoginDescriptor(
+                    provider = MusicProviderId.QQ,
+                    introduction = "登录后 QQ 音乐的搜索和播放使用你账号的权益；不登录也可以搜索，并播放可免费收听的歌曲。",
+                    accountLabel = "QQ 音乐账号",
+                    signedOutHint = "登录后搜索和播放使用你账号的权益",
+                    logoutWarning = "退出后 QQ 音乐按未登录状态搜索和播放。",
+                    server = ProviderServerSetting(
+                        key = SettingKeys.QQ_SERVER,
+                        default = SettingKeys.QQ_SERVER_DEFAULT,
+                        label = "QQ 音乐后端地址",
+                        appliesWhen = "后端地址立即生效",
+                    ),
+                ),
+            ),
+        )
+    }
+
+    // Login sources, logic half — the login page renders whatever is registered here for the
+    // provider it was opened for. A way to sign in of an existing shape is an entry in this list.
     single {
         LoginMethodRegistry(
             listOf(
@@ -111,7 +154,20 @@ val sharedModule = module {
                 NeteaseCookieLoginMethod(),
                 QQQrLoginMethod(get(), QQQrLoginMethod.Kind.QQ),
                 QQQrLoginMethod(get(), QQQrLoginMethod.Kind.WECHAT),
+                QQPhoneCodeLoginMethod(get()),
                 QQCredentialTextLoginMethod(),
+            ),
+        )
+    }
+
+    // Login sources, UI half — one presenter per shape, in the order their sections appear. A new
+    // shape of login is a method interface, a presenter here, and their registrations.
+    single {
+        LoginPresenterRegistry(
+            listOf(
+                QrLoginPresenter(),
+                PhoneCodeLoginPresenter(),
+                CredentialTextLoginPresenter(),
             ),
         )
     }
@@ -159,7 +215,7 @@ val sharedModule = module {
 
     // ViewModels
     // One login page per provider; the provider is the injection parameter.
-    factory { (provider: MusicProviderId) -> LoginViewModel(provider, get(), get(), get()) }
+    factory { (provider: MusicProviderId) -> LoginViewModel(provider, get(), get(), get(), get()) }
     // Single —— 与原版单 Activity 共享一个 MainViewModel 一致：各屏共享搜索/歌单/推荐状态，
     // init 中的 UID 解析与播放状态恢复只执行一次。
     single { MainViewModel(get(), get(), get(), get(), get(), get(), get()) }

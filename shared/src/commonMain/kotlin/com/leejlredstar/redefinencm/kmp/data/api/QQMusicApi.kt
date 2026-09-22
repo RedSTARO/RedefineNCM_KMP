@@ -88,6 +88,20 @@ class QQMusicApi(
     suspend fun refreshCredential(): QQGatewayCredential? =
         fetchData<QQGatewayCredential>("login/refresh_credential")
 
+    /** Asks QQ to text a login code; the answer's `event` is 0 sent, 1 captcha wanted, 2 too frequent. */
+    suspend fun phoneSendCode(phone: Long, countryCode: Int = 86): QQPhoneAuthCode? =
+        fetchData<QQPhoneAuthCode>("login/phone/authcode") {
+            parameter("phone", phone)
+            parameter("country_code", countryCode)
+        }
+
+    /** Exchanges a texted code for the account; null for a wrong or stale code. */
+    suspend fun phoneAuthorize(phone: Long, code: String): QQGatewayCredential? =
+        fetchData<QQGatewayCredential>("login/phone/authorize") {
+            parameter("phone", phone)
+            parameter("auth_code", code)
+        }
+
     private suspend inline fun <reified T> fetchData(
         path: String,
         crossinline block: HttpRequestBuilder.() -> Unit = {},
@@ -248,6 +262,12 @@ data class QQQrStatus(
     val event: Int = -1,
     val done: Boolean = false,
     val credential: QQGatewayCredential? = null,
+)
+
+@Serializable
+data class QQPhoneAuthCode(
+    val event: Int = -1,
+    val info: String? = null,
 )
 
 /** The gateway's `Credential` model, as it appears in QR-login and renewal answers. */

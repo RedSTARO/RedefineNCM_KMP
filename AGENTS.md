@@ -343,19 +343,30 @@ and `MusicProviderRegistry`, a `NeteaseProvider` adapter over the untouched `Rep
 provider-neutral search end to end, the settings to turn QQ Music on, point it at a gateway and
 choose merged or per-provider grouping, and a login page per provider.
 
-**Login sources are registered, not hard-wired (2026-09-22).** `data/auth` holds the login
-abstraction: a `LoginMethod` is either a `QrLoginMethod` (issue a code, poll it into the one
-`QrLoginPoll` vocabulary — waiting, scanned, confirmed, expired, refused, failed) or a
-`CredentialTextLoginMethod` (validate pasted text into the stored form). `LoginMethodRegistry`
-lists them; `LoginViewModel(provider)` drives the QR loop once against the interface, and
-`LoginScreen(provider)` renders whatever the registry holds for that provider, with a chooser when
-it holds more than one QR method. Persisting goes through the provider's `ProviderCredentialSlot`
-in `CredentialStore`, which owns that provider's change rules (NetEase's clears the UID binding
-and restarts account work; QQ's just writes). Registered today: NetEase QR and cookie, QQ Music
-QR by QQ and by WeChat, and pasted QQ credential. Adding a login method is an implementation plus
-an entry in the `LoginMethodRegistry` list in `Modules.kt`; adding a provider also needs a slot in
-the `CredentialStore` list and a `ProviderServerSetting` entry. `PushedDest.Login(provider)`
-carries the provider through navigation (saved as `login` for NetEase, `login:<key>` otherwise).
+**Login sources are plugins in two halves (2026-09-22).** The logic half lives in `data/auth`: a
+`LoginMethod` implements one shape — `QrLoginMethod` (issue a code, poll it into the one
+`QrLoginPoll` vocabulary), `PhoneCodeLoginMethod` (send a code, verify it) or
+`CredentialTextLoginMethod` (validate pasted text into the stored form) — and `LoginMethodRegistry`
+lists them. The UI half lives in `ui/login`: a `LoginMethodPresenter` draws every method of one
+shape and owns its on-screen state (`QrLoginFlow` and `PhoneCodeLoginFlow` are the Compose-free
+state machines it drives), and `LoginPresenterRegistry` lists presenters in section order.
+`LoginScreen(provider)` is only a host: it groups the provider's methods into sections by presenter
+(a chooser where a section holds several methods), and hands each presenter the `LoginHost` —
+`LoginViewModel` — for persistence and "done". Persisting goes through the provider's
+`ProviderCredentialSlot` in `CredentialStore`, which owns that provider's change rules (NetEase's
+clears the UID binding and restarts account work; QQ's just writes). What a page says about a
+provider — introduction, account label, sign-out warning, backend-address setting — is a
+`ProviderLoginDescriptor` in `ProviderLoginDescriptorRegistry`; the login and settings pages hold
+no provider branches.
+
+Registered today: NetEase QR and cookie; QQ Music QR by QQ and by WeChat, SMS code, and pasted
+credential. The cost of extending: a method of an existing shape is one class plus a line in the
+`LoginMethodRegistry` list in `Modules.kt`; a new shape is a method interface, a presenter, and
+their two registrations; a new provider is a descriptor, a credential slot, its methods, and the
+`MusicProviderId` entry. `PushedDest.Login(provider)` carries the provider through navigation
+(saved as `login` for NetEase, `login:<key>` otherwise). The QQ SMS method is unverified against
+a real phone; the gateway answers event 1 when QQ wants a slider captcha first, which the app
+cannot show, so that answer ends the attempt and points at the QR methods.
 
 Credentials stay additive: `qqEnabled` / `qqServer` / `qqCookie` sit beside the existing
 `cookie` / `server` keys rather than renaming them, so nothing migrates and no user data is at
