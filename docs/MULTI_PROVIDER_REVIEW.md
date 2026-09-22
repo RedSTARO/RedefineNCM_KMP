@@ -47,7 +47,7 @@
 
 「当前曲目是不是网易云的」没有类型上的表示，由各处把 `MediaInfo.id` 解析成 `Long` 来隐式判定：
 
-- `NowPlayingViewModel.kt` 9 处：`248`、`540`、`562`、`572`（歌词），`710`（歌词预取），`805`、`860`（评论），`918`（歌曲详情），`963`（喜欢）。
+- `NowPlayingViewModel.kt` 9 处：`248`（本地下载判定，决定本地歌词优先与本地封面），`540`、`562`、`572`（歌词），`710`（歌词预取），`805`、`860`（评论），`918`（歌曲详情），`963`（喜欢）。
 - `NowPlayingScreen.kt:535`（歌手 / 专辑菜单）。
 - `SharedScreenParts.kt:152`（`neteaseSong != null` 决定下载、复制链接、歌手、专辑四个菜单项）。
 - `SearchScreen.kt:592`、`609-627`。
@@ -91,7 +91,7 @@ P1–P6 同出一处：没有一个地方能回答「当前曲目支持哪些功
 | C3 | 没有被动续期：会话中途 key 过期后，直到重启都不会再续期。过期 key 的请求由网关按匿名处理还是答 401【推断，未核实】；后者在 `fetchEnvelope` 里变成 `null`。 | `QQMusicApi.kt:132`，`QQProvider.kt:123-139` | 摩擦 |
 | C4 | 续期没有测试（`commonTest` / `jvmTest` 中搜不到 `renew`、`check_expired`、`refreshCredential`）。 | — | 结构 |
 | C5 | `QQQrLoginMethod.unansweredPolls` 是单例里（`LoginMethodRegistry` 为 Koin `single`）按二维码 token 计数的可变 map；离开页面时计数未满 3 次的 token 不会被移除。`LoginMethod` 的注释约定方法只放逻辑、状态归 flow，这里不符。 | `QQLoginMethods.kt:39-52`，`Modules.kt:157-168` | 结构 |
-| C6 | Web：QQ 的登录方法在所有平台注册，`WasmPlatformModule` 不覆盖；`QQMusicApi` 用 `Cookie` 请求头传账号，fetch 不能设置这个头。【推断】Web 端的登录流程可以走完、账号页显示已登录，而请求按未登录处理。AGENTS.md 写明 Web 对 QQ 是匿名的，界面没有体现。网关是否允许 Web 源跨域也未核实。 | `Modules.kt:157-168`，`QQMusicApi.kt:127`，`WasmPlatformModule.kt` | 一致性 |
+| C6 | Web：QQ 的登录方法在所有平台注册，`WasmPlatformModule` 不覆盖；`QQMusicApi` 用 `Cookie` 请求头传账号，fetch 不能设置这个头。【推断】Web 端的登录流程可以走完、账号页显示已登录，之后登录状态下的 QQ 请求有两种可能：浏览器丢弃该头，请求按未登录处理；或 fetch / Ktor 在设置该头时报错，请求全部失败，界面显示「QQ音乐后端无响应」。两种都未核实。AGENTS.md 写明 Web 对 QQ 是匿名的，界面没有体现。网关是否允许 Web 源跨域也未核实。 | `Modules.kt:157-168`，`QQMusicApi.kt:127`，`WasmPlatformModule.kt` | 一致性 |
 | C7 | `MusicProviderRegistry` 的 `available` / `streamUrl` / `lyric` / `playlistDetail` / `searchAll` 用 `runCatching` 包裹，会吞掉 `CancellationException`；`QQMusicApi.fetchEnvelope` 为此专门重新抛出，注释写明了吞掉它造成过的问题。桌面播放器有 generation 校验，目前未见实际影响。 | `MusicProviderRegistry.kt:47`、`63`、`68`、`73`、`93`；`QQMusicApi.kt:135-138` | 一致性 |
 
 ### 2.4 设置与备份
@@ -107,7 +107,7 @@ P1–P6 同出一处：没有一个地方能回答「当前曲目支持哪些功
 |---|---|---|---|
 | U1 | 配置 QQ 分散在三处：设置页（启用、后端地址、分组方式）、账号页（登录、手动凭证）、登录页（后端地址）。 | `SettingsScreen.kt:850-895`，`AccountsScreen.kt:151-218`，`LoginScreen.kt:172-181` | 摩擦 |
 | U2 | 设置页的账号摘要行写死「网易云 / QQ 音乐 / 本地账号」三段文案，并在 `SettingsScreen` 里直接解析 `QQCredential`。descriptor 注册表引入的目的就是让设置页不含平台分支。 | `SettingsScreen.kt:454-469` | 结构 |
-| U3 | 「已登录」有三种判定口径：设置页摘要用 `QQCredential.parse(...) != null`，账号页用 `stored.isNotBlank()`，`LoginViewModel` 用 `isNotBlank()`。存储值非空但无法解析时，三处结论不同。 | `SettingsScreen.kt:455`，`AccountsScreen.kt:163`，`LoginViewModel.kt:98-101` | 一致性 |
+| U3 | 「已登录」有两种判定口径：设置页摘要用 `QQCredential.parse(...) != null`，账号页和 `LoginViewModel` 都用 `isNotBlank()`。存储值非空但无法解析时，设置页摘要显示未登录，另外两处显示已登录。 | `SettingsScreen.kt:455`，`AccountsScreen.kt:163`，`LoginViewModel.kt:98-101` | 一致性 |
 | U4 | 账号身份用 `isNetease` 分支：网易云取 `MainViewModel.userDetail` 的昵称和头像，其他平台取 `descriptor.accountName(stored)`。后者是同步函数，只能从凭证字符串里读，QQ 显示的是 musicid。 | `AccountsScreen.kt:155-165` | 结构 |
 | U5 | 账号页不看 `qqEnabled`，QQ 关闭时仍显示 QQ 账号卡片。 | `AccountsScreen.kt:151` | 一致性 |
 | U6 | 凭证状态不可观察：账号页靠 `reloadGeneration` 手动重读，设置页和 `LoginViewModel` 各持一份快照；`QQProvider` 续期写入后，三处都不会更新。 | `AccountsScreen.kt:97-106`，`SettingsScreen.kt:219-226`，`LoginViewModel.kt:41-45` | 结构 |
@@ -163,7 +163,7 @@ fun MusicProviderRegistry.capabilitiesOf(mediaId: String): Set<ProviderCapabilit
 
 - ViewModel：不支持的功能写入单独的 `Unsupported` 状态，与 `Error` 分开，不再用英文内部信息占位。
 - 界面：按能力隐藏或禁用入口，统一成一种处理方式（P3、P6 目前不同）。
-- 较小的一步：只加一个 `MediaInfo.neteaseSongIdOrNull()`，把 1.3 的 10 处集中到一个可检索的函数，同时把 P1、P2 的英文信息换成「该平台暂不支持」一类的中文文案。这一步不改结构，只让判定位置可见。
+- 较小的一步：只加一个 `MediaInfo.neteaseSongIdOrNull()`，把 1.3 中直接对 `MediaInfo.id` 调 `toLongOrNull()` 的 10 处（`NowPlayingViewModel` 9 处、`NowPlayingScreen.kt:535`）集中到一个可检索的函数，同时把 P1、P2 的英文信息换成「该平台暂不支持」一类的中文文案。这一步不改结构，只让判定位置可见。
 
 ### R2 取流结果带原因（P5）
 
@@ -256,7 +256,7 @@ AGENTS.md D6 第 244 行的「eight files」与现状（14 个）不符；「Sti
 | F2 | 搜索结果显示「VIP」「无损」标记；可选「优先显示当前账号能播放的来源」 | R7 的 `ProviderTrack` 可用性字段 | 标记只反映曲目属性，不代表当前账号的权益（`QQSongFile` 的注释已写明） |
 | F3 | 合并视图里把跨平台的同一首歌合成一行，行内列出各平台来源，点击时按用户设定的平台顺序选源 | 标题、歌手、时长的归一化匹配 | 属于模糊匹配。AGENTS.md 对 TTML 的规定是不自动应用模糊标题匹配；若沿用这一原则，合并必须可见、可拆开、可改选 |
 | F4 | 换源：某平台无法播放（VIP、下架、平台已关闭）时，提示「在另一平台播放同名歌曲」 | R2 | 同 F3 的模糊匹配问题；替换队列项必须走 `rebuildPlaylistFromTimeline()` 这一条路径；换成网易云曲目后是否上报网易云播放记录，需要决定 |
-| F5 | 本地账号的歌单，允许混合各平台曲目；可从平台歌单导入 | 接入 `MusicProvider.playlistDetail`（已实现、未调用） | 新表从一开始就用 `(provider TEXT, raw_id TEXT)` 作键，不需要等现有 11 张缓存表的破坏性迁移；只有要关联那些缓存（例如复用歌单曲目缓存）时才依赖迁移。本地歌单是否进备份，需要决定 |
+| F5 | 本地账号的歌单，允许混合各平台曲目；可从平台歌单导入 | 接入 `MusicProvider.playlistDetail`（已实现、未调用） | 新表从一开始就用 `(provider TEXT, raw_id TEXT)` 作键，不需要等现有 11 张缓存表的破坏性迁移；只有要关联那些缓存（例如复用歌单曲目缓存）时才依赖迁移。D6 的「Order of work」把 schema 与凭证迁移排在聚合界面之前，先做本地歌单等于调换这个顺序。本地歌单是否进备份，需要决定 |
 | F6 | 与平台无关的本地「喜欢」，让心形按钮对所有平台的曲目都有效 | F5 的存储 | 与网易云账号「喜欢」的关系（只存本地，或同时写网易云）需要决定；QQ 网关有无收藏接口，未核实 |
 | F7 | QQ 曲目使用 QQ 自己的歌词（同平台、精确 id，不涉及匹配） | 把 `QQProvider.lyric` 接入 `LyricResolver`；逐字歌词需要 QRC → YRC | 四态歌词来源策略目前只有 AMLL TTML 和网易云后端两个源。QQ 曲目在 `TTML_ONLY`、`BACKEND_ONLY` 下的含义需要定义；按现在的文字，`TTML_ONLY` 下 QQ 曲目没有歌词（AMLL DB 只收 ncm id） |
 | F8 | 跨平台歌词回退（网易云曲目缺歌词时取 QQ 的，或反过来） | F7 | 需要重新设计歌词来源的隐私门，D6 已写明加一个枚举值不够；同时涉及 F3 的模糊匹配 |
@@ -269,7 +269,7 @@ AGENTS.md D6 第 244 行的「eight files」与现状（14 个）不符；「Sti
 2. 注册方式：每平台一个注册包（R8），还是保留四个独立注册表。
 3. 网易云是否可以关闭（S5、R3）；这改变「网易云总是参与聚合」的前提。
 4. Web 端的 QQ 登录：隐藏、标注匿名，或维持现状（C6）。
-5. 本地账号的数据（名称、将来的歌单、本地「喜欢」）是否进入设置备份（U9、F5、F6）。
+5. 本地账号的数据（名称、将来的歌单、本地「喜欢」）是否进入设置备份（U9、F5、F6）；本地歌单是否先于 D6 的 schema 迁移实施（F5）。
 6. 换源（F4）只允许用户确认，还是允许自动；换源后的播放是否上报网易云。
 7. QQ 曲目在 `TTML_ONLY` / `BACKEND_ONLY` 下的歌词语义（F7）；是否做跨平台歌词（F8）。
 8. 合并视图播放时，队列是否允许混合平台（S3，目前允许）。
