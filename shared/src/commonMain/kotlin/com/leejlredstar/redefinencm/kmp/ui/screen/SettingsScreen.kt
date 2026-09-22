@@ -99,7 +99,10 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.BuildInfo
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
+import com.leejlredstar.redefinencm.kmp.data.auth.LoginMethodRegistry
+import com.leejlredstar.redefinencm.kmp.data.auth.QQCredential
 import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
+import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
 import com.leejlredstar.redefinencm.kmp.util.applySettingsBackup
@@ -144,13 +147,15 @@ private val windowedLyricSurface: WindowedLyricSurface? = lyricSurface as? Windo
 @Composable
 fun SettingsScreen(
     scaffoldPadding: PaddingValues,
-    onOpenLogin: () -> Unit,
+    /** Opens the login page for one provider. */
+    onOpenLogin: (MusicProviderId) -> Unit,
     /** Settings is a page opened from the library and the sidebar, so it has a way back. */
     onBack: (() -> Unit)? = null,
     settings: PlatformSettings = koinInject(),
     api: NCMApi = koinInject(),
     mainViewModel: MainViewModel = koinInject(),
     nowPlayingViewModel: NowPlayingViewModel = koinInject(),
+    loginMethods: LoginMethodRegistry = koinInject(),
 ) {
     var cookie by remember(settings) { mutableStateOf("") }
     var server by remember(settings) { mutableStateOf("") }
@@ -200,8 +205,12 @@ fun SettingsScreen(
     var lyricSourceWriteGeneration by remember { mutableIntStateOf(0) }
     var lyricDisplayWriteGeneration by remember { mutableIntStateOf(0) }
     var showImportConfirmation by remember { mutableStateOf(false) }
-    var showLogoutConfirmation by remember { mutableStateOf(false) }
+    var logoutConfirmationFor by remember { mutableStateOf<MusicProviderId?>(null) }
     var showCookieField by remember { mutableStateOf(false) }
+    var showQQCredentialField by remember { mutableStateOf(false) }
+    // The pasted-credential method for QQ Music, if one is registered; it owns the field's label
+    // and the rules for what pasted text is accepted.
+    val qqCredentialMethod = remember(loginMethods) { loginMethods.textMethod(MusicProviderId.QQ) }
     val userDetail by mainViewModel.userDetail.collectAsState()
     // Results of saving, importing and exporting appear at the bottom, beside the controls that
     // cause them; a banner at the top of the page was off screen by the time the backup buttons
@@ -455,9 +464,11 @@ fun SettingsScreen(
                     loggedIn = cookie.isNotBlank(),
                     nickname = userDetail?.profile?.nickname,
                     avatarUrl = userDetail?.profile?.avatarUrl,
+                    providerLabel = "网易云音乐账号",
+                    signedOutHint = "登录后可以查看歌单、每日推荐和喜欢的音乐",
                     accentPalette = settingsPalette,
-                    onLogin = onOpenLogin,
-                    onLogout = { showLogoutConfirmation = true },
+                    onLogin = { onOpenLogin(MusicProviderId.NETEASE) },
+                    onLogout = { logoutConfirmationFor = MusicProviderId.NETEASE },
                 )
                 SettingsExpanderRow(
                     label = "手动填写 Cookie",
@@ -866,17 +877,18 @@ fun SettingsScreen(
                 }
 
                 SettingsSectionLabel("多平台", settingsPalette)
-                // QQ Music has no public API, so it needs a backend the user self-hosts, the same
-                // arrangement as the NetEase server above. The cookie is held here and sent on every
-                // QQ request, so the Android build can sign in without reaching the backend's config
-                // file. Rain120/qq-music-api does not read that header yet — see AGENTS.md D6.
+                // QQ Music has no public API, so it needs a gateway the user self-hosts (the web app
+                // of L-1124/QQMusicApi), the same arrangement as the NetEase server above. The
+                // account is held here in the gateway's own cookie form and sent on every QQ
+                // request, so the Android build can sign in without reaching the gateway's config
+                // file — see AGENTS.md D6.
                 SettingsSwitch(
                     checked = qqEnabled,
                     label = "启用 QQ 音乐",
                     accentPalette = settingsPalette,
                     index = 0,
-                    count = if (qqEnabled) 4 else 1,
-                    supportingText = "需要自建 qq-music-api 后端；未登录时仅能播放免费歌曲的普通音质",
+                    count = if (qqEnabled) 3 else 1,
+                    supportingText = "需要自建 QQMusicApi 网关；未登录时按 QQ 对未登录用户的限制播放",
                 ) { value ->
                     qqEnabled = value
                     persistSettings({ settings.setBoolean(SettingKeys.QQ_ENABLED, value) })
@@ -887,7 +899,7 @@ fun SettingsScreen(
                         label = "QQ 音乐后端地址",
                         accentPalette = settingsPalette,
                         index = 1,
-                        count = 4,
+                        count = 3,
                         onDraftChange = { qqServer = it },
                         onCommit = { raw ->
                             val normalized = normalizeServerInput(raw)
@@ -896,28 +908,13 @@ fun SettingsScreen(
                             persistSettings({ settings.setString(SettingKeys.QQ_SERVER, normalized) })
                         },
                     )
-                    // Obscured and kept out of the settings backup, exactly like the NetEase one.
-                    SettingsTextField(
-                        value = qqCookie,
-                        label = "QQ 音乐 Cookie",
-                        obscureText = true,
-                        accentPalette = settingsPalette,
-                        index = 2,
-                        count = 4,
-                        onDraftChange = { qqCookie = it },
-                        onCommit = { raw ->
-                            val normalized = raw.trim()
-                            qqCookie = normalized
-                            persistSettings({ settings.setString(SettingKeys.QQ_COOKIE, normalized) })
-                        },
-                    )
                     // Both aggregation views ship; this picks which one the library and search use.
                     SettingsSwitch(
                         checked = aggregationMode == LibraryAggregationMode.PER_PROVIDER,
                         label = "按平台分组显示",
                         accentPalette = settingsPalette,
-                        index = 3,
-                        count = 4,
+                        index = 2,
+                        count = 3,
                         supportingText = "关闭时各平台结果混合为一个列表",
                     ) { value ->
                         val mode = if (value) {
@@ -932,6 +929,57 @@ fun SettingsScreen(
                                 mode.wireValue,
                             )
                         })
+                    }
+
+                    // The QQ account, laid out like the NetEase one above: who is signed in, the
+                    // login page for changing that, and the raw credential folded away beneath.
+                    // The stored form is the gateway's; it carries no nickname, so the account
+                    // number stands in for one.
+                    val qqAccount = remember(qqCookie) { QQCredential.parse(qqCookie) }
+                    Spacer(Modifier.height(ExpressiveLayout.ConnectedItemGap * 3))
+                    AccountCard(
+                        loggedIn = qqAccount != null,
+                        nickname = qqAccount?.musicId?.toString(),
+                        avatarUrl = null,
+                        providerLabel = "QQ 音乐账号",
+                        signedOutHint = "登录后搜索和播放使用你账号的权益",
+                        accentPalette = settingsPalette,
+                        onLogin = { onOpenLogin(MusicProviderId.QQ) },
+                        onLogout = { logoutConfirmationFor = MusicProviderId.QQ },
+                    )
+                    if (qqCredentialMethod != null) {
+                        SettingsExpanderRow(
+                            label = "手动填写凭证",
+                            supportingText = "高级：${qqCredentialMethod.supportingText}",
+                            expanded = showQQCredentialField,
+                            accentPalette = settingsPalette,
+                            onToggle = { showQQCredentialField = !showQQCredentialField },
+                        )
+                    }
+                    if (showQQCredentialField && qqCredentialMethod != null) {
+                        // Obscured and kept out of the settings backup, exactly like the NetEase one.
+                        SettingsTextField(
+                            value = qqCookie,
+                            label = qqCredentialMethod.fieldLabel,
+                            obscureText = true,
+                            accentPalette = settingsPalette,
+                            index = 1,
+                            count = 2,
+                            onDraftChange = { qqCookie = it },
+                            onCommit = { raw ->
+                                qqCredentialMethod.normalize(raw)
+                                    .onSuccess { normalized ->
+                                        qqCookie = normalized
+                                        persistSettings({
+                                            settings.setString(SettingKeys.QQ_COOKIE, normalized)
+                                        })
+                                    }
+                                    .onFailure { failure ->
+                                        reloadSettingsSnapshot()
+                                        settingsMessage = failure.message ?: "凭证无法识别"
+                                    }
+                            },
+                        )
                     }
                 }
 
@@ -977,29 +1025,47 @@ fun SettingsScreen(
         )
     }
 
-    if (showLogoutConfirmation) {
+    logoutConfirmationFor?.let { provider ->
         AlertDialog(
-            onDismissRequest = { showLogoutConfirmation = false },
+            onDismissRequest = { logoutConfirmationFor = null },
             icon = { Icon(AppIcons.Logout, contentDescription = null) },
-            title = { Text("退出登录？") },
+            title = { Text("退出${provider.displayName}登录？") },
             text = {
-                Text("退出后「我的」、每日推荐和喜欢等功能将不可用，已下载的歌曲会保留。")
+                Text(
+                    when (provider) {
+                        MusicProviderId.NETEASE ->
+                            "退出后「我的」、每日推荐和喜欢等功能将不可用，已下载的歌曲会保留。"
+                        MusicProviderId.QQ ->
+                            "退出后 QQ 音乐按未登录状态搜索和播放。"
+                    },
+                )
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        showLogoutConfirmation = false
-                        cookie = ""
-                        persistSettings(
-                            write = { settings.setString(SettingKeys.COOKIE, "") },
-                            onWritten = { mainViewModel.refreshAccount() },
-                            onPersisted = { settingsMessage = "已退出登录" },
-                        )
+                        logoutConfirmationFor = null
+                        when (provider) {
+                            MusicProviderId.NETEASE -> {
+                                cookie = ""
+                                persistSettings(
+                                    write = { settings.setString(SettingKeys.COOKIE, "") },
+                                    onWritten = { mainViewModel.refreshAccount() },
+                                    onPersisted = { settingsMessage = "已退出登录" },
+                                )
+                            }
+                            MusicProviderId.QQ -> {
+                                qqCookie = ""
+                                persistSettings(
+                                    write = { settings.setString(SettingKeys.QQ_COOKIE, "") },
+                                    onPersisted = { settingsMessage = "已退出 QQ 音乐" },
+                                )
+                            }
+                        }
                     },
                 ) { Text("退出登录") }
             },
             dismissButton = {
-                TextButton(onClick = { showLogoutConfirmation = false }) { Text("取消") }
+                TextButton(onClick = { logoutConfirmationFor = null }) { Text("取消") }
             },
         )
     }
@@ -1557,12 +1623,16 @@ private fun SettingsButton(
     }
 }
 
-/** Who is signed in, and the two things to do about it. */
+/** Who is signed in to one provider, and the two things to do about it. */
 @Composable
 private fun AccountCard(
     loggedIn: Boolean,
     nickname: String?,
     avatarUrl: String?,
+    /** Under the name when signed in: "网易云音乐账号". */
+    providerLabel: String,
+    /** Under "未登录": what signing in is for. */
+    signedOutHint: String,
     accentPalette: ContentAccentPalette,
     onLogin: () -> Unit,
     onLogout: () -> Unit,
@@ -1611,7 +1681,7 @@ private fun AccountCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = if (loggedIn) "网易云音乐账号" else "登录后可以查看歌单、每日推荐和喜欢的音乐",
+                    text = if (loggedIn) providerLabel else signedOutHint,
                     style = MaterialTheme.typography.bodySmall,
                     color = accentPalette.secondaryOnQuietContainer,
                 )

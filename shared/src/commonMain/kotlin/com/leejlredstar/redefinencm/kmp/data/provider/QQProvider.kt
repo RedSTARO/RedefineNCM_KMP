@@ -1,18 +1,21 @@
 package com.leejlredstar.redefinencm.kmp.data.provider
 
-import com.leejlredstar.redefinencm.kmp.util.getStringAsync
-import com.leejlredstar.redefinencm.kmp.util.getBooleanAsync
 import com.leejlredstar.redefinencm.kmp.data.api.QQMusicApi
-import com.leejlredstar.redefinencm.kmp.data.api.QQPlaylistSong
-import com.leejlredstar.redefinencm.kmp.data.api.QQSearchSong
-import com.leejlredstar.redefinencm.kmp.data.api.QQSinger
+import com.leejlredstar.redefinencm.kmp.data.api.QQSong
+import com.leejlredstar.redefinencm.kmp.data.api.QQSonglistDetail
 import com.leejlredstar.redefinencm.kmp.data.api.qqAlbumArtworkUrl
+import com.leejlredstar.redefinencm.kmp.data.auth.ProviderCredentialSlot
+import com.leejlredstar.redefinencm.kmp.data.auth.QQCredential
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
+import com.leejlredstar.redefinencm.kmp.util.getBooleanAsync
+import com.leejlredstar.redefinencm.kmp.util.getStringAsync
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * QQ Music, reached through a self-hosted `Rain120/qq-music-api` backend.
+ * QQ Music, reached through a self-hosted `L-1124/QQMusicApi` web gateway.
  *
  * Nothing here is cached. The cache tables are keyed by a numeric NetEase song id, and giving them
  * a provider column is the one step in this plan that can destroy a year of real user data, so it
@@ -21,8 +24,13 @@ import kotlinx.coroutines.withTimeoutOrNull
 class QQProvider(
     private val api: QQMusicApi,
     private val settings: PlatformSettings,
+    /** Where the signed-in account lives, so a renewed key can be written back. Null disables renewal. */
+    private val credentials: ProviderCredentialSlot? = null,
 ) : MusicProvider {
     override val id: MusicProviderId = MusicProviderId.QQ
+
+    private val renewal = Mutex()
+    private var renewalAttempted = false
 
     override suspend fun isAvailable(): Boolean =
         settings.getBooleanAsync(SettingKeys.QQ_ENABLED, false) &&
@@ -30,30 +38,38 @@ class QQProvider(
 
     override suspend fun search(keyword: String, limit: Int, offset: Int): List<ProviderTrack> {
         if (keyword.isBlank() || !isAvailable()) return emptyList()
+        renewCredentialOnce()
         // Null is a transport failure, not an empty result set — see NeteaseProvider.search.
         // This backend pages by page number rather than by offset.
         val response = api.search(keyword, limit, page = offset / limit.coerceAtLeast(1) + 1)
             ?: throw ProviderUnavailableException(id, "QQ音乐后端无响应")
-        return response.data
-            ?.song
-            ?.list
-            .orEmpty()
-            .filter { it.songmid.isNotBlank() }
+        return response.song
+            .filter { it.mid.isNotBlank() }
             .map { it.toProviderTrack() }
     }
 
     override suspend fun playlistDetail(id: ProviderItemId): ProviderPlaylist? {
         if (id.provider != MusicProviderId.QQ || !isAvailable()) return null
-        val entry = api.playlistDetail(id.rawId)?.cdlist?.firstOrNull() ?: return null
-        val tracks = entry.songlist
-            .filter { it.mid.isNotBlank() }
-            .map { it.toProviderTrack() }
+        val listId = id.rawId.toLongOrNull() ?: return null
+        renewCredentialOnce()
+        val pages = collectQQPlaylistPages(MaxPlaylistPages) { page ->
+            api.playlistDetail(listId, PlaylistPageSize, page)
+        }
+        val first = pages.firstOrNull() ?: return null
+        val tracks = pages.flatMap { page ->
+            page.songs.filter { it.mid.isNotBlank() }.map { it.toProviderTrack() }
+        }
+        val info = first.info
         return ProviderPlaylist(
             id = id,
-            name = entry.dissname,
-            coverUrl = entry.logo,
-            description = entry.desc,
-            trackCount = if (entry.songnum > 0) entry.songnum else tracks.size,
+            name = info?.title.orEmpty(),
+            coverUrl = info?.picurl.orEmpty(),
+            description = info?.desc.orEmpty(),
+            trackCount = when {
+                info != null && info.songnum > 0 -> info.songnum
+                first.total > 0 -> first.total
+                else -> tracks.size
+            },
             tracks = tracks,
         )
     }
@@ -64,36 +80,60 @@ class QQProvider(
         return ProviderLyric(
             plain = lyric.lyric.takeIf(String::isNotBlank),
             translation = lyric.trans.takeIf(String::isNotBlank),
-            // QQ's word-level format (QRC) is not exposed by this backend, and it has no
-            // romanization track at all.
+            // The gateway can also hand over QRC, QQ's word-level format, but the lyric pipeline
+            // parses YRC; converting one into the other is that pipeline's change, not this one's.
             wordByWord = null,
-            romanization = null,
+            romanization = lyric.roma.takeIf(String::isNotBlank),
         ).takeIf { !it.isEmpty }
     }
 
     /**
      * Walks down from the requested tier until one answers.
      *
-     * QQ gates quality on account entitlement server-side, so a signed-out or non-VIP backend
-     * returns an empty URL for everything above `128` and for VIP tracks at every tier. Asking
-     * once at the user's configured quality would make an entire provider look broken whenever
-     * that quality is set to lossless, which is the app's default-ish case rather than a corner.
+     * QQ gates quality on account entitlement server-side, so a signed-out or non-VIP account gets
+     * an empty URL for the tiers it may not fetch. Asking once at the user's configured quality
+     * would make an entire provider look broken whenever that quality is set to lossless, which is
+     * the app's default-ish case rather than a corner.
      *
      * The walk is time-bounded because of where it runs: Android resolves stream URLs under
      * `runBlocking` on ExoPlayer's IO thread, and the shared external client allows 30s per
-     * request. A VIP track answers empty at every rung, so an unbounded walk would hold playback
-     * for two minutes before admitting defeat. The per-attempt bound keeps one slow rung from
-     * eating the whole budget; the overall bound caps the walk however many rungs remain.
-     *
-     * The `size128`/`sizeflac` fields on a search row cannot shortcut this: 晴天 reports
-     * `size128 = 4308000` and still resolves empty, so they describe which encodings exist, not
-     * which the configured account may fetch.
+     * request. A track that answers empty at every rung would otherwise hold playback for two
+     * minutes before admitting defeat. The per-attempt bound keeps one slow rung from eating the
+     * whole budget; the overall bound caps the walk however many rungs remain.
      */
     override suspend fun streamUrl(id: ProviderItemId, quality: SoundQualityPreference): String? {
         if (id.provider != MusicProviderId.QQ || !isAvailable()) return null
+        renewCredentialOnce()
         return withTimeoutOrNull(StreamResolveBudgetMillis) {
-            quality.qqTierLadder().firstNotNullOfOrNull { tier ->
-                withTimeoutOrNull(StreamResolveAttemptMillis) { api.songUrl(id.rawId, tier) }
+            quality.qqFileTypeLadder().firstNotNullOfOrNull { fileType ->
+                withTimeoutOrNull(StreamResolveAttemptMillis) { api.songUrl(id.rawId, fileType) }
+            }
+        }
+    }
+
+    /**
+     * Renews an expired key once per process, before the first call that would use it.
+     *
+     * The gateway keeps alive only the accounts installed in its own pool; an account sent per
+     * request is the caller's to keep alive. Checking on every call would double the round trips,
+     * so the check runs once and its outcome, either way, is not revisited until restart. It is
+     * time-bounded for the same reason the stream walk is: the first call may be on the player's
+     * IO thread.
+     */
+    private suspend fun renewCredentialOnce() {
+        val slot = credentials ?: return
+        renewal.withLock {
+            if (renewalAttempted) return
+            renewalAttempted = true
+            val stored = QQCredential.parse(slot.read()) ?: return
+            if (!stored.canRefresh) return
+            withTimeoutOrNull(RenewalBudgetMillis) {
+                if (api.credentialExpired() != true) return@withTimeoutOrNull
+                val renewed = api.refreshCredential()
+                    ?.let(QQCredential::fromGateway)
+                    ?.takeIf { it.isSignedIn }
+                    ?: return@withTimeoutOrNull
+                slot.write(renewed.toCookieHeader())
             }
         }
     }
@@ -101,17 +141,50 @@ class QQProvider(
     private companion object {
         const val StreamResolveAttemptMillis = 6_000L
         const val StreamResolveBudgetMillis = 15_000L
+        const val RenewalBudgetMillis = 8_000L
+
+        /** The gateway pages playlists; 200 a page keeps a typical list to one or two calls. */
+        const val PlaylistPageSize = 200
+        const val MaxPlaylistPages = 10
     }
+}
+
+/**
+ * Reads a playlist page by page until the gateway clears `hasmore`, a page comes back empty or
+ * unanswered, or [maxPages] is reached. A page that fails after others succeeded ends the walk
+ * with what was read rather than dropping the playlist; the first page failing yields nothing.
+ */
+internal suspend fun collectQQPlaylistPages(
+    maxPages: Int,
+    fetchPage: suspend (page: Int) -> QQSonglistDetail?,
+): List<QQSonglistDetail> {
+    val pages = ArrayList<QQSonglistDetail>()
+    var pageNumber = 1
+    while (pageNumber <= maxPages) {
+        val page = fetchPage(pageNumber) ?: break
+        pages += page
+        if (page.hasmore == 0 || page.songs.isEmpty()) break
+        pageNumber += 1
+    }
+    return pages
+}
+
+/** The rows of the gateway's file-type table this app plays. */
+internal object QQFileType {
+    const val FLAC = 7
+    const val MP3_320 = 12
+    const val MP3_128 = 13
+    const val AAC_96 = 15
 }
 
 /**
  * QQ's tiers, highest first, starting at the rung matching the user's preference.
  *
- * `ape` is omitted: it is the same lossless content as `flac` in a container the players here do
- * not all handle, so trying it would only add a round trip.
+ * Lossless stops at FLAC: the mastered and spatial rows above it are formats the players here do
+ * not all handle, so trying them would only add round trips.
  */
-internal fun SoundQualityPreference.qqTierLadder(): List<String> {
-    val ladder = listOf("flac", "320", "128", "m4a")
+internal fun SoundQualityPreference.qqFileTypeLadder(): List<Int> {
+    val ladder = listOf(QQFileType.FLAC, QQFileType.MP3_320, QQFileType.MP3_128, QQFileType.AAC_96)
     val startAt = when (this) {
         SoundQualityPreference.HIRES, SoundQualityPreference.LOSSLESS -> 0
         SoundQualityPreference.HIGH -> 1
@@ -120,33 +193,21 @@ internal fun SoundQualityPreference.qqTierLadder(): List<String> {
     return ladder.drop(startAt)
 }
 
-internal fun QQSearchSong.toProviderTrack(): ProviderTrack = ProviderTrack(
-    id = ProviderItemId.qq(songmid),
-    title = songname,
-    artists = singer.map { it.toProviderArtist() },
-    album = ProviderAlbum(
-        id = albummid.takeIf(String::isNotBlank)?.let { ProviderItemId.qq(it) },
-        name = albumname,
-        artworkUrl = qqAlbumArtworkUrl(albummid),
-    ),
-    durationMillis = interval * 1000,
-)
-
-internal fun QQPlaylistSong.toProviderTrack(): ProviderTrack = ProviderTrack(
+internal fun QQSong.toProviderTrack(): ProviderTrack = ProviderTrack(
     id = ProviderItemId.qq(mid),
-    title = name,
-    artists = singer.map { it.toProviderArtist() },
+    title = name.ifBlank { title },
+    artists = singer.map { artist ->
+        ProviderArtist(
+            id = artist.mid.takeIf(String::isNotBlank)?.let(ProviderItemId::qq),
+            name = artist.name,
+        )
+    },
     album = album?.let {
         ProviderAlbum(
-            id = it.mid.takeIf(String::isNotBlank)?.let { mid -> ProviderItemId.qq(mid) },
+            id = it.mid.takeIf(String::isNotBlank)?.let(ProviderItemId::qq),
             name = it.name,
-            artworkUrl = qqAlbumArtworkUrl(it.mid),
+            artworkUrl = qqAlbumArtworkUrl(it),
         )
     },
     durationMillis = interval * 1000,
-)
-
-private fun QQSinger.toProviderArtist(): ProviderArtist = ProviderArtist(
-    id = mid.takeIf(String::isNotBlank)?.let { ProviderItemId.qq(it) },
-    name = name,
 )

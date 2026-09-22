@@ -262,94 +262,100 @@ steps in the plan that can destroy real user data, and they carry over a year of
   tracks.
 
 **Backend.** QQ Music has no public API, so it needs a self-hosted service, the same shape as
-the NeteaseCloudMusicApi server this app already points at. Surveyed 2026-08-20:
+the NeteaseCloudMusicApi server this app already points at. Surveyed 2026-08-20 and again on
+2026-09-22:
 
 | Project | Stars | Last push | Shape | License |
 | --- | --- | --- | --- | --- |
-| `Rain120/qq-music-api` | 1046 | 2026-08 | Koa2 HTTP server (TS) | MIT |
-| `jsososo/QQMusicApi` | 1616 | 2024-06 | Express HTTP server | GPL-3.0 |
-| `L-1124/QQMusicApi` | 451 | 2026-08 | Python library | GPL-3.0 |
+| `L-1124/QQMusicApi` | 489 | 2026-09 (v0.7.3) | Python library + FastAPI gateway under `web/` | GPL-3.0 |
+| `Rain120/qq-music-api` | 1082 | 2026-09 | Koa2 HTTP server (TS) | MIT |
+| `jsososo/QQMusicApi` | 1625 | 2024-06 | Express HTTP server | GPL-3.0 |
 
-`Rain120/qq-music-api` is the working pick: it is the closest analogue to the server already in
-use, it is still maintained, and it is MIT. `jsososo/QQMusicApi` has the most stars but has not
-been pushed to in over two years with 64 issues open. `L-1124/QQMusicApi` is healthy but is a
-library rather than a service, so it would need a server written around it.
+`Rain120/qq-music-api` was the first pick (2026-08-20) and was replaced on 2026-09-22 by the
+`L-1124/QQMusicApi` web gateway. Rain120 could not take a per-request credential without a fork,
+sent a hardcoded `sign`, and its 2026 pushes were README and search fixes. The L-1124 gateway
+reads the caller's account from request cookies ("Cookie 中显式传入的登录凭证始终优先"), computes
+the real `zzc` sign, decrypts QRC, logs in by QR code for QQ and WeChat, renews credentials, and
+runs natively on Windows. `jsososo/QQMusicApi` has the most stars but has not been pushed to in
+over two years.
 
 The backend runs as a separate process reached over HTTP, so its GPL does not reach this
-AGPL-3.0-only app either way; MIT simply avoids the question.
+AGPL-3.0-only app. Its Python source is a protocol reference only; nothing is ported from it.
 
 Two limits are properties of the services, not of this design: these APIs are unofficial and
 break without notice, and paid tracks cannot be streamed without an entitled account. Neither is
 a reason to change the plan; both are reasons not to promise coverage.
 
-**The backend is deployed locally and its coverage is measured (2026-08-27).** `Rain120/qq-music-api`
-runs in WSL (Debian 13, Node 20.19.2) on port 3200, reachable from Windows at `localhost:3200`.
-Two setup traps: `npm` on the WSL `PATH` resolves to the *Windows* binary through interop and
-must not be used to install, and corepack's current `npm` 12 and `pnpm` 11 both refuse Node 20 —
-`corepack prepare pnpm@9.15.9 --activate` is the combination that installs. WSL also tears the
-server down when the last session closes, so it needs a session held open rather than `nohup`.
-An Android device reaches it over `adb reverse tcp:3200 tcp:3200`; WSL is in NAT mode, so a LAN
-device would otherwise need a `netsh portproxy` rule.
+**The gateway is deployed locally (2026-09-22).** `L-1124/QQMusicApi` is cloned at
+`E:\Repo\QQMusicApi` and runs natively on Windows (Python 3.14, `uv sync --group web --no-dev`,
+`uv run --no-sync web/run.py`) on `127.0.0.1:8080`, which is the app's default QQ backend address.
+It answers on the IPv4 loopback, so the IPv6-only trap of the earlier WSL deployment is gone. An
+Android device reaches it over `adb reverse tcp:8080 tcp:8080`. Deployment, the routes the app
+uses and the credential form are written up in
+[docs/qq-music-gateway.md](docs/qq-music-gateway.md). The earlier Rain120 deployment in WSL on
+port 3200 is no longer used; an install that saved `http://localhost:3200` explicitly needs the
+address changed.
 
-**`localhost` is not reachable from the JVM in this setup.** WSL's port forwarding answers on the
-IPv6 loopback only: `http://[::1]:3200` and the WSL address both return 200, while `127.0.0.1`
-is refused. Windows `curl` hides this because it tries IPv6 first; a JVM client resolves
-`localhost` to IPv4 and gets `Connection refused`. So the desktop app needs `http://[::1]:3200`
-in the QQ backend field, or a `netsh interface portproxy` rule to make the IPv4 loopback work.
-This is a property of the WSL deployment, not of the client — the same client reaches a natively
-hosted backend through `localhost` unchanged.
+Measured against the live gateway on 2026-09-22, signed out:
 
-Measured against the live server, signed out:
-
-| Capability | Endpoint | Anonymous result |
+| Capability | Route | Anonymous result |
 | --- | --- | --- |
-| Search | `/getSearchByKey?key=` | works |
-| Playlist browse | `/getSongLists` | works |
-| Playlist detail | `/getSongListDetail?disstid=` | works, full track metadata |
-| Lyrics | `/getLyric?songmid=` | works — LRC, plus a separate `trans` field |
-| Stream URL | `/getMusicPlay?songmid=&quality=` | free tracks at `m4a`/`128` only |
+| Search | `/search/search_by_type?keyword=&search_type=0` | works |
+| Playlist detail | `/songlist/{id}/detail?num=200&page=` | works, paged, `hasmore` flags the rest |
+| Lyrics | `/song/{mid}/lyric?trans=true&roma=true` | works — LRC plus `trans`/`roma`; `qrc=true` gives word timing |
+| Stream URL | `/song/{mid}/url?file_type=13` | a VIP-tagged track (`pay_month=1`) resolved at MP3 128 |
+| Stream URL | `/song/{mid}/url?file_type=7` | an indie upload answered `result 104003`, no path at any tier |
 
-This sharpens the limit stated above. The gate is account entitlement checked server-side at
-`vkey.GetVkeyServer`, not client-side DRM, so signed out a *free* track does return a real URL —
-verified by fetching one, which answered `206 audio/mpeg` with an `ID3` header and honoured range
-requests, so seeking works. The same call for a VIP track returns an empty `purl` at every
-quality, and `320`/`flac` are empty even for free tracks. A cookie is therefore needed for parity
-with the NetEase side, not merely for personal playlists. What a cookie actually unlocks has not
-been measured, and a non-VIP account is not expected to lift the VIP wall.
+The gateway returns a bare CDN path (`purl`); the client prefixes
+`https://dl.stream.qqmusic.qq.com/`, the one host that answered it with `206 audio/mpeg` (the
+SDK's `isure.stream` fallback and every `sip` host from `/song/get_cdn_dispatch` answered 403).
+What an account unlocks above 128 has not been measured, and a non-VIP account is not expected to
+lift the VIP wall.
 
-**The cookie is held by the app, and this backend cannot yet receive it.** The app stores a QQ
-cookie beside the NetEase one and sends it as a `Cookie` header on every QQ request. That is the
-right architecture rather than installing a credential into the backend: it lets one backend serve
-several clients, and it is the only way the Android build can sign in at all, since it has no
-access to the backend's config file.
+**The credential is held by the app and sent per request, and the gateway honours it.** The app
+stores the QQ account beside the NetEase cookie under `qqCookie`, in the gateway's own cookie form
+(`musicid=…; musickey=…; refresh_token=…; refresh_key=…; …`), and sends it as a `Cookie` header on
+every QQ request. The gateway reads exactly those names (`web/src/core/auth.py`): `musicid` and
+`musickey` are required together, the rest let it renew the key. That is the right architecture
+rather than installing a credential into the gateway: one gateway serves several clients, and it
+is the only way the Android build can sign in at all. The gateway does not read the cookie names
+`y.qq.com` sets in a browser, so `QQCredential` translates a pasted browser cookie (`uin`,
+`qm_keyst`, the `psrf_*` and `wx*` pairs) and the gateway's `Credential` JSON into the stored form.
 
-`Rain120/qq-music-api` ignores that header, for four independent reasons: `/user/setCookie`
-answers `403` by design, the cookie middleware reads only the config file, the outbound request
-never forwards a `Cookie` header upstream (the credential only derives `uin` into query params),
-and `export const userInfo = appConfig.user` captures a reference while `updateConfig()` replaces
-the object — so merely re-enabling `setCookie` would log success and change nothing. Until the
-backend is patched, QQ requests are anonymous whatever the app has stored, and the only working
-credential path is its `config/user-info` file, which is desktop-only. The patch, its staleness
-trap, and its caveats are written up in
-[docs/qq-music-api-per-request-cookie.md](docs/qq-music-api-per-request-cookie.md); it is
-deliberately not applied, because it forks a third-party repository.
+The gateway keeps alive only the accounts installed in its own pool, so an account sent per
+request is the caller's to renew: `QQProvider` asks `/login/check_expired` once per process before
+the first QQ call and, if expired, writes the answer of `/login/refresh_credential` back through
+the credential slot. Web/WASM cannot set a `Cookie` header from `fetch`, and the gateway takes the
+credential nowhere else, so the Web build stays anonymous towards QQ.
 
-Two shape hazards for the mapper. Routes declare path parameters but every controller reads
-`ctx.query`, so `/getSearchByKey/周杰伦` answers `400 search key is null` — pass query strings.
-And the two list shapes disagree: search rows carry `songmid`/`songname`, playlist rows carry
-`mid`/`name` with nested `singer[]` and `album{}`. The provider client normalises both.
-`getMusicPlay` also sends a hardcoded `sign` constant, which is the most likely thing to break
-when QQ rotates it.
+Shape notes for the client: every answer is `{code, msg, data}` with `code == 0` on success and
+`401 {"code": -1}` for an account-only route; enumerated parameters are integers (`search_type=0`,
+`file_type` 7 FLAC / 12 MP3 320 / 13 MP3 128 / 15 AAC 96); search and playlist rows share one
+`Song` shape whose `album.mid` may be empty with the cover under `album.pmid` instead.
 
 **Order of work.** The neutral domain model comes first — it is the keystone, it is useful with
 or without QQ Music, and it removes an existing coupling. Provider abstraction follows, then the
 schema and credential migrations, then aggregation UX, then the QQ Music client itself.
 
-**Shipped so far (2026-08-27).** `ProviderItemId`, `MusicProvider` and `MusicProviderRegistry`,
-a `NeteaseProvider` adapter over the untouched `Repository`, a `QQProvider`, provider dispatch in
-all four platform stream resolvers, provider-neutral search end to end, and the settings to turn
-QQ Music on, point it at a backend, sign in with a cookie, and choose merged or per-provider
-grouping.
+**Shipped so far (2026-08-27, backend switched 2026-09-22).** `ProviderItemId`, `MusicProvider`
+and `MusicProviderRegistry`, a `NeteaseProvider` adapter over the untouched `Repository`, a
+`QQProvider` over the L-1124 gateway, provider dispatch in all four platform stream resolvers,
+provider-neutral search end to end, the settings to turn QQ Music on, point it at a gateway and
+choose merged or per-provider grouping, and a login page per provider.
+
+**Login sources are registered, not hard-wired (2026-09-22).** `data/auth` holds the login
+abstraction: a `LoginMethod` is either a `QrLoginMethod` (issue a code, poll it into the one
+`QrLoginPoll` vocabulary — waiting, scanned, confirmed, expired, refused, failed) or a
+`CredentialTextLoginMethod` (validate pasted text into the stored form). `LoginMethodRegistry`
+lists them; `LoginViewModel(provider)` drives the QR loop once against the interface, and
+`LoginScreen(provider)` renders whatever the registry holds for that provider, with a chooser when
+it holds more than one QR method. Persisting goes through the provider's `ProviderCredentialSlot`
+in `CredentialStore`, which owns that provider's change rules (NetEase's clears the UID binding
+and restarts account work; QQ's just writes). Registered today: NetEase QR and cookie, QQ Music
+QR by QQ and by WeChat, and pasted QQ credential. Adding a login method is an implementation plus
+an entry in the `LoginMethodRegistry` list in `Modules.kt`; adding a provider also needs a slot in
+the `CredentialStore` list and a `ProviderServerSetting` entry. `PushedDest.Login(provider)`
+carries the provider through navigation (saved as `login` for NetEase, `login:<key>` otherwise).
 
 Credentials stay additive: `qqEnabled` / `qqServer` / `qqCookie` sit beside the existing
 `cookie` / `server` keys rather than renaming them, so nothing migrates and no user data is at
@@ -366,11 +372,14 @@ while a `qq:` id is correctly read by those sites as "not a NetEase song".
 **Still open, in the order they matter.** QQ results are uncached, because the provider column on
 the eleven cache tables is the data-destroying step and belongs in its own change. The library
 and playlist screens still bind to NetEase DTOs, so the aggregation setting currently only reaches
-search — the per-provider tabs the setting promises are not built. QQ tracks cannot be downloaded,
-since the download queue is keyed by a numeric song id. And the lyric source-mode privacy gate is
-still a closed policy over two NetEase-era sources: QQ lyrics are reachable through the provider
-interface but are not wired into that pipeline, which is a redesign of the policy rather than a
-new enum entry.
+search — the per-provider tabs the setting promises are not built, and the signed-in QQ account's
+own playlists (`/user/{euin}/fav/songs`, `/user/{uin}/created_songlists`) are not fetched. QQ
+tracks cannot be downloaded, since the download queue is keyed by a numeric song id. The lyric
+source-mode privacy gate is still a closed policy over two NetEase-era sources: QQ lyrics are
+reachable through the provider interface but are not wired into that pipeline, which is a
+redesign of the policy rather than a new enum entry, and the gateway's QRC word timing would need
+converting to the YRC shape the pipeline parses. What a signed-in account unlocks above MP3 128 is
+unmeasured.
 
 ---
 
@@ -470,10 +479,13 @@ RedefineNCM_KMP/
 │       │   ├── Platform.kt              # expect fun getPlatform(): Platform
 │       │   ├── data/
 │       │   │   ├── Repository.kt        # Cache-then-network SQLDelight repository + write Results
-│       │   │   └── api/
-│       │   │       ├── HttpClientFactory.kt   # Ktor client factory + safeApiCall<T>()
-│       │   │       ├── NCMApi.kt              # NeteaseCloudMusicApi client (Ktor)
-│       │   │       └── dto/Models.kt          # @Serializable DTOs
+│       │   │   ├── api/
+│       │   │   │   ├── HttpClientFactory.kt   # Ktor client factory + safeApiCall<T>()
+│       │   │   │   ├── NCMApi.kt              # NeteaseCloudMusicApi client (Ktor)
+│       │   │   │   ├── QQMusicApi.kt          # L-1124/QQMusicApi web-gateway client + DTOs
+│       │   │   │   └── dto/Models.kt          # @Serializable DTOs
+│       │   │   ├── auth/                    # Login sources: LoginMethod, registry, credential slots
+│       │   │   └── provider/                # MusicProvider abstraction, ids, NetEase/QQ adapters
 │       │   ├── di/Modules.kt            # Koin sharedModule + expect fun platformModule()
 │       │   ├── player/
 │       │   │   ├── PlatformPlayer.kt    # interface + PlayerState enum + MediaInfo + StreamUrlResolver

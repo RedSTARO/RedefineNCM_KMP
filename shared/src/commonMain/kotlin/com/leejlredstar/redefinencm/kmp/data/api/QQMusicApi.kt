@@ -1,188 +1,278 @@
 package com.leejlredstar.redefinencm.kmp.data.api
 
 import io.ktor.client.HttpClient
-import io.ktor.client.call.body
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
 /**
- * Client for a self-hosted `Rain120/qq-music-api` instance.
+ * Client for a self-hosted `L-1124/QQMusicApi` web gateway (the project's `web/` FastAPI app).
  *
  * QQ Music has no public API, so this talks to a backend the user runs, the same arrangement as
- * the NetEase side. The account cookie is held by the app and sent as a `Cookie` header on every
- * request, so one backend can serve several clients and so the Android build can sign in without
- * reaching the backend's own config file.
+ * the NetEase side. The account travels as a `Cookie` header on every request, in the names the
+ * gateway reads (`musicid=…; musickey=…; …`, see `QQCredential`): a caller's cookie takes
+ * precedence over any account installed in the gateway, so one gateway can serve several clients
+ * and the Android build can sign in without reaching the gateway's config file.
  *
- * `Rain120/qq-music-api` does not read that header yet: it takes its credential only from
- * `config/user-info`, and `/user/setCookie` answers 403 by design. The header is sent regardless
- * because it is the standard mechanism and costs nothing, but until the backend honours it, QQ
- * requests are effectively anonymous whatever the app has stored.
- *
- * Two shapes of that backend are load-bearing here. Its routes declare path parameters but every
- * controller reads `ctx.query`, so requests must pass query strings — `/getSearchByKey/周杰伦`
- * answers `400 search key is null`. And nearly every response is wrapped in a `response` envelope,
- * with `/getMusicPlay` the exception.
+ * Every route answers `{code, msg, data}` with `code == 0` on success; a route that needs an
+ * account answers `401 {"code": -1}` without one. Enumerated query parameters are integers:
+ * `search_type=0` is songs, `file_type` is a row of the gateway's file-type table.
  */
 class QQMusicApi(
     private val client: HttpClient,
     private val baseUrl: suspend () -> String,
     private val cookie: suspend () -> String = { "" },
 ) {
-    suspend fun search(keyword: String, limit: Int, page: Int = 1): QQSearchData? =
-        request<QQEnvelope<QQSearchData>>("getSearchByKey") {
-            parameter("key", keyword)
-            parameter("limit", limit)
+    /** One page of song hits; null when the gateway could not be reached or errored. */
+    suspend fun search(keyword: String, num: Int, page: Int = 1): QQSearchData? =
+        fetchData<QQSearchData>("search/search_by_type") {
+            parameter("keyword", keyword)
+            parameter("search_type", SearchTypeSong)
+            parameter("num", num)
             parameter("page", page)
-        }?.response
+            parameter("highlight", false)
+        }
 
-    suspend fun lyric(songMid: String): QQLyric? =
-        request<QQEnvelope<QQLyric>>("getLyric") {
-            parameter("songmid", songMid)
-        }?.response?.takeIf { it.code == QQ_SUCCESS_CODE }
+    /** One page of a playlist; the gateway pages at `num` a call and flags `hasmore`. */
+    suspend fun playlistDetail(id: Long, num: Int, page: Int = 1): QQSonglistDetail? =
+        fetchData<QQSonglistDetail>("songlist/$id/detail") {
+            parameter("num", num)
+            parameter("page", page)
+            parameter("tag", false)
+            parameter("userinfo", true)
+        }
 
-    suspend fun playlistDetail(dissId: String): QQPlaylistDetail? =
-        request<QQEnvelope<QQPlaylistDetail>>("getSongListDetail") {
-            parameter("disstid", dissId)
-        }?.response
+    suspend fun lyric(mid: String): QQLyric? =
+        fetchData<QQLyric>("song/$mid/lyric") {
+            parameter("trans", true)
+            parameter("roma", true)
+        }
 
     /**
-     * Resolves a stream URL at one quality tier.
+     * A playable URL at one file type, or null when QQ will not serve it.
      *
-     * Returns null rather than throwing when the tier is unavailable: signed out, or without an
-     * entitled account, the backend answers with an empty `purl` and an `暂无播放链接` error for
-     * anything above `128`, and for VIP tracks at every tier.
+     * The gateway returns the CDN path (`purl`) and leaves the host to the caller. Of the hosts QQ
+     * lists, only `dl.stream.qqmusic.qq.com` answers these paths with audio, so that one is fixed
+     * here. An empty `purl` — the gateway reports it beside a non-zero `result` — means the track
+     * is not available to the configured account at that tier.
      */
-    suspend fun songUrl(songMid: String, quality: String): String? =
-        request<QQPlayUrlResponse>("getMusicPlay") {
-            parameter("songmid", songMid)
-            parameter("quality", quality)
-        }?.data?.playUrl?.get(songMid)?.url?.takeIf(String::isNotBlank)
+    suspend fun songUrl(mid: String, fileType: Int): String? =
+        fetchData<QQSongUrls>("song/$mid/url") {
+            parameter("file_type", fileType)
+        }
+            ?.data
+            ?.firstOrNull { it.mid == mid }
+            ?.purl
+            ?.takeIf(String::isNotBlank)
+            ?.let { StreamHost + it }
 
-    private suspend inline fun <reified T> request(
+    /** Issues a login QR code for [loginType], `qq` or `wx`. */
+    suspend fun qrCodeStart(loginType: String): QQQrCode? = fetchData<QQQrCode>("login/qrcode/$loginType")
+
+    suspend fun qrCodeStatus(loginType: String, identifier: String): QQQrStatus? =
+        fetchData<QQQrStatus>("login/qrcode/$loginType/status") {
+            parameter("identifier", identifier)
+        }
+
+    /** Whether the account sent as the cookie has expired; null without one, or on failure. */
+    suspend fun credentialExpired(): Boolean? = fetchEnvelope<Boolean>("login/check_expired")?.data
+
+    /** Renews the account sent as the cookie; the answer is the account to store from now on. */
+    suspend fun refreshCredential(): QQGatewayCredential? =
+        fetchData<QQGatewayCredential>("login/refresh_credential")
+
+    private suspend inline fun <reified T> fetchData(
         path: String,
-        crossinline block: io.ktor.client.request.HttpRequestBuilder.() -> Unit,
-    ): T? = runCatching {
+        crossinline block: HttpRequestBuilder.() -> Unit = {},
+    ): T? = fetchEnvelope<T>(path, block)?.data
+
+    /**
+     * The decoded envelope of a successful call, or null for a transport failure, a non-2xx
+     * status or a non-zero `code`. The three collapse together because no caller here can do
+     * anything different with them; `search` tells an empty result from a null one, which is the
+     * distinction that matters.
+     */
+    private suspend inline fun <reified T> fetchEnvelope(
+        path: String,
+        crossinline block: HttpRequestBuilder.() -> Unit = {},
+    ): QQApiResponse<T>? {
         val root = baseUrl().trimEnd('/')
         if (root.isEmpty()) return null
         val account = cookie().trim()
-        val response: HttpResponse = client.get("$root/$path") {
-            // Credentials travel per request rather than being installed into the backend, so one
-            // backend can serve several clients and so the Android build can sign in at all.
-            if (account.isNotEmpty()) header(HttpHeaders.Cookie, account)
-            block()
+        return try {
+            val response: HttpResponse = client.get("$root/$path") {
+                // Credentials travel per request rather than being installed into the gateway, so
+                // one gateway can serve several clients and the Android build can sign in at all.
+                if (account.isNotEmpty()) header(HttpHeaders.Cookie, account)
+                block()
+            }
+            // The gateway answers 4xx with a JSON body; decoding that as the success shape would
+            // yield an empty result that reads like "no such song".
+            if (response.status.value !in 200..299) return null
+            ApiJson.decodeFromString<QQApiResponse<T>>(response.bodyAsText())
+                .takeIf { it.code == SuccessCode }
+        } catch (cancelled: CancellationException) {
+            // A cancelled caller is not a dead gateway: swallowing this turned switching QR
+            // methods mid-poll into a "后端无响应" banner on the next method's page.
+            throw cancelled
+        } catch (_: Exception) {
+            null
         }
-        // The backend answers 400 with a JSON body for bad input; decoding that as the success
-        // shape would yield an empty result that reads like "no such song".
-        if (response.status.value !in 200..299) return null
-        ApiJson.decodeFromString<T>(response.bodyAsText())
-    }.getOrNull()
+    }
 
-    private companion object {
-        const val QQ_SUCCESS_CODE = 0
+    companion object {
+        const val SuccessCode = 0
+        private const val SearchTypeSong = 0
+
+        /** The one CDN host that serves the gateway's `purl` paths. */
+        const val StreamHost = "https://dl.stream.qqmusic.qq.com/"
     }
 }
 
-/** Almost every route wraps its payload in this envelope; `/getMusicPlay` does not. */
+/** Every route's envelope. */
 @Serializable
-data class QQEnvelope<T>(val response: T? = null)
+data class QQApiResponse<T>(
+    val code: Int = -1,
+    val msg: String = "",
+    val data: T? = null,
+)
 
 @Serializable
-data class QQSearchData(val data: QQSearchPayload? = null)
+data class QQSearchData(
+    @SerialName("total_num") val totalNum: Int = 0,
+    val nextpage: Int = 0,
+    val song: List<QQSong> = emptyList(),
+)
 
+/** A song row, the same shape in search results and playlist pages. */
 @Serializable
-data class QQSearchPayload(val song: QQSearchSongList? = null)
-
-@Serializable
-data class QQSearchSongList(val list: List<QQSearchSong> = emptyList())
-
-@Serializable
-data class QQSearchSong(
-    val songmid: String = "",
-    val songname: String = "",
-    val albummid: String = "",
-    val albumname: String = "",
+data class QQSong(
+    val id: Long = 0,
+    val mid: String = "",
+    val name: String = "",
+    val title: String = "",
+    val singer: List<QQSinger> = emptyList(),
+    val album: QQAlbum? = null,
+    val file: QQSongFile? = null,
+    val pay: QQSongPay? = null,
     /** Seconds, unlike NetEase's milliseconds. */
     val interval: Long = 0,
-    val singer: List<QQSinger> = emptyList(),
-    // Non-zero byte sizes mark which tiers exist for this track at all. They say nothing about
-    // whether the configured account may reach them.
-    val size128: Long = 0,
-    val size320: Long = 0,
-    val sizeflac: Long = 0,
-    val sizeape: Long = 0,
 )
 
 @Serializable
 data class QQSinger(
+    val id: Long = 0,
     val mid: String = "",
     val name: String = "",
-)
-
-@Serializable
-data class QQLyric(
-    val code: Int = 0,
-    val lyric: String = "",
-    /** Translated lines, in the same LRC shape as [lyric]. Empty when none exist. */
-    val trans: String = "",
-)
-
-@Serializable
-data class QQPlaylistDetail(val cdlist: List<QQPlaylistEntry> = emptyList())
-
-@Serializable
-data class QQPlaylistEntry(
-    val disstid: String = "",
-    val dissname: String = "",
-    val logo: String = "",
-    val desc: String = "",
-    val songnum: Int = 0,
-    val songlist: List<QQPlaylistSong> = emptyList(),
-)
-
-/**
- * Playlist rows disagree with search rows: `mid`/`name` here against `songmid`/`songname` there,
- * with the album nested rather than flattened into `albummid`/`albumname`.
- */
-@Serializable
-data class QQPlaylistSong(
-    val mid: String = "",
-    val name: String = "",
-    val interval: Long = 0,
-    val singer: List<QQSinger> = emptyList(),
-    val album: QQAlbum? = null,
 )
 
 @Serializable
 data class QQAlbum(
+    val id: Long = 0,
     val mid: String = "",
     val name: String = "",
+    /** The cover's own id, present on rows whose [mid] is empty (singles, indie uploads). */
+    val pmid: String = "",
+)
+
+/** Non-zero sizes mark which encodings exist; they say nothing about which the account may fetch. */
+@Serializable
+data class QQSongFile(
+    @SerialName("media_mid") val mediaMid: String = "",
+    @SerialName("size_128mp3") val size128: Long = 0,
+    @SerialName("size_320mp3") val size320: Long = 0,
+    @SerialName("size_flac") val sizeFlac: Long = 0,
 )
 
 @Serializable
-data class QQPlayUrlResponse(val data: QQPlayUrlData? = null)
-
-@Serializable
-data class QQPlayUrlData(
-    @SerialName("playUrl") val playUrl: Map<String, QQPlayUrlEntry> = emptyMap(),
+data class QQSongPay(
+    @SerialName("pay_play") val payPlay: Int = 0,
+    @SerialName("pay_month") val payMonth: Int = 0,
 )
 
 @Serializable
-data class QQPlayUrlEntry(val url: String = "")
+data class QQSonglistDetail(
+    val info: QQSonglistInfo? = null,
+    val songs: List<QQSong> = emptyList(),
+    val total: Int = 0,
+    val hasmore: Int = 0,
+)
+
+@Serializable
+data class QQSonglistInfo(
+    val id: Long = 0,
+    val title: String = "",
+    val picurl: String = "",
+    val desc: String = "",
+    val songnum: Int = 0,
+)
+
+/** `lyric` is LRC; `trans` and `roma` are LRC-shaped too, and empty when absent. */
+@Serializable
+data class QQLyric(
+    val lyric: String = "",
+    val trans: String = "",
+    val roma: String = "",
+)
+
+@Serializable
+data class QQSongUrls(
+    val expiration: Long = 0,
+    val data: List<QQSongUrlItem> = emptyList(),
+)
+
+@Serializable
+data class QQSongUrlItem(
+    val mid: String = "",
+    val purl: String = "",
+    val result: Int = 0,
+)
+
+@Serializable
+data class QQQrCode(
+    val identifier: String = "",
+    val mimetype: String = "",
+    /** The PNG, base64. */
+    val data: String = "",
+)
+
+@Serializable
+data class QQQrStatus(
+    val event: Int = -1,
+    val done: Boolean = false,
+    val credential: QQGatewayCredential? = null,
+)
+
+/** The gateway's `Credential` model, as it appears in QR-login and renewal answers. */
+@Serializable
+data class QQGatewayCredential(
+    val musicid: Long = 0,
+    val musickey: String = "",
+    val openid: String = "",
+    @SerialName("refresh_token") val refreshToken: String = "",
+    @SerialName("access_token") val accessToken: String = "",
+    @SerialName("expired_at") val expiredAt: Long = 0,
+    val unionid: String = "",
+    @SerialName("str_musicid") val strMusicid: String = "",
+    @SerialName("refresh_key") val refreshKey: String = "",
+    val encryptUin: String = "",
+    val loginType: Int = 0,
+)
 
 /**
- * QQ serves cover art off a predictable path keyed by album mid, so playlist and search rows do
- * not carry an artwork URL of their own.
+ * QQ serves cover art off a predictable path keyed by the album's mid, or by the cover's own
+ * `pmid` on rows that have no album of their own.
  */
-internal fun qqAlbumArtworkUrl(albumMid: String, size: Int = 300): String =
-    if (albumMid.isBlank()) {
-        ""
-    } else {
-        "https://y.gtimg.cn/music/photo_new/T002R${size}x${size}M000$albumMid.jpg"
-    }
+internal fun qqAlbumArtworkUrl(album: QQAlbum?, size: Int = 300): String {
+    val key = album?.mid?.takeIf(String::isNotBlank)
+        ?: album?.pmid?.takeIf(String::isNotBlank)
+        ?: return ""
+    return "https://y.gtimg.cn/music/photo_new/T002R${size}x${size}M000$key.jpg"
+}

@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,6 +21,8 @@ import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -43,7 +46,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
@@ -55,30 +57,44 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
 import com.leejlredstar.redefinencm.kmp.util.decodePngToImageBitmap
 import com.leejlredstar.redefinencm.kmp.viewmodel.LoginViewModel
 import org.koin.compose.koinInject
+import org.koin.core.parameter.parametersOf
 
+/**
+ * Signs in to one provider with whatever login methods are registered for it.
+ *
+ * The page knows two shapes of method — a QR code to scan and a credential to paste — and renders
+ * a section for each shape the registry holds. Which provider's methods those are is the only
+ * thing [provider] decides here; the texts that differ per provider are read off the methods.
+ */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun LoginScreen(
     onBack: () -> Unit,
-    viewModel: LoginViewModel = koinInject(),
+    provider: MusicProviderId = MusicProviderId.NETEASE,
+    viewModel: LoginViewModel = koinInject(parameters = { parametersOf(provider) }),
 ) {
     val server by viewModel.server.collectAsState()
     val cookie by viewModel.cookie.collectAsState()
-    val qrDataUri by viewModel.qrDataUri.collectAsState()
     val qrBitmapBytes by viewModel.qrBitmapBytes.collectAsState()
-    
+    val selectedQrMethod by viewModel.selectedQrMethod.collectAsState()
+
     val qrScanStatus by viewModel.qrScanStatus.collectAsState()
     val qrLoading by viewModel.qrLoading.collectAsState()
     val qrError by viewModel.qrError.collectAsState()
     val qrSuccess by viewModel.qrSuccess.collectAsState()
     val qrExpired by viewModel.qrExpired.collectAsState()
     val cookiePersistError by viewModel.cookiePersistError.collectAsState()
+
+    val qrMethods = viewModel.qrMethods
+    val textMethod = viewModel.textMethod
+    val serverSetting = viewModel.serverSetting
 
     var serverField by remember(server) { mutableStateOf(server) }
     var cookieField by remember(cookie) { mutableStateOf(cookie) }
@@ -92,7 +108,7 @@ fun LoginScreen(
 
     // 原版 QrLogin：进入登录页即自动生成二维码
     LaunchedEffect(Unit) {
-        if (qrDataUri.isEmpty() && !qrLoading) viewModel.startQrLogin()
+        if (qrMethods.isNotEmpty() && qrBitmapBytes == null && !qrLoading) viewModel.startQrLogin()
     }
 
     DisposableEffect(viewModel) {
@@ -163,13 +179,13 @@ fun LoginScreen(
                     .padding(horizontal = 24.dp, vertical = 16.dp),
             ) {
                 Text(
-                    text = "登录网易云音乐",
+                    text = "登录${provider.displayName}",
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.ExtraBold,
                     color = loginPalette.onPageStart,
                 )
                 Text(
-                    text = "RedefineNCM 是第三方网易云音乐客户端。登录后可以使用你的歌单、每日推荐和喜欢的音乐；不登录也可以搜索和播放。",
+                    text = loginIntroduction(provider),
                     style = MaterialTheme.typography.bodyMedium,
                     color = loginPalette.secondaryOnPageStart,
                 )
@@ -177,6 +193,7 @@ fun LoginScreen(
         }
 
         // QR Login section
+        if (qrMethods.isNotEmpty()) {
         Surface(
             shape = MaterialTheme.shapes.extraLarge,
             color = loginPalette.quietContainer,
@@ -190,10 +207,37 @@ fun LoginScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    "扫码登录",
+                    if (qrMethods.size == 1) qrMethods.single().displayName else "扫码登录",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
+                // More than one app can scan for this provider; the chips pick which one, and
+                // switching replaces the code on screen.
+                if (qrMethods.size > 1) {
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        qrMethods.forEach { method ->
+                            val selected = method.id == selectedQrMethod?.id
+                            FilterChip(
+                                selected = selected,
+                                onClick = { viewModel.selectQrMethod(method.id) },
+                                label = { Text(method.displayName) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    containerColor = Color.Transparent,
+                                    labelColor = loginPalette.onQuietContainer,
+                                    selectedContainerColor = loginPalette.accent,
+                                    selectedLabelColor = loginPalette.onAccent,
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    enabled = true,
+                                    selected = selected,
+                                    borderColor = loginPalette.onQuietContainer.copy(alpha = 0.18f),
+                                    selectedBorderColor = Color.Transparent,
+                                ),
+                            )
+                        }
+                    }
+                }
                 Spacer(Modifier.height(16.dp))
 
                 // QR code image or placeholder
@@ -209,7 +253,7 @@ fun LoginScreen(
                     } else if (qrBitmap != null) {
                         Image(
                             painter = BitmapPainter(qrBitmap),
-                            contentDescription = "网易云音乐登录二维码",
+                            contentDescription = "${provider.displayName}登录二维码",
                             modifier = Modifier.fillMaxSize().padding(12.dp),
                             contentScale = ContentScale.Fit,
                         )
@@ -227,7 +271,7 @@ fun LoginScreen(
                                 ) {
                                     Icon(AppIcons.Refresh, contentDescription = null)
                                     Spacer(Modifier.height(8.dp))
-                                    Text("二维码已过期", style = MaterialTheme.typography.titleSmall)
+                                    Text("二维码已失效", style = MaterialTheme.typography.titleSmall)
                                     Text("点按刷新", style = MaterialTheme.typography.bodySmall)
                                 }
                             }
@@ -298,7 +342,7 @@ fun LoginScreen(
                 Spacer(Modifier.height(12.dp))
 
                 // Buttons
-                if ((qrDataUri.isEmpty() || qrDecodeFailed || qrExpired) && !qrLoading) {
+                if ((qrBitmapBytes == null || qrDecodeFailed || qrExpired) && !qrLoading) {
                     Button(
                         onClick = { viewModel.startQrLogin() },
                         modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -325,14 +369,18 @@ fun LoginScreen(
                 }
             }
         }
+        }
 
         // Divider
-        HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-            color = loginPalette.onQuietContainer.copy(alpha = 0.16f),
-        )
+        if (qrMethods.isNotEmpty() && textMethod != null) {
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                color = loginPalette.onQuietContainer.copy(alpha = 0.16f),
+            )
+        }
 
-        // Manual cookie/server input
+        // Manual credential/server input
+        if (textMethod != null) {
         Surface(
             shape = MaterialTheme.shapes.extraLarge,
             color = loginPalette.quietContainer,
@@ -343,7 +391,7 @@ fun LoginScreen(
         ) {
             Column(modifier = Modifier.padding(24.dp)) {
                 Text(
-                    "手动输入",
+                    textMethod.displayName,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
@@ -351,7 +399,7 @@ fun LoginScreen(
                 OutlinedTextField(
                     value = serverField,
                     onValueChange = { serverField = it; saved = false },
-                    label = { Text("服务器地址") },
+                    label = { Text(serverSetting.label) },
                     singleLine = true,
                     shape = MaterialTheme.shapes.large,
                     modifier = Modifier.fillMaxWidth(),
@@ -361,7 +409,13 @@ fun LoginScreen(
                 OutlinedTextField(
                     value = cookieField,
                     onValueChange = { cookieField = it; saved = false },
-                    label = { Text("Cookie") },
+                    label = { Text(textMethod.fieldLabel) },
+                    supportingText = {
+                        Text(
+                            textMethod.supportingText,
+                            color = loginPalette.secondaryOnQuietContainer,
+                        )
+                    },
                     minLines = 3,
                     visualTransformation = if (revealCookie) {
                         VisualTransformation.None
@@ -408,7 +462,7 @@ fun LoginScreen(
                             .semantics { liveRegion = LiveRegionMode.Polite },
                     ) {
                         Text(
-                            "已保存；Cookie 已生效，服务器地址重启后生效。",
+                            "已保存；${textMethod.fieldLabel}已生效，${serverSetting.appliesWhen}。",
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                         )
@@ -433,10 +487,19 @@ fun LoginScreen(
                 }
             }
         }
+        }
 
         Spacer(Modifier.height(32.dp))
         }
     }
+}
+
+/** What signing in to [provider] is for, and that it can wait. */
+private fun loginIntroduction(provider: MusicProviderId): String = when (provider) {
+    MusicProviderId.NETEASE ->
+        "RedefineNCM 是第三方网易云音乐客户端。登录后可以使用你的歌单、每日推荐和喜欢的音乐；不登录也可以搜索和播放。"
+    MusicProviderId.QQ ->
+        "登录后 QQ 音乐的搜索和播放使用你账号的权益；不登录也可以搜索，并播放可免费收听的歌曲。"
 }
 
 @Composable

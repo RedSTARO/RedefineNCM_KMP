@@ -109,6 +109,7 @@ import com.leejlredstar.redefinencm.kmp.ui.screen.ArtistScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.DailySongsScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.DownloadManagementScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
+import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 import com.leejlredstar.redefinencm.kmp.ui.screen.LoginScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.PlaylistDetailScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.SearchScreen
@@ -151,7 +152,8 @@ private sealed interface TabDest {
 }
 
 internal sealed interface PushedDest {
-    data object Login : PushedDest
+    /** The login page for one provider; NetEase's is the one that opens on first launch. */
+    data class Login(val provider: MusicProviderId = MusicProviderId.NETEASE) : PushedDest
     data object NowPlaying : PushedDest
     data object FullLyric : PushedDest
     data object Downloads : PushedDest
@@ -195,7 +197,13 @@ private val pushedStackSaver = listSaver<SnapshotStateList<PushedDest>, String>(
 )
 
 internal fun encodePushedDestination(destination: PushedDest): String = when (destination) {
-    PushedDest.Login -> "login"
+    // NetEase's login keeps the bare form so navigation state saved before providers existed
+    // still restores.
+    is PushedDest.Login -> if (destination.provider == MusicProviderId.NETEASE) {
+        "login"
+    } else {
+        "login:${destination.provider.key}"
+    }
     PushedDest.NowPlaying -> "now-playing"
     PushedDest.FullLyric -> "full-lyric"
     PushedDest.Downloads -> "downloads"
@@ -208,7 +216,7 @@ internal fun encodePushedDestination(destination: PushedDest): String = when (de
 }
 
 internal fun decodePushedDestination(saved: String): PushedDest? = when (saved) {
-    "login" -> PushedDest.Login
+    "login" -> PushedDest.Login()
     // Migrate navigation state saved before the legacy KMP player was removed.
     "now-playing" -> PushedDest.NowPlaying
     "full-lyric" -> PushedDest.FullLyric
@@ -217,6 +225,8 @@ internal fun decodePushedDestination(saved: String): PushedDest? = when (saved) 
     "daily-songs" -> PushedDest.DailySongs
     "settings" -> PushedDest.Settings
     else -> when {
+        saved.startsWith("login:") ->
+            MusicProviderId.fromKey(saved.removePrefix("login:"))?.let(PushedDest::Login)
         saved.startsWith("playlist:") -> saved.removePrefix("playlist:").toLongOrNull()?.let(PushedDest::Playlist)
         saved.startsWith("artist:") -> saved.removePrefix("artist:").toLongOrNull()?.let(PushedDest::Artist)
         saved.startsWith("album:") -> saved.removePrefix("album:").toLongOrNull()?.let(PushedDest::Album)
@@ -352,7 +362,7 @@ private fun AppContent(
             val pushedStack = rememberSaveable(saver = pushedStackSaver) {
                 mutableStateListOf<PushedDest>().apply {
                     // 原版 SplashActivity：无 cookie 时先进登录页
-                    if (initialCookie.isBlank()) add(PushedDest.Login)
+                    if (initialCookie.isBlank()) add(PushedDest.Login())
                 }
             }
             // Every destination keeps its saved state (scroll offsets, carousel positions, a
@@ -638,7 +648,10 @@ private fun AppContent(
                                     saveableStateHolder.SaveableStateProvider(target.stateKey()) {
                                     when (target) {
                                         is RootDest.Pushed -> when (val dest = target.dest) {
-                                            is PushedDest.Login -> LoginScreen(onBack = ::back)
+                                            is PushedDest.Login -> LoginScreen(
+                                                onBack = ::back,
+                                                provider = dest.provider,
+                                            )
                                             is PushedDest.NowPlaying -> NowPlayingScreen(
                                                 onBack = ::back,
                                                 onOpenLyrics = ::openFullLyric,
@@ -666,7 +679,7 @@ private fun AppContent(
                                             )
                                             is PushedDest.Settings -> SettingsScreen(
                                                 scaffoldPadding = screenPadding,
-                                                onOpenLogin = { push(PushedDest.Login) },
+                                                onOpenLogin = { push(PushedDest.Login(it)) },
                                                 onBack = ::back,
                                             )
                                             is PushedDest.Artist -> ArtistScreen(
@@ -705,7 +718,7 @@ private fun AppContent(
                                             is TabDest.My -> UserPlaylistScreen(
                                                 scaffoldPadding = screenPadding,
                                                 onOpenPlaylist = { push(PushedDest.Playlist(it)) },
-                                                onOpenLogin = { push(PushedDest.Login) },
+                                                onOpenLogin = { push(PushedDest.Login()) },
                                                 onOpenDownloads = ::openDownloads,
                                                 onOpenSettings = { push(PushedDest.Settings) },
                                             )

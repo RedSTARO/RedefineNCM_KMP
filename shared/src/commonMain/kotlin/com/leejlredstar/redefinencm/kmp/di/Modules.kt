@@ -6,6 +6,15 @@ import com.leejlredstar.redefinencm.kmp.data.api.AmlldbApi
 import com.leejlredstar.redefinencm.kmp.data.api.ExternalHttpClient
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.data.api.QQMusicApi
+import com.leejlredstar.redefinencm.kmp.data.auth.CredentialStore
+import com.leejlredstar.redefinencm.kmp.data.auth.LoginMethodRegistry
+import com.leejlredstar.redefinencm.kmp.data.auth.NeteaseCookieLoginMethod
+import com.leejlredstar.redefinencm.kmp.data.auth.NeteaseCredentialSlot
+import com.leejlredstar.redefinencm.kmp.data.auth.NeteaseQrLoginMethod
+import com.leejlredstar.redefinencm.kmp.data.auth.QQCredentialSlot
+import com.leejlredstar.redefinencm.kmp.data.auth.QQCredentialTextLoginMethod
+import com.leejlredstar.redefinencm.kmp.data.auth.QQQrLoginMethod
+import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
 import com.leejlredstar.redefinencm.kmp.data.provider.NeteaseProvider
 import com.leejlredstar.redefinencm.kmp.data.provider.QQProvider
@@ -83,13 +92,37 @@ val sharedModule = module {
     // Repository
     single { Repository(get(), get()) }
 
+    // Credentials — one slot per provider, holding that provider's change rules. NetEase's
+    // restarts account work through the main view model, resolved lazily so the slot does not
+    // pull the view-model graph up at startup.
+    single {
+        val koin = getKoin()
+        NeteaseCredentialSlot(get()) { koin.get<MainViewModel>().refreshAccount() }
+    }
+    single { QQCredentialSlot(get()) }
+    single { CredentialStore(listOf(get<NeteaseCredentialSlot>(), get<QQCredentialSlot>())) }
+
+    // Login sources — the login page renders whatever is registered here for the provider it was
+    // opened for. Adding a way to sign in is an entry in this list.
+    single {
+        LoginMethodRegistry(
+            listOf(
+                NeteaseQrLoginMethod(get()),
+                NeteaseCookieLoginMethod(),
+                QQQrLoginMethod(get(), QQQrLoginMethod.Kind.QQ),
+                QQQrLoginMethod(get(), QQQrLoginMethod.Kind.WECHAT),
+                QQCredentialTextLoginMethod(),
+            ),
+        )
+    }
+
     // Providers — NetEase is an adapter over the existing Repository, not a rewrite of it. Order
     // here is the order aggregated results are grouped in, so NetEase stays first.
     single {
         MusicProviderRegistry(
             providers = listOf(
                 NeteaseProvider(get(), get()),
-                QQProvider(get(), get()),
+                QQProvider(get(), get(), get<QQCredentialSlot>()),
             ),
             settings = get(),
         )
@@ -125,7 +158,8 @@ val sharedModule = module {
     single(createdAtStart = true) { PlaybackReportingCoordinator(get(), get(), get()) }
 
     // ViewModels
-    factory { LoginViewModel(get(), get(), get()) }
+    // One login page per provider; the provider is the injection parameter.
+    factory { (provider: MusicProviderId) -> LoginViewModel(provider, get(), get(), get()) }
     // Single —— 与原版单 Activity 共享一个 MainViewModel 一致：各屏共享搜索/歌单/推荐状态，
     // init 中的 UID 解析与播放状态恢复只执行一次。
     single { MainViewModel(get(), get(), get(), get(), get(), get(), get()) }
