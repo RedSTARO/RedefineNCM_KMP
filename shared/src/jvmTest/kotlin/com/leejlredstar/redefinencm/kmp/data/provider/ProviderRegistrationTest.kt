@@ -149,4 +149,15 @@ class ProviderRegistrationTest {
         settings.setBoolean("qqSwitch", true)
         assertTrue(registrations.anySignedIn(settings))
     }
+
+    @Test
+    fun anAccountStoredWhereThePlatformCannotSignInDoesNotCount() = runTest {
+        // Web cannot send QQ's credential, so one saved there earlier is never used.
+        val qqSlot = MemorySlot(MusicProviderId.QQ, value = "musicid=1; musickey=k")
+        val qq = registration(MusicProviderId.QQ, slot = qqSlot, signInUnavailableReason = "Web 无法携带凭证")
+        val registrations = ProviderRegistrations(listOf(registration(MusicProviderId.NETEASE), qq))
+
+        assertFalse(qq.holdsAccount(qqSlot.value))
+        assertFalse(registrations.anySignedIn(settings))
+    }
 }

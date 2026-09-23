@@ -114,7 +114,7 @@ class AccountsViewModel(
             registrations.all.mapIndexed { index, registration ->
                 val (credential, identity) = credentials[index]
                 val config = configs[registration.id]
-                val signedIn = registration.credentialSlot.isSignedIn(credential)
+                val signedIn = registration.holdsAccount(credential)
                 ProviderAccount(
                     registration = registration,
                     enabled = config?.enabled ?: (registration.descriptor.enabledSetting?.default ?: true),

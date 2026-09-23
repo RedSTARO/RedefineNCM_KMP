@@ -46,9 +46,16 @@ class ProviderRegistration(
     suspend fun isEnabled(settings: PlatformSettings): Boolean =
         descriptor.enabledSetting?.let { settings.getBooleanAsync(it.key, it.default) } ?: true
 
-    /** Whether the provider is switched on and holds a signed-in account. */
+    /**
+     * Whether [credential] is an account this platform can use. A credential stored where the
+     * provider cannot be signed in to — a QQ account saved before the Web build stopped offering
+     * sign-in — is never sent, so it does not count.
+     */
+    fun holdsAccount(credential: String): Boolean = canSignIn && credentialSlot.isSignedIn(credential)
+
+    /** Whether the provider is switched on and holds an account this platform can use. */
     suspend fun isSignedIn(settings: PlatformSettings): Boolean =
-        isEnabled(settings) && credentialSlot.isSignedIn(credentialSlot.read())
+        isEnabled(settings) && holdsAccount(credentialSlot.read())
 }
 
 /** The registered providers, in the order pages list them and search groups their results. */
