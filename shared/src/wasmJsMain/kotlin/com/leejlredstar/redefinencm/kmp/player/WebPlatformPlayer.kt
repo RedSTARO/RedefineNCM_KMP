@@ -6,6 +6,8 @@ import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
 import com.leejlredstar.redefinencm.kmp.data.provider.toProviderItemIdOrNull
 import com.leejlredstar.redefinencm.kmp.download.LocalMediaAssets
+import com.leejlredstar.redefinencm.kmp.transition.TransitionCapability
+import com.leejlredstar.redefinencm.kmp.transition.TransitionPlan
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
@@ -13,6 +15,7 @@ import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
 import com.leejlredstar.redefinencm.kmp.util.WebDownloadStorage
 import kotlinx.browser.document
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -27,6 +30,7 @@ import kotlinx.coroutines.launch
 import org.w3c.dom.HTMLAudioElement
 import org.w3c.dom.events.Event
 import kotlin.JsFun
+import kotlin.math.abs
 
 /**
  * Browser [PlatformPlayer] backed by one persistent [HTMLAudioElement].
@@ -38,6 +42,10 @@ import kotlin.JsFun
  * Browser playback can be rejected by the user agent's autoplay policy. A rejected `play()`
  * promise leaves the prepared track paused, allowing the next explicit play click to start the
  * same audio element without another URL resolution.
+ *
+ * A song transition plays the next track on a second element, its volume and the current one's
+ * rate driven every 20 ms. At the swap the second element becomes [audio] and takes its
+ * listeners; the first keeps fading out, unheard by anything else, and is emptied at the end.
  */
 class WebPlatformPlayer(
     private val repo: Repository,
@@ -47,8 +55,10 @@ class WebPlatformPlayer(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
 ) : BasePlatformPlayer(settings.persistedPlayerVolume()) {
 
-    private val audio = document.createElement("audio") as HTMLAudioElement
-    private val resolver = StreamUrlResolver { mediaId ->
+    /** The element the queue's current track plays on; a song transition hands it over. */
+    private var audio = document.createElement("audio") as HTMLAudioElement
+
+    private fun resolverFor(recordFailures: Boolean) = StreamUrlResolver { mediaId ->
         resolveStreamUrl(
             mediaId = mediaId,
             providers = providers,
@@ -56,7 +66,28 @@ class WebPlatformPlayer(
             localAudioUri = { null },
             onlineUrl = { id, quality -> repo.getSongUrl(id, quality.name.lowercase()) },
             quality = { settings.onlinePlaybackQuality() },
+            recordFailures = recordFailures,
         )
+    }
+
+    private val resolver = resolverFor(recordFailures = true)
+
+    // The next track of a song transition is prepared before anyone is listening to it; its
+    // failure must not reach the "this track cannot play" channel.
+    private val quietResolver = resolverFor(recordFailures = false)
+
+    // ── Song transitions ──
+
+    private var armedPlan: TransitionPlan? = null
+    private var preparedPlan: TransitionPlan? = null
+    private var preparedDeck: HTMLAudioElement? = null
+    private var prepareJob: Job? = null
+    private var transitionJob: Job? = null
+    private var blend: WebBlend? = null
+
+    /** A blend under way: [deck] plays the incoming track, [ghost] the outgoing one after the swap. */
+    private class WebBlend(val plan: TransitionPlan, val deck: HTMLAudioElement, val outgoing: HTMLAudioElement) {
+        var swapped = false
     }
 
     private var queueModel: PlayQueue<MediaInfo> = PlayQueue.empty()
@@ -155,6 +186,14 @@ class WebPlatformPlayer(
     private fun listenToAudio(type: String, listener: (Event) -> Unit) {
         audio.addEventListener(type, listener)
         audioListeners += type to listener
+    }
+
+    /** Hands every listener from [from] to [to], for the swap of a song transition. */
+    private fun moveAudioListeners(from: HTMLAudioElement, to: HTMLAudioElement) {
+        audioListeners.forEach { (type, listener) ->
+            from.removeEventListener(type, listener)
+            to.addEventListener(type, listener)
+        }
     }
 
     private fun eventBelongsToCurrentMedia(): Boolean =
@@ -427,6 +466,7 @@ class WebPlatformPlayer(
 
     override fun pause() {
         if (released || _state.value == PlayerState.IDLE) return
+        abandonTransition()
         val wasActive = playRequested || _isPlaying.value || _state.value == PlayerState.BUFFERING
         if (!wasActive) return
 
@@ -449,6 +489,7 @@ class WebPlatformPlayer(
 
     override fun seekTo(positionMs: Long) {
         if (released || queueModel.currentItem == null) return
+        abandonTransition()
         val bounded = boundPosition(positionMs)
         pendingSeekMs = bounded
         _position.value = bounded
@@ -463,6 +504,7 @@ class WebPlatformPlayer(
 
     override fun seekToPrevious() {
         if (released) return
+        abandonTransition()
         val autoplay = playRequested || _isPlaying.value || _state.value == PlayerState.BUFFERING
         val previous = queueModel.previous(repeat = false)
         if (previous.currentIndex == queueModel.currentIndex) return
@@ -472,6 +514,7 @@ class WebPlatformPlayer(
 
     override fun seekToNext() {
         if (released) return
+        abandonTransition()
         val autoplay = playRequested || _isPlaying.value || _state.value == PlayerState.BUFFERING
         val next = queueModel.next(repeat = false)
         if (next.currentIndex != queueModel.currentIndex) {
@@ -484,6 +527,7 @@ class WebPlatformPlayer(
 
     override fun setQueue(items: List<MediaInfo>, startIndex: Int) {
         if (released) return
+        abandonTransition(dropPlan = true)
         if (items.isEmpty()) {
             clearQueue()
             return
@@ -494,6 +538,7 @@ class WebPlatformPlayer(
 
     override fun restoreQueue(items: List<MediaInfo>, startIndex: Int, positionMs: Long) {
         if (released) return
+        abandonTransition(dropPlan = true)
         if (items.isEmpty()) {
             clearQueue()
             return
@@ -510,10 +555,12 @@ class WebPlatformPlayer(
         if (released) return
         queueModel = queueModel.addItem(item)
         publishQueue()
+        revalidateTransition()
     }
 
     override fun clearQueue() {
         if (released) return
+        abandonTransition(dropPlan = true)
         invalidatePlayback(clearSource = true)
         queueModel = PlayQueue.empty()
         pendingSeekMs = 0L
@@ -526,6 +573,7 @@ class WebPlatformPlayer(
 
     override fun skipToIndex(index: Int) {
         if (released) return
+        abandonTransition()
         val selected = queueModel.skipToPlayOrderPosition(index)
         if (selected.currentIndex == queueModel.currentIndex) return
         val autoplay = playRequested || _isPlaying.value || _state.value == PlayerState.BUFFERING
@@ -544,8 +592,10 @@ class WebPlatformPlayer(
         if (itemIndex != queueModel.currentIndex) {
             queueModel = remaining
             publishQueue()
+            revalidateTransition()
             return
         }
+        abandonTransition(dropPlan = true)
         val autoplay = playRequested || _isPlaying.value || _state.value == PlayerState.BUFFERING
         queueModel = remaining
         selectCurrentTrack(autoplay = autoplay)
@@ -557,12 +607,14 @@ class WebPlatformPlayer(
         if (moved === queueModel) return
         queueModel = moved
         publishQueue()
+        revalidateTransition()
     }
 
     override fun setShuffleEnabled(enabled: Boolean) {
         if (released) return
         queueModel = queueModel.setShuffle(enabled)
         publishQueue()
+        revalidateTransition()
     }
 
     override fun setVolume(volume: Float) {
@@ -571,6 +623,13 @@ class WebPlatformPlayer(
     }
 
     private fun handleNaturalEnd() {
+        blend?.let { active ->
+            // The outgoing track ran out inside the blend: the incoming one takes over now.
+            if (!active.swapped) {
+                swapToIncoming(active)
+                return
+            }
+        }
         stopPositionSync()
         _isPlaying.value = false
         val next = queueModel.next(repeat = false)
@@ -603,6 +662,7 @@ class WebPlatformPlayer(
 
     override fun release() {
         if (released) return
+        abandonTransition(dropPlan = true)
         playbackLifecycle.dispose()
         clearWebMediaSessionHandlers()
         clearWebMediaSession()
@@ -625,6 +685,226 @@ class WebPlatformPlayer(
         scope.cancel()
     }
 
+    override val transitionCapability: TransitionCapability = TransitionCapability.TEMPO_MATCHED
+
+    override fun armTransition(plan: TransitionPlan) {
+        if (released || blend != null) return
+        val next = queueModel.next(repeat = false).takeIf { it.currentIndex != queueModel.currentIndex }
+        if (queueModel.currentItem?.id != plan.outgoingMediaId || next?.currentItem?.id != plan.incomingMediaId) return
+        if (preparedPlan != null && preparedPlan?.incomingMediaId != plan.incomingMediaId) discardPrepared()
+        armedPlan = plan
+        ensureTransitionLoop()
+    }
+
+    override fun disarmTransition() {
+        if (blend != null) return
+        armedPlan = null
+        discardPrepared()
+        audio.playbackRate = 1.0
+    }
+
+    private fun ensureTransitionLoop() {
+        if (transitionJob?.isActive == true) return
+        transitionJob = scope.launch {
+            while (isActive && !released && (armedPlan != null || blend != null)) {
+                tickTransition()
+                delay(TRANSITION_TICK_MS)
+            }
+        }
+    }
+
+    /** One step of the plan: prepare, ramp, start, drive the gains, swap and finish. */
+    private fun tickTransition() {
+        blend?.let { active ->
+            tickBlend(active)
+            return
+        }
+        val plan = armedPlan ?: return
+        if (queueModel.currentItem?.id != plan.outgoingMediaId) return
+        if (!playRequested || audio.paused || audio.readyState < 2) return
+        val positionMs = audio.currentTime * 1_000.0
+        val entry = if (plan.changesTempo) plan.rampStartMs else plan.startMs
+        if (audio.playbackRate == 1.0 && positionMs > entry + LATE_TOLERANCE_MS) {
+            // A seek landed past the plan's start; the track plays out on its own.
+            armedPlan = null
+            discardPrepared()
+            return
+        }
+        if (preparedPlan != plan && positionMs >= plan.startMs - PREPARE_LEAD_MS) prepareIncoming(plan)
+        if (plan.changesTempo && positionMs >= plan.rampStartMs) {
+            audio.playbackRate = plan.outgoingRateAt(positionMs.toLong())
+        }
+        if (positionMs >= plan.startMs) startBlend(plan)
+    }
+
+    private fun prepareIncoming(plan: TransitionPlan) {
+        discardPrepared()
+        preparedPlan = plan
+        prepareJob = scope.launch {
+            val url = quietResolver.resolve(plan.incomingMediaId) ?: return@launch
+            if (released || armedPlan != plan) return@launch
+            val deck = document.createElement("audio") as HTMLAudioElement
+            deck.preload = "auto"
+            deck.autoplay = false
+            deck.volume = 0.0
+            deck.src = url
+            deck.load()
+            if (!awaitMediaEvent(deck, "loadedmetadata")) {
+                releaseDeck(deck)
+                return@launch
+            }
+            deck.currentTime = plan.incomingEntryMs / 1_000.0
+            if (!awaitMediaEvent(deck, "canplay") || released || armedPlan != plan) {
+                releaseDeck(deck)
+                return@launch
+            }
+            preparedDeck = deck
+        }
+    }
+
+    private fun startBlend(plan: TransitionPlan) {
+        val deck = preparedDeck?.takeIf { preparedPlan == plan }
+        preparedDeck = null
+        preparedPlan = null
+        armedPlan = null
+        if (deck == null) {
+            // The next track was not ready in time; the current one plays out at its own tempo.
+            audio.playbackRate = 1.0
+            return
+        }
+        deck.volume = 0.0
+        val active = WebBlend(plan, deck, audio)
+        blend = active
+        deck.play().then(
+            onFulfilled = { null },
+            onRejected = {
+                if (blend === active) abandonTransition()
+                null
+            },
+        )
+    }
+
+    private fun tickBlend(active: WebBlend) {
+        val plan = active.plan
+        // The incoming track's own clock drives the blend: before it really starts, nothing moves.
+        val elapsedMs = (active.deck.currentTime * 1_000.0 - plan.incomingEntryMs).coerceAtLeast(0.0)
+        val gains = plan.gainsAt(elapsedMs.toLong())
+        val userVolume = _volume.value.toDouble()
+        active.outgoing.volume = (userVolume * gains.outgoing).coerceIn(0.0, 1.0)
+        active.deck.volume = (userVolume * gains.incoming).coerceIn(0.0, 1.0)
+        // Keep the outgoing beat on the incoming one: nudge its rate by the phase error, up to
+        // 4 %, the way a DJ rides the pitch fader. Browsers start play() tens of milliseconds late.
+        if (!active.outgoing.ended && elapsedMs > 0.0) {
+            val expected = plan.startMs + elapsedMs * plan.outgoingRate
+            val errorMs = (active.outgoing.currentTime * 1_000.0 - expected) / plan.outgoingRate
+            val correction = if (abs(errorMs) < 5.0) 0.0 else (errorMs / 1_000.0).coerceIn(-0.04, 0.04)
+            active.outgoing.playbackRate = plan.outgoingRate * (1.0 - correction)
+        }
+        if (!active.swapped && elapsedMs >= plan.swapAfterMs) swapToIncoming(active)
+        if (elapsedMs >= plan.overlapMs || active.outgoing.ended) finishBlend(active)
+    }
+
+    /** The incoming track becomes the current one, through the one queue publication path. */
+    private fun swapToIncoming(active: WebBlend) {
+        val advanced = queueModel.next(repeat = false)
+        if (advanced.currentIndex == queueModel.currentIndex || advanced.currentItem?.id != active.plan.incomingMediaId) {
+            abandonTransition()
+            return
+        }
+        active.swapped = true
+        moveAudioListeners(active.outgoing, active.deck)
+        audio = active.deck
+        queueModel = advanced
+        loadedMediaId = active.plan.incomingMediaId
+        playRequested = true
+        publishQueue()
+        publishDurationFromAudio()
+        syncPositionFromAudio()
+        _isPlaying.value = true
+        _state.value = PlayerState.PLAYING
+        startPositionSync()
+        updateWebMediaSessionPlaybackState("playing")
+        // Last, so observers reading currentMedia on this change already see the new track.
+        _playbackOccurrence.advancePlaybackOccurrence()
+    }
+
+    private fun finishBlend(active: WebBlend) {
+        if (!active.swapped) swapToIncoming(active)
+        if (blend !== active) return
+        releaseDeck(active.outgoing)
+        audio.volume = _volume.value.toDouble()
+        audio.playbackRate = 1.0
+        blend = null
+    }
+
+    /**
+     * Ends a blend or a ramp that is under way, keeping the track the queue calls current at its
+     * own tempo and volume. [dropPlan] also forgets a plan that has not started, for actions that
+     * replace the current track.
+     */
+    private fun abandonTransition(dropPlan: Boolean = false) {
+        val active = blend
+        if (active != null) {
+            blend = null
+            if (active.swapped) {
+                releaseDeck(active.outgoing)
+            } else {
+                releaseDeck(active.deck)
+            }
+            audio.volume = _volume.value.toDouble()
+        }
+        audio.playbackRate = 1.0
+        if (dropPlan || active != null) {
+            armedPlan = null
+            discardPrepared()
+        }
+    }
+
+    /** After a queue change that keeps the current track: drop a plan for a pair that is gone. */
+    private fun revalidateTransition() {
+        val next = queueModel.next(repeat = false).takeIf { it.currentIndex != queueModel.currentIndex }?.currentItem
+        val active = blend
+        if (active != null && !active.swapped && active.plan.incomingMediaId != next?.id) {
+            abandonTransition()
+        }
+        val plan = armedPlan ?: return
+        if (plan.outgoingMediaId != queueModel.currentItem?.id || plan.incomingMediaId != next?.id) {
+            armedPlan = null
+            discardPrepared()
+            if (blend == null) audio.playbackRate = 1.0
+        }
+    }
+
+    private fun discardPrepared() {
+        prepareJob?.cancel()
+        prepareJob = null
+        preparedDeck?.let(::releaseDeck)
+        preparedDeck = null
+        preparedPlan = null
+    }
+
+    private fun releaseDeck(deck: HTMLAudioElement) {
+        if (deck === audio) return
+        deck.pause()
+        deck.removeAttribute("src")
+        deck.load()
+    }
+
+    /** Waits for [type] on [element]; false on an `error` event instead. */
+    private suspend fun awaitMediaEvent(element: HTMLAudioElement, type: String): Boolean {
+        val outcome = CompletableDeferred<Boolean>()
+        val onEvent: (Event) -> Unit = { outcome.complete(true) }
+        val onError: (Event) -> Unit = { outcome.complete(false) }
+        element.addEventListener(type, onEvent)
+        element.addEventListener("error", onError)
+        return try {
+            outcome.await()
+        } finally {
+            element.removeEventListener(type, onEvent)
+            element.removeEventListener("error", onError)
+        }
+    }
+
     private fun publishMediaSessionPosition(force: Boolean = false) {
         val durationMs = _duration.value
         if (durationMs <= 0L) return
@@ -640,6 +920,11 @@ class WebPlatformPlayer(
 
     private companion object {
         const val POSITION_POLL_INTERVAL_MS = 100L
+        const val TRANSITION_TICK_MS = 20L
+
+        /** How long before a blend its incoming track is loaded: a CDN round trip plus a seek. */
+        const val PREPARE_LEAD_MS = 12_000L
+        const val LATE_TOLERANCE_MS = 250.0
 
         val terminalOrEmptyStates = setOf(
             PlayerState.IDLE,

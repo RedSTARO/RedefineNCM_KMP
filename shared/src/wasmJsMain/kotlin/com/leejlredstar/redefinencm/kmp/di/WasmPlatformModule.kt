@@ -7,6 +7,10 @@ import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.WebPlatformPlayer
 import com.leejlredstar.redefinencm.kmp.recognition.MicrophoneRecorder
 import com.leejlredstar.redefinencm.kmp.recognition.WasmMicrophoneRecorder
+import com.leejlredstar.redefinencm.kmp.transition.BeatModelLoader
+import com.leejlredstar.redefinencm.kmp.transition.TrackEndsDecoder
+import com.leejlredstar.redefinencm.kmp.transition.WebBeatModelLoader
+import com.leejlredstar.redefinencm.kmp.transition.WebTrackEndsDecoder
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.js.Js
@@ -35,4 +39,9 @@ actual fun platformModule() = module {
 
     // 浏览器 getUserMedia 输入；只在 HTTPS 或 localhost 安全上下文工作。
     single<MicrophoneRecorder> { WasmMicrophoneRecorder() }
+
+    // Smart song transitions: the beat model through ONNX Runtime Web on WebNN or WebGPU, and the
+    // track ends decoded by the browser. There is no local download store to analyse from.
+    single<BeatModelLoader> { WebBeatModelLoader() }
+    single<TrackEndsDecoder> { WebTrackEndsDecoder() }
 }

@@ -28,6 +28,7 @@ ffmpeg = "8.0.1-1.5.13"
 # which is published up to 1.24.4, so the Java side stays on the matching 1.24 line.
 onnxruntimeJava = "1.24.3"
 onnxruntimeDirectml = "1.24.4"
+onnxruntimeWeb = "1.30.0"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }

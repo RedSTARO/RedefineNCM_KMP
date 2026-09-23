@@ -472,6 +472,9 @@ kotlin {
             dependencies {
                 implementation(libs.kotlinx.browser)
                 implementation(libs.ktor.client.js)
+                // The beat model's runtime for smart transitions. Imported dynamically, so its
+                // JavaScript and WebAssembly are fetched only when the model is first needed.
+                implementation(npm("onnxruntime-web", libs.versions.onnxruntimeWeb.get()))
             }
         }
     }

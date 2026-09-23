@@ -286,6 +286,11 @@ ships the DirectML build of `onnxruntime.dll` and `onnxruntime_providers_shared.
 `Microsoft.ML.OnnxRuntime.DirectML` 1.24.4 NuGet package. That build loads `DirectML.dll` from
 Windows itself; the app does not ship DirectML.
 
+The web app bundles ONNX Runtime Web (`onnxruntime-web` 1.30.0) and its WebAssembly, loaded
+only when smart transitions first need the model. Parts of that bundle carry Google LLC's
+Apache License 2.0 notices, reproduced in the `.LICENSE.txt` files next to the bundle; the full
+Apache License text is [`LICENSES/Apache-2.0.txt`](LICENSES/Apache-2.0.txt).
+
 Copyright (c) Microsoft Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
