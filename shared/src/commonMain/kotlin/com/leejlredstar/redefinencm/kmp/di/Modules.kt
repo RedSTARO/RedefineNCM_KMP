@@ -12,10 +12,12 @@ import com.leejlredstar.redefinencm.kmp.data.auth.ProviderEnabledSetting
 import com.leejlredstar.redefinencm.kmp.data.auth.QQAccountIdentitySource
 import com.leejlredstar.redefinencm.kmp.data.auth.ServerCheckResult
 import com.leejlredstar.redefinencm.kmp.data.local.LocalAccount
+import com.leejlredstar.redefinencm.kmp.data.local.LocalLibraryStore
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderRegistration
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderRegistrations
 import com.leejlredstar.redefinencm.kmp.getPlatform
 import com.leejlredstar.redefinencm.kmp.viewmodel.AccountsViewModel
+import com.leejlredstar.redefinencm.kmp.viewmodel.LocalLibraryViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.map
 import com.leejlredstar.redefinencm.kmp.data.auth.NeteaseCookieLoginMethod
@@ -244,8 +246,10 @@ val sharedModule = module {
         )
     }
 
-    // The device-local account owns what never leaves this device; it has a name and no login.
+    // The device-local account owns what never leaves this device; it has a name and no login,
+    // and a library of playlists and favourites whose tracks may come from any provider.
     single { LocalAccount(get()) }
+    single { LocalLibraryStore(get()) }
 
     single { LocalMediaAssets(get()) }
     single { LyricResolver(get(), get(), get(), get()) }
@@ -286,11 +290,13 @@ val sharedModule = module {
     // Single — the now-playing state is inherently global (only one song plays at a time).
     // The eager status restorer resolves this singleton after settings and queue restoration, so
     // restored/background playback also resolves lyrics without waiting for a screen composition.
-    single { NowPlayingViewModel(get(), get(), get(), get(), get(), get(), get()) }
+    single { NowPlayingViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
     // Factory — recording and cancellation are scoped to one pushed recognition page.
     factory { SongRecognitionViewModel(get(), get(), get()) }
     // Single — the settings summary and the accounts page read the same account state.
     single { AccountsViewModel(get(), get(), get()) }
+    // Single — the song menus of every page share one add-to-local-playlist dialog.
+    single { LocalLibraryViewModel(get(), get()) }
 }
 
 /** NetEase's server check: `/inner/version/` answers with the backend's version. */

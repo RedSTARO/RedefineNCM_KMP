@@ -110,6 +110,8 @@ import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
 import com.leejlredstar.redefinencm.kmp.util.applySettingsBackup
 import com.leejlredstar.redefinencm.kmp.util.encodeSettingsBackup
+import com.leejlredstar.redefinencm.kmp.util.decodeBackupLocalLibrary
+import com.leejlredstar.redefinencm.kmp.data.local.LocalLibraryStore
 import com.leejlredstar.redefinencm.kmp.util.rememberExportFileLauncher
 import com.leejlredstar.redefinencm.kmp.util.rememberImportFileLauncher
 import com.leejlredstar.redefinencm.kmp.viewmodel.AccountsViewModel
@@ -156,6 +158,7 @@ fun SettingsScreen(
     settings: PlatformSettings = koinInject(),
     mainViewModel: MainViewModel = koinInject(),
     accountsViewModel: AccountsViewModel = koinInject(),
+    localLibrary: LocalLibraryStore = koinInject(),
     nowPlayingViewModel: NowPlayingViewModel = koinInject(),
 ) {
     var onlineQuality by remember(settings) { mutableStateOf(SoundQuality.STANDARD.name) }
@@ -334,6 +337,11 @@ fun SettingsScreen(
     val launchImport = rememberImportFileLauncher { json ->
         scope.launch {
             if (applySettingsBackup(json, settings)) {
+                decodeBackupLocalLibrary(json)?.let { playlists ->
+                    localLibrary.importPlaylists(playlists).onFailure { failure ->
+                        settingsMessage = "本地歌单导入失败：${failure.message ?: "未知错误"}"
+                    }
+                }
                 lyricSourceWriteGeneration += 1
                 lyricDisplayWriteGeneration += 1
                 // Apply privacy-sensitive source changes from the process snapshot immediately.
@@ -739,7 +747,12 @@ fun SettingsScreen(
                 // here — verified on device with and without an icon, scrolled to the end of the
                 // list — so the group is not usable for two text-labelled actions in this
                 // Compose Multiplatform build.
-                SettingsButton("导出设置", settingsPalette, index = 0, count = 2) { launchExport(encodeSettingsBackup(settings)) }
+                SettingsButton("导出设置", settingsPalette, index = 0, count = 2) {
+                    // The local account's playlists travel with the settings (AGENTS.md D6).
+                    scope.launch {
+                        launchExport(encodeSettingsBackup(settings, localLibrary.snapshot()))
+                    }
+                }
                 SettingsButton("导入设置", settingsPalette, index = 1, count = 2) {
                     showImportConfirmation = true
                 }

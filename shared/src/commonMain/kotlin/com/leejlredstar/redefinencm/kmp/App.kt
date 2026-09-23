@@ -112,6 +112,10 @@ import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderRegistrations
 import com.leejlredstar.redefinencm.kmp.ui.screen.AccountsScreen
+import com.leejlredstar.redefinencm.kmp.ui.screen.LocalLibraryScreen
+import com.leejlredstar.redefinencm.kmp.ui.screen.LocalPlaylistScreen
+import com.leejlredstar.redefinencm.kmp.ui.component.AddToLocalPlaylistDialog
+import com.leejlredstar.redefinencm.kmp.viewmodel.LocalLibraryViewModel
 import com.leejlredstar.redefinencm.kmp.ui.screen.LoginScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.PlaylistDetailScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.SearchScreen
@@ -164,6 +168,9 @@ internal sealed interface PushedDest {
     data object Settings : PushedDest
     /** Every account the app holds, opened from settings. */
     data object Accounts : PushedDest
+    /** The local account's playlists and favourites. */
+    data object LocalLibrary : PushedDest
+    data class LocalPlaylist(val id: String) : PushedDest
     data class Playlist(val id: Long) : PushedDest
     data class Artist(val id: Long) : PushedDest
     data class Album(val id: Long) : PushedDest
@@ -215,6 +222,8 @@ internal fun encodePushedDestination(destination: PushedDest): String = when (de
     PushedDest.DailySongs -> "daily-songs"
     PushedDest.Settings -> "settings"
     PushedDest.Accounts -> "accounts"
+    PushedDest.LocalLibrary -> "local-library"
+    is PushedDest.LocalPlaylist -> "local-playlist:${destination.id}"
     is PushedDest.Playlist -> "playlist:${destination.id}"
     is PushedDest.Artist -> "artist:${destination.id}"
     is PushedDest.Album -> "album:${destination.id}"
@@ -230,7 +239,10 @@ internal fun decodePushedDestination(saved: String): PushedDest? = when (saved) 
     "daily-songs" -> PushedDest.DailySongs
     "settings" -> PushedDest.Settings
     "accounts" -> PushedDest.Accounts
+    "local-library" -> PushedDest.LocalLibrary
     else -> when {
+        saved.startsWith("local-playlist:") ->
+            saved.removePrefix("local-playlist:").takeIf(String::isNotBlank)?.let(PushedDest::LocalPlaylist)
         saved.startsWith("login:") ->
             MusicProviderId.fromKey(saved.removePrefix("login:"))?.let(PushedDest::Login)
         saved.startsWith("playlist:") -> saved.removePrefix("playlist:").toLongOrNull()?.let(PushedDest::Playlist)
@@ -474,6 +486,22 @@ private fun AppContent(
                 mainViewModel.consumeUpdateMessage()
             }
 
+            // The local library answers from wherever it was asked — a song menu on any page — so
+            // its messages use the app's snackbar, and its "add to a playlist" dialog is hosted here.
+            val localLibraryViewModel: LocalLibraryViewModel = koinInject()
+            val localLibraryMessage by localLibraryViewModel.message.collectAsState()
+            LaunchedEffect(localLibraryMessage) {
+                val message = localLibraryMessage ?: return@LaunchedEffect
+                desktopSnackbarVisible = true
+                try {
+                    snackbarHostState.showSnackbar(message)
+                } finally {
+                    desktopSnackbarVisible = false
+                }
+                localLibraryViewModel.consumeMessage()
+            }
+            AddToLocalPlaylistDialog(localLibraryViewModel)
+
             // A track that resolved to nothing used to leave the player silent with no word of
             // why. The reason comes from the provider that failed, once per failure.
             val playbackFailure by nowPlayingViewModel.playbackFailure.collectAsState()
@@ -715,6 +743,16 @@ private fun AppContent(
                                                 onBack = ::back,
                                                 onOpenLogin = { push(PushedDest.Login(it)) },
                                             )
+                                            is PushedDest.LocalLibrary -> LocalLibraryScreen(
+                                                onBack = ::back,
+                                                onOpenPlaylist = { push(PushedDest.LocalPlaylist(it)) },
+                                                scaffoldPadding = screenPadding,
+                                            )
+                                            is PushedDest.LocalPlaylist -> LocalPlaylistScreen(
+                                                playlistId = dest.id,
+                                                onBack = ::back,
+                                                scaffoldPadding = screenPadding,
+                                            )
                                             is PushedDest.Artist -> ArtistScreen(
                                                 artistId = dest.id,
                                                 scaffoldPadding = screenPadding,
@@ -754,6 +792,7 @@ private fun AppContent(
                                                 onOpenLogin = { push(PushedDest.Login()) },
                                                 onOpenDownloads = ::openDownloads,
                                                 onOpenSettings = { push(PushedDest.Settings) },
+                                                onOpenLocalLibrary = { push(PushedDest.LocalLibrary) },
                                             )
                                         }
                                     }

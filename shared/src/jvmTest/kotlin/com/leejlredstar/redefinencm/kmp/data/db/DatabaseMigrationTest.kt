@@ -70,6 +70,7 @@ class DatabaseMigrationTest {
                 assertTrue("CachedCommentMusic" in tables)
                 assertTrue("PlayerStatus" in tables)
                 assertTrue("CachedUserLevel" in tables)
+                assertTrue("LocalLibrary" in tables)
 
                 assertEquals(AppDatabase.Schema.version, readUserVersion(jdbcUrl))
             }

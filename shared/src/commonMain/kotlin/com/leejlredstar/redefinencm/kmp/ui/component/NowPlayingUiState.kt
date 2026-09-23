@@ -47,8 +47,14 @@ internal data class NowPlayingUiState(
     val isFavorite: Boolean
         get() = favoriteState.mediaId == media?.id && favoriteState.isLiked
 
-    /** Whether the heart does anything for this track's provider. */
-    val canFavorite: Boolean get() = hasMedia && ProviderCapability.LIKE in capabilities
+    /**
+     * Whether the heart can be used: always with a track playing. A provider without the account's
+     * own likes keeps its hearts in the local account's favourites instead.
+     */
+    val canFavorite: Boolean get() = hasMedia
+
+    /** Whether the heart writes to the local favourites rather than the provider account. */
+    val favoriteIsLocal: Boolean get() = hasMedia && ProviderCapability.LIKE !in capabilities
 
     /** Whether this track's provider has comments to show. */
     val canComment: Boolean get() = hasMedia && ProviderCapability.COMMENTS in capabilities

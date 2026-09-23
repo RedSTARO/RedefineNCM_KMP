@@ -27,6 +27,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -69,6 +71,7 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
+import com.leejlredstar.redefinencm.kmp.viewmodel.LocalLibraryViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -83,6 +86,7 @@ fun PlaylistDetailScreen(
     viewModel: MainViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
     settings: PlatformSettings = koinInject(),
+    localLibrary: LocalLibraryViewModel = koinInject(),
 ) {
     val detail by viewModel.playlistDetail.collectAsState()
     val tracks by viewModel.playlistSongs.collectAsState()
@@ -170,6 +174,8 @@ fun PlaylistDetailScreen(
                     onBack = onBack,
                     onPlayAll = { playAll() },
                     onDownloadAll = { confirmDownloadAll = true },
+                    // A copy in the local account keeps the list even if the account loses it.
+                    onSaveLocal = { localLibrary.requestAddition(queueItems, suggestedName = title) },
                 )
             }
             if (hasCachedContent) {
@@ -371,6 +377,7 @@ private fun PlaylistHeader(
     onBack: () -> Unit,
     onPlayAll: () -> Unit,
     onDownloadAll: () -> Unit,
+    onSaveLocal: () -> Unit,
 ) {
     val fallbackAccentColor = MaterialTheme.colorScheme.primaryContainer
     val extractAccent = rememberThemeColorExtractor(
@@ -439,6 +446,17 @@ private fun PlaylistHeader(
                     Icon(AppIcons.Download, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("下载全部")
+                }
+                FilledTonalIconButton(
+                    onClick = onSaveLocal,
+                    enabled = actionsEnabled,
+                    modifier = Modifier.size(52.dp),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = accentPalette.container,
+                        contentColor = accentPalette.onContainer,
+                    ),
+                ) {
+                    Icon(AppIcons.Add, contentDescription = "存为本地歌单")
                 }
             }
         }

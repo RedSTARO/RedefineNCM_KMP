@@ -53,6 +53,7 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.AccentColorSaver
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
+import com.leejlredstar.redefinencm.kmp.viewmodel.LocalLibraryViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -115,8 +116,11 @@ fun UserPlaylistScreen(
     onOpenLogin: () -> Unit = {},
     onOpenDownloads: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    onOpenLocalLibrary: () -> Unit = {},
     viewModel: MainViewModel = koinInject(),
+    localLibraryViewModel: LocalLibraryViewModel = koinInject(),
 ) {
+    val localLibrary by localLibraryViewModel.library.collectAsState()
     val userDetail by viewModel.userDetail.collectAsState()
     val userLevel by viewModel.userLevel.collectAsState()
     val playlists by viewModel.userPlaylists.collectAsState()
@@ -225,6 +229,24 @@ fun UserPlaylistScreen(
                     icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Download,
                     accentPalette = accentPalette,
                     onClick = onOpenDownloads,
+                )
+            }
+            // The local account's library needs no sign-in either, and holds any provider's songs.
+            item(key = "library-local") {
+                val library = localLibrary
+                LibraryShortcut(
+                    title = "本地歌单",
+                    subtitle = when {
+                        library == null -> "只保存在此设备的歌单"
+                        library.playlists.isEmpty() -> "歌曲可来自任意平台；只保存在此设备"
+                        else -> buildString {
+                            append("${library.userPlaylists.size} 个歌单")
+                            library.favorites?.let { append(" · 本地喜欢 ${it.tracks.size} 首") }
+                        }
+                    },
+                    icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.QueueMusic,
+                    accentPalette = accentPalette,
+                    onClick = onOpenLocalLibrary,
                 )
             }
             when {

@@ -11,7 +11,8 @@ import kotlinx.browser.localStorage
 /**
  * Synchronous SQLDelight driver for the browser cache used by this project.
  *
- * The schema contains only JSON value tables addressed by one integer primary key. Browsers do
+ * The schema contains only JSON value tables addressed by one integer primary key — the local
+ * library included, which is why it is one JSON document rather than relational tables. Browsers do
  * not expose a synchronous SQLite API, while SQLDelight's worker driver would force every other
  * target onto async generated queries. This driver keeps the generated [AppDatabase] API intact
  * and persists the exact current query model in localStorage. Unsupported SQL fails immediately
@@ -173,7 +174,7 @@ internal class BrowserStorageSqlDriver : SqlDriver {
     }
 
     private fun keyForTable(table: String, values: List<Any?>): Long = when (table) {
-        "CachedRecommendResource", "CachedRecommendSongs", "DownloadQueue" -> 0L
+        "CachedRecommendResource", "CachedRecommendSongs", "DownloadQueue", "LocalLibrary" -> 0L
         "PlayerStatus" -> 1L
         in KEYED_TABLES -> values.firstOrNull() as? Long
             ?: error("Missing primary key for $table")
@@ -272,6 +273,7 @@ internal class BrowserStorageSqlDriver : SqlDriver {
             "CREATE TABLE IF NOT EXISTS CachedUserLevel ( uid INTEGER NOT NULL PRIMARY KEY, json TEXT NOT NULL )",
             "CREATE TABLE IF NOT EXISTS CachedUserPlaylist ( uid INTEGER NOT NULL PRIMARY KEY, json TEXT NOT NULL )",
             "CREATE TABLE IF NOT EXISTS DownloadQueue ( singleton INTEGER NOT NULL PRIMARY KEY DEFAULT 0, json TEXT NOT NULL )",
+            "CREATE TABLE IF NOT EXISTS LocalLibrary ( singleton INTEGER NOT NULL PRIMARY KEY DEFAULT 0, json TEXT NOT NULL )",
             "CREATE TABLE IF NOT EXISTS PlayerStatus ( id INTEGER NOT NULL PRIMARY KEY, json TEXT NOT NULL )",
         )
 
@@ -286,6 +288,7 @@ internal class BrowserStorageSqlDriver : SqlDriver {
             "INSERT OR REPLACE INTO CachedUserLevel(uid, json) VALUES (?, ?)" to "CachedUserLevel",
             "INSERT OR REPLACE INTO CachedUserPlaylist(uid, json) VALUES (?, ?)" to "CachedUserPlaylist",
             "INSERT OR REPLACE INTO DownloadQueue(singleton, json) VALUES (0, ?)" to "DownloadQueue",
+            "INSERT OR REPLACE INTO LocalLibrary(singleton, json) VALUES (0, ?)" to "LocalLibrary",
             "INSERT OR REPLACE INTO PlayerStatus(id, json) VALUES (1, ?)" to "PlayerStatus",
         )
 
@@ -300,6 +303,7 @@ internal class BrowserStorageSqlDriver : SqlDriver {
             "SELECT json FROM CachedUserLevel WHERE uid = ?" to "CachedUserLevel",
             "SELECT json FROM CachedUserPlaylist WHERE uid = ?" to "CachedUserPlaylist",
             "SELECT json FROM DownloadQueue WHERE singleton = 0" to "DownloadQueue",
+            "SELECT json FROM LocalLibrary WHERE singleton = 0" to "LocalLibrary",
             "SELECT json FROM PlayerStatus WHERE id = 1" to "PlayerStatus",
         )
 

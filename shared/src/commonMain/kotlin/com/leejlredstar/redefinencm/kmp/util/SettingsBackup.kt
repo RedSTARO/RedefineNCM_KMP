@@ -1,5 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.util
 
+import com.leejlredstar.redefinencm.kmp.data.local.LocalLibraryDocument
+import com.leejlredstar.redefinencm.kmp.data.local.LocalPlaylist
 import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
 import com.leejlredstar.redefinencm.kmp.notification.LyricSurfaceAlignment
@@ -25,6 +27,11 @@ data class SettingsBackupData(
     val localAccountName: String? = null,
     /** Null keeps the current choice when importing a backup made before the setting existed. */
     val mergeSameSongs: Boolean? = null,
+    /**
+     * The local account's playlists and favourites — user data rather than a setting, carried so
+     * a reinstall does not lose them. Null in a backup made before the local library existed.
+     */
+    val localLibrary: List<LocalPlaylist>? = null,
     val onlinePlayQuality: String = SoundQuality.STANDARD.name,
     val downloadQuality: String = SoundQuality.STANDARD.name,
     val replacePlaylist: Boolean = SettingKeys.REPLACE_PLAYLIST_DEFAULT,
@@ -49,15 +56,23 @@ data class SettingsBackupData(
 
 private val backupJson = Json { ignoreUnknownKeys = true; coerceInputValues = true }
 
-/** Reads current settings and returns a JSON string ready to write to a file. */
-fun encodeSettingsBackup(settings: PlatformSettings): String = encodeSettingsBackup(
+/**
+ * Reads current settings, and the local library when given, and returns a JSON string ready to
+ * write to a file.
+ */
+fun encodeSettingsBackup(
+    settings: PlatformSettings,
+    localLibrary: LocalLibraryDocument? = null,
+): String = encodeSettingsBackup(
     getString = settings::getString,
     getBoolean = settings::getBoolean,
+    localLibrary = localLibrary,
 )
 
 internal fun encodeSettingsBackup(
     getString: (key: String, default: String) -> String,
     getBoolean: (key: String, default: Boolean) -> Boolean,
+    localLibrary: LocalLibraryDocument? = null,
 ): String = backupJson.encodeToString(
     SettingsBackupData(
         cookie = "",
@@ -69,6 +84,7 @@ internal fun encodeSettingsBackup(
         ).wireValue,
         localAccountName = getString(SettingKeys.LOCAL_ACCOUNT_NAME, ""),
         mergeSameSongs = getBoolean(SettingKeys.MERGE_SAME_SONGS, SettingKeys.MERGE_SAME_SONGS_DEFAULT),
+        localLibrary = localLibrary?.playlists,
         onlinePlayQuality = getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name),
         downloadQuality = getString(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name),
         replacePlaylist = getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT),
@@ -94,6 +110,13 @@ internal fun encodeSettingsBackup(
         dynamicColor = getBoolean(SettingKeys.DYNAMIC_COLOR, false),
     )
 )
+
+/**
+ * The local playlists a backup carries, or null when it carries none or cannot be read. Importing
+ * them is the local library store's job: it replaces playlists with the same id and keeps the rest.
+ */
+fun decodeBackupLocalLibrary(json: String): List<LocalPlaylist>? =
+    runCatching { backupJson.decodeFromString<SettingsBackupData>(json).localLibrary }.getOrNull()
 
 /** Parses [json] and writes values into [settings]. Returns false on any parse error. */
 fun applySettingsBackup(json: String, settings: PlatformSettings): Boolean =

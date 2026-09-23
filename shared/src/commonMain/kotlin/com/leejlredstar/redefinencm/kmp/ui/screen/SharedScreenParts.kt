@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
+import com.leejlredstar.redefinencm.kmp.viewmodel.LocalLibraryViewModel
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderTrack
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
 import com.leejlredstar.redefinencm.kmp.data.api.dto.UserPlaylistEach
@@ -105,6 +106,9 @@ fun ProviderTrack.toMediaInfo(
     sourceId: String = "",
 ): MediaInfo = toPlayerMediaInfo(sourceId)
 
+/** The song menu's entry that opens the add-to-local-playlist dialog. */
+internal const val AddToLocalPlaylistLabel = "添加到本地歌单"
+
 /** One entry of a song row's overflow menu. */
 data class SongRowAction(
     val label: String,
@@ -145,13 +149,16 @@ fun rememberSongRowActions(
     val player = koinInject<PlatformPlayer>()
     val downloadManager = koinInject<SongDownloadManager>()
     val providers = koinInject<MusicProviderRegistry>()
+    val localLibrary = koinInject<LocalLibraryViewModel>()
     // LocalClipboard needs a platform ClipEntry and common code has no plain-text factory for
     // one; the text-only manager does the same job on every target.
     @Suppress("DEPRECATION")
     val clipboard = LocalClipboardManager.current
-    return remember(media, neteaseSong, playlistId, player, downloadManager, providers, clipboard) {
+    return remember(media, neteaseSong, playlistId, player, downloadManager, providers, localLibrary, clipboard) {
         buildList {
             add(SongRowAction("加入播放队列", AppIcons.PlaylistAdd) { player.addToQueue(media) })
+            // A song of any provider can go into a local playlist.
+            add(SongRowAction(AddToLocalPlaylistLabel, AppIcons.Add) { localLibrary.requestAddition(listOf(media)) })
             if (neteaseSong != null) {
                 add(
                     SongRowAction("下载", AppIcons.Download) {

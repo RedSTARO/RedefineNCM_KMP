@@ -56,6 +56,32 @@ class BrowserStorageSqlDriverTest {
     }
 
     @Test
+    fun versionFourStorageMigratesToTheLocalLibraryAndKeepsIt() {
+        localStorage.setItem("redefinencm.db.schemaVersion", "4")
+
+        val first = DatabaseDriverFactory().createDriver()
+        try {
+            AppDatabase(first).localLibraryQueries.upsert("{\"playlists\":[]}")
+        } finally {
+            first.close()
+        }
+
+        val second = DatabaseDriverFactory().createDriver()
+        try {
+            assertEquals(
+                "{\"playlists\":[]}",
+                AppDatabase(second).localLibraryQueries.select().executeAsOne(),
+            )
+            assertEquals(
+                AppDatabase.Schema.version.toString(),
+                localStorage.getItem("redefinencm.db.schemaVersion"),
+            )
+        } finally {
+            second.close()
+        }
+    }
+
+    @Test
     fun versionTwoStorageMigratesToUserLevelCache() {
         localStorage.setItem("redefinencm.db.schemaVersion", "2")
 

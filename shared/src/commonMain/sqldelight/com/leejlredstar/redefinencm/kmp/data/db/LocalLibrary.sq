@@ -1,0 +1,14 @@
+-- The device-local account's library: playlists and favourites whose tracks may come from any
+-- provider. One JSON document, stored the way PlayerStatus and DownloadQueue are, because the
+-- browser driver keeps only single-key JSON tables. Each track inside is keyed by its provider
+-- and that provider's id, so it needs none of the cache tables' numeric song ids.
+CREATE TABLE IF NOT EXISTS LocalLibrary (
+  singleton INTEGER NOT NULL PRIMARY KEY DEFAULT 0,
+  json TEXT NOT NULL
+);
+
+upsert:
+INSERT OR REPLACE INTO LocalLibrary(singleton, json) VALUES (0, :json);
+
+select:
+SELECT json FROM LocalLibrary WHERE singleton = 0;

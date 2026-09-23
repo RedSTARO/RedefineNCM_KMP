@@ -109,16 +109,19 @@ class NowPlayingUiStateTest {
     }
 
     @Test
-    fun aProviderWithoutLikesOrCommentsTurnsThoseActionsOffAndIsNamed() {
+    fun aProviderWithoutCommentsTurnsThemOffKeepsALocalHeartAndIsNamed() {
         val qqTrack = MediaInfo(id = "qq:0039MnYb0qxYhV", title = "t", artist = "a")
         val qq = state(media = qqTrack, capabilities = setOf(ProviderCapability.SHARE_LINK))
-        assertFalse(qq.canFavorite)
+        // Its heart still works, into the local favourites.
+        assertTrue(qq.canFavorite)
+        assertTrue(qq.favoriteIsLocal)
         assertFalse(qq.canComment)
         assertEquals("QQ音乐", qq.providerBadge)
 
         // NetEase's own tracks stay unmarked, and nothing is offered with nothing playing.
         val netease = state()
         assertTrue(netease.canFavorite)
+        assertFalse(netease.favoriteIsLocal)
         assertTrue(netease.canComment)
         assertEquals(null, netease.providerBadge)
         assertFalse(state(media = null).canFavorite)

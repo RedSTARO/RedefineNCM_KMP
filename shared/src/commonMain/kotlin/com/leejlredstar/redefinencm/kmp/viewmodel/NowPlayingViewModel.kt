@@ -6,6 +6,7 @@ import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.SongWikiSummary
 import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusic
 import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusicComments
+import com.leejlredstar.redefinencm.kmp.data.local.LocalLibraryStore
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderCapability
@@ -73,6 +74,8 @@ sealed interface SongWikiUiState {
 data class FavoriteUiState(
     val mediaId: String? = null,
     val isLiked: Boolean = false,
+    /** Kept in the local account's favourites rather than the provider account's likes. */
+    val local: Boolean = false,
 )
 
 data class DynamicCoverUiState(
@@ -126,6 +129,7 @@ class NowPlayingViewModel(
     private val lyricResolver: LyricResolver,
     private val localMediaAssets: LocalMediaAssets,
     private val providers: MusicProviderRegistry,
+    private val localLibrary: LocalLibraryStore,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -439,6 +443,18 @@ class NowPlayingViewModel(
                 .collectLatest { (mediaId, uid) ->
                     favoriteActionJob?.cancel()
                     val requestGeneration = ++favoriteStatusGeneration
+                    // A provider without the account's own likes keeps its heart in the local
+                    // account's favourites, which need no sign-in.
+                    if (mediaId != null && !supports(mediaId, ProviderCapability.LIKE)) {
+                        localLibrary.updates().collect { library ->
+                            favoriteUiState.value = FavoriteUiState(
+                                mediaId = mediaId,
+                                isLiked = library.isFavorite(mediaId),
+                                local = true,
+                            )
+                        }
+                        return@collectLatest
+                    }
                     val songId = neteaseSongId(mediaId)
                         ?.takeIf { supports(mediaId, ProviderCapability.LIKE) }
                     if (songId == null || uid <= 0) {
@@ -1044,8 +1060,15 @@ class NowPlayingViewModel(
     // ── Playback actions ──
 
     fun onFavClick() {
+        val media = player.currentMedia.value ?: return
+        if (!supports(media.id, ProviderCapability.LIKE)) {
+            // The local favourites toggle both ways, unlike NetEase's like below.
+            val liked = favoriteUiState.value.let { it.mediaId == media.id && it.isLiked }
+            scope.launch { localLibrary.setFavorite(media, favorite = !liked) }
+            return
+        }
         val uid = mainViewModel.uid.value.takeIf { it > 0 } ?: return
-        val mediaId = player.currentMedia.value?.id ?: return
+        val mediaId = media.id
         val songId = neteaseSongId(mediaId)?.takeIf { supports(mediaId, ProviderCapability.LIKE) } ?: return
         if (favoriteUiState.value.let { it.mediaId == mediaId && it.isLiked }) return
         if (favoriteActionJob?.isActive == true) return
