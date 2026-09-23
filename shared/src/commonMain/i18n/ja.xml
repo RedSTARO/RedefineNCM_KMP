@@ -773,6 +773,8 @@
     <string name="beatModelUnavailable">利用できません</string>
     <string name="beatModelUnavailableNote">{reason}。つなぎはラウドネスに合わせて行いますが、ビートは揃えません</string>
     <string name="beatAnalysisSourceNote">解析では曲の標準音質版を別に読み込みます。ダウンロード済みの曲はローカルファイルを読み込みます</string>
+    <string name="beatModelDownloading">ビートモデルをダウンロード中 {percent}%</string>
+    <string name="beatModelDownloadNote">ビートモデル（約9 MB）は、初めて必要になったときにjsDelivrまたはGitHubからダウンロードし、チェックサムを確認してからこの端末に保存します</string>
     <string name="checkNow">確認</string>
 
     <!-- ui/screen/SharedScreenParts.kt -->
@@ -1029,4 +1031,7 @@
     <!-- transition/LiteRtBeatModelLoader.kt -->
     <string name="liteRtLoadFailed">LiteRTを読み込めませんでした：{reason}</string>
     <string name="liteRtNpuRuntimeMissing">このビルドにはチップメーカーのNPUランタイムが含まれていません</string>
+
+    <!-- transition/ModelDownload.kt -->
+    <string name="beatModelChecksumMismatch">ダウンロードしたファイルがチェックサムと一致しません</string>
 </resources>

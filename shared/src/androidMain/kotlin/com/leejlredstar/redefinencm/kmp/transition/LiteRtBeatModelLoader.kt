@@ -8,8 +8,10 @@ import com.google.ai.edge.litert.CompiledModel
 import com.google.ai.edge.litert.Environment
 import com.google.ai.edge.litert.TensorBuffer
 import com.leejlredstar.redefinencm.kmp.i18n.strings
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.Executors
@@ -25,36 +27,65 @@ import java.util.concurrent.Executors
  *   the GPU is used; it stays for a build that adds them.
  * - **GPU**: LiteRT's GPU accelerator, OpenCL where the driver has it and OpenGL ES otherwise.
  *
- * LiteRT quietly runs any op its GPU backend lacks on the CPU. The model shipped here was
- * rewritten until LiteRT reports it fully accelerated on a GPU
- * (`tools/automix-model/litert_gpu_rewrite.py` and `check_litert_gpu.py`).
+ * LiteRT quietly runs any op its GPU backend lacks on the CPU. The model used here was rewritten
+ * until LiteRT reports it fully accelerated on a GPU (`tools/automix-model/litert_gpu_rewrite.py`
+ * and `check_litert_gpu.py`). It is not in the APK: [BeatModelDownloads.liteRt] is downloaded the
+ * first time the model is needed, after LiteRT itself has loaded, so a device that cannot run
+ * LiteRT never downloads it.
  *
  * Every LiteRT call runs on one thread of its own: an OpenGL ES context belongs to the thread
  * that created it.
  */
-internal class LiteRtBeatModelLoader(private val context: Context) : BeatModelLoader {
+internal class LiteRtBeatModelLoader(
+    private val context: Context,
+    private val download: ModelDownload = ModelDownload(BeatModelDownloads.liteRt) {
+        File(context.noBackupFilesDir, "automix")
+    },
+) : BeatModelLoader {
+
+    override val downloadProgress: StateFlow<Float?> get() = download.progress
 
     override suspend fun load(): BeatModelAvailability {
         val thread = Executors.newSingleThreadExecutor { runnable ->
             Thread(runnable, "LiteRT beat model").apply { isDaemon = true }
         }.asCoroutineDispatcher()
-        val availability = try {
-            withContext(thread) { loadOnThread(thread) }
+        var environment: Environment? = null
+        var ready = false
+        try {
+            // One environment serves both attempts; the NPU provider only adds where to look for
+            // the vendor libraries. Creating it loads LiteRT's native library.
+            val created = withContext(thread) { Environment.create(context, BuiltinNpuAcceleratorProvider(context)) }
+            environment = created
+            val availability = when (val model = download.file()) {
+                is ModelFile.Failed -> BeatModelAvailability.Unavailable(
+                    strings.beatModelDownloadFailed(model.reason),
+                    retryable = true,
+                )
+                is ModelFile.Ready -> withContext(thread) { compile(created, thread, model.file.absolutePath) }
+            }
+            ready = availability is BeatModelAvailability.Ready
+            return availability
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (failure: Throwable) {
             // UnsatisfiedLinkError and friends: LiteRT's native library does not load here.
-            BeatModelAvailability.Unavailable(strings.liteRtLoadFailed(failure.message ?: failure.javaClass.simpleName))
+            return BeatModelAvailability.Unavailable(
+                strings.liteRtLoadFailed(failure.message ?: failure.javaClass.simpleName),
+            )
+        } finally {
+            if (!ready) {
+                environment?.let { unused -> thread.executor.execute { unused.close() } }
+                thread.close()
+            }
         }
-        if (availability !is BeatModelAvailability.Ready) thread.close()
-        return availability
     }
 
-    private fun loadOnThread(thread: ExecutorCoroutineDispatcher): BeatModelAvailability {
-        val modelPath = extractModel()?.absolutePath
-            ?: return BeatModelAvailability.Unavailable(strings.beatModelFileMissing)
+    private fun compile(
+        environment: Environment,
+        thread: ExecutorCoroutineDispatcher,
+        modelPath: String,
+    ): BeatModelAvailability {
         val label = listOfNotNull(socName(), "LiteRT").joinToString(" · ")
-        // One environment serves both attempts; the NPU provider only adds where to look for
-        // the vendor libraries.
-        val environment = Environment.create(context, BuiltinNpuAcceleratorProvider(context))
         val available = runCatching { environment.getAvailableAccelerators() }.getOrDefault(emptySet())
         val failures = mutableListOf<String>()
         val attempts = listOf(Accelerator.NPU to InferenceAccelerator.NPU, Accelerator.GPU to InferenceAccelerator.GPU)
@@ -68,8 +99,9 @@ internal class LiteRtBeatModelLoader(private val context: Context) : BeatModelLo
             val model = tryCreate(modelPath, accelerator, environment, failures) ?: continue
             return BeatModelAvailability.Ready(LiteRtBeatActivationModel(model, environment, thread, kind, label))
         }
-        environment.close()
-        return BeatModelAvailability.Unavailable(strings.beatModelDevicesFailed(failures.joinToString(strings.clauseSeparator)))
+        return BeatModelAvailability.Unavailable(
+            strings.beatModelDevicesFailed(failures.joinToString(strings.clauseSeparator)),
+        )
     }
 
     private fun tryCreate(
@@ -91,36 +123,12 @@ internal class LiteRtBeatModelLoader(private val context: Context) : BeatModelLo
         }
     }
 
-    /**
-     * LiteRT loads a model from a file path; the model travels in the APK as a Java resource, so
-     * it is copied out once per model version.
-     */
-    private fun extractModel(): File? {
-        val target = File(File(context.noBackupFilesDir, "automix"), MODEL_FILE)
-        val bytes = LiteRtBeatModelLoader::class.java.getResourceAsStream(MODEL_RESOURCE)?.use { it.readBytes() }
-            ?: return null
-        if (target.isFile && target.length() == bytes.size.toLong()) return target
-        target.parentFile?.mkdirs()
-        val partial = File(target.parentFile, "$MODEL_FILE.partial")
-        partial.writeBytes(bytes)
-        if (!partial.renameTo(target)) {
-            target.delete()
-            if (!partial.renameTo(target)) return null
-        }
-        return target
-    }
-
     private fun socName(): String? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
         return listOf(Build.SOC_MANUFACTURER, Build.SOC_MODEL)
             .filter { it.isNotBlank() && it != Build.UNKNOWN }
             .joinToString(" ")
             .ifEmpty { null }
-    }
-
-    private companion object {
-        const val MODEL_FILE = "beat_this_small0_t750.tflite"
-        const val MODEL_RESOURCE = "/automix/$MODEL_FILE"
     }
 }
 

@@ -594,11 +594,8 @@ kotlin {
             // Palette-based album-art theme color (matches the original ImageParser)
             implementation(libs.androidx.palette)
             // The beat model for smart song transitions, on the GPU (or a vendor NPU runtime).
+            // The model itself is downloaded on first use; see BeatModelDownloads.
             implementation(libs.litert)
-        }
-        androidMain {
-            // The beat model rewritten for LiteRT's GPU backend; see tools/automix-model.
-            resources.srcDir("src/beatModel/android")
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)
@@ -677,15 +674,13 @@ kotlin {
                 }
             }
         }
-        jvmMain {
-            // The beat model, shared with the browser build, which serves it as a static file.
-            resources.srcDir("src/beatModel/resources")
-        }
         jvmTest.dependencies {
             implementation(libs.ktor.client.mock)
         }
         wasmJsMain {
             resources.srcDir(generateWebVersionManifest)
+            // The browser serves the beat model as a static file of its own; the desktop and
+            // Android apps download theirs on first use (BeatModelDownloads).
             resources.srcDir("src/beatModel/resources")
             dependencies {
                 implementation(libs.kotlinx.browser)

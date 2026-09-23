@@ -251,9 +251,11 @@ SOFTWARE.
 Smart song transitions find beats and downbeats with the `small0` checkpoint of
 [CPJKU/beat_this](https://github.com/CPJKU/beat_this) (Foscarin, Schlüter, Widmer, "Beat This!
 Accurate Beat Tracking Without DBN Postprocessing", ISMIR 2024), commit
-`b95c8ab0c58c2d9fcfd40508ae8dffbc05ac4f5c`. The bundled model files
+`b95c8ab0c58c2d9fcfd40508ae8dffbc05ac4f5c`. The model files
 (`beat_this_small0_t750.onnx` and its LiteRT and Core ML conversions) are made from that
-checkpoint by `tools/automix-model`. The Kotlin log-mel front end, the chunk split and
+checkpoint by `tools/automix-model`. The web app serves the ONNX file with its own pages; the
+Android and desktop apps do not ship the model and download it from this repository the first
+time smart transitions need it. The Kotlin log-mel front end, the chunk split and
 aggregation, and the minimal peak picking are ports of `beat_this.preprocessing`,
 `beat_this.inference` and `beat_this.model.postprocessor`. The model's transformer is adapted
 upstream from Phil Wang's BS-RoFormer, also under the MIT License.

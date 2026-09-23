@@ -61,6 +61,9 @@ class SongTransitionCoordinator(
 
     val accelerator: StateFlow<BeatAcceleratorState> get() = analyzer.accelerator
 
+    /** The beat model's download while it runs, for platforms that download it on first use. */
+    val modelDownload: StateFlow<Float?>? get() = analyzer.modelDownload
+
     val capability: TransitionCapability get() = player.transitionCapability
 
     init {

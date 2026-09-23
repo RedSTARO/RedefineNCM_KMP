@@ -773,6 +773,8 @@
     <string name="beatModelUnavailable">不可用</string>
     <string name="beatModelUnavailableNote">{reason}。仍会按响度安排过渡，但不对齐节拍</string>
     <string name="beatAnalysisSourceNote">分析时会另外读取歌曲的标准音质版本，已下载的歌曲直接读取本地文件</string>
+    <string name="beatModelDownloading">正在下载节拍模型 {percent}%</string>
+    <string name="beatModelDownloadNote">节拍模型约 9 MB，第一次需要时从 jsDelivr 或 GitHub 下载，校验无误后保存在本机</string>
     <string name="checkNow">检测</string>
 
     <!-- ui/screen/SharedScreenParts.kt -->
@@ -1029,4 +1031,7 @@
     <!-- transition/LiteRtBeatModelLoader.kt -->
     <string name="liteRtLoadFailed">LiteRT 无法加载：{reason}</string>
     <string name="liteRtNpuRuntimeMissing">这个版本没有附带芯片厂商的 NPU 运行库</string>
+
+    <!-- transition/ModelDownload.kt -->
+    <string name="beatModelChecksumMismatch">下载的文件与校验值不符</string>
 </resources>

@@ -30,6 +30,11 @@ class SmartTransitionHarnessTest {
     private val audioDirectory = System.getProperty("redefinencm.harness.audio")?.let(::File)
     private val outputDirectory = System.getProperty("redefinencm.harness.out")?.let(::File)
 
+    /** The model file in this repository, so the harness never downloads one. */
+    private fun repositoryModelLoader() = OnnxBeatModelLoader(
+        modelFile = { ModelFile.Ready(File(BeatModelDownloads.ONNX_PATH.removePrefix("shared/"))) },
+    )
+
     private fun tracks(): List<File> =
         audioDirectory?.listFiles { file -> file.extension.lowercase() in setOf("mp3", "flac") }
             ?.sortedBy { it.name }
@@ -38,7 +43,7 @@ class SmartTransitionHarnessTest {
     @Test
     fun beatModelRunsOnAnAccelerator() = runBlocking {
         if (audioDirectory == null) return@runBlocking
-        val availability = OnnxBeatModelLoader().load()
+        val availability = repositoryModelLoader().load()
         println("beat model: $availability")
         assertTrue(availability is BeatModelAvailability.Ready, "beat model unavailable: $availability")
         val model = availability.model
@@ -82,7 +87,7 @@ class SmartTransitionHarnessTest {
     fun rendersAPlannedTransitionBetweenTwoRealTracks() = runBlocking {
         val files = tracks()
         if (files.size < 2 || outputDirectory == null) return@runBlocking
-        val loader = OnnxBeatModelLoader()
+        val loader = repositoryModelLoader()
         val analyzer = TrackAnalyzer(
             decoder = FfmpegTrackEndsDecoder(),
             urls = AnalysisUrlResolver { media -> media.placeholderUri },

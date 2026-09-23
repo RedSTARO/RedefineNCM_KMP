@@ -818,6 +818,8 @@
     <string name="beatModelUnavailable">Unavailable</string>
     <string name="beatModelUnavailableNote">{reason}. Transitions still follow loudness but don't align the beats</string>
     <string name="beatAnalysisSourceNote">Analysis reads a separate standard-quality copy of each song; downloaded songs are read from their local files</string>
+    <string name="beatModelDownloading">Downloading the beat model {percent}%</string>
+    <string name="beatModelDownloadNote">The beat model, about 9 MB, is downloaded from jsDelivr or GitHub the first time it's needed and kept on this device once its checksum matches</string>
     <string name="checkNow">Check</string>
 
     <!-- ui/screen/SharedScreenParts.kt -->
@@ -1101,4 +1103,7 @@
     <!-- transition/LiteRtBeatModelLoader.kt -->
     <string name="liteRtLoadFailed">LiteRT could not be loaded: {reason}</string>
     <string name="liteRtNpuRuntimeMissing">this build doesn't include the chip maker's NPU runtime</string>
+
+    <!-- transition/ModelDownload.kt -->
+    <string name="beatModelChecksumMismatch">the downloaded file doesn't match its checksum</string>
 </resources>

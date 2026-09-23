@@ -31,7 +31,8 @@ sealed interface BeatAcceleratorState {
 
     data class Ready(val accelerator: InferenceAccelerator, val deviceLabel: String) : BeatAcceleratorState
 
-    data class Unavailable(val reason: String) : BeatAcceleratorState
+    /** [retryable]: see [BeatModelAvailability.Unavailable]. */
+    data class Unavailable(val reason: String, val retryable: Boolean = false) : BeatAcceleratorState
 }
 
 /**
@@ -69,6 +70,7 @@ class TrackAnalyzer(
     private val failures = HashMap<String, TimeSource.Monotonic.ValueTimeMark>()
     private val modelLock = Mutex()
     private var model: BeatActivationModel? = null
+    private var unavailableSince: TimeSource.Monotonic.ValueTimeMark? = null
 
     private val _accelerator = MutableStateFlow<BeatAcceleratorState>(BeatAcceleratorState.NotLoaded)
     val accelerator: StateFlow<BeatAcceleratorState> = _accelerator.asStateFlow()
@@ -115,9 +117,15 @@ class TrackAnalyzer(
         return result
     }
 
-    /** Loads the model now if it is not loaded; for the Settings row's "check" action. */
+    /** The model file's download while it runs; see [BeatModelLoader.downloadProgress]. */
+    val modelDownload: StateFlow<Float?>? get() = modelLoader.downloadProgress
+
+    /**
+     * Loads the model now if it is not loaded, for the Settings row's check and retry action. A
+     * retryable failure is tried again at once rather than after the usual wait.
+     */
     suspend fun prepareModel(): BeatAcceleratorState {
-        loadedModel()
+        loadedModel(retryNow = true)
         return _accelerator.value
     }
 
@@ -170,9 +178,16 @@ class TrackAnalyzer(
         )
     }
 
-    private suspend fun loadedModel(): BeatActivationModel? = modelLock.withLock {
+    private suspend fun loadedModel(retryNow: Boolean = false): BeatActivationModel? = modelLock.withLock {
         model?.let { return@withLock it }
-        if (_accelerator.value is BeatAcceleratorState.Unavailable) return@withLock null
+        val unavailable = _accelerator.value as? BeatAcceleratorState.Unavailable
+        if (unavailable != null) {
+            // A platform that cannot run the model will not start to during this session; a
+            // download that failed may succeed later.
+            val since = unavailableSince
+            val retry = unavailable.retryable && (retryNow || since == null || since.elapsedNow() >= RETRY_AFTER)
+            if (!retry) return@withLock null
+        }
         _accelerator.value = BeatAcceleratorState.Loading
         val availability = try {
             modelLoader.load()
@@ -192,7 +207,8 @@ class TrackAnalyzer(
                 availability.model
             }
             is BeatModelAvailability.Unavailable -> {
-                _accelerator.value = BeatAcceleratorState.Unavailable(availability.reason)
+                _accelerator.value = BeatAcceleratorState.Unavailable(availability.reason, availability.retryable)
+                unavailableSince = TimeSource.Monotonic.markNow()
                 null
             }
         }

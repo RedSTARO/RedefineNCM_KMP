@@ -7,6 +7,7 @@ import ai.onnxruntime.OrtHardwareDevice
 import ai.onnxruntime.OrtSession
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.FloatBuffer
@@ -25,33 +26,55 @@ import java.nio.FloatBuffer
  *
  * Every session is created with CPU fallback disabled, so creation fails outright if any
  * operator would have run on the CPU, instead of quietly running part of the model there.
+ *
+ * The model is not in the package: [BeatModelDownloads.onnx] is downloaded into the app's data
+ * folder the first time it is needed, and only on a platform that has a runtime to run it.
  */
 internal class OnnxBeatModelLoader(
     private val nativeDirectory: () -> File? = ::bundledOnnxRuntimeDirectory,
+    private val download: ModelDownload = ModelDownload(BeatModelDownloads.onnx) {
+        File(File(System.getProperty("user.home"), ".redefinencm"), "models")
+    },
+    private val modelFile: suspend () -> ModelFile = download::file,
 ) : BeatModelLoader {
 
-    override suspend fun load(): BeatModelAvailability = withContext(Dispatchers.IO) {
+    override val downloadProgress: StateFlow<Float?> get() = download.progress
+
+    override suspend fun load(): BeatModelAvailability {
         val os = System.getProperty("os.name").orEmpty().lowercase()
-        try {
-            when {
-                os.contains("windows") -> loadWindows()
-                os.contains("mac") || os.contains("darwin") -> loadMac()
-                else -> BeatModelAvailability.Unavailable(strings.beatModelLinuxNoRuntime)
-            }
-        } catch (failure: Throwable) {
-            // UnsatisfiedLinkError and friends: the native library is missing or does not load.
-            BeatModelAvailability.Unavailable(
-                strings.onnxRuntimeLoadFailed(failure.message ?: failure.javaClass.simpleName),
+        val windows = os.contains("windows")
+        if (!windows && !os.contains("mac") && !os.contains("darwin")) {
+            return BeatModelAvailability.Unavailable(strings.beatModelLinuxNoRuntime)
+        }
+        val directory = if (windows) {
+            nativeDirectory()?.takeIf { File(it, "onnxruntime.dll").isFile }
+                ?: return BeatModelAvailability.Unavailable(strings.directMLRuntimeMissing)
+        } else {
+            null
+        }
+        val file = when (val found = modelFile()) {
+            is ModelFile.Failed -> return BeatModelAvailability.Unavailable(
+                strings.beatModelDownloadFailed(found.reason),
+                retryable = true,
             )
+            is ModelFile.Ready -> found.file
+        }
+        return withContext(Dispatchers.IO) {
+            try {
+                val model = file.readBytes()
+                if (directory != null) loadWindows(directory, model) else loadMac(model)
+            } catch (failure: Throwable) {
+                // UnsatisfiedLinkError and friends: the native library is missing or does not load.
+                BeatModelAvailability.Unavailable(
+                    strings.onnxRuntimeLoadFailed(failure.message ?: failure.javaClass.simpleName),
+                )
+            }
         }
     }
 
-    private fun loadWindows(): BeatModelAvailability {
-        val directory = nativeDirectory()?.takeIf { File(it, "onnxruntime.dll").isFile }
-            ?: return BeatModelAvailability.Unavailable(strings.directMLRuntimeMissing)
+    private fun loadWindows(directory: File, model: ByteArray): BeatModelAvailability {
         // Must be set before the first ONNX Runtime class initialises; it is read once, then.
         System.setProperty("onnxruntime.native.path", directory.absolutePath)
-        val model = modelBytes() ?: return BeatModelAvailability.Unavailable(strings.beatModelFileMissing)
         val environment = OrtEnvironment.getEnvironment()
         val devices = runCatching { environment.epDevices }.getOrElse { failure ->
             return BeatModelAvailability.Unavailable(strings.onnxDeviceListFailed(failure.message))
@@ -90,8 +113,7 @@ internal class OnnxBeatModelLoader(
         )
     }
 
-    private fun loadMac(): BeatModelAvailability {
-        val model = modelBytes() ?: return BeatModelAvailability.Unavailable(strings.beatModelFileMissing)
+    private fun loadMac(model: ByteArray): BeatModelAvailability {
         val environment = OrtEnvironment.getEnvironment()
         val failures = mutableListOf<String>()
         val attempts = listOf(
@@ -132,13 +154,6 @@ internal class OnnxBeatModelLoader(
         } finally {
             options.close()
         }
-    }
-
-    private fun modelBytes(): ByteArray? =
-        OnnxBeatModelLoader::class.java.getResourceAsStream(MODEL_RESOURCE)?.use { it.readBytes() }
-
-    companion object {
-        const val MODEL_RESOURCE = "/automix/beat_this_small0_t750.onnx"
     }
 }
 

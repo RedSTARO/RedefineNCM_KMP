@@ -1,5 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.transition
 
+import kotlinx.coroutines.flow.StateFlow
+
 /**
  * The processor a model actually runs on.
  *
@@ -42,8 +44,12 @@ interface BeatActivationModel : AutoCloseable {
 sealed interface BeatModelAvailability {
     data class Ready(val model: BeatActivationModel) : BeatModelAvailability
 
-    /** [reason] is shown to the user as is, so it names the platform fact, not a stack trace. */
-    data class Unavailable(val reason: String) : BeatModelAvailability
+    /**
+     * [reason] is shown to the user as is, so it names the platform fact, not a stack trace.
+     * [retryable] marks a failure that may pass on its own, such as a model download that found
+     * no mirror reachable; the analyzer asks again later instead of giving up for the session.
+     */
+    data class Unavailable(val reason: String, val retryable: Boolean = false) : BeatModelAvailability
 }
 
 /**
@@ -54,6 +60,12 @@ sealed interface BeatModelAvailability {
  */
 fun interface BeatModelLoader {
     suspend fun load(): BeatModelAvailability
+
+    /**
+     * The model file's download, 0 to 1 while it runs and null otherwise, for a loader that
+     * downloads its model on first use. Null for one that never downloads.
+     */
+    val downloadProgress: StateFlow<Float?>? get() = null
 }
 
 /** For targets with no accelerated runtime at all. */

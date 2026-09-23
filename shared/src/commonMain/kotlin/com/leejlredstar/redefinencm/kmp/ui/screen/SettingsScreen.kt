@@ -1157,6 +1157,9 @@ private fun SongTransitionSection(
 ) {
     val preferences by coordinator.preferences.collectAsState()
     val accelerator by coordinator.accelerator.collectAsState()
+    // Null on platforms whose loader never downloads the model; fixed for the session either way.
+    val modelDownload = coordinator.modelDownload
+    val downloadProgress = modelDownload?.collectAsState()?.value
     val current = preferences ?: SongTransitionPreferences()
     val capability = coordinator.capability
     val scope = rememberCoroutineScope()
@@ -1186,6 +1189,8 @@ private fun SongTransitionSection(
         )
         SongTransitionMode.SMART -> BeatAnalysisRow(
             state = accelerator,
+            downloadProgress = downloadProgress,
+            downloadsModel = modelDownload != null,
             accentPalette = accentPalette,
             index = 1,
             count = rows,
@@ -1249,6 +1254,8 @@ private fun CrossfadeLengthRow(
 @Composable
 private fun BeatAnalysisRow(
     state: BeatAcceleratorState,
+    downloadProgress: Float?,
+    downloadsModel: Boolean,
     accentPalette: ContentAccentPalette,
     index: Int,
     count: Int,
@@ -1257,7 +1264,11 @@ private fun BeatAnalysisRow(
     val (value, note) = when (state) {
         BeatAcceleratorState.NotLoaded ->
             strings.beatModelNotLoaded to strings.beatModelNotLoadedNote
-        BeatAcceleratorState.Loading -> strings.beatModelLoading to ""
+        BeatAcceleratorState.Loading -> if (downloadProgress != null) {
+            strings.beatModelDownloading((downloadProgress * 100).roundToInt()) to ""
+        } else {
+            strings.beatModelLoading to ""
+        }
         is BeatAcceleratorState.Ready ->
             "${state.accelerator.label} · ${state.deviceLabel}" to strings.beatModelReadyNote
         is BeatAcceleratorState.Unavailable ->
@@ -1284,6 +1295,7 @@ private fun BeatAnalysisRow(
                 )
                 val details = listOf(
                     note,
+                    if (downloadsModel) strings.beatModelDownloadNote else "",
                     strings.beatAnalysisSourceNote,
                 ).filter { it.isNotEmpty() }
                 details.forEach { line ->
@@ -1297,6 +1309,9 @@ private fun BeatAnalysisRow(
             if (state == BeatAcceleratorState.NotLoaded) {
                 Spacer(Modifier.width(12.dp))
                 TextButton(onClick = onProbe) { Text(strings.checkNow) }
+            } else if (state is BeatAcceleratorState.Unavailable && state.retryable) {
+                Spacer(Modifier.width(12.dp))
+                TextButton(onClick = onProbe) { Text(strings.retry) }
             }
         }
     }

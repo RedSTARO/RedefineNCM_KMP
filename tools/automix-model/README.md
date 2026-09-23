@@ -7,6 +7,14 @@ about 8 MB. The scripts here turn that checkpoint into the files each platform r
 They are a reproducible record of how those files were made. Nothing in the Gradle build runs
 them.
 
+The Android and desktop apps do not ship these files. They download theirs the first time smart
+transitions need the model, from this repository at the commit pinned in
+`shared/src/commonMain/kotlin/com/leejlredstar/redefinencm/kmp/transition/BeatModelDownloads.kt`:
+jsDelivr's CDNs first, then GitHub's raw file host. A download is kept only when its size and
+SHA-256 match the pinned values. To ship a new model, commit it and update that file;
+`BeatModelDownloadsTest` fails until the two agree. The web app serves the ONNX file with its own
+pages.
+
 | Platform | Runtime | File | Made by |
 | --- | --- | --- | --- |
 | Desktop (Windows, macOS), Web | ONNX Runtime (DirectML / Core ML), ONNX Runtime Web (WebNN / WebGPU) | `beat_this_small0_t750.onnx` | `export_beat_this.py --onnx` |
