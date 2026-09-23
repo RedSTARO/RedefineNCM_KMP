@@ -4,9 +4,7 @@ import com.leejlredstar.redefinencm.kmp.player.FfmpegAudioSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlin.math.abs
 import kotlin.math.roundToLong
-import kotlin.math.sqrt
 
 /**
  * Decodes a track's two ends with the same FFmpeg the desktop player plays through, resampled by
@@ -54,50 +52,17 @@ internal class FfmpegTrackEndsDecoder : TrackEndsDecoder {
     }
 
     /**
-     * How far this stream's seek timestamps are from its decoded-from-the-start timeline, in
-     * milliseconds, positive when a seek reports a later time than where its samples really are.
-     * Null when the probe lands on something too quiet or too repetitive to place.
+     * How far this stream's seek timestamps are from its decoded-from-the-start timeline; see
+     * [measureSeekErrorMs]. Null when the probe cannot be placed.
      */
     private fun measureSeekError(source: FfmpegAudioSource, head: FloatArray): Double? {
-        if (head.size < (PROBE_AT_MS + PROBE_SETTLE_MS + PROBE_LENGTH_MS + SEARCH_MS) * RATE / 1000) return null
+        if (head.size < (PROBE_AT_MS + PROBE_SETTLE_MS + PROBE_LENGTH_MS + 200) * RATE / 1000) return null
         source.seekTo(PROBE_AT_MS)
         // The first frames after a seek can still be warming up the decoder; compare later ones.
         readMs(source, PROBE_SETTLE_MS)
         val landed = source.landedAtMs ?: return null
         val probe = readMs(source, PROBE_LENGTH_MS)
-        if (probe.size < PROBE_LENGTH_MS * RATE / 1000) return null
-        if (rms(probe) < 1e-3) return null
-        val claimed = ((landed + PROBE_SETTLE_MS) * RATE / 1000).roundToLong().toInt()
-        val search = (SEARCH_MS * RATE / 1000).toInt()
-        var bestShift = 0
-        var bestError = Double.MAX_VALUE
-        var secondBest = Double.MAX_VALUE
-        for (shift in -search..search) {
-            val at = claimed + shift
-            if (at < 0 || at + probe.size > head.size) continue
-            var error = 0.0
-            var i = 0
-            while (i < probe.size) {
-                error += abs(head[at + i] - probe[i])
-                i += 2
-            }
-            if (error < bestError) {
-                if (abs(shift - bestShift) > 2) secondBest = bestError
-                bestError = error
-                bestShift = shift
-            } else if (abs(shift - bestShift) > 2 && error < secondBest) {
-                secondBest = error
-            }
-        }
-        // A true match is far better than any other alignment; a flat or periodic probe is not.
-        if (bestError * 4 > secondBest) return null
-        return -bestShift * 1000.0 / RATE
-    }
-
-    private fun rms(samples: FloatArray): Double {
-        var sum = 0.0
-        for (s in samples) sum += s * s
-        return sqrt(sum / samples.size)
+        return measureSeekErrorMs(head, probe, landed + PROBE_SETTLE_MS, RATE)
     }
 
     private fun readMs(source: FfmpegAudioSource, ms: Long): FloatArray {
@@ -116,6 +81,5 @@ internal class FfmpegTrackEndsDecoder : TrackEndsDecoder {
         const val PROBE_AT_MS = 20_000L
         const val PROBE_SETTLE_MS = 200L
         const val PROBE_LENGTH_MS = 1_000L
-        const val SEARCH_MS = 120L
     }
 }

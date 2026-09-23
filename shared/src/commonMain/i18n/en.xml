@@ -1097,4 +1097,8 @@
     <string name="beatModelDownloadFailed">The beat model failed to download: {reason}</string>
     <string name="browserNoWebNnOrWebGpu">The browser doesn't offer WebNN or WebGPU</string>
     <string name="browserBeatModelDevicesFailed">The browser's accelerators could not run the beat model: {reasons}</string>
+
+    <!-- transition/LiteRtBeatModelLoader.kt -->
+    <string name="liteRtLoadFailed">LiteRT could not be loaded: {reason}</string>
+    <string name="liteRtNpuRuntimeMissing">this build doesn't include the chip maker's NPU runtime</string>
 </resources>

@@ -42,6 +42,10 @@
 # Media3 / ExoPlayer
 -dontwarn androidx.media3.**
 
+# LiteRT (smart transitions' beat model): its JNI library constructs and calls these by name
+-keep class com.google.ai.edge.litert.** { *; }
+-dontwarn com.google.ai.edge.litert.**
+
 # Preserve stack traces
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile

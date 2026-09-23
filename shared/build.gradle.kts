@@ -593,6 +593,12 @@ kotlin {
             implementation(libs.androidx.media3.session)
             // Palette-based album-art theme color (matches the original ImageParser)
             implementation(libs.androidx.palette)
+            // The beat model for smart song transitions, on the GPU (or a vendor NPU runtime).
+            implementation(libs.litert)
+        }
+        androidMain {
+            // The beat model rewritten for LiteRT's GPU backend; see tools/automix-model.
+            resources.srcDir("src/beatModel/android")
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)

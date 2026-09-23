@@ -49,12 +49,21 @@ class PlaybackService : MediaSessionService() {
             try {
                 get<PlatformSettings>().awaitLoaded()
                 get<PlayerStatusRestorer>().awaitRestored()
-                val exoPlayer = (get<PlatformPlayer>() as ExoPlayerPlatformPlayer).exoPlayer
-                val sessionBuilder = MediaSession.Builder(this@PlaybackService, exoPlayer)
+                val platformPlayer = get<PlatformPlayer>() as ExoPlayerPlatformPlayer
+                val sessionBuilder = MediaSession.Builder(this@PlaybackService, platformPlayer.sessionPlayer.value)
                 createNowPlayingPendingIntent(this@PlaybackService, requestCode = 0x4D454449)
                     ?.let(sessionBuilder::setSessionActivity)
-                mediaSession = sessionBuilder.build()
+                val session = sessionBuilder.build()
+                mediaSession = session
                 initializationState = AndroidMediaSessionInitializationState.Ready
+                // A song transition hands playback to the platform player's other ExoPlayer; the
+                // session, and with it the media notification, follows.
+                platformPlayer.sessionPlayer.collect { player ->
+                    if (session.player !== player) {
+                        runCatching { session.player = player }
+                            .onFailure { System.err.println("PlaybackService could not follow the player: ${it.message}") }
+                    }
+                }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {

@@ -10,7 +10,7 @@ them.
 | Platform | Runtime | File | Made by |
 | --- | --- | --- | --- |
 | Desktop (Windows, macOS), Web | ONNX Runtime (DirectML / Core ML), ONNX Runtime Web (WebNN / WebGPU) | `beat_this_small0_t750.onnx` | `export_beat_this.py --onnx` |
-| Android | LiteRT `CompiledModel` (NPU, then GPU) | `beat_this_small0_t750.tflite` | `convert_mobile.py --tflite` |
+| Android | LiteRT `CompiledModel` (NPU, then GPU) | `beat_this_small0_t750.tflite` | `convert_mobile.py --tflite`, then `litert_gpu_rewrite.py` |
 | iOS | Core ML (Neural Engine, then GPU) | `BeatThisSmall0.mlpackage` | `convert_mobile.py --coreml` |
 
 ## Why a re-implementation
@@ -52,8 +52,26 @@ The downbeat F-measure was 0.82 to 1.0.
 - **Float16.** NPUs and mobile GPUs run the model in float16. On 15 s windows of three real
   tracks the float16 model stayed finite. Its largest logit difference from float32 was 0.08,
   and the sign of 99.93 % or more of the frames agreed. The sign is what peak picking uses.
-- **LiteRT.** The `.tflite` file matches the PyTorch model to 8.3e-6 on the CPU interpreter
-  that converts it. It has not run on a phone's GPU or NPU here.
+- **LiteRT on a GPU.** The converted `.tflite` matches the PyTorch model to 8.3e-6 on LiteRT's
+  CPU interpreter, but LiteRT's GPU backend does not implement two of its ops:
+  `L2_NORMALIZATION`, which the converter makes of every RMSNorm, and `BROADCAST_TO`, which it
+  makes of the rotary `rotate_half` matmul on rank-4 tensors. LiteRT does not refuse such a model;
+  it runs the unsupported ops on the CPU and splits the graph around them. LiteRT 2.2.0's GPU
+  accelerator reported 67 of the 1066 ops on the GPU. `litert_gpu_rewrite.py` replaces each
+  `L2_NORMALIZATION` with `MUL`, `SUM`, `MAXIMUM`, `RSQRT` and `MUL`, which compute the same value,
+  and gives each such `BATCH_MATMUL` the constant matrix itself, which the GPU backend runs as a
+  1x1 convolution. `check_litert_gpu.py` then loaded the result on LiteRT 2.2.0's GPU accelerator
+  (WebGPU on Direct3D 12, Radeon RX 7900 XT). LiteRT reported it fully accelerated, at 2.5 ms per
+  15 s chunk. On the CPU the rewritten model differs from the converted one by at most 3.3e-6.
+  Between GPU and CPU the largest logit difference was 0.35 (float16), and the sign of every
+  frame agreed. It has not run on a phone here; a phone's LiteRT uses OpenCL or OpenGL ES instead
+  of WebGPU, and its op support comes from the same GPU delegate code.
+- **LiteRT's model analyzer cannot be used for this check.** `ModelAnalyzer(..., gpu_compatibility=True)`
+  in `ai-edge-litert` 2.2.0 reports every model as compatible: its per-node GPU check is gone, and
+  the list of incompatible nodes it prints is always empty.
+- **No NPU on Android yet.** LiteRT reaches a phone NPU through the SoC vendor's dispatch and
+  compiler-plugin libraries, which the app does not bundle. The app tries the NPU first and falls
+  back to the GPU.
 - **Core ML.** The `.mlpackage` converts as an ML program with float16 compute precision for
   iOS 16. It has not run here, because Core ML needs macOS or iOS.
 - **ONNX on DirectML with CPU fallback disabled.** The session was created with
@@ -82,3 +100,16 @@ uv pip install --index-url https://download.pytorch.org/whl/cpu torch torchaudio
 uv pip install einops rotary-embedding-torch soxr numpy onnx
 python export_beat_this.py --beat-this beat_this --checkpoint small0.ckpt --onnx beat_this_small0_t750.onnx
 ```
+
+The Android model is the converted `.tflite` rewritten for LiteRT's GPU backend. Both scripts
+run on Windows too, with `ai-edge-litert` 2.2.0 and `flatbuffers` installed:
+
+```sh
+python litert_gpu_rewrite.py beat_this_small0_t750.tflite out.tflite
+python check_litert_gpu.py out.tflite --reference beat_this_small0_t750.tflite
+```
+
+On Windows, LiteRT's GPU accelerator is WebGPU on Direct3D 12 through Dawn. Dawn loads
+`dxil.dll` and `dxcompiler.dll` from the accelerator's own directory
+(`site-packages/ai_edge_litert`), so copy them there first; the Windows SDK has both under
+`bin/<version>/x64`.

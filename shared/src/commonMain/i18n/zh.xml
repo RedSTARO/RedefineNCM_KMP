@@ -1025,4 +1025,8 @@
     <string name="beatModelDownloadFailed">节拍模型下载失败：{reason}</string>
     <string name="browserNoWebNnOrWebGpu">浏览器没有开放 WebNN 或 WebGPU</string>
     <string name="browserBeatModelDevicesFailed">浏览器的加速设备无法运行节拍模型：{reasons}</string>
+
+    <!-- transition/LiteRtBeatModelLoader.kt -->
+    <string name="liteRtLoadFailed">LiteRT 无法加载：{reason}</string>
+    <string name="liteRtNpuRuntimeMissing">这个版本没有附带芯片厂商的 NPU 运行库</string>
 </resources>

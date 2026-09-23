@@ -310,3 +310,16 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## LiteRT
+
+The Android app runs the beat model with [LiteRT](https://github.com/google-ai-edge/LiteRT)
+(`com.google.ai.edge.litert:litert` 2.2.0 and `litert-api` 2.2.0), Google's on-device
+inference runtime, under the Apache License 2.0
+([`LICENSES/Apache-2.0.txt`](LICENSES/Apache-2.0.txt)). The APK carries its native libraries
+`libLiteRt.so`, `libLiteRtClGlAccelerator.so` and `liblitert_jni.so`. Those libraries are built
+from many open-source components under Apache, MIT, BSD and other licences; LiteRT's own notice
+file for them is reproduced as
+[`LICENSES/LiteRT-2.2.0-THIRD_PARTY_NOTICE.txt`](LICENSES/LiteRT-2.2.0-THIRD_PARTY_NOTICE.txt).
+
+Copyright 2025 Google LLC.
