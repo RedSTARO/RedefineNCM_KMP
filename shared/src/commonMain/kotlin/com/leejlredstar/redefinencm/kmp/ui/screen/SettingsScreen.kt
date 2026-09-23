@@ -75,6 +75,13 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
+import com.leejlredstar.redefinencm.kmp.transition.BeatAcceleratorState
+import com.leejlredstar.redefinencm.kmp.transition.MAX_CROSSFADE_SECONDS
+import com.leejlredstar.redefinencm.kmp.transition.MIN_CROSSFADE_SECONDS
+import com.leejlredstar.redefinencm.kmp.transition.SongTransitionCoordinator
+import com.leejlredstar.redefinencm.kmp.transition.SongTransitionMode
+import com.leejlredstar.redefinencm.kmp.transition.SongTransitionPreferences
+import com.leejlredstar.redefinencm.kmp.transition.TransitionCapability
 import com.leejlredstar.redefinencm.kmp.lyric.supportsDynamicNowPlayingCover
 import com.leejlredstar.redefinencm.kmp.notification.OptionalLyricSurface
 import com.leejlredstar.redefinencm.kmp.notification.WindowedLyricSurface
@@ -124,6 +131,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.collectAsState
@@ -135,6 +144,7 @@ import com.leejlredstar.redefinencm.kmp.getPlatform
 import com.leejlredstar.redefinencm.kmp.ui.theme.ThemeMode
 import com.leejlredstar.redefinencm.kmp.ui.theme.ThemePreferences
 import com.leejlredstar.redefinencm.kmp.ui.theme.dynamicColorSupported
+import kotlin.math.roundToInt
 
 /**
  * The lyric surface's capabilities, as this target has them.
@@ -160,6 +170,7 @@ fun SettingsScreen(
     accountsViewModel: AccountsViewModel = koinInject(),
     localLibrary: LocalLibraryStore = koinInject(),
     nowPlayingViewModel: NowPlayingViewModel = koinInject(),
+    songTransitions: SongTransitionCoordinator = koinInject(),
 ) {
     var onlineQuality by remember(settings) { mutableStateOf(SoundQuality.STANDARD.name) }
     var dlQuality by remember(settings) { mutableStateOf(SoundQuality.STANDARD.name) }
@@ -253,6 +264,7 @@ fun SettingsScreen(
             SettingKeys.AUDIO_OUTPUT_DEVICE,
             SYSTEM_DEFAULT_AUDIO_OUTPUT_ID,
         )
+        songTransitions.reloadPreferences()
     }
 
     fun flushSettings(
@@ -513,6 +525,12 @@ fun SettingsScreen(
                         )
                     }
                 }
+
+                SongTransitionSection(
+                    coordinator = songTransitions,
+                    accentPalette = settingsPalette,
+                    onChange = { write -> persistSettings(write) },
+                )
 
                 SettingsSectionLabel("歌词", settingsPalette)
                 val surfaceRows = if (optionalLyricSurface != null) 1 else 0
@@ -1089,4 +1107,178 @@ private fun LyricSourceDropdown(
         ),
         onUpdate = onUpdate,
     )
+}
+
+private val SongTransitionMode.displayName: String
+    get() = when (this) {
+        SongTransitionMode.OFF -> "关闭"
+        SongTransitionMode.CROSSFADE -> "淡入淡出"
+        SongTransitionMode.SMART -> "智能过渡"
+    }
+
+private val SongTransitionMode.menuLabel: String
+    get() = when (this) {
+        SongTransitionMode.OFF -> "关闭"
+        SongTransitionMode.CROSSFADE -> "淡入淡出（固定时长）"
+        SongTransitionMode.SMART -> "智能过渡（分析节拍后衔接）"
+    }
+
+/**
+ * How one song hands over to the next: not at all, a fixed crossfade, or a smart transition, and
+ * for smart transitions what the beat model runs on here.
+ *
+ * The coordinator persists and applies a change itself; [onChange] only carries the write through
+ * the page's own save path, so a failed durable write reports here like every other row.
+ */
+@Composable
+private fun SongTransitionSection(
+    coordinator: SongTransitionCoordinator,
+    accentPalette: ContentAccentPalette,
+    onChange: (write: () -> Unit) -> Unit,
+) {
+    val preferences by coordinator.preferences.collectAsState()
+    val accelerator by coordinator.accelerator.collectAsState()
+    val current = preferences ?: SongTransitionPreferences()
+    val capability = coordinator.capability
+    val scope = rememberCoroutineScope()
+    val rows = if (current.mode == SongTransitionMode.OFF) 1 else 2
+
+    SettingsSectionLabel("歌曲过渡", accentPalette)
+    SettingsDropdownRow(
+        label = "歌曲之间",
+        valueLabel = current.mode.displayName,
+        options = SongTransitionMode.entries,
+        optionLabel = { it.displayName },
+        menuLabel = { it.menuLabel },
+        accentPalette = accentPalette,
+        index = 0,
+        count = rows,
+        supportingText = listOfNotNull(songTransitionNote(current.mode, capability)),
+        onUpdate = { mode -> onChange { coordinator.setMode(mode) } },
+    )
+    when (current.mode) {
+        SongTransitionMode.OFF -> Unit
+        SongTransitionMode.CROSSFADE -> CrossfadeLengthRow(
+            seconds = current.crossfadeSeconds,
+            accentPalette = accentPalette,
+            index = 1,
+            count = rows,
+            onUpdate = { seconds -> onChange { coordinator.setCrossfadeSeconds(seconds) } },
+        )
+        SongTransitionMode.SMART -> BeatAnalysisRow(
+            state = accelerator,
+            accentPalette = accentPalette,
+            index = 1,
+            count = rows,
+            onProbe = { scope.launch { coordinator.probeAccelerator() } },
+        )
+    }
+}
+
+private fun songTransitionNote(mode: SongTransitionMode, capability: TransitionCapability): String? = when {
+    mode == SongTransitionMode.OFF -> null
+    capability == TransitionCapability.NONE -> "这个平台的播放器暂不支持歌曲过渡"
+    mode == SongTransitionMode.CROSSFADE -> "上一首淡出的同时，下一首淡入"
+    capability == TransitionCapability.CROSSFADE ->
+        "分析两首歌的响度、节拍和调性，在小节线上衔接。这个平台不调整播放速度，所以不对齐节拍"
+    else -> "分析两首歌的响度、节拍和调性，在小节线上衔接。两首歌速度相近时，微调上一首的速度，让节拍对齐"
+}
+
+@Composable
+private fun CrossfadeLengthRow(
+    seconds: Long,
+    accentPalette: ContentAccentPalette,
+    index: Int,
+    count: Int,
+    onUpdate: (Long) -> Unit,
+) {
+    var dragged by remember(seconds) { mutableStateOf(seconds.toFloat()) }
+    Surface(
+        shape = connectedListItemShape(index = index, count = count),
+        color = accentPalette.quietContainer,
+        contentColor = accentPalette.onQuietContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = ExpressiveLayout.ConnectedItemGap),
+    ) {
+        Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("过渡时长", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Text(
+                    text = "${dragged.roundToInt()} 秒",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = accentPalette.secondaryOnQuietContainer,
+                )
+            }
+            Slider(
+                value = dragged,
+                onValueChange = { dragged = it },
+                onValueChangeFinished = { onUpdate(dragged.roundToInt().toLong()) },
+                valueRange = MIN_CROSSFADE_SECONDS.toFloat()..MAX_CROSSFADE_SECONDS.toFloat(),
+                steps = (MAX_CROSSFADE_SECONDS - MIN_CROSSFADE_SECONDS - 1).toInt(),
+                colors = SliderDefaults.colors(
+                    thumbColor = accentPalette.accent,
+                    activeTrackColor = accentPalette.accent,
+                    inactiveTrackColor = accentPalette.onQuietContainer.copy(alpha = 0.16f),
+                ),
+            )
+        }
+    }
+}
+
+/** What the beat model runs on here, loaded on demand so opening Settings costs nothing. */
+@Composable
+private fun BeatAnalysisRow(
+    state: BeatAcceleratorState,
+    accentPalette: ContentAccentPalette,
+    index: Int,
+    count: Int,
+    onProbe: () -> Unit,
+) {
+    val (value, note) = when (state) {
+        BeatAcceleratorState.NotLoaded ->
+            "尚未加载" to "第一次智能过渡时加载，也可以现在检测"
+        BeatAcceleratorState.Loading -> "正在加载节拍模型…" to ""
+        is BeatAcceleratorState.Ready ->
+            "${state.accelerator.label} · ${state.deviceLabel}" to "节拍模型只在 NPU 或 GPU 上运行，不占用 CPU"
+        is BeatAcceleratorState.Unavailable ->
+            "不可用" to "${state.reason}。仍会按响度安排过渡，但不对齐节拍"
+    }
+    Surface(
+        shape = connectedListItemShape(index = index, count = count),
+        color = accentPalette.quietContainer,
+        contentColor = accentPalette.onQuietContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = ExpressiveLayout.ConnectedItemGap),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("节拍分析", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = accentPalette.secondaryOnQuietContainer,
+                )
+                val details = listOf(
+                    note,
+                    "分析时会另外读取歌曲的标准音质版本，已下载的歌曲直接读取本地文件",
+                ).filter { it.isNotEmpty() }
+                details.forEach { line ->
+                    Text(
+                        text = line,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = accentPalette.secondaryOnQuietContainer,
+                    )
+                }
+            }
+            if (state == BeatAcceleratorState.NotLoaded) {
+                Spacer(Modifier.width(12.dp))
+                TextButton(onClick = onProbe) { Text("检测") }
+            }
+        }
+    }
 }

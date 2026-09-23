@@ -5,6 +5,9 @@ import com.leejlredstar.redefinencm.kmp.data.local.LocalPlaylist
 import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
 import com.leejlredstar.redefinencm.kmp.notification.LyricSurfaceAlignment
+import com.leejlredstar.redefinencm.kmp.transition.DEFAULT_CROSSFADE_SECONDS
+import com.leejlredstar.redefinencm.kmp.transition.SongTransitionMode
+import com.leejlredstar.redefinencm.kmp.transition.normalizeCrossfadeSeconds
 import com.leejlredstar.redefinencm.kmp.ui.theme.ThemeMode
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -53,6 +56,9 @@ data class SettingsBackupData(
     /** Null keeps the current choice when importing a backup made before the theme setting. */
     val themeMode: String? = null,
     val dynamicColor: Boolean = false,
+    /** Null keeps the current choice when importing a backup made before song transitions. */
+    val songTransitionMode: String? = null,
+    val songTransitionCrossfadeSeconds: Long? = null,
 )
 
 private val backupJson = Json { ignoreUnknownKeys = true; coerceInputValues = true }
@@ -67,12 +73,14 @@ fun encodeSettingsBackup(
 ): String = encodeSettingsBackup(
     getString = settings::getString,
     getBoolean = settings::getBoolean,
+    getLong = settings::getLong,
     localLibrary = localLibrary,
 )
 
 internal fun encodeSettingsBackup(
     getString: (key: String, default: String) -> String,
     getBoolean: (key: String, default: Boolean) -> Boolean,
+    getLong: (key: String, default: Long) -> Long = { _, default -> default },
     localLibrary: LocalLibraryDocument? = null,
 ): String = backupJson.encodeToString(
     SettingsBackupData(
@@ -109,6 +117,12 @@ internal fun encodeSettingsBackup(
         useDynamicCover = getBoolean(SettingKeys.USE_DYNAMIC_COVER, false),
         themeMode = ThemeMode.fromWireValue(getString(SettingKeys.THEME_MODE, "")).wireValue,
         dynamicColor = getBoolean(SettingKeys.DYNAMIC_COLOR, false),
+        songTransitionMode = SongTransitionMode.fromWireValue(
+            getString(SettingKeys.SONG_TRANSITION_MODE, SongTransitionMode.DEFAULT.wireValue),
+        ).wireValue,
+        songTransitionCrossfadeSeconds = normalizeCrossfadeSeconds(
+            getLong(SettingKeys.SONG_TRANSITION_CROSSFADE_SECONDS, DEFAULT_CROSSFADE_SECONDS),
+        ),
     )
 )
 
@@ -125,12 +139,14 @@ fun applySettingsBackup(json: String, settings: PlatformSettings): Boolean =
         json = json,
         setString = settings::setString,
         setBoolean = settings::setBoolean,
+        setLong = settings::setLong,
     )
 
 internal fun applySettingsBackup(
     json: String,
     setString: (key: String, value: String) -> Unit,
     setBoolean: (key: String, value: Boolean) -> Unit,
+    setLong: (key: String, value: Long) -> Unit = { _, _ -> },
 ): Boolean = try {
     val data = backupJson.decodeFromString<SettingsBackupData>(json)
     val lyricSourceMode = data.lyricSourceMode?.let { stored ->
@@ -138,6 +154,9 @@ internal fun applySettingsBackup(
     }
     val desktopLyricAlignment = data.desktopLyricAlignment?.let { stored ->
         LyricSurfaceAlignment.fromWireValueOrNull(stored) ?: return false
+    }
+    val songTransitionMode = data.songTransitionMode?.let { stored ->
+        SongTransitionMode.fromWireValueOrNull(stored) ?: return false
     }
     if (data.server.isNotEmpty()) setString(SettingKeys.SERVER, data.server)
     data.qqEnabled?.let { setBoolean(SettingKeys.QQ_ENABLED, it) }
@@ -161,6 +180,10 @@ internal fun applySettingsBackup(
     setBoolean(SettingKeys.USE_DYNAMIC_COVER, data.useDynamicCover)
     data.themeMode?.let { setString(SettingKeys.THEME_MODE, ThemeMode.fromWireValue(it).wireValue) }
     setBoolean(SettingKeys.DYNAMIC_COLOR, data.dynamicColor)
+    songTransitionMode?.let { setString(SettingKeys.SONG_TRANSITION_MODE, it.wireValue) }
+    data.songTransitionCrossfadeSeconds?.let {
+        setLong(SettingKeys.SONG_TRANSITION_CROSSFADE_SECONDS, normalizeCrossfadeSeconds(it))
+    }
     true
 } catch (_: Exception) {
     false

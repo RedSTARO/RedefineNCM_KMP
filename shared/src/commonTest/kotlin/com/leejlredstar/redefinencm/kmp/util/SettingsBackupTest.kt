@@ -289,4 +289,52 @@ class SettingsBackupTest {
         assertFalse(applied)
         assertTrue(writes.isEmpty())
     }
+
+    @Test
+    fun songTransitionsTravelWithABackup() {
+        val json = encodeSettingsBackup(
+            getString = { key, default -> if (key == SettingKeys.SONG_TRANSITION_MODE) "smart" else default },
+            getBoolean = { _, default -> default },
+            getLong = { key, default -> if (key == SettingKeys.SONG_TRANSITION_CROSSFADE_SECONDS) 9L else default },
+        )
+        assertTrue(json.contains("\"songTransitionMode\":\"smart\""))
+        assertTrue(json.contains("\"songTransitionCrossfadeSeconds\":9"))
+
+        val writtenStrings = mutableMapOf<String, String>()
+        val writtenLongs = mutableMapOf<String, Long>()
+        assertTrue(
+            applySettingsBackup(
+                json = json,
+                setString = { key, value -> writtenStrings[key] = value },
+                setBoolean = { _, _ -> },
+                setLong = { key, value -> writtenLongs[key] = value },
+            ),
+        )
+        assertEquals("smart", writtenStrings[SettingKeys.SONG_TRANSITION_MODE])
+        assertEquals(9L, writtenLongs[SettingKeys.SONG_TRANSITION_CROSSFADE_SECONDS])
+    }
+
+    @Test
+    fun anOlderBackupLeavesSongTransitionsAlone() {
+        val writtenStrings = mutableMapOf<String, String>()
+        val writtenLongs = mutableMapOf<String, Long>()
+        assertTrue(
+            applySettingsBackup(
+                json = """{"server":"http://server/"}""",
+                setString = { key, value -> writtenStrings[key] = value },
+                setBoolean = { _, _ -> },
+                setLong = { key, value -> writtenLongs[key] = value },
+            ),
+        )
+        assertFalse(SettingKeys.SONG_TRANSITION_MODE in writtenStrings)
+        assertFalse(SettingKeys.SONG_TRANSITION_CROSSFADE_SECONDS in writtenLongs)
+        // An unknown mode is a damaged backup, not a reason to switch transitions off.
+        assertFalse(
+            applySettingsBackup(
+                json = """{"songTransitionMode":"automix"}""",
+                setString = { _, _ -> },
+                setBoolean = { _, _ -> },
+            ),
+        )
+    }
 }
