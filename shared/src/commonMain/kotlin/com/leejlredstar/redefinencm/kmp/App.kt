@@ -110,6 +110,7 @@ import com.leejlredstar.redefinencm.kmp.ui.screen.DailySongsScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.DownloadManagementScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
+import com.leejlredstar.redefinencm.kmp.ui.screen.AccountsScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.LoginScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.PlaylistDetailScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.SearchScreen
@@ -160,6 +161,8 @@ internal sealed interface PushedDest {
     data object SongRecognition : PushedDest
     data object DailySongs : PushedDest
     data object Settings : PushedDest
+    /** Every account the app holds, opened from settings. */
+    data object Accounts : PushedDest
     data class Playlist(val id: Long) : PushedDest
     data class Artist(val id: Long) : PushedDest
     data class Album(val id: Long) : PushedDest
@@ -210,6 +213,7 @@ internal fun encodePushedDestination(destination: PushedDest): String = when (de
     PushedDest.SongRecognition -> "song-recognition"
     PushedDest.DailySongs -> "daily-songs"
     PushedDest.Settings -> "settings"
+    PushedDest.Accounts -> "accounts"
     is PushedDest.Playlist -> "playlist:${destination.id}"
     is PushedDest.Artist -> "artist:${destination.id}"
     is PushedDest.Album -> "album:${destination.id}"
@@ -224,6 +228,7 @@ internal fun decodePushedDestination(saved: String): PushedDest? = when (saved) 
     "song-recognition" -> PushedDest.SongRecognition
     "daily-songs" -> PushedDest.DailySongs
     "settings" -> PushedDest.Settings
+    "accounts" -> PushedDest.Accounts
     else -> when {
         saved.startsWith("login:") ->
             MusicProviderId.fromKey(saved.removePrefix("login:"))?.let(PushedDest::Login)
@@ -679,8 +684,13 @@ private fun AppContent(
                                             )
                                             is PushedDest.Settings -> SettingsScreen(
                                                 scaffoldPadding = screenPadding,
-                                                onOpenLogin = { push(PushedDest.Login(it)) },
+                                                onOpenAccounts = { push(PushedDest.Accounts) },
                                                 onBack = ::back,
+                                            )
+                                            is PushedDest.Accounts -> AccountsScreen(
+                                                scaffoldPadding = screenPadding,
+                                                onBack = ::back,
+                                                onOpenLogin = { push(PushedDest.Login(it)) },
                                             )
                                             is PushedDest.Artist -> ArtistScreen(
                                                 artistId = dest.id,

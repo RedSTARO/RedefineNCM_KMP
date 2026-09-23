@@ -99,12 +99,8 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.BuildInfo
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
-import com.leejlredstar.redefinencm.kmp.data.auth.CredentialStore
-import com.leejlredstar.redefinencm.kmp.data.auth.LoginMethodRegistry
-import com.leejlredstar.redefinencm.kmp.data.auth.ProviderLoginDescriptorRegistry
 import com.leejlredstar.redefinencm.kmp.data.auth.QQCredential
 import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
-import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
 import com.leejlredstar.redefinencm.kmp.util.applySettingsBackup
@@ -149,17 +145,14 @@ private val windowedLyricSurface: WindowedLyricSurface? = lyricSurface as? Windo
 @Composable
 fun SettingsScreen(
     scaffoldPadding: PaddingValues,
-    /** Opens the login page for one provider. */
-    onOpenLogin: (MusicProviderId) -> Unit,
+    /** Opens the accounts page, where every provider's account and the local one live. */
+    onOpenAccounts: () -> Unit,
     /** Settings is a page opened from the library and the sidebar, so it has a way back. */
     onBack: (() -> Unit)? = null,
     settings: PlatformSettings = koinInject(),
     api: NCMApi = koinInject(),
     mainViewModel: MainViewModel = koinInject(),
     nowPlayingViewModel: NowPlayingViewModel = koinInject(),
-    loginMethods: LoginMethodRegistry = koinInject(),
-    loginDescriptors: ProviderLoginDescriptorRegistry = koinInject(),
-    credentials: CredentialStore = koinInject(),
 ) {
     var cookie by remember(settings) { mutableStateOf("") }
     var server by remember(settings) { mutableStateOf("") }
@@ -209,15 +202,6 @@ fun SettingsScreen(
     var lyricSourceWriteGeneration by remember { mutableIntStateOf(0) }
     var lyricDisplayWriteGeneration by remember { mutableIntStateOf(0) }
     var showImportConfirmation by remember { mutableStateOf(false) }
-    var logoutConfirmationFor by remember { mutableStateOf<MusicProviderId?>(null) }
-    var showCookieField by remember { mutableStateOf(false) }
-    var showQQCredentialField by remember { mutableStateOf(false) }
-    // The pasted-credential method for QQ Music, if one is registered; it owns the field's label
-    // and the rules for what pasted text is accepted.
-    val qqCredentialMethod = remember(loginMethods) { loginMethods.textMethod(MusicProviderId.QQ) }
-    // What each account card and sign-out dialog says comes from the provider's descriptor.
-    val neteaseLogin = remember(loginDescriptors) { loginDescriptors.require(MusicProviderId.NETEASE) }
-    val qqLogin = remember(loginDescriptors) { loginDescriptors.require(MusicProviderId.QQ) }
     val userDetail by mainViewModel.userDetail.collectAsState()
     // Results of saving, importing and exporting appear at the bottom, beside the controls that
     // cause them; a banner at the top of the page was off screen by the time the backup buttons
@@ -464,51 +448,25 @@ fun SettingsScreen(
             } else {
                 Column(modifier = Modifier.padding(horizontal = 20.dp)) {
                 // Account first: who is signed in and how to change that are what people open
-                // settings for most. The raw cookie is still here, folded away as an advanced
-                // option instead of sitting in the open where one stray keystroke replaced it.
+                // settings for most. The accounts themselves — one per provider plus the local
+                // one, with their sign-in, sign-out and raw credentials — live on their own page;
+                // this row says who is signed in where and opens it.
                 SettingsSectionLabel("账号", settingsPalette)
-                AccountCard(
-                    loggedIn = cookie.isNotBlank(),
-                    nickname = userDetail?.profile?.nickname,
-                    avatarUrl = userDetail?.profile?.avatarUrl,
-                    providerLabel = neteaseLogin.accountLabel,
-                    signedOutHint = neteaseLogin.signedOutHint,
+                val qqSignedIn = remember(qqCookie) { QQCredential.parse(qqCookie) != null }
+                SettingsLinkRow(
+                    label = when {
+                        cookie.isBlank() -> "未登录网易云音乐"
+                        userDetail?.profile?.nickname.isNullOrBlank() -> "网易云音乐已登录"
+                        else -> userDetail?.profile?.nickname.orEmpty()
+                    },
+                    supportingText = buildString {
+                        append("QQ 音乐")
+                        append(if (qqSignedIn) "已登录" else "未登录")
+                        append("；本地账号")
+                    },
                     accentPalette = settingsPalette,
-                    onLogin = { onOpenLogin(MusicProviderId.NETEASE) },
-                    onLogout = { logoutConfirmationFor = MusicProviderId.NETEASE },
+                    onClick = onOpenAccounts,
                 )
-                SettingsExpanderRow(
-                    label = "手动填写 Cookie",
-                    supportingText = "高级：已有登录 Cookie 时可以直接粘贴",
-                    expanded = showCookieField,
-                    accentPalette = settingsPalette,
-                    onToggle = { showCookieField = !showCookieField },
-                )
-                if (showCookieField) {
-                    SettingsTextField(
-                        value = cookie,
-                        label = "Cookie",
-                        obscureText = true,
-                        accentPalette = settingsPalette,
-                        index = 1,
-                        count = 2,
-                        onDraftChange = { cookie = it },
-                        onCommit = { raw ->
-                            val normalized = raw.trim()
-                            cookie = normalized
-                            persistSettings(
-                                write = { settings.setString(SettingKeys.COOKIE, normalized) },
-                                // Stop old-account work as soon as the process cookie changes. The
-                                // refresh waits on the same settings barrier before resolving UID.
-                                onWritten = { mainViewModel.refreshAccount() },
-                                onFailure = {
-                                    reloadSettingsSnapshot()
-                                    mainViewModel.refreshAccount()
-                                },
-                            )
-                        },
-                    )
-                }
 
                 SettingsSectionLabel("播放", settingsPalette)
                 // The output-device row sits with the quality dropdowns because it is the other
@@ -938,56 +896,6 @@ fun SettingsScreen(
                         })
                     }
 
-                    // The QQ account, laid out like the NetEase one above: who is signed in, the
-                    // login page for changing that, and the raw credential folded away beneath.
-                    // The stored form is the gateway's; it carries no nickname, so the account
-                    // number stands in for one.
-                    val qqAccount = remember(qqCookie) { QQCredential.parse(qqCookie) }
-                    Spacer(Modifier.height(ExpressiveLayout.ConnectedItemGap * 3))
-                    AccountCard(
-                        loggedIn = qqAccount != null,
-                        nickname = qqAccount?.musicId?.toString(),
-                        avatarUrl = null,
-                        providerLabel = qqLogin.accountLabel,
-                        signedOutHint = qqLogin.signedOutHint,
-                        accentPalette = settingsPalette,
-                        onLogin = { onOpenLogin(MusicProviderId.QQ) },
-                        onLogout = { logoutConfirmationFor = MusicProviderId.QQ },
-                    )
-                    if (qqCredentialMethod != null) {
-                        SettingsExpanderRow(
-                            label = "手动填写凭证",
-                            supportingText = "高级：${qqCredentialMethod.supportingText}",
-                            expanded = showQQCredentialField,
-                            accentPalette = settingsPalette,
-                            onToggle = { showQQCredentialField = !showQQCredentialField },
-                        )
-                    }
-                    if (showQQCredentialField && qqCredentialMethod != null) {
-                        // Obscured and kept out of the settings backup, exactly like the NetEase one.
-                        SettingsTextField(
-                            value = qqCookie,
-                            label = qqCredentialMethod.fieldLabel,
-                            obscureText = true,
-                            accentPalette = settingsPalette,
-                            index = 1,
-                            count = 2,
-                            onDraftChange = { qqCookie = it },
-                            onCommit = { raw ->
-                                qqCredentialMethod.normalize(raw)
-                                    .onSuccess { normalized ->
-                                        qqCookie = normalized
-                                        persistSettings({
-                                            settings.setString(SettingKeys.QQ_COOKIE, normalized)
-                                        })
-                                    }
-                                    .onFailure { failure ->
-                                        reloadSettingsSnapshot()
-                                        settingsMessage = failure.message ?: "凭证无法识别"
-                                    }
-                            },
-                        )
-                    }
                 }
 
                 SettingsSectionLabel("备份", settingsPalette)
@@ -1032,37 +940,6 @@ fun SettingsScreen(
         )
     }
 
-    logoutConfirmationFor?.let { provider ->
-        AlertDialog(
-            onDismissRequest = { logoutConfirmationFor = null },
-            icon = { Icon(AppIcons.Logout, contentDescription = null) },
-            title = { Text("退出${provider.displayName}登录？") },
-            text = { Text(loginDescriptors.require(provider).logoutWarning) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        logoutConfirmationFor = null
-                        // Signing out goes through the provider's credential slot, which applies
-                        // that provider's change rules (NetEase's restarts account work).
-                        scope.launch {
-                            credentials.require(provider).clear()
-                                .onSuccess {
-                                    reloadSettingsSnapshot()
-                                    settingsMessage = "已退出${provider.displayName}"
-                                }
-                                .onFailure { failure ->
-                                    reloadSettingsSnapshot()
-                                    settingsMessage = "退出失败：${failure.message ?: "未知错误"}"
-                                }
-                        }
-                    },
-                ) { Text("退出登录") }
-            },
-            dismissButton = {
-                TextButton(onClick = { logoutConfirmationFor = null }) { Text("取消") }
-            },
-        )
-    }
 
     if (showImportConfirmation) {
         AlertDialog(
@@ -1100,7 +977,7 @@ fun SettingsScreen(
  * leaves the page title as the only large type on screen.
  */
 @Composable
-private fun SettingsSectionLabel(
+internal fun SettingsSectionLabel(
     text: String,
     accentPalette: ContentAccentPalette,
 ) {
@@ -1149,7 +1026,7 @@ private fun SettingsHero(accentPalette: ContentAccentPalette) {
 }
 
 @Composable
-private fun SettingsTextField(
+internal fun SettingsTextField(
     value: String,
     label: String,
     obscureText: Boolean = false,
@@ -1619,7 +1496,7 @@ private fun SettingsButton(
 
 /** Who is signed in to one provider, and the two things to do about it. */
 @Composable
-private fun AccountCard(
+internal fun AccountCard(
     loggedIn: Boolean,
     nickname: String?,
     avatarUrl: String?,
@@ -1630,9 +1507,11 @@ private fun AccountCard(
     accentPalette: ContentAccentPalette,
     onLogin: () -> Unit,
     onLogout: () -> Unit,
+    /** How many rows the card's group has: two when an advanced row sits beneath it. */
+    shapeCount: Int = 2,
 ) {
     Surface(
-        shape = connectedListItemShape(index = 0, count = 2),
+        shape = connectedListItemShape(index = 0, count = shapeCount),
         color = accentPalette.quietContainer,
         contentColor = accentPalette.onQuietContainer,
         modifier = Modifier
@@ -1702,9 +1581,56 @@ private fun AccountCard(
     }
 }
 
+/** A row that opens another page. */
+@Composable
+internal fun SettingsLinkRow(
+    label: String,
+    supportingText: String,
+    accentPalette: ContentAccentPalette,
+    onClick: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Surface(
+        onClick = onClick,
+        shape = rememberConnectedListItemShape(
+            index = 0,
+            count = 1,
+            interactionSource = interactionSource,
+        ),
+        color = accentPalette.quietContainer,
+        contentColor = accentPalette.onQuietContainer,
+        interactionSource = interactionSource,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = ExpressiveLayout.ConnectedItemGap),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = ExpressiveLayout.MinimumTouchTarget)
+                .padding(start = 20.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(text = label, style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = supportingText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = accentPalette.secondaryOnQuietContainer,
+                )
+            }
+            Icon(
+                imageVector = AppIcons.KeyboardArrowRight,
+                contentDescription = "打开",
+                tint = accentPalette.secondaryOnQuietContainer,
+            )
+        }
+    }
+}
+
 /** A row that shows or hides an advanced setting beneath it. */
 @Composable
-private fun SettingsExpanderRow(
+internal fun SettingsExpanderRow(
     label: String,
     supportingText: String,
     expanded: Boolean,

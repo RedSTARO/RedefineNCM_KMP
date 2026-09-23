@@ -7,7 +7,9 @@ import com.leejlredstar.redefinencm.kmp.data.api.ExternalHttpClient
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.data.api.QQMusicApi
 import com.leejlredstar.redefinencm.kmp.data.auth.CredentialStore
+import com.leejlredstar.redefinencm.kmp.data.auth.LocalAccount
 import com.leejlredstar.redefinencm.kmp.data.auth.LoginMethodRegistry
+import com.leejlredstar.redefinencm.kmp.data.auth.QQCredential
 import com.leejlredstar.redefinencm.kmp.data.auth.NeteaseCookieLoginMethod
 import com.leejlredstar.redefinencm.kmp.data.auth.NeteaseCredentialSlot
 import com.leejlredstar.redefinencm.kmp.data.auth.NeteaseQrLoginMethod
@@ -140,10 +142,15 @@ val sharedModule = module {
                         label = "QQ 音乐后端地址",
                         appliesWhen = "后端地址立即生效",
                     ),
+                    // The gateway's credential carries no nickname; the account number stands in.
+                    accountName = { stored -> QQCredential.parse(stored)?.musicId?.toString() },
                 ),
             ),
         )
     }
+
+    // The device-local account owns what never leaves this device; it has a name and no login.
+    single { LocalAccount(get()) }
 
     // Login sources, logic half — the login page renders whatever is registered here for the
     // provider it was opened for. A way to sign in of an existing shape is an entry in this list.

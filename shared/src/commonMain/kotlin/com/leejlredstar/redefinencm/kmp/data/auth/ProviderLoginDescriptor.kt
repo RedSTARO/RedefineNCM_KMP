@@ -28,8 +28,14 @@ class ProviderLoginDescriptor(
     val logoutWarning: String,
     /** The backend address the provider reads, or null when it has none to edit. */
     val server: ProviderServerSetting?,
+    /**
+     * The name the accounts page shows for a stored credential, when the credential itself
+     * carries one (QQ's carries the account number). Null leaves the page to say "已登录".
+     */
+    val accountName: (storedCredential: String) -> String? = { null },
 )
 
+/** The registered descriptors, in the order the accounts page lists providers. */
 class ProviderLoginDescriptorRegistry(descriptors: List<ProviderLoginDescriptor>) {
     private val byProvider: Map<MusicProviderId, ProviderLoginDescriptor> =
         descriptors.associateBy { it.provider }
@@ -37,6 +43,8 @@ class ProviderLoginDescriptorRegistry(descriptors: List<ProviderLoginDescriptor>
     init {
         require(byProvider.size == descriptors.size) { "more than one login descriptor for a provider" }
     }
+
+    val all: List<ProviderLoginDescriptor> = descriptors
 
     operator fun get(provider: MusicProviderId): ProviderLoginDescriptor? = byProvider[provider]
 

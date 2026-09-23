@@ -27,6 +27,9 @@ object SettingKeys {
 
     /** Whether the library merges every provider into one view or keeps a tab per provider. */
     const val LIBRARY_AGGREGATION_MODE = "libraryAggregationMode"
+
+    /** The device-local account's display name; blank means the default. */
+    const val LOCAL_ACCOUNT_NAME = "localAccountName"
     const val UID = "uid"
     const val UID_COOKIE_FINGERPRINT = "uidCookieFingerprint"
     const val ONLINE_PLAY_QUALITY = "onlinePlayQuality"

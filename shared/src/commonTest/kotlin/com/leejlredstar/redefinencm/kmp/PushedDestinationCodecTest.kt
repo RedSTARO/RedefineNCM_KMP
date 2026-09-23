@@ -19,6 +19,7 @@ class PushedDestinationCodecTest {
         PushedDest.SongRecognition,
         PushedDest.DailySongs,
         PushedDest.Settings,
+        PushedDest.Accounts,
         PushedDest.Playlist(123L),
         PushedDest.Artist(33927412L),
         PushedDest.Album(94214994L),
