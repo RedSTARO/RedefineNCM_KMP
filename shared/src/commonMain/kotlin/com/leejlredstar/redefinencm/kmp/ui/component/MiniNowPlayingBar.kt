@@ -52,7 +52,7 @@ fun MiniNowPlayingBar(
     val duration by player.duration.collectAsState()
     val volume by player.volume.collectAsState()
     val hasMedia = media != null
-    // Silence with the pill looking the same as ever was the one sign-free state it had.
+    // Without a muted badge, silence would be the one state the pill gives no sign of.
     val muted = hasMedia && volume <= 0.001f
     val totalDuration = duration
         .takeIf { it > 0 }
@@ -76,8 +76,8 @@ fun MiniNowPlayingBar(
     val containerColor = accentPalette.container
     val contentColor = contentColorFor(containerColor)
 
-    // The whole pill opens the player; only the play button does something else. It used to be
-    // the cover alone, with the rest of the pill doing nothing when tapped.
+    // The whole pill opens the player; only the play button does something else. Limiting that
+    // to the cover would leave the rest of the pill doing nothing when tapped.
     Surface(
         onClick = onExpand,
         enabled = hasMedia,

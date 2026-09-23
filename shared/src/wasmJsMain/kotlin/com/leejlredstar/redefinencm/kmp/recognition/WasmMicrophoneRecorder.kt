@@ -81,7 +81,7 @@ class WasmMicrophoneRecorder : ExclusiveMicrophoneRecorder() {
             }
             mediaRecorder.onerror = {
                 completedBlob.completeExceptionally(
-                    MicrophoneUnavailableException("浏览器录音器报告错误"),
+                    MicrophoneUnavailableException("浏览器录音出错"),
                 )
             }
             mediaRecorder.onstop = {

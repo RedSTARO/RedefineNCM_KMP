@@ -82,7 +82,7 @@ private data class SemanticVersion(
 
 /**
  * 查询 GitHub 最新 release tag（原版 SplashActivity.checkAppUpdate 的 KMP 版）。
- * 使用独立的临时 HttpClient —— 共享客户端的 defaultRequest 会附带 NCM cookie，
+ * 使用独立的临时 HttpClient：共享客户端的 defaultRequest 会附带 NCM cookie，
  * 不能发给 GitHub。
  */
 suspend fun fetchLatestReleaseTag(

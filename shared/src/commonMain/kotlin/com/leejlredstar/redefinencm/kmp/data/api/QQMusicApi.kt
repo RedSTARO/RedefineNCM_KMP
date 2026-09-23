@@ -32,8 +32,8 @@ class QQMusicApi(
     private val cookie: suspend () -> String = { "" },
     /**
      * Called when the gateway refuses (401) a request that carried an account, with the account it
-     * carried. True means the request is sent once more with the account stored by then — see
-     * `QQCredentialRenewer.renewAfterRejection`. The renewal's own requests never come back here.
+     * carried. True means the request is sent once more with the account stored by then (see
+     * `QQCredentialRenewer.renewAfterRejection`). The renewal's own requests never come back here.
      */
     private val onRejected: (suspend (rejectedCredential: String) -> Boolean)? = null,
 ) {
@@ -69,8 +69,8 @@ class QQMusicApi(
      *
      * The gateway returns the CDN path (`purl`) and leaves the host to the caller. Of the hosts QQ
      * lists, only `dl.stream.qqmusic.qq.com` answers these paths with audio, so that one is fixed
-     * here. An empty `purl` — the gateway reports it beside a non-zero `result` — means the track
-     * is not available to the configured account at that tier.
+     * here. An empty `purl` (the gateway reports it beside a non-zero `result`) means the track is
+     * not available to the configured account at that tier.
      */
     suspend fun songUrl(mid: String, fileType: Int): String? = songUrlAnswer(mid, fileType)?.url
 
@@ -106,7 +106,7 @@ class QQMusicApi(
         }
     }
 
-    /** The public header of an account's profile — its name and avatar — by encrypted UIN. */
+    /** The public header of an account's profile (its name and avatar), by encrypted UIN. */
     suspend fun userHomepage(encryptUin: String): QQUserHomepage? =
         fetchData<QQUserHomepage>("user/$encryptUin/homepage")
 
@@ -198,8 +198,8 @@ class QQMusicApi(
             // yield an empty result that reads like "no such song".
             if (response.status.value !in 200..299) null else response.bodyAsText()
         } catch (cancelled: CancellationException) {
-            // A cancelled caller is not a dead gateway: swallowing this turned switching QR
-            // methods mid-poll into a "后端无响应" banner on the next method's page.
+            // A cancelled caller is not a dead gateway. Swallowing this would turn switching QR
+            // methods mid-poll into a "服务器无响应" banner on the next method's page.
             throw cancelled
         } catch (_: Exception) {
             null

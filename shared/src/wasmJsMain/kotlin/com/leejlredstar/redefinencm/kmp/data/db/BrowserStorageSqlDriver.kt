@@ -11,12 +11,12 @@ import kotlinx.browser.localStorage
 /**
  * Synchronous SQLDelight driver for the browser cache used by this project.
  *
- * The schema contains only JSON value tables addressed by one integer primary key — the local
- * library included, which is why it is one JSON document rather than relational tables. Browsers do
- * not expose a synchronous SQLite API, while SQLDelight's worker driver would force every other
- * target onto async generated queries. This driver keeps the generated [AppDatabase] API intact
- * and persists the exact current query model in localStorage. Unsupported SQL fails immediately
- * so future schema changes cannot silently lose data.
+ * The schema contains only JSON value tables addressed by one integer primary key. That includes
+ * the local library, which is why it is one JSON document rather than relational tables. Browsers
+ * do not expose a synchronous SQLite API, while SQLDelight's worker driver would force every
+ * other target onto async generated queries. This driver keeps the generated [AppDatabase] API
+ * intact and persists the exact current query model in localStorage. Unsupported SQL fails
+ * immediately so future schema changes cannot silently lose data.
  */
 internal class BrowserStorageSqlDriver : SqlDriver {
     private val listeners = mutableMapOf<String, MutableSet<Query.Listener>>()

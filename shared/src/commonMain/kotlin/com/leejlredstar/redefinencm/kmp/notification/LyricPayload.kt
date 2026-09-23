@@ -1,14 +1,13 @@
 package com.leejlredstar.redefinencm.kmp.notification
 
 /**
- * What a lyric surface was handed, in the form every surface actually wants it.
+ * What a lyric surface was handed, in the form every surface wants it.
  *
- * [LyricSurface.updateLyric] takes eight nullable, untrimmed arguments straight
- * from the view model. Each of the four targets turned them into the same non-null trimmed shape
- * before doing anything with them, and Android and iOS had grown a private data class for it that
- * was identical field for field. The copies had drifted: Web did not trim at all and let a
- * negative position through to the DOM, and only two of the four fell back to the title when the
- * lyric line was blank.
+ * [LyricSurface.updateLyric] takes eight nullable, untrimmed arguments straight from the view
+ * model. Every target needs the same non-null, trimmed shape, so it is built once here rather
+ * than in a private data class per target. Per-target copies drift apart: one skips trimming and
+ * lets a negative position through to the DOM, another has no fallback to the title when the
+ * lyric line is blank.
  */
 data class LyricPayload(
     val title: String,
@@ -55,16 +54,16 @@ internal fun lyricPayloadOf(
 )
 
 /**
- * The payload for a surface whose whole point is one line — a notification whose title is the
- * lyric, a Live Activity's leading text.
+ * The payload for a surface whose whole point is one line: a notification whose title is the
+ * lyric, or a Live Activity's leading text.
  *
  * [LyricPayload.currentLyric] is replaced by [LyricPayload.headline], so the surface has nothing
  * left to decide and two updates that resolve to the same line compare equal. Returns null when
  * there is no line to show, which is the signal to leave the surface as it is rather than blank
  * it: a track between lyric lines still has a notification worth keeping on screen.
  *
- * The desktop floating window deliberately does not use this. It draws the title, the artist and
- * the lyric as separate lines, so substituting the title into the lyric line would show it twice.
+ * The desktop floating window does not use this. It draws the title, the artist and the lyric as
+ * separate lines, so substituting the title into the lyric line would show it twice.
  */
 internal fun LyricPayload.asSingleLineSurface(): LyricPayload? =
     headline.takeIf { it.isNotEmpty() }?.let { copy(currentLyric = it) }

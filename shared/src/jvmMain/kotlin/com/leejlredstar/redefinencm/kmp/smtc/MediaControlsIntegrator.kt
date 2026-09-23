@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * The desktop's channel between the playback layer and whichever native transport this host has.
  *
  * The JVM player has no OS transport of its own, so `DesktopMediaControls` picks a backend for
- * the host — Windows SMTC, MPRIS on Linux, `MPNowPlayingInfoCenter` on macOS — and each of them
+ * the host (Windows SMTC, MPRIS on Linux, `MPNowPlayingInfoCenter` on macOS), and each of them
  * observes [metadata] and pushes it out. The other three targets have no equivalent: their
  * players talk to the OS directly, so their [MediaControlsSink] does nothing.
  */

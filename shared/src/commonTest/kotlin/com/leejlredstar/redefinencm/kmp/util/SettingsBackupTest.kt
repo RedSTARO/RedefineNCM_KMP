@@ -252,9 +252,9 @@ class SettingsBackupTest {
 
     @Test
     fun backupsFromTheSelectableRendererEraStillImport() {
-        // The AMLL WebView renderer and its `useNativeAmllRenderer` preference are gone. Files
-        // exported while both renderers existed still carry the key, so importing one must
-        // neither fail nor write a setting the app no longer reads.
+        // The app has one lyric renderer and no `useNativeAmllRenderer` preference. Files
+        // exported while the AMLL WebView renderer existed beside it still carry the key, so
+        // importing one must neither fail nor write a setting the app does not read.
         val writtenBooleans = mutableMapOf<String, Boolean>()
 
         assertTrue(

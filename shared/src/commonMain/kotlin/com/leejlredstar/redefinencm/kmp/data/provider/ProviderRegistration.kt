@@ -13,8 +13,8 @@ import com.leejlredstar.redefinencm.kmp.util.getBooleanAsync
 /**
  * Everything the app knows about one provider, registered once in the DI module.
  *
- * The registries the screens use — [MusicProviderRegistry], [CredentialStore],
- * [ProviderLoginDescriptorRegistry], [LoginMethodRegistry] — are derived from the list of these,
+ * The registries the screens use ([MusicProviderRegistry], [CredentialStore],
+ * [ProviderLoginDescriptorRegistry], [LoginMethodRegistry]) are derived from the list of these,
  * so a provider cannot be half-registered: a slot without a descriptor, or a login method filed
  * under another provider, fails here at construction instead of on the page that needed it.
  */
@@ -48,8 +48,8 @@ class ProviderRegistration(
 
     /**
      * Whether [credential] is an account this platform can use. A credential stored where the
-     * provider cannot be signed in to — a QQ account saved before the Web build stopped offering
-     * sign-in — is never sent, so it does not count.
+     * provider cannot be signed in to is never sent, so it does not count. On Web that covers a
+     * QQ account saved by an earlier build that still offered QQ sign-in.
      */
     fun holdsAccount(credential: String): Boolean = canSignIn && credentialSlot.isSignedIn(credential)
 

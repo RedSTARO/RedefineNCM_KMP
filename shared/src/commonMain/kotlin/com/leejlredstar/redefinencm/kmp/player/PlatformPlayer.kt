@@ -28,8 +28,8 @@ interface PlatformPlayer {
     /**
      * Monotonically increasing playback-selection occurrence.
      *
-     * This changes whenever a playback item is genuinely selected, including selecting the
-     * same song again after [PlayerState.ENDED] and moving between adjacent equal songs. Plain
+     * This changes whenever a playback item is selected, including selecting the same song
+     * again after [PlayerState.ENDED] and moving between adjacent equal songs. Plain
      * pause/resume, seek, shuffle and queue-append operations do not change it.
      */
     val playbackOccurrence: StateFlow<Long>
@@ -69,7 +69,7 @@ interface PlatformPlayer {
     fun skipToIndex(index: Int)
 
     /**
-     * Removes the track at [position] in play order — the position the queue sheet shows and
+     * Removes the track at [position] in play order: the position the queue sheet shows and
      * [skipToIndex] takes, which under shuffle is not an index into the original list.
      * Removing the current track moves to the next one, playing if playback was running.
      */

@@ -26,7 +26,7 @@ class JvmAudioSupportTest {
     @Test
     fun localFileUrisReachFfmpegAsPlainPaths() {
         // File.toURI() emits the single-slash form, which avformat_open_input() rejects with
-        // EINVAL. This only became reachable once .flac stopped being filtered out.
+        // EINVAL. Downloaded .flac files are not filtered out, so they reach this path.
         val converted = ffmpegAudioInput("file:/C:/Music/RedefineNCM/1304882922.flac")
         assertFalse(converted.startsWith("file:"))
         assertTrue(converted.endsWith("1304882922.flac"))

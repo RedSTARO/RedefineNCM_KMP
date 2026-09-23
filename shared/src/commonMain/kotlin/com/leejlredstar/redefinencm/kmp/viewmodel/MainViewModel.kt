@@ -56,8 +56,9 @@ internal fun shouldApplyPlaybackVerification(
 /**
  * Where one provider's search results continue.
  *
- * Each provider pages on its own: one that failed is asked for the page it missed — skipping it
- * would lose its first results for good — and one that has run out is not asked again.
+ * Each provider pages on its own. One that failed is asked for the page it missed, since
+ * skipping it would lose its first results for good, and one that has run out is not asked
+ * again.
  */
 internal data class SearchCursor(
     val nextOffset: Int,
@@ -588,7 +589,7 @@ class MainViewModel(
             return
         }
         if (requestUid <= 0L) {
-            intelligenceError.value = "请先登录后再使用心动模式"
+            intelligenceError.value = "请先登录再使用心动模式"
             return
         }
 
@@ -693,7 +694,7 @@ class MainViewModel(
                     playlistGeneration.value == generation &&
                     activePlaylistId.value == songlistID
                 ) {
-                    playlistDetailLoadError.value = "歌单资料加载失败，可重试以恢复封面与简介"
+                    playlistDetailLoadError.value = "歌单资料加载失败，重试后可以显示封面和简介"
                 }
                 if (
                     !tracksEmitted &&
@@ -716,7 +717,7 @@ class MainViewModel(
         }
     }
 
-    // ── Download（应用内下载队列；不再使用系统 DownloadManager）──
+    // ── Download（应用内下载队列；不使用系统 DownloadManager）──
 
     fun onDownloadPlaylistClick(songlistID: Long) {
         val currentSongs = if (activePlaylistId.value == songlistID) {
@@ -778,7 +779,7 @@ class MainViewModel(
                     failed.isEmpty() -> null
                     failed.size == groups.size -> "搜索失败，请检查网络后重试"
                     else -> failed.joinToString("、") { it.provider.displayName }
-                        .let { "$it 搜索失败，仅显示其他平台结果" }
+                        .let { "${it}搜索失败，只显示其他平台的结果" }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -837,7 +838,7 @@ class MainViewModel(
                 searchFailedProviders.value = searchCursors.filterValues { it.failed }.keys.toList()
                 searchMoreError.value = failed.takeIf { it.isNotEmpty() }
                     ?.joinToString("、") { it.provider.displayName }
-                    ?.let { "$it 没能加载更多结果" }
+                    ?.let { "${it}没能加载更多结果" }
                 // Every failed provider has now answered, so the partial-failure line goes.
                 if (searchFailedProviders.value.isEmpty()) searchError.value = null
             } catch (cancelled: CancellationException) {

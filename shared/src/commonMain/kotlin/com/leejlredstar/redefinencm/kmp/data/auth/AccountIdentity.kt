@@ -16,7 +16,7 @@ data class AccountIdentity(
  * no provider branches. A source that cannot tell emits null, and the page says "已登录".
  */
 fun interface AccountIdentitySource {
-    /** Follows [credential] — the stored value as it changes — and names each account. */
+    /** Follows [credential] (the stored value as it changes) and names each account. */
     fun identities(credential: Flow<String>): Flow<AccountIdentity?>
 }
 

@@ -13,8 +13,8 @@ enum class LyricSource {
 /**
  * Persisted lyric-source policy.
  *
- * [wireValue] is deliberately independent from the enum name so future source additions do not
- * turn a Kotlin refactor into a settings migration.
+ * [wireValue] is kept independent from the enum name so future source additions do not turn a
+ * Kotlin refactor into a settings migration.
  */
 enum class LyricSourceMode(
     val wireValue: String,

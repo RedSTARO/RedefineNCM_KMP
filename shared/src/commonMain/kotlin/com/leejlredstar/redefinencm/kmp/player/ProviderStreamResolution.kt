@@ -15,12 +15,12 @@ import com.leejlredstar.redefinencm.kmp.util.SoundQuality
  *
  * Every platform player already owns NetEase-specific stream resolution: the local-download
  * lookup, the platform's playable-format filter, and the full NetEase quality ladder that the
- * backend accepts verbatim. Rerouting that through the registry would flatten those, so the split
- * is deliberate — the registry only takes over the ids the platform code cannot handle.
+ * backend accepts verbatim. Rerouting that through the registry would flatten those, so the
+ * registry only takes over the ids the platform code cannot handle.
  *
- * Returning null rather than throwing matters here: three of the four platform resolvers used to
- * call `mediaId.toLong()`, which throws on a composite id like `qq:0039MnYb0qxYhV`, and a throw
- * on the player's IO thread at play time is a crash rather than a skipped track.
+ * Returning null rather than throwing matters here: a throw on the player's IO thread at play
+ * time is a crash rather than a skipped track. A platform resolver must not parse the media id
+ * with `mediaId.toLong()`, which throws on a composite id like `qq:0039MnYb0qxYhV`.
  */
 suspend fun MusicProviderRegistry.streamUrlForForeignProvider(itemId: ProviderItemId): String? =
     if (itemId.provider == MusicProviderId.NETEASE) {
@@ -32,11 +32,11 @@ suspend fun MusicProviderRegistry.streamUrlForForeignProvider(itemId: ProviderIt
 /**
  * The stream-resolution order every platform player follows.
  *
- * All four wrote this out: parse the media id, hand a foreign provider's id to the registry,
- * check whatever locally-downloaded copy the platform can play, then fall back to the NetEase
- * CDN at the configured quality. Only the last two steps differ between backends, so they are
- * the parameters — Desktop can only decode a subset of downloaded formats, Web has no local
- * store at all, and Desktop asks the backend for a different quality name than the others.
+ * It parses the media id, hands a foreign provider's id to the registry, checks whatever
+ * locally-downloaded copy the platform can play, then falls back to the NetEase CDN at the
+ * configured quality. Only the last two steps differ between backends, so they are the
+ * parameters: Desktop can only decode a subset of downloaded formats, Web has no local store at
+ * all, and Desktop asks the backend for a different quality name than the others.
  *
  * Returning null means "nothing to play"; the caller treats that as a skipped selection rather
  * than an error. Why there was nothing is recorded in [MusicProviderRegistry.streamFailures] under

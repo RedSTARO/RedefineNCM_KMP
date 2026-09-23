@@ -139,8 +139,8 @@ class LyricResolver(
                         if (untimedCandidate == null) untimedCandidate = localDocument
                     } else if (localDocument.outranks(emittedDocument)) {
                         // Cache-then-network: show the on-disk lyric immediately, then keep going
-                        // so the upstream copy can still upgrade it. Previously this returned here,
-                        // which made the local sidecar authoritative and skipped the refresh.
+                        // so the upstream copy can still upgrade it. Returning here would make the
+                        // local sidecar authoritative and skip the refresh.
                         emittedDocument = localDocument
                         val resolution = LyricResolution.Found(localDocument)
                         remember(cacheKey, resolution)
@@ -301,8 +301,8 @@ private data class LyricMemoryCacheKey(
  * The "backend" source: the lyrics of the service the track came from.
  *
  * NetEase's come from the configured NeteaseCloudMusicApi server through the SQLDelight cache.
- * Another provider's come from that provider once per request and are never cached — the cache
- * tables are keyed by a NetEase song id (AGENTS.md D6).
+ * Another provider's come from that provider once per request and are never cached, because the
+ * cache tables are keyed by a NetEase song id (AGENTS.md D6).
  */
 internal class BackendLyricProvider(
     private val lyricFlow: (Long) -> Flow<Lyric?>,
@@ -346,7 +346,7 @@ internal class BackendLyricProvider(
         emit(
             LyricProviderResult.Unavailable(
                 lastFailureReason?.takeIf(String::isNotBlank)
-                    ?: "现有歌词后端请求失败",
+                    ?: "网易云音乐歌词请求失败",
             ),
         )
     }
@@ -389,7 +389,7 @@ internal class BackendLyricProvider(
 
 /**
  * The endpoint a provider's own lyrics are labelled with, so the lyric badge can name the service
- * rather than "网易云歌词后端".
+ * rather than "网易云音乐歌词".
  */
 internal fun providerLyricEndpoint(provider: MusicProviderId): String = "provider:${provider.key}"
 

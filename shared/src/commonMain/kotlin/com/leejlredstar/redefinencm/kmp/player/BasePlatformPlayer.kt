@@ -7,13 +7,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * The observable half of [PlatformPlayer], which every backend held identically.
+ * The observable half of [PlatformPlayer], which is the same for every backend.
  *
- * All five implementations declared the same eleven `MutableStateFlow` / `override val` pairs and
- * fanned a queue snapshot out to the same five of them. None of the playback control is here:
- * the backends genuinely disagree about who owns the queue — ExoPlayer reads its own timeline,
- * the Desktop player holds revision-stamped claims, and the iOS, Web and in-memory players own a
- * [PlayQueue] — so unifying `play()` would mean rewriting three audio stacks rather than
+ * It holds the eleven `MutableStateFlow` / `override val` pairs all five implementations share,
+ * and fans a queue snapshot out to five of them. None of the playback control is here, because
+ * the backends disagree about who owns the queue: ExoPlayer reads its own timeline, the Desktop
+ * player holds revision-stamped claims, and the iOS, Web and in-memory players own a
+ * [PlayQueue]. Unifying `play()` would mean rewriting three audio stacks rather than
  * deduplicating them.
  */
 abstract class BasePlatformPlayer(
@@ -56,8 +56,8 @@ abstract class BasePlatformPlayer(
     /**
      * Fans one timeline snapshot out to the five queue-derived flows.
      *
-     * [_duration] is deliberately untouched: ExoPlayer reports a decoder duration that queue
-     * metadata must not overwrite. Backends whose duration only ever comes from the queue call
+     * [_duration] is left untouched: ExoPlayer reports a decoder duration that queue metadata
+     * must not overwrite. Backends whose duration only ever comes from the queue call
      * [publishDurationFromMedia] alongside this.
      */
     protected fun publishQueueSnapshot(snapshot: PlayerQueueSnapshot) {
@@ -71,11 +71,10 @@ abstract class BasePlatformPlayer(
     /**
      * Publishes [model] as the queue every surface reads, and returns what was published.
      *
-     * The three copies of this — iOS, Web and the in-memory player, the backends that own a
-     * [PlayQueue] rather than reading a native timeline — each derived the visible items, the
-     * highlight position and the current track from the model in the same three lines. Deriving
-     * them together from one model on every publish is the shuffle invariant; a fourth backend
-     * written by copying is how it would be lost.
+     * iOS, Web and the in-memory player call this: they are the backends that own a [PlayQueue]
+     * rather than reading a native timeline. It derives the visible items, the highlight position
+     * and the current track together from one model on every publish, which is the shuffle
+     * invariant; a fourth backend that copied these lines instead of calling this would lose it.
      */
     protected fun publishQueue(model: PlayQueue<MediaInfo>): PlayerQueueSnapshot {
         val snapshot = PlayerQueueSnapshot(
@@ -96,8 +95,8 @@ abstract class BasePlatformPlayer(
 
     /**
      * Normalises [volume], hands it to the backend through [applyToBackend], and persists it
-     * only when the stored whole-percent value actually changes — a drag across one percent
-     * would otherwise write on every animation frame.
+     * only when the stored whole-percent value changes, since a drag across one percent would
+     * otherwise write on every animation frame.
      */
     protected fun applyVolume(
         volume: Float,

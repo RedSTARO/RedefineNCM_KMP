@@ -9,10 +9,10 @@ import kotlinx.coroutines.sync.withLock
 /**
  * In-memory cache of downloaded songs to avoid repeated file-system scans.
  *
- * Per-row platform file checks used to scan the download folder repeatedly, causing UI jank when
- * many rows requested their status during composition. This singleton
- * keeps a process-local snapshot map for O(1) lookups. Full directory scans must be
- * triggered by explicit sync points; UI reads never perform disk I/O.
+ * A platform file check per row would rescan the download folder for every row and make the UI
+ * jank when many rows ask for their status during composition. This singleton keeps a
+ * process-local snapshot map for O(1) lookups instead. Full directory scans must be triggered by
+ * explicit sync points; UI reads never perform disk I/O.
  */
 object DownloadedSongsCache {
     private data class CacheState(
@@ -21,8 +21,8 @@ object DownloadedSongsCache {
         val hasSuccessfulScan: Boolean = false,
     )
 
-    // MutableStateFlow.update performs an atomic read-modify-write. A volatile Map alone did not:
-    // concurrent scan/upsert/remove operations could overwrite one another with stale copies.
+    // MutableStateFlow.update performs an atomic read-modify-write. A volatile Map alone would
+    // not: concurrent scan/upsert/remove operations could overwrite one another with stale copies.
     private val cacheState = MutableStateFlow(CacheState())
     private val initialScanMutex = Mutex()
 

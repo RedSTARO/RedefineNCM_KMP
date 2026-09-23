@@ -2,12 +2,12 @@
 
 package com.leejlredstar.redefinencm.kmp.notification
 
-/** Browser lyric surface: a live DOM pill, tab title, and an optional granted notification. */
 /**
- * The browser's lyric surface: a fixed element in the page.
+ * The browser's lyric surface: a live DOM pill fixed in the page, the tab title, and a
+ * notification once the user has granted that permission.
  *
- * Plain [LyricSurface]. It is part of playback rather than something to switch on, so it had
- * carried six stub members for capabilities it does not have.
+ * Plain [LyricSurface]. It is part of playback rather than something to switch on, so it carries
+ * no stub members for capabilities it does not have.
  */
 object WebLyricSurface : LyricSurface {
     override fun updateLyric(
@@ -20,9 +20,9 @@ object WebLyricSurface : LyricSurface {
         positionMs: Long,
         durationMs: Long,
     ) {
-        // Was the one target that passed these through untrimmed, with a negative position
-        // reaching the DOM. Like the desktop window, the browser surface has separate lines, so
-        // a blank lyric stays blank rather than repeating the title.
+        // The payload is trimmed and its position clamped, as on every other target, so a
+        // negative position never reaches the DOM. Like the desktop window, the browser surface
+        // has separate lines, so a blank lyric stays blank rather than repeating the title.
         val payload = lyricPayloadOf(
             title = title,
             artist = artist,
@@ -160,7 +160,7 @@ private fun updateBrowserLyricSurface(
         const ratio = durationMs > 0 ? Math.max(0, Math.min(1, positionMs / durationMs)) : 0;
         surface.querySelector('[data-role="progress"]').style.transform = "scaleX(" + ratio + ")";
         document.title = trimmedCurrentLyric
-            ? trimmedCurrentLyric + " — " + (title || "RedefineNCM")
+            ? trimmedCurrentLyric + " · " + (title || "RedefineNCM")
             : (title || "RedefineNCM");
 
         const notificationSignature = [currentText, detailText, artworkUri].join("\u0000");

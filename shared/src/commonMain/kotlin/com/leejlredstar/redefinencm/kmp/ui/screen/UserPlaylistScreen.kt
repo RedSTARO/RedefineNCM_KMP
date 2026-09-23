@@ -167,8 +167,8 @@ fun UserPlaylistScreen(
             contentPadding = PaddingValues(bottom = scaffoldPadding.calculateBottomPadding() + 16.dp),
         ) {
             // The title belongs to the hero when there is one. Drawn above it instead, the
-            // page ended in a hard horizontal cut: the page's own tint met the top edge of a
-            // photograph with nothing in between.
+            // page would end in a hard horizontal cut, the page's own tint meeting the top
+            // edge of a photograph with nothing in between.
             val detail = userDetail
             if (detail != null) {
                 item(key = "user-hero") {
@@ -425,14 +425,14 @@ private fun UserPlaylistHero(
         (backgroundAccent ?: avatarAccent)?.let(onAccentColor)
     }
     // Avatar beside the name rather than stacked above it, and a height that follows the content:
-    // the old fixed 320dp block pushed the playlists below the first screen and had no room left
-    // for a larger system font.
+    // a fixed 320dp block pushes the playlists below the first screen and leaves no room for a
+    // larger system font.
     //
     // The height follows the width at 3:1 instead of being pinned at 180dp. A fixed 180dp box
     // is a 6.6:1 slit at desktop width, and a centred crop of a portrait or 4:3 background
-    // through a slit that shape lands on whatever happens to cross the middle of the picture —
-    // a sleeve, a hem — never the subject. Anchored to the top, where a profile background
-    // puts it.
+    // through a slit that shape lands on whatever happens to cross the middle of the picture
+    // (a sleeve, a hem), never the subject. The crop is anchored to the top, where a profile
+    // background puts the subject.
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         // The title row and the status bar are part of the hero, not a band above it, so the
         // picture runs to the very top of the page and the only edge left is the one the
@@ -453,14 +453,14 @@ private fun UserPlaylistHero(
                         drawContent()
                         // Clear at the top so the picture is a picture; opaque by the bottom,
                         // where the name and the level bar need a background they can be read
-                        // against and the hero has to meet the page. The 3dp blur that used to
-                        // stand in for this only softened it — and did nothing at all below
-                        // Android 12, where `blur` is a no-op.
+                        // against and the hero has to meet the page. A 3dp blur cannot stand in
+                        // for this: it only softens, and it does nothing at all below Android 12,
+                        // where `blur` is a no-op.
                         drawRect(color = accentPalette.pageStart.copy(alpha = 0.10f))
                         // Measured up from the bottom rather than as a fraction of the hero:
                         // the block of text is the same height whatever the hero is, so a
                         // fractional scrim that closes above the name on a 260dp hero opens
-                        // under it on a 180dp one — where the name sits at 0.42 of the height
+                        // under it on a 180dp one, where the name sits at 0.42 of the height
                         // and a bright background photo would leave white text on white.
                         val scrimHeight = 132.dp.toPx().coerceAtMost(size.height)
                         drawRect(
@@ -473,7 +473,7 @@ private fun UserPlaylistHero(
                             ),
                         )
                         // The same treatment at the top, for the page title and the status bar
-                        // icons that now sit over the picture.
+                        // icons that sit over the picture.
                         val topScrim = (topInset + HeroTitleRowHeight).toPx()
                             .coerceAtMost(size.height)
                         drawRect(

@@ -33,11 +33,11 @@ class LocalMediaAssets(
     ): LocalMediaAssetSnapshot {
         require(songId > 0L) { "songId must be positive" }
         val files = document.toOriginalLyricSidecars(songId)
-        require(files.isNotEmpty()) { "歌词源没有可持久化的原始内容" }
+        require(files.isNotEmpty()) { "这份歌词没有可以保存的原始内容" }
         LocalMediaAssetStorage.replaceLyrics(songId, files)
         val snapshot = LocalMediaAssetStorage.inspect(songId)
         check(snapshot.lyricFormat != null && snapshot.lyricFileName != null) {
-            "歌词文件写入后无法回读"
+            "歌词文件写入后无法读取"
         }
         return snapshot
     }
@@ -110,7 +110,7 @@ class LocalMediaAssets(
             "封面文件超过 ${MAX_ARTWORK_BYTES / (1024 * 1024)} MiB 限制"
         }
         val bytes = response.readArtworkBytesAtMost(MAX_ARTWORK_BYTES.toInt())
-        check(bytes.isNotEmpty()) { "封面响应为空" }
+        check(bytes.isNotEmpty()) { "下载到的封面为空" }
         check(bytes.size.toLong() <= MAX_ARTWORK_BYTES) {
             "封面文件超过 ${MAX_ARTWORK_BYTES / (1024 * 1024)} MiB 限制"
         }
@@ -125,10 +125,10 @@ class LocalMediaAssets(
                 rawContentType.startsWith("image/") ||
                 rawContentType == "application/octet-stream",
         ) {
-            "封面响应不是图片：$rawContentType"
+            "下载到的封面不是图片：$rawContentType"
         }
         val format = detectArtworkFormat(bytes)
-            ?: error("封面文件签名不受支持")
+            ?: error("不支持这种封面图片格式")
         val fileName = LocalMediaAssetStorage.replaceArtwork(
             songId = songId,
             fileExtension = format.extension,
@@ -138,7 +138,7 @@ class LocalMediaAssets(
             bytes = bytes,
         )
         val snapshot = LocalMediaAssetStorage.inspect(songId)
-        check(snapshot.artworkFileName == fileName) { "封面文件写入后无法回读" }
+        check(snapshot.artworkFileName == fileName) { "封面文件写入后无法读取" }
         return fileName
     }
 

@@ -79,7 +79,7 @@ object HttpClientFactory {
                 } else {
                     LogLevel.HEADERS
                 }
-                // 绝不把会话 Cookie（账号凭证）打进日志——只留占位，避免凭证泄漏到 logcat/控制台
+                // 绝不把会话 Cookie（账号凭证）打进日志：只留占位，避免凭证泄漏到 logcat/控制台
                 sanitizeHeader { header -> header == HttpHeaders.Cookie }
             }
             // 宽松超时：直连（不走系统代理）时 TCP 首次握手实测可达 3s+ 且有丢包重传，
@@ -158,7 +158,7 @@ object HttpClientFactory {
 }
 
 /**
- * Safe API call wrapper — catches exceptions and returns null (no crash propagates to UI).
+ * Safe API call wrapper: catches exceptions and returns null, so no crash propagates to the UI.
  * Ported from the original Retrofit `safeApiCall`.
  */
 suspend fun <T> safeApiCall(apiCall: suspend () -> T): T? {

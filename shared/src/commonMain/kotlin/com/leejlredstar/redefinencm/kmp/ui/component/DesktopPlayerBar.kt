@@ -43,11 +43,9 @@ import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 /**
  * The desktop's playback bar, fixed along the bottom of the window beside the sidebar.
  *
- * The desktop used to have a 116dp pill in the corner for its always-visible controls, and a
- * fuller card only inside the expanded sidebar of tall windows. This is the full set in one
- * place: the song (opening the player), the transport and the progress, and on the right the
- * lyrics, the queue, the comments and the volume. Narrow windows drop the shuffle and the volume
- * slider before anything else.
+ * It holds the full set of controls in one place: the song (opening the player), the transport
+ * and the progress, and on the right the lyrics, the queue, the comments and the volume. Narrow
+ * windows drop the shuffle and the volume slider before anything else.
  */
 @Composable
 internal fun DesktopPlayerBar(

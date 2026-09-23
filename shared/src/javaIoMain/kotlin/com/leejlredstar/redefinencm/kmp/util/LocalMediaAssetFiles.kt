@@ -9,10 +9,9 @@ import java.util.UUID
  *
  * Both targets keep lyrics and artwork beside the audio file in a plain directory, and both have
  * to replace a set of them without ever leaving a half-written state on disk: a reader that
- * arrives mid-write must see either the old sidecars or the new ones. That transaction was
- * written once per target, and the copies had drifted — Desktop moved a backup aside and back
- * with an atomic move, Android renamed and checked the boolean, and the two reported failures
- * differently. The steps live here once; each target supplies only the move primitive it has.
+ * arrives mid-write must see either the old sidecars or the new ones. The steps of that
+ * transaction live here once, so the targets cannot drift apart in how they set backups aside
+ * or report failures; each target supplies only the move primitive it has.
  *
  * Desktop uses `Files.move` with `ATOMIC_MOVE`. Android cannot: `java.nio.file` needs API 26 and
  * this module's minSdk is 24, so its legacy path passes `File.renameTo`.
@@ -39,7 +38,7 @@ internal fun localMediaAssetFiles(
 
 private fun localMediaAssetDirectoryEntries(directory: File, label: String): List<File> {
     if (!directory.exists()) return emptyList()
-    check(directory.isDirectory) { "$label 不是目录：$directory" }
+    check(directory.isDirectory) { "${label}不是文件夹：$directory" }
     return checkNotNull(directory.listFiles()) { "无法读取$label：$directory" }
         .filter(File::isFile)
 }
@@ -73,7 +72,7 @@ internal fun writeLocalMediaAssetAndSync(file: File, bytes: ByteArray) {
 /** Deletes [file], accepting that it may already be gone. */
 internal fun deleteLocalMediaAssetOrThrow(file: File) {
     check(!file.exists() || file.delete() || !file.exists()) {
-        "无法删除本地媒体边车：${file.name}"
+        "无法删除歌词或封面文件：${file.name}"
     }
 }
 

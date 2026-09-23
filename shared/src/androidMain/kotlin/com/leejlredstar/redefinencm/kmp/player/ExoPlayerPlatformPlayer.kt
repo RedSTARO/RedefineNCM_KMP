@@ -39,7 +39,7 @@ import kotlinx.coroutines.launch
  *
  * URL resolution: placeholder URIs (`redefinencm://playbackPlaceHolder?id=xxx`) are intercepted
  * by [RedirectingDataSourceFactory] which calls [Repository.getSongUrl] synchronously (via
- * runBlocking) on ExoPlayer's IO thread at play time — stream URLs are never persisted.
+ * runBlocking) on ExoPlayer's IO thread at play time. Stream URLs are never persisted.
  */
 @OptIn(UnstableApi::class)
 class ExoPlayerPlatformPlayer(
@@ -106,7 +106,7 @@ class ExoPlayerPlatformPlayer(
                 // 每次切歌都完整重建列表与高亮：随机模式下 ExoPlayer 可能在不触发
                 // onTimelineChanged 的情况下重排内部顺序，缓存索引会失效（原版修过的回归 bug）
                 rebuildQueue()
-                // occurrence 最后发布，确保观察方读取到的 currentMedia 已属于新播放项。
+                // occurrence 最后发布：观察方收到它时，currentMedia 已属于新播放项。
                 if (isNewOccurrence) _playbackOccurrence.advancePlaybackOccurrence()
             }
 
@@ -159,7 +159,7 @@ class ExoPlayerPlatformPlayer(
 
     /**
      * 依据当前 timeline（按播放顺序，含随机模式）重建可见队列、窗口顺序索引与当前高亮。
-     * 三者必须来自同一次重建 —— 这是从原版继承的随机模式不变量，不要拆开更新。
+     * 三者必须来自同一次重建（从原版继承的随机模式不变量），不要拆开更新。
      */
     private fun rebuildQueue() {
         val timeline = exoPlayer.currentTimeline
@@ -364,9 +364,9 @@ class ExoPlayerPlatformPlayer(
 }
 
 /**
- * Media3 emits `PLAYLIST_CHANGED` for both selecting a replacement queue and merely appending
- * one. Queue replacement is counted synchronously by [ExoPlayerPlatformPlayer.setQueue], while
- * append must not count, so only actual transport transitions are counted from this callback.
+ * Media3 emits `PLAYLIST_CHANGED` both when a replacement queue is selected and when one is
+ * appended. Queue replacement is counted synchronously by [ExoPlayerPlatformPlayer.setQueue],
+ * while append must not count, so this callback counts only transport transitions.
  */
 internal fun shouldAdvanceMedia3PlaybackOccurrence(
     reason: Int,

@@ -148,8 +148,8 @@ fun DownloadManagementScreen(
     val counts = remember(tasks) {
         DownloadFilter.entries.associateWith { f -> tasks.count { f.matches(it) } }
     }
-    // An empty category is not offered as a filter: six always-present chips crowded the header
-    // and most were zero.
+    // An empty category is not offered as a filter: six chips that are always present would crowd
+    // the header, and most would read zero.
     val offeredFilters = remember(counts) {
         DownloadFilter.entries.filter { it == DownloadFilter.All || (counts[it] ?: 0) > 0 }
     }
@@ -418,7 +418,7 @@ private fun DownloadHeader(
                 DownloadMenu(expanded = menuOpen, actions = menu, onDismiss = { menuOpen = false })
             }
         }
-        // Only the bulk actions that apply now, and in words: the old row of bare icons put
+        // Only the bulk actions that apply now, and in words: a row of bare icons puts
         // "cancel everything" and "clear the list" one mis-tap from each other.
         if (active > 0 || paused > 0) {
             Spacer(Modifier.height(12.dp))
@@ -492,8 +492,8 @@ private fun DownloadFilterRow(
     onSelected: (DownloadFilter) -> Unit,
     accentPalette: ContentAccentPalette,
 ) {
-    // The counts live on the filters themselves; they used to be a second row of pills that
-    // repeated the filters under slightly different names.
+    // The counts live on the filters themselves; a second row of pills for them would repeat
+    // the filters under slightly different names.
     LazyRow(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         contentPadding = PaddingValues(horizontal = 16.dp),
@@ -744,7 +744,7 @@ private fun DownloadEmptyState(
         else -> "没有「${filter.label}」的歌曲"
     }
     val message = when (filter) {
-        DownloadFilter.All -> "在歌单页点「下载全部」，或在歌曲的更多菜单里选「下载」。"
+        DownloadFilter.All -> "在歌单页点按「下载全部」，或在歌曲的「更多操作」里选「下载」。"
         else -> "切换到其他筛选查看。"
     }
     ExpressiveStatePanel(

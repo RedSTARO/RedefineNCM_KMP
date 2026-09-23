@@ -10,8 +10,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Covers the transaction Desktop and Android now share. Both drive it with a real filesystem, so
- * the test does too; a rename is the operation under test and cannot be faked usefully.
+ * Covers the transaction Desktop and Android share. Both drive it with a real filesystem, so the
+ * test does too; a rename is the operation under test and cannot be faked usefully.
  */
 class LocalMediaAssetFilesTest {
 

@@ -67,9 +67,9 @@ private fun BoxScope.LyricStateOverlayPanels(
                 "暂无歌词"
             },
             message = if (state.capabilityLevel == LyricCapabilityLevel.UNSYNCED) {
-                "检测到歌词文本，但没有可用于同步的时间戳。"
+                "这首歌的歌词没有时间戳，不能随播放滚动。"
             } else {
-                "这首歌曲暂时没有可用歌词。"
+                "这首歌暂时没有歌词。"
             },
             icon = AppIcons.FormatQuote,
             accentPalette = statePalette,

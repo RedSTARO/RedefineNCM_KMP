@@ -64,7 +64,7 @@ object ExpressiveLayout {
     /**
      * Bottom inset reserved for the floating nav toolbar.
      *
-     * The toolbar is an overlay, not a Scaffold `bottomBar` — content scrolls *underneath* it,
+     * The toolbar is an overlay, not a Scaffold `bottomBar`: content scrolls *underneath* it,
      * which is the point of a floating toolbar. Scaffold therefore contributes no bottom
      * padding of its own, so screens are handed this clearance instead: enough that the last
      * list item can be scrolled clear of the pill rather than being permanently hidden by it.
@@ -96,8 +96,8 @@ enum class ExpressiveStateTone {
  * This is a core Material 3 Expressive pattern used across all list screens.
  *
  * [pressProgress] rounds the *inner* corners up toward the outer radius, so a held row visibly
- * detaches from the rows above and below it instead of staying welded into the stack. At `0f`
- * the result is the plain connected shape, so existing callers are unaffected.
+ * detaches from the rows above and below it instead of staying welded into the stack. At `0f`,
+ * the default, the result is the plain connected shape.
  */
 fun connectedListItemShape(
     index: Int,
@@ -142,11 +142,11 @@ fun rememberConnectedListItemShape(
 }
 
 /**
- * Expressive section title — used as a heading above content groups.
+ * Expressive section title, used as a heading above content groups.
  *
  * The [action] sits beside the title when both fit on one line and moves under it when they do
- * not. Side by side regardless, a wide action on a narrow window squeezed the title into a
- * column one character wide.
+ * not. If they stayed side by side regardless, a wide action on a narrow window would squeeze
+ * the title into a column one character wide.
  */
 @Composable
 fun ExpressiveSectionTitle(
@@ -164,9 +164,9 @@ fun ExpressiveSectionTitle(
                 modifier = Modifier
                     .layoutId(SectionTitleId)
                     // No rounded clip for the ripple: this scale's `small` is an 18dp radius,
-                    // and the bite it takes out of the lower-left corner lands exactly on the
-                    // first glyph of the supporting line — 共 lost its upper bar, then "33 首"
-                    // lost the left of its first digit. A heading is not a chip; the ripple can
+                    // and the bite it takes out of the lower-left corner lands on the first
+                    // glyph of the supporting line: it cuts the upper bar off 共, and the left
+                    // of the first digit off "33 首". A heading is not a chip; the ripple can
                     // be square.
                     .then(
                         if (onClick == null) {
@@ -199,8 +199,8 @@ fun ExpressiveSectionTitle(
                         text = supporting,
                         // bodyLarge and Medium, not bodyMedium and Normal. At 14sp on a
                         // dark surface the hinting drops a CJK glyph's thinnest strokes: 共
-                        // rendered with its upper bar missing wherever this line counted
-                        // something, and came back whole as soon as the size went up.
+                        // renders with its upper bar missing wherever this line counts
+                        // something, and comes back whole as soon as the size goes up.
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -315,7 +315,8 @@ fun ExpressivePage(
         contentAlignment = Alignment.TopCenter,
     ) {
         // The alignment has to be on this box: it fills the page, so the outer box's TopCenter
-        // never had anything to center and the bounded pane sat against the left edge.
+        // has nothing to center, and without it here the bounded pane sits against the left
+        // edge.
         BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             val boundedWidth = minOf(maxWidth, maxContentWidth)
             Box(

@@ -10,12 +10,12 @@ import javax.sound.sampled.AudioFormat
 
 /**
  * Signed 16-bit PCM decoded out of anything FFmpeg can open, which on desktop is every stream
- * and every download this app produces — MP3, FLAC, M4A, and the Hi-Res masters above them.
+ * and every download this app produces: MP3, FLAC, M4A, and the Hi-Res masters above them.
  *
- * This replaced Java Sound's own SPI decoding. `AudioSystem.getAudioInputStream()` could only
- * reach MP3, through mp3spi, which is why every lossless tier used to be downgraded to a 320k
- * MP3 before it was ever requested. It also decoded through JLayer, whose tables are loaded with
- * a package-relative `Class.getResourceAsStream()` that release obfuscation silently broke.
+ * Java Sound's own SPI decoding is not used. `AudioSystem.getAudioInputStream()` reaches only
+ * MP3, through mp3spi, so every lossless tier would have to be downgraded to a 320k MP3 before
+ * it was requested. That path also decodes through JLayer, whose tables are loaded with a
+ * package-relative `Class.getResourceAsStream()` that release obfuscation silently breaks.
  *
  * FFmpeg is already shipped for the dynamic-cover decoder, so this adds no new native payload.
  */
@@ -40,7 +40,7 @@ internal class FfmpegAudioSource private constructor(
             val samples = frame.samples ?: continue
             if (samples.isEmpty()) continue
             // AV_SAMPLE_FMT_S16 is a packed format, so swresample always emits exactly one
-            // plane. Fail loudly if that ever stops holding — silently taking plane 0 of a
+            // plane. Fail loudly if that ever stops holding: silently taking plane 0 of a
             // planar frame would play one channel at double speed.
             check(samples.size == 1) {
                 "Expected packed PCM from FFmpeg, got ${samples.size} planes"
@@ -83,7 +83,7 @@ internal class FfmpegAudioSource private constructor(
         private const val NetworkTimeoutMicros = 15_000_000L
 
         /**
-         * Opens [source] — a local file URI or a CDN URL — positioned at [startMs].
+         * Opens [source] (a local file URI or a CDN URL) positioned at [startMs].
          *
          * [forcedSampleRate] makes FFmpeg resample on the way out; leaving it null keeps the
          * track's own rate so a Hi-Res tier is not quietly downsampled on a device that can
@@ -134,10 +134,9 @@ internal class FfmpegAudioSource private constructor(
  * Hands FFmpeg a plain filesystem path for local files, and the URL as-is for streams.
  *
  * Offline downloads arrive as the `file:/C:/...` form `File.toURI()` produces, and
- * `avformat_open_input()` rejects that with EINVAL — Java Sound used to absorb the difference
- * through `URI.toURL()`. Anything that is not a file: URI, notably the CDN's http(s) URLs, is
- * passed through untouched, and a file: URI that will not parse is left alone so FFmpeg reports
- * the real failure rather than this function inventing one.
+ * `avformat_open_input()` rejects that with EINVAL. Anything that is not a file: URI, notably
+ * the CDN's http(s) URLs, is passed through untouched, and a file: URI that will not parse is
+ * left alone so FFmpeg reports the real failure rather than this function inventing one.
  */
 internal fun ffmpegAudioInput(source: String): String {
     val trimmed = source.trim()

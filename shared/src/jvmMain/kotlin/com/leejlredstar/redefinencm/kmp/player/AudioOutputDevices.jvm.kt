@@ -26,20 +26,20 @@ actual fun availableAudioOutputDevices(): List<AudioOutputDevice> =
 
 /**
  * Opens a playback line on the device the user picked, or on the JVM default when they picked
- * none — [persistedDeviceId] is the raw settings value.
+ * none. [persistedDeviceId] is the raw settings value.
  *
  * The choice is resolved on every open rather than cached in a [Mixer]: the device list changes
  * while the app runs, and re-reading it also lets the default follow the OS instead of pinning
  * whichever endpoint existed at startup.
  *
- * A device can be listed and still refuse *this* track — a mixer that reports no support for the
- * decoded PCM format, or one another process holds exclusively. That falls back to the default
- * output, because failing the whole track would make picking a device worse than not offering
- * the choice at all.
+ * A device can be listed and still refuse *this* track: its mixer may report no support for the
+ * decoded PCM format, or another process may hold it exclusively. The track then falls back to
+ * the default output, because failing the whole track would make picking a device worse than not
+ * offering the choice at all.
  */
 internal fun openAudioOutputLine(format: AudioFormat, persistedDeviceId: String): SourceDataLine {
     val info = DataLine.Info(SourceDataLine::class.java, format)
-    // No stored choice means no enumeration — the untouched-setting path stays what it was.
+    // No stored choice means no enumeration: an untouched setting goes straight to the default.
     val selected = persistedDeviceId.takeUnless { it.isBlank() }?.let { deviceId ->
         val mixers = runCatching { playbackMixers() }.getOrDefault(emptyList())
         val choice = resolveAudioOutputSelection(

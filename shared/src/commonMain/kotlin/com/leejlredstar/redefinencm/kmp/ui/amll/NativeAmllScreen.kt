@@ -72,11 +72,9 @@ import com.leejlredstar.redefinencm.kmp.lyric.LyricCapabilityLevel
 import com.leejlredstar.redefinencm.kmp.viewmodel.lyricCapabilityLevel
 
 /**
- * The Android control island's own timeout, now the timeout on every target.
+ * The Android control island's own timeout, used on every target.
  *
- * Desktop used to keep the expanded console up for 30 seconds because its console lived inside
- * the AMLL WebView page and a Compose reveal could not sit above the WebView2 child HWND. That
- * page is gone; desktop shows the same island as Android and follows the same timing.
+ * Desktop shows the same island as Android and follows the same timing.
  */
 private const val AmllControllerAutoHideMillis = 3_600L
 
@@ -173,8 +171,8 @@ fun NativeAmllScreen(
             artworkUri = primaryArtworkUri,
             fallbackArtworkUri = fallbackArtworkUri,
             dynamicCoverUrl = dynamicCoverUrl,
-            // Nothing pauses it any more: the song's details left this page for Now
-            // Playing, and they were the only thing that ever opened over it.
+            // Nothing opens over this page (the song's details are on Now Playing), so
+            // nothing pauses it.
             playDynamicCover = true,
             androidPresentation = platform.isAndroid,
             reducedMotion = reducedMotion,
@@ -210,8 +208,8 @@ fun NativeAmllScreen(
             lyricUiState.lyricCapabilityLevel == LyricCapabilityLevel.UNSYNCED &&
             untimedLyricLines.isNotEmpty()
         if (untimedLyrics) {
-            // Lyrics without timestamps used to leave the page blank: there was nothing to sync,
-            // so nothing was drawn. The text itself is still worth reading.
+            // Lyrics without timestamps have nothing to sync, so the synced viewport would draw
+            // nothing. The text itself is still worth reading.
             UntimedLyrics(
                 lines = untimedLyricLines,
                 modifier = Modifier.fillMaxSize(),
@@ -263,10 +261,10 @@ private fun AmllTopActions(
             .statusBarsPadding()
             .padding(top = 18.dp),
     ) {
-        // Down, not back: the lyrics are the player opened up, and this puts them away — the
+        // Down, not back: the lyrics are the player opened up, and this puts them away with the
         // same gesture and the same glyph as the Now Playing page it returns to. Nothing behind
-        // it: the artwork under the lyrics is blurred and darkened, so a filled circle was one
-        // more shape on a page whose whole point is the words.
+        // it: the artwork under the lyrics is blurred and darkened, so a filled circle would be
+        // one more shape on a page whose whole point is the words.
         IconButton(
             onClick = onBack,
             modifier = Modifier
@@ -292,7 +290,7 @@ private fun AmllTopActions(
  * AMLL's word animations are Web Animations on the document timeline, so they move on every
  * display refresh whatever the host's `timeupdate` cadence. The player publishes a sample only
  * every 100 ms; this clock therefore anchors to the newest sample and publishes a position on
- * every frame, so masks, floats and emphasis glows advance at the refresh rate — on a high-refresh
+ * every frame, so masks, floats and emphasis glows advance at the refresh rate, on a high-refresh
  * desktop as well as on a 60 Hz phone.
  */
 @Composable
@@ -371,7 +369,7 @@ private fun UntimedLyrics(
     ) {
         item(key = "untimed-note") {
             Text(
-                text = "这首歌的歌词没有时间轴，不能随播放滚动",
+                text = "这首歌的歌词没有时间戳，不能随播放滚动",
                 color = Color.White.copy(alpha = 0.56f),
                 style = MaterialTheme.typography.labelMedium,
             )

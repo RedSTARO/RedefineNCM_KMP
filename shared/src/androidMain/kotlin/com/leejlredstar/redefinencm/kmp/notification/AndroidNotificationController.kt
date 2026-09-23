@@ -12,7 +12,7 @@ import com.leejlredstar.redefinencm.kmp.util.canPostNotifications
 /**
  * 实况歌词通知（Android 平台的 now-playing 歌词面）。
  *
- * 只负责展示歌词文字（原版 LiveUpdateLyricController 形态）——**不带**播放控制按钮：
+ * 只负责展示歌词文字（原版 LiveUpdateLyricController 形态），**不带**播放控制按钮：
  * 进度条/封面/上一首/播放/下一首由 Media3 的原生 MediaStyle 媒体通知提供
  * （PlaybackService 的 MediaSession + DefaultMediaNotificationProvider），
  * 两个通知各司其职，与原版行为一致。

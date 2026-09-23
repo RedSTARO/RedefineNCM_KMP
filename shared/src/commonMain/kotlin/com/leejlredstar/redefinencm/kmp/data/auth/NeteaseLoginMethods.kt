@@ -15,7 +15,7 @@ class NeteaseQrLoginMethod(private val api: NCMApi) : QrLoginMethod {
 
     override suspend fun start(): QrLoginSession {
         val key = api.loginQrKey().takeIf { it.code == SuccessCode }?.data?.unikey
-        if (key.isNullOrEmpty()) throw LoginMethodException("服务器返回空 key")
+        if (key.isNullOrEmpty()) throw LoginMethodException("服务器返回的 key 为空")
         val image = api.loginQrCreate(key, qrimg = true).takeIf { it.code == SuccessCode }?.data?.qrimg
         if (image.isNullOrEmpty()) throw LoginMethodException("服务器未返回二维码")
         val png = runCatching { decodeBase64Image(image) }
@@ -32,10 +32,10 @@ class NeteaseQrLoginMethod(private val api: NCMApi) : QrLoginMethod {
             803 -> if (check.cookie.isNotEmpty()) {
                 QrLoginPoll.Confirmed(check.cookie)
             } else {
-                QrLoginPoll.Failed("登录成功但未获取到 Cookie")
+                QrLoginPoll.Failed("登录成功，但未获取到 Cookie")
             }
-            // Anything else is shown and polling continues, as the page did before methods existed.
-            else -> QrLoginPoll.Waiting(check.message.ifBlank { "未知状态 (${check.code})" })
+            // Anything else is shown and polling continues.
+            else -> QrLoginPoll.Waiting(check.message.ifBlank { "未知状态（${check.code}）" })
         }
     }
 

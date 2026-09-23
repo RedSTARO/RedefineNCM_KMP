@@ -16,7 +16,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  *
  * Nothing here is cached. The cache tables are keyed by a numeric NetEase song id, and giving them
  * a provider column is the one step in this plan that can destroy a year of real user data, so it
- * is deliberately left for its own change. QQ results cost a round trip every time until then.
+ * is left for its own change. QQ results cost a round trip every time until then.
  */
 class QQProvider(
     private val api: QQMusicApi,
@@ -41,10 +41,10 @@ class QQProvider(
     override suspend fun search(keyword: String, limit: Int, offset: Int): List<ProviderTrack> {
         if (keyword.isBlank() || !isAvailable()) return emptyList()
         renewCredentialOnce()
-        // Null is a transport failure, not an empty result set — see NeteaseProvider.search.
+        // Null is a transport failure, not an empty result set (see NeteaseProvider.search).
         // This backend pages by page number rather than by offset.
         val response = api.search(keyword, limit, page = offset / limit.coerceAtLeast(1) + 1)
-            ?: throw ProviderUnavailableException(id, "QQ音乐后端无响应")
+            ?: throw ProviderUnavailableException(id, "QQ音乐服务器无响应")
         return response.song
             .filter { it.mid.isNotBlank() }
             .map { it.toProviderTrack() }

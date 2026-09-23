@@ -10,11 +10,11 @@ import kotlinx.coroutines.flow.StateFlow
  * - Desktop: a floating always-on-top window
  * - Web: a fixed element in the page
  *
- * This was one `expect object` carrying every capability any target had. Because an expect
- * declaration must be implemented in full everywhere, a feature only the desktop window could
- * offer cost three stub members on the other three, and adding the lock and alignment controls
- * took the stub count to fifteen. A capability is an interface here instead, so a target
- * declares what it can do and writes nothing for what it cannot.
+ * Each capability is an interface, so a target declares what it can do and writes nothing for
+ * what it cannot. Do not fold them into one `expect object` carrying every capability any target
+ * has: an expect declaration must be implemented in full everywhere, so a feature only the
+ * desktop window offers would cost a stub member on each of the other three targets, and with the
+ * lock and alignment controls the stub count would reach fifteen.
  */
 interface LyricSurface {
     /**

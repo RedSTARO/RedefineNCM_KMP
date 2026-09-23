@@ -19,8 +19,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * A provider registers once, and everything derived from the registrations — the login methods a
- * platform offers, the startup sign-in check — follows from what was registered.
+ * A provider registers once, and everything derived from the registrations (the login methods a
+ * platform offers, the startup sign-in check) follows from what was registered.
  */
 class ProviderRegistrationTest {
     private class MemorySlot(

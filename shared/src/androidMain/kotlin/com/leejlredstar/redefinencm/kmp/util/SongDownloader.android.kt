@@ -23,7 +23,7 @@ import java.net.URI
 import kotlin.coroutines.coroutineContext
 
 /**
- * Android actual：应用内流式下载，不再使用系统 DownloadManager。
+ * Android actual：应用内流式下载，不使用系统 DownloadManager。
  * Android 10+ 通过 MediaStore 写入 Downloads/RedefineNCM/，旧系统写公共下载目录。
  */
 actual object SongDownloader {
@@ -44,7 +44,7 @@ actual object SongDownloader {
         val partialFile = partialDownloadFile(context, item)
 
         findDownloadedSongSnapshot(item.id)?.let { existing ->
-            if (!onReadyToPublish()) throw CancellationException("下载发布已取消")
+            if (!onReadyToPublish()) throw CancellationException("下载已取消，文件未保存")
             deletePartialDownloads(context, item.id)
             return@withContext DownloadedSongFile(
                 fileName = existing.fileName,
@@ -59,7 +59,7 @@ actual object SongDownloader {
             requestedExtension = requestedExtension,
             onProgress = onProgress,
         )
-        if (!onReadyToPublish()) throw CancellationException("下载发布已取消")
+        if (!onReadyToPublish()) throw CancellationException("下载已取消，文件未保存")
         val fileName = "${item.id}.$fileExtension"
 
         withContext(NonCancellable) {
@@ -185,11 +185,11 @@ private suspend fun downloadToPartialFile(
             }
 
             val finalBytes = partialFile.length()
-            check(finalBytes > 0L) { "下载响应为空，拒绝发布空音频文件" }
+            check(finalBytes > 0L) { "下载到的内容为空，没有保存" }
             if (authoritativeTotalBytes != null && finalBytes != authoritativeTotalBytes) {
                 error(
-                    "下载长度不完整：已写入 $finalBytes 字节，" +
-                        "响应声明 $authoritativeTotalBytes 字节",
+                    "下载不完整：收到 $finalBytes 字节，" +
+                        "应为 $authoritativeTotalBytes 字节",
                 )
             }
             if (authoritativeTotalBytes == null) {
@@ -217,7 +217,7 @@ private fun openDownloadConnection(
     validator: ResumableEntityValidator?,
 ): HttpURLConnection {
     val connection = URI(url).toURL().openConnection() as? HttpURLConnection
-        ?: error("下载地址不是 HTTP(S) URL")
+        ?: error("下载地址不是 HTTP 或 HTTPS 地址")
     connection.connectTimeout = 15_000
     connection.readTimeout = 30_000
     connection.instanceFollowRedirects = true
@@ -281,7 +281,7 @@ private fun persistResumableMetadata(
         Os.rename(temporary.path, target.path)
     } catch (failure: Throwable) {
         temporary.delete()
-        throw IllegalStateException("无法原子持久化断点下载元数据", failure)
+        throw IllegalStateException("无法保存断点下载信息", failure)
     }
 }
 
@@ -296,12 +296,12 @@ private fun deleteResumableMetadata(partialFile: File, requireSuccess: Boolean) 
         temporaryResumableMetadataFile(partialFile),
     ).forEach { file ->
         val deleted = !file.exists() || file.delete()
-        if (requireSuccess) check(deleted) { "无法删除断点下载元数据" }
+        if (requireSuccess) check(deleted) { "无法删除断点下载信息" }
     }
 }
 
 private fun deletePartialArtifacts(partialFile: File) {
-    deleteFileOrThrow(partialFile, "无法删除断点音频文件")
+    deleteFileOrThrow(partialFile, "无法删除未下载完的音频文件")
     deleteResumableMetadata(partialFile, requireSuccess = true)
 }
 
@@ -337,7 +337,7 @@ private suspend fun publishViaMediaStore(
             put(MediaStore.MediaColumns.IS_PENDING, 0)
         }.also { completedValues ->
             check(resolver.update(uri, completedValues, null, null) == 1) {
-                "无法发布下载文件"
+                "无法完成下载文件的保存"
             }
         }
         deletePartialArtifacts(partialFile)
@@ -345,7 +345,7 @@ private suspend fun publishViaMediaStore(
     } catch (t: Throwable) {
         runCatching {
             check(resolver.delete(uri, null, null) == 1) {
-                "无法清理未发布的 MediaStore 下载文件"
+                "无法清理系统媒体库里没保存完的下载文件"
             }
         }.exceptionOrNull()?.let(t::addSuppressed)
         throw t
@@ -380,9 +380,9 @@ private suspend fun publishLegacyFile(
     } catch (t: Throwable) {
         runCatching {
             if (targetCommitted) {
-                deleteFileOrThrow(target, "无法回滚已发布的下载文件")
+                deleteFileOrThrow(target, "无法撤回已保存的下载文件")
             } else {
-                deleteFileOrThrow(publishingFile, "无法清理未发布的下载文件")
+                deleteFileOrThrow(publishingFile, "无法清理没保存完的下载文件")
             }
         }.exceptionOrNull()?.let(t::addSuppressed)
         throw t
@@ -411,7 +411,7 @@ private fun deleteStalePendingMediaRows(context: Context, songId: Long) {
     }
     pendingUris.forEach { uri ->
         check(context.contentResolver.delete(uri, null, null) == 1) {
-            "无法清理遗留的 MediaStore 下载文件"
+            "无法清理系统媒体库里上次没保存完的下载文件"
         }
     }
 }

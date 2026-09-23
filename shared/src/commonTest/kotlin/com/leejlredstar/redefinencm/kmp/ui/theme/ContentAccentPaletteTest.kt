@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 
 class ContentAccentPaletteTest {
 
-    /** The saturated yellow that produced the olive page washes this palette was rewritten for. */
+    /** The saturated yellow behind the olive page washes this palette is written to prevent. */
     private val loudYellow = Color(0xFFFFE94A)
 
     @Test
@@ -70,7 +70,7 @@ class ContentAccentPaletteTest {
      * The home page draws its "全部 N 首" button in the page's own hue over
      * [ContentAccentPalette.pageStart], because the scheme's own primary is a brand green with
      * no relation to the cover. The accent's tone is fixed per scheme while the page's tint
-     * follows the artwork, so the pair has to be measured rather than assumed — a light yellow
+     * follows the artwork, so the pair has to be measured rather than assumed: a light yellow
      * cover in the light theme leaves the raw accent at about 4.2:1.
      */
     @Test

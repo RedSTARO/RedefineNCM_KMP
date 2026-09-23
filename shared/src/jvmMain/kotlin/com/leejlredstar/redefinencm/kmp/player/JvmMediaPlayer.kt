@@ -255,8 +255,8 @@ class JvmMediaPlayer(
                 SettingKeys.AUDIO_OUTPUT_DEVICE,
                 SYSTEM_DEFAULT_AUDIO_OUTPUT_ID,
             )
-            // FFmpeg seeks the decoder itself, so the old "discard PCM bytes at the head of the
-            // stream" approximation is gone along with the channel-misalignment it could cause.
+            // FFmpeg seeks the decoder itself, so nothing discards PCM bytes at the head of the
+            // stream to approximate a seek; that approximation could misalign the channels.
             var decoded = FfmpegAudioSource.open(streamUrl, startMs)
             source = decoded
             audioLine = try {
@@ -336,10 +336,10 @@ class JvmMediaPlayer(
             }
         } catch (e: Throwable) {
             // Throwable, not Exception: a decoder SPI that fails to initialise throws
-            // ExceptionInInitializerError from the first read(), which is an Error. Letting it
-            // past this handler killed the playback thread with the state flows still reading
-            // PLAYING, so the UI kept advancing its progress bar over silence instead of
-            // reporting a failure.
+            // ExceptionInInitializerError from the first read(), which is an Error. If it got
+            // past this handler, the playback thread would die with the state flows still
+            // reading PLAYING, and the UI would keep advancing its progress bar over silence
+            // instead of reporting a failure.
             if (isPlaybackCurrent(generation)) {
                 System.err.println("JvmMediaPlayer failed to play audio stream: ${e.javaClass.name}: ${e.message}")
                 _state.value = PlayerState.ERROR

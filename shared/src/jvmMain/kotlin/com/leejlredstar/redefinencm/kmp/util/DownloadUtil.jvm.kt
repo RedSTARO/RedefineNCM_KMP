@@ -5,7 +5,7 @@ import java.io.File
 actual suspend fun scanDownloadedSongs(): DownloadScanResult = runCatching {
     val dir = jvmDownloadDirectory()
     if (!dir.exists()) return@runCatching emptyList()
-    check(dir.isDirectory) { "下载路径不是目录：$dir" }
+    check(dir.isDirectory) { "下载目录不是文件夹：$dir" }
     val files = dir.listFiles() ?: error("无法读取下载目录：$dir")
     files.asSequence()
         .filter(File::isFile)

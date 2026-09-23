@@ -5,10 +5,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The PCM arithmetic the four microphone recorders used to each carry their own copy of.
+ * The PCM arithmetic the four microphone recorders share.
  *
- * Every one of these was previously exercised only by running the app on a device with a real
- * microphone, which is why the copies were free to disagree.
+ * Outside these tests it is exercised only by running the app on a device with a real
+ * microphone, where separate per-recorder copies could disagree unnoticed.
  */
 class PcmCaptureTest {
 
@@ -32,7 +32,7 @@ class PcmCaptureTest {
     fun int16ScalesIntoTheDocumentedRange() {
         assertEquals(0f, 0.toShort().toPcmSample())
         assertEquals(-1f, Short.MIN_VALUE.toPcmSample())
-        // 32767 / 32768 — full positive scale is just short of 1f, which is why the level
+        // 32767 / 32768: full positive scale is just short of 1f, which is why the level
         // meter clamps rather than assuming the maximum is exactly reachable.
         assertTrue(Short.MAX_VALUE.toPcmSample() < 1f)
         assertTrue(Short.MAX_VALUE.toPcmSample() > 0.999f)

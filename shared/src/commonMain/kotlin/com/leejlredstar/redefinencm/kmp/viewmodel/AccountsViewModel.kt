@@ -36,7 +36,7 @@ import kotlinx.coroutines.launch
  *
  * Nothing here names a provider: the page is built from [ProviderRegistrations], each provider's
  * signed-in state comes from its credential slot, and its name from its identity source. A
- * credential written anywhere — the login page, a background key renewal — reaches this through
+ * credential written anywhere (the login page, a background key renewal) reaches this through
  * the slot, so no page keeps a copy that can go stale.
  */
 class AccountsViewModel(
@@ -192,7 +192,7 @@ class AccountsViewModel(
         )
     }
 
-    /** Checks the address in the field, saved or not, the way the old settings page did. */
+    /** Checks the address in the field, whether or not it has been saved. */
     fun checkServer(provider: MusicProviderId, raw: String) {
         val setting = registrations[provider]?.descriptor?.server ?: return
         val check = setting.check ?: return
@@ -281,7 +281,7 @@ class AccountsViewModel(
         }
     }
 
-    /** Writes, flushes, and on failure re-reads what is actually stored. */
+    /** Writes, flushes, and on failure re-reads what is stored. */
     private fun persist(write: () -> Unit, onPersisted: () -> Unit) {
         scope.launch {
             try {
@@ -307,7 +307,7 @@ internal data class AccountSummaryEntry(
     val accountName: String?,
 )
 
-/** "网易云音乐：昵称；QQ音乐：未启用；本地账号" — who is signed in where, in registration order. */
+/** Who is signed in where, in registration order: "网易云音乐：昵称；QQ音乐：未启用；本地账号". */
 internal fun accountsSummaryLine(entries: List<AccountSummaryEntry>, localName: String): String =
     (
         entries.map { entry ->

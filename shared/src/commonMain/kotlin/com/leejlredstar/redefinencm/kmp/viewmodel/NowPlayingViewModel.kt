@@ -130,10 +130,9 @@ internal fun completeLocalArtworkResolutionState(
 /**
  * Ported from the original Android NowPlayingViewModel.
  *
- * Key invariant (preserved from original):
- * The visible queue and current highlight MUST always be rebuilt together from the current
- * Player state via rebuildPlaylistFromTimeline().
- * Never update them independently �?this prevents the shuffle highlight misalignment bug.
+ * Invariant kept from the original: the visible queue and current highlight MUST always be
+ * rebuilt together from the current Player state via rebuildPlaylistFromTimeline(). Never update
+ * them independently; doing so brings back the shuffle highlight misalignment bug.
  */
 class NowPlayingViewModel(
     private val repo: Repository,
@@ -189,7 +188,7 @@ class NowPlayingViewModel(
     /**
      * Plays the same song from another provider in place of the current track, which just failed.
      *
-     * Only ever run from the snackbar's "换源" — the app never switches on its own, because the
+     * Only ever run from the snackbar's "换源": the app never switches on its own, because the
      * match is by title, first artist and length rather than by id. The match is the strict one the
      * merged search rows use. The replacement is an ordinary queue item of its provider: a NetEase
      * replacement is reported to NetEase like any NetEase track (AGENTS.md D6, 2026-09-23).
@@ -438,8 +437,8 @@ class NowPlayingViewModel(
 
     /**
      * Rebuild the visible playlist, window-order indices, and current highlight
-     * from the current Player state. This is the SINGLE rebuild path �?
-     * all track transitions, shuffle toggles, and timeline changes go through here.
+     * from the current Player state. This is the SINGLE rebuild path: all track transitions,
+     * shuffle toggles, and timeline changes go through here.
      */
     fun rebuildPlaylistFromTimeline(snapshot: PlayerQueueSnapshot = player.queueSnapshot.value) {
         _queueSnapshot.value = snapshot
@@ -731,14 +730,14 @@ class NowPlayingViewModel(
             null
         }
         prepareLyricsForMedia(mediaId, initialCachedResolution)
-        // 网络必须离开 Main：桌面端 Main=Swing EDT，AMLL 软件渲染期间 EDT 饱和会把
-        // 运行其上Ktor 连接协程避免超时（特别是 lyric 连环 ConnectTimeout 的根因）
+        // 网络必须离开 Main：桌面端 Main=Swing EDT，AMLL 软件渲染期间 EDT 饱和，
+        // 运行其上的 Ktor 连接协程会超时（这是 lyric 连环 ConnectTimeout 的根因）。
         lyricFetchJob = scope.launch(Dispatchers.Default) {
             val mode = lyricSourceModeGate.awaitMode()
             if (query == null) {
                 applyLyricsForMedia(mediaId, requestGeneration) {
                     if (supports(mediaId, ProviderCapability.LYRIC)) {
-                        applyLyricError("歌曲 id 无效")
+                        applyLyricError("歌曲 ID 无效")
                     } else {
                         applyLyricUnsupported("${providerName(mediaId)}的歌词暂不支持在应用内显示")
                     }
@@ -1099,7 +1098,7 @@ class NowPlayingViewModel(
         if (id == null) {
             songWikiUiState.value = SongWikiUiState.Error(
                 mediaId = mediaId,
-                message = "歌曲 id 无效",
+                message = "歌曲 ID 无效",
             )
             return
         }

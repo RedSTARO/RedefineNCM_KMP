@@ -8,9 +8,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * The details are a bottom sheet in the app's own colours now, so the dialog geometry and the
- * CSS gradient axis the web host's overlay was measured against are gone with it. What is left
- * to check is which song's state the panel is allowed to show, and when opening it fetches.
+ * The details are a bottom sheet in the app's own colours, with no dialog geometry or CSS
+ * gradient axis to measure. What there is to check is which song's state the panel is allowed
+ * to show, and when opening it fetches.
  */
 class SongWikiDetailsTest {
     private val summary = SongWikiSummary(sections = emptyList())

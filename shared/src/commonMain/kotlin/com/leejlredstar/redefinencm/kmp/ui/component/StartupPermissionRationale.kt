@@ -13,8 +13,8 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
 /**
  * Says what the runtime permissions are for before the system asks for them.
  *
- * The app used to fire the notification and audio-library prompts at launch, back to back and on
- * top of the login page, with nothing saying why a music player wanted either.
+ * Without it, the notification and audio-library prompts would fire at launch, back to back and
+ * on top of the login page, with nothing saying why a music player wants either.
  */
 @Composable
 fun StartupPermissionRationale(

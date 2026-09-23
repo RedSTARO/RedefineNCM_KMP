@@ -238,7 +238,7 @@ private fun replaceWebLyrics(
     """{
         (async () => {
             if (!globalThis.isSecureContext || !navigator.storage?.getDirectory) {
-                throw new Error("浏览器本地媒体边车需要 HTTPS 或 localhost，并要求支持 OPFS");
+                throw new Error("在浏览器里保存歌词和封面需要 HTTPS 或 localhost 页面，且浏览器要支持 OPFS");
             }
             const assets = JSON.parse(payload);
             const lyricPattern = new RegExp("^" + songId + "\\.lyric\\.[A-Za-z0-9][A-Za-z0-9._-]{0,63}$");
@@ -246,7 +246,7 @@ private fun replaceWebLyrics(
                 !asset || typeof asset.fileName !== "string" ||
                 typeof asset.content !== "string" || !lyricPattern.test(asset.fileName)
             )) {
-                throw new Error("无效的浏览器本地歌词边车");
+                throw new Error("要保存的歌词文件无效");
             }
             const root = await navigator.storage.getDirectory();
             const directory = await root.getDirectoryHandle("RedefineNCM", { create: true });
@@ -333,7 +333,7 @@ private fun readWebLyrics(
     """{
         (async () => {
             if (!globalThis.isSecureContext || !navigator.storage?.getDirectory) {
-                throw new Error("浏览器本地媒体边车需要 HTTPS 或 localhost，并要求支持 OPFS");
+                throw new Error("在浏览器里保存歌词和封面需要 HTTPS 或 localhost 页面，且浏览器要支持 OPFS");
             }
             const requestedNames = JSON.parse(requestedPayload);
             const lyricPattern = new RegExp("^" + songId + "\\.lyric\\.[A-Za-z0-9][A-Za-z0-9._-]{0,63}$");
@@ -341,7 +341,7 @@ private fun readWebLyrics(
                 !Array.isArray(requestedNames) ||
                 requestedNames.some(name => typeof name !== "string" || !lyricPattern.test(name))
             ) {
-                throw new Error("无效的浏览器本地歌词读取范围");
+                throw new Error("要读取的歌词文件名无效");
             }
             const root = await navigator.storage.getDirectory();
             let directory;
@@ -380,11 +380,11 @@ private fun replaceWebArtwork(
     """{
         (async () => {
             if (!globalThis.isSecureContext || !navigator.storage?.getDirectory) {
-                throw new Error("浏览器本地媒体边车需要 HTTPS 或 localhost，并要求支持 OPFS");
+                throw new Error("在浏览器里保存歌词和封面需要 HTTPS 或 localhost 页面，且浏览器要支持 OPFS");
             }
             const artworkPattern = new RegExp("^" + songId + "\\.cover\\.[A-Za-z0-9]{1,12}$");
             if (!artworkPattern.test(fileName) || !mimeType.toLowerCase().startsWith("image/")) {
-                throw new Error("无效的浏览器本地封面边车");
+                throw new Error("要保存的封面文件无效");
             }
             const binary = atob(base64);
             const bytes = new Uint8Array(binary.length);
@@ -465,7 +465,7 @@ private fun inspectWebAssets(
     """{
         (async () => {
             if (!globalThis.isSecureContext || !navigator.storage?.getDirectory) {
-                throw new Error("浏览器本地媒体边车需要 HTTPS 或 localhost，并要求支持 OPFS");
+                throw new Error("在浏览器里保存歌词和封面需要 HTTPS 或 localhost 页面，且浏览器要支持 OPFS");
             }
             const root = await navigator.storage.getDirectory();
             let directory;
@@ -500,7 +500,7 @@ private fun resolveWebArtworkUri(
     """{
         (async () => {
             if (!globalThis.isSecureContext || !navigator.storage?.getDirectory) {
-                throw new Error("浏览器本地媒体边车需要 HTTPS 或 localhost，并要求支持 OPFS");
+                throw new Error("在浏览器里保存歌词和封面需要 HTTPS 或 localhost 页面，且浏览器要支持 OPFS");
             }
             const root = await navigator.storage.getDirectory();
             let directory;
@@ -539,7 +539,7 @@ private fun deleteWebAssets(
     """{
         (async () => {
             if (!globalThis.isSecureContext || !navigator.storage?.getDirectory) {
-                throw new Error("浏览器本地媒体边车需要 HTTPS 或 localhost，并要求支持 OPFS");
+                throw new Error("在浏览器里保存歌词和封面需要 HTTPS 或 localhost 页面，且浏览器要支持 OPFS");
             }
             const root = await navigator.storage.getDirectory();
             let directory;

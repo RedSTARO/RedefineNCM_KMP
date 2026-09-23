@@ -202,9 +202,9 @@ private fun migrateSharedArtworkToPrivate(
             val source = sharedRows.first()
             val bytes = context.contentResolver.openInputStream(source.uri)
                 ?.use { it.readBytesAtMost(MAX_MIGRATED_ARTWORK_BYTES) }
-                ?: error("无法读取待迁移的 Android 本地封面：${source.fileName}")
+                ?: error("无法读取需要迁移的旧封面文件：${source.fileName}")
             check(bytes.isNotEmpty()) {
-                "待迁移的 Android 本地封面为空：${source.fileName}"
+                "需要迁移的旧封面文件为空：${source.fileName}"
             }
             replacePrivateArtwork(context, songId, source.fileName, bytes)
         }
@@ -218,7 +218,7 @@ private fun migrateSharedArtworkToPrivate(
                 it.readBytesAtMost(MAX_MIGRATED_ARTWORK_BYTES)
             }
             check(bytes.isNotEmpty()) {
-                "待迁移的 Android 本地封面为空：${source.name}"
+                "需要迁移的旧封面文件为空：${source.name}"
             }
             replacePrivateArtwork(context, songId, source.name, bytes)
         }
@@ -268,7 +268,7 @@ private fun privateArtworkFiles(
         .asSequence()
         .flatMap { directory ->
             checkNotNull(directory.listFiles()) {
-                "无法读取 Android 应用专属封面目录：$directory"
+                "无法读取应用的封面目录：$directory"
             }.asSequence()
         }
         .filter(File::isFile)
@@ -288,7 +288,7 @@ private fun privateArtworkFileNames(context: Context): List<String> =
         .asSequence()
         .flatMap { directory ->
             checkNotNull(directory.listFiles()) {
-                "无法读取 Android 应用专属封面目录：$directory"
+                "无法读取应用的封面目录：$directory"
             }.asSequence()
         }
         .filter(File::isFile)
@@ -303,7 +303,7 @@ private fun deletePrivateArtworkAssets(
         .asSequence()
         .flatMap { directory ->
             checkNotNull(directory.listFiles()) {
-                "无法读取 Android 应用专属封面目录：$directory"
+                "无法读取应用的封面目录：$directory"
             }.asSequence()
         }
         .filter(File::isFile)
@@ -323,18 +323,18 @@ private fun privateArtworkDirectories(context: Context): List<File> =
         .filter(File::exists)
         .onEach { directory ->
             check(directory.isDirectory) {
-                "Android 应用专属封面路径不是目录：$directory"
+                "应用的封面目录不是文件夹：$directory"
             }
         }
 
 internal fun ensureAndroidPrivateArtworkDirectory(storageRoot: File): File {
     val directory = File(storageRoot, ANDROID_LOCAL_ARTWORK_SUBDIR)
     check(directory.isDirectory || directory.mkdirs()) {
-        "无法创建 Android 应用专属封面目录：$directory"
+        "无法创建应用的封面目录：$directory"
     }
     val noMedia = File(directory, ANDROID_NO_MEDIA_FILE_NAME)
     check(noMedia.isFile || noMedia.createNewFile()) {
-        "无法创建 Android 封面媒体扫描屏蔽标记：$noMedia"
+        "无法创建阻止相册扫描封面的 .nomedia 文件：$noMedia"
     }
     return directory
 }
@@ -348,7 +348,7 @@ private fun InputStream.readBytesAtMost(maxBytes: Int): ByteArray {
         if (read < 0) return output.toByteArray()
         total += read
         check(total <= maxBytes) {
-            "待迁移的 Android 本地封面超过 ${maxBytes / (1024 * 1024)} MiB 限制"
+            "需要迁移的旧封面文件超过 ${maxBytes / (1024 * 1024)} MiB 限制"
         }
         output.write(buffer, 0, read)
     }
@@ -414,7 +414,7 @@ private fun backupMediaStoreAssets(
                 put(MediaStore.MediaColumns.IS_PENDING, 1)
             }
             check(context.contentResolver.update(row.uri, values, null, null) == 1) {
-                "无法备份本地媒体边车：${row.fileName}"
+                "无法备份歌词文件：${row.fileName}"
             }
         }
 }
@@ -437,7 +437,7 @@ private fun rollbackMediaStoreReplacement(
                 put(MediaStore.MediaColumns.IS_PENDING, 0)
             }
             check(context.contentResolver.update(backup.uri, values, null, null) == 1) {
-                "无法恢复本地媒体边车：${backup.originalFileName}"
+                "无法恢复原来的歌词文件：${backup.originalFileName}"
             }
         }.exceptionOrNull()?.let(failure::addSuppressed)
     }
@@ -500,7 +500,7 @@ private fun deleteMediaStoreAssets(
         .filter { predicate(songId, it.fileName) }
     rows.forEach { row ->
         check(context.contentResolver.delete(row.uri, null, null) > 0) {
-            "无法删除本地媒体边车：${row.fileName}"
+            "无法删除歌词或封面文件：${row.fileName}"
         }
     }
     return rows.isNotEmpty()
@@ -550,12 +550,12 @@ private fun insertPendingMediaStoreAsset(
     val uri = context.contentResolver.insert(
         MediaStore.Downloads.EXTERNAL_CONTENT_URI,
         values,
-    ) ?: error("无法创建本地媒体边车：$fileName")
+    ) ?: error("无法创建歌词文件：$fileName")
     try {
         context.contentResolver.openOutputStream(uri, "w")?.use { output ->
             output.write(bytes)
             output.flush()
-        } ?: error("无法写入本地媒体边车：$fileName")
+        } ?: error("无法写入歌词文件：$fileName")
         return uri
     } catch (failure: Throwable) {
         context.contentResolver.delete(uri, null, null)
@@ -573,7 +573,7 @@ private fun publishMediaStoreAsset(
         put(MediaStore.MediaColumns.IS_PENDING, 0)
     }
     check(context.contentResolver.update(uri, values, null, null) == 1) {
-        "无法发布本地媒体边车"
+        "无法完成歌词文件的保存"
     }
 }
 
@@ -613,11 +613,11 @@ private fun replaceLegacyLyrics(
  */
 private fun renameLegacyAsset(source: File, target: File) {
     check(source.renameTo(target)) {
-        "无法移动 Android 本地媒体边车：${source.name}"
+        "无法移动歌词或封面文件：${source.name}"
     }
 }
 
-private const val LEGACY_DOWNLOAD_DIRECTORY_LABEL = "Android 下载路径"
+private const val LEGACY_DOWNLOAD_DIRECTORY_LABEL = "下载目录"
 
 private fun legacyAssetFileNames(): List<String> =
     localMediaAssetFileNames(legacyAssetDirectory(), LEGACY_DOWNLOAD_DIRECTORY_LABEL)

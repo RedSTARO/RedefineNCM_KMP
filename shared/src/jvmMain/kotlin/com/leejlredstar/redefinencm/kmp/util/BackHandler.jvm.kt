@@ -7,8 +7,8 @@ import androidx.navigationevent.compose.rememberNavigationEventState
 
 /**
  * Desktop back navigation through the window's navigation-event dispatcher, which the window
- * feeds from the Esc key. The mouse back button is fed into the same dispatcher by the desktop
- * app shell, so the innermost enabled handler wins either way — a search overlay closes before
+ * feeds from the Esc key. The desktop app shell feeds the mouse back button into the same
+ * dispatcher, so the innermost enabled handler wins either way: a search overlay closes before
  * the page behind it pops.
  */
 @Composable

@@ -3,7 +3,7 @@ package com.leejlredstar.redefinencm.kmp.data.provider
 /**
  * A music service the app can aggregate.
  *
- * [key] is persisted — in composite ids, in settings keys, and eventually in cache tables — so it
+ * [key] is persisted (in composite ids, in settings keys, and eventually in cache tables), so it
  * must stay stable even if the enum entry is renamed.
  */
 enum class MusicProviderId(val key: String, val displayName: String) {
@@ -12,7 +12,7 @@ enum class MusicProviderId(val key: String, val displayName: String) {
     ;
 
     companion object {
-        /** The provider every id belonged to before the app knew what a provider was. */
+        /** The provider of every id written before providers existed. */
         val Legacy: MusicProviderId = NETEASE
 
         fun fromKey(key: String): MusicProviderId? = entries.firstOrNull { it.key == key }
@@ -56,7 +56,7 @@ data class ProviderItemId(
          *
          * A bare id with no recognised prefix is read as NetEase rather than rejected: the player
          * queue, the download queue and a year of cached rows are all full of bare numeric ids,
-         * and they must keep resolving. An unknown prefix is *not* silently coerced — `"spotify:1"`
+         * and they must keep resolving. An unknown prefix is *not* silently coerced: `"spotify:1"`
          * returns null so a future provider's ids cannot be mistaken for NetEase's.
          */
         fun parseOrNull(value: String): ProviderItemId? {
@@ -98,14 +98,14 @@ data class ProviderItemId(
 fun String.toProviderItemIdOrNull(): ProviderItemId? = ProviderItemId.parseOrNull(this)
 
 /**
- * The form written into `MediaInfo.id` — bare for NetEase, prefixed for every other provider.
+ * The form written into `MediaInfo.id`: bare for NetEase, prefixed for every other provider.
  *
- * This is deliberately not [ProviderItemId.toString]. Around fifteen call sites read
- * `MediaInfo.id.toLongOrNull()` to reach NetEase-only features — lyrics, the local-download
- * lookup, the song wiki, the download-status chip — and prefixing NetEase's own ids would switch
+ * Do not replace this with [ProviderItemId.toString]. Around fifteen call sites read
+ * `MediaInfo.id.toLongOrNull()` to reach NetEase-only features (lyrics, the local-download
+ * lookup, the song wiki, the download-status chip), and prefixing NetEase's own ids would switch
  * all of them off at once. A bare id still parses back to NetEase through the legacy reader, so
- * provider dispatch is unaffected, while a foreign provider's id is correctly read by those same
- * sites as "not a NetEase song".
+ * provider dispatch is unaffected, while those same sites correctly read a foreign provider's id
+ * as "not a NetEase song".
  */
 val ProviderItemId.mediaId: String
     get() = if (provider == MusicProviderId.NETEASE) rawId else toString()

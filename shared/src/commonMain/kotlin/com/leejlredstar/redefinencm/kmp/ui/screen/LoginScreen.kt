@@ -61,9 +61,9 @@ import org.koin.core.parameter.parametersOf
  *
  * The page is a host and knows no login shape. It groups the provider's methods into sections by
  * the presenter that draws them, offers a chooser where a section holds more than one method, and
- * lets each presenter draw its method against the view model's [com.leejlredstar.redefinencm.kmp.data.auth.LoginHost].
- * The only provider-specific things here — the introduction and the backend address field — come
- * from the provider's registered descriptor.
+ * lets each presenter draw its method against the view model's
+ * [com.leejlredstar.redefinencm.kmp.data.auth.LoginHost]. The only provider-specific things here,
+ * the introduction and the backend address field, come from the provider's registered descriptor.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -100,7 +100,7 @@ fun LoginScreen(
                 .verticalScroll(rememberScrollState()),
         ) {
             // Header. No gradient of its own: ExpressivePage already paints one across the whole
-            // window, and a second one bounded to the content column ended in a hard vertical
+            // window, and a second one bounded to the content column would end in a hard vertical
             // edge on wide windows.
             Box(
                 modifier = Modifier
@@ -269,7 +269,7 @@ private fun BackendAddressCard(
     ) {
         Column(modifier = Modifier.padding(24.dp)) {
             Text(
-                "后端地址",
+                "服务器地址",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )

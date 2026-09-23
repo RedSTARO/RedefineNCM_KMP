@@ -10,10 +10,11 @@ package com.leejlredstar.redefinencm.kmp.data.provider
  * [14273,3225]词(14273,184)曲(14457,272) (14729,0)作(14729,392)
  * ```
  *
- * — a line's start and length in milliseconds, then each word followed by its own absolute start
- * and length. NetEase's YRC, which [com.leejlredstar.amll.compose.lyric.LyricParser.parseYrc]
- * reads, puts the timing in front of the word instead: `[14273,3225](14273,184,0)词(14457,272,0)曲`.
- * The shape was read from the gateway's answer for a real track on 2026-09-23.
+ * The square brackets hold the line's start and length in milliseconds, and each word is
+ * followed by its own absolute start and length. NetEase's YRC, which
+ * [com.leejlredstar.amll.compose.lyric.LyricParser.parseYrc] reads, puts the timing in front of
+ * the word instead: `[14273,3225](14273,184,0)词(14457,272,0)曲`. The shape was read from the
+ * gateway's answer for a real track on 2026-09-23.
  */
 internal object QrcLyric {
     /** The `LyricContent` of a decrypted QRC document, or null when [text] is not one. */

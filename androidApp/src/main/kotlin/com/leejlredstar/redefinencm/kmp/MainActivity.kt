@@ -33,10 +33,10 @@ class MainActivity : ComponentActivity() {
 
     /**
      * 官方 Media3 模式（也是原版的做法）：UI 侧建立 MediaController 连接。
-     * 连接会 bind 起 PlaybackService，并把会话置入"用户参与"生命周期 ——
+     * 连接会 bind 起 PlaybackService，并把会话置入"用户参与"生命周期：
      * Media3 的原生媒体通知（MediaStyle 封面/进度条/控制）与前台升降级
-     * 由此驱动。没有任何 controller 连接时通知管理不会激活，这正是
-     * 之前"只有歌词通知、没有媒体通知"的原因。
+     * 由此驱动。没有任何 controller 连接时通知管理不会激活，表现为
+     * "只有歌词通知、没有媒体通知"。
      * UI 的播放控制仍走进程内共享的 ExoPlayer（Koin 单例），controller
      * 只为生命周期而存在。
      */

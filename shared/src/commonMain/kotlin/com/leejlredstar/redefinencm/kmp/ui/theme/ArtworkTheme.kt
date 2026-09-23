@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * The colour the whole app is drawn from: the accent of the cover that is playing.
  *
- * A holder rather than a parameter for the same reason [ThemePreferences] is one — the theme is
+ * A holder rather than a parameter for the same reason [ThemePreferences] is one: the theme is
  * applied at each platform's entry point, above everything that knows what is playing, and the
  * scheme has to be the same in the app, the desktop window chrome and its lyric window.
  *

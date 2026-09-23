@@ -9,7 +9,7 @@ import kotlinx.serialization.json.Json
  * The gateway reads the caller's account from request cookies named after its own `Credential`
  * fields: `musicid` and `musickey` are required together, the rest let it renew the key. It does
  * not read the cookie names `y.qq.com` sets in a browser, so a pasted browser cookie is translated
- * here — `uin` → `musicid` (minus the `o` prefix and zero padding QQ writes), `qm_keyst` →
+ * here: `uin` → `musicid` (minus the `o` prefix and zero padding QQ writes), `qm_keyst` →
  * `musickey`, and the `psrf_*` / `wx*` pairs onto the renewal fields. The stored form is always
  * [toCookieHeader], which is what every QQ request sends.
  */

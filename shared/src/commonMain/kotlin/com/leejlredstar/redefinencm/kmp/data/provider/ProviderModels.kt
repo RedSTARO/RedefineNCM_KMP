@@ -3,9 +3,9 @@ package com.leejlredstar.redefinencm.kmp.data.provider
 /**
  * Provider-neutral shapes for the capabilities more than one service can answer.
  *
- * These are deliberately narrower than the NetEase DTOs. Only search, playlist detail, lyrics and
- * stream URLs are cross-provider today; user profiles, liked songs, listening records, daily
- * recommendations and playback reporting remain NetEase-only and keep speaking their own DTOs.
+ * These are kept narrower than the NetEase DTOs. Only search, playlist detail, lyrics and stream
+ * URLs are cross-provider today; user profiles, liked songs, listening records, daily
+ * recommendations and playback reporting remain NetEase-only and keep their own DTOs.
  * Which of those a provider's tracks support is its [ProviderCapability] set.
  */
 data class ProviderArtist(
@@ -102,7 +102,7 @@ class ProviderUnavailableException(
  *
  * Screens and view models ask [MusicProviderRegistry.capabilitiesOf] for the current track instead
  * of parsing its id: a missing capability is shown as "not offered by this provider", never as an
- * error. It says what the provider can do, not what the signed-in account may do — a feature the
+ * error. It says what the provider can do, not what the signed-in account may do; a feature the
  * account is not signed in for is a separate state its screen shows on its own.
  */
 enum class ProviderCapability {
@@ -158,8 +158,8 @@ sealed interface StreamResolution {
  *
  * [search] throws [ProviderUnavailableException] on transport failure, because its caller
  * aggregates across providers and has to tell an empty result from a broken one. The rest address
- * a single item on a single provider, where a null — or, for streams, a [StreamResolution.Failed]
- * with its reason — is the whole answer.
+ * a single item on a single provider, where a null (or, for streams, a [StreamResolution.Failed]
+ * with its reason) is the whole answer.
  */
 interface MusicProvider {
     val id: MusicProviderId
@@ -189,8 +189,8 @@ interface MusicProvider {
     /**
      * The track's lyrics, or null when it has none.
      *
-     * @throws ProviderUnavailableException when the backend could not be reached — a different
-     *   answer from "no lyrics", which the lyric page shows differently.
+     * @throws ProviderUnavailableException when the backend could not be reached, an answer the
+     *   lyric page shows differently from "no lyrics".
      */
     suspend fun lyric(id: ProviderItemId): ProviderLyric?
 

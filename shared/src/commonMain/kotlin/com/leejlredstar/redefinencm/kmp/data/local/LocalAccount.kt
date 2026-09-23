@@ -8,7 +8,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * The device-local account: no service behind it and nothing to sign in to. It owns whatever the
- * app keeps only on this device — local playlists and local favourites — so those have a home on
+ * app keeps only on this device (local playlists and local favourites), so those have a home on
  * the accounts page beside the online accounts.
  */
 class LocalAccount(private val settings: PlatformSettings) {

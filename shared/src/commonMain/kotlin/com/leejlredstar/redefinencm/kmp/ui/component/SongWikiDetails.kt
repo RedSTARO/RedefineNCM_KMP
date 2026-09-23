@@ -53,14 +53,10 @@ import com.leejlredstar.redefinencm.kmp.viewmodel.SongWikiUiState
 /**
  * The song's details: what the service knows about the recording beyond its title.
  *
- * This was a Compose translation of the former web host's `#wiki-overlay` — a dialog that
- * measured its own geometry against the viewport, animated on hand-copied CSS easings, drew its
- * own gradients along a `linear-gradient(135deg, …)` axis, and pinned a dark palette because the
- * lyric page it opened over is always dark. None of that is true of the page it opens from now:
- * it is reached from Now Playing, which follows the theme and is tinted from the cover, so it is
- * a bottom sheet in the app's own colours like the queue and the comments beside it.
+ * It opens from Now Playing, which follows the theme and is tinted from the cover, so it is a
+ * bottom sheet in the app's own colours, like the queue and the comments beside it.
  *
- * @param artworkOverlay drawn over the cover — the dynamic cover video, where the song has one.
+ * @param artworkOverlay drawn over the cover: the dynamic cover video, where the song has one.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -265,7 +261,7 @@ private fun SongWikiHeader(
 /**
  * One section: its name, the short values under it, and the paragraph that some of them carry.
  *
- * The values are short and there are usually several — credits, a tag, a chart position — so
+ * The values are short and there are usually several (credits, a tag, a chart position), so
  * they read as chips rather than as a column of one-word lines.
  */
 @Composable

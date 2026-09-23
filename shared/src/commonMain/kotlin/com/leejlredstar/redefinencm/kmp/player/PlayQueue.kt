@@ -5,9 +5,9 @@ import kotlin.random.Random
 /**
  * Pure, platform-independent model of the play queue and its shuffle ordering.
  *
- * This is the unit-testable heart of the **shuffle-ordering invariant** both repos treat as
+ * This is the unit-testable core of the **shuffle-ordering invariant** both repos treat as
  * regression-critical (see AGENTS.md): the visible queue, the play order, and the current-item
- * highlight must always be derived **together from one source of truth** — never from a
+ * highlight must always be derived **together from one source of truth**, never from a
  * separately cached index that can drift when the shuffle permutation is regenerated.
  *
  * The original Android bug: under shuffle, Media3 could regenerate its internal permutation
@@ -17,14 +17,14 @@ import kotlin.random.Random
  * `currentItem == itemsInPlayOrder[positionInPlayOrder]` holds by construction.
  *
  * `PlatformPlayer` actuals should delegate ordering decisions to this model rather than
- * re-deriving them (which is how the bug was reintroduced).
+ * re-deriving them (which is how the bug comes back).
  *
  * Immutable: every operation returns a new [PlayQueue].
  *
  * @param items queue contents in their original (unshuffled) order.
  * @param currentIndex index into [items] of the current track, or -1 when empty.
  * @param shuffleEnabled whether shuffle is on.
- * @param playOrder a permutation of `items.indices` giving the order tracks actually play in.
+ * @param playOrder a permutation of `items.indices` giving the order tracks play in.
  */
 class PlayQueue<T> private constructor(
     val items: List<T>,
@@ -106,8 +106,8 @@ class PlayQueue<T> private constructor(
      * Jump to the item at [position] in play order.
      *
      * This is the index a queue list hands back, and under shuffle it is not an index into
-     * [items] — translating between the two is exactly where a cached highlight used to drift.
-     * Out of range leaves the queue alone.
+     * [items]; translating between the two is where a cached highlight drifts. Out of range
+     * leaves the queue alone.
      */
     fun skipToPlayOrderPosition(position: Int): PlayQueue<T> =
         playOrder.getOrNull(position)?.let(::skipTo) ?: this
@@ -129,7 +129,7 @@ class PlayQueue<T> private constructor(
     }
 
     /**
-     * Remove the track at [position] in play order — the row the queue sheet shows there, which
+     * Remove the track at [position] in play order: the row the queue sheet shows there, which
      * under shuffle is not [items]`[position]`. The rest keep their relative play order.
      *
      * Removing the current track makes the one after it in play order current, wrapping to the

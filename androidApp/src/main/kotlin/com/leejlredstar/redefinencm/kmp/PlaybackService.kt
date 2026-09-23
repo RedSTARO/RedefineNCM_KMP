@@ -27,7 +27,7 @@ import org.koin.android.ext.android.get
  *
  * 媒体通知完全交给 Media3 的 DefaultMediaNotificationProvider：原生 MediaStyle
  * 通知（封面经 BitmapLoader 自动拉取 artworkUri、系统进度条、播放/上一首/下一首
- * 控制），播放开始时它自行 startForeground、停止时降级 —— 与原版行为一致。
+ * 控制），播放开始时它自行 startForeground、停止时降级，与原版行为一致。
  * 不要在这里手动 startForeground 自制通知：那会顶掉原生媒体通知的位置
  * （用户只会看到一个没有封面/进度条的假通知）。
  *

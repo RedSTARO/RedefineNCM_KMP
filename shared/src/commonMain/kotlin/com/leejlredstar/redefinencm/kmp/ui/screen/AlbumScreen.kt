@@ -58,7 +58,7 @@ import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import org.koin.compose.koinInject
 
-/** An album and its songs, reachable from any song on it. There was no album page before. */
+/** An album and its songs, reachable from any song on it. */
 @Composable
 fun AlbumScreen(
     albumId: Long,

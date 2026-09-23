@@ -48,7 +48,7 @@ interface ProviderCredentialSlot {
     suspend fun clear(): Result<Unit> = write("")
 
     /**
-     * The stored credential now, then after every write through this slot — a sign-in on the
+     * The stored credential now, then after every write through this slot: a sign-in on the
      * login page, a sign-out on the accounts page, a renewal in the background. Pages follow this
      * instead of keeping their own copy.
      */
@@ -165,7 +165,7 @@ class QQCredentialSlot(settings: PlatformSettings) :
     SettingsCredentialSlot(settings, SettingKeys.QQ_COOKIE) {
     override val provider: MusicProviderId = MusicProviderId.QQ
 
-    /** Only a credential the gateway can use — `musicid` with `musickey` — is an account. */
+    /** Only a credential the gateway can use (`musicid` with `musickey`) is an account. */
     override fun isSignedIn(credential: String): Boolean = QQCredential.parse(credential) != null
 
     override suspend fun persist(credential: String): Result<Unit> {

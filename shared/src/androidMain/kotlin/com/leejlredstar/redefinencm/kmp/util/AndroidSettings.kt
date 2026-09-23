@@ -31,7 +31,7 @@ private sealed interface SettingsWriteCommand {
 /**
  * DataStore-backed settings with an in-memory cache.
  *
- * The synchronous getters are deliberately cache-only: DataStore is asynchronous and must never
+ * The synchronous getters are cache-only: DataStore is asynchronous and must never
  * be bridged with `runBlocking` from Compose or Koin construction on the main thread. Callers that
  * require the persisted value before continuing use the suspend getters, which wait for the one
  * background snapshot load. Writes update the cache before returning and are serialized through

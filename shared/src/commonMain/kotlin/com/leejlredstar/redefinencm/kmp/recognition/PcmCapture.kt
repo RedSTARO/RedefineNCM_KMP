@@ -7,9 +7,9 @@ import kotlin.math.sqrt
 /**
  * A [MicrophoneRecorder] that lets one capture own the device at a time.
  *
- * The four platform recorders had written this guard identically: reject a non-positive
- * duration, fail fast with [MicrophoneBusyException] rather than queueing behind a capture
- * already in flight, and release the claim on every exit path including cancellation.
+ * The four platform recorders share this guard: reject a non-positive duration, fail fast with
+ * [MicrophoneBusyException] rather than queueing behind a capture already in flight, and release
+ * the claim on every exit path including cancellation.
  */
 abstract class ExclusiveMicrophoneRecorder : MicrophoneRecorder {
 

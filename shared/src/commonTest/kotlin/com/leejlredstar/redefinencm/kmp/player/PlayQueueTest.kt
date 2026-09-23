@@ -27,7 +27,7 @@ class PlayQueueTest {
         }
         // playOrder is a true permutation of all item indices.
         assertEquals(items.indices.toList(), playOrder.sorted())
-        // The highlight and the visible order derive from one source — they cannot disagree.
+        // The highlight and the visible order derive from one source, so they cannot disagree.
         assertEquals(currentItem, itemsInPlayOrder[positionInPlayOrder])
         assertEquals(currentIndex, playOrder[positionInPlayOrder])
     }
@@ -151,7 +151,8 @@ class PlayQueueTest {
     @Test
     fun skippingByPlayOrderPositionSelectsWhatTheQueueListShows() {
         // The queue list renders itemsInPlayOrder and hands back a position in that list, which
-        // under shuffle is not an index into items. Every player used to translate it by hand.
+        // under shuffle is not an index into items. skipToPlayOrderPosition translates it, so no
+        // player does that by hand.
         val shuffled = PlayQueue.of(tracks, startIndex = 0, shuffle = true, rng = Random(7))
         for (position in shuffled.playOrder.indices) {
             val jumped = shuffled.skipToPlayOrderPosition(position)

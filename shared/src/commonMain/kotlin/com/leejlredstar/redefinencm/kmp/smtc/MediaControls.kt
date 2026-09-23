@@ -22,10 +22,10 @@ data class MediaControlMetadata(
  * state first-hand; the desktop's JVM player has no OS transport of its own, so a separate
  * binding observes this instead.
  *
- * It used to be one shared object that every target wrote to on every position tick while only
- * the desktop read it, so three targets allocated and published a metadata value per tick that
- * nothing consumed. The three that publish from inside their players now have a sink that does
- * nothing, and it is a type rather than a comment nobody was reading.
+ * The three targets that publish from inside their players have a sink that does nothing. A
+ * single shared object that every target writes on every position tick, read only by the
+ * desktop, would make those three allocate and publish a metadata value per tick that nothing
+ * consumes.
  *
  * Every argument is null-for-unchanged, so a caller can update the position without restating
  * the track.

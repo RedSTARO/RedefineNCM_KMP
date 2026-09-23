@@ -34,7 +34,7 @@ expect suspend fun scanDownloadedSongs(): DownloadScanResult
 expect suspend fun deleteDownloadedSongFile(songId: Long): Boolean
 
 /**
- * Whether downloads are kept where the user cannot open them — the browser's private storage —
+ * Whether downloads are kept where the user cannot open them (the browser's private storage),
  * so the download page offers [exportDownloadedSong] to save a copy out.
  */
 expect val downloadsNeedExport: Boolean

@@ -107,11 +107,11 @@ compose.desktop {
         mainClass = "com.leejlredstar.redefinencm.kmp.MainKt"
         // The lyric page animates on every display refresh, 200 Hz on a fast monitor, so a
         // stop-the-world collection of even 10 ms drops frames. Measured with G1 during
-        // playback: young pauses of 5–45 ms every few seconds, plus 20–50 ms full collections
-        // from the `System.gc()` Skiko issues every 30 s of rendering. ZGC keeps every pause
-        // under a millisecond and runs that explicit collection concurrently. The generational
-        // mode exists on JDK 21+; the unrecognised-option flag makes it a no-op, not a startup
-        // failure, on the JDK 17 that CI still packages with.
+        // playback: young pauses of 5 to 45 ms every few seconds, plus 20 to 50 ms full
+        // collections from the `System.gc()` Skiko issues every 30 s of rendering. ZGC keeps
+        // every pause under a millisecond and runs that explicit collection concurrently. The
+        // generational mode exists on JDK 21+; the unrecognised-option flag makes it a no-op,
+        // not a startup failure, on the JDK 17 that CI still packages with.
         jvmArgs += listOf(
             "-XX:+IgnoreUnrecognizedVMOptions",
             "-XX:+UseZGC",

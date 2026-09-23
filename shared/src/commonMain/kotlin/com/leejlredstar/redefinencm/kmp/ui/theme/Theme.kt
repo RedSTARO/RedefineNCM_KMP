@@ -22,9 +22,8 @@ import com.leejlredstar.amll.compose.rememberReducedMotionEnabled
  *
  * The scale is deliberately steep: `extraSmall` stays legible for dense chips while
  * `extraLarge` is round enough that panels read as capsules rather than cards. That
- * contrast is what makes the connected-list language (large outer / tight inner corners,
- * see ui/component/Expressive.kt) land as a deliberate shape statement instead of
- * uniformly rounded boxes.
+ * contrast keeps the connected-list language (large outer / tight inner corners, see
+ * ui/component/Expressive.kt) from looking like uniformly rounded boxes.
  */
 private val ExpressiveShapes = Shapes(
     extraSmall = RoundedCornerShape(12.dp),
@@ -35,19 +34,18 @@ private val ExpressiveShapes = Shapes(
 )
 
 /**
- * RedefineNCM Material 3 Expressive theme — used across all platforms
- * (Android, iOS, Desktop, Web).
+ * RedefineNCM Material 3 Expressive theme, used on all platforms (Android, iOS, Desktop, Web).
  *
- * Uses the real [MaterialExpressiveTheme] (not plain `MaterialTheme`), so every Material
- * component inherits the expressive [MotionScheme] — spirited, physics-based animation
- * specs — in addition to the expressive color/shape/type scales defined here.
+ * Uses [MaterialExpressiveTheme] (not plain `MaterialTheme`), so every Material component
+ * inherits the expressive [MotionScheme] (physics-based animation specs) in addition to the
+ * expressive color/shape/type scales defined here.
  *
  * Light or dark follows [ThemePreferences] (the system's setting unless the user picked one).
  *
- * The scheme itself is generated from the cover that is playing — see [artworkColorScheme]. The
+ * The scheme itself is generated from the cover that is playing (see [artworkColorScheme]). The
  * app has no brand colour; before anything has played the scheme is grey. Android 12+ wallpaper
- * colours still take over when the user turns them on, which is then a choice between the
- * wallpaper's colour and the cover's rather than between the wallpaper and a fixed green.
+ * colours take over when the user turns them on, so the choice is between the wallpaper's colour
+ * and the cover's.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable

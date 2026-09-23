@@ -5,14 +5,14 @@ package com.leejlredstar.redefinencm.kmp.player
  *
  * [id] identifies the endpoint well enough to survive the list being reordered while the app
  * runs; [displayName] is what Settings shows. It is not durable across restarts, and nothing
- * asks it to be — a chosen device only holds for the session that chose it.
+ * asks it to be: a chosen device only holds for the session that chose it.
  */
 data class AudioOutputDevice(val id: String, val displayName: String)
 
 /**
  * The [SettingKeys.AUDIO_OUTPUT_DEVICE][com.leejlredstar.redefinencm.kmp.util.SettingKeys] value
  * meaning "follow whatever the platform is currently using", and the value every launch starts
- * from — desktop startup clears any device pinned by an earlier session.
+ * from: desktop startup clears any device pinned by an earlier session.
  */
 const val SYSTEM_DEFAULT_AUDIO_OUTPUT_ID: String = ""
 
@@ -20,7 +20,7 @@ const val SYSTEM_DEFAULT_AUDIO_OUTPUT_ID: String = ""
  * Whether this target lets the user choose which output device playback opens.
  *
  * False on the platforms that route through an OS-level picker (Android, iOS, browser), where
- * an in-app list would only duplicate — and fight with — the system one.
+ * an in-app list would only duplicate the system one and fight with it.
  */
 expect val supportsAudioOutputDeviceSelection: Boolean
 
@@ -28,7 +28,7 @@ expect val supportsAudioOutputDeviceSelection: Boolean
  * Output devices the platform currently offers, freshly enumerated on every call.
  *
  * Empty when the target has no selection to make, and empty rather than throwing when
- * enumeration fails — callers treat "no devices" and "use the default" the same way.
+ * enumeration fails, because callers treat "no devices" and "use the default" the same way.
  */
 expect fun availableAudioOutputDevices(): List<AudioOutputDevice>
 
@@ -48,9 +48,9 @@ internal fun audioOutputDeviceName(id: String): String =
 /**
  * Picks which of [available] a persisted id refers to, or null for "open the platform default".
  *
- * Null covers both "nothing was ever chosen" and "the chosen device is gone" — a device that
- * was unplugged, or renamed by a driver update. Falling back to the default beats reporting an
- * error: the alternative is silence until the user notices and reopens Settings.
+ * Null covers both "nothing was ever chosen" and "the chosen device is gone" (a device that
+ * was unplugged, or renamed by a driver update). Falling back to the default beats reporting
+ * an error, which would leave playback silent until the user notices and reopens Settings.
  */
 internal fun resolveAudioOutputSelection(
     persistedId: String,

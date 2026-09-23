@@ -39,9 +39,9 @@ import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 /**
  * Which of the two transport sheets is open.
  *
- * Every surface that can reach the queue and the comments held its own pair of booleans and its
- * own pair of `if (show…) { …BottomSheet(…) }` blocks. Four surfaces meant four copies that had
- * to be kept in step by hand, and the newest one was written by copying the previous.
+ * Every surface that can reach the queue and the comments keeps one of these and draws
+ * [TransportSheets] with it. A surface with its own pair of booleans and its own pair of
+ * `if (show…) { …BottomSheet(…) }` blocks is one more copy to keep in step by hand.
  */
 @Stable
 internal class TransportSheetsState {
@@ -90,8 +90,8 @@ internal fun TransportSheets(
     viewModel: NowPlayingViewModel,
     onSeekClick: ((Int) -> Unit)? = null,
 ) {
-    // Comments load when the sheet opens, and again when the sheet is open across a track
-    // change. Each surface used to run this effect itself.
+    // Comments load when the sheet opens, and again when the track changes while it is open.
+    // This effect runs here for every surface; surfaces do not run their own.
     LaunchedEffect(state.showComments, nowPlaying.media?.id) {
         if (state.showComments) viewModel.getComments()
     }
@@ -223,7 +223,7 @@ internal fun rememberQueueActions(
 }
 
 /**
- * The comments to list — the first page of the ordering picked, then the pages loaded after it —
+ * The comments to list (the first page of the ordering picked, then the pages loaded after it)
  * and the paging state that goes with them.
  */
 @Composable

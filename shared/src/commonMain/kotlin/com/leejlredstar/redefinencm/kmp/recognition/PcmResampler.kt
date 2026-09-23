@@ -30,14 +30,14 @@ fun prepareRecognitionSamples(
     val requiredInputLong = (
         durationMillis * captured.sampleRateHz.toLong() + 999L
     ) / 1_000L
-    require(requiredInputLong <= Int.MAX_VALUE.toLong()) { "输入样本数量超出可处理范围" }
+    require(requiredInputLong <= Int.MAX_VALUE.toLong()) { "录音采样点数量超出可处理范围" }
     val requiredInput = requiredInputLong.toInt()
     require(captured.monoSamples.size >= requiredInput) {
-        "录音样本不足：需要 $requiredInput，实际 ${captured.monoSamples.size}"
+        "录音采样点不足：需要 $requiredInput 个，实际 ${captured.monoSamples.size} 个"
     }
     for (index in 0 until requiredInput) {
         require(captured.monoSamples[index].isFinite()) {
-            "录音在样本 $index 处包含非有限值"
+            "录音第 $index 个采样点的数值无效"
         }
     }
 

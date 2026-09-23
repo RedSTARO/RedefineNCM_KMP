@@ -16,9 +16,9 @@ import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 /**
  * Everything a transport surface needs about the current song, read once.
  *
- * The desktop now-playing strip and the auto-hiding mini player each collected the same nine
- * flows by hand and re-derived the same four values from them, which is how their progress
- * maths drifted apart. Deriving them here keeps one definition of "how full is the bar".
+ * The desktop now-playing strip and the auto-hiding mini player both read this instead of
+ * collecting the player's flows by hand, so there is one definition of "how full is the bar".
+ * Deriving it separately in each surface lets their progress maths drift apart.
  */
 @Immutable
 internal data class NowPlayingUiState(

@@ -120,13 +120,13 @@ val sharedModule = module {
         QQCredentialRenewer(api = { koin.get() }, slot = get<QQCredentialSlot>())
     }
 
-    // Database — DatabaseDriverFactory is provided by platformModule()
+    // Database: DatabaseDriverFactory is provided by platformModule()
     single { AppDatabase(get<DatabaseDriverFactory>().createDriver()) }
 
     // Repository
     single { Repository(get(), get()) }
 
-    // Credential slots — kept as their own singletons because the QQ renewer writes through its
+    // Credential slots, kept as their own singletons because the QQ renewer writes through its
     // slot directly. NetEase's restarts account work through the main view model, resolved lazily
     // so the slot does not pull the view-model graph up at startup.
     single {
@@ -135,7 +135,7 @@ val sharedModule = module {
     }
     single { QQCredentialSlot(get()) }
 
-    // Providers — each registered once: what it answers, where its account lives, what the pages
+    // Providers, each registered once: what it answers, where its account lives, what the pages
     // say about it, how to sign in to it, and who its account is. Order is the order the pages
     // list them and search groups results, so NetEase stays first. A new provider is one more
     // entry here and a MusicProviderId.
@@ -147,7 +147,7 @@ val sharedModule = module {
         ProviderRegistrations(
             listOf(
                 ProviderRegistration(
-                    // An adapter over the existing Repository, not a rewrite of it.
+                    // Wraps the existing Repository without changing it.
                     provider = NeteaseProvider(get(), get()),
                     credentialSlot = get<NeteaseCredentialSlot>(),
                     descriptor = ProviderLoginDescriptor(
@@ -186,28 +186,28 @@ val sharedModule = module {
                     credentialSlot = get<QQCredentialSlot>(),
                     descriptor = ProviderLoginDescriptor(
                         provider = MusicProviderId.QQ,
-                        introduction = "登录后 QQ 音乐的搜索和播放使用你账号的权益；不登录也可以搜索，并播放可免费收听的歌曲。",
-                        accountLabel = "QQ 音乐账号",
+                        introduction = "登录后 QQ音乐的搜索和播放使用你账号的权益；不登录也可以搜索，并播放可免费收听的歌曲。",
+                        accountLabel = "QQ音乐账号",
                         signedOutHint = "登录后搜索和播放使用你账号的权益",
-                        logoutWarning = "退出后 QQ 音乐按未登录状态搜索和播放。",
+                        logoutWarning = "退出后 QQ音乐按未登录状态搜索和播放。",
                         server = ProviderServerSetting(
                             key = SettingKeys.QQ_SERVER,
                             default = SettingKeys.QQ_SERVER_DEFAULT,
-                            label = "QQ 音乐网关地址",
-                            appliesWhen = "网关地址立即生效",
+                            label = "QQ音乐服务器地址",
+                            appliesWhen = "服务器地址立即生效",
                             check = { address -> checkQQGateway(qqApi, address) },
                         ),
                         enabledSetting = ProviderEnabledSetting(
                             key = SettingKeys.QQ_ENABLED,
                             default = false,
-                            label = "启用 QQ 音乐",
-                            supportingText = "需要自建 QQMusicApi 网关；未登录时按 QQ 对未登录用户的限制播放",
+                            label = "启用 QQ音乐",
+                            supportingText = "需要自建 QQMusicApi 服务器；未登录时按 QQ 对未登录用户的限制播放",
                         ),
                         // The gateway reads the account from a Cookie header only (see AGENTS.md D6).
                         signInUnavailableReason = if (canSendCookie) {
                             null
                         } else {
-                            "浏览器无法携带 QQ 音乐的登录凭证，Web 端以未登录身份使用 QQ 音乐"
+                            "浏览器无法携带 QQ音乐的登录凭证，Web 端以未登录身份使用 QQ音乐"
                         },
                     ),
                     loginMethods = listOf(
@@ -224,7 +224,7 @@ val sharedModule = module {
     // The registries the pages and the player use, derived from the registrations above.
     single { get<ProviderRegistrations>().credentialStore() }
     single { get<ProviderRegistrations>().descriptorRegistry() }
-    // Login sources, logic half — the login page renders whatever is registered for the provider
+    // Login sources, logic half: the login page renders whatever is registered for the provider
     // it was opened for; a platform that cannot sign in to a provider gets none of its methods.
     single { get<ProviderRegistrations>().loginMethodRegistry() }
     single {
@@ -234,7 +234,7 @@ val sharedModule = module {
         )
     }
 
-    // Login sources, UI half — one presenter per shape, in the order their sections appear. A new
+    // Login sources, UI half: one presenter per shape, in the order their sections appear. A new
     // shape of login is a method interface, a presenter here, and their registrations.
     single {
         LoginPresenterRegistry(
@@ -254,10 +254,10 @@ val sharedModule = module {
     single { LocalMediaAssets(get()) }
     single { LyricResolver(get(), get(), get(), get()) }
 
-    // Download queue — one process-wide queue drives the manager page and row status chips.
+    // Download queue: one process-wide queue drives the manager page and row status chips.
     single { SongDownloadManager(get(), get(), get(), get()) }
 
-    // Player — shared in-memory default (no real audio). A platform that implements a real
+    // Player: shared in-memory default (no real audio). A platform that implements a real
     // PlatformPlayer should bind it in platformModule() and remove this default (or load with
     // Koin override). NowPlayingViewModel resolves PlatformPlayer from here.
     single<PlatformPlayer> { InMemoryPlatformPlayer() }
@@ -284,18 +284,18 @@ val sharedModule = module {
     // ViewModels
     // One login page per provider; the provider is the injection parameter.
     factory { (provider: MusicProviderId) -> LoginViewModel(provider, get(), get(), get(), get()) }
-    // Single —— 与原版单 Activity 共享一个 MainViewModel 一致：各屏共享搜索/歌单/推荐状态，
+    // Single（与原版单 Activity 共享一个 MainViewModel 一致）：各屏共享搜索/歌单/推荐状态，
     // init 中的 UID 解析与播放状态恢复只执行一次。
     single { MainViewModel(get(), get(), get(), get(), get(), get(), get()) }
-    // Single — the now-playing state is inherently global (only one song plays at a time).
+    // Single: the now-playing state is global (only one song plays at a time).
     // The eager status restorer resolves this singleton after settings and queue restoration, so
     // restored/background playback also resolves lyrics without waiting for a screen composition.
     single { NowPlayingViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
-    // Factory — recording and cancellation are scoped to one pushed recognition page.
+    // Factory: recording and cancellation are scoped to one pushed recognition page.
     factory { SongRecognitionViewModel(get(), get(), get()) }
-    // Single — the settings summary and the accounts page read the same account state.
+    // Single: the settings summary and the accounts page read the same account state.
     single { AccountsViewModel(get(), get(), get()) }
-    // Single — the song menus of every page share one add-to-local-playlist dialog.
+    // Single: the song menus of every page share one add-to-local-playlist dialog.
     single { LocalLibraryViewModel(get(), get()) }
 }
 
@@ -317,7 +317,7 @@ private suspend fun checkNcmServer(api: NCMApi, address: String): ServerCheckRes
 /** The QQ gateway's check: whether it serves its own API description. */
 private suspend fun checkQQGateway(api: QQMusicApi, address: String): ServerCheckResult =
     if (api.ping(address)) {
-        ServerCheckResult(true, "网关可用")
+        ServerCheckResult(true, "服务器可用")
     } else {
-        ServerCheckResult(false, "无法连接到这个网关，请检查地址是否正确、网关是否在运行")
+        ServerCheckResult(false, "无法连接到这个服务器，请检查地址是否正确、服务是否在运行")
     }

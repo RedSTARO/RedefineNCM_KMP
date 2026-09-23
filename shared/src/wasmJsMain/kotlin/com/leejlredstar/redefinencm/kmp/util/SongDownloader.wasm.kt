@@ -27,9 +27,9 @@ actual object SongDownloader {
         )
         if (!onReadyToPublish()) {
             withContext(NonCancellable) {
-                check(WebDownloadStorage.delete(item.id)) { "无法回滚已取消的 Web 下载" }
+                check(WebDownloadStorage.delete(item.id)) { "下载已取消，但无法删除已下载的文件" }
             }
-            throw CancellationException("下载发布已取消")
+            throw CancellationException("下载已取消，文件未保存")
         }
         return downloadedFile
     }

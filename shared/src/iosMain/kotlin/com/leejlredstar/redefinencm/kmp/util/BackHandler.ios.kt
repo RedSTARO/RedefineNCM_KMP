@@ -7,8 +7,8 @@ import androidx.navigationevent.compose.rememberNavigationEventState
 
 /**
  * iOS back navigation through the window's navigation-event dispatcher, which recognises the
- * system edge-swipe gesture. Before this the actual was empty and every screen could only be
- * left through its on-screen back button.
+ * system edge-swipe gesture. With an empty actual, a screen can only be left through its
+ * on-screen back button.
  */
 @Composable
 actual fun BackHandler(enabled: Boolean, onBack: () -> Unit) {

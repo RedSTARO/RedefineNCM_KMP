@@ -48,13 +48,13 @@ actual object LocalMediaAssetStorage {
                             val original = "$directory/$fileName"
                             val backup = backupIosAssetPath(directory, fileName)
                             check(manager.moveItemAtPath(original, backup, error = null)) {
-                                "无法备份 iOS 本地歌词：$fileName"
+                                "无法备份歌词文件：$fileName"
                             }
                             backups += backup to original
                         }
                     staged.forEach { (temporary, target) ->
                         check(manager.moveItemAtPath(temporary, target, error = null)) {
-                            "无法发布 iOS 本地歌词：${target.substringAfterLast('/')}"
+                            "无法保存歌词文件：${target.substringAfterLast('/')}"
                         }
                         published += target
                     }
@@ -74,7 +74,7 @@ actual object LocalMediaAssetStorage {
                             if (!restored) {
                                 failure.addSuppressed(
                                     IllegalStateException(
-                                        "无法恢复 iOS 本地歌词：${original.substringAfterLast('/')}"
+                                        "无法恢复原来的歌词文件：${original.substringAfterLast('/')}"
                                     )
                                 )
                             }
@@ -138,12 +138,12 @@ actual object LocalMediaAssetStorage {
                             val original = "$directory/$oldFileName"
                             val backup = backupIosAssetPath(directory, oldFileName)
                             check(manager.moveItemAtPath(original, backup, error = null)) {
-                                "无法备份 iOS 本地封面：$oldFileName"
+                                "无法备份封面文件：$oldFileName"
                             }
                             backups += backup to original
                         }
                     check(manager.moveItemAtPath(temporary, target, error = null)) {
-                        "无法发布 iOS 本地封面：$fileName"
+                        "无法保存封面文件：$fileName"
                     }
                     published = true
                     backups.forEach { (backup, _) ->
@@ -158,7 +158,7 @@ actual object LocalMediaAssetStorage {
                             if (!restored) {
                                 failure.addSuppressed(
                                     IllegalStateException(
-                                        "无法恢复 iOS 本地封面：${original.substringAfterLast('/')}"
+                                        "无法恢复原来的封面文件：${original.substringAfterLast('/')}"
                                     )
                                 )
                             }
@@ -256,7 +256,7 @@ private fun backupIosAssetPath(directory: String, targetName: String): String =
 
 private fun writeIosAsset(path: String, bytes: ByteArray) {
     val file = fopen(path, "wb")
-        ?: error("无法创建 iOS 本地媒体边车：${path.substringAfterLast('/')}")
+        ?: error("无法创建歌词或封面文件：${path.substringAfterLast('/')}")
     try {
         if (bytes.isNotEmpty()) {
             val written = bytes.usePinned { pinned ->
@@ -268,14 +268,14 @@ private fun writeIosAsset(path: String, bytes: ByteArray) {
                 )
             }
             check(written.toLong() == bytes.size.toLong()) {
-                "iOS 本地媒体边车写入不完整：${path.substringAfterLast('/')}"
+                "歌词或封面文件没有写完整：${path.substringAfterLast('/')}"
             }
         }
         check(fflush(file) == 0) {
-            "无法刷新 iOS 本地媒体边车：${path.substringAfterLast('/')}"
+            "无法写入歌词或封面文件：${path.substringAfterLast('/')}"
         }
         check(fsync(fileno(file)) == 0) {
-            "无法持久化 iOS 本地媒体边车：${path.substringAfterLast('/')}"
+            "无法把歌词或封面文件同步到存储：${path.substringAfterLast('/')}"
         }
     } finally {
         fclose(file)
@@ -284,7 +284,7 @@ private fun writeIosAsset(path: String, bytes: ByteArray) {
 
 private fun readIosAsset(path: String): ByteArray {
     val data = NSFileManager.defaultManager.contentsAtPath(path)
-        ?: error("无法读取 iOS 本地媒体边车：${path.substringAfterLast('/')}")
+        ?: error("无法读取歌词或封面文件：${path.substringAfterLast('/')}")
     val size = data.length.toInt()
     return ByteArray(size).also { bytes ->
         if (size > 0) {
@@ -298,6 +298,6 @@ private fun readIosAsset(path: String): ByteArray {
 private fun deleteIosAssetOrThrow(path: String) {
     val manager = NSFileManager.defaultManager
     check(!manager.fileExistsAtPath(path) || manager.removeItemAtPath(path, error = null)) {
-        "无法删除 iOS 本地媒体边车：${path.substringAfterLast('/')}"
+        "无法删除歌词或封面文件：${path.substringAfterLast('/')}"
     }
 }

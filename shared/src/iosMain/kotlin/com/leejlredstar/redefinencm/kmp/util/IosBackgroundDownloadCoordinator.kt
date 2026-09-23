@@ -65,12 +65,12 @@ internal fun iosDownloadCancelledDecision(
 /**
  * One stable background NSURLSession for all iOS song downloads.
  *
- * `taskDescription` contains the validated destination file name. This is intentionally enough to
- * finish moving a system-owned temporary file after iOS relaunches the app and reconnects the
+ * `taskDescription` contains the validated destination file name. That alone is enough to finish
+ * moving a system-owned temporary file after iOS relaunches the app and reconnects the
  * background session, even though the original coroutine no longer exists in that process.
  *
- * A Kotlin `object` cannot inherit from an Obj-C class — Kotlin/Native aborts codegen with
- * "Allocation of Obj-C class ... should have been lowered" — so this stays a plain singleton and
+ * A Kotlin `object` cannot inherit from an Obj-C class (Kotlin/Native aborts codegen with
+ * "Allocation of Obj-C class ... should have been lowered"), so this stays a plain singleton and
  * delegates the protocol conformance to [IosBackgroundDownloadSessionDelegate].
  */
 internal object IosBackgroundDownloadCoordinator {
@@ -126,7 +126,7 @@ internal object IosBackgroundDownloadCoordinator {
         fileName: String,
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
     ): DownloadedSongFile {
-        require(isValidDownloadFileName(fileName)) { "无效的下载文件名" }
+        require(isValidDownloadFileName(fileName)) { "下载文件名无效" }
         return suspendCancellableCoroutine { continuation ->
             val task = session.downloadTaskWithURL(url)
             task.taskDescription = fileName
@@ -152,7 +152,7 @@ internal object IosBackgroundDownloadCoordinator {
                 task.cancel()
                 // Always remove both final and .part files. This also covers the narrow prompt-
                 // cancellation race after didComplete has removed its lifecycle record but before
-                // the resumed coroutine actually receives the successful result.
+                // the resumed coroutine receives the successful result.
                 deleteIosDownloadArtifacts(fileName)
                 if (!activeCancellation) {
                     withStateLock { lifecycles.remove(taskIdentifier) }
@@ -253,7 +253,7 @@ internal object IosBackgroundDownloadCoordinator {
         }
         val fileName = task.taskDescription
         if (fileName == null || !isValidDownloadFileName(fileName)) {
-            return IosDownloadOutcome.Failure(IllegalStateException("后台下载缺少有效文件名"))
+            return IosDownloadOutcome.Failure(IllegalStateException("后台下载任务没有有效的文件名"))
         }
 
         return runCatching {
@@ -266,10 +266,10 @@ internal object IosBackgroundDownloadCoordinator {
                 toURL = NSURL.fileURLWithPath(partPath),
                 error = null,
             )
-            if (!moved) error("无法移动 iOS 后台下载临时文件")
+            if (!moved) error("无法移动后台下载的临时文件")
             if (rename(partPath, targetPath) != 0) {
                 remove(partPath)
-                error("无法原子保存 iOS 后台下载文件")
+                error("无法保存后台下载的文件")
             }
             DownloadedSongFile(
                 fileName = fileName,

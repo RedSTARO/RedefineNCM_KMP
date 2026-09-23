@@ -17,7 +17,7 @@ class ProviderServerSetting(
 ) {
     /**
      * The form an address is stored in: trimmed, with exactly one trailing slash. An empty field
-     * means the default — an empty address left every request without a host.
+     * means the default, because an empty address would leave every request without a host.
      */
     fun normalize(raw: String): String {
         val trimmed = raw.trim()

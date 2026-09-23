@@ -128,17 +128,17 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 
-// The rows the settings and accounts pages are built from. They lived in SettingsScreen, and the
-// accounts page reaching into that file for them made one page depend on the other.
+// The rows the settings and accounts pages are built from. They live here rather than in
+// SettingsScreen so that neither page depends on the other.
 
 /**
  * Group label for a settings section.
  *
  * Settings groups are not page titles. ExpressiveSectionTitle renders at `headlineSmall`, which
- * is the right weight above the home carousels but announced every one of the seven groups here
- * at 25sp, so each one opened a large empty band and the rows below it read as unrelated
- * floating cards. A short accent-coloured label ties a group to the rows underneath it and
- * leaves the page title as the only large type on screen.
+ * is the right weight above the home carousels, but here it would announce every one of the
+ * seven groups at 25sp, so each one would open a large empty band and the rows below it would
+ * read as unrelated floating cards. A short accent-coloured label ties a group to the rows
+ * underneath it and leaves the page title as the only large type on screen.
  */
 @Composable
 internal fun SettingsSectionLabel(

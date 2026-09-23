@@ -3,7 +3,7 @@ package com.leejlredstar.redefinencm.kmp.data.auth
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 
 /**
- * One way of signing in to one provider — a "login source".
+ * One way of signing in to one provider (a "login source").
  *
  * A login source is a plugin in two halves. This half, in the data layer, is the logic: what the
  * provider's backend is asked and what its answers mean. The other half is a
@@ -103,9 +103,9 @@ sealed interface QrLoginPoll {
     data class Failed(val message: String) : QrLoginPoll
 }
 
-/** The user pastes a credential obtained elsewhere — a browser session, another client. */
+/** The user pastes a credential obtained elsewhere: a browser session, another client. */
 interface CredentialTextLoginMethod : LoginMethod {
-    /** The text field's label: "Cookie", "QQ 音乐凭证". */
+    /** The text field's label: "Cookie", "QQ音乐凭证". */
     val fieldLabel: String
 
     /** Where such a credential comes from, shown under the field. */

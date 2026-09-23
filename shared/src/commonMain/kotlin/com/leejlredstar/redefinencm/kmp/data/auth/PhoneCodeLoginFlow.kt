@@ -115,7 +115,7 @@ class PhoneCodeLoginFlow(
                 when (val answer = method.verify(phone, _code.value)) {
                     is PhoneCodeVerify.Confirmed -> host.persist(answer.credential)
                         .onSuccess {
-                            _message.value = "登录成功！"
+                            _message.value = "登录成功"
                             _success.value = true
                             host.onSignedIn()
                         }

@@ -29,11 +29,10 @@ import androidx.graphics.shapes.RoundedPolygon
 /**
  * Material 3 Expressive shape-and-motion primitives.
  *
- * M3 Expressive's defining interaction is shape *morphing* — a surface changing its silhouette
- * in response to touch rather than only its colour or elevation. Material provides that natively
- * for `ButtonGroup`, `ToggleButton` and `SplitButton`; this file supplies the same behaviour for
- * the artwork surfaces this app draws itself, so the language is consistent instead of only
- * appearing on stock components.
+ * M3 Expressive's defining interaction is shape *morphing*: a surface changes its silhouette in
+ * response to touch, not only its colour or elevation. Material provides that natively for
+ * `ButtonGroup`, `ToggleButton` and `SplitButton`; this file supplies the same behaviour for the
+ * artwork surfaces this app draws itself, so the morph is not limited to stock components.
  */
 
 /**
@@ -84,8 +83,8 @@ enum class ExpressiveMorphPair(
      * The **start** shape must be the resting silhouette, because progress `0f` is what the
      * artwork displays whenever it is not being touched. Starting from a cookie leaves every
      * cover permanently scalloped and crops the image badly, so the rest end is
-     * [MaterialShapes.Square] — a rounded square close to the `medium` shape these covers used
-     * before — and only the pressed end is decorative.
+     * [MaterialShapes.Square] (a rounded square close to the covers' `medium` shape) and only
+     * the pressed end is decorative.
      */
     ArtworkBloom({ MaterialShapes.Square }, { MaterialShapes.Cookie12Sided }),
 }
@@ -103,8 +102,8 @@ fun rememberMorphShape(pair: ExpressiveMorphPair, progress: Float): Shape =
 /**
  * Remember a [Shape] morphing between two explicit [MaterialShapes] polygons.
  *
- * Use this when the resting silhouette is chosen at runtime — for example when a surface's shape
- * encodes state — so it cannot be expressed as a fixed [ExpressiveMorphPair].
+ * Use this when the resting silhouette is chosen at runtime (for example when a surface's shape
+ * encodes state), so it cannot be expressed as a fixed [ExpressiveMorphPair].
  */
 @Composable
 fun rememberMorphShape(
@@ -141,7 +140,7 @@ fun rememberPressMorphProgress(interactionSource: InteractionSource): State<Floa
 }
 
 /**
- * Determinate wavy progress — the Expressive replacement for a flat linear bar.
+ * Determinate wavy progress, the Expressive replacement for a flat linear bar.
  *
  * Centralised so every progress surface in the app (downloads, recognition, caching) shares one
  * amplitude and colour treatment.

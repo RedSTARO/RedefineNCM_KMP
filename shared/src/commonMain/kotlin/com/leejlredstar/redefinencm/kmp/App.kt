@@ -138,9 +138,8 @@ import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 /**
- * The three tabs: recommendations, search and the library. Settings used to take the third slot
- * while search was reachable from the recommendations page only; settings is a page now, opened
- * from the library and from the foot of the desktop sidebar.
+ * The three tabs: recommendations, search and the library. Settings is a page, opened from the
+ * library and from the foot of the desktop sidebar.
  */
 private sealed interface TabDest {
     /** Left to right along the bar; the page transition travels the same way. */
@@ -322,8 +321,8 @@ fun App() {
  * Expressive navigation affordance for the floating toolbar.
  *
  * Uses [ToggleButton] instead of a plain icon button so selection carries Material's own shape
- * morph — the silhouette relaxes between round and squared as the item becomes checked. That
- * morph replaces the pill indicator a `NavigationBarItem` used to draw behind the icon, and the
+ * morph: the silhouette relaxes between round and squared as the item becomes checked. The morph
+ * takes the place of the pill indicator a `NavigationBarItem` draws behind the icon, and the
  * label is revealed only on the selected item so the toolbar stays compact on narrow windows.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -367,8 +366,8 @@ private fun AppContent(
             val currentMedia by player.currentMedia.collectAsState()
             val chromeAccentSource = currentMedia?.artworkUri
             val defaultChromeAccent = MaterialTheme.colorScheme.primaryContainer
-            // Keyed on the artwork only: keyed on the theme's default as well, switching between
-            // light and dark threw away the colour taken from the cover until the next song.
+            // Keyed on the artwork only. Keying on the theme's default as well would make a
+            // light/dark switch throw away the colour taken from the cover until the next song.
             var rawChromeAccent by remember(chromeAccentSource) { mutableStateOf<Color?>(null) }
             val chromeAccent by animateColorAsState(
                 targetValue = rawChromeAccent ?: defaultChromeAccent,
@@ -488,8 +487,9 @@ private fun AppContent(
                 mainViewModel.consumeUpdateMessage()
             }
 
-            // The local library answers from wherever it was asked — a song menu on any page — so
-            // its messages use the app's snackbar, and its "add to a playlist" dialog is hosted here.
+            // The local library answers from wherever it was asked (a song menu on any page),
+            // so its messages use the app's snackbar, and its "add to a playlist" dialog is
+            // hosted here.
             val localLibraryViewModel: LocalLibraryViewModel = koinInject()
             val localLibraryMessage by localLibraryViewModel.message.collectAsState()
             LaunchedEffect(localLibraryMessage) {
@@ -504,8 +504,8 @@ private fun AppContent(
             }
             AddToLocalPlaylistDialog(localLibraryViewModel)
 
-            // A track that resolved to nothing used to leave the player silent with no word of
-            // why. The reason comes from the provider that failed, once per failure.
+            // Say why a track resolved to nothing instead of leaving the player silent. The
+            // reason comes from the provider that failed, once per failure.
             val playbackFailure by nowPlayingViewModel.playbackFailure.collectAsState()
             LaunchedEffect(playbackFailure?.sequence) {
                 val failure = playbackFailure ?: return@LaunchedEffect
@@ -540,9 +540,8 @@ private fun AppContent(
                 nowPlayingViewModel.consumeSourceSwitchMessage()
             }
 
-            // The navigation stays on the pages opened from a tab; it used to vanish on every one,
-            // so changing tabs meant backing out first. The player, the lyrics and sign-in are
-            // full-screen and still hide it.
+            // The navigation stays on the pages opened from a tab, so changing tabs never means
+            // backing out first. The player, the lyrics and sign-in are full-screen and hide it.
             val showTabs = !hidesNavigation(pushedStack.lastOrNull())
             val tabs = remember {
                 listOf(
@@ -585,8 +584,8 @@ private fun AppContent(
                     // The toolbar floats over the content instead of occupying a Scaffold
                     // bottomBar, so Scaffold reserves nothing for it and screens are handed this
                     // clearance directly. navigationBars is added because the Scaffold runs with
-                    // contentWindowInsets = 0 and a floating toolbar carries no insets of its own
-                    // — without it the pill sits under the system gesture bar on phones.
+                    // contentWindowInsets = 0 and a floating toolbar carries no insets of its own;
+                    // without it the pill sits under the system gesture bar on phones.
                     val systemNavInset = WindowInsets.navigationBars
                         .asPaddingValues()
                         .calculateBottomPadding()
@@ -595,18 +594,18 @@ private fun AppContent(
                     } else {
                         0.dp
                     }
-                    // One bottom clearance for every page: the floating toolbar (when shown) plus
-                    // the mini player that floats above it. Pages used to add their own trailing
-                    // spacers on top of this, which left a dead band at the end of some lists and
-                    // none at all under search results.
+                    // One bottom clearance for every page, search results included: the
+                    // floating toolbar (when shown) plus the mini player that floats above it.
+                    // Pages do not add their own trailing spacers on top of this, which would
+                    // leave a dead band at the end of the list.
                     val miniPlayerClearance = if (showMiniPlayer) MiniPlayerClearance else 0.dp
                     val screenPadding = PaddingValues(bottom = contentBottomInset + miniPlayerClearance)
                     val toolbarScrollBehavior = FloatingToolbarDefaults.exitAlwaysScrollBehavior(
                         exitDirection = FloatingToolbarExitDirection.Bottom,
                     )
                     // The toolbar's scrolled-away state belongs to the page that scrolled it.
-                    // Without this reset a page reached by navigation opened with no navigation
-                    // bar until the user happened to scroll.
+                    // Without this reset a page reached by navigation would open with no
+                    // navigation bar until the user happened to scroll.
                     LaunchedEffect(rootDest) {
                         toolbarScrollBehavior.state.offset = 0f
                     }
@@ -621,14 +620,14 @@ private fun AppContent(
                                 enter = miniPlayerEnterTransition(),
                                 exit = miniPlayerExitTransition(),
                             ) {
-                                // Scaffold no longer reserves the toolbar's height, so the FAB
+                                // Scaffold does not reserve the toolbar's height, so the FAB
                                 // has to step over the floating pill itself.
                                 Box(
                                     Modifier
                                         .padding(bottom = contentBottomInset)
                                         .graphicsLayer {
                                             // Follow the toolbar down as it scrolls away, so no
-                                            // empty band is left where it used to be.
+                                            // empty band is left where it was.
                                             if (bottomNavVisible) {
                                                 val state = toolbarScrollBehavior.state
                                                 val limit = state.offsetLimit
@@ -978,8 +977,8 @@ private fun DesktopSidebarContent(
         unselectedIconColor = accentPalette.secondaryOnQuietContainer,
         unselectedTextColor = accentPalette.secondaryOnQuietContainer,
     )
-    // Expanded, an item is a pill as wide as its label; filling the width centred it, out of
-    // line with the app name and the section title above. Collapsed, it centres in the rail.
+    // Expanded, an item is a pill as wide as its label; filling the width would centre it, out
+    // of line with the app name and the section title above. Collapsed, it centres in the rail.
     val railItemModifier = if (expandedContentVisible) Modifier else Modifier.fillMaxWidth()
 
     Column(modifier = Modifier.fillMaxHeight()) {
@@ -1035,8 +1034,8 @@ private fun DesktopSidebarContent(
                     colors = itemColors,
                 )
             }
-            // The tools stay reachable with the rail collapsed. They used to exist only in the
-            // expanded rail, so downloads took two clicks and a scrim from any page.
+            // The tools stay reachable with the rail collapsed, so downloads is one click from
+            // any page instead of two clicks and a scrim.
             if (expandedContentVisible) {
                 Text(
                     text = "工具",
@@ -1250,9 +1249,9 @@ private fun isToolPage(dest: PushedDest): Boolean =
  * Tabs travel along the bar: going right brings the next page in from the right and pushes the
  * one leaving out to the left, and going back reverses it.
  *
- * It was a plain cross-fade — "tabs are peers, not a sequence" — which is true of the pages but
- * not of the bar, where they sit in a fixed order the reader can see. A fade left every switch
- * looking the same, so nothing said which way you had moved.
+ * A plain cross-fade would treat the tabs as peers with no order. That is true of the pages but
+ * not of the bar, where they sit in a fixed order the reader can see. A fade also makes every
+ * switch look the same, so nothing says which way you moved.
  *
  * Shared axis X: a twelfth of the width, not a page-width push, because these are still peers
  * rather than a stack. The fade carries the change; the travel only gives it a direction.

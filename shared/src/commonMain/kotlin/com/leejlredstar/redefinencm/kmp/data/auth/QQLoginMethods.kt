@@ -24,8 +24,8 @@ class QQQrLoginMethod(
     override val scanHint: String = kind.scanHint
 
     override suspend fun start(): QrLoginSession {
-        val code = api.qrCodeStart(kind.loginType) ?: throw LoginMethodException("QQ音乐后端无响应")
-        if (code.identifier.isBlank() || code.data.isBlank()) throw LoginMethodException("后端未返回二维码")
+        val code = api.qrCodeStart(kind.loginType) ?: throw LoginMethodException("QQ音乐服务器无响应")
+        if (code.identifier.isBlank() || code.data.isBlank()) throw LoginMethodException("服务器未返回二维码")
         val png = runCatching { decodeBase64Image(code.data) }
             .getOrElse { throw LoginMethodException("二维码数据无法解析") }
         return QrLoginSession(token = code.identifier, imagePng = png)
@@ -42,12 +42,12 @@ class QQQrLoginMethod(
                 ?.let(QQCredential::fromGateway)
                 ?.takeIf { it.isSignedIn }
                 ?.let { QrLoginPoll.Confirmed(it.toCookieHeader()) }
-                ?: QrLoginPoll.Failed("登录成功但后端未返回凭证")
+                ?: QrLoginPoll.Failed("登录成功，但服务器未返回凭证")
             EventWaiting -> QrLoginPoll.Waiting()
             EventScanned -> QrLoginPoll.Scanned
             EventTimeout -> QrLoginPoll.Expired
             EventRefused -> QrLoginPoll.Refused
-            else -> QrLoginPoll.Failed("后端返回未知状态 (${status.event})")
+            else -> QrLoginPoll.Failed("服务器返回了未知状态（${status.event}）")
         }
     }
 
@@ -74,13 +74,13 @@ class QQPhoneCodeLoginMethod(private val api: QQMusicApi) : PhoneCodeLoginMethod
 
     override suspend fun sendCode(phone: String): PhoneCodeSend {
         val number = phone.toLongOrNull() ?: return PhoneCodeSend.Failed("手机号格式不正确")
-        val answer = api.phoneSendCode(number) ?: throw LoginMethodException("QQ音乐后端无响应")
+        val answer = api.phoneSendCode(number) ?: throw LoginMethodException("QQ音乐服务器无响应")
         return when (answer.event) {
             SendEventSent -> PhoneCodeSend.Sent
             SendEventCaptcha -> PhoneCodeSend.Blocked("QQ 要求先完成滑块验证，应用内无法完成；请改用扫码登录")
             SendEventFrequency -> PhoneCodeSend.Failed("验证码发送过于频繁，请稍后再试")
             else -> PhoneCodeSend.Failed(
-                answer.info?.takeIf(String::isNotBlank) ?: "验证码发送失败 (${answer.event})",
+                answer.info?.takeIf(String::isNotBlank) ?: "验证码发送失败（${answer.event}）",
             )
         }
     }
@@ -90,11 +90,11 @@ class QQPhoneCodeLoginMethod(private val api: QQMusicApi) : PhoneCodeLoginMethod
         // The gateway answers a non-zero code for a wrong or stale code, which the client reports
         // as null; a dead gateway reads the same way, so the message names both.
         val credential = api.phoneAuthorize(number, code)
-            ?: return PhoneCodeVerify.Failed("验证码错误、已过期，或后端无响应")
+            ?: return PhoneCodeVerify.Failed("验证码错误或已过期，也可能是服务器无响应")
         return QQCredential.fromGateway(credential)
             .takeIf { it.isSignedIn }
             ?.let { PhoneCodeVerify.Confirmed(it.toCookieHeader()) }
-            ?: PhoneCodeVerify.Failed("后端未返回凭证")
+            ?: PhoneCodeVerify.Failed("服务器未返回凭证")
     }
 
     private companion object {
@@ -109,9 +109,9 @@ class QQCredentialTextLoginMethod : CredentialTextLoginMethod {
     override val id: String = "qq.credential"
     override val provider: MusicProviderId = MusicProviderId.QQ
     override val displayName: String = "手动输入"
-    override val fieldLabel: String = "QQ 音乐凭证"
+    override val fieldLabel: String = "QQ音乐凭证"
     override val supportingText: String =
-        "可粘贴 y.qq.com 登录后的 Cookie（含 uin 与 qm_keyst），或网关返回的 Credential JSON"
+        "可粘贴 y.qq.com 登录后的 Cookie（含 uin 与 qm_keyst），或服务器返回的 Credential JSON"
 
     override fun normalize(raw: String): Result<String> {
         if (raw.isBlank()) return Result.success("")

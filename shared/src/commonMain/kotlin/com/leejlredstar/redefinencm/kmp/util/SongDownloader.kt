@@ -29,7 +29,7 @@ internal fun extensionFromUrl(url: String): String =
         .ifBlank { "mp3" }
 
 /**
- * 平台文件写入器。不要在 actual 中再调用 Android 系统 DownloadManager。
+ * 平台文件写入器。不要在 actual 中调用 Android 系统 DownloadManager。
  *
  * actual 只做一件事：把 [item.url] 流式写到平台下载目录，并通过 [onProgress] 上报字节数。
  */

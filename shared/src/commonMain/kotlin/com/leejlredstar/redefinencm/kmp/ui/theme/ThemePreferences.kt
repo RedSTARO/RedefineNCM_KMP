@@ -25,10 +25,10 @@ enum class ThemeMode(val wireValue: String, val displayName: String) {
 /**
  * The theme the user picked, read by every [RedefineNCMTheme].
  *
- * The app used to follow the system's light or dark setting with no way to choose, and never
- * offered Android 12's wallpaper colours. A shared holder rather than a parameter because the
- * theme is applied in several roots — the app, the desktop window chrome and its lyric window,
- * the Android permission dialog — and all of them have to agree.
+ * The user picks light, dark or the system's setting, and on Android 12 and later can use the
+ * wallpaper's colours. A shared holder rather than a parameter because the theme is applied in
+ * several roots (the app, the desktop window chrome and its lyric window, the Android permission
+ * dialog), and all of them have to agree.
  */
 object ThemePreferences {
     private val _mode = MutableStateFlow(ThemeMode.System)

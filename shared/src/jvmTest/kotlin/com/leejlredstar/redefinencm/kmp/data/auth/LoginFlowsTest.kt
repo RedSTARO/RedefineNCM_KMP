@@ -96,7 +96,7 @@ class LoginFlowsTest {
         assertEquals(listOf("musicid=1; musickey=k"), host.persisted)
         assertTrue(flow.success.value)
         assertEquals(1, host.signedInCalls)
-        assertEquals("登录成功！", flow.status.value)
+        assertEquals("登录成功", flow.status.value)
         assertEquals(3, method.polls)
     }
 
@@ -143,12 +143,12 @@ class LoginFlowsTest {
         runCurrent()
         advanceTimeBy(2_100)
         runCurrent()
-        assertEquals("等待后端响应…", flow.status.value)
+        assertEquals("等待服务器响应…", flow.status.value)
         assertEquals("", flow.error.value)
 
         advanceUntilIdle()
         assertEquals(6, method.polls)
-        assertEquals("QQ音乐后端无响应", flow.error.value)
+        assertEquals("QQ音乐服务器无响应", flow.error.value)
         assertFalse(flow.success.value)
         assertTrue(host.persisted.isEmpty())
     }
@@ -198,7 +198,7 @@ class LoginFlowsTest {
 
         flow.cancel()
         assertNull(flow.imagePng.value)
-        assertEquals("点击生成二维码", flow.status.value)
+        assertEquals("点按生成二维码", flow.status.value)
         assertFalse(flow.loading.value)
 
         advanceUntilIdle()

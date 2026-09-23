@@ -137,11 +137,11 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.ThemePreferences
 import com.leejlredstar.redefinencm.kmp.ui.theme.dynamicColorSupported
 
 /**
- * The lyric surface's capabilities, as this target actually has them.
+ * The lyric surface's capabilities, as this target has them.
  *
- * Settings used to ask the surface two booleans about itself and then call members every target
- * had to declare. A capability is a type now: a target that cannot switch its lyric surface off
- * simply is not an [OptionalLyricSurface], and these are null there.
+ * A capability is a type, so no target has to declare members for what it cannot do: a target
+ * that cannot switch its lyric surface off is not an [OptionalLyricSurface], and these are null
+ * there.
  */
 private val optionalLyricSurface: OptionalLyricSurface? = lyricSurface as? OptionalLyricSurface
 
@@ -203,8 +203,8 @@ fun SettingsScreen(
     var showImportConfirmation by remember { mutableStateOf(false) }
     val accountsSummary by accountsViewModel.summary.collectAsState()
     // Results of saving, importing and exporting appear at the bottom, beside the controls that
-    // cause them; a banner at the top of the page was off screen by the time the backup buttons
-    // were reached.
+    // cause them; a banner at the top of the page would be off screen by the time the backup
+    // buttons are reached.
     val snackbarHostState = remember { SnackbarHostState() }
     var settingsMessage by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(settingsMessage) {
@@ -368,11 +368,11 @@ fun SettingsScreen(
     val launchExport = rememberExportFileLauncher()
     val settingsPalette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
 
-    // The page title is a real LargeFlexibleTopAppBar rather than a hand-rolled hero Box. The
-    // bar owns the collapse: it starts large and shrinks to a compact title as the page scrolls,
-    // which a fixed 188dp gradient header could not do. Its container is transparent so
-    // ExpressivePage's gradient still reads through, and the Scaffold here exists only to give
-    // the bar somewhere to live and to hand back its measured height.
+    // The page title is a LargeFlexibleTopAppBar rather than a hand-rolled hero Box. The bar
+    // owns the collapse: it starts large and shrinks to a compact title as the page scrolls,
+    // which a fixed 188dp gradient header cannot do. Its container is transparent so
+    // ExpressivePage's gradient reads through, and the Scaffold here exists only to give the
+    // bar somewhere to live and to hand back its measured height.
     val appBarScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     ExpressivePage(
         accentPalette = settingsPalette,
@@ -489,11 +489,11 @@ fun SettingsScreen(
                 // recommendation, search results and downloads.
                 SettingsSwitch(
                     replacePlaylist,
-                    "点击列表中的歌曲时播放整个列表",
+                    "点按列表中的歌曲时播放整个列表",
                     settingsPalette,
                     index = 1 + outputDeviceRows,
                     count = playbackSettingCount,
-                    supportingText = "关闭时只播放点中的那一首",
+                    supportingText = "关闭时只播放点按的那一首",
                 ) { v ->
                     replacePlaylist = v
                     persistSettings({ settings.setBoolean(SettingKeys.REPLACE_PLAYLIST, v) })
@@ -672,7 +672,7 @@ fun SettingsScreen(
                 val trayRows = if (isDesktop) 1 else 0
                 val themeRows = if (dynamicColorSupported) 2 else 1
                 val generalCount = 3 + trayRows + themeRows
-                // The app followed the system's light or dark setting with no say in it.
+                // The user picks light or dark here, or leaves it to the system.
                 SettingsDropdownRow(
                     label = "主题",
                     valueLabel = themeMode.displayName,
@@ -716,7 +716,7 @@ fun SettingsScreen(
                         settingsPalette,
                         index = themeRows + 1,
                         count = generalCount,
-                        supportingText = "播放不会中断；点托盘图标重新打开窗口，在托盘菜单里选「退出」才会退出",
+                        supportingText = "播放不会中断；点按托盘图标重新打开窗口，在托盘菜单里选「退出」才会退出",
                     ) { v ->
                         closeToTray = v
                         persistSettings({ settings.setBoolean(SettingKeys.DESKTOP_CLOSE_TO_TRAY, v) })
@@ -744,8 +744,8 @@ fun SettingsScreen(
                 SettingsSectionLabel("备份", settingsPalette)
                 // Deliberately two buttons, not a ButtonGroup. ButtonGroupScope.clickableItem
                 // takes `label: String` plus an `icon` composable and rendered nothing at all
-                // here — verified on device with and without an icon, scrolled to the end of the
-                // list — so the group is not usable for two text-labelled actions in this
+                // here (verified on device with and without an icon, scrolled to the end of the
+                // list), so the group is not usable for two text-labelled actions in this
                 // Compose Multiplatform build.
                 SettingsButton("导出设置", settingsPalette, index = 0, count = 2) {
                     // The local account's playlists travel with the settings (AGENTS.md D6).
@@ -852,16 +852,15 @@ private fun SettingsHero(accentPalette: ContentAccentPalette) {
 /**
  * A settings row that opens a menu.
  *
- * Setting name leading, current value trailing — the M3 list-item arrangement. The old
- * label-over-value stack with a caret read as a filled text field, so those rows looked like
- * inputs sitting among the switch rows instead of like the same kind of row.
+ * Setting name leading, current value trailing: the M3 list-item arrangement. A label-over-value
+ * stack with a caret reads as a filled text field, which makes such rows look like inputs among
+ * the switch rows instead of like the same kind of row.
  *
- * Every dropdown in this screen draws through here. Four of them had their own copy of the
- * surface, the row and the menu, and the copies had drifted: one still used the rejected stacked
- * arrangement, sat on the pre-morph shape helper, and had no minimum touch target.
+ * Every dropdown in this screen draws through here rather than keeping its own copy of the
+ * surface, the row and the menu; separate copies drift apart.
  *
  * @param valueLabel what the row shows for the current choice. The caller supplies it because a
- *   choice is not always one of [options] — a saved audio device can be gone.
+ *   choice is not always one of [options]: a saved audio device can be gone.
  * @param menuLabel the menu has room to say what the compact row cannot.
  * @param onExpandedChange for options that are enumerated fresh each time the menu opens.
  */
@@ -925,8 +924,8 @@ private fun <T> SettingsDropdownRow(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.widthIn(max = valueMaxWidth),
             )
-            // Up/down arrows: this row opens a menu in place. A right chevron promised a new
-            // page and then opened a menu.
+            // Up/down arrows: this row opens a menu in place. A right chevron would promise a
+            // new page and then open a menu.
             Icon(
                 AppIcons.UnfoldMore,
                 contentDescription = null,
@@ -976,7 +975,7 @@ private fun SettingsDropdown(
 
 /**
  * What a quality above the account's entitlement does. The list offers every tier; without this
- * the VIP-only ones looked like they would simply play.
+ * the VIP-only ones would look as if they play like the rest.
  */
 private const val QualityAvailabilityNote = "账号没有对应权限时，会得到能播放的最高音质"
 

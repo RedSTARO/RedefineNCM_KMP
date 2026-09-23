@@ -46,8 +46,8 @@ expect object LocalMediaAssetStorage {
      * [inspect] for every id in [songIds] from one listing of the store.
      *
      * Reconciling the download queue with the local library inspects every local song. Doing
-     * that one song at a time listed the whole download directory once per song: with a few
-     * hundred songs beside a couple of thousand sidecars that was over a million directory
+     * that one song at a time lists the whole download directory once per song: with a few
+     * hundred songs beside a couple of thousand sidecars, that comes to over a million directory
      * entries materialised per sync, several seconds of I/O and half a gigabyte of garbage.
      */
     suspend fun inspectAll(songIds: Collection<Long>): Map<Long, LocalMediaAssetSnapshot>

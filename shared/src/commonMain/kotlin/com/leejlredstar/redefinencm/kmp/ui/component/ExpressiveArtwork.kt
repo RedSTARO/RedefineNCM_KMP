@@ -25,7 +25,7 @@ import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
  * Palette extraction stays tied to this visible request through [onImageLoaded]; callers do not
  * need a second hidden image request.
  *
- * Passing [pressInteractionSource] — the same source given to the enclosing clickable — opts the
+ * Passing [pressInteractionSource] (the same source given to the enclosing clickable) opts the
  * artwork into the expressive shape morph: the frame blooms from a soft squircle into a
  * scalloped cookie while held, then springs back on release. It is off by default so callers
  * that are not interactive keep a plain rectangle and pay nothing for the morph path.

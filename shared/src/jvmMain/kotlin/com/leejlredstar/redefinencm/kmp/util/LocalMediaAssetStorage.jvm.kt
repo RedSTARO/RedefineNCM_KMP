@@ -139,7 +139,7 @@ actual object LocalMediaAssetStorage {
     }
 }
 
-private const val JVM_DOWNLOAD_DIRECTORY_LABEL = "桌面下载路径"
+private const val JVM_DOWNLOAD_DIRECTORY_LABEL = "下载目录"
 
 private fun ensureJvmAssetDirectory(): File =
     ensureLocalMediaAssetDirectory(jvmDownloadDirectory(), JVM_DOWNLOAD_DIRECTORY_LABEL)

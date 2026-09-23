@@ -41,7 +41,7 @@
 7. `SettingsBackupData` 的字段与导入导出。
 8. `SettingsScreen` 里的「启用」开关与后端地址（QQ 目前是写死的一段）。
 
-2–5 在 `Modules.kt` 的四个列表里分别登记，漏登由运行时的 `require(...)` / `error(...)` 发现（`CredentialStore.require`、`ProviderLoginDescriptorRegistry.require`）。6–8 没有集中入口。
+第 2 至 5 项分别在 `Modules.kt` 的四个列表里登记，漏登的项由运行时的 `require(...)` / `error(...)` 发现（`CredentialStore.require`、`ProviderLoginDescriptorRegistry.require`）。第 6 至 8 项没有集中入口。
 
 ### 1.3 网易云专属功能的判定方式
 
@@ -70,13 +70,13 @@
 | P5 | 取流失败不给原因：VIP 限制（网关 `result 104003`）、QQ 已关闭（`isAvailable()` 为 false）、网关不可达，在 `QQMusicApi.songUrl` / `QQProvider.streamUrl` 处都变成 `null`；Android 抛 `IOException("Failed to resolve stream URL…")`，桌面置 `PlayerState.ERROR`，界面不说明是哪一种。 | `QQMusicApi.kt:66-74`，`QQProvider.kt:104-112`，`RedirectingDataSource.kt:42-43`，`JvmMediaPlayer.kt:403-409` | 摩擦 |
 | P6 | 歌手 / 专辑菜单对 QQ 曲目禁用点击（`enabled = songId != null`）。同一类「不支持」，这里是禁用，P3 是可点无反应，P1 / P2 是报错。 | `NowPlayingScreen.kt:535-548` | 一致性 |
 
-P1–P6 同出一处：没有一个地方能回答「当前曲目支持哪些功能」，每个功能各自解析 id、各自决定失败时的表现（1.3）。
+P1 至 P6 同出一处：没有一个地方能回答「当前曲目支持哪些功能」，每个功能各自解析 id、各自决定失败时的表现（1.3）。
 
 ### 2.2 搜索聚合
 
 | # | 现象 | 位置 | 影响 |
 |---|---|---|---|
-| S1 | 翻页用一个共享的 `searchOffset`，每次对所有可用平台请求同一 offset。第一页失败的平台，在「加载更多」时直接被请求第二页，它的第一页不会再出现；第一页已不足 30 条（已到底）的平台仍被继续请求。加载更多时只有全部平台都失败才提示，单个平台失败无提示。`ProviderSearchPagingTest` 只覆盖两个平台都返回满页的情况。 | `MainViewModel.kt:750-770`，`ProviderSearchPagingTest.kt:26-37` | 缺陷 |
+| S1 | 翻页用一个共享的 `searchOffset`，每次对所有可用平台请求同一 offset。「加载更多」会直接向第一页失败的平台请求第二页，该平台的第一页不会再出现；第一页已不足 30 条（已到底）的平台仍会继续收到请求。加载更多时只有全部平台都失败才提示，单个平台失败无提示。`ProviderSearchPagingTest` 只覆盖两个平台都返回满页的情况。 | `MainViewModel.kt:750-770`，`ProviderSearchPagingTest.kt:26-37` | 缺陷 |
 | S2 | 合并视图按平台交替排列，不识别跨平台的同一首歌；同一首热门歌曲可能在第 1、2 位各出现一次。【推断】 | `MusicProviderRegistry.kt:122-133` | 摩擦 |
 | S3 | 在合并视图点一首歌，整个交替列表进入播放队列，队列里混有网易云和 QQ 曲目，其中的 QQ 曲目逐首遇到 2.1 的情况。按平台分组视图只放入该组。 | `SearchScreen.kt:239-248`，`SearchScreen.kt:286-296` | 摩擦 |
 | S4 | 搜索建议和热搜只来自网易云（`repo.searchSuggest`、`repo.searchHot`）。 | `MainViewModel.kt:835-854` | 一致性 |
@@ -144,7 +144,7 @@ P1–P6 同出一处：没有一个地方能回答「当前曲目支持哪些功
 
 按依赖关系排列，不代表优先级。每条标出对应的发现。
 
-### R1 平台能力模型（P1–P6、1.3）
+### R1 平台能力模型（P1 至 P6、1.3）
 
 在平台层声明能力，界面和 ViewModel 查询能力，替代各处解析 id：
 
@@ -205,7 +205,7 @@ S5：给网易云加与 QQ 相同的启用开关（默认开），`isAvailable()
 
 每个平台一张卡片：启用开关、后端地址、账号、手动凭证。删除设置页的 QQ 段和两处后端地址输入，设置页的摘要按 descriptor 列表生成。后端地址的规范化只保留一个函数，由账号页和登录页共用（或登录页不再提供地址编辑）。账号页对未启用的平台显示「未启用」。
 
-### R6 续期（C1–C4）
+### R6 续期（C1 至 C4）
 
 - 以凭证指纹为键记录「已检查」，凭证变化后重新检查。
 - 写回前比较：`slot.write` 增加期望值参数（或提供 `compareAndSet(expected, new)`），当前值已经变了就放弃写回。
@@ -236,7 +236,7 @@ class ProviderModule(
 )
 ```
 
-- 得到：漏登记在构造时就不可能发生；设置页、账号页、备份可以按包遍历，1.2 的第 6–8 项不再逐平台手写。
+- 收益：漏登记在构造时就不可能发生；设置页、账号页、备份可以按包遍历，1.2 的第 6 至 8 项不再逐平台手写。
 - 代价：现有四个注册表的调用方都要改；只有两个平台时收益有限，接入第三个平台时才明显。
 - 属于取舍，列入第 6 节。
 
@@ -279,7 +279,7 @@ AGENTS.md D6 第 244 行的「eight files」与现状（14 个）不符；「Sti
 
 ## 7. 处理状态（2026-09-23）
 
-第 6 节的 9 项由用户委托决定，决定记录在 AGENTS.md D6「Decisions of 2026-09-23」。下表列每条发现的处理与所在提交。已编译 Android / Desktop / Web / iOS 源码，`:shared:jvmTest` 与 `:shared:wasmJsBrowserTest` 通过；未在真机运行界面。
+第 6 节的 9 项由用户委托代为决定，决定记录在 AGENTS.md D6「Decisions of 2026-09-23」。下表列每条发现的处理与所在提交。已编译 Android / Desktop / Web / iOS 源码，`:shared:jvmTest` 与 `:shared:wasmJsBrowserTest` 通过；未在真机运行界面。
 
 ### 7.1 待决定项的决定
 
@@ -299,33 +299,33 @@ AGENTS.md D6 第 244 行的「eight files」与现状（14 个）不符；「Sti
 
 | 发现 | 处理 | 提交 |
 |---|---|---|
-| P1–P4、P6 | 能力模型；歌词、歌曲详情为 `Unsupported` 状态，评论、歌手菜单按能力禁用；心形改为写入本地喜欢 | `5f9f76d`、`2b6dd57` |
+| P1 至 P4、P6 | 能力模型；歌词、歌曲详情为 `Unsupported` 状态，评论、歌手菜单按能力禁用；心形改为写入本地喜欢 | `5f9f76d`、`2b6dd57` |
 | P5 | `StreamResolution` + 注册表旁路通道；播放失败原因以提示条显示 | `5f9f76d` |
 | S1、S5 | 每平台游标；失败平台重试原页；部分失败行可重试 | `7a20e40` |
 | S2 | 合并视图折叠同曲（严格匹配），可在账号页关闭 | `7a20e40` |
 | S3 | 保持允许（决定 8），来源平台标记 | `5f9f76d` |
 | S4 | 未处理：搜索建议与热搜仍只来自网易云（QQ 网关的对应接口未核对） | — |
-| C1–C4 | `QQCredentialRenewer`：按凭证检查、401 时续期一次并重试、比对写回；有测试 | `5b19a38` |
+| C1 至 C4 | `QQCredentialRenewer`：按凭证检查、401 时续期一次并重试、比对写回；有测试 | `5b19a38` |
 | C5 | 未应答计数移入 `QrLoginFlow` | `5b19a38` |
 | C6 | 见决定 4 | `664959e` |
 | C7 | 注册表改用放行取消的 `providerCall` | `5b19a38` |
 | T1 | 地址统一由 `ProviderServerSetting.normalize` 处理 | `664959e` |
 | T2 | `qqEnabled` 改为可空 | `5b19a38` |
-| U1–U9 | 账号页由注册表驱动，集中平台开关、地址（含检查）、账号、凭证；`AccountsViewModel`；凭证槽可观察并统一「已登录」判定；QQ 账号名取自网关主页；设置行移至 `SettingsRows.kt`；`LocalAccount` 移至 `data/local` | `664959e` |
+| U1 至 U9 | 账号页由注册表驱动，集中平台开关、地址（含检查）、账号、凭证；`AccountsViewModel`；凭证槽可观察并统一「已登录」判定；QQ 账号名取自网关主页；设置行移至 `SettingsRows.kt`；`LocalAccount` 移至 `data/local` | `664959e` |
 | 2.6 平台接口 | `lyric` 接入歌词管线；`playlistDetail` 用于导入平台歌单 | `b24be31`、`2b6dd57` |
 | 2.6 DTO 文件数 | AGENTS.md 更新为 14；未减少（资料库页面的中性模型仍属 D6 未完成项） | 文档提交 |
 | 2.6 可用性字段 | `ProviderTrack.tags`（VIP / 付费 / 无损） | `7a20e40` |
-| F1、F3–F7 | 已实施 | 见上 |
-| F2 | 部分：只做了 VIP / 付费 / 无损标记；「优先显示当前账号能播放的来源」未做——账号对某首歌有无权益，网关在取流之前不会告知 | `7a20e40` |
+| F1、F3 至 F7 | 已实施 | 见上 |
+| F2 | 部分：只做了 VIP / 付费 / 无损标记；「优先显示当前账号能播放的来源」未做，因为网关在取流之前不会告知账号对某首歌有无权益 | `7a20e40` |
 | F8 | 不实施（决定 7） | — |
 
 ### 7.3 实施中对本报告的更正
 
-- 1.3 所列 `NowPlayingViewModel` 的 id 解析实为 11 处：收藏状态同步里的 `mediaId?.toLongOrNull()` 未被原检索式匹配到；动态封面同样是网易云专属功能，已加入能力 `DYNAMIC_COVER`。
+- 1.3 所列 `NowPlayingViewModel` 的 id 解析实为 11 处：原检索式没有匹配到收藏状态同步里的 `mediaId?.toLongOrNull()`；动态封面同样是网易云专属功能，已加入能力 `DYNAMIC_COVER`。
 - 决定 5 原文为「按 `(provider TEXT, raw_id TEXT)` 建表」。Web 端 SQL 驱动只支持单键 JSON 表，实施为一个 JSON 文档表，曲目在文档内按 `(provider, rawId)` 标识；AGENTS.md 已改写该条。
 - 修改歌词管线时发现 `LyricResolver.kt` 中三条错误文案有字符损坏（编码往返所致），已恢复为「现有歌词后端请求失败」「AMLL DB 查询超时」「AMLL DB 的 TTML 无法解析」。
 
 ### 7.4 验证范围
 
-- 已验证：各平台编译；JVM 与浏览器单元测试；对本机 QQ 网关的只读请求——账号主页接口的返回结构、两首真实曲目的 QRC 转换（各 63 行逐字歌词）。
+- 已验证：各平台编译；JVM 与浏览器单元测试；用对本机 QQ 网关的只读请求核对了账号主页接口的返回结构和两首真实曲目的 QRC 转换（各 63 行逐字歌词）。
 - 未验证：Android / iOS / 桌面 / Web 上的界面运行；QQ 账号登录后的续期与 401 重试（无可用账号）；Web 端网关的跨域；换源在真实失败曲目上的端到端表现。

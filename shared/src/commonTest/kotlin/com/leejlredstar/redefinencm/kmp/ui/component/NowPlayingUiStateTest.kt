@@ -10,10 +10,10 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * The derivations the desktop strip and the mini player used to each compute for themselves.
+ * The derivations the desktop strip and the mini player share.
  *
- * Their progress maths had already drifted apart — one divided the clamped position, the other
- * the raw one — so the interesting cases here are the ones where a player reports something the
+ * Separate copies of the progress maths drift apart (one dividing the clamped position, the other
+ * the raw one), so the interesting cases here are the ones where a player reports something the
  * UI has to defend against.
  */
 class NowPlayingUiStateTest {

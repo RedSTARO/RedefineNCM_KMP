@@ -118,7 +118,7 @@ internal actual fun NativeDynamicCoverLayer(
 /**
  * FFmpeg runs off the Compose thread and publishes immutable Skia-backed frame copies.
  * A single decoder stays alive while [setPlaying] is false: no frame is cleared or
- * advanced, which preserves the exact last picture just like HTMLVideoElement.pause().
+ * advanced, which preserves the exact last picture, as HTMLVideoElement.pause() does.
  */
 private class JvmDynamicCoverDecoder(
     private val url: String,

@@ -23,7 +23,7 @@ actual fun platformModule() = module {
     // SQLDelight driver (needs Context for the Android SQLite helper).
     single { DatabaseDriverFactory(androidContext()) }
 
-    // ExoPlayer-backed PlatformPlayer — overrides the InMemoryPlatformPlayer in sharedModule.
+    // ExoPlayer-backed PlatformPlayer. It overrides the InMemoryPlatformPlayer in sharedModule.
     // Must be resolved on the main thread (ExoPlayer requirement); Koin singleton lives for the
     // app lifetime. PlaybackService wraps the same ExoPlayer instance in a MediaSession.
     single<PlatformPlayer> { ExoPlayerPlatformPlayer(androidContext(), get(), get(), get(), get()) }

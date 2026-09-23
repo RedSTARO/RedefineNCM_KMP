@@ -123,9 +123,9 @@ internal fun QueueBottomSheet(
 /**
  * The queue: tap a row to play it, remove it, drag its handle to move it, or clear everything.
  *
- * It used to offer only the tap. A drag reorders a copy of the list drawn here and asks the
- * player for the one move on release, so the rows never wait on the player mid-drag; the copy
- * is dropped when the player's queue comes back.
+ * A drag reorders a copy of the list drawn here and asks the player for the one move on
+ * release, so the rows never wait on the player mid-drag; the copy is dropped when the player's
+ * queue comes back.
  */
 @Composable
 internal fun QueuePanelContent(
@@ -500,8 +500,7 @@ internal fun CommentBottomSheet(
 /**
  * A song's comments, hot or latest, loading the next page on reaching the end.
  *
- * It used to show the first page only — about fifteen of a song's thousands — under a count
- * that was the length of that page.
+ * The header shows the song's total comment count rather than the length of the loaded pages.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -575,10 +574,10 @@ internal fun CommentPanelContent(
                         selected = paging.showHot == hot,
                         onClick = { paging.onShowHot(hot) },
                         shape = SegmentedButtonDefaults.itemShape(index = i, count = 2),
-                        // One quiet outline, the same on both halves. The unselected half used
-                        // to be outlined in `secondaryOnQuietContainer` — a near-white line at
-                        // full strength, which read as a stray border rather than as the edge
-                        // of a control, while the selected half's outline was invisible.
+                        // One quiet outline, the same on both halves. Outlining the unselected
+                        // half in `secondaryOnQuietContainer` gives a near-white line at full
+                        // strength, which reads as a stray border rather than as the edge of a
+                        // control, while the selected half's outline stays invisible.
                         colors = SegmentedButtonDefaults.colors(
                             activeContainerColor = accentPalette.container,
                             activeContentColor = accentPalette.onContainer,
@@ -588,7 +587,7 @@ internal fun CommentPanelContent(
                             inactiveBorderColor = accentPalette.onQuietContainer.copy(alpha = 0.18f),
                         ),
                         // No check glyph: with two options the filled half already says which
-                        // one is showing, and the tick pushed a two-character label off centre.
+                        // one is showing, and the tick pushes a two-character label off centre.
                         icon = {},
                     ) {
                         Text(label)

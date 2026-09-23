@@ -12,10 +12,10 @@ import platform.posix.time
  * On iOS, this bridges to ActivityKit Live Activities for 灵动岛 (Dynamic Island)
  * and Lock Screen lyric display via a shared data mechanism.
  *
- * The actual ActivityKit interaction is done from Swift code in the iOS app target.
+ * The ActivityKit calls themselves are made from Swift code in the iOS app target.
  * This Kotlin object owns the lyric data and exposes a Swift-friendly observer bridge.
  *
- * Architectural note (implemented):
+ * How the pieces fit together:
  * - Kotlin owns the lyric data as a StateFlow and exposes [startObserving]/[stopObserving].
  * - The Swift `LiveActivityManager` (main app) observes it and drives ActivityKit:
  *   `Activity.request` / `activity.update(ContentState)` / `activity.end`.
@@ -24,7 +24,7 @@ import platform.posix.time
  *   Live Activity would require App-Group image caching (TODO).
  *
  * Plain [LyricSurface]. ActivityKit owns whether it appears, so there is nothing for Settings to
- * switch and it had carried six stub members saying so.
+ * switch.
  */
 object IosLiveActivity : LyricSurface {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)

@@ -34,7 +34,7 @@ class DesktopAudioOutputStartupTest {
             setString = { _, _ -> writes++ },
         )
 
-        // Every launch runs this, so the common case must not spend a settings write — and on
+        // Every launch runs this, so the common case must not spend a settings write. On
         // java.util.prefs a write is a registry flush that can fail.
         assertEquals(0, writes)
     }

@@ -13,8 +13,8 @@ import kotlinx.coroutines.withTimeoutOrNull
  * the caller's to renew. Two paths do it:
  *
  * - [ensureFresh] asks `/login/check_expired` before the first call that would use a credential,
- *   once per credential rather than once per process — an account signed in or pasted after the
- *   first QQ call is checked too.
+ *   once per credential rather than once per process, so an account signed in or pasted after
+ *   the first QQ call is checked too.
  * - [renewAfterRejection] runs when the gateway refuses a signed-in request, so a key that expires
  *   mid-session is renewed then rather than at the next launch. Also once per credential, so a
  *   gateway that refuses everything cannot turn every request into a renewal.
@@ -57,7 +57,7 @@ class QQCredentialRenewer(
     /**
      * The gateway refused a request sent with [rejectedCredential]. True when the request is worth
      * sending once more with whatever is stored now: either this call renewed the credential, or
-     * the stored one had already changed — another renewal, or another account — since the request
+     * the stored one had already changed (another renewal, or another account) since the request
      * left.
      */
     suspend fun renewAfterRejection(rejectedCredential: String): Boolean = lock.withLock {

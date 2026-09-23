@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * 播放状态持久化模型（对应原版 Room 的 PlayerStatusEntity + MediaItemData）。
- * 只存元数据与占位 URI 所需的 id —— 真实流 URL 永不持久化（播放时重新解析）。
+ * 只存元数据与占位 URI 所需的 id；真实流 URL 永不持久化（播放时重新解析）。
  */
 @Serializable
 data class PersistedMediaItem(

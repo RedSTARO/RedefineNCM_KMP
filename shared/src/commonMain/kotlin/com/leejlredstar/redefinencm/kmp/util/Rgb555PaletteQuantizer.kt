@@ -8,8 +8,7 @@ import kotlin.math.min
  * Platform-neutral Palette-style extractor used by the Skia-backed Coil targets.
  *
  * Pixels are sampled on an approximately 64 x 64 grid, quantized to RGB555, then scored
- * against the same saturation/luminance targets used by the previous JVM and Web actuals.
- * The pixel reader returns an ARGB Int.
+ * against fixed saturation/luminance targets. The pixel reader returns an ARGB Int.
  */
 internal fun rgb555ThemeColor(
     width: Int,
@@ -73,10 +72,10 @@ internal fun rgb555ThemeColor(
         for (swatch in swatches) {
             val saturation = swatch.saturation
             val luminance = swatch.luminance
-            // A narrow luminance window rejects every swatch on covers that are simply dark or
-            // simply bright, and the caller then falls back to the dominant swatch — usually the
-            // background, so a moody cover produced a flat grey theme. The window is widened and
-            // the distance-from-mid-grey term below still prefers mid tones when they exist.
+            // A narrow luminance window rejects every swatch on a cover that is dark or bright
+            // overall. The caller then falls back to the dominant swatch, usually the background,
+            // and a moody cover gets a flat grey theme. The window is therefore wide, and the
+            // distance-from-mid-grey term below still prefers mid tones when they exist.
             if (
                 saturation !in saturationMin..saturationMax ||
                 luminance !in 0.18f..0.85f

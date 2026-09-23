@@ -2,7 +2,7 @@ package com.leejlredstar.redefinencm.kmp.util
 
 /**
  * Platform-independent settings keys and defaults.
- * Backed by multiplatform-settings on each platform.
+ * Each platform stores them through its [PlatformSettings] actual.
  */
 object SettingKeys {
     // The unprefixed credential keys are NetEase's. They are deliberately not renamed to
@@ -19,7 +19,7 @@ object SettingKeys {
     const val QQ_SERVER_DEFAULT = "http://localhost:8080"
 
     // Held here and sent per request, the same shape as [COOKIE], so one backend can serve several
-    // clients and so the Android build can sign in at all — it has no access to the backend's own
+    // clients and so the Android build can sign in at all: it has no access to the backend's own
     // config file. The value is the gateway's cookie form of its credential (`musicid=…;
     // musickey=…; …`, see QQCredential), whichever login method produced it. Like [COOKIE] it is
     // deliberately absent from the settings backup.
@@ -40,7 +40,7 @@ object SettingKeys {
     const val DOWNLOAD_QUALITY = "downloadQuality"
     const val REPLACE_PLAYLIST = "replacePlaylist"
     // Every read of these three uses the constant, so a screen cannot disagree with its switch.
-    // Tapping a song plays the list from it; one song and silence afterwards was the old default.
+    // Tapping a song plays the list from it; with this off, the song alone replaces the queue.
     const val REPLACE_PLAYLIST_DEFAULT = true
     const val CHECK_UPDATE = "checkUpdate"
     const val SHOW_DOWNLOAD_STATUS = "showDownloadStatus"
@@ -75,7 +75,7 @@ object SettingKeys {
     const val PLAYER_VOLUME = "playerVolume"
     // A per-session override, not a preference: desktop startup resets it so playback follows
     // the current system output device. Left out of the settings backup for the same reason it
-    // is not carried across restarts — it names one machine's hardware at one moment in time.
+    // is not carried across restarts: it names one machine's hardware at one moment in time.
     const val AUDIO_OUTPUT_DEVICE = "audioOutputDevice"
 }
 
@@ -96,10 +96,10 @@ enum class SoundQuality(val displayName: String) {
 /**
  * A platform's persisted key-value store.
  *
- * Each target keeps its own storage format — DataStore stores typed preferences, NSUserDefaults
- * stores native booleans, `java.util.prefs` and `localStorage` store strings — so the typed
- * accessors stay in the expect surface rather than being derived from one raw string getter.
- * Rewriting them onto a common raw format would strand every existing install's saved values.
+ * Each target keeps its own storage format (DataStore stores typed preferences, NSUserDefaults
+ * stores native booleans, `java.util.prefs` and `localStorage` store strings), so the typed
+ * accessors stay in the expect surface instead of being derived from one raw string getter.
+ * Moving them onto a common raw format would strand every existing install's saved values.
  *
  * The suspending reads are not part of that surface: on every platform they mean "wait for the
  * process snapshot, then read it", which [getStringAsync] and friends express once below.
@@ -125,8 +125,9 @@ expect class PlatformSettings {
  * Reads that wait for the persisted snapshot first.
  *
  * Callers that must see the durable value before continuing use these; the synchronous getters
- * are snapshot-only and would return the default before the first load completes. Every platform
- * implemented the same await-then-read three times over, once per value type.
+ * are snapshot-only and would return the default before the first load completes. The
+ * await-then-read is written once here for every platform instead of once per value type in
+ * each actual.
  */
 suspend fun PlatformSettings.getStringAsync(key: String, default: String): String {
     awaitLoaded()

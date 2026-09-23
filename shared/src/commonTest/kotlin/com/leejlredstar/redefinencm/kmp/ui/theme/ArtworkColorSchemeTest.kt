@@ -11,8 +11,8 @@ import kotlin.test.assertTrue
  * The scheme is generated, so it cannot be checked by looking at it: there is one per cover.
  *
  * Two properties stand in for looking. Every colour the app writes on a container has to be
- * readable on it, and no role may carry a hue the cover did not give it — which is the failure
- * that brought this generator about, and the one a forgotten role silently reintroduces, since
+ * readable on it, and no role may carry a hue the cover did not give it. That second failure is
+ * the one this generator exists to prevent, and a forgotten role silently brings it back, since
  * `lightColorScheme()` fills what it is not passed from Material's own purple baseline.
  */
 class ArtworkColorSchemeTest {
@@ -77,7 +77,7 @@ class ArtworkColorSchemeTest {
         "onErrorContainer" to onErrorContainer,
     )
 
-    /** The pairs the app actually draws: a container and the colour written on it. */
+    /** The pairs the app draws: a container and the colour written on it. */
     private fun ColorScheme.readablePairs(): List<Triple<String, Color, Color>> = listOf(
         Triple("primary", primary, onPrimary),
         Triple("primaryContainer", primaryContainer, onPrimaryContainer),

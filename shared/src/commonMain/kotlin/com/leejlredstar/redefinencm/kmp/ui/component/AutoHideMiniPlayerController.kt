@@ -149,7 +149,8 @@ fun AutoHideMiniPlayerController(
     var showLyricDetails by remember { mutableStateOf(false) }
     // A held volume thumb keeps the island open; the auto-hide timer restarts on release.
     var adjustingOutputVolume by remember { mutableStateOf(false) }
-    // So does a mouse resting on it: the island used to vanish from under the pointer.
+    // A mouse resting on the island keeps it open too, so it does not vanish from under the
+    // pointer.
     val islandHoverSource = remember { MutableInteractionSource() }
     val islandHovered by islandHoverSource.collectIsHoveredAsState()
 
@@ -238,9 +239,8 @@ fun AutoHideMiniPlayerController(
         if (lyricCapabilityLevel == null) showLyricDetails = false
     }
 
-    // Keep the host transparent. The legacy Desktop overlay filled this box with an opaque
-    // rectangle to back a second native window; inside NativeAmllScreen that rectangle became
-    // visible around the rounded cards while AnimatedContent scaled between states.
+    // Keep the host transparent. An opaque fill in this box shows around the rounded cards
+    // inside NativeAmllScreen while AnimatedContent scales between states.
     Box(modifier = modifier.fillMaxSize()) {
         AnimatedContent(
             targetState = visible,
@@ -470,7 +470,7 @@ private fun FullLyricControlConsole(
             )
         }
         // A connected button group, not four round buttons inside a fifth container. Nesting
-        // a 0.72 container inside a 0.88 one over a blurred cover left four faint lozenges
+        // a 0.72 container inside a 0.88 one over a blurred cover leaves four faint lozenges
         // floating in a larger lozenge; a button group is the expressive element for a row of
         // peer actions, so the ends carry the capsule radius, the joins are square, and
         // pressing one squeezes its neighbours.
@@ -482,7 +482,7 @@ private fun FullLyricControlConsole(
         val commentsInteraction = remember { MutableInteractionSource() }
         val shuffleInteraction = remember { MutableInteractionSource() }
         // The overload that takes an overflow indicator builds its items itself, through
-        // `clickableItem`, which draws them in the scheme's own colours — the brand green this
+        // `clickableItem`, which draws them in the scheme's own colours: the brand green this
         // row exists to keep off an artwork-tinted page. Four buttons in a 620dp strip have
         // nothing to overflow into anyway.
         @Suppress("DEPRECATION")
@@ -800,8 +800,8 @@ private fun ExpandedPlaybackCard(
                             modifier = Modifier.padding(start = 8.dp),
                         )
                     }
-                    // Collapsing is its own control. It used to be a tap on the cover or the
-                    // title, which people tap expecting something about the song.
+                    // Collapsing is its own control, not a tap on the cover or the title:
+                    // people tap those expecting something about the song.
                     IconButton(onClick = onCollapse) {
                         Icon(AppIcons.KeyboardArrowDown, contentDescription = "收起播放控制")
                     }
@@ -917,8 +917,8 @@ private fun CollapsedProgressController(
         label = "collapsedControllerScale",
     )
     val swipeLabel = when {
-        dragOffsetPx <= -dragThresholdPx * 0.38f -> "释放下一首"
-        dragOffsetPx >= dragThresholdPx * 0.38f -> "释放上一首"
+        dragOffsetPx <= -dragThresholdPx * 0.38f -> "松手播放下一首"
+        dragOffsetPx >= dragThresholdPx * 0.38f -> "松手播放上一首"
         else -> null
     }
     val swipeAlpha by animateFloatAsState(

@@ -58,8 +58,8 @@ data class LocalPlaylist(
 }
 
 /**
- * One track of a local playlist, named by its provider and that provider's own id — no NetEase
- * song id is needed, so a QQ track keeps its place beside a NetEase one.
+ * One track of a local playlist, named by its provider and that provider's own id. It needs no
+ * NetEase song id, so a QQ track keeps its place beside a NetEase one.
  */
 @Serializable
 data class LocalTrack(

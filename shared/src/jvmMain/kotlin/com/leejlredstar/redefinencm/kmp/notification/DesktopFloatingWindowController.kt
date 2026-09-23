@@ -7,10 +7,10 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * The desktop's lyric surface: a floating always-on-top window.
  *
- * Instead of a notification, this drives a floating desktop lyrics window. The window is created
- * by the desktop app's main.kt using Compose Desktop; this object holds the state it renders.
+ * The desktop app's main.kt creates the window with Compose Desktop; this object holds the state
+ * it renders.
  *
- * The only [WindowedLyricSurface] — it is the one surface with a position and a layout of its
+ * The only [WindowedLyricSurface]. It is the one surface with a position and a layout of its
  * own, which is why locking and alignment are its interface rather than members every target has
  * to answer for. Its window state below is desktop-only and deliberately not on any interface.
  */

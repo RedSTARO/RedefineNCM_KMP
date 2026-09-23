@@ -223,7 +223,7 @@ fun PlaylistDetailScreen(
                 tracks != null && songs.isEmpty() -> item(key = "playlist-empty") {
                     ExpressiveStatePanel(
                         title = "歌单里还没有歌曲",
-                        message = "添加歌曲后，它们会显示在这里。",
+                        message = "添加的歌曲会显示在这里。",
                         icon = AppIcons.QueueMusic,
                         accentPalette = accentPalette,
                         modifier = Modifier.padding(horizontal = 16.dp),
@@ -413,8 +413,8 @@ private fun PlaylistHeader(
                 color = accentPalette.secondaryOnQuietContainer,
             )
             Spacer(Modifier.height(20.dp))
-            // Two plain buttons. The download used to be the trailing half of a split button,
-            // the slot Material reserves for opening a menu of the leading action's variants.
+            // Two plain buttons. The download is not the trailing half of a split button: Material
+            // reserves that slot for opening a menu of the leading action's variants.
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,

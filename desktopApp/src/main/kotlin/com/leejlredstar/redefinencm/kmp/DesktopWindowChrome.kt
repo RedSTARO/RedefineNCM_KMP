@@ -117,8 +117,7 @@ internal fun WindowScope.Win10WindowChrome(
                         }
                     },
             ) {
-                // The window's name, where every desktop app shows one; the strip used to be a
-                // blank band above the content.
+                // The window's name, where every desktop app shows one.
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
                     Text(
                         text = "RedefineNCM",

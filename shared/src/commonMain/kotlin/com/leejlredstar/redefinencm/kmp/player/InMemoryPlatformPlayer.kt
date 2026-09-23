@@ -20,8 +20,7 @@ import org.koin.mp.Lockable
  * It is the shared reference implementation of the player contract: queue + shuffle are managed
  * by the unit-tested [PlayQueue], play/pause and a *simulated* position are tracked, and every
  * StateFlow the ViewModels/UI consume is emitted. This lets the whole DI graph + Compose UI run
- * on every target before the native audio backends (Android media3, iOS AVPlayer, JVM audio)
- * exist.
+ * on a target without its native audio backend (Android media3, iOS AVPlayer, JVM audio).
  *
  * Real platform players replace it by binding their own [PlatformPlayer] in `platformModule()`
  * (and removing this default from `sharedModule`, or loading with Koin override). They should

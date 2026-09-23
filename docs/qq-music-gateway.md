@@ -8,7 +8,7 @@ cookies, which is the transport this app already used.
 
 ## Deploy (Windows, native)
 
-Python ≥ 3.10 and `uv`:
+You need Python ≥ 3.10 and `uv`:
 
 ```bash
 git clone https://github.com/L-1124/QQMusicApi.git E:/Repo/QQMusicApi
@@ -18,14 +18,14 @@ uv run --no-sync web/run.py
 ```
 
 It listens on `http://127.0.0.1:8080`; `/swagger` and `/openapi.json` describe every route. Docker
-and WSL recipes are in its `web/README.md`. Point 设置 → 多平台 → QQ 音乐后端地址 at it. The
+and WSL recipes are in its `web/README.md`. Point 设置 → 账号与平台 → QQ音乐服务器地址 at it. The
 app's default is `http://localhost:8080`; an install that saved the old `http://localhost:3200`
-explicitly needs the field changed. Unlike the WSL-hosted predecessor this answers on the IPv4
-loopback, so `localhost` works from the JVM. An Android device reaches it over
+explicitly needs the field changed. Unlike the earlier WSL deployment, this one answers on the
+IPv4 loopback, so `localhost` works from the JVM. An Android device reaches it over
 `adb reverse tcp:8080 tcp:8080`.
 
 Keep it on loopback. It accepts whatever account the caller sends, and if `web/config.toml`
-enables `[credential]` it serves a pooled account to anyone who reaches it.
+enables `[credential]`, it serves a pooled account to anyone who reaches it.
 
 ## Routes the app uses
 
@@ -49,14 +49,14 @@ every host from `/song/get_cdn_dispatch` answered 403.
 ## The credential
 
 The gateway reads the account from request cookies named after its own `Credential` fields:
-`musicid` and `musickey` together are required; `refresh_token`, `refresh_key`, `openid`,
+`musicid` and `musickey` are required together; `refresh_token`, `refresh_key`, `openid`,
 `access_token`, `expired_at`, `unionid` and `str_musicid` let it renew the key. The app stores
 exactly that cookie string under the `qqCookie` setting (excluded from settings backups like the
 NetEase cookie) and sends it on every QQ request.
 
 `QQCredential` also accepts the gateway's `Credential` JSON and a browser cookie copied from
 `y.qq.com` (`uin`/`qm_keyst`, plus the `psrf_*` and `wx*` pairs), and translates both into the
-same stored form. The `o` prefix and zero padding QQ writes on `uin` are stripped.
+same stored form. It strips the `o` prefix and the zero padding that QQ writes on `uin`.
 
 Web/WASM cannot set a `Cookie` header from `fetch`, and the gateway takes the credential nowhere
 else, so the Web build stays anonymous towards QQ.

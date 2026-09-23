@@ -9,16 +9,14 @@ import kotlin.math.PI
 /**
  * The whole Material scheme, generated from the cover that is playing.
  *
- * The app has no brand colour. It used to ship one — a teal green written out as thirteen
- * literals per scheme — and every component that takes its colour from the scheme rather than
- * from a [ContentAccentPalette] drew in it: the switches and sliders in settings, the text
- * buttons, the navigation indicator, the dialogs. On pages tinted from the artwork that green
- * was the one thing on screen with no relation to what was playing.
+ * The app has no brand colour. Every component that takes its colour from the scheme rather
+ * than from a [ContentAccentPalette] draws in it: the switches and sliders in settings, the text
+ * buttons, the navigation indicator, the dialogs. A fixed brand colour there would be the one
+ * thing on an artwork-tinted page with no relation to what is playing.
  *
- * So the scheme itself is derived now: hold the cover's hue, choose a chroma per palette, read
- * off a tone. [seed] is the accent extracted from the current song's artwork; with none — before
- * anything has played — the scheme is neutral, and the app is grey until a cover gives it a
- * colour.
+ * The scheme holds the cover's hue, chooses a chroma per palette and reads off a tone. [seed] is
+ * the accent extracted from the current song's artwork; with none (before anything has played)
+ * the scheme is neutral, and the app is grey until a cover gives it a colour.
  *
  * The error roles are not derived. Red is what an error means, not a brand choice, and a scheme
  * whose errors are tinted by the album cover cannot say "this went wrong" at a glance.
@@ -31,7 +29,7 @@ import kotlin.math.PI
 internal fun artworkColorScheme(seed: Color?, dark: Boolean): ColorScheme {
     val hue = seed?.takeIf { it.alpha > 0f } ?: NeutralSchemeSeed
     // The ceiling is a ceiling, not a target: a cover that is nearly grey has no hue worth
-    // holding, and raising it to the ceiling would invent one out of quantisation noise — the
+    // holding, and raising it to the ceiling would invent one out of quantisation noise. The
     // hue of a grey is whatever its last bit of rounding says it is.
     val available = hue.toOklch().chroma
     fun tone(lightness: Float, ceiling: Float): Color =

@@ -9,12 +9,12 @@ import kotlin.test.assertTrue
 /**
  * What every [PlatformSettings] actual must answer the same way.
  *
- * The storage formats deliberately differ and cannot be unified — DataStore keeps typed
+ * The storage formats deliberately differ and cannot be unified: DataStore keeps typed
  * preferences, NSUserDefaults keeps a native boolean, `java.util.prefs` and `localStorage` keep
  * strings, and rewriting any of them would strand values existing installs already hold. What
- * can be unified is the behaviour callers are entitled to assume, and that had drifted: the Web
- * store read every unrecognised value as `false` where the others fell back to the caller's
- * default.
+ * can be unified is the behaviour callers are entitled to assume. For example, an unrecognised
+ * value must fall back to the caller's default on every store, the Web store included, instead
+ * of reading as `false`.
  *
  * Subclasses supply an isolated store so a test run never touches the developer's real
  * preferences. Android is absent: its DataStore delegate is bound to a fixed file name and its

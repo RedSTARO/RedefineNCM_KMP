@@ -112,7 +112,7 @@ internal expect fun NativeDynamicCoverLayer(
 /**
  * The source's `opacity <n>ms ease` transition, as a Compose spec.
  *
- * Every target faded its video surface with this, spelled out in full each time.
+ * Every target fades its video surface with this.
  */
 @Composable
 internal fun nativeDynamicCoverFadeSpec(
@@ -157,9 +157,8 @@ internal fun ReportNativeDynamicCoverVisibility(
 /**
  * The frame around a platform video surface: the fade, the visibility report and the badge slot.
  *
- * Android, iOS and Desktop each held their own copy of all three. Android's copy had also
- * inlined [DynamicCoverBadge] rather than calling it, so the badge existed twice despite the
- * shared one documenting itself as the single definition.
+ * Android, iOS and Desktop wrap their video surface in this, and the badge it draws is
+ * [DynamicCoverBadge], the single definition.
  *
  * The browser layer does not use this. Its video is a DOM node that owns its own badge and
  * reports its own visibility, so it shares [nativeDynamicCoverFadeSpec] and
@@ -185,7 +184,7 @@ internal fun NativeDynamicCoverScaffold(
     )
     // `setDynamicBackgroundSuppressed(true)` in player.html pauses `#dynamic-bg` without
     // removing its `.visible` class, so a paused full-screen background keeps its last frame
-    // on screen — for instance while the song-wiki dialog is open.
+    // on screen, for instance while the song-wiki dialog is open.
     val videoAlpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
         animationSpec = nativeDynamicCoverFadeSpec(visualSpec, reducedMotion),
@@ -206,8 +205,7 @@ internal fun NativeDynamicCoverScaffold(
  * The "动态封面" pill AMLL shows over `#wiki-cover-video`.
  *
  * Pure Compose with no platform surface of its own, so it is declared once here rather than
- * copied into each target's video layer — the Desktop and iOS copies had drifted into being
- * byte-identical, and Android and Web rendered no badge at all.
+ * copied into each target's video layer.
  */
 @Composable
 internal fun DynamicCoverBadge(modifier: Modifier) {

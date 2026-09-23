@@ -61,8 +61,8 @@ import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 /**
- * An artist: who they are, their fifty most played songs and their albums. There was no page
- * for an artist at all; the names on songs and on the player led nowhere.
+ * An artist: who they are, their fifty most played songs and their albums. The artist names on
+ * songs and on the player lead here.
  */
 @Composable
 fun ArtistScreen(

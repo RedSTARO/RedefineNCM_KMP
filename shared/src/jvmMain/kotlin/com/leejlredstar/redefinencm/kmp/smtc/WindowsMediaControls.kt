@@ -35,9 +35,9 @@ import kotlinx.coroutines.runBlocking
  * Windows System Media Transport Controls (SMTC) integration.
  *
  * Desktop WinRT apps obtain SMTC through `ISystemMediaTransportControlsInterop::GetForWindow`.
- * Compose Desktop gives us a real HWND through JNA, so this binding can stay in JVM code: no
- * bundled helper DLL and no build-time Windows SDK requirement. Session creation, updates, and
- * release stay on one dedicated MTA thread so RoInitialize/RoUninitialize remain balanced.
+ * Compose Desktop gives us a real HWND through JNA, so this binding can stay in JVM code, with
+ * no bundled helper DLL and no build-time Windows SDK requirement. Session creation, updates,
+ * and release stay on one dedicated MTA thread so RoInitialize/RoUninitialize remain balanced.
  */
 class WindowsMediaControls(
     private val player: PlatformPlayer,

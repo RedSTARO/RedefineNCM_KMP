@@ -131,7 +131,7 @@ class QrLoginPresenter : LoginMethodPresenter {
                     }
                 } else {
                     Text(
-                        "二维码\n将在此显示",
+                        "二维码\n会显示在这里",
                         style = MaterialTheme.typography.bodyMedium,
                         color = palette.secondaryOnQuietContainer,
                         textAlign = TextAlign.Center,

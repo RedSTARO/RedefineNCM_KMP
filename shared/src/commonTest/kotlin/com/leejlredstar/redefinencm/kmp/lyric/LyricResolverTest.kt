@@ -100,8 +100,8 @@ class LyricResolverTest {
             preferLocal = true,
         )
 
-        // Cache-then-network: the on-disk copy is shown first, but the upstream source is still
-        // consulted so a better version can replace it. It previously short-circuited here.
+        // Cache-then-network: the on-disk copy is shown first, and the resolver must still
+        // consult the upstream source so a better version can replace it.
         assertEquals(listOf(LyricSource.NCM_BACKEND), localCalls)
         assertEquals(listOf(LyricSource.NCM_BACKEND), providerCalls)
         assertEquals(

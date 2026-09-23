@@ -48,8 +48,8 @@ private data class AmlldbSearchItem(
  * AMLL TTML database lookup.
  *
  * NCM already gives us a stable song ID, so an exact direct lookup is used first. The public
- * search API is only a second exact-ID path; title fuzzy matching is deliberately not used
- * because automatically selecting a similarly named song would display incorrect lyrics.
+ * search API is only a second exact-ID path. Title fuzzy matching is not used, because
+ * automatically selecting a similarly named song would display incorrect lyrics.
  */
 class AmlldbApi(
     externalHttpClient: ExternalHttpClient,
@@ -61,7 +61,7 @@ class AmlldbApi(
         var fallbackFailure: AmlldbTtmlResult? = null
         val directLookup = withTimeoutOrNull(DIRECT_LOOKUP_TIMEOUT_MILLIS) {
             getTtml("$DIRECT_NCM_ENDPOINT/$songId")
-        } ?: TextFetch.Failed("AMLL DB TTML 直取超时")
+        } ?: TextFetch.Failed("AMLL DB 按歌曲 ID 获取 TTML 超时")
         when (val direct = directLookup) {
             is TextFetch.Found -> {
                 if (direct.text.looksLikeTtml()) {
@@ -71,7 +71,7 @@ class AmlldbApi(
                         endpoint = "amll-ttml-db",
                     )
                 }
-                fallbackFailure = AmlldbTtmlResult.Malformed("TTML 直取响应不是有效 XML")
+                fallbackFailure = AmlldbTtmlResult.Malformed("AMLL DB 按歌曲 ID 返回的 TTML 不是有效的 XML")
             }
             TextFetch.NotFound -> Unit
             is TextFetch.Failed ->
@@ -94,13 +94,13 @@ class AmlldbApi(
                 } else {
                     when (val boundedBody = response.readBodyTextAtMost(MAX_SEARCH_RESPONSE_BYTES)) {
                         BoundedBody.TooLarge ->
-                            SearchFetch.Failed(AmlldbTtmlResult.Malformed("AMLL DB 搜索响应过大"))
+                            SearchFetch.Failed(AmlldbTtmlResult.Malformed("AMLL DB 搜索结果过大"))
                         is BoundedBody.Text -> {
                             val items = try {
                                 ApiJson.decodeFromString<List<AmlldbSearchItem>>(boundedBody.value)
                             } catch (_: Exception) {
                                 return@withTimeoutOrNull SearchFetch.Failed(
-                                    AmlldbTtmlResult.Malformed("AMLL DB 搜索响应格式无效"),
+                                    AmlldbTtmlResult.Malformed("AMLL DB 搜索结果格式无效"),
                                 )
                             }
                             SearchFetch.Items(items.take(MAX_SEARCH_RESULTS))

@@ -9,22 +9,21 @@ import androidx.compose.ui.unit.sp
 /**
  * Material 3 Expressive type scale, tuned for maximum hierarchy contrast.
  *
- * The scale is intentionally bimodal. Display and headline roles are heavy
- * ([FontWeight.Black] / [FontWeight.ExtraBold]) while every body role stays at
- * [FontWeight.Normal] with positive tracking for sustained reading. The gap between those two
- * groups is what carries the expressive voice, so body sizes are left at the comfortable M3
- * values rather than being scaled up alongside.
+ * The scale is bimodal. Display and headline roles are heavy ([FontWeight.Black] /
+ * [FontWeight.ExtraBold]), while every body role stays at [FontWeight.Normal] with positive
+ * tracking for sustained reading. The gap between the two groups carries the expressive voice,
+ * so body sizes stay at the M3 baseline instead of growing with the headlines.
  *
- * Two constraints come from this app's UI being predominantly Chinese:
+ * The UI is mostly Chinese, which adds two constraints:
  *
- * - **No negative tracking.** CJK glyphs are already set on a tight em box; pulling them
- *   together collides them. Display roles therefore sit at `0.sp` rather than the negative
- *   tracking a Latin-only poster scale would use.
- * - **The weight ladder collapses on CJK.** System CJK families (Noto Sans CJK, PingFang,
- *   Microsoft YaHei) rarely ship above Bold, so Black / ExtraBold / Bold render alike for
- *   Chinese text and only the Bold-vs-Normal step survives. That step is still real contrast,
- *   but it means **size** has to do the rest of the hierarchy work — which is why the display
- *   and headline sizes are set well apart rather than relying on weight alone.
+ * - No negative tracking. CJK glyphs already sit on a tight em box, and pulling them closer
+ *   makes them collide. Display roles use `0.sp` where a Latin-only poster scale would go
+ *   negative.
+ * - The weight ladder collapses on CJK. System CJK families (Noto Sans CJK, PingFang,
+ *   Microsoft YaHei) rarely ship weights above Bold, so Black, ExtraBold and Bold look alike in
+ *   Chinese text and only the step from Normal to Bold remains. That step is still real
+ *   contrast, but size has to carry the rest of the hierarchy, so the display and headline
+ *   sizes are set well apart instead of relying on weight alone.
  *
  * Titles bridge the two: heavy enough to anchor a section, small enough to sit inside list rows.
  */

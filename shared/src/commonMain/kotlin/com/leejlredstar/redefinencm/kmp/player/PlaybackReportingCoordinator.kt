@@ -113,7 +113,7 @@ class PlaybackReportingCoordinator(
 
     /**
      * The cookie is sampled with every position emission. Cleaning it and hashing it into the
-     * credential key are repeated only when the stored string actually changes.
+     * credential key are repeated only when the stored string changes.
      */
     private fun currentCredential(): PlaybackCredential {
         val rawCookie = settings.getString(SettingKeys.COOKIE, "")
@@ -420,7 +420,7 @@ private fun PlaybackReportResult.toStatus(
         endpoint = endpoint,
         httpStatus = httpStatus,
         message = when (endpoint) {
-            PlaybackReportEndpoint.RELAY -> "当前服务器未部署 relay 播放进度接口"
+            PlaybackReportEndpoint.RELAY -> "当前服务器不支持 relay 播放进度上报"
             PlaybackReportEndpoint.WEBLOG_STARTPLAY -> "当前服务器不支持最近播放上报"
             else -> "当前服务器不支持播放记录上报"
         },
@@ -626,10 +626,10 @@ internal class PlaybackReportingReducer(
 
         val media = observation.media
         // Playback reporting is a NetEase contract end to end: their endpoints, their song ids,
-        // their account. Another provider's track must never be reported against it. A composite
-        // id like `qq:0039MnYb0qxYhV` already failed the old `toLongOrNull()` and so reported
-        // nothing, but that was an accident of parsing rather than a decision — `neteaseIdOrNull`
-        // returns null for any provider but NetEase, which makes the exclusion explicit.
+        // their account. Another provider's track must never be reported against it.
+        // `neteaseIdOrNull` returns null for any provider but NetEase, so the exclusion is an
+        // explicit decision and does not depend on a composite id like `qq:0039MnYb0qxYhV`
+        // failing to parse as a number.
         val songId = media?.id?.toProviderItemIdOrNull()?.neteaseIdOrNull?.takeIf { it > 0L }
         val stableSelection = pendingOccurrence?.let { pending ->
             observation.occurrence == pending &&

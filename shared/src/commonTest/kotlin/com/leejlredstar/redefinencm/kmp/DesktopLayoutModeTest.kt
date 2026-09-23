@@ -14,8 +14,8 @@ class DesktopLayoutModeTest {
 
     @Test
     fun railModeCoversEveryWindowWideAndTallEnough() {
-        // The playback bar along the bottom replaced the player card that only windows of
-        // 900 by 900 and more used to get, so there is no third mode any more.
+        // Windows of 900 by 900 and more get no player card of their own: the playback bar
+        // along the bottom serves them too, so there is no third mode.
         assertEquals(DesktopLayoutMode.Rail, desktopLayoutMode(600.dp, 480.dp))
         assertEquals(DesktopLayoutMode.Rail, desktopLayoutMode(899.dp, 900.dp))
         assertEquals(DesktopLayoutMode.Rail, desktopLayoutMode(1280.dp, 899.dp))

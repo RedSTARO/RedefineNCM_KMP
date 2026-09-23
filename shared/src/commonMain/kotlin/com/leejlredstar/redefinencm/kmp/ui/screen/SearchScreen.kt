@@ -74,8 +74,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 
 /**
- * The search tab. It used to be an overlay inside the recommendations page, reachable from
- * there only; as a tab it is one tap from anywhere and keeps its query while the user is away.
+ * The search tab: one tap from anywhere, and it keeps its query while the user is away.
  *
  * @param focusRequest raised by the home page's search pill and Ctrl/⌘+F: put the cursor in the
  *   field and bring up the keyboard. Switching to the tab by itself does not.
@@ -173,7 +172,7 @@ fun SearchScreen(
                             IconButton(onClick = { onQueryChange(""); viewModel.clearSearch() }) {
                                 Icon(AppIcons.Clear, contentDescription = "清除")
                             }
-                            // The keyboard's search key was the only way to run a search.
+                            // The keyboard's search key is not the only way to run a search.
                             IconButton(onClick = { submit(query) }) {
                                 Icon(
                                     AppIcons.Search,
@@ -210,14 +209,14 @@ fun SearchScreen(
         when {
             loading && submittedMatchesQuery -> {
                 ExpressiveLoadingState(
-                    label = "正在搜索“${submittedQuery ?: query}”…",
+                    label = "正在搜索「${submittedQuery ?: query}」…",
                     accentColor = searchPalette.accent,
                     modifier = Modifier.padding(top = SearchSpacing.SectionGap),
                 )
             }
             // Only a total failure replaces the results. With two providers configured, one being
-            // down still leaves the other's hits worth showing — that case is reported by the
-            // notice inside the list instead.
+            // down still leaves the other's hits worth showing; the notice inside the list reports
+            // that case instead.
             searchError != null && results.isEmpty() && submittedMatchesQuery -> {
                 ExpressiveStatePanel(
                     title = "搜索失败",
@@ -325,7 +324,7 @@ fun SearchScreen(
             submittedMatchesQuery -> {
                 ExpressiveStatePanel(
                     title = "没有找到结果",
-                    message = "没有找到与“$submittedQuery”匹配的歌曲，试试更短的关键词或只输入歌手名。",
+                    message = "没有找到与「$submittedQuery」匹配的歌曲，试试更短的关键词或只输入歌手名。",
                     icon = AppIcons.Search,
                     accentPalette = searchPalette,
                     modifier = Modifier.padding(top = SearchSpacing.SectionGap),
@@ -374,7 +373,7 @@ fun SearchScreen(
             query.isNotBlank() -> {
                 ExpressiveStatePanel(
                     title = "准备搜索",
-                    message = "点搜索按钮或按回车键，查找与“$query”相关的歌曲。",
+                    message = "点按搜索按钮或按回车键，查找与「$query」相关的歌曲。",
                     icon = AppIcons.Search,
                     accentPalette = searchPalette,
                 )
@@ -394,7 +393,6 @@ fun SearchScreen(
 
 /**
  * What search offers before a query: the user's recent searches and today's hot-search chart.
- * It used to be one line of instructions.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -408,8 +406,8 @@ private fun SearchStart(
 ) {
     if (history.isEmpty() && hotSearches.isEmpty()) {
         ExpressiveStatePanel(
-            title = "发现想听的音乐",
-            message = "输入歌名、歌手或专辑名，查找相关的歌曲。",
+            title = "输入歌名、歌手或专辑名",
+            message = "点按搜索按钮或按回车键开始搜索。",
             icon = AppIcons.Search,
             accentPalette = accentPalette,
             modifier = Modifier.padding(top = SearchSpacing.SectionGap),
@@ -612,9 +610,9 @@ private fun SearchTrackRow(
         media = media,
         neteaseSong = remember(track) { track.toNeteaseSongOrNull() },
     )
-    // One accent for the whole result list. Tinting each row from its own cover striped the list
-    // in unrelated colours. The provider, when several are mixed, is a chip in the row rather than
-    // a line of its own above it.
+    // One accent for the whole result list. Tinting each row from its own cover would stripe the
+    // list in unrelated colours. The provider, when several are mixed, is a chip in the row rather
+    // than a line of its own above it.
     SongRow(
         index = index,
         title = track.title,
@@ -668,10 +666,8 @@ internal fun ProviderTrack.toNeteaseSongOrNull(): com.leejlredstar.redefinencm.k
 /**
  * One spacing scale for the page's sections.
  *
- * There were five: section titles 4dp inside the gutter with tops of 8, 16 and 24dp and bottoms
- * of 0, 8 and 12dp; the history chips flush to the gutter while their own title was not; the hot
- * list padded by a third value again. Nothing about a search result is special enough to earn
- * its own rhythm, and side by side the page read as drifting rather than as sections.
+ * Nothing about a search result is special enough to earn its own rhythm. With separate values
+ * per section, the page reads as drifting rather than as a set of sections.
  */
 private object SearchSpacing {
     /** Anything that is not a full-width row lines up with the page title, 4dp in. */

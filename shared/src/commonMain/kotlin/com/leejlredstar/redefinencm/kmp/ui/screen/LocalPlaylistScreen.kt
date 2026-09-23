@@ -146,7 +146,7 @@ fun LocalPlaylistScreen(
                     item(key = "local-playlist-empty") {
                         ExpressiveStatePanel(
                             title = "歌单是空的",
-                            message = "在任意歌曲的菜单里选「添加到本地歌单」。",
+                            message = "在任意歌曲的「更多操作」里选「添加到本地歌单」。",
                             icon = AppIcons.PlaylistAdd,
                             accentPalette = palette,
                             modifier = Modifier.padding(horizontal = 16.dp),

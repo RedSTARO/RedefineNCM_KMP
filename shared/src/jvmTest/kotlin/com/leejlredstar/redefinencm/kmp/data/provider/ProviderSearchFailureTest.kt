@@ -8,10 +8,11 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * "Matched nothing" and "is down" must stay distinguishable.
+ * "Matched nothing" and "is down" must stay distinguishable, as they were before search had
+ * providers.
  *
  * Flattening a failed backend into an empty list makes the UI say 没有找到结果 for a provider that
- * never answered, which is the behaviour the pre-provider search deliberately avoided.
+ * never answered.
  */
 class ProviderSearchFailureTest {
     private class FakeProvider(

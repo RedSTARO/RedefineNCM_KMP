@@ -17,12 +17,12 @@ data class MergedSearchEntry(
  * Folds the same song from different providers into one row, keeping the order of first
  * appearance.
  *
- * The match is deliberately strict, because a wrong merge hides a track: the title and the first
- * artist must be equal once case, spaces and punctuation are ignored, and both durations must be
- * known and within [DurationToleranceMillis]. "晴天" and "晴天 (Live)" stay apart. Two tracks of one
- * provider are never merged — that provider listed them separately for a reason. The rows stay
- * labelled with every provider they stand for, and the setting that turns merging off shows them
- * one by one again.
+ * The match is strict because a wrong merge hides a track: the title and the first artist must
+ * be equal once case, spaces and punctuation are ignored, and both durations must be known and
+ * within [DurationToleranceMillis]. "晴天" and "晴天 (Live)" stay apart. Two tracks of one
+ * provider are never merged, since that provider listed them separately for a reason. The rows
+ * stay labelled with every provider they stand for, and the setting that turns merging off shows
+ * them one by one again.
  */
 fun List<ProviderTrack>.mergeSameSongs(): List<MergedSearchEntry> {
     val entries = ArrayList<MergedSearchEntry>(size)

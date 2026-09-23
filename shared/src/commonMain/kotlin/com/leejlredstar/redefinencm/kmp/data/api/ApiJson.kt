@@ -10,9 +10,9 @@ import kotlinx.serialization.json.Json
  * inconsistently; `coerceInputValues` because they send `null` for primitives that the DTOs
  * declare non-null.
  *
- * Five call sites had built this exact configuration independently. Parsers whose settings
- * genuinely differ — the settings backup, the Web download index, the desktop AMLL seek
- * payload — keep their own instance rather than being widened to match this one.
+ * Use this instance instead of rebuilding the same configuration at a call site. Parsers whose
+ * settings differ (the settings backup, the Web download index, the desktop AMLL seek payload)
+ * keep their own instance and are not widened to match this one.
  */
 internal val ApiJson: Json = Json {
     ignoreUnknownKeys = true

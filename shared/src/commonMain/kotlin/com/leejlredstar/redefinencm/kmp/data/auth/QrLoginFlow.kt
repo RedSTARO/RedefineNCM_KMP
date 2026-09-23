@@ -42,8 +42,8 @@ class QrLoginFlow(
     private val _success = MutableStateFlow(false)
     val success: StateFlow<Boolean> = _success.asStateFlow()
 
-    // Expired is a state of its own: the old code only changed the status text, so the dead code
-    // stayed on screen with a "取消" button beneath it.
+    // Expired is a state of its own. Changing only the status text would leave the dead code on
+    // screen with a "取消" button beneath it.
     private val _expired = MutableStateFlow(false)
     val expired: StateFlow<Boolean> = _expired.asStateFlow()
 
@@ -89,19 +89,19 @@ class QrLoginFlow(
                         when (poll) {
                             QrLoginPoll.Unanswered -> {
                                 if (unanswered >= method.maxUnansweredPolls) {
-                                    val message = "${method.provider.displayName}后端无响应"
+                                    val message = "${method.provider.displayName}服务器无响应"
                                     _status.value = message
                                     _error.value = message
                                     return@withTimeoutOrNull true
                                 }
-                                _status.value = "等待后端响应…"
+                                _status.value = "等待服务器响应…"
                             }
                             is QrLoginPoll.Waiting -> _status.value = poll.message ?: method.scanHint
                             QrLoginPoll.Scanned -> _status.value = "请在手机上确认登录"
                             is QrLoginPoll.Confirmed -> {
                                 host.persist(poll.credential)
                                     .onSuccess {
-                                        _status.value = "登录成功！"
+                                        _status.value = "登录成功"
                                         _success.value = true
                                         host.onSignedIn()
                                     }
@@ -166,6 +166,6 @@ class QrLoginFlow(
     }
 
     private companion object {
-        const val IdleStatus = "点击生成二维码"
+        const val IdleStatus = "点按生成二维码"
     }
 }

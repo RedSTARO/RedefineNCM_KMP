@@ -1,7 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.lyric
 
 /**
- * The timing and source-format capability that the current lyric document actually exposes.
+ * The timing and source-format capability that the current lyric document exposes.
  *
  * This is not a quality score. In particular, [TTML_FULL] means that the upstream TTML document
  * was parsed through the AMLL TTML path; it does not assert that every document uses every TTML

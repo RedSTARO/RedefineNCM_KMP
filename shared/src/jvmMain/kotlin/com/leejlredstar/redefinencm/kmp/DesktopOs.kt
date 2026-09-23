@@ -3,10 +3,10 @@ package com.leejlredstar.redefinencm.kmp
 /**
  * The desktop host this JVM is running on.
  *
- * Five places used to read and parse `os.name` for themselves — the media-controls backend
- * selector, the SMTC guard, the click-through window style, the dynamic-cover capability check,
- * and the packaging script — each with its own spelling of the match. `Darwin` was accepted in
- * two of them and not the others, and case sensitivity differed. The parse lives here now.
+ * The media-controls backend selector, the SMTC guard, the click-through window style and the
+ * dynamic-cover capability check read the host from here instead of each parsing `os.name`.
+ * Separate parses drift apart, down to whether `Darwin` is accepted and whether case matters.
+ * The packaging script is a Gradle build script and keeps its own parse.
  */
 internal enum class DesktopOs {
     Windows,

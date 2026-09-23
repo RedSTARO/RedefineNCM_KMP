@@ -175,7 +175,7 @@ fun rememberSongRowActions(
                 )
             }
             if (neteaseSong != null) {
-                // The names on a song lead to their pages now that there are pages.
+                // The names on a song lead to their pages.
                 neteaseSong.ar.filter { it.id != 0L }.take(MaxArtistActions).forEach { artist ->
                     add(
                         SongRowAction("歌手：${artist.name}", AppIcons.Person) {
@@ -421,7 +421,7 @@ private fun Modifier.secondaryClick(enabled: Boolean, onSecondaryClick: () -> Un
 
 /**
  * The download mark at the end of a row: downloaded, downloading, or failed (tap to retry).
- * A song that is simply not downloaded, or whose download the user cancelled, has no mark.
+ * A song that is not downloaded, or whose download the user cancelled, has no mark.
  */
 @Composable
 private fun SongDownloadMark(
@@ -504,10 +504,9 @@ fun CarouselItemScope.RecommendSquareCard(
     // than only rippling the container.
     val interactionSource = remember { MutableInteractionSource() }
     // One silhouette, not three. maskClip applies the carousel's own mask, which is the shape
-    // that actually animates as the tile squeezes; the Surface and the artwork therefore draw
-    // square. Previously the container rounded at `large` and the cover at `extraLarge` inside
-    // it, so two mismatched arcs sat on top of each other and both got clipped again by the
-    // squeeze — the doubled outline.
+    // that animates as the tile squeezes, so the Surface and the artwork draw square. Rounding
+    // the container at `large` and the cover at `extraLarge` inside it as well would stack two
+    // mismatched arcs, both clipped again by the squeeze, into a doubled outline.
     Surface(
         onClick = onClick,
         modifier = Modifier
@@ -543,14 +542,14 @@ fun CarouselItemScope.RecommendSquareCard(
                         .background(
                             // Fractional stops, not a pixel startY: `startY = 120f` is 120 raw
                             // pixels, which is a third of the way down a 168dp tile on a 3.5x
-                            // phone but almost the whole tile on a 1x one, so the scrim covered
-                            // a different amount of artwork on every density.
+                            // phone but almost the whole tile on a 1x one, so the scrim would
+                            // cover a different amount of artwork on every density.
                             //
-                            // Every stop darkens, and none of them is the artwork's accent. The
-                            // middle stop used to be `accent`, which is a *light* colour in a
-                            // dark scheme (tone 0.78) — and the title's own line sits inside
-                            // that band, so a pale cover was being lightened exactly where the
-                            // white text had to be read.
+                            // Every stop darkens, and none of them is the artwork's accent.
+                            // `accent` is a *light* colour in a dark scheme (tone 0.78), and the
+                            // title's own line sits inside the middle band, so an accent middle
+                            // stop would lighten a pale cover exactly where the white text has
+                            // to be read.
                             brush = Brush.verticalGradient(
                                 0.32f to Color.Transparent,
                                 0.62f to Color.Black.copy(alpha = 0.42f * overlayAlpha),
@@ -685,7 +684,7 @@ fun <T> SectionWithCarousel(
         } else if (items.isEmpty()) {
             ExpressiveStatePanel(
                 title = "暂无$title",
-                message = if (onRetry != null) "可以点下面的按钮重新加载。" else "稍后再来看看。",
+                message = if (onRetry != null) "点按「重新加载」再试一次。" else "稍后再来看看。",
                 icon = AppIcons.QueueMusic,
                 actionLabel = onRetry?.let { "重新加载" },
                 onAction = onRetry,
@@ -698,7 +697,7 @@ fun <T> SectionWithCarousel(
             // The mask that produces that motion also clips whatever the item draws, so a title
             // laid over the artwork gets sliced mid-character once an item narrows. Items are
             // therefore handed how expanded they currently are, and fade their own overlay out
-            // before the mask can cut it — see RecommendSquareCard.
+            // before the mask can cut it (see RecommendSquareCard).
             HorizontalMultiBrowseCarousel(
                 state = carouselState,
                 preferredItemWidth = CarouselItemWidth,
@@ -792,8 +791,8 @@ fun PlaylistCard(
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // shapes.small, not large: 40dp corners on a 60dp cover cut it into a circle and
-            // cropped whatever the cover had in its corners.
+            // shapes.small, not large: 40dp corners on a 60dp cover would cut it into a circle and
+            // crop whatever the cover has in its corners.
             ExpressiveArtwork(
                 model = userPlaylistEach.coverImgUrl,
                 contentDescription = null,
@@ -838,8 +837,8 @@ fun PlaylistCard(
             if (specialCard != "no") {
                 Spacer(modifier = Modifier.width(12.dp))
                 if (specialCard == "fav" && onSpecialClick != null) {
-                    // Named, and a full touch target: a bare heart here read as "like", and at
-                    // 34dp it was smaller than a finger.
+                    // Named, and a full touch target: a bare heart here reads as "like", and at
+                    // 34dp it would be smaller than a finger.
                     Surface(
                         onClick = {
                             if (!specialActionLoading) onSpecialClick()

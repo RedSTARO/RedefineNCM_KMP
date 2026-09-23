@@ -12,14 +12,13 @@ import kotlin.math.sqrt
  * Perceptual colour maths used to derive theme roles from a source colour.
  *
  * Material derives its roles by holding a source **hue**, choosing a **chroma**, and reading off
- * a **tone** — never by blending two sRGB colours together. Blending in sRGB is what produces
- * muddy intermediates: mixing a saturated yellow toward a dark surface passes through olive,
- * because sRGB is not perceptually uniform and the shortest numeric path is not the shortest
- * visual one.
+ * a **tone**, never by blending two sRGB colours together. Blending in sRGB produces muddy
+ * intermediates: mixing a saturated yellow toward a dark surface passes through olive, because
+ * sRGB is not perceptually uniform and the shortest numeric path is not the shortest visual one.
  *
  * Oklch gives the same three controls (lightness, chroma, hue) with well-behaved interpolation,
  * in about sixty lines of pure maths, so it works on every target with no extra dependency.
- * It is not CAM16/HCT — the absolute numbers differ — but the property this app needs from it,
+ * It is not CAM16/HCT and the absolute numbers differ, but the property this app needs from it,
  * "keep the hue, bound the chroma, put the tone where I ask", holds.
  */
 internal data class Oklch(
@@ -83,11 +82,11 @@ private fun Triple<Float, Float, Float>.isInGamut(): Boolean {
 /**
  * Reduces chroma until the colour fits inside sRGB at its requested lightness.
  *
- * Most lightness/hue pairs cannot hold every chroma: a saturated yellow simply does not exist at
- * a dark tone. Clamping the RGB channels instead would silently move the colour's lightness back
- * toward where the channels happened to land, so asking for tone 0.35 could return something
- * lighter than the input. Giving up chroma keeps the tone — and therefore the contrast — exact,
- * which is the property the palette depends on.
+ * Most lightness/hue pairs cannot hold every chroma: a saturated yellow does not exist at a dark
+ * tone. Clamping the RGB channels instead would silently move the colour's lightness back toward
+ * where the channels happened to land, so asking for tone 0.35 could return something lighter
+ * than the input. Giving up chroma keeps the tone exact, and with it the contrast, which is the
+ * property the palette depends on.
  */
 private fun Oklch.fitToGamut(): Oklch {
     if (toLinearRgb().isInGamut()) return this

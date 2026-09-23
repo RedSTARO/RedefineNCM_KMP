@@ -13,11 +13,11 @@ import kotlinx.serialization.json.Json
 /** Serializable snapshot of user-configurable settings used for export / import. */
 @Serializable
 data class SettingsBackupData(
-    /** Kept only so older exported files decode; auth cookies are no longer exported/imported. */
+    /** Kept only so older exported files decode; auth cookies are never exported or imported. */
     val cookie: String = "",
     val server: String = "",
     // The QQ backend address and view preference travel with a backup the way `server` does.
-    // Its cookie deliberately does not — same rule as `cookie` above.
+    // Its cookie deliberately does not, by the same rule as `cookie` above.
     /** Null keeps the current choice when importing a backup made before multi-provider support. */
     val qqEnabled: Boolean? = null,
     val qqServer: String = "",
@@ -28,8 +28,9 @@ data class SettingsBackupData(
     /** Null keeps the current choice when importing a backup made before the setting existed. */
     val mergeSameSongs: Boolean? = null,
     /**
-     * The local account's playlists and favourites — user data rather than a setting, carried so
-     * a reinstall does not lose them. Null in a backup made before the local library existed.
+     * The local account's playlists and favourites. They are user data rather than a setting,
+     * carried so a reinstall does not lose them. Null in a backup made before the local library
+     * existed.
      */
     val localLibrary: List<LocalPlaylist>? = null,
     val onlinePlayQuality: String = SoundQuality.STANDARD.name,

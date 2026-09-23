@@ -65,7 +65,7 @@ internal object WebDownloadStorage {
                     }
                 }.fold(
                     onSuccess = { DownloadScanResult.Success(it) },
-                    onFailure = { DownloadScanResult.Failure("无法解析浏览器下载索引", it) },
+                    onFailure = { DownloadScanResult.Failure("无法读取浏览器里的下载记录", it) },
                 )
                 continuation.resume(result)
             },
@@ -153,7 +153,7 @@ private fun startWebDownload(
         controllers.set(token, controller);
         (async () => {
             if (!globalThis.isSecureContext || !navigator.storage?.getDirectory) {
-                throw new Error("浏览器内部下载需要 HTTPS 或 localhost，并要求支持 OPFS");
+                throw new Error("在浏览器里下载需要 HTTPS 或 localhost 页面，且浏览器要支持 OPFS");
             }
             navigator.storage.persist?.().catch(() => false);
             const root = await navigator.storage.getDirectory();
@@ -246,7 +246,7 @@ private fun scanWebDownloads(
     """{
         (async () => {
             if (!globalThis.isSecureContext || !navigator.storage?.getDirectory) {
-                throw new Error("浏览器内部下载需要 HTTPS 或 localhost，并要求支持 OPFS");
+                throw new Error("在浏览器里下载需要 HTTPS 或 localhost 页面，且浏览器要支持 OPFS");
             }
             const root = await navigator.storage.getDirectory();
             let directory;
@@ -289,7 +289,7 @@ private fun deleteWebDownloads(
     """{
         (async () => {
             if (!globalThis.isSecureContext || !navigator.storage?.getDirectory) {
-                throw new Error("浏览器内部下载需要 HTTPS 或 localhost，并要求支持 OPFS");
+                throw new Error("在浏览器里下载需要 HTTPS 或 localhost 页面，且浏览器要支持 OPFS");
             }
             const root = await navigator.storage.getDirectory();
             let directory;
@@ -328,7 +328,7 @@ private fun createWebDownloadObjectUrl(
             }
             const fileName = decodeURIComponent(uri.slice(prefix.length));
             if (!fileName || fileName.includes("/") || fileName.includes("\\")) {
-                throw new Error("无效的浏览器下载 URI");
+                throw new Error("浏览器下载地址无效");
             }
             const root = await navigator.storage.getDirectory();
             const directory = await root.getDirectoryHandle("RedefineNCM");
@@ -349,7 +349,7 @@ private fun exportWebDownload(
     """{
         (async () => {
             if (!fileName || fileName.includes("/") || fileName.includes("\\")) {
-                throw new Error("无效的下载文件名");
+                throw new Error("下载文件名无效");
             }
             const root = await navigator.storage.getDirectory();
             const directory = await root.getDirectoryHandle("RedefineNCM");

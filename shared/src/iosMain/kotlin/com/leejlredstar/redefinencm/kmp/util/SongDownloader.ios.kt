@@ -24,7 +24,7 @@ actual object SongDownloader {
                 ?: IllegalStateException(scan.message)
         }
         existingSnapshots.firstOrNull { it.id == item.id }?.let { existing ->
-            if (!onReadyToPublish()) throw CancellationException("下载发布已取消")
+            if (!onReadyToPublish()) throw CancellationException("下载已取消，文件未保存")
             return DownloadedSongFile(fileName = existing.fileName, uri = existing.uri)
         }
 
@@ -35,9 +35,9 @@ actual object SongDownloader {
         val downloadedFile = IosBackgroundDownloadCoordinator.download(url, fileName, onProgress)
         if (!onReadyToPublish()) {
             withContext(NonCancellable) {
-                check(deleteDownloadedSongFile(item.id)) { "无法回滚已取消的 iOS 下载" }
+                check(deleteDownloadedSongFile(item.id)) { "下载已取消，但无法删除已下载的文件" }
             }
-            throw CancellationException("下载发布已取消")
+            throw CancellationException("下载已取消，文件未保存")
         }
         return downloadedFile
     }

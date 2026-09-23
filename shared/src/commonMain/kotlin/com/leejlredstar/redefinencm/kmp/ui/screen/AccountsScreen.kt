@@ -88,7 +88,8 @@ fun AccountsScreen(
     val mergeSameSongs by viewModel.mergeSameSongs.collectAsState()
     val message by viewModel.message.collectAsState()
 
-    // Settings can change behind this page — a backup import — so each visit reads them afresh.
+    // Settings can change behind this page, for example through a backup import, so each
+    // visit reads them afresh.
     LaunchedEffect(viewModel) { viewModel.reload() }
 
     val snackbarHostState = remember { SnackbarHostState() }

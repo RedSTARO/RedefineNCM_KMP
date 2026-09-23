@@ -29,7 +29,7 @@ actual object SongDownloader {
         val extension = extensionFromUrl(item.url)
         val target = File(dir, "${item.id}.$extension")
         if (target.exists()) {
-            if (!onReadyToPublish()) throw CancellationException("下载发布已取消")
+            if (!onReadyToPublish()) throw CancellationException("下载已取消，文件未保存")
             return@withContext DownloadedSongFile(fileName = target.name, uri = target.toURI().toString())
         }
 
@@ -45,7 +45,7 @@ actual object SongDownloader {
                     copyWithProgress(input, output, totalBytes, onProgress)
                 }
             }
-            if (!onReadyToPublish()) throw CancellationException("下载发布已取消")
+            if (!onReadyToPublish()) throw CancellationException("下载已取消，文件未保存")
             if (!partFile.renameTo(target)) error("无法保存下载文件")
             DownloadedSongFile(fileName = target.name, uri = target.toURI().toString())
         } catch (t: Throwable) {

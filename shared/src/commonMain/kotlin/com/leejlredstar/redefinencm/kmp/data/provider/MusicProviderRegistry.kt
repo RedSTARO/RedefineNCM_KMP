@@ -97,7 +97,7 @@ class MusicProviderRegistry(
     }
 
     /**
-     * The URL to play [id], or null — with the reason recorded in [streamFailures] under
+     * The URL to play [id], or null. On null the reason is recorded in [streamFailures] under
      * [mediaId], the id the queue carries.
      */
     suspend fun streamUrl(
@@ -179,8 +179,8 @@ class MusicProviderRegistry(
 }
 
 /**
- * [runCatching] that lets cancellation through. A caller that was cancelled — a new search typed,
- * a track skipped — is not a provider that failed, and recording it as one would report a healthy
+ * [runCatching] that lets cancellation through. A caller that was cancelled (a new search typed,
+ * a track skipped) is not a provider that failed, and recording it as one would report a healthy
  * backend as down.
  */
 internal inline fun <T> providerCall(block: () -> T): Result<T> = try {
@@ -202,7 +202,7 @@ data class StreamFailure(
     val message: String
         get() = when (reason) {
             StreamFailureReason.PROVIDER_DISABLED -> "${provider.displayName}已关闭"
-            StreamFailureReason.UNREACHABLE -> "${provider.displayName}后端无响应"
+            StreamFailureReason.UNREACHABLE -> "${provider.displayName}服务器无响应"
             StreamFailureReason.NO_SOURCE -> "${provider.displayName}没有提供这首歌的播放地址"
         }
 }
@@ -211,9 +211,9 @@ data class ProviderSearchResults(
     val provider: MusicProviderId,
     val tracks: List<ProviderTrack>,
     /**
-     * Whether this provider errored rather than simply matching nothing. Kept apart so a caller
-     * can report "one of two providers is down" instead of "no results", which are different
-     * things to a user with two accounts.
+     * Whether this provider errored rather than matching nothing. Kept apart so a caller can
+     * report "one of two providers is down" instead of "no results", which are different things
+     * to a user with two accounts.
      */
     val failed: Boolean = false,
 )

@@ -5,9 +5,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * The song's details moved to Now Playing, and with them the rule about when the full-screen
- * dynamic cover paused — it paused for the details video, which never opens over this page any
- * more. Those cases live in `SongWikiDetailsTest` or are gone.
+ * The song's details open from Now Playing, never over this page, so the full-screen dynamic
+ * cover has no details video to pause for. The details cases live in `SongWikiDetailsTest`.
  */
 class NativeAmllScreenTest {
     @Test

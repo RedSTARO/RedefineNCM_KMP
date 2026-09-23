@@ -37,7 +37,7 @@ class LyricCapabilityBadgeTest {
             lyricSourceDisplayName(LyricSource.AMLL_TTML, "stevexmh-exact"),
         )
         assertEquals(
-            "网易云歌词后端 · 本地歌词文件",
+            "网易云音乐歌词 · 本地歌词文件",
             lyricSourceDisplayName(LyricSource.NCM_BACKEND, "local-sidecar"),
         )
         assertEquals("未知", lyricSourceDisplayName(null, ""))

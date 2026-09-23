@@ -41,7 +41,7 @@ internal data class ResumableDownloadMetadata(
  *
  * A partial response is appendable only when its Content-Range starts exactly at the
  * requested offset and describes a self-consistent, bounded byte range. A full 200 response
- * deliberately restarts from byte zero because the server ignored (or did not receive) Range.
+ * restarts from byte zero, because the server ignored (or did not receive) Range.
  */
 internal fun decideResumableDownload(
     requestedOffset: Long,

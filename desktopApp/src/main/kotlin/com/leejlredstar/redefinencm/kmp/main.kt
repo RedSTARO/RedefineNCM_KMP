@@ -119,12 +119,12 @@ fun main() {
 /**
  * Drops any output device pinned in a previous session so this launch follows the system.
  *
- * A chosen device is a per-session override, not a preference worth carrying across restarts.
- * The OS renames and reorders endpoints as hardware comes and goes — a monitor that reconnects
- * as `1 - Display (2- ...)` no longer matches the `1 - Display (...)` that was stored — and a
- * pin that survives a restart keeps sending audio at whatever was chosen last week. Playing into
- * a device nobody is listening to is indistinguishable from a broken player, so the safe start
- * is the one the OS is currently using.
+ * A chosen device is a per-session override and is not carried across restarts. The OS renames
+ * and reorders endpoints as hardware comes and goes: a monitor that reconnects as
+ * `1 - Display (2- ...)` no longer matches the `1 - Display (...)` that was stored. A pin that
+ * survives a restart keeps sending audio at whatever was chosen last week, and playing into a
+ * device nobody is listening to is indistinguishable from a broken player. The safe start is the
+ * device the OS is currently using.
  *
  * Only [JvmMediaPlayer][com.leejlredstar.redefinencm.kmp.player.JvmMediaPlayer] reads this key,
  * and only when opening a stream, which cannot happen before this returns: queue restoration
@@ -140,7 +140,7 @@ internal fun startFromTheSystemAudioOutput(
         setString(SettingKeys.AUDIO_OUTPUT_DEVICE, SYSTEM_DEFAULT_AUDIO_OUTPUT_ID)
     }.onFailure { error ->
         // A store that will not take the reset leaves the pin in place, so say which device
-        // playback is still aimed at rather than letting the silence be a mystery again.
+        // playback is still aimed at; otherwise the silence has no explanation.
         System.err.println(
             "Could not clear the pinned audio output device, keeping '$pinned': ${error.message}",
         )
@@ -243,8 +243,8 @@ private fun launchDesktopApplication(settings: PlatformSettings) = application {
     var showWindowRequest by remember { mutableStateOf(0) }
     val trayState = rememberTrayState()
     var trayNoticeShown by remember { mutableStateOf(false) }
-    // Closing the window used to quit, music and all. With the setting on (the default) the app
-    // stays in the tray; the tray menu's 退出 is what quits.
+    // With the setting on (the default), closing the window keeps the app and its music
+    // running in the tray; the tray menu's 退出 is what quits. With it off, closing quits.
     val closeMainWindow: () -> Unit = {
         val toTray = settings.getBoolean(
             SettingKeys.DESKTOP_CLOSE_TO_TRAY,
@@ -257,7 +257,7 @@ private fun launchDesktopApplication(settings: PlatformSettings) = application {
                 trayState.sendNotification(
                     Notification(
                         title = "RedefineNCM 仍在运行",
-                        message = "点托盘图标打开窗口；在托盘菜单里选「退出」才会退出。",
+                        message = "点按托盘图标打开窗口；在托盘菜单里选「退出」才会退出。",
                         type = Notification.Type.Info,
                     ),
                 )
@@ -285,7 +285,7 @@ private fun launchDesktopApplication(settings: PlatformSettings) = application {
         }
         val mediaControls = remember(player) { DesktopMediaControls(player) }
         DisposableEffect(window, mediaControls) {
-            // Below this the layout has nowhere to go; the window used to shrink to nothing.
+            // Below this the layout has nowhere to go, so the window stops shrinking here.
             window.minimumSize = Dimension(360, 480)
             val dynamicCoverWindowBinding =
                 DesktopDynamicCoverWindowLifecycle.bind(window)
@@ -367,7 +367,7 @@ private fun handleDesktopShortcut(event: KeyEvent, player: PlatformPlayer): Bool
 
 /**
  * The tray icon: playback control while the window is out of the way, and the one place a locked
- * desktop lyric can be unlocked without opening settings — a locked lyric window lets every click
+ * desktop lyric can be unlocked without opening settings. A locked lyric window lets every click
  * through, so it cannot offer that itself.
  */
 @Composable
@@ -479,8 +479,8 @@ private fun ApplicationScope.FloatingLyricWindow(settings: PlatformSettings, pla
         alwaysOnTop = true,
         resizable = !locked,
     ) {
-        // A locked window is parked: no drag area, no resize, and on Windows no pointer at all —
-        // clicks fall through to what is underneath. The tray menu and settings unlock it.
+        // A locked window is parked: no drag area, no resize, and on Windows no pointer at all,
+        // so clicks fall through to what is underneath. The tray menu and settings unlock it.
         DisposableEffect(window, locked) {
             DesktopFloatingWindowNative.setClickThrough(window, locked)
             onDispose { }
@@ -496,7 +496,7 @@ private fun ApplicationScope.FloatingLyricWindow(settings: PlatformSettings, pla
                         FloatingLyricContent(data, alignment, textScale)
                     }
                     // Controls appear under the pointer, the way desktop lyrics usually offer
-                    // them; they used to exist only as switches in the settings page.
+                    // them, so they are reachable without opening the settings page.
                     AnimatedVisibility(
                         visible = hovered,
                         enter = fadeIn(),
@@ -554,10 +554,10 @@ private fun ToolbarButton(icon: ImageVector, description: String, onClick: () ->
  * The two lyric lines, and nothing else.
  *
  * There is no container to sit on: the window is transparent, so this draws straight onto
- * whatever wallpaper or window happens to be underneath. That rules out theme colours —
- * `onSurface` is near-black under the light theme and would vanish over a dark desktop — so
- * the text is a fixed light pair carried by a drop shadow, which is what keeps it readable
- * over an arbitrary background.
+ * whatever wallpaper or window happens to be underneath. That rules out theme colours
+ * (`onSurface` is near-black under the light theme and would vanish over a dark desktop), so
+ * the text is a fixed light pair with a drop shadow, which keeps it readable over an arbitrary
+ * background.
  *
  * The column still fills the window even though the text does not: [WindowDraggableArea]
  * only drags where its content draws, and a column sized to two glyph runs would leave the
@@ -617,8 +617,8 @@ private fun FloatingLyricContent(
                     .semantics { liveRegion = LiveRegionMode.Polite },
             )
         }
-        // Nothing when there is no next line (the last line, an instrumental break). It used to
-        // print a placeholder sentence addressed to nobody.
+        // Nothing when there is no next line (the last line, an instrumental break); do not
+        // fill the slot with a placeholder sentence.
         val next = data?.nextLyric?.takeIf { it.isNotBlank() }
         if (next != null) {
             Text(

@@ -10,8 +10,8 @@ import kotlinx.serialization.json.Json
 /**
  * Credential-free client for public services outside the user-configured NCM backend.
  *
- * This must stay separate from [HttpClientFactory]: that factory intentionally injects the
- * account Cookie, realIP and timestamp into every request.
+ * This must stay separate from [HttpClientFactory]: that factory injects the account Cookie,
+ * realIP and timestamp into every request.
  */
 class ExternalHttpClient(val client: HttpClient)
 

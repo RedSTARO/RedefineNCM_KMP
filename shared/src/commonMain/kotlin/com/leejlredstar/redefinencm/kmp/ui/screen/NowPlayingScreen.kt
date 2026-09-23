@@ -96,14 +96,14 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
 
 /**
- * The Now Playing entry page — what the mini player, the desktop rail and every OS
+ * The Now Playing entry page: what the mini player, the desktop rail and every OS
  * "now playing" request open first.
  *
- * It is the Apple Music layout in Material 3 Expressive clothing: one large artwork whose
+ * It is the Apple Music layout drawn with Material 3 Expressive: one large artwork whose
  * frame morphs while held and settles smaller while paused, a Black headline, a wavy progress
- * track that only ripples while audio is actually moving, a wide play/pause toggle that
- * morphs between round and square, and a floating toolbar whose action button is the pair of
- * quotation marks that opens the AMLL lyric page. Nothing here renders lyrics; that stays the
+ * track that ripples only while audio is moving, a wide play/pause toggle that morphs
+ * between round and square, and a floating toolbar whose action button is the pair of
+ * quotation marks that opens the AMLL lyric page. Nothing here renders lyrics; that is the
  * job of `AmllPlayerScreen`, which this page pushes on top of itself.
  */
 @OptIn(
@@ -135,7 +135,7 @@ fun NowPlayingScreen(
     val sheets = rememberTransportSheetsState()
     val playbackSource by PlaybackSource.label.collectAsState()
     val songWikiState by viewModel.songWikiUiState.collectAsState()
-    // The dynamic cover came with the details, and the details came here from the lyric page.
+    // The dynamic cover plays over the artwork in the song details, which open from this page.
     val dynamicCoverUiState by viewModel.dynamicCoverUiState.collectAsState()
     val localArtworkActive by viewModel.localArtworkActive.collectAsState()
     val remoteArtworkUri by viewModel.remoteArtworkUri.collectAsState()
@@ -192,7 +192,8 @@ fun NowPlayingScreen(
                     reducedMotion = reducedMotion,
                     onSeek = player::seekTo,
                 )
-                // Silence with no sign of why: a muted app volume showed nowhere on this page.
+                // A muted app volume gets a chip here; otherwise the silence would have no visible
+                // cause on this page.
                 if (outputVolume <= 0.001f && nowPlaying.hasMedia) {
                     MutedChip(
                         palette = palette,
@@ -497,7 +498,7 @@ private fun NowPlayingTitle(
     ) {
         Column(Modifier.weight(1f)) {
             Text(
-                text = media?.title ?: "未在播放",
+                text = media?.title ?: "未播放",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Black,
                 color = palette.onPageMiddle,

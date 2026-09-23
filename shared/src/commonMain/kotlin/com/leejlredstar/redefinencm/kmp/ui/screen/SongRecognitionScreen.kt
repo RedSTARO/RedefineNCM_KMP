@@ -303,7 +303,7 @@ private fun RecognitionIdlePanel(
                 }
             }
             Text(
-                text = "让音乐更清晰地靠近麦克风",
+                text = "靠近音源，让麦克风听清音乐",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
@@ -359,7 +359,7 @@ private fun RecognitionListeningPanel(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // A fixed box with the circle scaled inside it: resizing the circle itself moved
+            // A fixed box with the circle scaled inside it: resizing the circle itself would move
             // everything below it up and down with every level sample.
             Box(Modifier.size(112.dp), contentAlignment = Alignment.Center) {
                 Surface(

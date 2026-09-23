@@ -12,10 +12,10 @@ import kotlinx.coroutines.flow.firstOrNull
 /**
  * The existing NetEase stack, presented as a [MusicProvider].
  *
- * This is an adapter, not a rewrite: [Repository] keeps its NetEase-shaped API and every existing
- * caller keeps using it directly. Only the four cross-provider capabilities are routed through
- * here, so nothing NetEase-only — playback reporting, liked songs, daily recommendations — is
- * pulled into the provider abstraction where it would have to be made conditional.
+ * This is an adapter: [Repository] keeps its NetEase-shaped API and every existing caller keeps
+ * using it directly. Only the four cross-provider capabilities are routed through here, so
+ * nothing NetEase-only (playback reporting, liked songs, daily recommendations) is pulled into
+ * the provider abstraction, where it would have to be made conditional.
  */
 class NeteaseProvider(
     private val repository: Repository,
@@ -29,10 +29,9 @@ class NeteaseProvider(
     /**
      * Always available.
      *
-     * Gating this on a configured server address would be a new behaviour: NetEase search was
-     * never conditional before, and excluding the provider would turn an unconfigured backend into
-     * "没有找到结果" instead of the search failure it actually is. Letting the call run and fail
-     * keeps the honest message.
+     * NetEase search runs whether or not a server address is configured. Excluding the provider
+     * when no address is set would turn an unconfigured backend into "没有找到结果" instead of
+     * the search failure it is; letting the call run and fail keeps the message accurate.
      */
     override suspend fun isAvailable(): Boolean = true
 

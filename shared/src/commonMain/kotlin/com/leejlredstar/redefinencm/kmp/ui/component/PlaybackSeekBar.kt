@@ -17,14 +17,13 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 /**
  * The position a transport surface shows while its seek control is being dragged.
  *
- * A seek control cannot simply display the player's position: between the finger moving and the
- * backend reporting the new position the bar would snap back. Every surface therefore holds a
- * pending fraction, shows that instead while a drag is live, and commits on release.
+ * A seek control cannot display the player's position directly: between the finger moving and
+ * the backend reporting the new position the bar would snap back. Every surface therefore holds
+ * a pending fraction, shows that instead while a drag is live, and commits on release.
  *
- * That protocol had been written four times — inside [PlaybackSeekBar] and again at each of its
- * call sites, plus a fourth copy on the now-playing screen — and the copies disagreed. Two of
- * them multiplied the fraction by the duration without clamping, so a drag to the very end could
- * ask the backend to seek past the end of the track. Clamping lives in [seekPositionOf] now.
+ * Every surface runs that protocol through this one class. Clamping lives in [seekPositionOf]:
+ * multiplying the fraction by the duration without clamping lets a drag to the very end ask the
+ * backend to seek past the end of the track.
  */
 @Stable
 internal class SeekDragState {
@@ -65,8 +64,8 @@ internal class SeekDragState {
     /**
      * The position to label: the pending one while dragging, the player's otherwise.
      *
-     * A reported position never draws past the end of the track. Backends overshoot by a frame
-     * around a track change, and one surface already clamped for it while the others did not.
+     * A reported position never draws past the end of the track, because backends overshoot by
+     * a frame around a track change.
      */
     fun positionFor(position: Long, totalDuration: Long): Long = when {
         isDragging -> seekPositionOf(dragProgress, totalDuration)

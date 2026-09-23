@@ -136,7 +136,7 @@ fun LocalLibraryScreen(
                     rows.isEmpty() -> item(key = "local-empty") {
                         ExpressiveStatePanel(
                             title = "还没有本地歌单",
-                            message = "新建一个，或从歌曲菜单里「添加到本地歌单」。点亮 QQ 音乐等平台歌曲的心形，也会收进「本地喜欢」。",
+                            message = "新建一个，或在歌曲的「更多操作」里选「添加到本地歌单」。点亮 QQ音乐等平台歌曲的心形，也会收进「本地喜欢」。",
                             icon = AppIcons.PlaylistAdd,
                             accentPalette = palette,
                             modifier = Modifier.padding(horizontal = 16.dp),
@@ -172,7 +172,7 @@ fun LocalLibraryScreen(
         TextEntryDialog(
             title = "导入平台歌单",
             label = "歌单链接或 ID",
-            supportingText = "支持网易云音乐与 QQ 音乐的歌单链接；纯数字按网易云歌单读取，QQ 歌单 ID 前加 qq:",
+            supportingText = "支持网易云音乐与 QQ音乐的歌单链接；纯数字按网易云歌单读取，QQ 歌单 ID 前加 qq:",
             confirmLabel = "导入",
             onDismiss = { importingDialog = false },
             onConfirm = { reference ->

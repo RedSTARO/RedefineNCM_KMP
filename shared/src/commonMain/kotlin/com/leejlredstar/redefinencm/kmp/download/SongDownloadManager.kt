@@ -771,8 +771,8 @@ class SongDownloadManager(
     }
 
     /**
-     * One listing for every song; a store that cannot be read leaves each song with an empty
-     * snapshot, the same outcome a failed per-song inspection used to have.
+     * One listing for every song. A store that cannot be read leaves each song with an empty
+     * snapshot.
      */
     private suspend fun inspectLocalAssets(
         songIds: Collection<Long>,
@@ -900,7 +900,7 @@ class SongDownloadManager(
                 transitionTask(taskId, generation, DownloadTaskStatus.Resolving) {
                     it.copy(
                         status = DownloadTaskStatus.Failed,
-                        errorMessage = "无法解析歌曲直链",
+                        errorMessage = "无法获取歌曲的下载地址",
                     )
                 }
                 return
@@ -1124,8 +1124,8 @@ class SongDownloadManager(
             task.copy(
                 errorMessage = failure.message
                     ?.takeIf(String::isNotBlank)
-                    ?.let { "无法清理断点文件：$it" }
-                    ?: "无法清理断点文件",
+                    ?.let { "无法清理断点下载文件：$it" }
+                    ?: "无法清理断点下载文件",
             )
         }
         return false
@@ -1594,7 +1594,7 @@ private fun SongDetailSongs.downloadDisplayTitle(): String =
     name.ifBlank { "本地歌曲 $id" }
 
 private fun SongDetailSongs.downloadDisplayArtist(): String =
-    ar.joinToString(" / ") { it.name }.ifBlank { "未知艺术家" }
+    ar.joinToString(" / ") { it.name }.ifBlank { "未知歌手" }
 
 private const val PERSISTENCE_INTERVAL_MS = 500L
 private const val MAX_CONCURRENT_ASSET_SAVES = 2

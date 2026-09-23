@@ -32,9 +32,9 @@ import kotlinx.coroutines.withContext
 /**
  * Saves a page's extracted accent across the page leaving composition.
  *
- * Pages keep their scroll position when the user switches tabs now, so the artwork a page
- * extracts its colour from (a hero, a first carousel card) can be off screen when it returns and
- * never reload. Without this the page came back in the default colour.
+ * Pages keep their scroll position when the user switches tabs, so the artwork a page extracts
+ * its colour from (a hero, a first carousel card) can be off screen when it returns and never
+ * reload. Without this the page would come back in the default colour.
  */
 val AccentColorSaver: Saver<Color, Long> = Saver(
     save = { it.value.toLong() },
@@ -67,10 +67,10 @@ data class ContentAccentPalette(
  * that produces it.
  *
  * Every surface that tints itself from cover art needs the same four things wired in the same
- * order — a colour that survives recomposition, an extractor bound to the artwork's request key,
+ * order: a colour that survives recomposition, an extractor bound to the artwork's request key,
  * an animation between the old colour and the new one, and a palette derived from the result.
- * Written out per surface that came to eight near-copies which had already drifted: some honoured
- * reduced motion, some did not. [rememberArtworkAccent] is the one place it lives now.
+ * [rememberArtworkAccent] is the one place that wiring lives. Copies written out per surface
+ * drift apart, for example in whether they honour reduced motion.
  */
 @Stable
 class ArtworkAccent internal constructor(
@@ -135,14 +135,14 @@ internal fun buildContentAccentPalette(
 ): ContentAccentPalette {
     val isDark = scheme.surface.luminance() < 0.5f
     // Everything below is derived the way Material derives a scheme: hold the source's hue,
-    // choose a chroma, place a tone. The previous implementation lerp'd the raw source toward
-    // the surface in sRGB, which is what produced the muddy washes — blending a saturated yellow
-    // toward a dark surface travels through olive, because the straight numeric path between two
-    // sRGB colours is not the path the eye expects.
+    // choose a chroma, place a tone. Lerping the raw source toward the surface in sRGB gives
+    // muddy washes: blending a saturated yellow toward a dark surface travels through olive,
+    // because the straight numeric path between two sRGB colours is not the path the eye
+    // expects.
     //
     // The chroma ceilings matter more than the tones. A Material surface tint is *barely*
-    // tinted; letting a fully saturated album colour through at full chroma is what made whole
-    // pages look dyed.
+    // tinted; a fully saturated album colour let through at full chroma makes whole pages look
+    // dyed.
     val hue = source.copy(alpha = 1f)
     val surfaceTone = scheme.surface.toOklch().lightness
 
@@ -190,7 +190,7 @@ internal fun buildContentAccentPalette(
 /** Ceiling for page-background tinting. Material surface tints are subtle by design. */
 private const val SurfaceTintChroma = 0.030f
 
-/** Ceiling for tonal containers — visibly coloured, still a surface rather than a swatch. */
+/** Ceiling for tonal containers: visibly coloured, but still a surface rather than a swatch. */
 private const val ContainerChroma = 0.055f
 
 private const val AccentChromaMin = 0.055f
@@ -237,8 +237,8 @@ internal fun secondaryContentColorFor(
 /**
  * The colour for a text button or a link on the page this palette tints.
  *
- * A text button defaults to the scheme's own primary, which is the app's brand green: on a page
- * tinted from the artwork that is the one colour on screen with no relation to the cover.
+ * A text button defaults to the scheme's own primary, which follows the cover that is playing
+ * (or the wallpaper), not the artwork this page is tinted from.
  */
 @Composable
 fun ContentAccentPalette.pageLinkColor(): Color =
@@ -249,7 +249,7 @@ fun ContentAccentPalette.pageLinkColor(): Color =
  * to carry text at WCAG AA.
  *
  * The accent's tone is fixed per scheme while a page's tint follows the artwork, so a pale hue
- * on the page it tinted — a yellow cover in the light theme — leaves the two about 4:1 apart.
+ * on the page it tinted (a yellow cover in the light theme) leaves the two about 4:1 apart.
  * Blending the rest of the way keeps the album's hue on the label; falling back to the page's
  * plain foreground would not.
  */
@@ -322,9 +322,9 @@ private fun compositeOver(foreground: Color, background: Color): Color {
 @Composable
 fun rememberThemeColorExtractor(
     requestKey: Any?,
-    // Vibrant, not muted. The palette now bounds chroma itself, so the extractor's job is to
-    // find the colour that actually represents the cover rather than to pre-soften it; picking a
-    // muted swatch first and then tinting with it gave washed-out, near-interchangeable pages.
+    // Vibrant, not muted. The palette bounds chroma itself, so the extractor's job is to find
+    // the colour that represents the cover rather than to pre-soften it; picking a muted swatch
+    // first and then tinting with it gives washed-out, near-interchangeable pages.
     preferStyle: Int = 1,
     onAccentColor: (Color) -> Unit,
 ): (Image) -> Unit {

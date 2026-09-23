@@ -52,8 +52,8 @@ internal data class LyricCapabilityBadgeSpec(
      * lyrics are before the colour or the dropdown does. Shape is decoration in most of this app;
      * here it carries the meaning, which is why the tone/level/shape triple moves together.
      *
-     * Never the sole signal — [contentDescription] and the dropdown still state the level in
-     * words for screen readers and for anyone who cannot distinguish the outlines.
+     * It is never the sole signal: [contentDescription] and the dropdown still state the level
+     * in words for screen readers and for anyone who cannot distinguish the outlines.
      */
     val shape: () -> RoundedPolygon,
 )
@@ -102,7 +102,7 @@ internal fun lyricSourceDisplayName(
             .takeIf { endpoint.startsWith("provider:") }
             ?.let(MusicProviderId::fromKey)
             ?.let { "${it.displayName}歌词" }
-            ?: "网易云歌词后端"
+            ?: "网易云音乐歌词"
         null -> "未知"
     }
     return if (endpoint == "local-sidecar") "$provider · 本地歌词文件" else provider
@@ -146,8 +146,8 @@ internal fun LyricCapabilityBadge(
             },
         contentAlignment = Alignment.Center,
     ) {
-        // Square rather than the old 40x32 pill: MaterialShapes are normalised into a unit box,
-        // so a non-square badge would stretch every silhouette out of recognisable proportion.
+        // Square, not a 40x32 pill: MaterialShapes are normalised into a unit box, so a
+        // non-square badge would stretch every silhouette out of recognisable proportion.
         Surface(
             modifier = Modifier.size(36.dp),
             shape = badgeShape,

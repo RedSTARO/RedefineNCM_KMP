@@ -197,9 +197,9 @@ kotlin {
     
     sourceSets {
         // Desktop, iOS and Web all draw through Skia/skiko, so the pieces that only need a
-        // Skia bitmap — Coil's decoded image surface and the palette extraction over it —
-        // live here once instead of being copied into three identical actuals. Android is
-        // deliberately outside: it has its own Bitmap and androidx.palette.
+        // Skia bitmap (Coil's decoded image surface and the palette extraction over it) live
+        // here once instead of being copied into three identical actuals. Android stays
+        // outside: it has its own Bitmap and androidx.palette.
         val skiaMain by creating {
             dependsOn(commonMain.get())
         }
@@ -208,8 +208,9 @@ kotlin {
         wasmJsMain.get().dependsOn(skiaMain)
 
         // Android, iOS and the browser have no window the app owns and no in-app audio-route
-        // picker — the OS provides both. Their "this target cannot do that" actuals were three
-        // copies of one file differing only in a word of an error message; they live here once.
+        // picker; the OS provides both. Their "this target cannot do that" actuals live here
+        // once instead of as three copies of one file that differ only in a word of an error
+        // message.
         val nonDesktopMain by creating {
             dependsOn(commonMain.get())
         }
@@ -218,9 +219,9 @@ kotlin {
         wasmJsMain.get().dependsOn(nonDesktopMain)
 
         // Desktop and Android are the two targets with java.io.File. The local-media sidecar
-        // transaction — stage to a temp name, move the old file aside, publish, drop the
-        // backup, and roll every step back on failure — was written once per target, and the
-        // two copies had already drifted in how they restore a backup. It lives here now.
+        // transaction (stage to a temp name, move the old file aside, publish, drop the
+        // backup, and roll every step back on failure) lives here once, because the two
+        // per-target copies had drifted apart in how they restore a backup.
         // iOS and the browser are outside: neither has a filesystem of this shape.
         val javaIoMain by creating {
             dependsOn(commonMain.get())
@@ -248,13 +249,13 @@ kotlin {
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.material3)
-            // 图标改用自绘 Material Symbols（ui/icon/AppIcons.kt），不再依赖已弃用的 materialIconsExtended
+            // 图标使用自绘 Material Symbols（ui/icon/AppIcons.kt），不依赖已弃用的 materialIconsExtended
             implementation(libs.compose.ui)
             implementation(libs.compose.components.resources)
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
-            // Networking (Ktor) — engines are added per platform below
+            // Networking (Ktor); engines are added per platform below
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.content.negotiation)
             implementation(libs.ktor.client.logging)
@@ -265,7 +266,7 @@ kotlin {
             // DI
             implementation(libs.koin.core)
             implementation(libs.koin.compose)
-            // Image loading — coil-compose + Ktor-backed network fetcher
+            // Image loading: coil-compose + Ktor-backed network fetcher
             implementation(libs.coil.compose)
             implementation(libs.coil.network.ktor3)
             // SQLDelight runtime
@@ -304,8 +305,8 @@ kotlin {
                 implementation(libs.dbus.java.core)
                 runtimeOnly(libs.dbus.java.native.unixsocket)
                 // Decodes both the dynamic-cover MP4 frames and all playback audio, so the
-                // desktop player reaches FLAC and the Hi-Res tiers Java Sound's own SPI could
-                // not. javacv is kept non-transitive so camera/OpenCV/Tesseract presets are not
+                // desktop player reaches FLAC and the Hi-Res tiers Java Sound's own SPI cannot.
+                // javacv is kept non-transitive so camera/OpenCV/Tesseract presets are not
                 // dragged into the app.
                 implementation("org.bytedeco:javacv:${libs.versions.javacv.get()}") {
                     isTransitive = false

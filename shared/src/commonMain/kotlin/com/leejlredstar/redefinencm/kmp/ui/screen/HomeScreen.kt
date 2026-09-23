@@ -71,8 +71,7 @@ internal fun replaceQueueWithDailyRecommendations(
 }
 
 /**
- * 推荐主页（原版 RecommendPage）：搜索药丸 → 搜索页 的共享元素过渡由
- * SharedTransitionLayout + AnimatedVisibility + sharedBounds 实现。
+ * 推荐主页（原版 RecommendPage）。搜索药丸切换到搜索 Tab。
  */
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -82,7 +81,7 @@ fun HomeScreen(
     onOpenMy: () -> Unit,
     onOpenRecognition: () -> Unit,
     onOpenDailySongs: () -> Unit = {},
-    /** The search pill: search is a tab of its own now, so this switches to it. */
+    /** The search pill: search is a tab of its own, so this switches to it. */
     onOpenSearch: () -> Unit = {},
     viewModel: MainViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
@@ -126,10 +125,9 @@ fun HomeScreen(
         accentPalette = pagePalette,
         contentWindowInsets = WindowInsets.statusBars,
     ) {
-        // The page title, the counts and the avatar are a real collapsing app bar now.
-        // They used to be a Surface inside the list that scrolled away like content;
-        // as a top bar they collapse to a pinned compact title instead, and the search
-        // pill is left as the first actual row of the page.
+        // The page title, the counts and the avatar are a collapsing app bar, not a Surface
+        // inside the list that scrolls away like content: as a top bar they collapse to a
+        // pinned compact title, and the search pill is the first row of the page.
         val appBarScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
         Scaffold(
             modifier = Modifier
@@ -214,9 +212,9 @@ fun HomeScreen(
                 SectionWithCarousel(
                     title = "每日推荐",
                     // The heading is the way into the full list, and the count is what the
-                    // heading is about. They used to be a second button beside the first,
-                    // labelled with the sentence "全部 33 首" — three controls on one line, one
-                    // of them a bare piece of text stating what the page already showed.
+                    // heading is about. A second button beside the first, labelled with the
+                    // sentence "全部 33 首", would make three controls on one line, one of them
+                    // a bare piece of text stating what the page already shows.
                     supportingText = if (dailySongs.isEmpty()) null else "${dailySongs.size} 首",
                     onOpenAll = onOpenDailySongs.takeIf { dailySongs.isNotEmpty() },
                     onOpenAllLabel = "查看每日推荐的全部歌曲",
@@ -236,7 +234,7 @@ fun HomeScreen(
                             shape = CircleShape,
                             contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
                             // Default tonal colours land on secondaryContainer, which in
-                            // this scheme is a yellow — the one loud element left on an
+                            // this scheme is a yellow: the one loud element left on an
                             // otherwise artwork-tinted page. Follow the page accent.
                             colors = ButtonDefaults.filledTonalButtonColors(
                                 containerColor = pagePalette.container,
@@ -299,10 +297,10 @@ private fun RecognitionToolSection(
     accentColor: Color,
     onOpenRecognition: () -> Unit,
 ) {
-    // One entry point does not earn a titled section plus a carousel: the old layout spent a
-    // 168dp tile, a heading and a supporting line — roughly a third of the viewport — on a
-    // single tap target, and the LazyRow never had a second item to scroll to. A list item is
-    // the M3 element for "one action with a label and a description".
+    // One entry point does not earn a titled section plus a carousel: that layout spends a
+    // 168dp tile, a heading and a supporting line (roughly a third of the viewport) on a
+    // single tap target, and its LazyRow would never have a second item to scroll to. A list
+    // item is the M3 element for "one action with a label and a description".
     Column(modifier = Modifier.padding(top = 20.dp)) {
         RecognitionToolCard(
             accentColor = accentColor,

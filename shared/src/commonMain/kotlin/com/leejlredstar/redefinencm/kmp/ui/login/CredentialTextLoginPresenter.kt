@@ -30,7 +30,7 @@ import kotlinx.coroutines.launch
 /**
  * Draws any [CredentialTextLoginMethod]: one obscured field, prefilled with what is stored, and a
  * save that runs the method's validation before the host persists. Saving an empty field signs
- * out, which is why the field is prefilled — clearing it is a deliberate act.
+ * out, which is why the field is prefilled: clearing it is a deliberate act.
  */
 class CredentialTextLoginPresenter : LoginMethodPresenter {
     override fun supports(method: LoginMethod): Boolean = method is CredentialTextLoginMethod

@@ -134,7 +134,7 @@ class SongRecognitionViewModel internal constructor(
     private var recognitionJob: Job? = null
     private var closed = false
     // Playback this screen paused to hear the room. It is given back when the user leaves or
-    // cancels without choosing a result; the page used to say it would simply stay paused.
+    // cancels without choosing a result.
     private var pausedForRecognition = false
 
     fun beginPermissionRequest() {
