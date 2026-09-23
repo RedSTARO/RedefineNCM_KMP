@@ -582,6 +582,7 @@ class ExoPlayerPlatformPlayer(
         val userVolume = _volume.value
         blend.outgoing.volume = userVolume * gains.outgoing
         blend.incoming.volume = if (beforeEntry) 0f else userVolume * gains.incoming
+        _transitionAudible.value = !beforeEntry
         if (beforeEntry) {
             // A long entry can start the pre-roll before the outgoing tempo ramp; keep ramping.
             val position = blend.outgoing.currentPosition
@@ -649,6 +650,7 @@ class ExoPlayerPlatformPlayer(
         if (!blend.swapped) swapToIncoming(blend)
         if (this.blend !== blend) return
         this.blend = null
+        _transitionAudible.value = false
         emptyDeck(blend.outgoing)
         active.volume = _volume.value
         setSpeed(active, 1f)
@@ -663,6 +665,7 @@ class ExoPlayerPlatformPlayer(
         val running = blend
         if (running != null) {
             blend = null
+            _transitionAudible.value = false
             if (running.swapped) emptyDeck(running.outgoing) else emptyDeck(running.incoming)
             active.volume = _volume.value
         }

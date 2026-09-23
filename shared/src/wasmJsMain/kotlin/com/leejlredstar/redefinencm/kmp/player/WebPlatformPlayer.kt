@@ -792,6 +792,7 @@ class WebPlatformPlayer(
         val userVolume = _volume.value.toDouble()
         active.outgoing.volume = (userVolume * gains.outgoing).coerceIn(0.0, 1.0)
         active.deck.volume = (userVolume * gains.incoming).coerceIn(0.0, 1.0)
+        _transitionAudible.value = elapsedMs > 0.0
         // Keep the outgoing beat on the incoming one: nudge its rate by the phase error, up to
         // 4 %, the way a DJ rides the pitch fader. Browsers start play() tens of milliseconds late.
         if (!active.outgoing.ended && elapsedMs > 0.0) {
@@ -835,6 +836,7 @@ class WebPlatformPlayer(
         audio.volume = _volume.value.toDouble()
         audio.playbackRate = 1.0
         blend = null
+        _transitionAudible.value = false
     }
 
     /**
@@ -846,6 +848,7 @@ class WebPlatformPlayer(
         val active = blend
         if (active != null) {
             blend = null
+            _transitionAudible.value = false
             if (active.swapped) {
                 releaseDeck(active.outgoing)
             } else {

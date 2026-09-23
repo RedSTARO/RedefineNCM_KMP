@@ -119,6 +119,13 @@ interface PlatformPlayer {
     /** Drops an armed plan that has not started yet. */
     fun disarmTransition() {}
 
+    /**
+     * True while a transition's two tracks sound together: from the moment the incoming track
+     * becomes audible until the outgoing one has faded out or the blend was abandoned. For
+     * screens that show a transition playing; it changes nothing about playback.
+     */
+    val transitionAudible: StateFlow<Boolean> get() = NoTransitionAudible
+
     // ── Lifecycle ──
 
     fun release()
@@ -179,3 +186,5 @@ internal fun MutableStateFlow<Long>.advancePlaybackOccurrence() {
     check(value != Long.MAX_VALUE) { "Playback occurrence exhausted" }
     value += 1L
 }
+
+private val NoTransitionAudible: StateFlow<Boolean> = MutableStateFlow(false)

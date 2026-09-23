@@ -25,6 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -52,6 +54,7 @@ fun MiniNowPlayingBar(
     val position by player.position.collectAsState()
     val duration by player.duration.collectAsState()
     val volume by player.volume.collectAsState()
+    val transitionAudible by player.transitionAudible.collectAsState()
     val hasMedia = media != null
     // Without a muted badge, silence would be the one state the pill gives no sign of.
     val muted = hasMedia && volume <= 0.001f
@@ -76,107 +79,122 @@ fun MiniNowPlayingBar(
     val accentPalette = artworkAccent.palette
     val containerColor = accentPalette.container
     val contentColor = contentColorFor(containerColor)
+    // On a dark container the comets' heads burn near white; on a light one white would vanish
+    // into it, so they stay the accent.
+    val ringHead = if (contentColor.luminance() > 0.5f) {
+        lerp(accentPalette.accent, Color.White, 0.7f)
+    } else {
+        accentPalette.accent
+    }
 
     // The whole pill opens the player; only the play button does something else. Limiting that
     // to the cover would leave the rest of the pill doing nothing when tapped.
-    Surface(
-        onClick = onExpand,
-        enabled = hasMedia,
-        modifier = Modifier
-            .padding(end = 2.dp, bottom = 2.dp)
-            // FAB slot 没有高度约束，使用固定小尺寸贴右下角，避免覆盖列表主体。
-            .width(116.dp)
-            .height(60.dp)
-            .semantics {
-                contentDescription = strings.openPlayerFor(media?.title ?: strings.currentSong) +
-                    if (muted) strings.mutedSuffix else ""
-            },
-        shape = CircleShape,
-        color = containerColor,
-        contentColor = contentColor,
-        tonalElevation = 4.dp,
-    ) {
-        CompositionLocalProvider(LocalContentColor provides contentColor) {
-            Box {
-                Row(
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(Modifier.size(48.dp)) {
-                        Surface(
-                            modifier = Modifier.fillMaxSize(),
-                            shape = CircleShape,
-                            color = contentColor.copy(alpha = 0.16f),
-                            contentColor = contentColor,
-                        ) {
-                            if (hasMedia) {
-                                AsyncImage(
-                                    model = ImageRequest.Builder(LocalPlatformContext.current)
-                                        .data(media?.artworkUri)
-                                        .crossfade(true)
-                                        .build(),
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
-                                    onSuccess = { state -> extractThemeColor(state.result.image) },
-                                )
-                            } else {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = AppIcons.MusicNote,
+    Box(Modifier.padding(end = 2.dp, bottom = 2.dp)) {
+        Surface(
+            onClick = onExpand,
+            enabled = hasMedia,
+            modifier = Modifier
+                // FAB slot 没有高度约束，使用固定小尺寸贴右下角，避免覆盖列表主体。
+                .width(116.dp)
+                .height(60.dp)
+                .semantics {
+                    contentDescription = strings.openPlayerFor(media?.title ?: strings.currentSong) +
+                        if (muted) strings.mutedSuffix else ""
+                },
+            shape = CircleShape,
+            color = containerColor,
+            contentColor = contentColor,
+            tonalElevation = 4.dp,
+        ) {
+            CompositionLocalProvider(LocalContentColor provides contentColor) {
+                Box {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.size(48.dp)) {
+                            Surface(
+                                modifier = Modifier.fillMaxSize(),
+                                shape = CircleShape,
+                                color = contentColor.copy(alpha = 0.16f),
+                                contentColor = contentColor,
+                            ) {
+                                if (hasMedia) {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(LocalPlatformContext.current)
+                                            .data(media?.artworkUri)
+                                            .crossfade(true)
+                                            .build(),
                                         contentDescription = null,
-                                        modifier = Modifier.size(22.dp),
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                        onSuccess = { state -> extractThemeColor(state.result.image) },
+                                    )
+                                } else {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = AppIcons.MusicNote,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(22.dp),
+                                        )
+                                    }
+                                }
+                            }
+                            if (muted) {
+                                Surface(
+                                    modifier = Modifier.align(Alignment.BottomEnd).size(20.dp),
+                                    shape = CircleShape,
+                                    color = containerColor,
+                                    contentColor = contentColor,
+                                ) {
+                                    Icon(
+                                        imageVector = AppIcons.VolumeOff,
+                                        contentDescription = null,
+                                        modifier = Modifier.padding(3.dp),
                                     )
                                 }
                             }
                         }
-                        if (muted) {
-                            Surface(
-                                modifier = Modifier.align(Alignment.BottomEnd).size(20.dp),
-                                shape = CircleShape,
-                                color = containerColor,
+
+                        Spacer(Modifier.width(6.dp))
+
+                        FilledIconButton(
+                            onClick = { player.togglePlayPause() },
+                            enabled = hasMedia,
+                            modifier = Modifier.size(48.dp),
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = contentColor.copy(alpha = 0.18f),
                                 contentColor = contentColor,
-                            ) {
-                                Icon(
-                                    imageVector = AppIcons.VolumeOff,
-                                    contentDescription = null,
-                                    modifier = Modifier.padding(3.dp),
-                                )
-                            }
+                                disabledContainerColor = contentColor.copy(alpha = 0.08f),
+                                disabledContentColor = contentColor.copy(alpha = 0.42f),
+                            ),
+                        ) {
+                            Icon(
+                                imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
+                                contentDescription = if (isPlaying) strings.pause else strings.play,
+                            )
                         }
                     }
-
-                    Spacer(Modifier.width(6.dp))
-
-                    FilledIconButton(
-                        onClick = { player.togglePlayPause() },
-                        enabled = hasMedia,
-                        modifier = Modifier.size(48.dp),
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = contentColor.copy(alpha = 0.18f),
-                            contentColor = contentColor,
-                            disabledContainerColor = contentColor.copy(alpha = 0.08f),
-                            disabledContentColor = contentColor.copy(alpha = 0.42f),
-                        ),
-                    ) {
-                        Icon(
-                            imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
-                            contentDescription = if (isPlaying) strings.pause else strings.play,
-                        )
-                    }
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = 14.dp)
+                            .width(70.dp)
+                            .height(2.dp)
+                            .clip(CircleShape),
+                        color = contentColor,
+                        trackColor = contentColor.copy(alpha = 0.20f),
+                    )
                 }
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(horizontal = 14.dp)
-                        .width(70.dp)
-                        .height(2.dp)
-                        .clip(CircleShape),
-                    color = contentColor,
-                    trackColor = contentColor.copy(alpha = 0.20f),
-                )
             }
         }
+        // While a song transition sounds, light runs around the pill.
+        FlowingLightRing(
+            visible = transitionAudible && hasMedia,
+            color = accentPalette.accent,
+            headColor = ringHead,
+            modifier = Modifier.matchParentSize(),
+        )
     }
 }

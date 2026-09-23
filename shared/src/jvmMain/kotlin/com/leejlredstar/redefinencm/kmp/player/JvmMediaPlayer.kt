@@ -129,6 +129,7 @@ class JvmMediaPlayer(
                 if (_isPlaying.value) {
                     clockReading()?.let { reading -> onClockReading(reading, generation) }
                 }
+                _transitionAudible.value = _isPlaying.value && mixer?.blendIncomingMediaId != null
                 delay(100)
             }
         }
@@ -173,6 +174,7 @@ class JvmMediaPlayer(
     private fun stopPolling() {
         pollJob?.cancel()
         pollJob = null
+        _transitionAudible.value = false
     }
 
     private fun stopPollingIfCurrent(generation: Long) {
