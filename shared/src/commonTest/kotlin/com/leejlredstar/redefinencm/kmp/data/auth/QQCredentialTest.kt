@@ -31,12 +31,14 @@ class QQCredentialTest {
         assertEquals(99L, credential.expiredAt)
         assertTrue(credential.canRefresh)
 
-        // `str_musicid` only travels when it says something `musicid` does not.
+        // `str_musicid` only travels when it says something `musicid` does not. The encrypted UIN
+        // rides along under a name the gateway ignores, for the accounts page's profile lookup.
         assertEquals(
             "musicid=123456; musickey=Q_H_L_key; openid=o1; refresh_token=r1; access_token=a1; " +
-                "expired_at=99; unionid=u1; refresh_key=k1",
+                "expired_at=99; unionid=u1; refresh_key=k1; encrypt_uin=e",
             credential.toCookieHeader(),
         )
+        assertEquals("e", QQCredential.parse(credential.toCookieHeader())?.encryptUin)
     }
 
     @Test

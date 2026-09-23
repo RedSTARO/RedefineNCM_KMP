@@ -74,7 +74,6 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
 import com.leejlredstar.redefinencm.kmp.lyric.supportsDynamicNowPlayingCover
 import com.leejlredstar.redefinencm.kmp.notification.OptionalLyricSurface
@@ -97,16 +96,23 @@ import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberConnectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.component.SettingsSectionLabel
+import com.leejlredstar.redefinencm.kmp.ui.component.SettingsTextField
+import com.leejlredstar.redefinencm.kmp.ui.component.SettingsValue
+import com.leejlredstar.redefinencm.kmp.ui.component.SettingsSwitch
+import com.leejlredstar.redefinencm.kmp.ui.component.SettingsButton
+import com.leejlredstar.redefinencm.kmp.ui.component.AccountCard
+import com.leejlredstar.redefinencm.kmp.ui.component.SettingsLinkRow
+import com.leejlredstar.redefinencm.kmp.ui.component.SettingsExpanderRow
 import com.leejlredstar.redefinencm.kmp.util.BuildInfo
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
-import com.leejlredstar.redefinencm.kmp.data.auth.QQCredential
-import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
 import com.leejlredstar.redefinencm.kmp.util.applySettingsBackup
 import com.leejlredstar.redefinencm.kmp.util.encodeSettingsBackup
 import com.leejlredstar.redefinencm.kmp.util.rememberExportFileLauncher
 import com.leejlredstar.redefinencm.kmp.util.rememberImportFileLauncher
+import com.leejlredstar.redefinencm.kmp.viewmodel.AccountsViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import kotlinx.coroutines.CancellationException
@@ -123,7 +129,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
-import com.leejlredstar.redefinencm.kmp.di.DEFAULT_NCM_SERVER as DefaultNcmServer
 import com.leejlredstar.redefinencm.kmp.getPlatform
 import com.leejlredstar.redefinencm.kmp.ui.theme.ThemeMode
 import com.leejlredstar.redefinencm.kmp.ui.theme.ThemePreferences
@@ -140,7 +145,6 @@ private val optionalLyricSurface: OptionalLyricSurface? = lyricSurface as? Optio
 
 private val windowedLyricSurface: WindowedLyricSurface? = lyricSurface as? WindowedLyricSurface
 
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SettingsScreen(
@@ -150,16 +154,10 @@ fun SettingsScreen(
     /** Settings is a page opened from the library and the sidebar, so it has a way back. */
     onBack: (() -> Unit)? = null,
     settings: PlatformSettings = koinInject(),
-    api: NCMApi = koinInject(),
     mainViewModel: MainViewModel = koinInject(),
+    accountsViewModel: AccountsViewModel = koinInject(),
     nowPlayingViewModel: NowPlayingViewModel = koinInject(),
 ) {
-    var cookie by remember(settings) { mutableStateOf("") }
-    var server by remember(settings) { mutableStateOf("") }
-    var qqEnabled by remember(settings) { mutableStateOf(false) }
-    var qqServer by remember(settings) { mutableStateOf(SettingKeys.QQ_SERVER_DEFAULT) }
-    var qqCookie by remember(settings) { mutableStateOf("") }
-    var aggregationMode by remember(settings) { mutableStateOf(LibraryAggregationMode.Default) }
     var onlineQuality by remember(settings) { mutableStateOf(SoundQuality.STANDARD.name) }
     var dlQuality by remember(settings) { mutableStateOf(SoundQuality.STANDARD.name) }
     var replacePlaylist by remember(settings) { mutableStateOf(SettingKeys.REPLACE_PLAYLIST_DEFAULT) }
@@ -194,15 +192,13 @@ fun SettingsScreen(
     var audioOutputDeviceId by remember(settings) {
         mutableStateOf(SYSTEM_DEFAULT_AUDIO_OUTPUT_ID)
     }
-    var serverCheckStatus by remember { mutableStateOf<String?>(null) }
     var settingsLoaded by remember(settings) { mutableStateOf(false) }
     var settingsLoadError by remember(settings) { mutableStateOf<String?>(null) }
     var settingsLoadRequest by remember(settings) { mutableIntStateOf(0) }
-    var serverCheckGeneration by remember { mutableIntStateOf(0) }
     var lyricSourceWriteGeneration by remember { mutableIntStateOf(0) }
     var lyricDisplayWriteGeneration by remember { mutableIntStateOf(0) }
     var showImportConfirmation by remember { mutableStateOf(false) }
-    val userDetail by mainViewModel.userDetail.collectAsState()
+    val accountsSummary by accountsViewModel.summary.collectAsState()
     // Results of saving, importing and exporting appear at the bottom, beside the controls that
     // cause them; a banner at the top of the page was off screen by the time the backup buttons
     // were reached.
@@ -216,14 +212,8 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
 
     fun reloadSettingsSnapshot() {
-        cookie = settings.getString(SettingKeys.COOKIE, "")
-        server = settings.getString(SettingKeys.SERVER, DefaultNcmServer)
-        qqEnabled = settings.getBoolean(SettingKeys.QQ_ENABLED, false)
-        qqServer = settings.getString(SettingKeys.QQ_SERVER, SettingKeys.QQ_SERVER_DEFAULT)
-        qqCookie = settings.getString(SettingKeys.QQ_COOKIE, "")
-        aggregationMode = LibraryAggregationMode.fromWireValueOrDefault(
-            settings.getString(SettingKeys.LIBRARY_AGGREGATION_MODE, ""),
-        )
+        // The provider switches and addresses live on the accounts page, which reads its own.
+        accountsViewModel.reload()
         onlineQuality = settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name)
         dlQuality = settings.getString(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name)
         replacePlaylist = settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT)
@@ -298,14 +288,6 @@ fun SettingsScreen(
         settingsLoaded = false
         settingsLoadError = null
         try {
-            cookie = settings.getStringAsync(SettingKeys.COOKIE, "")
-            server = settings.getStringAsync(SettingKeys.SERVER, DefaultNcmServer)
-            qqEnabled = settings.getBooleanAsync(SettingKeys.QQ_ENABLED, false)
-            qqServer = settings.getStringAsync(SettingKeys.QQ_SERVER, SettingKeys.QQ_SERVER_DEFAULT)
-            qqCookie = settings.getStringAsync(SettingKeys.QQ_COOKIE, "")
-            aggregationMode = LibraryAggregationMode.fromWireValueOrDefault(
-                settings.getStringAsync(SettingKeys.LIBRARY_AGGREGATION_MODE, ""),
-            )
             onlineQuality = settings.getStringAsync(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name)
             dlQuality = settings.getStringAsync(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name)
             replacePlaylist = settings.getBooleanAsync(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT)
@@ -448,22 +430,13 @@ fun SettingsScreen(
             } else {
                 Column(modifier = Modifier.padding(horizontal = 20.dp)) {
                 // Account first: who is signed in and how to change that are what people open
-                // settings for most. The accounts themselves — one per provider plus the local
-                // one, with their sign-in, sign-out and raw credentials — live on their own page;
-                // this row says who is signed in where and opens it.
+                // settings for most. The accounts and each provider's switch, backend address
+                // and raw credential live on their own page; this row says who is signed in where
+                // and opens it.
                 SettingsSectionLabel("账号", settingsPalette)
-                val qqSignedIn = remember(qqCookie) { QQCredential.parse(qqCookie) != null }
                 SettingsLinkRow(
-                    label = when {
-                        cookie.isBlank() -> "未登录网易云音乐"
-                        userDetail?.profile?.nickname.isNullOrBlank() -> "网易云音乐已登录"
-                        else -> userDetail?.profile?.nickname.orEmpty()
-                    },
-                    supportingText = buildString {
-                        append("QQ 音乐")
-                        append(if (qqSignedIn) "已登录" else "未登录")
-                        append("；本地账号")
-                    },
+                    label = "账号与平台",
+                    supportingText = accountsSummary,
                     accentPalette = settingsPalette,
                     onClick = onOpenAccounts,
                 )
@@ -760,144 +733,6 @@ fun SettingsScreen(
                     mainViewModel.checkForUpdatesNow()
                 }
 
-                // A one-time technical setup, so it comes after everything used day to day.
-                SettingsSectionLabel("服务器", settingsPalette)
-                SettingsTextField(
-                    value = server,
-                    label = "服务器地址",
-                    accentPalette = settingsPalette,
-                    index = 0,
-                    count = 2,
-                    supportingText = "修改后需要重启应用才会生效；清空则恢复默认服务器",
-                    onDraftChange = {
-                        server = it
-                        serverCheckGeneration += 1
-                        serverCheckStatus = null
-                    },
-                    onCommit = { raw ->
-                        // An empty address is not a setting: it left every request without a
-                        // host after the next launch. Clearing the field means "the default".
-                        val normalized = normalizeServerInput(raw).ifEmpty { DefaultNcmServer }
-                        server = normalized
-                        persistSettings(
-                            write = { settings.setString(SettingKeys.SERVER, normalized) },
-                            onPersisted = { settingsMessage = "服务器地址已保存，重启应用后生效" },
-                        )
-                    },
-                )
-                // 原版 ServerItem：调 /inner/version/ 校验服务器可用性并显示版本
-                SettingsButton("检查服务器", settingsPalette, index = 1, count = 2) {
-                    val checkedServer = normalizeServerInput(server)
-                    val checkGeneration = ++serverCheckGeneration
-                    if (checkedServer.isEmpty()) {
-                        serverCheckStatus = "服务器地址不能为空"
-                        return@SettingsButton
-                    }
-                    serverCheckStatus = "检查中…"
-                    scope.launch {
-                        val resultStatus = try {
-                            val result = api.innerVersion("${checkedServer}inner/version/")
-                            if (result.code == 200) "服务器可用，版本：${result.data.version}"
-                            else "服务器有响应，但返回了错误（代码 ${result.code}）"
-                        } catch (cancelled: CancellationException) {
-                            throw cancelled
-                        } catch (e: Exception) {
-                            // The raw exception names a socket or parser, not what to do about it.
-                            "无法连接到这个服务器，请检查地址是否正确、服务是否在运行"
-                        }
-                        if (
-                            checkGeneration == serverCheckGeneration &&
-                            normalizeServerInput(server) == checkedServer
-                        ) {
-                            serverCheckStatus = resultStatus
-                        }
-                    }
-                }
-                serverCheckStatus?.let { status ->
-                    val success = status.startsWith("服务器可用")
-                    val checking = status.startsWith("检查中")
-                    Surface(
-                        shape = MaterialTheme.shapes.large,
-                        color = when {
-                            success -> settingsPalette.container
-                            checking -> settingsPalette.quietContainer
-                            else -> MaterialTheme.colorScheme.errorContainer
-                        },
-                        contentColor = when {
-                            success -> settingsPalette.onContainer
-                            checking -> settingsPalette.onQuietContainer
-                            else -> MaterialTheme.colorScheme.onErrorContainer
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 6.dp)
-                            .semantics { liveRegion = LiveRegionMode.Polite },
-                    ) {
-                        Text(
-                            text = status,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                        )
-                    }
-                }
-
-                SettingsSectionLabel("多平台", settingsPalette)
-                // QQ Music has no public API, so it needs a gateway the user self-hosts (the web app
-                // of L-1124/QQMusicApi), the same arrangement as the NetEase server above. The
-                // account is held here in the gateway's own cookie form and sent on every QQ
-                // request, so the Android build can sign in without reaching the gateway's config
-                // file — see AGENTS.md D6.
-                SettingsSwitch(
-                    checked = qqEnabled,
-                    label = "启用 QQ 音乐",
-                    accentPalette = settingsPalette,
-                    index = 0,
-                    count = if (qqEnabled) 3 else 1,
-                    supportingText = "需要自建 QQMusicApi 网关；未登录时按 QQ 对未登录用户的限制播放",
-                ) { value ->
-                    qqEnabled = value
-                    persistSettings({ settings.setBoolean(SettingKeys.QQ_ENABLED, value) })
-                }
-                if (qqEnabled) {
-                    SettingsTextField(
-                        value = qqServer,
-                        label = "QQ 音乐后端地址",
-                        accentPalette = settingsPalette,
-                        index = 1,
-                        count = 3,
-                        onDraftChange = { qqServer = it },
-                        onCommit = { raw ->
-                            val normalized = normalizeServerInput(raw)
-                                .ifEmpty { SettingKeys.QQ_SERVER_DEFAULT }
-                            qqServer = normalized
-                            persistSettings({ settings.setString(SettingKeys.QQ_SERVER, normalized) })
-                        },
-                    )
-                    // Both aggregation views ship; this picks which one the library and search use.
-                    SettingsSwitch(
-                        checked = aggregationMode == LibraryAggregationMode.PER_PROVIDER,
-                        label = "按平台分组显示",
-                        accentPalette = settingsPalette,
-                        index = 2,
-                        count = 3,
-                        supportingText = "关闭时各平台结果混合为一个列表",
-                    ) { value ->
-                        val mode = if (value) {
-                            LibraryAggregationMode.PER_PROVIDER
-                        } else {
-                            LibraryAggregationMode.MERGED
-                        }
-                        aggregationMode = mode
-                        persistSettings({
-                            settings.setString(
-                                SettingKeys.LIBRARY_AGGREGATION_MODE,
-                                mode.wireValue,
-                            )
-                        })
-                    }
-
-                }
-
                 SettingsSectionLabel("备份", settingsPalette)
                 // Deliberately two buttons, not a ButtonGroup. ButtonGroupScope.clickableItem
                 // takes `label: String` plus an `icon` composable and rendered nothing at all
@@ -940,7 +775,6 @@ fun SettingsScreen(
         )
     }
 
-
     if (showImportConfirmation) {
         AlertDialog(
             onDismissRequest = { showImportConfirmation = false },
@@ -965,30 +799,6 @@ fun SettingsScreen(
             },
         )
     }
-}
-
-/**
- * Group label for a settings section.
- *
- * Settings groups are not page titles. ExpressiveSectionTitle renders at `headlineSmall`, which
- * is the right weight above the home carousels but announced every one of the seven groups here
- * at 25sp, so each one opened a large empty band and the rows below it read as unrelated
- * floating cards. A short accent-coloured label ties a group to the rows underneath it and
- * leaves the page title as the only large type on screen.
- */
-@Composable
-internal fun SettingsSectionLabel(
-    text: String,
-    accentPalette: ContentAccentPalette,
-) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelLarge,
-        color = accentPalette.accent,
-        modifier = Modifier
-            .semantics { heading() }
-            .padding(start = 20.dp, end = 20.dp, top = 26.dp, bottom = 8.dp),
-    )
 }
 
 @Composable
@@ -1025,202 +835,6 @@ private fun SettingsHero(accentPalette: ContentAccentPalette) {
     }
 }
 
-@Composable
-internal fun SettingsTextField(
-    value: String,
-    label: String,
-    obscureText: Boolean = false,
-    accentPalette: ContentAccentPalette,
-    index: Int,
-    count: Int,
-    supportingText: String? = null,
-    onDraftChange: (String) -> Unit,
-    onCommit: (String) -> Unit,
-) {
-    val textState = remember { mutableStateOf(value) }
-    val committedTextState = remember { mutableStateOf(value) }
-    var text by textState
-    var isFocused by remember { mutableStateOf(false) }
-    var revealText by remember { mutableStateOf(false) }
-    val focusManager = LocalFocusManager.current
-    val latestCommit = rememberUpdatedState(onCommit)
-
-    LaunchedEffect(value, isFocused) {
-        if (!isFocused && value != textState.value) {
-            textState.value = value
-            committedTextState.value = value
-        }
-    }
-
-    fun commit() {
-        val draft = textState.value
-        if (draft != committedTextState.value) {
-            committedTextState.value = draft
-            onCommit(draft)
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            val draft = textState.value
-            if (draft != committedTextState.value) latestCommit.value(draft)
-        }
-    }
-
-    OutlinedTextField(
-        value = text,
-        onValueChange = {
-            text = it
-            onDraftChange(it)
-        },
-        label = { Text(label) },
-        supportingText = supportingText?.let { { Text(it) } },
-        singleLine = true,
-        visualTransformation = if (obscureText && !revealText) {
-            PasswordVisualTransformation()
-        } else {
-            VisualTransformation.None
-        },
-        trailingIcon = if (obscureText) {
-            {
-                TextButton(onClick = { revealText = !revealText }) {
-                    Text(if (revealText) "隐藏" else "显示")
-                }
-            }
-        } else {
-            null
-        },
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-        keyboardActions = KeyboardActions(
-            onDone = {
-                commit()
-                focusManager.clearFocus()
-            },
-        ),
-        shape = connectedListItemShape(index, count),
-        modifier = Modifier
-            .fillMaxWidth()
-            .onFocusChanged { focusState ->
-                if (isFocused && !focusState.isFocused) commit()
-                isFocused = focusState.isFocused
-            }
-            .padding(vertical = 1.5.dp)
-            .heightIn(min = 64.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = accentPalette.quietContainer,
-            unfocusedContainerColor = accentPalette.quietContainer,
-            focusedTextColor = accentPalette.onQuietContainer,
-            unfocusedTextColor = accentPalette.onQuietContainer,
-            focusedLabelColor = accentPalette.accent,
-            unfocusedLabelColor = accentPalette.secondaryOnQuietContainer,
-            focusedBorderColor = accentPalette.accent,
-            unfocusedBorderColor = accentPalette.onQuietContainer.copy(alpha = 0.18f),
-            cursorColor = accentPalette.accent,
-        ),
-    )
-}
-
-private fun normalizeServerInput(raw: String): String {
-    val trimmed = raw.trim()
-    return if (trimmed.isEmpty()) "" else "${trimmed.trimEnd('/')}/"
-}
-
-@Composable
-private fun SettingsValue(
-    label: String,
-    value: String,
-    supportingText: String,
-    accentPalette: ContentAccentPalette,
-    index: Int = 0,
-    count: Int = 1,
-) {
-    Surface(
-        shape = connectedListItemShape(index = index, count = count),
-        color = accentPalette.quietContainer,
-        contentColor = accentPalette.onQuietContainer,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 1.5.dp),
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = accentPalette.secondaryOnQuietContainer,
-            )
-            Text(text = value, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                text = supportingText,
-                style = MaterialTheme.typography.bodySmall,
-                color = accentPalette.secondaryOnQuietContainer,
-            )
-        }
-    }
-}
-
-@Composable
-private fun SettingsSwitch(
-    checked: Boolean,
-    label: String,
-    accentPalette: ContentAccentPalette,
-    index: Int,
-    count: Int,
-    supportingText: String? = null,
-    enabled: Boolean = true,
-    onUpdate: (Boolean) -> Unit,
-) {
-    var state by remember(checked) { mutableStateOf(checked) }
-    val interactionSource = remember { MutableInteractionSource() }
-    Surface(
-        shape = rememberConnectedListItemShape(index, count, interactionSource),
-        color = accentPalette.quietContainer,
-        contentColor = accentPalette.onQuietContainer,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = ExpressiveLayout.ConnectedItemGap)
-            .toggleable(
-                value = state,
-                enabled = enabled,
-                role = Role.Switch,
-                interactionSource = interactionSource,
-                indication = ripple(),
-                onValueChange = { updated ->
-                    state = updated
-                    onUpdate(updated)
-                },
-            ),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(label, style = MaterialTheme.typography.bodyLarge)
-                if (supportingText != null) {
-                    Text(
-                        text = supportingText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = accentPalette.secondaryOnQuietContainer,
-                    )
-                }
-            }
-            Spacer(Modifier.width(16.dp))
-            Switch(
-                checked = state,
-                enabled = enabled,
-                onCheckedChange = null,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = accentPalette.onAccent,
-                    checkedTrackColor = accentPalette.accent,
-                    checkedBorderColor = accentPalette.accent,
-            uncheckedThumbColor = accentPalette.secondaryOnQuietContainer,
-                    uncheckedTrackColor = accentPalette.onQuietContainer.copy(alpha = 0.12f),
-                    uncheckedBorderColor = accentPalette.onQuietContainer.copy(alpha = 0.24f),
-                ),
-            )
-        }
-    }
-}
 
 /**
  * A settings row that opens a menu.
@@ -1463,215 +1077,4 @@ private fun LyricSourceDropdown(
         ),
         onUpdate = onUpdate,
     )
-}
-
-@Composable
-private fun SettingsButton(
-    label: String,
-    accentPalette: ContentAccentPalette,
-    leadingIcon: ImageVector? = null,
-    index: Int,
-    count: Int,
-    onClick: () -> Unit,
-) {
-    FilledTonalButton(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .padding(vertical = 1.5.dp),
-        shape = connectedListItemShape(index, count),
-        colors = ButtonDefaults.filledTonalButtonColors(
-            containerColor = accentPalette.container,
-            contentColor = accentPalette.onContainer,
-        ),
-    ) {
-        leadingIcon?.let {
-            Icon(it, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-        }
-        Text(label)
-    }
-}
-
-/** Who is signed in to one provider, and the two things to do about it. */
-@Composable
-internal fun AccountCard(
-    loggedIn: Boolean,
-    nickname: String?,
-    avatarUrl: String?,
-    /** Under the name when signed in: "网易云音乐账号". */
-    providerLabel: String,
-    /** Under "未登录": what signing in is for. */
-    signedOutHint: String,
-    accentPalette: ContentAccentPalette,
-    onLogin: () -> Unit,
-    onLogout: () -> Unit,
-    /** How many rows the card's group has: two when an advanced row sits beneath it. */
-    shapeCount: Int = 2,
-) {
-    Surface(
-        shape = connectedListItemShape(index = 0, count = shapeCount),
-        color = accentPalette.quietContainer,
-        contentColor = accentPalette.onQuietContainer,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = ExpressiveLayout.ConnectedItemGap),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = accentPalette.container,
-                contentColor = accentPalette.onContainer,
-                modifier = Modifier.size(44.dp),
-            ) {
-                if (loggedIn && !avatarUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = avatarUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } else {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(AppIcons.Person, contentDescription = null)
-                    }
-                }
-            }
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = when {
-                        !loggedIn -> "未登录"
-                        nickname.isNullOrBlank() -> "已登录"
-                        else -> nickname
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = if (loggedIn) providerLabel else signedOutHint,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = accentPalette.secondaryOnQuietContainer,
-                )
-            }
-            Spacer(Modifier.width(8.dp))
-            if (loggedIn) {
-                TextButton(onClick = onLogin) { Text("切换账号") }
-                TextButton(onClick = onLogout) { Text("退出") }
-            } else {
-                FilledTonalButton(
-                    onClick = onLogin,
-                    shape = CircleShape,
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = accentPalette.container,
-                        contentColor = accentPalette.onContainer,
-                    ),
-                ) {
-                    Icon(AppIcons.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("登录")
-                }
-            }
-        }
-    }
-}
-
-/** A row that opens another page. */
-@Composable
-internal fun SettingsLinkRow(
-    label: String,
-    supportingText: String,
-    accentPalette: ContentAccentPalette,
-    onClick: () -> Unit,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Surface(
-        onClick = onClick,
-        shape = rememberConnectedListItemShape(
-            index = 0,
-            count = 1,
-            interactionSource = interactionSource,
-        ),
-        color = accentPalette.quietContainer,
-        contentColor = accentPalette.onQuietContainer,
-        interactionSource = interactionSource,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = ExpressiveLayout.ConnectedItemGap),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = ExpressiveLayout.MinimumTouchTarget)
-                .padding(start = 20.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(text = label, style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    text = supportingText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = accentPalette.secondaryOnQuietContainer,
-                )
-            }
-            Icon(
-                imageVector = AppIcons.KeyboardArrowRight,
-                contentDescription = "打开",
-                tint = accentPalette.secondaryOnQuietContainer,
-            )
-        }
-    }
-}
-
-/** A row that shows or hides an advanced setting beneath it. */
-@Composable
-internal fun SettingsExpanderRow(
-    label: String,
-    supportingText: String,
-    expanded: Boolean,
-    accentPalette: ContentAccentPalette,
-    onToggle: () -> Unit,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Surface(
-        onClick = onToggle,
-        shape = rememberConnectedListItemShape(
-            index = if (expanded) 1 else 1,
-            count = if (expanded) 3 else 2,
-            interactionSource = interactionSource,
-        ),
-        color = accentPalette.quietContainer,
-        contentColor = accentPalette.onQuietContainer,
-        interactionSource = interactionSource,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = ExpressiveLayout.ConnectedItemGap),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = ExpressiveLayout.MinimumTouchTarget)
-                .padding(start = 20.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(text = label, style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    text = supportingText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = accentPalette.secondaryOnQuietContainer,
-                )
-            }
-            Icon(
-                imageVector = if (expanded) AppIcons.KeyboardArrowDown else AppIcons.KeyboardArrowRight,
-                contentDescription = if (expanded) "收起" else "展开",
-                tint = accentPalette.secondaryOnQuietContainer,
-            )
-        }
-    }
 }

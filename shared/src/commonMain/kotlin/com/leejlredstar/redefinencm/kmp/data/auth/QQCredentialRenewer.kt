@@ -72,9 +72,12 @@ class QQCredentialRenewer(
     private fun renewable(stored: String): Boolean = QQCredential.parse(stored)?.canRefresh == true
 
     private suspend fun renew(expected: String): Boolean {
+        val previous = QQCredential.parse(expected)
         val renewed = api().refreshCredential()
             ?.let(QQCredential::fromGateway)
             ?.takeIf { it.isSignedIn }
+            // A renewal answer need not repeat the encrypted UIN; the account has not changed.
+            ?.let { it.copy(encryptUin = it.encryptUin.ifBlank { previous?.encryptUin.orEmpty() }) }
             ?.toCookieHeader()
             ?: return false
         val written = slot.replace(expected, renewed).getOrDefault(false)

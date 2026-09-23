@@ -5,6 +5,11 @@ import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -41,6 +46,19 @@ interface ProviderCredentialSlot {
     suspend fun replace(expected: String, credential: String): Result<Boolean>
 
     suspend fun clear(): Result<Unit> = write("")
+
+    /**
+     * The stored credential now, then after every write through this slot — a sign-in on the
+     * login page, a sign-out on the accounts page, a renewal in the background. Pages follow this
+     * instead of keeping their own copy.
+     */
+    fun credentialUpdates(): Flow<String>
+
+    /**
+     * Whether [credential] is a signed-in account for this provider. The one definition the
+     * accounts page, the settings summary, the login page and the startup check all use.
+     */
+    fun isSignedIn(credential: String): Boolean = credential.isNotBlank()
 }
 
 /**
@@ -55,19 +73,30 @@ abstract class SettingsCredentialSlot(
 ) : ProviderCredentialSlot {
     private val writes = Mutex()
 
+    /** Null until the stored value has been read once. */
+    private val current = MutableStateFlow<String?>(null)
+
     override suspend fun read(): String = settings.getStringAsync(key, "")
 
     override suspend fun write(credential: String): Result<Unit> = writes.withLock {
         settings.awaitLoaded()
-        persist(credential)
+        persist(credential).onSuccess { current.value = credential }
     }
 
     override suspend fun replace(expected: String, credential: String): Result<Boolean> =
         writes.withLock {
             settings.awaitLoaded()
             if (settings.getString(key, "") != expected) return@withLock Result.success(false)
-            persist(credential).map { true }
+            persist(credential).onSuccess { current.value = credential }.map { true }
         }
+
+    override fun credentialUpdates(): Flow<String> = flow {
+        if (current.value == null) {
+            // A write that landed while this read was in flight is newer; it wins.
+            current.compareAndSet(null, read())
+        }
+        emitAll(current.filterNotNull())
+    }
 
     /** Stores [credential] and applies the provider's change rules; runs under the write lock. */
     protected abstract suspend fun persist(credential: String): Result<Unit>
@@ -135,6 +164,9 @@ class NeteaseCredentialSlot(
 class QQCredentialSlot(settings: PlatformSettings) :
     SettingsCredentialSlot(settings, SettingKeys.QQ_COOKIE) {
     override val provider: MusicProviderId = MusicProviderId.QQ
+
+    /** Only a credential the gateway can use — `musicid` with `musickey` — is an account. */
+    override fun isSignedIn(credential: String): Boolean = QQCredential.parse(credential) != null
 
     override suspend fun persist(credential: String): Result<Unit> {
         val previous = settings.getString(SettingKeys.QQ_COOKIE, "")

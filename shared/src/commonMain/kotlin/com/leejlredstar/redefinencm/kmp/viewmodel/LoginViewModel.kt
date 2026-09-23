@@ -72,12 +72,15 @@ class LoginViewModel(
         _finished.value = true
     }
 
-    /** Saves the provider's backend address; an empty field restores the default. */
+    /**
+     * Saves the provider's backend address in the one stored form the accounts page also writes;
+     * an empty field restores the default.
+     */
     fun saveServer(raw: String) {
         val setting = descriptor.server ?: return
         scope.launch {
             settings.awaitLoaded()
-            val value = raw.trim().ifEmpty { setting.default }
+            val value = setting.normalize(raw)
             val previous = settings.getString(setting.key, setting.default)
             try {
                 settings.setString(setting.key, value)
@@ -97,7 +100,8 @@ class LoginViewModel(
 
     private fun rememberCredential(credential: String) {
         _storedCredential.value = credential
-        _signedIn.value = credential.isNotBlank()
+        // The slot's own definition, the same one the accounts page and the startup check use.
+        _signedIn.value = slot.isSignedIn(credential)
     }
 
     fun onCleared() {

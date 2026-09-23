@@ -34,41 +34,44 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.leejlredstar.redefinencm.kmp.data.auth.CredentialStore
-import com.leejlredstar.redefinencm.kmp.data.auth.LocalAccount
-import com.leejlredstar.redefinencm.kmp.data.auth.LoginMethodRegistry
-import com.leejlredstar.redefinencm.kmp.data.auth.ProviderLoginDescriptorRegistry
+import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
+import com.leejlredstar.redefinencm.kmp.ui.component.AccountCard
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
+import com.leejlredstar.redefinencm.kmp.ui.component.SettingsButton
+import com.leejlredstar.redefinencm.kmp.ui.component.SettingsExpanderRow
+import com.leejlredstar.redefinencm.kmp.ui.component.SettingsSectionLabel
+import com.leejlredstar.redefinencm.kmp.ui.component.SettingsSwitch
+import com.leejlredstar.redefinencm.kmp.ui.component.SettingsTextField
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
-import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
-import kotlinx.coroutines.launch
+import com.leejlredstar.redefinencm.kmp.viewmodel.AccountsViewModel
 import org.koin.compose.koinInject
 
 /**
- * Every account the app can hold: one card per provider, then the device-local account.
+ * Every account and every provider's configuration: one group per provider, then how several
+ * providers are shown together, then the device-local account.
  *
- * The provider cards come from the registered login descriptors, so a new provider appears here
- * by registration. Signing in opens the provider's login page; signing out goes through its
- * credential slot, which applies that provider's change rules; and where a provider has a
- * pasted-credential method, the raw credential is folded away beneath its card as an advanced
- * option. The local account has nothing to sign in to — it names whatever stays on this device.
+ * A provider's group holds its switch (when it can be turned off), its account, its backend
+ * address with a check, and its pasted credential folded away as an advanced option. The groups
+ * come from the provider registrations, so a new provider appears here by registration; the page
+ * itself names no provider.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -76,39 +79,29 @@ fun AccountsScreen(
     scaffoldPadding: PaddingValues,
     onBack: () -> Unit,
     onOpenLogin: (MusicProviderId) -> Unit,
-    mainViewModel: MainViewModel = koinInject(),
-    loginMethods: LoginMethodRegistry = koinInject(),
-    loginDescriptors: ProviderLoginDescriptorRegistry = koinInject(),
-    credentials: CredentialStore = koinInject(),
-    localAccount: LocalAccount = koinInject(),
+    viewModel: AccountsViewModel = koinInject(),
 ) {
-    val scope = rememberCoroutineScope()
     val palette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
-    val userDetail by mainViewModel.userDetail.collectAsState()
+    val accounts by viewModel.accounts.collectAsState()
+    val localName by viewModel.localName.collectAsState()
+    val aggregationMode by viewModel.aggregationMode.collectAsState()
+    val message by viewModel.message.collectAsState()
+
+    // Settings can change behind this page — a backup import — so each visit reads them afresh.
+    LaunchedEffect(viewModel) { viewModel.reload() }
 
     val snackbarHostState = remember { SnackbarHostState() }
-    var message by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(message) {
         val text = message ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(text)
-        message = null
-    }
-
-    // What is stored for each provider, re-read whenever something on this page changes it.
-    var reloadGeneration by remember { mutableIntStateOf(0) }
-    val storedCredentials = remember { mutableStateMapOf<MusicProviderId, String>() }
-    var localName by remember { mutableStateOf(LocalAccount.DefaultName) }
-    LaunchedEffect(reloadGeneration) {
-        loginDescriptors.all.forEach { descriptor ->
-            storedCredentials[descriptor.provider] = credentials[descriptor.provider]?.read().orEmpty()
-        }
-        localName = localAccount.name()
+        viewModel.consumeMessage()
     }
 
     var logoutConfirmationFor by remember { mutableStateOf<MusicProviderId?>(null) }
     var renamingLocal by remember { mutableStateOf(false) }
     val expandedCredentialFields = remember { mutableStateMapOf<MusicProviderId, Boolean>() }
     val credentialDrafts = remember { mutableStateMapOf<MusicProviderId, String>() }
+    val serverDrafts = remember { mutableStateMapOf<MusicProviderId, String>() }
 
     val appBarScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     ExpressivePage(
@@ -122,7 +115,7 @@ fun AccountsScreen(
                 contentWindowInsets = WindowInsets(0, 0, 0, 0),
                 topBar = {
                     LargeFlexibleTopAppBar(
-                        title = { Text("账号") },
+                        title = { Text("账号与平台") },
                         subtitle = { Text("每个平台各一个账号；本地账号保存在此设备") },
                         navigationIcon = {
                             IconButton(onClick = onBack) {
@@ -148,72 +141,140 @@ fun AccountsScreen(
                         ),
                 ) {
                     Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                        loginDescriptors.all.forEach { descriptor ->
-                            val provider = descriptor.provider
-                            val stored = storedCredentials[provider].orEmpty()
-                            val textMethod = remember(loginMethods, provider) { loginMethods.textMethod(provider) }
-                            // NetEase's identity comes from the account the app resolves at
-                            // startup — the legacy account system, with a nickname and avatar the
-                            // cookie does not carry. Every other provider's comes from what its
-                            // credential says about itself.
-                            val isNetease = provider == MusicProviderId.NETEASE
+                        accounts.forEach { account ->
+                            val provider = account.provider
+                            val descriptor = account.descriptor
+                            val switch = descriptor.enabledSetting
+                            val server = descriptor.server
+                            val textMethod = account.textMethod
+                            val credentialExpanded = expandedCredentialFields[provider] == true
+
+                            // The rows of this provider's group, so each takes its place in the
+                            // connected shape whatever is shown.
+                            val rows = buildList {
+                                if (switch != null) add(AccountRow.Switch)
+                                if (account.enabled) {
+                                    add(AccountRow.Account)
+                                    if (server != null) add(AccountRow.Server)
+                                    if (server?.check != null) add(AccountRow.ServerCheck)
+                                    if (textMethod != null) {
+                                        add(AccountRow.CredentialExpander)
+                                        if (credentialExpanded) add(AccountRow.Credential)
+                                    }
+                                }
+                            }
 
                             SettingsSectionLabel(provider.displayName, palette)
-                            AccountCard(
-                                loggedIn = stored.isNotBlank(),
-                                nickname = if (isNetease) userDetail?.profile?.nickname else descriptor.accountName(stored),
-                                avatarUrl = if (isNetease) userDetail?.profile?.avatarUrl else null,
-                                providerLabel = descriptor.accountLabel,
-                                signedOutHint = descriptor.signedOutHint,
-                                accentPalette = palette,
-                                onLogin = { onOpenLogin(provider) },
-                                onLogout = { logoutConfirmationFor = provider },
-                                shapeCount = if (textMethod != null) 2 else 1,
-                            )
-                            if (textMethod != null) {
-                                val expanded = expandedCredentialFields[provider] == true
-                                SettingsExpanderRow(
-                                    label = "手动填写${textMethod.fieldLabel}",
-                                    supportingText = "高级：${textMethod.supportingText}",
-                                    expanded = expanded,
+                            if (switch != null) {
+                                SettingsSwitch(
+                                    checked = account.enabled,
+                                    label = switch.label,
                                     accentPalette = palette,
-                                    onToggle = { expandedCredentialFields[provider] = !expanded },
+                                    index = rows.indexOf(AccountRow.Switch),
+                                    count = rows.size,
+                                    supportingText = switch.supportingText,
+                                ) { enabled -> viewModel.setEnabled(provider, enabled) }
+                            }
+                            if (account.enabled) {
+                                AccountCard(
+                                    loggedIn = account.signedIn,
+                                    nickname = account.identity?.name,
+                                    avatarUrl = account.identity?.avatarUrl,
+                                    providerLabel = descriptor.accountLabel,
+                                    signedOutHint = descriptor.signInUnavailableReason ?: descriptor.signedOutHint,
+                                    accentPalette = palette,
+                                    onLogin = if (account.registration.canSignIn) {
+                                        { onOpenLogin(provider) }
+                                    } else {
+                                        null
+                                    },
+                                    onLogout = { logoutConfirmationFor = provider },
+                                    index = rows.indexOf(AccountRow.Account),
+                                    count = rows.size,
                                 )
-                                if (expanded) {
-                                    // Obscured, and never part of the settings backup.
+                                if (server != null) {
                                     SettingsTextField(
-                                        value = credentialDrafts[provider] ?: stored,
-                                        label = textMethod.fieldLabel,
-                                        obscureText = true,
+                                        value = serverDrafts[provider] ?: account.server.orEmpty(),
+                                        label = server.label,
                                         accentPalette = palette,
-                                        index = 1,
-                                        count = 2,
-                                        onDraftChange = { credentialDrafts[provider] = it },
+                                        index = rows.indexOf(AccountRow.Server),
+                                        count = rows.size,
+                                        supportingText = "${server.appliesWhen}；清空则恢复默认地址",
+                                        onDraftChange = { serverDrafts[provider] = it },
                                         onCommit = { raw ->
-                                            textMethod.normalize(raw)
-                                                .onSuccess { normalized ->
-                                                    scope.launch {
-                                                        credentials.require(provider).write(normalized)
-                                                            .onSuccess {
-                                                                credentialDrafts.remove(provider)
-                                                                reloadGeneration += 1
-                                                                message = if (normalized.isEmpty()) {
-                                                                    "已清除${provider.displayName}的凭证"
-                                                                } else {
-                                                                    "已保存${provider.displayName}的凭证"
-                                                                }
-                                                            }
-                                                            .onFailure { failure ->
-                                                                message = failure.message ?: "凭证保存失败"
-                                                            }
-                                                    }
-                                                }
-                                                .onFailure { failure ->
-                                                    message = failure.message ?: "凭证无法识别"
-                                                }
+                                            serverDrafts.remove(provider)
+                                            viewModel.saveServer(provider, raw)
                                         },
                                     )
+                                    if (server.check != null) {
+                                        SettingsButton(
+                                            label = if (account.checkingServer) "检查中…" else "检查地址",
+                                            accentPalette = palette,
+                                            index = rows.indexOf(AccountRow.ServerCheck),
+                                            count = rows.size,
+                                        ) {
+                                            viewModel.checkServer(
+                                                provider,
+                                                serverDrafts[provider] ?: account.server.orEmpty(),
+                                            )
+                                        }
+                                    }
                                 }
+                                if (textMethod != null) {
+                                    SettingsExpanderRow(
+                                        label = "手动填写${textMethod.fieldLabel}",
+                                        supportingText = "高级：${textMethod.supportingText}",
+                                        expanded = credentialExpanded,
+                                        accentPalette = palette,
+                                        index = rows.indexOf(AccountRow.CredentialExpander),
+                                        count = rows.size,
+                                        onToggle = { expandedCredentialFields[provider] = !credentialExpanded },
+                                    )
+                                    if (credentialExpanded) {
+                                        // Obscured, and never part of the settings backup.
+                                        SettingsTextField(
+                                            value = credentialDrafts[provider] ?: account.credential,
+                                            label = textMethod.fieldLabel,
+                                            obscureText = true,
+                                            accentPalette = palette,
+                                            index = rows.indexOf(AccountRow.Credential),
+                                            count = rows.size,
+                                            onDraftChange = { credentialDrafts[provider] = it },
+                                            onCommit = { raw ->
+                                                credentialDrafts.remove(provider)
+                                                viewModel.saveCredential(provider, raw)
+                                            },
+                                        )
+                                    }
+                                }
+                                account.serverCheck?.let { check ->
+                                    ServerCheckLine(
+                                        message = check.message,
+                                        reachable = check.reachable,
+                                        palette = palette,
+                                    )
+                                }
+                            }
+                        }
+
+                        // Only worth choosing once there is more than one provider to show.
+                        if (accounts.count { it.enabled } > 1) {
+                            SettingsSectionLabel("多平台", palette)
+                            SettingsSwitch(
+                                checked = aggregationMode == LibraryAggregationMode.PER_PROVIDER,
+                                label = "按平台分组显示",
+                                accentPalette = palette,
+                                index = 0,
+                                count = 1,
+                                supportingText = "关闭时各平台结果混合为一个列表",
+                            ) { perProvider ->
+                                viewModel.setAggregationMode(
+                                    if (perProvider) {
+                                        LibraryAggregationMode.PER_PROVIDER
+                                    } else {
+                                        LibraryAggregationMode.MERGED
+                                    },
+                                )
                             }
                         }
 
@@ -237,27 +298,18 @@ fun AccountsScreen(
     }
 
     logoutConfirmationFor?.let { provider ->
+        val warning = accounts.firstOrNull { it.provider == provider }?.descriptor?.logoutWarning.orEmpty()
         AlertDialog(
             onDismissRequest = { logoutConfirmationFor = null },
             icon = { Icon(AppIcons.Logout, contentDescription = null) },
             title = { Text("退出${provider.displayName}登录？") },
-            text = { Text(loginDescriptors.require(provider).logoutWarning) },
+            text = { Text(warning) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         logoutConfirmationFor = null
-                        scope.launch {
-                            credentials.require(provider).clear()
-                                .onSuccess {
-                                    credentialDrafts.remove(provider)
-                                    reloadGeneration += 1
-                                    message = "已退出${provider.displayName}"
-                                }
-                                .onFailure { failure ->
-                                    reloadGeneration += 1
-                                    message = "退出失败：${failure.message ?: "未知错误"}"
-                                }
-                        }
+                        credentialDrafts.remove(provider)
+                        viewModel.signOut(provider)
                     },
                 ) { Text("退出登录") }
             },
@@ -285,22 +337,40 @@ fun AccountsScreen(
                 TextButton(
                     onClick = {
                         renamingLocal = false
-                        scope.launch {
-                            localAccount.rename(draft)
-                                .onSuccess {
-                                    reloadGeneration += 1
-                                    message = "已重命名本地账号"
-                                }
-                                .onFailure { failure ->
-                                    message = "保存失败：${failure.message ?: "未知错误"}"
-                                }
-                        }
+                        viewModel.renameLocal(draft)
                     },
                 ) { Text("保存") }
             },
             dismissButton = {
                 TextButton(onClick = { renamingLocal = false }) { Text("取消") }
             },
+        )
+    }
+}
+
+/** The rows a provider's group can hold, in the order they appear. */
+private enum class AccountRow { Switch, Account, Server, ServerCheck, CredentialExpander, Credential }
+
+/** The outcome of the last address check, beneath the provider's group. */
+@Composable
+private fun ServerCheckLine(
+    message: String,
+    reachable: Boolean,
+    palette: ContentAccentPalette,
+) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = if (reachable) palette.container else MaterialTheme.colorScheme.errorContainer,
+        contentColor = if (reachable) palette.onContainer else MaterialTheme.colorScheme.onErrorContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp)
+            .semantics { liveRegion = LiveRegionMode.Polite },
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
         )
     }
 }
@@ -343,7 +413,7 @@ private fun LocalAccountCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "无需登录；本地歌单等只保存在此设备",
+                    text = "无需登录；只保存在此设备",
                     style = MaterialTheme.typography.bodySmall,
                     color = accentPalette.secondaryOnQuietContainer,
                 )

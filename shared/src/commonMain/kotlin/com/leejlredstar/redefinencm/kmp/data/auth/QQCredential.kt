@@ -23,6 +23,12 @@ data class QQCredential(
     val unionId: String = "",
     val strMusicId: String = "",
     val refreshKey: String = "",
+    /**
+     * The account's encrypted UIN, which QQ's profile routes take instead of the number. The
+     * gateway does not read it from a cookie; it travels in the stored form only so the accounts
+     * page can ask for the account's name.
+     */
+    val encryptUin: String = "",
 ) {
     val isSignedIn: Boolean get() = musicId > 0 && musicKey.isNotBlank()
 
@@ -39,6 +45,7 @@ data class QQCredential(
         if (unionId.isNotBlank()) add("unionid=$unionId")
         if (strMusicId.isNotBlank() && strMusicId != musicId.toString()) add("str_musicid=$strMusicId")
         if (refreshKey.isNotBlank()) add("refresh_key=$refreshKey")
+        if (encryptUin.isNotBlank()) add("$EncryptUinCookie=$encryptUin")
     }.joinToString("; ")
 
     companion object {
@@ -69,6 +76,7 @@ data class QQCredential(
             unionId = credential.unionid,
             strMusicId = credential.strMusicid,
             refreshKey = credential.refreshKey,
+            encryptUin = credential.encryptUin,
         )
 
         private fun fromCookiePairs(pairs: Map<String, String>): QQCredential? {
@@ -92,6 +100,7 @@ data class QQCredential(
                 unionId = pairs["unionid"] ?: pairs["psrf_qqunionid"] ?: pairs["wxunionid"] ?: "",
                 strMusicId = pairs["str_musicid"] ?: "",
                 refreshKey = pairs["refresh_key"] ?: "",
+                encryptUin = pairs[EncryptUinCookie] ?: pairs["euin"] ?: "",
             )
         }
 
@@ -108,6 +117,9 @@ data class QQCredential(
                 }
                 .filter { (_, value) -> value.isNotEmpty() }
                 .toMap()
+
+        /** The name [encryptUin] is stored under; one the gateway ignores. */
+        private const val EncryptUinCookie = "encrypt_uin"
 
         private val json = Json {
             ignoreUnknownKeys = true

@@ -88,6 +88,26 @@ class QQMusicApi(
         )
     }
 
+    /**
+     * Whether a gateway answers at [address], saved or not, by asking for the API description
+     * FastAPI serves. It touches no QQ upstream, so a check costs the gateway nothing.
+     */
+    suspend fun ping(address: String): Boolean {
+        val root = address.trim().trimEnd('/')
+        if (root.isEmpty()) return false
+        return try {
+            client.get("$root/openapi.json").status.value in 200..299
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /** The public header of an account's profile — its name and avatar — by encrypted UIN. */
+    suspend fun userHomepage(encryptUin: String): QQUserHomepage? =
+        fetchData<QQUserHomepage>("user/$encryptUin/homepage")
+
     // The login routes obtain a new account, so a refusal there is never a reason to renew the old
     // one; the renewal routes are what a refusal elsewhere calls, so they must not call back.
 
@@ -301,6 +321,18 @@ data class QQSongUrlItem(
     val mid: String = "",
     val purl: String = "",
     val result: Int = 0,
+)
+
+@Serializable
+data class QQUserHomepage(
+    @SerialName("base_info") val baseInfo: QQUserBaseInfo? = null,
+)
+
+@Serializable
+data class QQUserBaseInfo(
+    @SerialName("encrypted_uin") val encryptedUin: String = "",
+    val name: String = "",
+    val avatar: String = "",
 )
 
 /** See [QQMusicApi.songUrlAnswer]; [result] is QQ's own code beside an empty path, 0 otherwise. */

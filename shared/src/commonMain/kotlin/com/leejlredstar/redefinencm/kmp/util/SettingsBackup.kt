@@ -21,6 +21,8 @@ data class SettingsBackupData(
     val qqServer: String = "",
     /** Null keeps the current choice when importing a backup made before multi-provider support. */
     val libraryAggregationMode: String? = null,
+    /** The device-local account's name; null keeps the current one for an older backup. */
+    val localAccountName: String? = null,
     val onlinePlayQuality: String = SoundQuality.STANDARD.name,
     val downloadQuality: String = SoundQuality.STANDARD.name,
     val replacePlaylist: Boolean = SettingKeys.REPLACE_PLAYLIST_DEFAULT,
@@ -63,6 +65,7 @@ internal fun encodeSettingsBackup(
         libraryAggregationMode = LibraryAggregationMode.fromWireValueOrDefault(
             getString(SettingKeys.LIBRARY_AGGREGATION_MODE, ""),
         ).wireValue,
+        localAccountName = getString(SettingKeys.LOCAL_ACCOUNT_NAME, ""),
         onlinePlayQuality = getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name),
         downloadQuality = getString(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name),
         replacePlaylist = getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT),
@@ -113,6 +116,7 @@ internal fun applySettingsBackup(
     data.qqEnabled?.let { setBoolean(SettingKeys.QQ_ENABLED, it) }
     if (data.qqServer.isNotEmpty()) setString(SettingKeys.QQ_SERVER, data.qqServer)
     data.libraryAggregationMode?.let { setString(SettingKeys.LIBRARY_AGGREGATION_MODE, it) }
+    data.localAccountName?.let { setString(SettingKeys.LOCAL_ACCOUNT_NAME, it.trim()) }
     setString(SettingKeys.ONLINE_PLAY_QUALITY, data.onlinePlayQuality)
     setString(SettingKeys.DOWNLOAD_QUALITY, data.downloadQuality)
     setBoolean(SettingKeys.REPLACE_PLAYLIST, data.replacePlaylist)

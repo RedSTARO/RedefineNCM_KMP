@@ -1,4 +1,4 @@
-package com.leejlredstar.redefinencm.kmp.data.auth
+package com.leejlredstar.redefinencm.kmp.data.local
 
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
@@ -7,10 +7,9 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
 /**
- * The device-local account: no service behind it and nothing to sign in to. It is the owner of
- * whatever the app keeps only on this device — local playlists first — so those have a home in
- * the accounts page beside the online ones. Today it carries a name; the library it owns is the
- * next step.
+ * The device-local account: no service behind it and nothing to sign in to. It owns whatever the
+ * app keeps only on this device — local playlists and local favourites — so those have a home on
+ * the accounts page beside the online accounts.
  */
 class LocalAccount(private val settings: PlatformSettings) {
     suspend fun name(): String =

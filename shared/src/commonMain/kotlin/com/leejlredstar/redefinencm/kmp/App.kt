@@ -110,6 +110,7 @@ import com.leejlredstar.redefinencm.kmp.ui.screen.DailySongsScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.DownloadManagementScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
+import com.leejlredstar.redefinencm.kmp.data.provider.ProviderRegistrations
 import com.leejlredstar.redefinencm.kmp.ui.screen.AccountsScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.LoginScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.PlaylistDetailScreen
@@ -284,10 +285,11 @@ private sealed interface RootDest {
 @Composable
 fun App() {
     val settings: PlatformSettings = koinInject()
-    var initialCookie by remember(settings) { mutableStateOf<String?>(null) }
+    val registrations: ProviderRegistrations = koinInject()
+    var startsSignedIn by remember(settings) { mutableStateOf<Boolean?>(null) }
     LaunchedEffect(settings) {
         ThemePreferences.loadStored(settings)
-        initialCookie = settings.getStringAsync(SettingKeys.COOKIE, "")
+        startsSignedIn = registrations.anySignedIn(settings)
     }
 
     // Before the first themed frame, so a stored light or dark choice never flashes the other.
@@ -295,8 +297,8 @@ fun App() {
 
     RedefineNCMTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-            initialCookie?.let { cookie ->
-                AppContent(settings = settings, initialCookie = cookie)
+            startsSignedIn?.let { signedIn ->
+                AppContent(settings = settings, startsSignedIn = signedIn)
             }
         }
     }
@@ -341,7 +343,8 @@ private fun ExpressiveNavToggle(
 @Composable
 private fun AppContent(
     settings: PlatformSettings,
-    initialCookie: String,
+    /** Whether any switched-on provider held an account at launch. */
+    startsSignedIn: Boolean,
 ) {
             val mainViewModel: MainViewModel = koinInject()
             val nowPlayingViewModel: NowPlayingViewModel = koinInject()
@@ -366,8 +369,10 @@ private fun AppContent(
             }
             val pushedStack = rememberSaveable(saver = pushedStackSaver) {
                 mutableStateListOf<PushedDest>().apply {
-                    // 原版 SplashActivity：无 cookie 时先进登录页
-                    if (initialCookie.isBlank()) add(PushedDest.Login())
+                    // 原版 SplashActivity：无 cookie 时先进登录页。With more than one provider
+                    // that means no account anywhere: someone signed in to QQ only is not sent to
+                    // NetEase's login page at every launch (AGENTS.md D6, 2026-09-23 decision 3).
+                    if (!startsSignedIn) add(PushedDest.Login())
                 }
             }
             // Every destination keeps its saved state (scroll offsets, carousel positions, a

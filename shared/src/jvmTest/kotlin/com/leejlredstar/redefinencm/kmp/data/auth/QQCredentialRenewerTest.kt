@@ -8,6 +8,8 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -37,6 +39,8 @@ class QQCredentialRenewerTest {
             value = credential
             return Result.success(true)
         }
+
+        override fun credentialUpdates(): Flow<String> = flowOf(value)
     }
 
     private data class Recorded(val path: String, val cookie: String?)
