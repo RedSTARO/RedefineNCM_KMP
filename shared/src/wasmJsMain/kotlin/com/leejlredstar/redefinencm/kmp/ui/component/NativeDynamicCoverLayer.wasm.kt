@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.viewinterop.HtmlElementView
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.browser.document
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -185,7 +186,7 @@ private class WebDynamicCoverNode(
     private val badge: HTMLSpanElement? =
         if (showBadge) {
             (document.createElement("span") as HTMLSpanElement).apply {
-                textContent = "动态封面"
+                textContent = strings.animatedCover
                 hidden = true
                 style.position = "absolute"
                 style.right = "8px"

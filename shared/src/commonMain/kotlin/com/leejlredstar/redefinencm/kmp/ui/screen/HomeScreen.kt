@@ -21,6 +21,9 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
+import com.leejlredstar.redefinencm.kmp.i18n.UiText
+import com.leejlredstar.redefinencm.kmp.i18n.strings
+import com.leejlredstar.redefinencm.kmp.i18n.text
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -103,7 +106,7 @@ fun HomeScreen(
     val resources = recommendResource?.recommend ?: emptyList()
     val defaultPageAccent = MaterialTheme.colorScheme.primaryContainer
     val avatarUrl = userDetail?.profile?.avatarUrl
-    val nickname = userDetail?.profile?.nickname ?: "我的"
+    val nickname = userDetail?.profile?.nickname ?: strings.me
     val pageAccentSource = resources.firstOrNull()?.picUrl
         ?: dailySongs.firstOrNull()?.al?.picUrl
         ?: avatarUrl
@@ -137,7 +140,7 @@ fun HomeScreen(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
                 LargeFlexibleTopAppBar(
-                    title = { Text("推荐") },
+                    title = { Text(strings.forYou) },
                     actions = {
                         HomeAccountAvatar(
                             avatarUrl = avatarUrl,
@@ -185,12 +188,12 @@ fun HomeScreen(
 
             item {
                 SectionWithCarousel(
-                    title = "推荐歌单",
+                    title = strings.recommendedPlaylists,
                     items = resources,
                     isLoading = accountLoading && recommendResource == null,
                     isFromCache = resourceFromCache,
                     isRefreshing = accountLoading,
-                    errorMessage = resourceLoadError,
+                    errorMessage = resourceLoadError?.text,
                     onRetry = viewModel::retryAccountData,
                     key = { resource -> resource.id },
                     itemContent = { res ->
@@ -210,19 +213,19 @@ fun HomeScreen(
 
             item {
                 SectionWithCarousel(
-                    title = "每日推荐",
+                    title = strings.dailyPicks,
                     // The heading is the way into the full list, and the count is what the
                     // heading is about. A second button beside the first, labelled with the
                     // sentence "全部 33 首", would make three controls on one line, one of them
                     // a bare piece of text stating what the page already shows.
-                    supportingText = if (dailySongs.isEmpty()) null else "${dailySongs.size} 首",
+                    supportingText = if (dailySongs.isEmpty()) null else strings.songCount(dailySongs.size),
                     onOpenAll = onOpenDailySongs.takeIf { dailySongs.isNotEmpty() },
-                    onOpenAllLabel = "查看每日推荐的全部歌曲",
+                    onOpenAllLabel = strings.viewAllDailyPicks,
                     items = dailySongs,
                     isLoading = accountLoading && recommend == null,
                     isFromCache = songsFromCache,
                     isRefreshing = accountLoading,
-                    errorMessage = songsLoadError,
+                    errorMessage = songsLoadError?.text,
                     onRetry = viewModel::retryAccountData,
                     key = { song -> song.id },
                     action = {
@@ -247,7 +250,7 @@ fun HomeScreen(
                                 modifier = Modifier.size(20.dp),
                             )
                             Spacer(Modifier.size(8.dp))
-                            Text("播放全部")
+                            Text(strings.playAll)
                         }
                     },
                     itemContent = { song ->
@@ -323,7 +326,7 @@ private fun RecognitionToolCard(
         modifier = Modifier
             .fillMaxWidth()
             .semantics(mergeDescendants = true) {
-                contentDescription = "打开听歌识曲"
+                contentDescription = strings.openSongRecognition
             },
     ) {
         Row(
@@ -347,12 +350,12 @@ private fun RecognitionToolCard(
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = "听歌识曲",
+                    text = strings.songRecognition,
                     style = MaterialTheme.typography.titleMedium,
                     color = palette.onQuietContainer,
                 )
                 Text(
-                    text = "录制三秒，从周围声音里找出这首歌",
+                    text = strings.songRecognitionCardHint,
                     style = MaterialTheme.typography.bodyMedium,
                     color = palette.secondaryOnQuietContainer,
                     maxLines = 1,
@@ -388,7 +391,7 @@ private fun HomeAccountAvatar(
         contentColor = avatarPalette.onContainer,
         modifier = Modifier
             .size(56.dp)
-            .semantics { contentDescription = "打开${nickname.ifBlank { "我的" }}的个人页" },
+            .semantics { contentDescription = strings.openUserProfile(nickname.ifBlank { strings.me }) },
     ) {
         if (avatarUrl.isNullOrBlank()) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
@@ -448,4 +451,4 @@ private fun SearchBox(
     }
 }
 
-internal const val DailySource = "每日推荐"
+internal val DailySource: UiText = UiText { it.dailyPicks }

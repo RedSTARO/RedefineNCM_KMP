@@ -5,6 +5,7 @@ import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtEpDevice
 import ai.onnxruntime.OrtHardwareDevice
 import ai.onnxruntime.OrtSession
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -35,23 +36,25 @@ internal class OnnxBeatModelLoader(
             when {
                 os.contains("windows") -> loadWindows()
                 os.contains("mac") || os.contains("darwin") -> loadMac()
-                else -> BeatModelAvailability.Unavailable("Linux 桌面版没有 Java 能调用的 NPU 或 GPU 推理组件")
+                else -> BeatModelAvailability.Unavailable(strings.beatModelLinuxNoRuntime)
             }
         } catch (failure: Throwable) {
             // UnsatisfiedLinkError and friends: the native library is missing or does not load.
-            BeatModelAvailability.Unavailable("ONNX Runtime 无法加载：${failure.message ?: failure.javaClass.simpleName}")
+            BeatModelAvailability.Unavailable(
+                strings.onnxRuntimeLoadFailed(failure.message ?: failure.javaClass.simpleName),
+            )
         }
     }
 
     private fun loadWindows(): BeatModelAvailability {
         val directory = nativeDirectory()?.takeIf { File(it, "onnxruntime.dll").isFile }
-            ?: return BeatModelAvailability.Unavailable("缺少随应用分发的 ONNX Runtime DirectML 组件")
+            ?: return BeatModelAvailability.Unavailable(strings.directMLRuntimeMissing)
         // Must be set before the first ONNX Runtime class initialises; it is read once, then.
         System.setProperty("onnxruntime.native.path", directory.absolutePath)
-        val model = modelBytes() ?: return BeatModelAvailability.Unavailable("缺少节拍模型文件")
+        val model = modelBytes() ?: return BeatModelAvailability.Unavailable(strings.beatModelFileMissing)
         val environment = OrtEnvironment.getEnvironment()
         val devices = runCatching { environment.epDevices }.getOrElse { failure ->
-            return BeatModelAvailability.Unavailable("ONNX Runtime 无法列出加速设备：${failure.message}")
+            return BeatModelAvailability.Unavailable(strings.onnxDeviceListFailed(failure.message))
         }
         val candidates = devices
             .filter { it.device.type == OrtHardwareDevice.OrtHardwareDeviceType.NPU } +
@@ -64,7 +67,7 @@ internal class OnnxBeatModelLoader(
                     ),
                 )
         if (candidates.isEmpty()) {
-            return BeatModelAvailability.Unavailable("没有找到 DirectML 可用的 GPU 或 NPU（需要 DirectX 12 显卡驱动）")
+            return BeatModelAvailability.Unavailable(strings.directMLNoDevice)
         }
         val failures = mutableListOf<String>()
         for (device in candidates) {
@@ -82,11 +85,13 @@ internal class OnnxBeatModelLoader(
             } ?: continue
             return BeatModelAvailability.Ready(OnnxBeatActivationModel(environment, session, accelerator, label))
         }
-        return BeatModelAvailability.Unavailable("加速设备无法运行节拍模型：${failures.joinToString("；")}")
+        return BeatModelAvailability.Unavailable(
+            strings.beatModelDevicesFailed(failures.joinToString(strings.clauseSeparator)),
+        )
     }
 
     private fun loadMac(): BeatModelAvailability {
-        val model = modelBytes() ?: return BeatModelAvailability.Unavailable("缺少节拍模型文件")
+        val model = modelBytes() ?: return BeatModelAvailability.Unavailable(strings.beatModelFileMissing)
         val environment = OrtEnvironment.getEnvironment()
         val failures = mutableListOf<String>()
         val attempts = listOf(
@@ -99,7 +104,9 @@ internal class OnnxBeatModelLoader(
             } ?: continue
             return BeatModelAvailability.Ready(OnnxBeatActivationModel(environment, session, accelerator, label))
         }
-        return BeatModelAvailability.Unavailable("Core ML 无法运行节拍模型：${failures.joinToString("；")}")
+        return BeatModelAvailability.Unavailable(
+            strings.coreMlBeatModelFailed(failures.joinToString(strings.clauseSeparator)),
+        )
     }
 
     private fun tryCreate(
@@ -120,7 +127,7 @@ internal class OnnxBeatModelLoader(
             OnnxBeatActivationModel.runOnce(environment, session, FloatArray(BEAT_MODEL_CHUNK_FRAMES * BeatModelFeatures.MEL_BINS))
             session
         } catch (failure: Throwable) {
-            failures += "$label：${failure.message?.lineSequence()?.firstOrNull().orEmpty()}"
+            failures += strings.labelValue(label, failure.message?.lineSequence()?.firstOrNull().orEmpty())
             null
         } finally {
             options.close()

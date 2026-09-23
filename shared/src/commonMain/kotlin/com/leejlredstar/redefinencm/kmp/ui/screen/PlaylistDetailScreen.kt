@@ -57,6 +57,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.leejlredstar.redefinencm.kmp.i18n.UiText
+import com.leejlredstar.redefinencm.kmp.i18n.strings
+import com.leejlredstar.redefinencm.kmp.i18n.text
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveCacheHint
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
@@ -133,10 +136,10 @@ fun PlaylistDetailScreen(
     }
 
     val trackCountText = when {
-        (playlist?.trackCount ?: 0L) == 0L -> songs.size.toString()
-        else -> playlist?.trackCount?.toString() ?: "…"
+        (playlist?.trackCount ?: 0L) == 0L -> strings.playlistSongCount(songs.size)
+        else -> playlist?.trackCount?.let { strings.playlistSongCount(it) } ?: "…"
     }
-    val title = playlist?.name ?: "歌单"
+    val title = playlist?.name ?: strings.playlist
     val defaultAccentColor = MaterialTheme.colorScheme.primaryContainer
     var rawAccentColor by remember(playlist?.coverImgUrl, defaultAccentColor) {
         mutableStateOf(defaultAccentColor)
@@ -189,12 +192,12 @@ fun PlaylistDetailScreen(
             if (!loading && loadError == null && detailLoadError != null) {
                 item(key = "playlist-detail-error") {
                     ExpressiveStatePanel(
-                        title = "歌单资料暂不可用",
-                        message = detailLoadError.orEmpty(),
+                        title = strings.playlistDetailsUnavailable,
+                        message = detailLoadError?.text.orEmpty(),
                         icon = AppIcons.Refresh,
                         tone = ExpressiveStateTone.Error,
                         accentPalette = accentPalette,
-                        actionLabel = "重试",
+                        actionLabel = strings.retry,
                         onAction = { viewModel.fetchPlaylistDetail(playlistId) },
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
@@ -203,27 +206,27 @@ fun PlaylistDetailScreen(
             when {
                 loading && tracks == null -> item(key = "playlist-loading") {
                     ExpressiveLoadingState(
-                        label = "正在加载歌单与歌曲…",
+                        label = strings.playlistLoading,
                         accentColor = accentPalette.accent,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
                 loadError != null && tracks == null -> item(key = "playlist-error") {
                     ExpressiveStatePanel(
-                        title = "歌单加载失败",
-                        message = loadError.orEmpty(),
+                        title = strings.playlistLoadFailed,
+                        message = loadError?.text.orEmpty(),
                         icon = AppIcons.Refresh,
                         tone = ExpressiveStateTone.Error,
                         accentPalette = accentPalette,
-                        actionLabel = "重试",
+                        actionLabel = strings.retry,
                         onAction = { viewModel.fetchPlaylistDetail(playlistId) },
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
                 tracks != null && songs.isEmpty() -> item(key = "playlist-empty") {
                     ExpressiveStatePanel(
-                        title = "歌单里还没有歌曲",
-                        message = "添加的歌曲会显示在这里。",
+                        title = strings.playlistNoSongsYet,
+                        message = strings.playlistEmptyHint,
                         icon = AppIcons.QueueMusic,
                         accentPalette = accentPalette,
                         modifier = Modifier.padding(horizontal = 16.dp),
@@ -286,11 +289,10 @@ fun PlaylistDetailScreen(
         AlertDialog(
             onDismissRequest = { confirmDownloadAll = false },
             icon = { Icon(AppIcons.Download, contentDescription = null) },
-            title = { Text("下载「$title」？") },
+            title = { Text(strings.downloadPlaylistTitle(title)) },
             text = {
                 Text(
-                    "共 ${songs.size} 首，按「${quality.displayName}」音质下载（可在设置中修改）；" +
-                        "已下载的歌曲会跳过。",
+                    strings.downloadPlaylistMessage(songs.size, quality.displayName),
                 )
             },
             confirmButton = {
@@ -300,29 +302,29 @@ fun PlaylistDetailScreen(
                         viewModel.onDownloadPlaylistClick(playlistId)
                         scope.launch {
                             val result = snackbarHostState.showSnackbar(
-                                message = "已加入下载队列：${songs.size} 首",
-                                actionLabel = "查看",
+                                message = strings.addedToDownloadQueue(songs.size),
+                                actionLabel = strings.view,
                                 duration = SnackbarDuration.Short,
                             )
                             if (result == SnackbarResult.ActionPerformed) onOpenDownloads()
                         }
                     },
-                ) { Text("下载") }
+                ) { Text(strings.download) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDownloadAll = false }) { Text("取消") }
+                TextButton(onClick = { confirmDownloadAll = false }) { Text(strings.cancel) }
             },
         )
     }
 }
 
-internal fun playlistSourceLabel(name: String?): String? =
-    name?.takeIf { it.isNotBlank() }?.let { "歌单「$it」" }
+internal fun playlistSourceLabel(name: String?): UiText? =
+    name?.takeIf { it.isNotBlank() }?.let { playlistName -> UiText { it.playbackSourcePlaylist(playlistName) } }
 
 /** A short marker for songs a free account cannot play in full. */
 internal fun songFeeBadge(fee: Int): String? = when (fee) {
     1 -> "VIP"
-    4 -> "付费"
+    4 -> strings.paid
     else -> null
 }
 
@@ -345,7 +347,7 @@ private fun PlaylistCompactBar(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
-                Icon(AppIcons.ArrowBack, contentDescription = "返回")
+                Icon(AppIcons.ArrowBack, contentDescription = strings.back)
             }
             Spacer(Modifier.width(4.dp))
             TextButton(
@@ -387,7 +389,7 @@ private fun PlaylistHeader(
     val cover: @Composable (Modifier) -> Unit = { modifier ->
         AsyncImage(
             model = coverUrl,
-            contentDescription = "歌单封面",
+            contentDescription = strings.playlistCover,
             contentScale = ContentScale.Crop,
             modifier = modifier
                 .size(200.dp)
@@ -408,7 +410,7 @@ private fun PlaylistHeader(
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "$trackCountText 首歌曲",
+                text = trackCountText,
                 style = MaterialTheme.typography.labelLarge,
                 color = accentPalette.secondaryOnQuietContainer,
             )
@@ -431,7 +433,7 @@ private fun PlaylistHeader(
                 ) {
                     Icon(AppIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("播放全部", style = MaterialTheme.typography.titleMedium)
+                    Text(strings.playAll, style = MaterialTheme.typography.titleMedium)
                 }
                 FilledTonalButton(
                     onClick = onDownloadAll,
@@ -445,7 +447,7 @@ private fun PlaylistHeader(
                 ) {
                     Icon(AppIcons.Download, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("下载全部")
+                    Text(strings.downloadAll)
                 }
                 FilledTonalIconButton(
                     onClick = onSaveLocal,
@@ -456,7 +458,7 @@ private fun PlaylistHeader(
                         contentColor = accentPalette.onContainer,
                     ),
                 ) {
-                    Icon(AppIcons.Add, contentDescription = "存为本地歌单")
+                    Icon(AppIcons.Add, contentDescription = strings.saveAsLocalPlaylist)
                 }
             }
         }
@@ -481,7 +483,7 @@ private fun PlaylistHeader(
                     ) {
                         Icon(
                             AppIcons.ArrowBack,
-                            contentDescription = "返回",
+                            contentDescription = strings.back,
                             modifier = Modifier.padding(10.dp),
                         )
                     }

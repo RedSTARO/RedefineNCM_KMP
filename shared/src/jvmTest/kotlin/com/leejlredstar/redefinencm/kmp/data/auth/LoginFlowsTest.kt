@@ -1,6 +1,10 @@
 package com.leejlredstar.redefinencm.kmp.data.auth
 
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
+import com.leejlredstar.redefinencm.kmp.i18n.LanguageSetting
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +27,17 @@ import kotlin.test.assertTrue
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class LoginFlowsTest {
+    /** The expected copy below is the Chinese, so the test pins it whatever the machine's language. */
+    @BeforeTest
+    fun showChinese() {
+        I18n.apply(LanguageSetting.ZH)
+    }
+
+    @AfterTest
+    fun followTheSystemAgain() {
+        I18n.apply(LanguageSetting.SYSTEM)
+    }
+
     private class FakeHost(
         override val scope: CoroutineScope,
         private val persistOutcome: (String) -> Result<Unit> = { Result.success(Unit) },

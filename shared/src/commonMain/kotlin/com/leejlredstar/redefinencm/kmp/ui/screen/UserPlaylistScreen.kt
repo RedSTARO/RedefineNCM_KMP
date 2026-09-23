@@ -42,6 +42,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.data.api.dto.UserLevelResponse
+import com.leejlredstar.redefinencm.kmp.i18n.strings
+import com.leejlredstar.redefinencm.kmp.i18n.text
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveWavyProgress
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveCacheHint
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
@@ -88,22 +90,22 @@ internal fun userLevelDisplay(response: UserLevelResponse?): UserLevelDisplay? {
         else -> 0f
     }
     return UserLevelDisplay(
-        summary = "Lv.${data.level} · 听歌 ${data.nowPlayCount} 首 · 登录 ${data.nowLoginCount} 天",
+        summary = strings.userLevelSummary(data.level, data.nowPlayCount, data.nowLoginCount),
         nextLevelLabel = if (response.full) {
             null
         } else {
             buildList {
-                if (data.nextPlayCount > 0) add("听歌 ${data.nextPlayCount} 首")
-                if (data.nextLoginCount > 0) add("登录 ${data.nextLoginCount} 天")
+                if (data.nextPlayCount > 0) add(strings.userLevelNextSongs(data.nextPlayCount))
+                if (data.nextLoginCount > 0) add(strings.userLevelNextDays(data.nextLoginCount))
             }.takeIf { it.isNotEmpty() }?.joinToString(
                 separator = " · ",
-                prefix = "下一级门槛：",
+                prefix = strings.userLevelNextPrefix,
             )
         },
         progressLabel = if (response.full) {
-            "已达到最高等级"
+            strings.userLevelMax
         } else {
-            "等级进度 ${(progress * 100).roundToInt()}%"
+            strings.userLevelProgress((progress * 100).roundToInt())
         },
         progress = progress,
     )
@@ -196,7 +198,7 @@ fun UserPlaylistScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = "我的",
+                            text = strings.me,
                             style = MaterialTheme.typography.headlineLarge,
                             fontWeight = FontWeight.ExtraBold,
                             color = accentPalette.onPageStart,
@@ -205,7 +207,7 @@ fun UserPlaylistScreen(
                         IconButton(onClick = onOpenSettings) {
                             Icon(
                                 imageVector = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Settings,
-                                contentDescription = "设置",
+                                contentDescription = strings.settings,
                                 tint = accentPalette.onPageStart,
                             )
                         }
@@ -224,8 +226,8 @@ fun UserPlaylistScreen(
             // in. On phones this is the only way to them outside a download notification.
             item(key = "library-downloads") {
                 LibraryShortcut(
-                    title = "下载管理",
-                    subtitle = "已下载的歌曲与下载进度",
+                    title = strings.downloadManagement,
+                    subtitle = strings.downloadsShortcutSubtitle,
                     icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Download,
                     accentPalette = accentPalette,
                     onClick = onOpenDownloads,
@@ -235,13 +237,13 @@ fun UserPlaylistScreen(
             item(key = "library-local") {
                 val library = localLibrary
                 LibraryShortcut(
-                    title = "本地歌单",
+                    title = strings.localPlaylists,
                     subtitle = when {
-                        library == null -> "只保存在此设备的歌单"
-                        library.playlists.isEmpty() -> "歌曲可来自任意平台；只保存在此设备"
+                        library == null -> strings.localPlaylistsShortcutSubtitle
+                        library.playlists.isEmpty() -> strings.localPlaylistsEmptySubtitle
                         else -> buildString {
-                            append("${library.userPlaylists.size} 个歌单")
-                            library.favorites?.let { append(" · 本地喜欢 ${it.tracks.size} 首") }
+                            append(strings.localPlaylistCount(library.userPlaylists.size))
+                            library.favorites?.let { append(strings.localLikesCountSuffix(it.tracks.size)) }
                         }
                     },
                     icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.QueueMusic,
@@ -254,42 +256,42 @@ fun UserPlaylistScreen(
                     key = "account-error",
                 ) {
                     ExpressiveStatePanel(
-                        title = "账号数据加载失败",
-                        message = accountLoadError ?: userDetailLoadError.orEmpty(),
+                        title = strings.accountDataLoadFailed,
+                        message = (accountLoadError ?: userDetailLoadError)?.text.orEmpty(),
                         icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Refresh,
                         tone = ExpressiveStateTone.Error,
                         accentPalette = accentPalette,
-                        actionLabel = "重试",
+                        actionLabel = strings.retry,
                         onAction = viewModel::retryAccountData,
                         modifier = Modifier.padding(16.dp),
                     )
                 }
                 accountLoading && !hasAccountContent -> item(key = "account-loading") {
                     ExpressiveLoadingState(
-                        label = "正在加载账号与歌单…",
+                        label = strings.accountAndPlaylistsLoading,
                         accentColor = accentPalette.accent,
                         modifier = Modifier.padding(16.dp),
                     )
                 }
                 uid == 0L -> item(key = "login-hint") {
                     ExpressiveStatePanel(
-                        title = "登录后查看你的歌单",
-                        message = "登录网易云音乐账号，这里会显示你创建和收藏的歌单。",
+                        title = strings.signInToSeePlaylistsTitle,
+                        message = strings.signInToSeePlaylistsMessage,
                         icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Person,
                         accentPalette = accentPalette,
-                        actionLabel = "登录",
+                        actionLabel = strings.signIn,
                         onAction = onOpenLogin,
                         modifier = Modifier.padding(16.dp),
                     )
                 }
                 !hasAccountContent -> item(key = "profile-unavailable") {
                     ExpressiveStatePanel(
-                        title = "用户资料暂不可用",
-                        message = "账号已登录，但用户资料未能加载。",
+                        title = strings.profileUnavailableTitle,
+                        message = strings.profileUnavailableMessage,
                         icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Refresh,
                         tone = ExpressiveStateTone.Error,
                         accentPalette = accentPalette,
-                        actionLabel = "重试",
+                        actionLabel = strings.retry,
                         onAction = viewModel::retryAccountData,
                         modifier = Modifier.padding(16.dp),
                     )
@@ -298,12 +300,12 @@ fun UserPlaylistScreen(
                     if (intelligenceError != null) {
                         item(key = "intelligence-error") {
                             ExpressiveStatePanel(
-                                title = "心动模式启动失败",
-                                message = intelligenceError.orEmpty(),
+                                title = strings.heartbeatModeStartFailed,
+                                message = intelligenceError?.text.orEmpty(),
                                 icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Favorite,
                                 tone = ExpressiveStateTone.Error,
                                 accentPalette = accentPalette,
-                                actionLabel = lastIntelligencePlaylistId?.let { "重试" },
+                                actionLabel = lastIntelligencePlaylistId?.let { strings.retry },
                                 onAction = lastIntelligencePlaylistId?.let { playlistId ->
                                     { viewModel.startIntelligenceMode(playlistId) }
                                 },
@@ -314,12 +316,12 @@ fun UserPlaylistScreen(
                     if (userPlaylistsLoadError != null && !playlistsLoaded) {
                         item(key = "playlist-error") {
                             ExpressiveStatePanel(
-                                title = "歌单加载失败",
-                                message = userPlaylistsLoadError.orEmpty(),
+                                title = strings.userPlaylistsLoadFailed,
+                                message = userPlaylistsLoadError?.text.orEmpty(),
                                 icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Refresh,
                                 tone = ExpressiveStateTone.Error,
                                 accentPalette = accentPalette,
-                                actionLabel = "重试",
+                                actionLabel = strings.retry,
                                 onAction = viewModel::retryAccountData,
                                 modifier = Modifier.padding(horizontal = 16.dp),
                             )
@@ -327,7 +329,7 @@ fun UserPlaylistScreen(
                     } else if (accountLoading && !playlistsLoaded) {
                         item(key = "playlist-loading") {
                             ExpressiveLoadingState(
-                                label = "正在加载我的歌单…",
+                                label = strings.myPlaylistsLoading,
                                 accentColor = accentPalette.accent,
                                 modifier = Modifier.padding(horizontal = 16.dp),
                             )
@@ -335,8 +337,8 @@ fun UserPlaylistScreen(
                     } else if (playlists.isEmpty()) {
                         item(key = "playlist-empty") {
                             ExpressiveStatePanel(
-                                title = "还没有歌单",
-                                message = "你创建或收藏的歌单会显示在这里。",
+                                title = strings.noPlaylistsYetTitle,
+                                message = strings.noPlaylistsYetMessage,
                                 modifier = Modifier.padding(horizontal = 16.dp),
                                 accentPalette = accentPalette,
                             )
@@ -346,14 +348,14 @@ fun UserPlaylistScreen(
                         // they get a heading each instead of one interleaved list.
                         val (created, collected) = playlists.partition { it.creator.userId == uid }
                         listOf(
-                            "创建的歌单" to created,
-                            "收藏的歌单" to collected,
+                            strings.createdPlaylists to created,
+                            strings.savedPlaylists to collected,
                         ).forEach { (heading, group) ->
                             if (group.isEmpty()) return@forEach
                             item(key = "playlist-heading-$heading") {
                                 ExpressiveSectionTitle(
                                     text = heading,
-                                    supportingText = "${group.size} 个",
+                                    supportingText = strings.playlistSectionCount(group.size),
                                     modifier = Modifier.padding(
                                         start = 24.dp,
                                         end = 24.dp,
@@ -500,7 +502,7 @@ private fun UserPlaylistHero(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "我的",
+                    text = strings.me,
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.ExtraBold,
                     color = accentPalette.onPageStart,
@@ -509,7 +511,7 @@ private fun UserPlaylistHero(
                 IconButton(onClick = onOpenSettings) {
                     Icon(
                         imageVector = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Settings,
-                        contentDescription = "设置",
+                        contentDescription = strings.settings,
                         tint = accentPalette.onPageStart,
                     )
                 }
@@ -543,9 +545,9 @@ private fun UserPlaylistHero(
                     )
                     Text(
                         text = levelDisplay?.summary ?: if (levelLoading) {
-                            "正在加载等级信息…"
+                            strings.userLevelLoading
                         } else {
-                            "等级信息暂不可用"
+                            strings.userLevelUnavailable
                         },
                         style = MaterialTheme.typography.labelLarge,
                         color = accentPalette.secondaryOnPageStart,
@@ -554,7 +556,7 @@ private fun UserPlaylistHero(
                     )
                     if (levelLoadFailed) {
                         TextButton(onClick = onRetryLevel) {
-                            Text("重试")
+                            Text(strings.retry)
                         }
                     }
                     levelDisplay?.let { display ->

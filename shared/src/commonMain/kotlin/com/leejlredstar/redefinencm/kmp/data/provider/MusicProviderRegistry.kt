@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.data.provider
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
@@ -201,9 +202,9 @@ data class StreamFailure(
     /** A clause fit for "无法播放「…」：" on screen. */
     val message: String
         get() = when (reason) {
-            StreamFailureReason.PROVIDER_DISABLED -> "${provider.displayName}已关闭"
-            StreamFailureReason.UNREACHABLE -> "${provider.displayName}服务器无响应"
-            StreamFailureReason.NO_SOURCE -> "${provider.displayName}没有提供这首歌的播放地址"
+            StreamFailureReason.PROVIDER_DISABLED -> strings.providerTurnedOff(provider.displayName)
+            StreamFailureReason.UNREACHABLE -> strings.providerServerNoResponse(provider.displayName)
+            StreamFailureReason.NO_SOURCE -> strings.providerNoStreamUrl(provider.displayName)
         }
 }
 

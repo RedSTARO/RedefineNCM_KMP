@@ -15,6 +15,7 @@ import com.leejlredstar.redefinencm.kmp.download.LocalMediaAssets
 import com.leejlredstar.amll.compose.lyric.LyricParser
 import com.leejlredstar.amll.compose.lyric.TtmlLyricParser
 import com.leejlredstar.amll.compose.lyric.hasPrimaryTimedLine
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
@@ -346,7 +347,7 @@ internal class BackendLyricProvider(
         emit(
             LyricProviderResult.Unavailable(
                 lastFailureReason?.takeIf(String::isNotBlank)
-                    ?: "网易云音乐歌词请求失败",
+                    ?: strings.neteaseLyricsRequestFailed,
             ),
         )
     }
@@ -375,7 +376,7 @@ internal class BackendLyricProvider(
             onFailure = { failure ->
                 LyricProviderResult.Unavailable(
                     failure.message?.takeIf(String::isNotBlank)
-                        ?: "${query.itemId.provider.displayName}歌词请求失败",
+                        ?: strings.providerLyricsRequestFailed(query.itemId.provider.displayName),
                 )
             },
         )
@@ -425,12 +426,12 @@ internal class TtmlLyricProvider(
 
         val lookup = withTimeoutOrNull(TTML_LOOKUP_TIMEOUT_MILLIS) {
             amlldbApi.findByNcmId(query.songId)
-        } ?: AmlldbTtmlResult.Unavailable("AMLL DB 查询超时")
+        } ?: AmlldbTtmlResult.Unavailable(strings.amllDbLookupTimedOut)
         when (val result = lookup) {
             is AmlldbTtmlResult.Found -> {
                 val lines = runCatching { TtmlLyricParser.parse(result.ttml) }.getOrNull()
                 if (lines == null || !lines.hasPrimaryTimedLine()) {
-                    emit(LyricProviderResult.Malformed("AMLL DB 的 TTML 无法解析"))
+                    emit(LyricProviderResult.Malformed(strings.amllDbTtmlUnparseable))
                 } else {
                     try {
                         repository.cacheExternalTtml(

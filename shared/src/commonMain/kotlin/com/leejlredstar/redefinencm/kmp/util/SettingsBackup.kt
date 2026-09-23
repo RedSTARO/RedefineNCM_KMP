@@ -3,6 +3,7 @@ package com.leejlredstar.redefinencm.kmp.util
 import com.leejlredstar.redefinencm.kmp.data.local.LocalLibraryDocument
 import com.leejlredstar.redefinencm.kmp.data.local.LocalPlaylist
 import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
+import com.leejlredstar.redefinencm.kmp.i18n.LanguageSetting
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
 import com.leejlredstar.redefinencm.kmp.notification.LyricSurfaceAlignment
 import com.leejlredstar.redefinencm.kmp.transition.DEFAULT_CROSSFADE_SECONDS
@@ -59,6 +60,8 @@ data class SettingsBackupData(
     /** Null keeps the current choice when importing a backup made before song transitions. */
     val songTransitionMode: String? = null,
     val songTransitionCrossfadeSeconds: Long? = null,
+    /** Null keeps the current choice when importing a backup made before the language setting. */
+    val appLanguage: String? = null,
 )
 
 private val backupJson = Json { ignoreUnknownKeys = true; coerceInputValues = true }
@@ -123,6 +126,7 @@ internal fun encodeSettingsBackup(
         songTransitionCrossfadeSeconds = normalizeCrossfadeSeconds(
             getLong(SettingKeys.SONG_TRANSITION_CROSSFADE_SECONDS, DEFAULT_CROSSFADE_SECONDS),
         ),
+        appLanguage = LanguageSetting.fromWireValue(getString(SettingKeys.APP_LANGUAGE, "")).wireValue,
     )
 )
 
@@ -184,6 +188,7 @@ internal fun applySettingsBackup(
     data.songTransitionCrossfadeSeconds?.let {
         setLong(SettingKeys.SONG_TRANSITION_CROSSFADE_SECONDS, normalizeCrossfadeSeconds(it))
     }
+    data.appLanguage?.let { setString(SettingKeys.APP_LANGUAGE, LanguageSetting.fromWireValue(it).wireValue) }
     true
 } catch (_: Exception) {
     false

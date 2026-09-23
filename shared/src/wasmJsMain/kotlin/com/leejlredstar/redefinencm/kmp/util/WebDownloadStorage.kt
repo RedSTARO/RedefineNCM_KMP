@@ -2,6 +2,7 @@
 
 package com.leejlredstar.redefinencm.kmp.util
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -44,7 +45,7 @@ internal object WebDownloadStorage {
             },
             onError = failure@{ message ->
                 if (!continuation.isActive) return@failure
-                continuation.resumeWithException(IllegalStateException(message))
+                continuation.resumeWithException(IllegalStateException(webStorageMessage(message)))
             },
         )
     }
@@ -65,13 +66,13 @@ internal object WebDownloadStorage {
                     }
                 }.fold(
                     onSuccess = { DownloadScanResult.Success(it) },
-                    onFailure = { DownloadScanResult.Failure("无法读取浏览器里的下载记录", it) },
+                    onFailure = { DownloadScanResult.Failure(strings.browserDownloadsUnreadable, it) },
                 )
                 continuation.resume(result)
             },
             onError = failure@{ message ->
                 if (!continuation.isActive) return@failure
-                continuation.resume(DownloadScanResult.Failure(message))
+                continuation.resume(DownloadScanResult.Failure(webStorageMessage(message)))
             },
         )
     }
@@ -84,7 +85,7 @@ internal object WebDownloadStorage {
             },
             onError = failure@{ message ->
                 if (continuation.isActive) {
-                    continuation.resumeWithException(IllegalStateException(message))
+                    continuation.resumeWithException(IllegalStateException(webStorageMessage(message)))
                 }
             },
         )
@@ -105,7 +106,7 @@ internal object WebDownloadStorage {
                 },
                 onError = failure@{ message ->
                     if (continuation.isActive) {
-                        continuation.resumeWithException(IllegalStateException(message))
+                        continuation.resumeWithException(IllegalStateException(webStorageMessage(message)))
                     }
                 },
             )
@@ -127,7 +128,7 @@ internal object WebDownloadStorage {
                 },
                 onError = failure@{ message ->
                     if (continuation.isActive) {
-                        continuation.resumeWithException(IllegalStateException(message))
+                        continuation.resumeWithException(IllegalStateException(webStorageMessage(message)))
                     }
                 },
             )
@@ -153,7 +154,7 @@ private fun startWebDownload(
         controllers.set(token, controller);
         (async () => {
             if (!globalThis.isSecureContext || !navigator.storage?.getDirectory) {
-                throw new Error("在浏览器里下载需要 HTTPS 或 localhost 页面，且浏览器要支持 OPFS");
+                throw new Error("redefinencm:download-needs-opfs");
             }
             navigator.storage.persist?.().catch(() => false);
             const root = await navigator.storage.getDirectory();
@@ -179,7 +180,7 @@ private fun startWebDownload(
             let finalFileCreated = false;
             try {
                 const response = await fetch(url, { signal: controller.signal, credentials: "omit" });
-                if (!response.ok) throw new Error("下载失败：HTTP " + response.status);
+                if (!response.ok) throw new Error("redefinencm:http:" + response.status);
                 const headerLength = response.headers.get("content-length");
                 const total = headerLength && Number(headerLength) > 0
                     ? headerLength
@@ -228,7 +229,7 @@ private fun startWebDownload(
             }
         })().catch(error => {
             const message = error?.name === "AbortError"
-                ? "下载已取消"
+                ? "redefinencm:download-cancelled"
                 : (error?.message || String(error));
             onError(message);
         }).finally(() => controllers.delete(token));
@@ -246,7 +247,7 @@ private fun scanWebDownloads(
     """{
         (async () => {
             if (!globalThis.isSecureContext || !navigator.storage?.getDirectory) {
-                throw new Error("在浏览器里下载需要 HTTPS 或 localhost 页面，且浏览器要支持 OPFS");
+                throw new Error("redefinencm:download-needs-opfs");
             }
             const root = await navigator.storage.getDirectory();
             let directory;
@@ -289,7 +290,7 @@ private fun deleteWebDownloads(
     """{
         (async () => {
             if (!globalThis.isSecureContext || !navigator.storage?.getDirectory) {
-                throw new Error("在浏览器里下载需要 HTTPS 或 localhost 页面，且浏览器要支持 OPFS");
+                throw new Error("redefinencm:download-needs-opfs");
             }
             const root = await navigator.storage.getDirectory();
             let directory;
@@ -328,7 +329,7 @@ private fun createWebDownloadObjectUrl(
             }
             const fileName = decodeURIComponent(uri.slice(prefix.length));
             if (!fileName || fileName.includes("/") || fileName.includes("\\")) {
-                throw new Error("浏览器下载地址无效");
+                throw new Error("redefinencm:invalid-download-uri");
             }
             const root = await navigator.storage.getDirectory();
             const directory = await root.getDirectoryHandle("RedefineNCM");
@@ -349,7 +350,7 @@ private fun exportWebDownload(
     """{
         (async () => {
             if (!fileName || fileName.includes("/") || fileName.includes("\\")) {
-                throw new Error("下载文件名无效");
+                throw new Error("redefinencm:invalid-file-name");
             }
             const root = await navigator.storage.getDirectory();
             const directory = await root.getDirectoryHandle("RedefineNCM");
@@ -368,7 +369,7 @@ private fun exportWebDownload(
             onSuccess();
         })().catch(error => onError(
             error?.name === "NotFoundError"
-                ? "浏览器里已经没有这首歌的文件"
+                ? "redefinencm:file-missing"
                 : (error?.message || String(error))
         ));
     }""",

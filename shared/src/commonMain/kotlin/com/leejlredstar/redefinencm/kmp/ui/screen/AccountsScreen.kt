@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.ui.component.AccountCard
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
@@ -117,11 +118,11 @@ fun AccountsScreen(
                 contentWindowInsets = WindowInsets(0, 0, 0, 0),
                 topBar = {
                     LargeFlexibleTopAppBar(
-                        title = { Text("账号与平台") },
-                        subtitle = { Text("每个平台各一个账号；本地账号保存在此设备") },
+                        title = { Text(strings.accountsAndServices) },
+                        subtitle = { Text(strings.accountsSubtitle) },
                         navigationIcon = {
                             IconButton(onClick = onBack) {
-                                Icon(AppIcons.ArrowBack, contentDescription = "返回")
+                                Icon(AppIcons.ArrowBack, contentDescription = strings.back)
                             }
                         },
                         scrollBehavior = appBarScrollBehavior,
@@ -201,7 +202,7 @@ fun AccountsScreen(
                                         accentPalette = palette,
                                         index = rows.indexOf(AccountRow.Server),
                                         count = rows.size,
-                                        supportingText = "${server.appliesWhen}；清空则恢复默认地址",
+                                        supportingText = strings.serverAddressHint(server.appliesWhen),
                                         onDraftChange = { serverDrafts[provider] = it },
                                         onCommit = { raw ->
                                             serverDrafts.remove(provider)
@@ -210,7 +211,7 @@ fun AccountsScreen(
                                     )
                                     if (server.check != null) {
                                         SettingsButton(
-                                            label = if (account.checkingServer) "检查中…" else "检查地址",
+                                            label = if (account.checkingServer) strings.checking else strings.checkAddress,
                                             accentPalette = palette,
                                             index = rows.indexOf(AccountRow.ServerCheck),
                                             count = rows.size,
@@ -224,8 +225,8 @@ fun AccountsScreen(
                                 }
                                 if (textMethod != null) {
                                     SettingsExpanderRow(
-                                        label = "手动填写${textMethod.fieldLabel}",
-                                        supportingText = "高级：${textMethod.supportingText}",
+                                        label = strings.enterFieldManually(textMethod.fieldLabel),
+                                        supportingText = strings.advancedHint(textMethod.supportingText),
                                         expanded = credentialExpanded,
                                         accentPalette = palette,
                                         index = rows.indexOf(AccountRow.CredentialExpander),
@@ -262,14 +263,14 @@ fun AccountsScreen(
                         // Only worth choosing once there is more than one provider to show.
                         if (accounts.count { it.enabled } > 1) {
                             val merged = aggregationMode == LibraryAggregationMode.MERGED
-                            SettingsSectionLabel("多平台", palette)
+                            SettingsSectionLabel(strings.multipleServices, palette)
                             SettingsSwitch(
                                 checked = !merged,
-                                label = "按平台分组显示",
+                                label = strings.groupByService,
                                 accentPalette = palette,
                                 index = 0,
                                 count = if (merged) 2 else 1,
-                                supportingText = "关闭时各平台结果混合为一个列表",
+                                supportingText = strings.groupByServiceHint,
                             ) { perProvider ->
                                 viewModel.setAggregationMode(
                                     if (perProvider) {
@@ -282,16 +283,16 @@ fun AccountsScreen(
                             if (merged) {
                                 SettingsSwitch(
                                     checked = mergeSameSongs,
-                                    label = "合并各平台的同一首歌",
+                                    label = strings.mergeSameSongs,
                                     accentPalette = palette,
                                     index = 1,
                                     count = 2,
-                                    supportingText = "歌名、第一位歌手相同且时长相差不超过 3 秒时合为一行，可在菜单中改用其他平台播放",
+                                    supportingText = strings.mergeSameSongsHint,
                                 ) { merge -> viewModel.setMergeSameSongs(merge) }
                             }
                         }
 
-                        SettingsSectionLabel("本地", palette)
+                        SettingsSectionLabel(strings.local, palette)
                         LocalAccountCard(
                             name = localName,
                             accentPalette = palette,
@@ -315,7 +316,7 @@ fun AccountsScreen(
         AlertDialog(
             onDismissRequest = { logoutConfirmationFor = null },
             icon = { Icon(AppIcons.Logout, contentDescription = null) },
-            title = { Text("退出${provider.displayName}登录？") },
+            title = { Text(strings.signOutOfProvider(provider.displayName)) },
             text = { Text(warning) },
             confirmButton = {
                 TextButton(
@@ -324,10 +325,10 @@ fun AccountsScreen(
                         credentialDrafts.remove(provider)
                         viewModel.signOut(provider)
                     },
-                ) { Text("退出登录") }
+                ) { Text(strings.signOutConfirm) }
             },
             dismissButton = {
-                TextButton(onClick = { logoutConfirmationFor = null }) { Text("取消") }
+                TextButton(onClick = { logoutConfirmationFor = null }) { Text(strings.cancel) }
             },
         )
     }
@@ -336,12 +337,12 @@ fun AccountsScreen(
         var draft by remember(localName) { mutableStateOf(localName) }
         AlertDialog(
             onDismissRequest = { renamingLocal = false },
-            title = { Text("本地账号名称") },
+            title = { Text(strings.localAccountName) },
             text = {
                 OutlinedTextField(
                     value = draft,
                     onValueChange = { draft = it },
-                    label = { Text("名称") },
+                    label = { Text(strings.name) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -352,10 +353,10 @@ fun AccountsScreen(
                         renamingLocal = false
                         viewModel.renameLocal(draft)
                     },
-                ) { Text("保存") }
+                ) { Text(strings.save) }
             },
             dismissButton = {
-                TextButton(onClick = { renamingLocal = false }) { Text("取消") }
+                TextButton(onClick = { renamingLocal = false }) { Text(strings.cancel) }
             },
         )
     }
@@ -426,13 +427,13 @@ private fun LocalAccountCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "无需登录；只保存在此设备",
+                    text = strings.localAccountNoSignInNeeded,
                     style = MaterialTheme.typography.bodySmall,
                     color = accentPalette.secondaryOnQuietContainer,
                 )
             }
             Spacer(Modifier.width(8.dp))
-            TextButton(onClick = onRename) { Text("重命名") }
+            TextButton(onClick = onRename) { Text(strings.rename) }
         }
     }
 }

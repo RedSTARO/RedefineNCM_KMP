@@ -13,6 +13,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.window.ComposeViewport
 import com.leejlredstar.redefinencm.kmp.di.initKoin
+import com.leejlredstar.redefinencm.kmp.i18n.AppLanguage
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.image.configureWebArtworkImageLoader
 import com.leejlredstar.amll.compose.LocalAmllPlatformEventBridge
@@ -29,6 +31,7 @@ fun main() {
     configureWebArtworkImageLoader()
     startAfterWebFontReady {
         initKoin()
+        onSystemLanguageChange { I18n.refreshSystemLanguage() }
         ComposeViewport(viewportContainerId = "redefineNcmApp") {
             WebAppAfterFontPreload()
         }
@@ -39,6 +42,12 @@ fun main() {
 
 @Composable
 private fun WebAppAfterFontPreload() {
+    // The page's lang follows the app's, so screen readers and the in-page lyric element read
+    // the text in the right language.
+    val language = I18n.language
+    LaunchedEffect(language) {
+        setDocumentLanguage(if (language == AppLanguage.ZH) "zh-CN" else language.tag)
+    }
     val fontFamily = webBundledFontFamily()
     val fontFamilyResolver = LocalFontFamilyResolver.current
     var fontReady by remember { mutableStateOf(false) }
@@ -72,6 +81,13 @@ private fun WebAppAfterFontPreload() {
     }""",
 )
 private external fun startAfterWebFontReady(start: () -> Unit)
+
+/** The browser's languages changed; only matters while the app follows them. */
+@JsFun("(onChange) => { window.addEventListener('languagechange', () => onChange()); }")
+private external fun onSystemLanguageChange(onChange: () -> Unit)
+
+@JsFun("(tag) => { document.documentElement.lang = tag; }")
+private external fun setDocumentLanguage(tag: String)
 
 @JsFun(
     """() => {

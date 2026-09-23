@@ -5,6 +5,8 @@ import com.leejlredstar.redefinencm.kmp.data.api.dto.AudioMatch
 import com.leejlredstar.redefinencm.kmp.data.api.dto.AudioMatchSong
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
 import com.leejlredstar.redefinencm.kmp.data.toPlayerMediaInfo
+import com.leejlredstar.redefinencm.kmp.i18n.UiText
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.recognition.AudioFingerprint
 import com.leejlredstar.redefinencm.kmp.recognition.CapturedPcm
@@ -64,15 +66,15 @@ internal sealed interface AudioMatchOutcome {
 
 internal fun classifyAudioMatch(response: AudioMatch?): AudioMatchOutcome {
     if (response == null) {
-        return AudioMatchOutcome.Error("识曲请求失败，请检查网络后重试")
+        return AudioMatchOutcome.Error(strings.recognitionRequestFailed)
     }
     val data = response.data
-        ?: return AudioMatchOutcome.Error("识曲服务未返回有效数据")
+        ?: return AudioMatchOutcome.Error(strings.recognitionNoValidData)
     if (data.type == 0) {
         return AudioMatchOutcome.NoMatch(data.noMatchReason)
     }
     if (data.type != 1) {
-        return AudioMatchOutcome.Error("识曲服务返回了未知状态（type=${data.type}）")
+        return AudioMatchOutcome.Error(strings.recognitionUnknownStatus(data.type))
     }
 
     val seenSongIds = mutableSetOf<Long>()
@@ -89,7 +91,7 @@ internal fun classifyAudioMatch(response: AudioMatch?): AudioMatchOutcome {
         }
     }
     return if (matches.isEmpty()) {
-        AudioMatchOutcome.Error("识曲服务未返回匹配结果")
+        AudioMatchOutcome.Error(strings.recognitionNoMatches)
     } else {
         AudioMatchOutcome.Results(matches)
     }
@@ -163,7 +165,7 @@ class SongRecognitionViewModel internal constructor(
     fun play(match: RecognizedSongMatch) {
         if (closed) return
         pausedForRecognition = false
-        PlaybackSource.set("听歌识曲")
+        PlaybackSource.set(UiText { it.songRecognition })
         player.setQueue(listOf(match.song.toPlayerMediaInfo()), 0)
         player.play()
     }
@@ -250,28 +252,28 @@ class SongRecognitionViewModel internal constructor(
             } catch (failure: MicrophoneBusyException) {
                 if (recognitionGeneration.value == generation) {
                     _uiState.value = SongRecognitionUiState.MicrophoneUnavailable(
-                        message = failure.message ?: "麦克风正在被使用",
+                        message = failure.message ?: strings.microphoneBusy,
                         canRetry = true,
                     )
                 }
             } catch (failure: InsecureMicrophoneContextException) {
                 if (recognitionGeneration.value == generation) {
                     _uiState.value = SongRecognitionUiState.MicrophoneUnavailable(
-                        message = failure.message ?: "当前页面无法访问麦克风",
+                        message = failure.message ?: strings.recognitionMicUnavailable,
                         canRetry = false,
                     )
                 }
             } catch (failure: MicrophoneUnavailableException) {
                 if (recognitionGeneration.value == generation) {
                     _uiState.value = SongRecognitionUiState.MicrophoneUnavailable(
-                        message = failure.message ?: "麦克风不可用",
+                        message = failure.message ?: strings.microphoneUnavailable,
                         canRetry = true,
                     )
                 }
             } catch (failure: Exception) {
                 if (recognitionGeneration.value == generation) {
                     _uiState.value = SongRecognitionUiState.Error(
-                        failure.message ?: "听歌识曲失败",
+                        failure.message ?: strings.recognitionFailed,
                     )
                 }
             } finally {

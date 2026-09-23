@@ -1,15 +1,24 @@
 package com.leejlredstar.redefinencm.kmp.data.provider
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
+
 /**
  * A music service the app can aggregate.
  *
  * [key] is persisted (in composite ids, in settings keys, and eventually in cache tables), so it
  * must stay stable even if the enum entry is renamed.
  */
-enum class MusicProviderId(val key: String, val displayName: String) {
-    NETEASE("ncm", "网易云音乐"),
-    QQ("qq", "QQ音乐"),
+enum class MusicProviderId(val key: String) {
+    NETEASE("ncm"),
+    QQ("qq"),
     ;
+
+    /** The service's name in the language the app shows. */
+    val displayName: String
+        get() = when (this) {
+            NETEASE -> strings.neteaseCloudMusic
+            QQ -> strings.qqMusic
+        }
 
     companion object {
         /** The provider of every id written before providers existed. */

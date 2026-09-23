@@ -1,5 +1,8 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
+import com.leejlredstar.redefinencm.kmp.i18n.LanguageSetting
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import com.leejlredstar.redefinencm.kmp.util.getBooleanAsync
 import androidx.compose.foundation.background
@@ -180,6 +183,7 @@ fun SettingsScreen(
     var showDownloadStatus by remember(settings) { mutableStateOf(SettingKeys.SHOW_DOWNLOAD_STATUS_DEFAULT) }
     var closeToTray by remember(settings) { mutableStateOf(SettingKeys.DESKTOP_CLOSE_TO_TRAY_DEFAULT) }
     val themeMode by ThemePreferences.mode.collectAsState()
+    val languageSetting by I18n.setting.collectAsState()
     val dynamicColor by ThemePreferences.dynamicColor.collectAsState()
     val isDesktop = remember { getPlatform().isDesktop }
     var extraLyricSurfaceEnabled by remember(settings) { mutableStateOf(false) }
@@ -228,6 +232,8 @@ fun SettingsScreen(
     fun reloadSettingsSnapshot() {
         // The provider switches and addresses live on the accounts page, which reads its own.
         accountsViewModel.reload()
+        // An imported backup can carry another language; show it at once.
+        I18n.load(settings)
         onlineQuality = settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name)
         dlQuality = settings.getString(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name)
         replacePlaylist = settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT)
@@ -278,7 +284,7 @@ fun SettingsScreen(
                 .onSuccess { onPersisted() }
                 .onFailure { error ->
                     onFailure()
-                    settingsMessage = "设置保存失败：${error.message ?: "未知错误"}"
+                    settingsMessage = strings.settingsSaveFailed(error.message ?: strings.unknownError)
                 }
         }
     }
@@ -292,7 +298,7 @@ fun SettingsScreen(
         val writeResult = runCatching(write)
         if (writeResult.isFailure) {
             onFailure()
-            settingsMessage = "设置保存失败：${writeResult.exceptionOrNull()?.message ?: "未知错误"}"
+            settingsMessage = strings.settingsSaveFailed(writeResult.exceptionOrNull()?.message ?: strings.unknownError)
             return
         }
         onWritten()
@@ -342,7 +348,7 @@ fun SettingsScreen(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Throwable) {
-            settingsLoadError = failure.message ?: "设置读取失败"
+            settingsLoadError = failure.message ?: strings.settingsLoadFailed
         }
     }
 
@@ -351,7 +357,7 @@ fun SettingsScreen(
             if (applySettingsBackup(json, settings)) {
                 decodeBackupLocalLibrary(json)?.let { playlists ->
                     localLibrary.importPlaylists(playlists).onFailure { failure ->
-                        settingsMessage = "本地歌单导入失败：${failure.message ?: "未知错误"}"
+                        settingsMessage = strings.localPlaylistsImportFailed(failure.message ?: strings.unknownError)
                     }
                 }
                 lyricSourceWriteGeneration += 1
@@ -362,18 +368,18 @@ fun SettingsScreen(
                 val persisted = runCatching { settings.flush() }
                 if (persisted.isFailure) {
                     reloadSettingsSnapshot()
-                    settingsMessage = "设置保存失败：${persisted.exceptionOrNull()?.message ?: "未知错误"}"
+                    settingsMessage = strings.settingsSaveFailed(persisted.exceptionOrNull()?.message ?: strings.unknownError)
                     return@launch
                 }
                 reloadSettingsSnapshot()
-                settingsMessage = "设置已导入"
+                settingsMessage = strings.settingsImported
             } else {
                 lyricSourceWriteGeneration += 1
                 lyricDisplayWriteGeneration += 1
                 // A platform write can fail after earlier backup fields were already applied.
                 // Re-read the process snapshot so a partial source change is never left latent.
                 reloadSettingsSnapshot()
-                settingsMessage = "导入失败：文件不是有效的设置备份"
+                settingsMessage = strings.settingsImportInvalidFile
             }
         }
     }
@@ -396,12 +402,12 @@ fun SettingsScreen(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
                 LargeFlexibleTopAppBar(
-                    title = { Text("设置") },
-                    subtitle = { Text("账号、播放、歌词、下载与服务器") },
+                    title = { Text(strings.settings) },
+                    subtitle = { Text(strings.settingsSubtitle) },
                     navigationIcon = {
                         onBack?.let {
                             IconButton(onClick = it) {
-                                Icon(AppIcons.ArrowBack, contentDescription = "返回")
+                                Icon(AppIcons.ArrowBack, contentDescription = strings.back)
                             }
                         }
                     },
@@ -432,18 +438,18 @@ fun SettingsScreen(
 
             if (settingsLoadError != null) {
                 ExpressiveStatePanel(
-                    title = "设置读取失败",
+                    title = strings.settingsLoadFailed,
                     message = settingsLoadError.orEmpty(),
                     icon = AppIcons.Refresh,
                     tone = ExpressiveStateTone.Error,
                     accentPalette = settingsPalette,
-                    actionLabel = "重试",
+                    actionLabel = strings.retry,
                     onAction = { settingsLoadRequest += 1 },
                     modifier = Modifier.padding(20.dp),
                 )
             } else if (!settingsLoaded) {
                 ExpressiveLoadingState(
-                    label = "正在加载设置…",
+                    label = strings.settingsLoading,
                     accentColor = settingsPalette.accent,
                     modifier = Modifier.padding(20.dp),
                 )
@@ -453,15 +459,15 @@ fun SettingsScreen(
                 // settings for most. The accounts and each provider's switch, backend address
                 // and raw credential live on their own page; this row says who is signed in where
                 // and opens it.
-                SettingsSectionLabel("账号", settingsPalette)
+                SettingsSectionLabel(strings.settingsSectionAccounts, settingsPalette)
                 SettingsLinkRow(
-                    label = "账号与平台",
+                    label = strings.accountsAndServices,
                     supportingText = accountsSummary,
                     accentPalette = settingsPalette,
                     onClick = onOpenAccounts,
                 )
 
-                SettingsSectionLabel("播放", settingsPalette)
+                SettingsSectionLabel(strings.play, settingsPalette)
                 // The output-device row sits with the quality dropdowns because it is the other
                 // half of "what comes out of the speakers", not a behaviour toggle.
                 val outputDeviceRows = if (supportsAudioOutputDeviceSelection) 1 else 0
@@ -469,7 +475,7 @@ fun SettingsScreen(
                 val playbackSettingCount = 2 + outputDeviceRows + dynamicCoverRows
                 SettingsDropdown(
                     onlineQuality,
-                    "在线播放音质",
+                    strings.streamingQuality,
                     SoundQuality.entries,
                     settingsPalette,
                     index = 0,
@@ -501,11 +507,11 @@ fun SettingsScreen(
                 // recommendation, search results and downloads.
                 SettingsSwitch(
                     replacePlaylist,
-                    "点按列表中的歌曲时播放整个列表",
+                    strings.playWholeListOnTap,
                     settingsPalette,
                     index = 1 + outputDeviceRows,
                     count = playbackSettingCount,
-                    supportingText = "关闭时只播放点按的那一首",
+                    supportingText = strings.playWholeListOnTapHint,
                 ) { v ->
                     replacePlaylist = v
                     persistSettings({ settings.setBoolean(SettingKeys.REPLACE_PLAYLIST, v) })
@@ -513,7 +519,7 @@ fun SettingsScreen(
                 if (supportsDynamicNowPlayingCover) {
                     SettingsSwitch(
                         useDynamicCover,
-                        "播放页使用歌曲动态封面",
+                        strings.useAnimatedCover,
                         settingsPalette,
                         index = 2 + outputDeviceRows,
                         count = playbackSettingCount,
@@ -532,7 +538,7 @@ fun SettingsScreen(
                     onChange = { write -> persistSettings(write) },
                 )
 
-                SettingsSectionLabel("歌词", settingsPalette)
+                SettingsSectionLabel(strings.lyrics, settingsPalette)
                 val surfaceRows = if (optionalLyricSurface != null) 1 else 0
                 val surfaceLayoutRows = if (windowedLyricSurface != null) 2 else 0
                 val lyricSettingCount = 3 + surfaceRows + surfaceLayoutRows
@@ -580,12 +586,11 @@ fun SettingsScreen(
                 if (windowedLyricSurface != null) {
                     SettingsSwitch(
                         desktopLyricLocked,
-                        "锁定桌面歌词",
+                        strings.lockDesktopLyrics,
                         settingsPalette,
                         index = 1 + surfaceRows,
                         count = lyricSettingCount,
-                        supportingText = "锁定后窗口固定在原处，不能拖动或调整大小；Windows 上鼠标会穿透到下面的窗口。" +
-                            "解锁可以在这里，也可以在系统托盘图标的菜单里。",
+                        supportingText = strings.desktopLyricsLockHint,
                     ) { locked ->
                         desktopLyricLocked = locked
                         persistSettings(
@@ -617,7 +622,7 @@ fun SettingsScreen(
                 }
                 SettingsSwitch(
                     showTranslatedLyric,
-                    "显示翻译歌词",
+                    strings.showTranslatedLyrics,
                     settingsPalette,
                     index = lyricSettingCount - 2,
                     count = lyricSettingCount,
@@ -640,11 +645,11 @@ fun SettingsScreen(
                 }
                 SettingsSwitch(
                     showRomanLyric,
-                    "显示罗马音歌词",
+                    strings.showRomanization,
                     settingsPalette,
                     index = lyricSettingCount - 1,
                     count = lyricSettingCount,
-                    supportingText = "日语等歌曲的读音标注",
+                    supportingText = strings.showRomanizationHint,
                 ) { v ->
                     val writeGeneration = ++lyricDisplayWriteGeneration
                     showRomanLyric = v
@@ -661,10 +666,10 @@ fun SettingsScreen(
                     )
                 }
 
-                SettingsSectionLabel("下载", settingsPalette)
+                SettingsSectionLabel(strings.downloads, settingsPalette)
                 SettingsDropdown(
                     dlQuality,
-                    "下载音质",
+                    strings.downloadQuality,
                     SoundQuality.entries,
                     settingsPalette,
                     index = 0,
@@ -676,28 +681,42 @@ fun SettingsScreen(
                 }
                 SettingsSwitch(
                     showDownloadStatus,
-                    "在歌曲列表中标出下载状态",
+                    strings.showDownloadStatus,
                     settingsPalette,
                     index = 1,
                     count = 2,
-                    supportingText = "已下载、正在下载和下载失败的歌曲会带标记",
+                    supportingText = strings.showDownloadStatusHint,
                 ) { v ->
                     showDownloadStatus = v
                     persistSettings({ settings.setBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, v) })
                 }
 
-                SettingsSectionLabel("通用", settingsPalette)
+                SettingsSectionLabel(strings.settingsSectionGeneral, settingsPalette)
                 val trayRows = if (isDesktop) 1 else 0
-                val themeRows = if (dynamicColorSupported) 2 else 1
+                val languageRows = 1
+                val themeRows = languageRows + if (dynamicColorSupported) 2 else 1
                 val generalCount = 3 + trayRows + themeRows
+                // One of the three languages, or the system's (English when it is none of them).
+                SettingsDropdownRow(
+                    label = strings.settingsLanguage,
+                    valueLabel = languageSetting.displayName,
+                    options = LanguageSetting.entries,
+                    optionLabel = LanguageSetting::displayName,
+                    accentPalette = settingsPalette,
+                    index = 0,
+                    count = generalCount,
+                ) { setting ->
+                    I18n.apply(setting)
+                    persistSettings({ settings.setString(SettingKeys.APP_LANGUAGE, setting.wireValue) })
+                }
                 // The user picks light or dark here, or leaves it to the system.
                 SettingsDropdownRow(
-                    label = "主题",
+                    label = strings.theme,
                     valueLabel = themeMode.displayName,
                     options = ThemeMode.entries,
                     optionLabel = ThemeMode::displayName,
                     accentPalette = settingsPalette,
-                    index = 0,
+                    index = languageRows,
                     count = generalCount,
                 ) { mode ->
                     ThemePreferences.setMode(mode)
@@ -706,11 +725,11 @@ fun SettingsScreen(
                 if (dynamicColorSupported) {
                     SettingsSwitch(
                         dynamicColor,
-                        "使用壁纸颜色",
+                        strings.useWallpaperColors,
                         settingsPalette,
-                        index = 1,
+                        index = languageRows + 1,
                         count = generalCount,
-                        supportingText = "界面配色取自系统壁纸（Android 12 及以上）",
+                        supportingText = strings.useWallpaperColorsHint,
                     ) { v ->
                         ThemePreferences.setDynamicColor(v)
                         persistSettings({ settings.setBoolean(SettingKeys.DYNAMIC_COLOR, v) })
@@ -718,11 +737,11 @@ fun SettingsScreen(
                 }
                 SettingsSwitch(
                     searchPrediction,
-                    "搜索联想",
+                    strings.searchSuggestions,
                     settingsPalette,
                     index = themeRows,
                     count = generalCount,
-                    supportingText = "输入时显示搜索建议",
+                    supportingText = strings.searchSuggestionsHint,
                 ) { v ->
                     searchPrediction = v
                     persistSettings({ settings.setBoolean(SettingKeys.SEARCH_PREDICTION, v) })
@@ -730,11 +749,11 @@ fun SettingsScreen(
                 if (isDesktop) {
                     SettingsSwitch(
                         closeToTray,
-                        "关闭主窗口时留在托盘",
+                        strings.closeToTray,
                         settingsPalette,
                         index = themeRows + 1,
                         count = generalCount,
-                        supportingText = "播放不会中断；点按托盘图标重新打开窗口，在托盘菜单里选「退出」才会退出",
+                        supportingText = strings.closeToTrayHint,
                     ) { v ->
                         closeToTray = v
                         persistSettings({ settings.setBoolean(SettingKeys.DESKTOP_CLOSE_TO_TRAY, v) })
@@ -742,7 +761,7 @@ fun SettingsScreen(
                 }
                 SettingsSwitch(
                     checkUpdate,
-                    "启动时检查更新",
+                    strings.checkUpdatesOnStartup,
                     settingsPalette,
                     index = themeRows + 1 + trayRows,
                     count = generalCount,
@@ -751,7 +770,7 @@ fun SettingsScreen(
                     persistSettings({ settings.setBoolean(SettingKeys.CHECK_UPDATE, v) })
                 }
                 SettingsButton(
-                    "立即检查更新",
+                    strings.checkUpdatesNow,
                     settingsPalette,
                     index = themeRows + 2 + trayRows,
                     count = generalCount,
@@ -759,25 +778,25 @@ fun SettingsScreen(
                     mainViewModel.checkForUpdatesNow()
                 }
 
-                SettingsSectionLabel("备份", settingsPalette)
+                SettingsSectionLabel(strings.backup, settingsPalette)
                 // Deliberately two buttons, not a ButtonGroup. ButtonGroupScope.clickableItem
                 // takes `label: String` plus an `icon` composable and rendered nothing at all
                 // here (verified on device with and without an icon, scrolled to the end of the
                 // list), so the group is not usable for two text-labelled actions in this
                 // Compose Multiplatform build.
-                SettingsButton("导出设置", settingsPalette, index = 0, count = 2) {
+                SettingsButton(strings.exportSettings, settingsPalette, index = 0, count = 2) {
                     // The local account's playlists travel with the settings (AGENTS.md D6).
                     scope.launch {
                         launchExport(encodeSettingsBackup(settings, localLibrary.snapshot()))
                     }
                 }
-                SettingsButton("导入设置", settingsPalette, index = 1, count = 2) {
+                SettingsButton(strings.importSettings, settingsPalette, index = 1, count = 2) {
                     showImportConfirmation = true
                 }
 
-                SettingsSectionLabel("关于", settingsPalette)
+                SettingsSectionLabel(strings.about, settingsPalette)
                 SettingsValue(
-                    label = "版本",
+                    label = strings.version,
                     value = BuildInfo.VERSION_NAME,
                     supportingText = "Build ${BuildInfo.VERSION_CODE}",
                     accentPalette = settingsPalette,
@@ -785,9 +804,9 @@ fun SettingsScreen(
                     count = 2,
                 )
                 SettingsValue(
-                    label = "开源许可",
-                    value = "AMLL 歌词渲染与解析组件",
-                    supportingText = "以 AGPL-3.0-only 发布；许可证全文随应用资源提供。",
+                    label = strings.openSourceLicense,
+                    value = strings.amllComponentName,
+                    supportingText = strings.amllLicenseNote,
                     accentPalette = settingsPalette,
                     index = 1,
                     count = 2,
@@ -809,9 +828,9 @@ fun SettingsScreen(
     if (showImportConfirmation) {
         AlertDialog(
             onDismissRequest = { showImportConfirmation = false },
-            title = { Text("导入并覆盖当前设置？") },
+            title = { Text(strings.importSettingsConfirmTitle) },
             text = {
-                Text("导入文件会覆盖服务器地址、播放与歌词偏好；登录状态不在备份里，不受影响。建议先导出当前设置作为备份。")
+                Text(strings.importSettingsConfirmMessage)
             },
             confirmButton = {
                 TextButton(
@@ -820,12 +839,12 @@ fun SettingsScreen(
                         launchImport()
                     },
                 ) {
-                    Text("选择文件")
+                    Text(strings.chooseFile)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showImportConfirmation = false }) {
-                    Text("取消")
+                    Text(strings.cancel)
                 }
             },
         )
@@ -852,13 +871,13 @@ private fun SettingsHero(accentPalette: ContentAccentPalette) {
     ) {
         Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 18.dp)) {
             Text(
-                text = "设置",
+                text = strings.settings,
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.ExtraBold,
                 color = accentPalette.onPageStart,
             )
             Text(
-                text = "账号、播放、歌词与备份",
+                text = strings.settingsHeroSubtitle,
                 style = MaterialTheme.typography.titleMedium,
                 color = accentPalette.secondaryOnPageStart,
             )
@@ -995,13 +1014,13 @@ private fun SettingsDropdown(
  * What a quality above the account's entitlement does. The list offers every tier; without this
  * the VIP-only ones would look as if they play like the rest.
  */
-private const val QualityAvailabilityNote = "账号没有对应权限时，会得到能播放的最高音质"
+private val QualityAvailabilityNote: String get() = strings.audioQualityAvailabilityNote
 
 /** Shown for the "no explicit choice" entry and whenever the chosen device cannot be resolved. */
-private const val DefaultAudioOutputLabel = "系统默认"
+private val DefaultAudioOutputLabel: String get() = strings.audioOutputSystemDefault
 
 /** The menu row has space to say what the compact value cannot. */
-private const val DefaultAudioOutputMenuLabel = "系统默认（跟随系统输出设备）"
+private val DefaultAudioOutputMenuLabel: String get() = strings.audioOutputSystemDefaultMenu
 
 /**
  * Picks which output device desktop playback opens.
@@ -1035,10 +1054,10 @@ private fun AudioOutputDeviceDropdown(
         known == null -> audioOutputDeviceName(selectedId)
         // The device is gone; playback already falls back to the default output, so say so
         // instead of showing a name that nothing is coming out of.
-        else -> "${audioOutputDeviceName(selectedId)}（不可用）"
+        else -> strings.audioOutputDeviceUnavailable(audioOutputDeviceName(selectedId))
     }
     SettingsDropdownRow(
-        label = "音频输出设备",
+        label = strings.audioOutputDevice,
         valueLabel = selectedLabel,
         options = listOf(SYSTEM_DEFAULT_AUDIO_OUTPUT_ID) + known.orEmpty().map { it.id },
         optionLabel = { id ->
@@ -1075,7 +1094,7 @@ private fun LyricSurfaceAlignmentDropdown(
     onUpdate: (LyricSurfaceAlignment) -> Unit,
 ) {
     SettingsDropdownRow(
-        label = "桌面歌词对齐",
+        label = strings.desktopLyricsAlignment,
         valueLabel = selected.displayName,
         options = LyricSurfaceAlignment.entries,
         optionLabel = LyricSurfaceAlignment::displayName,
@@ -1095,7 +1114,7 @@ private fun LyricSourceDropdown(
     onUpdate: (LyricSourceMode) -> Unit,
 ) {
     SettingsDropdownRow(
-        label = "歌词来源",
+        label = strings.lyricsSource,
         valueLabel = LyricSourceMode.fromWireValue(selectedWireValue).displayName,
         options = LyricSourceMode.entries,
         optionLabel = LyricSourceMode::displayName,
@@ -1103,7 +1122,7 @@ private fun LyricSourceDropdown(
         index = index,
         count = count,
         supportingText = listOf(
-            "AMLL 歌词库由社区维护，逐字歌词更全；只按歌曲 ID 查询，不会发送账号信息。",
+            strings.lyricsSourceAmllNote,
         ),
         onUpdate = onUpdate,
     )
@@ -1111,16 +1130,16 @@ private fun LyricSourceDropdown(
 
 private val SongTransitionMode.displayName: String
     get() = when (this) {
-        SongTransitionMode.OFF -> "关闭"
-        SongTransitionMode.CROSSFADE -> "淡入淡出"
-        SongTransitionMode.SMART -> "智能过渡"
+        SongTransitionMode.OFF -> strings.transitionOff
+        SongTransitionMode.CROSSFADE -> strings.transitionCrossfade
+        SongTransitionMode.SMART -> strings.transitionSmart
     }
 
 private val SongTransitionMode.menuLabel: String
     get() = when (this) {
-        SongTransitionMode.OFF -> "关闭"
-        SongTransitionMode.CROSSFADE -> "淡入淡出（固定时长）"
-        SongTransitionMode.SMART -> "智能过渡（分析节拍后衔接）"
+        SongTransitionMode.OFF -> strings.transitionOff
+        SongTransitionMode.CROSSFADE -> strings.transitionCrossfadeMenu
+        SongTransitionMode.SMART -> strings.transitionSmartMenu
     }
 
 /**
@@ -1143,9 +1162,9 @@ private fun SongTransitionSection(
     val scope = rememberCoroutineScope()
     val rows = if (current.mode == SongTransitionMode.OFF) 1 else 2
 
-    SettingsSectionLabel("歌曲过渡", accentPalette)
+    SettingsSectionLabel(strings.songTransitions, accentPalette)
     SettingsDropdownRow(
-        label = "歌曲之间",
+        label = strings.betweenSongs,
         valueLabel = current.mode.displayName,
         options = SongTransitionMode.entries,
         optionLabel = { it.displayName },
@@ -1177,11 +1196,11 @@ private fun SongTransitionSection(
 
 private fun songTransitionNote(mode: SongTransitionMode, capability: TransitionCapability): String? = when {
     mode == SongTransitionMode.OFF -> null
-    capability == TransitionCapability.NONE -> "这个平台的播放器暂不支持歌曲过渡"
-    mode == SongTransitionMode.CROSSFADE -> "上一首淡出的同时，下一首淡入"
+    capability == TransitionCapability.NONE -> strings.transitionUnsupported
+    mode == SongTransitionMode.CROSSFADE -> strings.transitionCrossfadeNote
     capability == TransitionCapability.CROSSFADE ->
-        "分析两首歌的响度、节拍和调性，在小节线上衔接。这个平台不调整播放速度，所以不对齐节拍"
-    else -> "分析两首歌的响度、节拍和调性，在小节线上衔接。两首歌速度相近时，微调上一首的速度，让节拍对齐"
+        strings.transitionSmartFixedTempoNote
+    else -> strings.transitionSmartNote
 }
 
 @Composable
@@ -1203,9 +1222,9 @@ private fun CrossfadeLengthRow(
     ) {
         Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("过渡时长", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Text(strings.transitionLength, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                 Text(
-                    text = "${dragged.roundToInt()} 秒",
+                    text = strings.secondsValue(dragged.roundToInt()),
                     style = MaterialTheme.typography.bodyMedium,
                     color = accentPalette.secondaryOnQuietContainer,
                 )
@@ -1237,12 +1256,12 @@ private fun BeatAnalysisRow(
 ) {
     val (value, note) = when (state) {
         BeatAcceleratorState.NotLoaded ->
-            "尚未加载" to "第一次智能过渡时加载，也可以现在检测"
-        BeatAcceleratorState.Loading -> "正在加载节拍模型…" to ""
+            strings.beatModelNotLoaded to strings.beatModelNotLoadedNote
+        BeatAcceleratorState.Loading -> strings.beatModelLoading to ""
         is BeatAcceleratorState.Ready ->
-            "${state.accelerator.label} · ${state.deviceLabel}" to "节拍模型只在 NPU 或 GPU 上运行，不占用 CPU"
+            "${state.accelerator.label} · ${state.deviceLabel}" to strings.beatModelReadyNote
         is BeatAcceleratorState.Unavailable ->
-            "不可用" to "${state.reason}。仍会按响度安排过渡，但不对齐节拍"
+            strings.beatModelUnavailable to strings.beatModelUnavailableNote(state.reason)
     }
     Surface(
         shape = connectedListItemShape(index = index, count = count),
@@ -1257,7 +1276,7 @@ private fun BeatAnalysisRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text("节拍分析", style = MaterialTheme.typography.bodyLarge)
+                Text(strings.beatAnalysis, style = MaterialTheme.typography.bodyLarge)
                 Text(
                     text = value,
                     style = MaterialTheme.typography.bodyMedium,
@@ -1265,7 +1284,7 @@ private fun BeatAnalysisRow(
                 )
                 val details = listOf(
                     note,
-                    "分析时会另外读取歌曲的标准音质版本，已下载的歌曲直接读取本地文件",
+                    strings.beatAnalysisSourceNote,
                 ).filter { it.isNotEmpty() }
                 details.forEach { line ->
                     Text(
@@ -1277,7 +1296,7 @@ private fun BeatAnalysisRow(
             }
             if (state == BeatAcceleratorState.NotLoaded) {
                 Spacer(Modifier.width(12.dp))
-                TextButton(onClick = onProbe) { Text("检测") }
+                TextButton(onClick = onProbe) { Text(strings.checkNow) }
             }
         }
     }

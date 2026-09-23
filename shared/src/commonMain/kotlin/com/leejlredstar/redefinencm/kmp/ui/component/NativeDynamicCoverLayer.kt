@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 
 /**
  * Source-faithful visual constants for the two `<video>` elements in AMLL's `player.html`.
@@ -216,7 +217,7 @@ internal fun DynamicCoverBadge(modifier: Modifier) {
         contentColor = Color(0xFF9CF2DC),
     ) {
         Text(
-            text = "动态封面",
+            text = strings.animatedCover,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             style = TextStyle(
                 fontSize = 11.sp,

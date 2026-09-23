@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
@@ -112,7 +113,7 @@ internal fun DesktopPlayerBar(
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
-                                text = media?.title?.takeIf { it.isNotBlank() } ?: "未播放",
+                                text = media?.title?.takeIf { it.isNotBlank() } ?: strings.notPlaying,
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
@@ -140,7 +141,7 @@ internal fun DesktopPlayerBar(
                 IconButton(onClick = viewModel::onFavClick, enabled = nowPlaying.canFavorite) {
                     Icon(
                         imageVector = if (nowPlaying.isFavorite) AppIcons.Favorite else AppIcons.FavoriteBorder,
-                        contentDescription = if (nowPlaying.isFavorite) "已喜欢" else "喜欢",
+                        contentDescription = if (nowPlaying.isFavorite) strings.liked else strings.like,
                         // An explicit tint ignores the button's disabled state, so dim it here.
                         tint = when {
                             !nowPlaying.canFavorite -> accentPalette.onQuietContainer.copy(alpha = 0.38f)
@@ -167,13 +168,13 @@ internal fun DesktopPlayerBar(
                             ) {
                                 Icon(
                                     imageVector = if (nowPlaying.shuffleEnabled) AppIcons.ShuffleOn else AppIcons.Shuffle,
-                                    contentDescription = "随机播放",
+                                    contentDescription = strings.shuffle,
                                     tint = if (nowPlaying.shuffleEnabled) accentPalette.accent else accentPalette.secondaryOnQuietContainer,
                                 )
                             }
                         }
                         IconButton(onClick = viewModel::onPervClick, enabled = hasMedia) {
-                            Icon(AppIcons.SkipPrevious, contentDescription = "上一首")
+                            Icon(AppIcons.SkipPrevious, contentDescription = strings.previous)
                         }
                         FilledIconButton(
                             onClick = viewModel::onPauseClick,
@@ -186,11 +187,11 @@ internal fun DesktopPlayerBar(
                         ) {
                             Icon(
                                 imageVector = if (nowPlaying.isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
-                                contentDescription = if (nowPlaying.isPlaying) "暂停" else "播放",
+                                contentDescription = if (nowPlaying.isPlaying) strings.pause else strings.play,
                             )
                         }
                         IconButton(onClick = viewModel::onNextClick, enabled = hasMedia) {
-                            Icon(AppIcons.SkipNext, contentDescription = "下一首")
+                            Icon(AppIcons.SkipNext, contentDescription = strings.next)
                         }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -223,7 +224,7 @@ internal fun DesktopPlayerBar(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(onClick = onOpenLyrics, enabled = hasMedia) {
-                        Icon(AppIcons.FormatQuote, contentDescription = "歌词")
+                        Icon(AppIcons.FormatQuote, contentDescription = strings.lyrics)
                     }
                     IconButton(
                         onClick = {
@@ -232,10 +233,10 @@ internal fun DesktopPlayerBar(
                         },
                         enabled = hasMedia,
                     ) {
-                        Icon(AppIcons.QueueMusic, contentDescription = "播放队列")
+                        Icon(AppIcons.QueueMusic, contentDescription = strings.queue)
                     }
                     IconButton(onClick = sheets::openComments, enabled = nowPlaying.canComment) {
-                        Icon(AppIcons.Comment, contentDescription = "评论")
+                        Icon(AppIcons.Comment, contentDescription = strings.comments)
                     }
                     val volumeIcon = when (outputVolumeLevel(volume)) {
                         OutputVolumeLevel.MUTED -> AppIcons.VolumeOff
@@ -244,7 +245,7 @@ internal fun DesktopPlayerBar(
                     }
                     Icon(
                         imageVector = volumeIcon,
-                        contentDescription = "音量 ${formatOutputVolumePercent(volume)}",
+                        contentDescription = strings.volumePercent(formatOutputVolumePercent(volume)),
                         tint = accentPalette.secondaryOnQuietContainer,
                         modifier = Modifier.padding(start = 8.dp).size(20.dp),
                     )

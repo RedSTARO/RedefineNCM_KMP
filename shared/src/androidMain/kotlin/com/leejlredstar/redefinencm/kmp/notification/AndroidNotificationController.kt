@@ -7,6 +7,9 @@ import android.content.Context
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.leejlredstar.redefinencm.kmp.i18n.AppLanguage
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.util.canPostNotifications
 
 /**
@@ -24,7 +27,7 @@ object AndroidLyricNotification : OptionalLyricSurface {
     private const val CHANNEL_ID = "live_update_lyric"
     private const val NOTIFICATION_ID = 0x4C595243 // "LYRC"
 
-    override val settingLabel: String = "启用额外 Live Update 歌词"
+    override val settingLabel: String get() = strings.enableLiveUpdateLyrics
 
     private var latestPayload: LyricPayload? = null
     private var lastPostedPayload: LyricPayload? = null
@@ -101,6 +104,7 @@ object AndroidLyricNotification : OptionalLyricSurface {
             }
         }
 
+        ensureChannel(context)
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(
                 if (payload.isPlaying) android.R.drawable.ic_media_pause
@@ -154,22 +158,30 @@ object AndroidLyricNotification : OptionalLyricSurface {
         lastPostedPayload = null
     }
 
+    private var channelLanguage: AppLanguage? = null
+
+    /**
+     * Creates the channel, or renames it after a language switch: creating a channel that exists
+     * only updates its name and description, and keeps the settings the user gave it.
+     */
     private fun ensureChannel(context: Context) {
-        val manager = context.getSystemService(NotificationManager::class.java)
-        if (manager?.getNotificationChannel(CHANNEL_ID) != null) return
+        val language = I18n.language
+        if (channelLanguage == language) return
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        channelLanguage = language
 
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Live Update Lyric",
+            strings.lyricChannelName,
             NotificationManager.IMPORTANCE_LOW,
         ).apply {
-            description = "Shows current song lyrics in the notification shade"
+            description = strings.lyricChannelDescription
             enableLights(false)
             enableVibration(false)
             setShowBadge(false)
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
-        manager?.createNotificationChannel(channel)
+        manager.createNotificationChannel(channel)
     }
 
     private fun shouldRequestLiveUpdate(context: Context): Boolean {

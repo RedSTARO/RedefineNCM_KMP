@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.data.auth
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -72,7 +73,7 @@ class PhoneCodeLoginFlow(
     fun sendCode() {
         val phone = normalizedPhone()
         if (phone == null) {
-            _error.value = "请输入正确的手机号"
+            _error.value = strings.phoneNumberInvalid
             return
         }
         if (!canSendCode) return
@@ -83,7 +84,7 @@ class PhoneCodeLoginFlow(
                 when (val answer = method.sendCode(phone)) {
                     PhoneCodeSend.Sent -> {
                         _codeSent.value = true
-                        _message.value = "验证码已发送到 $phone"
+                        _message.value = strings.verificationCodeSent(phone)
                         startCountdown()
                     }
                     is PhoneCodeSend.Blocked -> {
@@ -95,9 +96,9 @@ class PhoneCodeLoginFlow(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: LoginMethodException) {
-                _error.value = e.message ?: "未知错误"
+                _error.value = e.message ?: strings.unknownError
             } catch (e: Exception) {
-                _error.value = "网络错误：${e.message ?: "未知错误"}"
+                _error.value = strings.networkErrorWithMessage(e.message ?: strings.unknownError)
             } finally {
                 _busy.value = false
             }
@@ -115,21 +116,21 @@ class PhoneCodeLoginFlow(
                 when (val answer = method.verify(phone, _code.value)) {
                     is PhoneCodeVerify.Confirmed -> host.persist(answer.credential)
                         .onSuccess {
-                            _message.value = "登录成功"
+                            _message.value = strings.signInSucceeded
                             _success.value = true
                             host.onSignedIn()
                         }
                         .onFailure { failure ->
-                            _error.value = failure.message ?: "凭证保存失败"
+                            _error.value = failure.message ?: strings.credentialSaveFailed
                         }
                     is PhoneCodeVerify.Failed -> _error.value = answer.message
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: LoginMethodException) {
-                _error.value = e.message ?: "未知错误"
+                _error.value = e.message ?: strings.unknownError
             } catch (e: Exception) {
-                _error.value = "网络错误：${e.message ?: "未知错误"}"
+                _error.value = strings.networkErrorWithMessage(e.message ?: strings.unknownError)
             } finally {
                 _busy.value = false
             }

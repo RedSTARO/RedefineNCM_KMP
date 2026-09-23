@@ -1,5 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.di
 
+import com.leejlredstar.redefinencm.kmp.i18n.UiText
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.AmlldbApi
@@ -159,15 +161,15 @@ val sharedModule = module {
                     credentialSlot = get<NeteaseCredentialSlot>(),
                     descriptor = ProviderLoginDescriptor(
                         provider = MusicProviderId.NETEASE,
-                        introduction = "RedefineNCM 是第三方网易云音乐客户端。登录后可以使用你的歌单、每日推荐和喜欢的音乐；不登录也可以搜索和播放。",
-                        accountLabel = "网易云音乐账号",
-                        signedOutHint = "登录后可以查看歌单、每日推荐和喜欢的音乐",
-                        logoutWarning = "退出后「我的」、每日推荐和喜欢等功能将不可用，已下载的歌曲会保留。",
+                        introductionText = UiText { it.neteaseLoginIntro },
+                        accountLabelText = UiText { it.neteaseAccount },
+                        signedOutHintText = UiText { it.neteaseSignedOutHint },
+                        logoutWarningText = UiText { it.neteaseSignOutWarning },
                         server = ProviderServerSetting(
                             key = SettingKeys.SERVER,
                             default = DEFAULT_NCM_SERVER,
-                            label = "网易云音乐服务器地址",
-                            appliesWhen = "服务器地址重启后生效",
+                            labelText = UiText { it.neteaseServerAddress },
+                            appliesWhenText = UiText { it.serverAddressAppliesAfterRestart },
                             // 原版 ServerItem：调 /inner/version/ 校验服务器可用性并显示版本
                             check = { address -> checkNcmServer(ncmApi, address) },
                         ),
@@ -193,28 +195,28 @@ val sharedModule = module {
                     credentialSlot = get<QQCredentialSlot>(),
                     descriptor = ProviderLoginDescriptor(
                         provider = MusicProviderId.QQ,
-                        introduction = "登录后 QQ音乐的搜索和播放使用你账号的权益；不登录也可以搜索，并播放可免费收听的歌曲。",
-                        accountLabel = "QQ音乐账号",
-                        signedOutHint = "登录后搜索和播放使用你账号的权益",
-                        logoutWarning = "退出后 QQ音乐按未登录状态搜索和播放。",
+                        introductionText = UiText { it.qqLoginIntro },
+                        accountLabelText = UiText { it.qqAccount },
+                        signedOutHintText = UiText { it.qqSignedOutHint },
+                        logoutWarningText = UiText { it.qqSignOutWarning },
                         server = ProviderServerSetting(
                             key = SettingKeys.QQ_SERVER,
                             default = SettingKeys.QQ_SERVER_DEFAULT,
-                            label = "QQ音乐服务器地址",
-                            appliesWhen = "服务器地址立即生效",
+                            labelText = UiText { it.qqServerAddress },
+                            appliesWhenText = UiText { it.serverAddressAppliesNow },
                             check = { address -> checkQQGateway(qqApi, address) },
                         ),
                         enabledSetting = ProviderEnabledSetting(
                             key = SettingKeys.QQ_ENABLED,
                             default = false,
-                            label = "启用 QQ音乐",
-                            supportingText = "需要自建 QQMusicApi 服务器；未登录时按 QQ 对未登录用户的限制播放",
+                            labelText = UiText { it.enableQqMusic },
+                            supportingTextText = UiText { it.enableQqMusicHint },
                         ),
                         // The gateway reads the account from a Cookie header only (see AGENTS.md D6).
-                        signInUnavailableReason = if (canSendCookie) {
+                        signInUnavailableReasonText = if (canSendCookie) {
                             null
                         } else {
-                            "浏览器无法携带 QQ音乐的登录凭证，Web 端以未登录身份使用 QQ音乐"
+                            UiText { it.qqWebSignInUnavailable }
                         },
                     ),
                     loginMethods = listOf(
@@ -296,7 +298,7 @@ val sharedModule = module {
             decoder = getOrNull<TrackEndsDecoder>() ?: TrackEndsDecoder { _, _, _ -> null },
             urls = ProviderAnalysisUrlResolver(get(), get()) { id -> local?.uri(id) },
             modelLoader = getOrNull<BeatModelLoader>()
-                ?: UnavailableBeatModelLoader("这个平台没有可用的 NPU 或 GPU 推理组件"),
+                ?: UnavailableBeatModelLoader(strings.beatModelNoRuntime),
         )
     }
     // Eager, like the reporter: a transition must be planned whether or not a screen is open.
@@ -324,21 +326,21 @@ val sharedModule = module {
 private suspend fun checkNcmServer(api: NCMApi, address: String): ServerCheckResult = try {
     val result = api.innerVersion("${address}inner/version/")
     if (result.code == 200) {
-        ServerCheckResult(true, "服务器可用，版本：${result.data.version}")
+        ServerCheckResult(true, strings.serverAvailableWithVersion(result.data.version))
     } else {
-        ServerCheckResult(false, "服务器有响应，但返回了错误（代码 ${result.code}）")
+        ServerCheckResult(false, strings.serverRespondedWithError(result.code))
     }
 } catch (cancelled: CancellationException) {
     throw cancelled
 } catch (_: Exception) {
     // The raw exception names a socket or parser, not what to do about it.
-    ServerCheckResult(false, "无法连接到这个服务器，请检查地址是否正确、服务是否在运行")
+    ServerCheckResult(false, strings.serverUnreachable)
 }
 
 /** The QQ gateway's check: whether it serves its own API description. */
 private suspend fun checkQQGateway(api: QQMusicApi, address: String): ServerCheckResult =
     if (api.ping(address)) {
-        ServerCheckResult(true, "服务器可用")
+        ServerCheckResult(true, strings.serverAvailable)
     } else {
-        ServerCheckResult(false, "无法连接到这个服务器，请检查地址是否正确、服务是否在运行")
+        ServerCheckResult(false, strings.serverUnreachable)
     }

@@ -31,6 +31,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.leejlredstar.redefinencm.kmp.i18n.strings
+import com.leejlredstar.redefinencm.kmp.i18n.text
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
@@ -83,20 +85,20 @@ fun DailySongsScreen(
                         ) {
                             Icon(
                                 AppIcons.ArrowBack,
-                                contentDescription = "返回",
+                                contentDescription = strings.back,
                                 modifier = Modifier.padding(10.dp),
                             )
                         }
                     }
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                         Text(
-                            text = "每日推荐",
+                            text = strings.dailyPicks,
                             style = MaterialTheme.typography.headlineLarge,
                             fontWeight = FontWeight.ExtraBold,
                             color = palette.onPageStart,
                         )
                         Text(
-                            text = if (songs.isEmpty()) "今天的推荐" else "今天为你推荐的 ${songs.size} 首歌",
+                            text = if (songs.isEmpty()) strings.todaysPicks else strings.dailyPicksSongCount(songs.size),
                             style = MaterialTheme.typography.labelLarge,
                             color = palette.secondaryOnPageStart,
                         )
@@ -118,7 +120,7 @@ fun DailySongsScreen(
                             ) {
                                 Icon(AppIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
                                 Spacer(Modifier.width(8.dp))
-                                Text("播放全部")
+                                Text(strings.playAll)
                             }
                         }
                     }
@@ -127,27 +129,27 @@ fun DailySongsScreen(
             when {
                 loadError != null && songs.isEmpty() -> item(key = "daily-error") {
                     ExpressiveStatePanel(
-                        title = "每日推荐加载失败",
-                        message = loadError.orEmpty(),
+                        title = strings.dailyPicksLoadFailed,
+                        message = loadError?.text.orEmpty(),
                         icon = AppIcons.Refresh,
                         tone = ExpressiveStateTone.Error,
                         accentPalette = palette,
-                        actionLabel = "重试",
+                        actionLabel = strings.retry,
                         onAction = viewModel::retryAccountData,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
                 accountLoading && songs.isEmpty() -> item(key = "daily-loading") {
                     ExpressiveLoadingState(
-                        label = "正在加载每日推荐…",
+                        label = strings.dailyPicksLoading,
                         accentColor = palette.accent,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
                 songs.isEmpty() -> item(key = "daily-empty") {
                     ExpressiveStatePanel(
-                        title = "暂无每日推荐",
-                        message = "登录后，每天的推荐歌曲会显示在这里。",
+                        title = strings.dailyPicksEmpty,
+                        message = strings.dailyPicksSignInHint,
                         icon = AppIcons.MusicNote,
                         accentPalette = palette,
                         modifier = Modifier.padding(horizontal = 16.dp),

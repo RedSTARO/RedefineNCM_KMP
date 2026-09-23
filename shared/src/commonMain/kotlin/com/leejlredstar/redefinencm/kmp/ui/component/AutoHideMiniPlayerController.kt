@@ -88,6 +88,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.getPlatform
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.lyric.LyricCapabilityLevel
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSource
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
@@ -516,7 +517,7 @@ private fun FullLyricControlConsole(
             ) {
                 Icon(
                     imageVector = if (isFavorite) AppIcons.Favorite else AppIcons.FavoriteBorder,
-                    contentDescription = if (isFavorite) "已喜欢" else "喜欢",
+                    contentDescription = if (isFavorite) strings.liked else strings.like,
                 )
             }
             FilledTonalIconButton(
@@ -532,7 +533,7 @@ private fun FullLyricControlConsole(
                     contentColor = accentPalette.onContainer,
                 ),
             ) {
-                Icon(AppIcons.QueueMusic, contentDescription = "播放队列")
+                Icon(AppIcons.QueueMusic, contentDescription = strings.queue)
             }
             FilledTonalIconButton(
                 onClick = onComments,
@@ -548,7 +549,7 @@ private fun FullLyricControlConsole(
                     contentColor = accentPalette.onContainer,
                 ),
             ) {
-                Icon(AppIcons.Comment, contentDescription = "评论")
+                Icon(AppIcons.Comment, contentDescription = strings.comments)
             }
             FilledIconToggleButton(
                 checked = shuffleEnabled,
@@ -568,7 +569,7 @@ private fun FullLyricControlConsole(
             ) {
                 Icon(
                     imageVector = if (shuffleEnabled) AppIcons.ShuffleOn else AppIcons.Shuffle,
-                    contentDescription = "随机播放",
+                    contentDescription = strings.shuffle,
                 )
             }
         }
@@ -640,7 +641,7 @@ private fun OutputVolumeControl(
                 modifier = Modifier
                     .weight(1f)
                     .heightIn(min = ExpressiveLayout.MinimumTouchTarget)
-                    .semantics { contentDescription = "输出音量 $label" },
+                    .semantics { contentDescription = strings.outputVolumePercent(label) },
                 colors = SliderDefaults.colors(
                     thumbColor = accentPalette.onQuietContainer,
                     activeTrackColor = accentPalette.onQuietContainer,
@@ -731,7 +732,7 @@ private fun ExpandedPlaybackCard(
             if (hasMedia) {
                 AsyncImage(
                     model = media?.artworkUri,
-                    contentDescription = "${media?.title ?: "当前歌曲"}封面",
+                    contentDescription = strings.coverOf(media?.title ?: strings.currentSong),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .size(72.dp)
@@ -767,7 +768,7 @@ private fun ExpandedPlaybackCard(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = media?.title?.takeIf { it.isNotBlank() } ?: "未播放",
+                            text = media?.title?.takeIf { it.isNotBlank() } ?: strings.notPlaying,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.ExtraBold,
                             maxLines = 1,
@@ -782,7 +783,7 @@ private fun ExpandedPlaybackCard(
                                 )
                             }
                             Text(
-                                text = media?.artist?.takeIf { it.isNotBlank() } ?: "选择歌曲开始播放",
+                                text = media?.artist?.takeIf { it.isNotBlank() } ?: strings.chooseSongToPlay,
                                 style = MaterialTheme.typography.labelMedium,
                                 color = accentPalette.secondaryOnContainer,
                                 maxLines = 1,
@@ -803,7 +804,7 @@ private fun ExpandedPlaybackCard(
                     // Collapsing is its own control, not a tap on the cover or the title:
                     // people tap those expecting something about the song.
                     IconButton(onClick = onCollapse) {
-                        Icon(AppIcons.KeyboardArrowDown, contentDescription = "收起播放控制")
+                        Icon(AppIcons.KeyboardArrowDown, contentDescription = strings.collapsePlaybackControls)
                     }
                 }
                 PlaybackSeekBar(
@@ -849,7 +850,7 @@ private fun ExpandedPlaybackCard(
                             enabled = hasMedia,
                             modifier = Modifier.size(48.dp),
                         ) {
-                            Icon(AppIcons.SkipPrevious, contentDescription = "上一首")
+                            Icon(AppIcons.SkipPrevious, contentDescription = strings.previous)
                         }
                         FilledIconButton(
                             onClick = onPlayPause,
@@ -864,7 +865,7 @@ private fun ExpandedPlaybackCard(
                         ) {
                             Icon(
                                 imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
-                                contentDescription = if (isPlaying) "暂停" else "播放",
+                                contentDescription = if (isPlaying) strings.pause else strings.play,
                             )
                         }
                         IconButton(
@@ -872,7 +873,7 @@ private fun ExpandedPlaybackCard(
                             enabled = hasMedia,
                             modifier = Modifier.size(48.dp),
                         ) {
-                            Icon(AppIcons.SkipNext, contentDescription = "下一首")
+                            Icon(AppIcons.SkipNext, contentDescription = strings.next)
                         }
                     }
                 }
@@ -917,8 +918,8 @@ private fun CollapsedProgressController(
         label = "collapsedControllerScale",
     )
     val swipeLabel = when {
-        dragOffsetPx <= -dragThresholdPx * 0.38f -> "松手播放下一首"
-        dragOffsetPx >= dragThresholdPx * 0.38f -> "松手播放上一首"
+        dragOffsetPx <= -dragThresholdPx * 0.38f -> strings.releaseForNextSong
+        dragOffsetPx >= dragThresholdPx * 0.38f -> strings.releaseForPreviousSong
         else -> null
     }
     val swipeAlpha by animateFloatAsState(
@@ -999,25 +1000,25 @@ private fun CollapsedProgressController(
             .semantics(mergeDescendants = true) {
                 role = Role.Button
                 contentDescription = if (hasMedia) {
-                    "${media?.title ?: "当前歌曲"}，播放控制"
+                    strings.playbackControlsFor(media?.title ?: strings.currentSong)
                 } else {
-                    "当前没有播放歌曲"
+                    strings.noSongPlaying
                 }
-                onClick(label = "展开播放控制") {
+                onClick(label = strings.expandPlaybackControls) {
                     onReveal()
                     true
                 }
                 if (hasMedia) {
                     customActions = listOf(
-                        CustomAccessibilityAction(if (isPlaying) "暂停" else "播放") {
+                        CustomAccessibilityAction(if (isPlaying) strings.pause else strings.play) {
                             onTogglePlayPause()
                             true
                         },
-                        CustomAccessibilityAction("上一首") {
+                        CustomAccessibilityAction(strings.previous) {
                             onPrevious()
                             true
                         },
-                        CustomAccessibilityAction("下一首") {
+                        CustomAccessibilityAction(strings.next) {
                             onNext()
                             true
                         },
@@ -1050,7 +1051,7 @@ private fun CollapsedProgressController(
                     }
                 }
                 Text(
-                    text = media?.title?.takeIf { it.isNotBlank() } ?: "未播放",
+                    text = media?.title?.takeIf { it.isNotBlank() } ?: strings.notPlaying,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,

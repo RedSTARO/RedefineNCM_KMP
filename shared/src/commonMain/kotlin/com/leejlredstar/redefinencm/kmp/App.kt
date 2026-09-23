@@ -1,5 +1,7 @@
 package com.leejlredstar.redefinencm.kmp
 
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.ui.theme.ArtworkTheme
 import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import androidx.compose.animation.AnimatedContent
@@ -302,11 +304,16 @@ fun App() {
     var startsSignedIn by remember(settings) { mutableStateOf<Boolean?>(null) }
     LaunchedEffect(settings) {
         ThemePreferences.loadStored(settings)
+        I18n.loadStored(settings)
         startsSignedIn = registrations.anySignedIn(settings)
     }
 
-    // Before the first themed frame, so a stored light or dark choice never flashes the other.
-    remember(settings) { ThemePreferences.load(settings) }
+    // Before the first themed frame, so a stored light or dark choice (or a stored language)
+    // never flashes the system's.
+    remember(settings) {
+        ThemePreferences.load(settings)
+        I18n.load(settings)
+    }
 
     RedefineNCMTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
@@ -513,14 +520,14 @@ private fun AppContent(
                     ?.takeIf { it.id == failure.mediaId }
                     ?.title
                     ?.takeIf(String::isNotBlank)
-                    ?: "这首歌"
+                    ?: strings.thisSong
                 // The other provider's copy is offered, never taken without asking.
                 val offerSwitch = nowPlayingViewModel.canOfferSourceSwitch(failure)
                 desktopSnackbarVisible = true
                 val result = try {
                     snackbarHostState.showSnackbar(
-                        message = "无法播放「$title」：${failure.message}",
-                        actionLabel = if (offerSwitch) "换源" else null,
+                        message = strings.playbackFailed(title, failure.message),
+                        actionLabel = if (offerSwitch) strings.switchSource else null,
                         duration = if (offerSwitch) SnackbarDuration.Long else SnackbarDuration.Short,
                     )
                 } finally {
@@ -543,11 +550,11 @@ private fun AppContent(
             // The navigation stays on the pages opened from a tab, so changing tabs never means
             // backing out first. The player, the lyrics and sign-in are full-screen and hide it.
             val showTabs = !hidesNavigation(pushedStack.lastOrNull())
-            val tabs = remember {
+            val tabs = remember(I18n.language) {
                 listOf(
-                    NavigationItem("推荐", AppIcons.Home, TabDest.Home),
-                    NavigationItem("搜索", AppIcons.Search, TabDest.Search),
-                    NavigationItem("我的", AppIcons.Person, TabDest.My),
+                    NavigationItem(strings.forYou, AppIcons.Home, TabDest.Home),
+                    NavigationItem(strings.search, AppIcons.Search, TabDest.Search),
+                    NavigationItem(strings.me, AppIcons.Person, TabDest.My),
                 )
             }
 
@@ -867,7 +874,7 @@ private fun AppContent(
                                     }
                                     if (desktopCompact) {
                                         ExpressiveNavToggle(
-                                            label = "下载",
+                                            label = strings.downloads,
                                             icon = AppIcons.Download,
                                             selected = rootDest is RootDest.Pushed &&
                                                 rootDest.dest is PushedDest.Downloads,
@@ -1003,12 +1010,12 @@ private fun DesktopSidebarContent(
                         contentColor = accentPalette.onContainer,
                     ),
                     modifier = Modifier.semantics {
-                        stateDescription = if (railExpanded) "侧栏已展开" else "侧栏已收起"
+                        stateDescription = if (railExpanded) strings.sidebarExpanded else strings.sidebarCollapsed
                     },
                 ) {
                     Icon(
                         imageVector = AppIcons.Menu,
-                        contentDescription = if (railExpanded) "收起侧栏" else "展开侧栏",
+                        contentDescription = if (railExpanded) strings.collapseSidebar else strings.expandSidebar,
                     )
                 }
                 if (expandedContentVisible) {
@@ -1038,7 +1045,7 @@ private fun DesktopSidebarContent(
             // any page instead of two clicks and a scrim.
             if (expandedContentVisible) {
                 Text(
-                    text = "工具",
+                    text = strings.tools,
                     style = MaterialTheme.typography.labelLarge,
                     color = accentPalette.secondaryOnQuietContainer,
                     // In line with the item icons: an expanded item starts its pill 20dp in and
@@ -1050,7 +1057,7 @@ private fun DesktopSidebarContent(
                 selected = downloadsSelected,
                 onClick = onOpenDownloads,
                 icon = { Icon(AppIcons.Download, contentDescription = null) },
-                label = { Text("下载管理") },
+                label = { Text(strings.downloadManagement) },
                 railExpanded = railExpanded,
                 modifier = railItemModifier,
                 colors = itemColors,
@@ -1059,7 +1066,7 @@ private fun DesktopSidebarContent(
                 selected = recognitionSelected,
                 onClick = onOpenRecognition,
                 icon = { Icon(AppIcons.Mic, contentDescription = null) },
-                label = { Text("听歌识曲") },
+                label = { Text(strings.songRecognition) },
                 railExpanded = railExpanded,
                 modifier = railItemModifier,
                 colors = itemColors,
@@ -1070,7 +1077,7 @@ private fun DesktopSidebarContent(
             selected = settingsSelected,
             onClick = onOpenSettings,
             icon = { Icon(AppIcons.Settings, contentDescription = null) },
-            label = { Text("设置") },
+            label = { Text(strings.settings) },
             railExpanded = railExpanded,
             modifier = railItemModifier.padding(vertical = 8.dp),
             colors = itemColors,

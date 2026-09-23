@@ -52,6 +52,7 @@ import com.leejlredstar.amll.compose.AmllLyricViewport
 import com.leejlredstar.amll.compose.buildAmllLyricDocument
 import com.leejlredstar.amll.compose.calculateAmllLyricVisualParameters
 import com.leejlredstar.amll.compose.rememberReducedMotionEnabled
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.lyric.LyricStateOverlay
 import com.leejlredstar.redefinencm.kmp.player.PlayerState
 import com.leejlredstar.redefinencm.kmp.getPlatform
@@ -157,7 +158,7 @@ fun NativeAmllScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF0A0A0A))
-            .semantics { contentDescription = "正在播放歌词" },
+            .semantics { contentDescription = strings.nowPlayingLyrics },
     ) {
         val visualParameters = remember(maxWidth, maxHeight, reducedMotion) {
             calculateAmllLyricVisualParameters(
@@ -271,7 +272,7 @@ private fun AmllTopActions(
                 .align(Alignment.TopStart)
                 .padding(start = 18.dp)
                 .size(48.dp)
-                .semantics { contentDescription = "收起歌词" },
+                .semantics { contentDescription = strings.closeLyrics },
         ) {
             Icon(
                 imageVector = AppIcons.KeyboardArrowDown,
@@ -369,7 +370,7 @@ private fun UntimedLyrics(
     ) {
         item(key = "untimed-note") {
             Text(
-                text = "这首歌的歌词没有时间戳，不能随播放滚动",
+                text = strings.lyricsUntimedNote,
                 color = Color.White.copy(alpha = 0.56f),
                 style = MaterialTheme.typography.labelMedium,
             )

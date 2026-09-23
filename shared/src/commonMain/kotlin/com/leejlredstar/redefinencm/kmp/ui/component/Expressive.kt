@@ -46,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 
@@ -272,7 +273,7 @@ fun ExpressiveCacheHint(
     isRefreshing: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val label = if (isRefreshing) "缓存数据 · 正在更新" else "当前为缓存数据"
+    val label = if (isRefreshing) strings.cachedDataUpdating else strings.showingCachedData
     Surface(
         shape = MaterialTheme.shapes.extraLarge,
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -357,7 +358,7 @@ fun ExpressiveStatePanel(
             .fillMaxWidth()
             .semantics {
                 liveRegion = LiveRegionMode.Polite
-                stateDescription = if (isError) "错误：$title" else title
+                stateDescription = if (isError) strings.errorStateDescription(title) else title
             },
     ) {
         Column(

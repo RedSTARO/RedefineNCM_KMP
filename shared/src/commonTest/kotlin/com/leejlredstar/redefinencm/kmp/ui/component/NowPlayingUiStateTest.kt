@@ -1,9 +1,13 @@
 package com.leejlredstar.redefinencm.kmp.ui.component
 
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderCapability
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
+import com.leejlredstar.redefinencm.kmp.i18n.LanguageSetting
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlayerQueueSnapshot
 import com.leejlredstar.redefinencm.kmp.viewmodel.FavoriteUiState
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -17,6 +21,17 @@ import kotlin.test.assertTrue
  * UI has to defend against.
  */
 class NowPlayingUiStateTest {
+    /** The expected copy below is the Chinese, so the test pins it whatever the machine's language. */
+    @BeforeTest
+    fun showChinese() {
+        I18n.apply(LanguageSetting.ZH)
+    }
+
+    @AfterTest
+    fun followTheSystemAgain() {
+        I18n.apply(LanguageSetting.SYSTEM)
+    }
+
 
     private fun state(
         media: MediaInfo? = MediaInfo(id = "1", title = "t", artist = "a", duration = 200_000L),

@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.data.api
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -61,7 +62,7 @@ class AmlldbApi(
         var fallbackFailure: AmlldbTtmlResult? = null
         val directLookup = withTimeoutOrNull(DIRECT_LOOKUP_TIMEOUT_MILLIS) {
             getTtml("$DIRECT_NCM_ENDPOINT/$songId")
-        } ?: TextFetch.Failed("AMLL DB 按歌曲 ID 获取 TTML 超时")
+        } ?: TextFetch.Failed(strings.amllDbIdLookupTimeout)
         when (val direct = directLookup) {
             is TextFetch.Found -> {
                 if (direct.text.looksLikeTtml()) {
@@ -71,7 +72,7 @@ class AmlldbApi(
                         endpoint = "amll-ttml-db",
                     )
                 }
-                fallbackFailure = AmlldbTtmlResult.Malformed("AMLL DB 按歌曲 ID 返回的 TTML 不是有效的 XML")
+                fallbackFailure = AmlldbTtmlResult.Malformed(strings.amllDbIdLookupInvalidXml)
             }
             TextFetch.NotFound -> Unit
             is TextFetch.Failed ->
@@ -88,19 +89,19 @@ class AmlldbApi(
                     response.cancelBody("AMLL DB search returned ${response.status.value}")
                     SearchFetch.Failed(
                         fallbackFailure ?: AmlldbTtmlResult.Unavailable(
-                            "AMLL DB 搜索返回 HTTP ${response.status.value}",
+                            strings.amllDbSearchHttpError(response.status.value),
                         ),
                     )
                 } else {
                     when (val boundedBody = response.readBodyTextAtMost(MAX_SEARCH_RESPONSE_BYTES)) {
                         BoundedBody.TooLarge ->
-                            SearchFetch.Failed(AmlldbTtmlResult.Malformed("AMLL DB 搜索结果过大"))
+                            SearchFetch.Failed(AmlldbTtmlResult.Malformed(strings.amllDbSearchTooLarge))
                         is BoundedBody.Text -> {
                             val items = try {
                                 ApiJson.decodeFromString<List<AmlldbSearchItem>>(boundedBody.value)
                             } catch (_: Exception) {
                                 return@withTimeoutOrNull SearchFetch.Failed(
-                                    AmlldbTtmlResult.Malformed("AMLL DB 搜索结果格式无效"),
+                                    AmlldbTtmlResult.Malformed(strings.amllDbSearchInvalidFormat),
                                 )
                             }
                             SearchFetch.Items(items.take(MAX_SEARCH_RESULTS))
@@ -108,13 +109,13 @@ class AmlldbApi(
                     }
                 }
             } ?: SearchFetch.Failed(
-                fallbackFailure ?: AmlldbTtmlResult.Unavailable("AMLL DB 搜索超时"),
+                fallbackFailure ?: AmlldbTtmlResult.Unavailable(strings.amllDbSearchTimeout),
             )
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
             SearchFetch.Failed(
-                fallbackFailure ?: AmlldbTtmlResult.Unavailable("AMLL DB 搜索请求失败"),
+                fallbackFailure ?: AmlldbTtmlResult.Unavailable(strings.amllDbSearchRequestFailed),
             )
         }
         when (searchFetch) {
@@ -143,7 +144,7 @@ class AmlldbApi(
         )) {
             val fetch = withTimeoutOrNull(FILE_LOOKUP_TIMEOUT_MILLIS) {
                 getTtml(url)
-            } ?: TextFetch.Failed("AMLL DB 歌词下载超时")
+            } ?: TextFetch.Failed(strings.amllDbLyricsDownloadTimeout)
             when (val result = fetch) {
                 is TextFetch.Found -> {
                     if (result.text.looksLikeTtml()) {
@@ -153,7 +154,7 @@ class AmlldbApi(
                             endpoint = endpointName,
                         )
                     }
-                    failure = AmlldbTtmlResult.Malformed("AMLL DB 歌词文件不是有效 TTML")
+                    failure = AmlldbTtmlResult.Malformed(strings.amllDbLyricsInvalidTtml)
                 }
                 TextFetch.NotFound -> Unit
                 is TextFetch.Failed ->
@@ -172,11 +173,11 @@ class AmlldbApi(
             }
             !response.status.isSuccess() -> {
                 response.cancelBody("AMLL DB returned ${response.status.value}")
-                TextFetch.Failed("AMLL DB 返回 HTTP ${response.status.value}")
+                TextFetch.Failed(strings.amllDbHttpError(response.status.value))
             }
             else -> {
                 when (val boundedBody = response.readBodyTextAtMost(MAX_TTML_BYTES)) {
-                    BoundedBody.TooLarge -> TextFetch.Failed("AMLL DB 歌词文件过大")
+                    BoundedBody.TooLarge -> TextFetch.Failed(strings.amllDbLyricsTooLarge)
                     is BoundedBody.Text -> TextFetch.Found(boundedBody.value)
                 }
             }
@@ -184,7 +185,7 @@ class AmlldbApi(
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (_: Exception) {
-        TextFetch.Failed("AMLL DB 请求失败")
+        TextFetch.Failed(strings.amllDbRequestFailed)
     }
 
     private suspend fun HttpResponse.readBodyTextAtMost(maxBytes: Int): BoundedBody {

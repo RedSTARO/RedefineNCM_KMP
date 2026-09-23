@@ -4,7 +4,10 @@ import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.intl.Locale
+import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.unit.sp
+import com.leejlredstar.redefinencm.kmp.i18n.AppLanguage
 
 /**
  * Material 3 Expressive type scale, tuned for maximum hierarchy contrast.
@@ -134,6 +137,39 @@ val ExpressiveTypography = Typography(
         letterSpacing = 0.5.sp,
     ),
 )
+
+/**
+ * Tags every Material text role with [localeList], which picks the font's regional forms: the
+ * same Han character is drawn differently in Chinese and Japanese, and the system fonts choose
+ * by the text's locale, not the app's copy.
+ */
+internal fun Typography.withLocaleList(localeList: LocaleList): Typography = copy(
+    displayLarge = displayLarge.copy(localeList = localeList),
+    displayMedium = displayMedium.copy(localeList = localeList),
+    displaySmall = displaySmall.copy(localeList = localeList),
+    headlineLarge = headlineLarge.copy(localeList = localeList),
+    headlineMedium = headlineMedium.copy(localeList = localeList),
+    headlineSmall = headlineSmall.copy(localeList = localeList),
+    titleLarge = titleLarge.copy(localeList = localeList),
+    titleMedium = titleMedium.copy(localeList = localeList),
+    titleSmall = titleSmall.copy(localeList = localeList),
+    bodyLarge = bodyLarge.copy(localeList = localeList),
+    bodyMedium = bodyMedium.copy(localeList = localeList),
+    bodySmall = bodySmall.copy(localeList = localeList),
+    labelLarge = labelLarge.copy(localeList = localeList),
+    labelMedium = labelMedium.copy(localeList = localeList),
+    labelSmall = labelSmall.copy(localeList = localeList),
+)
+
+/**
+ * The text locales for the app's language. English UI still shows mostly Chinese song titles and
+ * lyrics, so Chinese is its second locale for Han characters.
+ */
+internal fun AppLanguage.textLocales(): LocaleList = when (this) {
+    AppLanguage.ZH -> LocaleList("zh-CN")
+    AppLanguage.JA -> LocaleList("ja-JP")
+    AppLanguage.EN -> LocaleList(Locale("en-US"), Locale("zh-CN"))
+}
 
 /** Apply the platform family to every Material text role, including roles not customized above. */
 internal fun Typography.withFontFamily(fontFamily: FontFamily): Typography = copy(

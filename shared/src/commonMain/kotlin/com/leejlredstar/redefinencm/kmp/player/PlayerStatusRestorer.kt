@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.player
 
 import com.leejlredstar.redefinencm.kmp.data.PlayerStatus
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -51,7 +52,7 @@ class PlayerStatusRestorer internal constructor(
                 val failure = result.exceptionOrNull()
                 if (failure != null) {
                     mutableState.value = PlayerStatusRestoreState.Failed(
-                        failure.message ?: "播放状态读取失败",
+                        failure.message ?: strings.playerStatusReadFailed,
                     )
                     return@launch
                 }
@@ -88,7 +89,7 @@ class PlayerStatusRestorer internal constructor(
                 throw cancelled
             } catch (failure: Exception) {
                 mutableState.value = PlayerStatusRestoreState.Failed(
-                    failure.message ?: "播放状态恢复失败",
+                    failure.message ?: strings.playerStatusRestoreFailed,
                 )
             } finally {
                 if (playerInitialized) {
@@ -98,7 +99,7 @@ class PlayerStatusRestorer internal constructor(
                         throw cancelled
                     } catch (failure: Exception) {
                         mutableState.value = PlayerStatusRestoreState.Failed(
-                            failure.message ?: "播放状态初始化失败",
+                            failure.message ?: strings.playerStatusInitFailed,
                         )
                     }
                 }

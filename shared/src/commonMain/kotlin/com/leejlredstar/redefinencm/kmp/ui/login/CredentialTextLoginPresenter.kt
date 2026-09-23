@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.auth.CredentialTextLoginMethod
 import com.leejlredstar.redefinencm.kmp.data.auth.LoginHost
 import com.leejlredstar.redefinencm.kmp.data.auth.LoginMethod
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import kotlinx.coroutines.launch
 
@@ -36,7 +37,7 @@ class CredentialTextLoginPresenter : LoginMethodPresenter {
     override fun supports(method: LoginMethod): Boolean = method is CredentialTextLoginMethod
 
     override fun sectionTitle(methods: List<LoginMethod>): String =
-        methods.singleOrNull()?.displayName ?: "手动输入"
+        methods.singleOrNull()?.displayName ?: strings.enterManually
 
     @Composable
     override fun Content(method: LoginMethod, host: LoginHost, palette: ContentAccentPalette) {
@@ -57,7 +58,7 @@ class CredentialTextLoginPresenter : LoginMethodPresenter {
                 minLines = 3,
                 visualTransformation = if (reveal) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
-                    TextButton(onClick = { reveal = !reveal }) { Text(if (reveal) "隐藏" else "显示") }
+                    TextButton(onClick = { reveal = !reveal }) { Text(if (reveal) strings.hide else strings.show) }
                 },
                 shape = MaterialTheme.shapes.large,
                 modifier = Modifier.fillMaxWidth(),
@@ -72,13 +73,13 @@ class CredentialTextLoginPresenter : LoginMethodPresenter {
                             host.scope.launch {
                                 host.persist(credential)
                                     .onSuccess {
-                                        notice = (if (credential.isEmpty()) "已清除凭证" else "已保存；${textMethod.fieldLabel}已生效") to false
+                                        notice = (if (credential.isEmpty()) strings.credentialCleared else strings.credentialSavedInUse(textMethod.fieldLabel)) to false
                                         if (credential.isNotEmpty()) host.onSignedIn()
                                     }
-                                    .onFailure { failure -> notice = (failure.message ?: "凭证保存失败") to true }
+                                    .onFailure { failure -> notice = (failure.message ?: strings.credentialSaveFailed) to true }
                             }
                         }
-                        .onFailure { failure -> notice = (failure.message ?: "凭证无法识别") to true }
+                        .onFailure { failure -> notice = (failure.message ?: strings.credentialNotRecognized) to true }
                 },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = CircleShape,
@@ -87,7 +88,7 @@ class CredentialTextLoginPresenter : LoginMethodPresenter {
                     contentColor = palette.onContainer,
                 ),
             ) {
-                Text("保存", style = MaterialTheme.typography.titleMedium)
+                Text(strings.save, style = MaterialTheme.typography.titleMedium)
             }
             notice?.let { (text, isError) ->
                 Spacer(Modifier.height(12.dp))

@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.util
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import java.io.File
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
@@ -139,7 +140,7 @@ actual object LocalMediaAssetStorage {
     }
 }
 
-private const val JVM_DOWNLOAD_DIRECTORY_LABEL = "下载目录"
+private val JVM_DOWNLOAD_DIRECTORY_LABEL: String get() = strings.downloadFolder
 
 private fun ensureJvmAssetDirectory(): File =
     ensureLocalMediaAssetDirectory(jvmDownloadDirectory(), JVM_DOWNLOAD_DIRECTORY_LABEL)

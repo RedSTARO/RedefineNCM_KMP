@@ -2,6 +2,7 @@
 
 package com.leejlredstar.redefinencm.kmp.util
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.convert
 import kotlinx.cinterop.usePinned
@@ -48,13 +49,13 @@ actual object LocalMediaAssetStorage {
                             val original = "$directory/$fileName"
                             val backup = backupIosAssetPath(directory, fileName)
                             check(manager.moveItemAtPath(original, backup, error = null)) {
-                                "无法备份歌词文件：$fileName"
+                                strings.lyricsBackupFailed(fileName)
                             }
                             backups += backup to original
                         }
                     staged.forEach { (temporary, target) ->
                         check(manager.moveItemAtPath(temporary, target, error = null)) {
-                            "无法保存歌词文件：${target.substringAfterLast('/')}"
+                            strings.lyricsFileSaveFailed(target.substringAfterLast('/'))
                         }
                         published += target
                     }
@@ -74,7 +75,7 @@ actual object LocalMediaAssetStorage {
                             if (!restored) {
                                 failure.addSuppressed(
                                     IllegalStateException(
-                                        "无法恢复原来的歌词文件：${original.substringAfterLast('/')}"
+                                        strings.lyricsRestoreFailed(original.substringAfterLast('/'))
                                     )
                                 )
                             }
@@ -138,12 +139,12 @@ actual object LocalMediaAssetStorage {
                             val original = "$directory/$oldFileName"
                             val backup = backupIosAssetPath(directory, oldFileName)
                             check(manager.moveItemAtPath(original, backup, error = null)) {
-                                "无法备份封面文件：$oldFileName"
+                                strings.coverFileBackupFailed(oldFileName)
                             }
                             backups += backup to original
                         }
                     check(manager.moveItemAtPath(temporary, target, error = null)) {
-                        "无法保存封面文件：$fileName"
+                        strings.coverFileSaveFailed(fileName)
                     }
                     published = true
                     backups.forEach { (backup, _) ->
@@ -158,7 +159,7 @@ actual object LocalMediaAssetStorage {
                             if (!restored) {
                                 failure.addSuppressed(
                                     IllegalStateException(
-                                        "无法恢复原来的封面文件：${original.substringAfterLast('/')}"
+                                        strings.coverFileRestoreFailed(original.substringAfterLast('/'))
                                     )
                                 )
                             }
@@ -244,7 +245,7 @@ actual object LocalMediaAssetStorage {
 
 private fun iosAssetFileNames(directory: String): List<String> {
     val entries = NSFileManager.defaultManager.contentsOfDirectoryAtPath(directory, error = null)
-        ?: error("无法读取 iOS 下载目录：$directory")
+        ?: error(strings.iosDownloadFolderUnreadable(directory))
     return entries.mapNotNull { it as? String }
 }
 
@@ -256,7 +257,7 @@ private fun backupIosAssetPath(directory: String, targetName: String): String =
 
 private fun writeIosAsset(path: String, bytes: ByteArray) {
     val file = fopen(path, "wb")
-        ?: error("无法创建歌词或封面文件：${path.substringAfterLast('/')}")
+        ?: error(strings.assetFileCreateFailed(path.substringAfterLast('/')))
     try {
         if (bytes.isNotEmpty()) {
             val written = bytes.usePinned { pinned ->
@@ -268,14 +269,14 @@ private fun writeIosAsset(path: String, bytes: ByteArray) {
                 )
             }
             check(written.toLong() == bytes.size.toLong()) {
-                "歌词或封面文件没有写完整：${path.substringAfterLast('/')}"
+                strings.assetFileIncomplete(path.substringAfterLast('/'))
             }
         }
         check(fflush(file) == 0) {
-            "无法写入歌词或封面文件：${path.substringAfterLast('/')}"
+            strings.assetFileWriteFailed(path.substringAfterLast('/'))
         }
         check(fsync(fileno(file)) == 0) {
-            "无法把歌词或封面文件同步到存储：${path.substringAfterLast('/')}"
+            strings.assetFileSyncFailed(path.substringAfterLast('/'))
         }
     } finally {
         fclose(file)
@@ -284,7 +285,7 @@ private fun writeIosAsset(path: String, bytes: ByteArray) {
 
 private fun readIosAsset(path: String): ByteArray {
     val data = NSFileManager.defaultManager.contentsAtPath(path)
-        ?: error("无法读取歌词或封面文件：${path.substringAfterLast('/')}")
+        ?: error(strings.assetFileReadFailed(path.substringAfterLast('/')))
     val size = data.length.toInt()
     return ByteArray(size).also { bytes ->
         if (size > 0) {
@@ -298,6 +299,6 @@ private fun readIosAsset(path: String): ByteArray {
 private fun deleteIosAssetOrThrow(path: String) {
     val manager = NSFileManager.defaultManager
     check(!manager.fileExistsAtPath(path) || manager.removeItemAtPath(path, error = null)) {
-        "无法删除歌词或封面文件：${path.substringAfterLast('/')}"
+        strings.lyricsOrCoverDeleteFailed(path.substringAfterLast('/'))
     }
 }

@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.data.auth
 
+import com.leejlredstar.redefinencm.kmp.i18n.uiText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -8,8 +9,8 @@ class ProviderServerSettingTest {
     private val setting = ProviderServerSetting(
         key = "server",
         default = "https://default.test/",
-        label = "服务器地址",
-        appliesWhen = "重启后生效",
+        labelText = uiText("服务器地址"),
+        appliesWhenText = uiText("重启后生效"),
     )
 
     @Test

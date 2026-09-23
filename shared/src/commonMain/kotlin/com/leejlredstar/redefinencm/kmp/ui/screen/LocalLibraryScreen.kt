@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.local.LocalPlaylist
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
@@ -84,13 +85,13 @@ fun LocalLibraryScreen(
                         BackButton(palette, onBack)
                         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                             Text(
-                                text = "本地歌单",
+                                text = strings.localPlaylists,
                                 style = MaterialTheme.typography.headlineLarge,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = palette.onPageStart,
                             )
                             Text(
-                                text = "歌曲可以来自任意平台；只保存在此设备，随设置备份导出",
+                                text = strings.localPlaylistsSubtitle,
                                 style = MaterialTheme.typography.labelLarge,
                                 color = palette.secondaryOnPageStart,
                             )
@@ -106,7 +107,7 @@ fun LocalLibraryScreen(
                                 ) {
                                     Icon(AppIcons.Add, contentDescription = null, modifier = Modifier.size(20.dp))
                                     Spacer(Modifier.width(8.dp))
-                                    Text("新建歌单")
+                                    Text(strings.newPlaylist)
                                 }
                                 FilledTonalButton(
                                     onClick = { importingDialog = true },
@@ -119,7 +120,7 @@ fun LocalLibraryScreen(
                                 ) {
                                     Icon(AppIcons.Link, contentDescription = null, modifier = Modifier.size(20.dp))
                                     Spacer(Modifier.width(8.dp))
-                                    Text(if (importing) "正在导入…" else "导入平台歌单")
+                                    Text(if (importing) strings.importing else strings.importPlaylist)
                                 }
                             }
                         }
@@ -128,15 +129,15 @@ fun LocalLibraryScreen(
                 when {
                     library == null -> item(key = "local-loading") {
                         ExpressiveLoadingState(
-                            label = "正在读取本地歌单…",
+                            label = strings.localPlaylistsLoading,
                             accentColor = palette.accent,
                             modifier = Modifier.padding(horizontal = 16.dp),
                         )
                     }
                     rows.isEmpty() -> item(key = "local-empty") {
                         ExpressiveStatePanel(
-                            title = "还没有本地歌单",
-                            message = "新建一个，或在歌曲的「更多操作」里选「添加到本地歌单」。点亮 QQ音乐等平台歌曲的心形，也会收进「本地喜欢」。",
+                            title = strings.noLocalPlaylistsYet,
+                            message = strings.localPlaylistsEmptyHint,
                             icon = AppIcons.PlaylistAdd,
                             accentPalette = palette,
                             modifier = Modifier.padding(horizontal = 16.dp),
@@ -158,9 +159,9 @@ fun LocalLibraryScreen(
 
     if (creating) {
         TextEntryDialog(
-            title = "新建本地歌单",
-            label = "歌单名称",
-            confirmLabel = "新建",
+            title = strings.newLocalPlaylistTitle,
+            label = strings.playlistName,
+            confirmLabel = strings.create,
             onDismiss = { creating = false },
             onConfirm = { name ->
                 creating = false
@@ -170,10 +171,10 @@ fun LocalLibraryScreen(
     }
     if (importingDialog) {
         TextEntryDialog(
-            title = "导入平台歌单",
-            label = "歌单链接或 ID",
-            supportingText = "支持网易云音乐与 QQ音乐的歌单链接；纯数字按网易云歌单读取，QQ 歌单 ID 前加 qq:",
-            confirmLabel = "导入",
+            title = strings.importPlaylist,
+            label = strings.playlistLinkOrId,
+            supportingText = strings.importPlaylistHint,
+            confirmLabel = strings.importAction,
             onDismiss = { importingDialog = false },
             onConfirm = { reference ->
                 importingDialog = false
@@ -220,13 +221,13 @@ private fun LocalPlaylistRow(
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = playlist.name,
+                    text = playlist.displayName,
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "${playlist.tracks.size} 首",
+                    text = strings.songCount(playlist.tracks.size),
                     style = MaterialTheme.typography.bodySmall,
                     color = palette.secondaryOnQuietContainer,
                 )
@@ -245,7 +246,7 @@ internal fun BackButton(palette: ContentAccentPalette, onBack: () -> Unit) {
             color = palette.quietContainer.copy(alpha = 0.72f),
             contentColor = palette.onQuietContainer,
         ) {
-            Icon(AppIcons.ArrowBack, contentDescription = "返回", modifier = Modifier.padding(10.dp))
+            Icon(AppIcons.ArrowBack, contentDescription = strings.back, modifier = Modifier.padding(10.dp))
         }
     }
 }
@@ -278,6 +279,6 @@ internal fun TextEntryDialog(
         confirmButton = {
             TextButton(onClick = { onConfirm(draft) }, enabled = draft.isNotBlank()) { Text(confirmLabel) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(strings.cancel) } },
     )
 }

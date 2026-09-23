@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.notification
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -88,11 +89,18 @@ interface WindowedLyricSurface : OptionalLyricSurface {
 expect val lyricSurface: LyricSurface
 
 /** Horizontal placement of a windowed lyric surface's lines, persisted by its wire value. */
-enum class LyricSurfaceAlignment(val wireValue: String, val displayName: String) {
-    START("start", "左对齐"),
-    CENTER("center", "居中"),
-    END("end", "右对齐"),
+enum class LyricSurfaceAlignment(val wireValue: String) {
+    START("start"),
+    CENTER("center"),
+    END("end"),
     ;
+
+    val displayName: String
+        get() = when (this) {
+            START -> strings.alignLeft
+            CENTER -> strings.alignCenter
+            END -> strings.alignRight
+        }
 
     companion object {
         val DEFAULT = CENTER

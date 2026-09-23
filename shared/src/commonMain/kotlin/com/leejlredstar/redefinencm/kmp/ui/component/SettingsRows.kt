@@ -83,6 +83,7 @@ import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.data.auth.QQCredential
 import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
 import com.leejlredstar.redefinencm.kmp.getPlatform
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
 import com.leejlredstar.redefinencm.kmp.lyric.supportsDynamicNowPlayingCover
 import com.leejlredstar.redefinencm.kmp.notification.LyricSurfaceAlignment
@@ -214,7 +215,7 @@ internal fun SettingsTextField(
         trailingIcon = if (obscureText) {
             {
                 TextButton(onClick = { revealText = !revealText }) {
-                    Text(if (revealText) "隐藏" else "显示")
+                    Text(if (revealText) strings.hide else strings.show)
                 }
             }
         } else {
@@ -429,8 +430,8 @@ internal fun AccountCard(
             Column(Modifier.weight(1f)) {
                 Text(
                     text = when {
-                        !loggedIn -> "未登录"
-                        nickname.isNullOrBlank() -> "已登录"
+                        !loggedIn -> strings.notSignedIn
+                        nickname.isNullOrBlank() -> strings.signedIn
                         else -> nickname
                     },
                     style = MaterialTheme.typography.titleMedium,
@@ -445,8 +446,8 @@ internal fun AccountCard(
             }
             Spacer(Modifier.width(8.dp))
             if (loggedIn) {
-                onLogin?.let { TextButton(onClick = it) { Text("切换账号") } }
-                TextButton(onClick = onLogout) { Text("退出") }
+                onLogin?.let { TextButton(onClick = it) { Text(strings.switchAccount) } }
+                TextButton(onClick = onLogout) { Text(strings.signOut) }
             } else if (onLogin != null) {
                 FilledTonalButton(
                     onClick = onLogin,
@@ -458,7 +459,7 @@ internal fun AccountCard(
                 ) {
                     Icon(AppIcons.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("登录")
+                    Text(strings.signIn)
                 }
             }
         }
@@ -505,7 +506,7 @@ internal fun SettingsLinkRow(
             }
             Icon(
                 imageVector = AppIcons.KeyboardArrowRight,
-                contentDescription = "打开",
+                contentDescription = strings.open,
                 tint = accentPalette.secondaryOnQuietContainer,
             )
         }
@@ -556,7 +557,7 @@ internal fun SettingsExpanderRow(
             }
             Icon(
                 imageVector = if (expanded) AppIcons.KeyboardArrowDown else AppIcons.KeyboardArrowRight,
-                contentDescription = if (expanded) "收起" else "展开",
+                contentDescription = if (expanded) strings.collapse else strings.expand,
                 tint = accentPalette.secondaryOnQuietContainer,
             )
         }

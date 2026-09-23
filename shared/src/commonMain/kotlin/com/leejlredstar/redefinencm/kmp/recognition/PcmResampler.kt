@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.recognition
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -20,24 +21,24 @@ fun prepareRecognitionSamples(
     captured: CapturedPcm,
     durationMillis: Long = DEFAULT_RECOGNITION_DURATION_MILLIS,
 ): FloatArray {
-    require(durationMillis > 0L) { "录音时长必须大于 0" }
-    require(captured.sampleRateHz > 0) { "录音采样率无效" }
+    require(durationMillis > 0L) { strings.recordingDurationMustBePositive }
+    require(captured.sampleRateHz > 0) { strings.recordingSampleRateInvalid }
 
     val targetCountLong = durationMillis * RECOGNITION_SAMPLE_RATE_HZ / 1_000L
-    require(targetCountLong in 1..Int.MAX_VALUE.toLong()) { "录音时长超出可处理范围" }
+    require(targetCountLong in 1..Int.MAX_VALUE.toLong()) { strings.recordingDurationOutOfRange }
     val targetCount = targetCountLong.toInt()
 
     val requiredInputLong = (
         durationMillis * captured.sampleRateHz.toLong() + 999L
     ) / 1_000L
-    require(requiredInputLong <= Int.MAX_VALUE.toLong()) { "录音采样点数量超出可处理范围" }
+    require(requiredInputLong <= Int.MAX_VALUE.toLong()) { strings.recordingSampleCountOutOfRange }
     val requiredInput = requiredInputLong.toInt()
     require(captured.monoSamples.size >= requiredInput) {
-        "录音采样点不足：需要 $requiredInput 个，实际 ${captured.monoSamples.size} 个"
+        strings.recordingSamplesInsufficient(requiredInput, captured.monoSamples.size)
     }
     for (index in 0 until requiredInput) {
         require(captured.monoSamples[index].isFinite()) {
-            "录音第 $index 个采样点的数值无效"
+            strings.recordingSampleValueInvalid(index)
         }
     }
 

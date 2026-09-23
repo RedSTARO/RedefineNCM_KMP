@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.notification
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,7 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * to answer for. Its window state below is desktop-only and deliberately not on any interface.
  */
 object DesktopLyricWindow : WindowedLyricSurface {
-    override val settingLabel: String = "显示桌面歌词"
+    override val settingLabel: String get() = strings.showDesktopLyricsSetting
 
     private val _floatingLyricData = MutableStateFlow<FloatingLyricData?>(null)
     val floatingLyricData: StateFlow<FloatingLyricData?> = _floatingLyricData.asStateFlow()

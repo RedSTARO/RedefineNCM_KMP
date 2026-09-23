@@ -44,6 +44,8 @@ import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.dto.AlbumDetail
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongArtist
+import com.leejlredstar.redefinencm.kmp.i18n.UiText
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.player.PlaybackSource
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
@@ -86,14 +88,15 @@ fun AlbumScreen(
     }
     val songs = detail?.songs.orEmpty()
     val queue = remember(songs) { songs.map { it.toMediaInfo() } }
-    val source = "专辑「${detail?.album?.name.orEmpty()}」"
+    val albumName = detail?.album?.name.orEmpty()
+    val source = UiText { it.playbackSourceAlbum(albumName) }
 
     ExpressivePage(accentPalette = palette, contentWindowInsets = WindowInsets.statusBars) {
         when (load) {
             CatalogLoad.Loading -> Column {
                 CatalogBackRow(palette, onBack)
                 ExpressiveLoadingState(
-                    label = "正在加载专辑…",
+                    label = strings.albumLoading,
                     accentColor = palette.accent,
                     modifier = Modifier.padding(16.dp),
                 )
@@ -101,12 +104,12 @@ fun AlbumScreen(
             CatalogLoad.Failed -> Column {
                 CatalogBackRow(palette, onBack)
                 ExpressiveStatePanel(
-                    title = "专辑加载失败",
-                    message = "请检查网络后重试。",
+                    title = strings.albumLoadFailed,
+                    message = strings.checkNetworkAndRetry,
                     icon = AppIcons.Refresh,
                     tone = ExpressiveStateTone.Error,
                     accentPalette = palette,
-                    actionLabel = "重试",
+                    actionLabel = strings.retry,
                     onAction = { reload++ },
                     modifier = Modifier.padding(16.dp),
                 )
@@ -200,9 +203,9 @@ private fun AlbumHeader(
                 )
                 Text(
                     text = listOfNotNull(
-                        releaseDate.ifBlank { null }?.let { "$it 发行" },
+                        releaseDate.ifBlank { null }?.let { strings.albumReleaseDate(it) },
                         company.ifBlank { null },
-                        "$trackCount 首",
+                        strings.songCount(trackCount),
                     ).joinToString(" · "),
                     style = MaterialTheme.typography.bodyMedium,
                     color = accentPalette.secondaryOnPageStart,
@@ -260,7 +263,7 @@ private fun AlbumHeader(
             ) {
                 Icon(AppIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("播放全部")
+                Text(strings.playAll)
             }
         }
     }

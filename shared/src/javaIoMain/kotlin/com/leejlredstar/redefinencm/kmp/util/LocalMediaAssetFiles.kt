@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.util
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
@@ -20,7 +21,7 @@ import java.util.UUID
 /** Creates [directory] if it is missing. [label] names the path in user-visible failures. */
 internal fun ensureLocalMediaAssetDirectory(directory: File, label: String): File =
     directory.also {
-        check(it.isDirectory || it.mkdirs()) { "无法创建$label：$it" }
+        check(it.isDirectory || it.mkdirs()) { strings.assetDirectoryCreateFailed(label, it) }
     }
 
 /** Every file name directly in [directory], or none when it does not exist yet. */
@@ -38,8 +39,8 @@ internal fun localMediaAssetFiles(
 
 private fun localMediaAssetDirectoryEntries(directory: File, label: String): List<File> {
     if (!directory.exists()) return emptyList()
-    check(directory.isDirectory) { "${label}不是文件夹：$directory" }
-    return checkNotNull(directory.listFiles()) { "无法读取$label：$directory" }
+    check(directory.isDirectory) { strings.assetDirectoryNotFolder(label, directory) }
+    return checkNotNull(directory.listFiles()) { strings.assetDirectoryReadFailed(label, directory) }
         .filter(File::isFile)
 }
 
@@ -72,7 +73,7 @@ internal fun writeLocalMediaAssetAndSync(file: File, bytes: ByteArray) {
 /** Deletes [file], accepting that it may already be gone. */
 internal fun deleteLocalMediaAssetOrThrow(file: File) {
     check(!file.exists() || file.delete() || !file.exists()) {
-        "无法删除歌词或封面文件：${file.name}"
+        strings.lyricsOrCoverDeleteFailed(file.name)
     }
 }
 

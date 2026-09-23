@@ -43,6 +43,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.auth.ProviderServerSetting
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
+import com.leejlredstar.redefinencm.kmp.i18n.strings
+import com.leejlredstar.redefinencm.kmp.i18n.text
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
@@ -53,6 +55,7 @@ import com.leejlredstar.redefinencm.kmp.ui.login.loginTextFieldColors
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.viewmodel.LoginViewModel
+import com.leejlredstar.redefinencm.kmp.viewmodel.ServerNotice
 import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
 
@@ -121,7 +124,7 @@ fun LoginScreen(
                     ) {
                         Icon(
                             AppIcons.ArrowBack,
-                            contentDescription = "返回",
+                            contentDescription = strings.back,
                             modifier = Modifier.padding(10.dp),
                         )
                     }
@@ -137,7 +140,7 @@ fun LoginScreen(
                             .statusBarsPadding()
                             .padding(8.dp),
                     ) {
-                        Text("稍后登录")
+                        Text(strings.signInLater)
                     }
                 }
                 Column(
@@ -146,7 +149,7 @@ fun LoginScreen(
                         .padding(horizontal = 24.dp, vertical = 16.dp),
                 ) {
                     Text(
-                        text = "登录${provider.displayName}",
+                        text = strings.signInToProvider(provider.displayName),
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.ExtraBold,
                         color = loginPalette.onPageStart,
@@ -254,7 +257,7 @@ private fun LoginSectionCard(
 private fun BackendAddressCard(
     setting: ProviderServerSetting,
     server: String,
-    message: String?,
+    message: ServerNotice?,
     palette: ContentAccentPalette,
     onSave: (String) -> Unit,
 ) {
@@ -269,7 +272,7 @@ private fun BackendAddressCard(
     ) {
         Column(modifier = Modifier.padding(24.dp)) {
             Text(
-                "服务器地址",
+                strings.serverAddress,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
@@ -279,7 +282,7 @@ private fun BackendAddressCard(
                 onValueChange = { field = it },
                 label = { Text(setting.label) },
                 supportingText = {
-                    Text("清空则恢复默认地址", color = palette.secondaryOnQuietContainer)
+                    Text(strings.serverAddressResetHint, color = palette.secondaryOnQuietContainer)
                 },
                 singleLine = true,
                 shape = MaterialTheme.shapes.large,
@@ -296,11 +299,11 @@ private fun BackendAddressCard(
                     contentColor = palette.onContainer,
                 ),
             ) {
-                Text("保存地址")
+                Text(strings.saveAddress)
             }
             message?.let {
                 Spacer(Modifier.height(12.dp))
-                LoginNotice(it, palette, isError = !it.startsWith("已保存"))
+                LoginNotice(it.text.text, palette, isError = it.isError)
             }
         }
     }

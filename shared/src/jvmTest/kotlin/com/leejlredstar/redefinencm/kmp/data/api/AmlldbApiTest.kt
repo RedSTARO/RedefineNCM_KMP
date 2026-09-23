@@ -1,5 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.data.api
 
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
+import com.leejlredstar.redefinencm.kmp.i18n.LanguageSetting
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -10,6 +12,8 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.utils.io.ByteReadChannel
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
@@ -17,6 +21,17 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class AmlldbApiTest {
+    /** The expected copy below is the Chinese, so the test pins it whatever the machine's language. */
+    @BeforeTest
+    fun showChinese() {
+        I18n.apply(LanguageSetting.ZH)
+    }
+
+    @AfterTest
+    fun followTheSystemAgain() {
+        I18n.apply(LanguageSetting.SYSTEM)
+    }
+
     @Test
     fun rejectsOversizedBodyWithoutRelyingOnContentLength() {
         runBlocking {

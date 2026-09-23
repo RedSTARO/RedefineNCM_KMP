@@ -2,6 +2,7 @@ package com.leejlredstar.redefinencm.kmp.ui.theme
 
 import androidx.compose.material3.ColorScheme
 import androidx.compose.runtime.Composable
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.getBooleanAsync
@@ -11,11 +12,18 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /** Light, dark, or whatever the system is set to. */
-enum class ThemeMode(val wireValue: String, val displayName: String) {
-    System("system", "跟随系统"),
-    Light("light", "浅色"),
-    Dark("dark", "深色"),
+enum class ThemeMode(val wireValue: String) {
+    System("system"),
+    Light("light"),
+    Dark("dark"),
     ;
+
+    val displayName: String
+        get() = when (this) {
+            System -> strings.followSystem
+            Light -> strings.themeLight
+            Dark -> strings.themeDark
+        }
 
     companion object {
         fun fromWireValue(value: String): ThemeMode = entries.firstOrNull { it.wireValue == value } ?: System

@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.lyric
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,29 +19,32 @@ enum class LyricSource {
  */
 enum class LyricSourceMode(
     val wireValue: String,
-    val displayName: String,
     val sourceOrder: List<LyricSource>,
 ) {
     TTML_PREFERRED(
         wireValue = "ttml_preferred",
-        displayName = "优先用 AMLL 歌词库（找不到时用网易云）",
         sourceOrder = listOf(LyricSource.AMLL_TTML, LyricSource.NCM_BACKEND),
     ),
     BACKEND_PREFERRED(
         wireValue = "backend_preferred",
-        displayName = "优先用网易云歌词（找不到时用 AMLL 歌词库）",
         sourceOrder = listOf(LyricSource.NCM_BACKEND, LyricSource.AMLL_TTML),
     ),
     TTML_ONLY(
         wireValue = "ttml_only",
-        displayName = "只用 AMLL 歌词库",
         sourceOrder = listOf(LyricSource.AMLL_TTML),
     ),
     BACKEND_ONLY(
         wireValue = "backend_only",
-        displayName = "只用网易云歌词",
         sourceOrder = listOf(LyricSource.NCM_BACKEND),
     );
+
+    val displayName: String
+        get() = when (this) {
+            TTML_PREFERRED -> strings.lyricSourceTtmlPreferred
+            BACKEND_PREFERRED -> strings.lyricSourceBackendPreferred
+            TTML_ONLY -> strings.lyricSourceTtmlOnly
+            BACKEND_ONLY -> strings.lyricSourceBackendOnly
+        }
 
     override fun toString(): String = displayName
 

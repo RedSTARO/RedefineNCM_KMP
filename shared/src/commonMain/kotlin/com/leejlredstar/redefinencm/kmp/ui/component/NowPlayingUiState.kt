@@ -7,6 +7,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusic
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderCapability
+import com.leejlredstar.redefinencm.kmp.i18n.text
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlayerQueueSnapshot
@@ -116,7 +117,7 @@ internal fun rememberNowPlayingUiState(
             queueSnapshot = queueSnapshot,
             comments = comments,
             commentsLoading = commentsLoading,
-            commentsLoadError = commentsLoadError,
+            commentsLoadError = commentsLoadError?.text,
             commentsFromCache = commentsFromCache,
             favoriteState = favoriteState,
             capabilities = capabilities,

@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.recognition
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.sync.Mutex
 import kotlin.math.ceil
 import kotlin.math.sqrt
@@ -19,7 +20,7 @@ abstract class ExclusiveMicrophoneRecorder : MicrophoneRecorder {
         durationMillis: Long,
         onProgress: (elapsedMillis: Long, level: Float) -> Unit,
     ): CapturedPcm {
-        require(durationMillis > 0L) { "录音时长必须大于 0" }
+        require(durationMillis > 0L) { strings.recordingDurationMustBePositive }
         onBeforeClaim()
         if (!captureMutex.tryLock()) throw MicrophoneBusyException()
         try {

@@ -58,6 +58,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.amll.compose.rememberReducedMotionEnabled
+import com.leejlredstar.redefinencm.kmp.i18n.strings
+import com.leejlredstar.redefinencm.kmp.i18n.text
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveArtwork
@@ -151,7 +153,7 @@ fun NowPlayingScreen(
                     listOf(palette.pageStart, palette.pageMiddle, palette.pageEnd),
                 ),
             )
-            .semantics { contentDescription = "正在播放" },
+            .semantics { contentDescription = strings.nowPlaying },
     ) {
         BoxWithConstraints(
             modifier = Modifier
@@ -283,7 +285,7 @@ fun NowPlayingScreen(
 
             NowPlayingTopBar(
                 palette = palette,
-                source = playbackSource,
+                source = playbackSource?.text,
                 wikiEnabled = nowPlaying.hasMedia,
                 onBack = onBack,
                 onOpenDetails = {
@@ -355,7 +357,7 @@ private fun NowPlayingTopBar(
             shapes = IconButtonDefaults.shapes(),
             modifier = Modifier
                 .size(IconButtonDefaults.mediumContainerSize())
-                .semantics { contentDescription = "收起播放页" },
+                .semantics { contentDescription = strings.collapsePlayer },
             colors = IconButtonDefaults.filledTonalIconButtonColors(
                 containerColor = palette.container.copy(alpha = 0.72f),
                 contentColor = palette.onContainer,
@@ -372,14 +374,14 @@ private fun NowPlayingTopBar(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = "正在播放",
+                text = strings.nowPlaying,
                 style = MaterialTheme.typography.labelLarge,
                 color = palette.secondaryOnPageStart,
             )
             // Where this queue came from, when the page that started it said.
             source?.let {
                 Text(
-                    text = "来自$it",
+                    text = strings.playbackSourceFrom(it),
                     style = MaterialTheme.typography.labelSmall,
                     color = palette.secondaryOnPageStart,
                     maxLines = 1,
@@ -397,7 +399,7 @@ private fun NowPlayingTopBar(
                 contentColor = palette.onContainer,
             ),
         ) {
-            Icon(imageVector = AppIcons.Info, contentDescription = "歌曲详细信息")
+            Icon(imageVector = AppIcons.Info, contentDescription = strings.songDetails)
         }
     }
 }
@@ -410,7 +412,7 @@ private fun MutedChip(
     Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
         AssistChip(
             onClick = onUnmute,
-            label = { Text("已静音 · 点按恢复音量") },
+            label = { Text(strings.mutedTapToRestoreVolume) },
             leadingIcon = {
                 Icon(AppIcons.VolumeOff, contentDescription = null, modifier = Modifier.size(18.dp))
             },
@@ -449,7 +451,7 @@ private fun NowPlayingArtwork(
     val frameShape = MaterialTheme.shapes.extraLarge
     ExpressiveArtwork(
         model = media?.artworkUri?.takeIf(String::isNotBlank),
-        contentDescription = media?.title?.let { "$it 的封面" },
+        contentDescription = media?.title?.let { strings.artworkOf(it) },
         modifier = modifier
             .aspectRatio(1f)
             .graphicsLayer {
@@ -472,7 +474,7 @@ private fun NowPlayingArtwork(
                 enabled = media != null,
                 // The cover opens the lyrics, one tap instead of the quote button; play and pause
                 // have their own button right beside it.
-                onClickLabel = "打开歌词",
+                onClickLabel = strings.openLyrics,
                 onClick = onOpenLyrics,
             ),
         shape = frameShape,
@@ -498,7 +500,7 @@ private fun NowPlayingTitle(
     ) {
         Column(Modifier.weight(1f)) {
             Text(
-                text = media?.title ?: "未播放",
+                text = media?.title ?: strings.notPlaying,
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Black,
                 color = palette.onPageMiddle,
@@ -534,7 +536,7 @@ private fun NowPlayingTitle(
         ) {
             Icon(
                 imageVector = if (isFavorite) AppIcons.Favorite else AppIcons.FavoriteBorder,
-                contentDescription = "喜欢",
+                contentDescription = strings.like,
                 modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
             )
         }
@@ -563,24 +565,24 @@ private fun NowPlayingCredits(
     }
     Box {
         Text(
-            text = media?.artist?.takeIf(String::isNotBlank) ?: "从任意列表选一首歌开始",
+            text = media?.artist?.takeIf(String::isNotBlank) ?: strings.pickSongToStart,
             style = MaterialTheme.typography.bodyLarge,
             color = palette.secondaryOnPageMiddle,
             maxLines = 1,
             overflow = TextOverflow.Clip,
             modifier = Modifier
                 .clip(MaterialTheme.shapes.small)
-                .clickable(enabled = songId != null, onClickLabel = "查看歌手与专辑") { expanded = true }
+                .clickable(enabled = songId != null, onClickLabel = strings.viewArtistAndAlbum) { expanded = true }
                 .basicMarquee(),
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             val song = credits?.takeIf { it.id == songId }
             if (song == null) {
-                DropdownMenuItem(text = { Text("正在查找…") }, onClick = {}, enabled = false)
+                DropdownMenuItem(text = { Text(strings.lookingUp) }, onClick = {}, enabled = false)
             } else {
                 song.ar.filter { it.id != 0L }.forEach { artist ->
                     DropdownMenuItem(
-                        text = { Text("歌手：${artist.name}") },
+                        text = { Text(strings.artistWithName(artist.name)) },
                         leadingIcon = { Icon(AppIcons.Person, contentDescription = null) },
                         onClick = {
                             expanded = false
@@ -590,7 +592,7 @@ private fun NowPlayingCredits(
                 }
                 if (song.al.id != 0L) {
                     DropdownMenuItem(
-                        text = { Text("专辑：${song.al.name}") },
+                        text = { Text(strings.albumWithName(song.al.name)) },
                         leadingIcon = { Icon(AppIcons.Album, contentDescription = null) },
                         onClick = {
                             expanded = false
@@ -641,7 +643,7 @@ private fun NowPlayingProgress(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(44.dp)
-                .semantics { contentDescription = "播放进度" },
+                .semantics { contentDescription = strings.playbackPosition },
             thumb = {
                 SliderDefaults.Thumb(
                     interactionSource = interactionSource,
@@ -727,7 +729,7 @@ private fun NowPlayingTransport(
         ) {
             Icon(
                 imageVector = AppIcons.SkipPrevious,
-                contentDescription = "上一首",
+                contentDescription = strings.previous,
                 modifier = Modifier.size(skipIconSize),
             )
         }
@@ -750,7 +752,7 @@ private fun NowPlayingTransport(
         ) {
             Icon(
                 imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
-                contentDescription = if (isPlaying) "暂停" else "播放",
+                contentDescription = if (isPlaying) strings.pause else strings.play,
                 modifier = Modifier.size(playIconSize),
             )
         }
@@ -763,7 +765,7 @@ private fun NowPlayingTransport(
         ) {
             Icon(
                 imageVector = AppIcons.SkipNext,
-                contentDescription = "下一首",
+                contentDescription = strings.next,
                 modifier = Modifier.size(skipIconSize),
             )
         }
@@ -795,7 +797,7 @@ private fun NowPlayingToolbar(
             // own containerColor default (tertiaryContainer), so the artwork accent is passed here.
             FloatingToolbarDefaults.VibrantFloatingActionButton(
                 onClick = onLyrics,
-                modifier = Modifier.semantics { contentDescription = "歌词" },
+                modifier = Modifier.semantics { contentDescription = strings.lyrics },
                 containerColor = palette.accent,
                 contentColor = palette.onAccent,
             ) {
@@ -823,7 +825,7 @@ private fun NowPlayingToolbar(
             ) {
                 Icon(
                     imageVector = if (shuffleEnabled) AppIcons.ShuffleOn else AppIcons.Shuffle,
-                    contentDescription = "随机播放",
+                    contentDescription = strings.shuffle,
                 )
             }
             IconButton(
@@ -831,14 +833,14 @@ private fun NowPlayingToolbar(
                 shapes = IconButtonDefaults.shapes(),
                 enabled = hasMedia,
             ) {
-                Icon(imageVector = AppIcons.QueueMusic, contentDescription = "播放队列")
+                Icon(imageVector = AppIcons.QueueMusic, contentDescription = strings.queue)
             }
             IconButton(
                 onClick = onComments,
                 shapes = IconButtonDefaults.shapes(),
                 enabled = hasMedia && commentsEnabled,
             ) {
-                Icon(imageVector = AppIcons.Comment, contentDescription = "评论")
+                Icon(imageVector = AppIcons.Comment, contentDescription = strings.comments)
             }
         },
     )

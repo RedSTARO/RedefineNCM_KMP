@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.player
 
+import com.leejlredstar.redefinencm.kmp.i18n.UiText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,10 +14,10 @@ import kotlinx.coroutines.flow.asStateFlow
  * players carry media, not the reason it was chosen.
  */
 object PlaybackSource {
-    private val current = MutableStateFlow<String?>(null)
-    val label: StateFlow<String?> = current.asStateFlow()
+    private val current = MutableStateFlow<UiText?>(null)
+    val label: StateFlow<UiText?> = current.asStateFlow()
 
-    fun set(label: String?) {
-        current.value = label?.takeIf { it.isNotBlank() }
+    fun set(label: UiText?) {
+        current.value = label
     }
 }

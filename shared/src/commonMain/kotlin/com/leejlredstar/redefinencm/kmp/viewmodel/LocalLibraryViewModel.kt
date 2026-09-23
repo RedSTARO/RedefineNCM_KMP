@@ -6,6 +6,7 @@ import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderItemId
 import com.leejlredstar.redefinencm.kmp.data.toPlayerMediaInfo
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -64,16 +65,16 @@ class LocalLibraryViewModel(
         val pending = _pendingAddition.value ?: return
         _pendingAddition.value = null
         scope.launch {
-            val name = store.snapshot().playlist(playlistId)?.name.orEmpty()
+            val name = store.snapshot().playlist(playlistId)?.displayName.orEmpty()
             store.addTracks(playlistId, pending.tracks)
                 .onSuccess { added ->
                     _message.value = when {
-                        added == 0 -> "「$name」里已经有这些歌"
-                        pending.tracks.size == 1 -> "已添加到「$name」"
-                        else -> "已把 $added 首歌添加到「$name」"
+                        added == 0 -> strings.songsAlreadyInPlaylist(name)
+                        pending.tracks.size == 1 -> strings.addedToPlaylist(name)
+                        else -> strings.addedSongsToPlaylist(added, name)
                     }
                 }
-                .onFailure { failure -> _message.value = failure.message ?: "添加失败" }
+                .onFailure { failure -> _message.value = failure.message ?: strings.addToPlaylistFailed }
         }
     }
 
@@ -88,32 +89,32 @@ class LocalLibraryViewModel(
             store.createPlaylist(name, tracks)
                 .onSuccess { playlist ->
                     _message.value = if (tracks.isEmpty()) {
-                        "已新建「${playlist.name}」"
+                        strings.playlistCreated(playlist.name)
                     } else {
-                        "已新建「${playlist.name}」，共 ${playlist.tracks.size} 首"
+                        strings.playlistCreatedWithSongs(playlist.name, playlist.tracks.size)
                     }
                 }
-                .onFailure { failure -> _message.value = failure.message ?: "新建失败" }
+                .onFailure { failure -> _message.value = failure.message ?: strings.playlistCreateFailed }
         }
     }
 
     fun renamePlaylist(id: String, name: String) {
         scope.launch {
-            store.renamePlaylist(id, name).onFailure { failure -> _message.value = failure.message ?: "重命名失败" }
+            store.renamePlaylist(id, name).onFailure { failure -> _message.value = failure.message ?: strings.playlistRenameFailed }
         }
     }
 
     fun deletePlaylist(id: String) {
         scope.launch {
             store.deletePlaylist(id)
-                .onSuccess { _message.value = "已删除歌单" }
-                .onFailure { failure -> _message.value = failure.message ?: "删除失败" }
+                .onSuccess { _message.value = strings.playlistDeleted }
+                .onFailure { failure -> _message.value = failure.message ?: strings.playlistDeleteFailed }
         }
     }
 
     fun removeTrack(playlistId: String, trackKey: String) {
         scope.launch {
-            store.removeTrack(playlistId, trackKey).onFailure { failure -> _message.value = failure.message ?: "移除失败" }
+            store.removeTrack(playlistId, trackKey).onFailure { failure -> _message.value = failure.message ?: strings.playlistRemoveSongFailed }
         }
     }
 
@@ -125,7 +126,7 @@ class LocalLibraryViewModel(
     fun importPlaylist(reference: String) {
         val id = parsePlaylistReference(reference)
         if (id == null) {
-            _message.value = "无法识别这个歌单链接"
+            _message.value = strings.playlistLinkUnrecognized
             return
         }
         _importing.value = true
@@ -133,14 +134,14 @@ class LocalLibraryViewModel(
             try {
                 val playlist = providers.playlistDetail(id)
                 if (playlist == null || playlist.tracks.isEmpty()) {
-                    _message.value = "没能读取这个${id.provider.displayName}歌单"
+                    _message.value = strings.providerPlaylistReadFailed(id.provider.displayName)
                     return@launch
                 }
                 store.createPlaylist(playlist.name, playlist.tracks.map { it.toPlayerMediaInfo() })
                     .onSuccess { created ->
-                        _message.value = "已导入「${created.name}」，共 ${created.tracks.size} 首"
+                        _message.value = strings.playlistImported(created.name, created.tracks.size)
                     }
-                    .onFailure { failure -> _message.value = failure.message ?: "导入失败" }
+                    .onFailure { failure -> _message.value = failure.message ?: strings.playlistImportFailed }
             } finally {
                 _importing.value = false
             }

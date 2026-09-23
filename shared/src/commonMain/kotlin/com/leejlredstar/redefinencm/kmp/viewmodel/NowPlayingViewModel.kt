@@ -1,5 +1,8 @@
 ﻿package com.leejlredstar.redefinencm.kmp.viewmodel
 
+import com.leejlredstar.redefinencm.kmp.i18n.UiText
+import com.leejlredstar.redefinencm.kmp.i18n.strings
+import com.leejlredstar.redefinencm.kmp.i18n.uiText
 import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import com.leejlredstar.redefinencm.kmp.util.getBooleanAsync
 import com.leejlredstar.redefinencm.kmp.data.Repository
@@ -47,10 +50,10 @@ sealed interface LyricUiState {
         val lineCount: Int,
         val capabilityLevel: LyricCapabilityLevel,
     ) : LyricUiState
-    data class Error(val message: String) : LyricUiState
+    data class Error(val message: UiText) : LyricUiState
 
     /** The track's provider offers no lyrics through the app; [message] says so. */
-    data class Unsupported(val message: String) : LyricUiState
+    data class Unsupported(val message: UiText) : LyricUiState
 }
 
 val LyricUiState.lyricCapabilityLevel: LyricCapabilityLevel?
@@ -69,7 +72,7 @@ sealed interface SongWikiUiState {
     data class Loading(val mediaId: String) : SongWikiUiState
     data class Content(val mediaId: String, val summary: SongWikiSummary) : SongWikiUiState
     data class Empty(val mediaId: String) : SongWikiUiState
-    data class Error(val mediaId: String, val message: String) : SongWikiUiState
+    data class Error(val mediaId: String, val message: UiText) : SongWikiUiState
 
     /** The track's provider has no song details. */
     data class Unsupported(val mediaId: String) : SongWikiUiState
@@ -197,7 +200,7 @@ class NowPlayingViewModel(
         val media = player.currentMedia.value ?: return
         val failure = playbackFailure.value?.takeIf { it.mediaId == media.id } ?: return
         if (!canOfferSourceSwitch(failure)) {
-            sourceSwitchMessage.value = "随机播放时不能换源"
+            sourceSwitchMessage.value = strings.sourceSwitchShuffleBlocked
             return
         }
         scope.launch {
@@ -205,7 +208,7 @@ class NowPlayingViewModel(
                 findSameSongElsewhere(media, excluding = failure.provider)
             }
             if (alternate == null) {
-                sourceSwitchMessage.value = "没有在其他平台找到同一首歌"
+                sourceSwitchMessage.value = strings.sourceSwitchNoAlternate
                 return@launch
             }
             val snapshot = player.queueSnapshot.value
@@ -214,7 +217,7 @@ class NowPlayingViewModel(
             if (snapshot.shuffleEnabled || snapshot.items.getOrNull(index)?.id != media.id) return@launch
             val replacement = alternate.toPlayerMediaInfo(sourceId = media.sourceId)
             player.setQueue(snapshot.items.toMutableList().also { it[index] = replacement }, index)
-            sourceSwitchMessage.value = "已改用${alternate.provider.displayName}播放「${media.title}」"
+            sourceSwitchMessage.value = strings.sourceSwitched(alternate.provider.displayName, media.title)
         }
     }
 
@@ -273,12 +276,12 @@ class NowPlayingViewModel(
     val lyricUiState = MutableStateFlow<LyricUiState>(
         if (player.currentMedia.value == null) LyricUiState.Idle else LyricUiState.Loading,
     )
-    val lyricLoadError = MutableStateFlow<String?>(null)
+    val lyricLoadError = MutableStateFlow<UiText?>(null)
 
     // ── Comments ──
     val comments = MutableStateFlow<CommentMusic?>(null)
     val commentsLoading = MutableStateFlow(false)
-    val commentsLoadError = MutableStateFlow<String?>(null)
+    val commentsLoadError = MutableStateFlow<UiText?>(null)
     val commentsFromCache = MutableStateFlow(false)
 
     /** Hot or latest: the two orderings the comment sheet switches between. */
@@ -287,7 +290,7 @@ class NowPlayingViewModel(
     val moreComments = MutableStateFlow<List<CommentMusicComments>>(emptyList())
     val moreCommentsAvailable = MutableStateFlow(false)
     val moreCommentsLoading = MutableStateFlow(false)
-    val moreCommentsError = MutableStateFlow<String?>(null)
+    val moreCommentsError = MutableStateFlow<UiText?>(null)
 
     // ── Song wiki ──
     val songWikiUiState = MutableStateFlow<SongWikiUiState>(SongWikiUiState.Idle)
@@ -737,9 +740,9 @@ class NowPlayingViewModel(
             if (query == null) {
                 applyLyricsForMedia(mediaId, requestGeneration) {
                     if (supports(mediaId, ProviderCapability.LYRIC)) {
-                        applyLyricError("歌曲 ID 无效")
+                        applyLyricError(UiText { it.songIdInvalid })
                     } else {
-                        applyLyricUnsupported("${providerName(mediaId)}的歌词暂不支持在应用内显示")
+                        applyLyricUnsupported(UiText { it.providerLyricsUnsupported(providerName(mediaId)) })
                     }
                 }
                 return@launch
@@ -748,10 +751,7 @@ class NowPlayingViewModel(
             // so another provider's track has nothing to show and nothing is requested for it.
             if (!query.isNetease && mode == LyricSourceMode.TTML_ONLY) {
                 applyLyricsForMedia(mediaId, requestGeneration) {
-                    applyLyricUnsupported(
-                        "当前歌词来源为「只用 AMLL 歌词库」，该歌词库只收录网易云歌曲；" +
-                            "可在设置中改用其他歌词来源查看${providerName(mediaId)}的歌词",
-                    )
+                    applyLyricUnsupported(UiText { it.lyricsTtmlOnlyForeignProvider(providerName(mediaId)) })
                 }
                 return@launch
             }
@@ -777,7 +777,7 @@ class NowPlayingViewModel(
                 throw cancelled
             } catch (_: Exception) {
                 applyLyricsForMedia(mediaId, requestGeneration) {
-                    applyLyricError("歌词请求失败")
+                    applyLyricError(UiText { it.lyricsRequestFailed })
                 }
             }
         }
@@ -808,7 +808,7 @@ class NowPlayingViewModel(
                 val document = resolution.document
                 val displayLyricMap = LyricParser.toLineLyricMap(document.lines)
                 if (displayLyricMap.isEmpty()) {
-                    applyLyricError("歌词解析失败")
+                    applyLyricError(UiText { it.lyricsParseFailed })
                 } else {
                     lyricLoadError.value = null
                     rawTtmlLyric.value = document.rawTtml
@@ -849,7 +849,10 @@ class NowPlayingViewModel(
                 lyricUiState.value = LyricUiState.Empty()
             }
             is LyricResolution.Error ->
-                applyLyricError(resolution.message.ifBlank { "歌词请求失败" })
+                applyLyricError(
+                    resolution.message.takeIf(String::isNotBlank)?.let(::uiText)
+                        ?: UiText { it.lyricsRequestFailed },
+                )
         }
     }
 
@@ -922,13 +925,13 @@ class NowPlayingViewModel(
         lyricMap.value = linkedMapOf()
     }
 
-    private fun applyLyricUnsupported(message: String) {
+    private fun applyLyricUnsupported(message: UiText) {
         clearLyricPayload()
         lyricLoadError.value = null
         lyricUiState.value = LyricUiState.Unsupported(message)
     }
 
-    private fun applyLyricError(message: String) {
+    private fun applyLyricError(message: UiText) {
         clearLyricPayload()
         lyricLoadError.value = message
         lyricUiState.value = LyricUiState.Error(message)
@@ -997,7 +1000,7 @@ class NowPlayingViewModel(
                     currentMedia.value?.id == mediaId &&
                     currentCoroutineContext()[Job] == commentsFetchJob
                 ) {
-                    commentsLoadError.value = "评论加载失败，请检查网络后重试"
+                    commentsLoadError.value = UiText { it.commentsLoadFailedRetry }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -1006,7 +1009,7 @@ class NowPlayingViewModel(
                     currentMedia.value?.id == mediaId &&
                     currentCoroutineContext()[Job] == commentsFetchJob
                 ) {
-                    commentsLoadError.value = failure.message ?: "评论加载失败"
+                    commentsLoadError.value = failure.message?.let(::uiText) ?: UiText { it.commentsLoadFailed }
                 }
             } finally {
                 if (
@@ -1048,7 +1051,7 @@ class NowPlayingViewModel(
             // A track change or a switch of ordering while this was in flight makes it stale.
             if (currentMedia.value?.id != mediaId || commentsShowHot.value != hot) return@launch
             if (page == null) {
-                moreCommentsError.value = "没能加载更多评论"
+                moreCommentsError.value = UiText { it.moreCommentsLoadFailed }
             } else {
                 moreComments.value = moreComments.value + page.comments
                 moreCommentsAvailable.value = page.hasMore && page.comments.isNotEmpty()
@@ -1077,7 +1080,7 @@ class NowPlayingViewModel(
             songWikiRequestGeneration += 1
             songWikiUiState.value = SongWikiUiState.Error(
                 mediaId = "",
-                message = "没有正在播放的歌曲",
+                message = UiText { it.nothingPlaying },
             )
             return
         }
@@ -1098,7 +1101,7 @@ class NowPlayingViewModel(
         if (id == null) {
             songWikiUiState.value = SongWikiUiState.Error(
                 mediaId = mediaId,
-                message = "歌曲 ID 无效",
+                message = UiText { it.songIdInvalid },
             )
             return
         }
@@ -1114,7 +1117,7 @@ class NowPlayingViewModel(
                 songWikiUiState.value = when {
                     summary == null -> SongWikiUiState.Error(
                         mediaId = mediaId,
-                        message = "歌曲详情加载失败，请稍后再试",
+                        message = UiText { it.songDetailsLoadFailedLater },
                     )
                     summary.sections.isEmpty() -> SongWikiUiState.Empty(mediaId)
                     else -> SongWikiUiState.Content(mediaId, summary)
@@ -1128,7 +1131,7 @@ class NowPlayingViewModel(
                 ) {
                     songWikiUiState.value = SongWikiUiState.Error(
                         mediaId = mediaId,
-                        message = failure.message ?: "歌曲详情加载失败",
+                        message = failure.message?.let(::uiText) ?: UiText { it.songDetailsLoadFailed },
                     )
                 }
             }

@@ -1,14 +1,30 @@
 package com.leejlredstar.redefinencm.kmp.ui.component
 
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
+import com.leejlredstar.redefinencm.kmp.i18n.LanguageSetting
+import com.leejlredstar.redefinencm.kmp.i18n.uiText
 import com.leejlredstar.redefinencm.kmp.lyric.LyricCapabilityLevel
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSource
 import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
 import com.leejlredstar.redefinencm.kmp.viewmodel.lyricCapabilityLevel
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class LyricCapabilityBadgeTest {
+    /** The expected copy below is the Chinese, so the test pins it whatever the machine's language. */
+    @BeforeTest
+    fun showChinese() {
+        I18n.apply(LanguageSetting.ZH)
+    }
+
+    @AfterTest
+    fun followTheSystemAgain() {
+        I18n.apply(LanguageSetting.SYSTEM)
+    }
+
     @Test
     fun fourLevelsKeepOneGlyphAndDistinctColorRoles() {
         val specs = LyricCapabilityLevel.entries.map(::lyricCapabilityBadgeSpec)
@@ -62,6 +78,6 @@ class LyricCapabilityBadgeTest {
         assertNull(LyricUiState.Empty().lyricCapabilityLevel)
         assertNull(LyricUiState.Idle.lyricCapabilityLevel)
         assertNull(LyricUiState.Loading.lyricCapabilityLevel)
-        assertNull(LyricUiState.Error("failed").lyricCapabilityLevel)
+        assertNull(LyricUiState.Error(uiText("failed")).lyricCapabilityLevel)
     }
 }

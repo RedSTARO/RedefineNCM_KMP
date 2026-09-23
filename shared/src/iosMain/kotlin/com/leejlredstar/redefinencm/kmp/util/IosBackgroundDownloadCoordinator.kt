@@ -2,6 +2,7 @@
 
 package com.leejlredstar.redefinencm.kmp.util
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.suspendCancellableCoroutine
 import platform.Foundation.NSError
@@ -126,7 +127,7 @@ internal object IosBackgroundDownloadCoordinator {
         fileName: String,
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
     ): DownloadedSongFile {
-        require(isValidDownloadFileName(fileName)) { "下载文件名无效" }
+        require(isValidDownloadFileName(fileName)) { strings.downloadFileNameInvalid }
         return suspendCancellableCoroutine { continuation ->
             val task = session.downloadTaskWithURL(url)
             task.taskDescription = fileName
@@ -248,12 +249,12 @@ internal object IosBackgroundDownloadCoordinator {
         val statusCode = (task.response as? NSHTTPURLResponse)?.statusCode
         if (statusCode != null && statusCode !in 200L..299L) {
             return IosDownloadOutcome.Failure(
-                IllegalStateException("下载失败：HTTP $statusCode"),
+                IllegalStateException(strings.downloadHttpFailed(statusCode)),
             )
         }
         val fileName = task.taskDescription
         if (fileName == null || !isValidDownloadFileName(fileName)) {
-            return IosDownloadOutcome.Failure(IllegalStateException("后台下载任务没有有效的文件名"))
+            return IosDownloadOutcome.Failure(IllegalStateException(strings.backgroundDownloadNoFileName))
         }
 
         return runCatching {
@@ -266,10 +267,10 @@ internal object IosBackgroundDownloadCoordinator {
                 toURL = NSURL.fileURLWithPath(partPath),
                 error = null,
             )
-            if (!moved) error("无法移动后台下载的临时文件")
+            if (!moved) error(strings.backgroundDownloadMoveFailed)
             if (rename(partPath, targetPath) != 0) {
                 remove(partPath)
-                error("无法保存后台下载的文件")
+                error(strings.backgroundDownloadSaveFailed)
             }
             DownloadedSongFile(
                 fileName = fileName,

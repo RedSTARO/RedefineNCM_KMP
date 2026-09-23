@@ -1,0 +1,1100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- English. Keys and {placeholders} must match zh.xml and ja.xml; the build checks them. <plural by="count"> gives the singular form for count == 1. -->
+<resources>
+
+    <!-- DesktopWindowChrome.kt -->
+    <string name="minimize">Minimize</string>
+    <string name="restoreWindow">Restore</string>
+    <string name="maximize">Maximize</string>
+    <string name="close">Close</string>
+
+    <!-- main.kt -->
+    <string name="trayStillRunningTitle">RedefineNCM is still running</string>
+    <string name="trayStillRunningMessage">Click the system tray icon to open the window. The app only quits when you choose “Quit” from the system tray menu.</string>
+    <string name="trayShowMainWindow">Show main window</string>
+    <string name="pause">Pause</string>
+    <string name="play">Play</string>
+    <string name="previous">Previous</string>
+    <string name="next">Next</string>
+    <string name="closeDesktopLyrics">Close desktop lyrics</string>
+    <string name="showDesktopLyrics">Show desktop lyrics</string>
+    <string name="unlockDesktopLyrics">Unlock desktop lyrics</string>
+    <string name="lockDesktopLyrics">Lock desktop lyrics</string>
+    <string name="quit">Quit</string>
+    <string name="signOut">Sign out</string>
+    <string name="desktopLyrics">Desktop lyrics</string>
+    <string name="makeLyricsSmaller">Make lyrics smaller</string>
+    <string name="makeLyricsLarger">Make lyrics larger</string>
+    <string name="lockDesktopLyricsWithHint">Lock desktop lyrics (unlock from the system tray menu)</string>
+    <string name="noLyrics">No lyrics</string>
+
+    <!-- download/AndroidDownloadService.kt -->
+    <string name="downloadingTitle">Downloading: {title}</string>
+    <string name="downloadsPaused">Downloads paused</string>
+    <string name="downloadsFinishedWithFailures">Downloads finished, {failedCount} failed</string>
+    <string name="downloadsFinished">Downloads finished</string>
+    <string name="downloadsPreparing">Preparing downloads</string>
+    <string name="downloadQueuePreparing">Preparing the download queue</string>
+    <string name="downloadProgressWithArtist">{completed}/{total} done · {artist}</string>
+    <string name="downloadProgressWithPaused">{pausedCount} paused · {completed}/{total} done</string>
+    <string name="downloadProgress">{completed}/{total} done</string>
+    <string name="resume">Resume</string>
+    <string name="continueAction">Continue</string>
+    <string name="cancel">Cancel</string>
+
+    <!-- notification/AndroidNotificationController.kt -->
+    <string name="enableLiveUpdateLyrics">Enable extra Live Update lyrics</string>
+
+    <!-- recognition/AndroidMicrophoneRecorder.kt -->
+    <string name="micMonoPcmUnsupported">This device doesn't support mono PCM recording</string>
+    <string name="micRecorderInitFailed">Couldn't initialize the recording device</string>
+    <string name="micNotRecording">The microphone didn't start recording</string>
+    <string name="micReadFailed">Couldn't read from the microphone (error code {errorCode})</string>
+
+    <!-- util/DownloadUtil.android.kt -->
+    <string name="androidDownloadsLibraryUnreadable">Couldn't read the downloads in the Android media library</string>
+    <string name="legacyDownloadFolderUnreadable">Couldn't read the old download folder: {path}</string>
+
+    <!-- util/LocalMediaAssetStorage.android.kt -->
+    <string name="localLyricsUnreadable">Couldn't read the local lyrics: {fileName}</string>
+    <string name="legacyCoverUnreadable">Couldn't read the old cover file to migrate: {fileName}</string>
+    <string name="legacyCoverEmpty">The old cover file to migrate is empty: {fileName}</string>
+    <string name="coverFolderUnreadable">Couldn't read the app's cover folder: {path}</string>
+    <string name="coverFolderNotDirectory">The app's cover location isn't a folder: {path}</string>
+    <string name="coverFolderCreateFailed">Couldn't create the app's cover folder: {path}</string>
+    <string name="noMediaFileCreateFailed">Couldn't create the .nomedia file that keeps the gallery from scanning covers: {path}</string>
+    <string name="legacyCoverTooLarge">The old cover file to migrate is over the {limitMib} MiB limit</string>
+    <string name="lyricsBackupFailed">Couldn't back up the lyrics file: {fileName}</string>
+    <string name="lyricsRestoreFailed">Couldn't restore the original lyrics file: {fileName}</string>
+    <string name="lyricsOrCoverDeleteFailed">Couldn't delete the lyrics or cover file: {fileName}</string>
+    <string name="lyricsFileCreateFailed">Couldn't create the lyrics file: {fileName}</string>
+    <string name="lyricsFileWriteFailed">Couldn't write the lyrics file: {fileName}</string>
+    <string name="lyricsFileFinishSaveFailed">Couldn't finish saving the lyrics file</string>
+    <string name="lyricsFileTypeUnsupported">Unsupported local lyrics file type: {fileName}</string>
+    <string name="lyricsOrCoverMoveFailed">Couldn't move the lyrics or cover file: {fileName}</string>
+    <string name="downloadFolder">download folder</string>
+
+    <!-- util/SettingsFileOps.android.kt -->
+    <string name="exportSettingsFile">Export settings file</string>
+
+    <!-- util/SongDownloader.android.kt -->
+    <string name="downloadUrlEmpty">The download URL is empty</string>
+    <string name="downloadCanceledNotSaved">Download canceled. The file wasn't saved.</string>
+    <string name="downloadEmptyNotSaved">The downloaded content was empty and wasn't saved</string>
+    <string name="downloadIncomplete">Download incomplete: received {received} bytes, expected {expected}</string>
+    <string name="downloadUrlNotHttp">The download URL isn't an HTTP or HTTPS URL</string>
+    <string name="partialDownloadInfoSaveFailed">Couldn't save the partial download info</string>
+    <string name="partialDownloadInfoDeleteFailed">Couldn't delete the partial download info</string>
+    <string name="unfinishedAudioDeleteFailed">Couldn't delete the partly downloaded audio file</string>
+    <string name="downloadFileCreateFailed">Couldn't create the download file</string>
+    <string name="downloadFileWriteFailed">Couldn't write the download file</string>
+    <string name="downloadFileFinishSaveFailed">Couldn't finish saving the download file</string>
+    <string name="mediaLibraryPendingCleanupFailed">Couldn't clean up a partly saved download in the system media library</string>
+    <string name="downloadFolderCreateFailed">Couldn't create the download folder</string>
+    <string name="downloadFileSaveFailed">Couldn't save the download file</string>
+    <string name="downloadFileRollbackFailed">Couldn't roll back the saved download file</string>
+    <string name="unsavedDownloadCleanupFailed">Couldn't clean up the partly saved download file</string>
+    <string name="mediaLibraryStaleCleanupFailed">Couldn't clean up a download left partly saved last time in the system media library</string>
+    <string name="partialDownloadFolderCreateFailed">Couldn't create the partial download folder</string>
+    <string name="partialDownloadFolderUnreadable">Couldn't read the partial download folder</string>
+    <string name="oldPartialDownloadDeleteFailed">Couldn't delete an old partial download file</string>
+    <string name="partialDownloadDeleteFailed">Couldn't delete the partial download file</string>
+
+    <!-- App.kt -->
+    <string name="thisSong">this song</string>
+    <string name="playbackFailed">Couldn't play “{title}”: {reason}</string>
+    <string name="switchSource">Switch source</string>
+    <string name="forYou">For you</string>
+    <string name="search">Search</string>
+    <string name="me">Me</string>
+    <string name="downloads">Downloads</string>
+    <string name="download">Download</string>
+    <string name="sidebarExpanded">Sidebar expanded</string>
+    <string name="sidebarCollapsed">Sidebar collapsed</string>
+    <string name="collapseSidebar">Collapse sidebar</string>
+    <string name="expandSidebar">Expand sidebar</string>
+    <string name="tools">Tools</string>
+    <string name="downloadManagement">Downloads</string>
+    <string name="songRecognition">Song recognition</string>
+    <string name="settings">Settings</string>
+
+    <!-- data/api/AmlldbApi.kt -->
+    <string name="amllDbIdLookupTimeout">AMLL DB timed out fetching TTML by song ID</string>
+    <string name="amllDbIdLookupInvalidXml">The TTML from AMLL DB for this song ID isn't valid XML</string>
+    <string name="amllDbSearchHttpError">AMLL DB search returned HTTP {statusCode}</string>
+    <string name="amllDbSearchTooLarge">AMLL DB search results are too large</string>
+    <string name="amllDbSearchInvalidFormat">AMLL DB search results have an invalid format</string>
+    <string name="amllDbSearchTimeout">AMLL DB search timed out</string>
+    <string name="amllDbSearchRequestFailed">AMLL DB search request failed</string>
+    <string name="amllDbLyricsDownloadTimeout">AMLL DB lyrics download timed out</string>
+    <string name="amllDbLyricsInvalidTtml">The AMLL DB lyrics file isn't valid TTML</string>
+    <string name="amllDbHttpError">AMLL DB returned HTTP {statusCode}</string>
+    <string name="amllDbLyricsTooLarge">The AMLL DB lyrics file is too large</string>
+    <string name="amllDbRequestFailed">AMLL DB request failed</string>
+
+    <!-- data/auth/NeteaseLoginMethods.kt -->
+    <string name="signInWithQrCode">Sign in with QR code</string>
+    <string name="neteaseQrScanHint">Scan this code with the NetEase Cloud Music app</string>
+    <string name="loginQrKeyEmpty">The server returned an empty key</string>
+    <string name="loginQrMissing">The server didn't return a QR code</string>
+    <string name="loginQrUnreadable">Couldn't parse the QR code data</string>
+    <string name="loginNoCookie">Signed in, but no Cookie was received</string>
+    <string name="loginUnknownStatus">Unknown status ({code})</string>
+    <string name="enterManually">Enter manually</string>
+    <string name="neteaseCookieHint">If you already have a sign-in Cookie, you can paste it here</string>
+
+    <!-- data/auth/PhoneCodeLoginFlow.kt -->
+    <string name="phoneNumberInvalid">Enter a valid phone number</string>
+    <string name="verificationCodeSent">Verification code sent to {phoneNumber}</string>
+    <string name="unknownError">Unknown error</string>
+    <string name="networkErrorWithMessage">Network error: {error}</string>
+    <string name="signInSucceeded">Signed in</string>
+    <string name="credentialSaveFailed">Couldn't save the credential</string>
+
+    <!-- data/auth/QQLoginMethods.kt -->
+    <string name="qqScanWithQq">Scan with QQ</string>
+    <string name="qqScanWithQqHint">Scan this code with QQ on your phone</string>
+    <string name="qqScanWithWechat">Scan with WeChat</string>
+    <string name="qqScanWithWechatHint">Scan this code with WeChat</string>
+    <string name="qqServerNoResponse">The QQ Music server isn't responding</string>
+    <string name="loginNoCredential">Signed in, but the server didn't return a credential</string>
+    <string name="loginServerUnknownStatus">The server returned an unknown status ({event})</string>
+    <string name="phoneVerificationCode">Phone verification code</string>
+    <string name="mainlandChinaPhoneHint">Mainland China phone number (+86)</string>
+    <string name="phoneNumberFormatInvalid">Invalid phone number format</string>
+    <string name="qqSliderCaptchaRequired">QQ requires a slider verification first, which can't be completed in the app. Sign in with a QR code instead.</string>
+    <string name="verificationCodeTooFrequent">Verification codes were requested too often. Try again later.</string>
+    <string name="verificationCodeSendFailed">Couldn't send the verification code ({event})</string>
+    <string name="verificationCodeRejected">The verification code is wrong or has expired, or the server isn't responding</string>
+    <string name="serverNoCredential">The server didn't return a credential</string>
+    <string name="qqCredentialLabel">QQ Music credential</string>
+    <string name="qqCredentialHint">You can paste the Cookie from y.qq.com after signing in (including uin and qm_keyst), or the Credential JSON returned by the server</string>
+    <string name="qqCredentialUnrecognized">Unrecognized credential: it needs both musicid and musickey, or both uin and qm_keyst</string>
+
+    <!-- data/auth/QrLoginFlow.kt -->
+    <string name="qrGenerating">Generating QR code…</string>
+    <string name="providerServerNoResponse">The {provider} server isn't responding</string>
+    <string name="waitingForServer">Waiting for the server…</string>
+    <string name="confirmLoginOnPhone">Confirm the sign-in on your phone</string>
+    <string name="loginStateSaveFailed">Couldn't save the sign-in state</string>
+    <string name="loginCanceledOnPhone">Sign-in was canceled on your phone. You can generate a new QR code.</string>
+    <string name="qrGenerateFailed">Couldn't generate the QR code</string>
+    <string name="networkError">Network error</string>
+    <string name="qrExpired">The QR code has expired. Generate a new one.</string>
+    <string name="tapToGenerateQr">Tap to generate a QR code</string>
+
+    <!-- data/local/LocalAccount.kt -->
+    <string name="localAccountDefaultName">Local account</string>
+
+    <!-- data/local/LocalLibrary.kt -->
+    <string name="localPlaylistNotFound">The local playlist doesn't exist</string>
+    <string name="songUnidentifiable">Couldn't identify this song</string>
+    <string name="localLikes">Local likes</string>
+    <string name="untitledPlaylist">Untitled playlist</string>
+
+    <!-- data/provider/MusicProviderRegistry.kt -->
+    <string name="providerTurnedOff">{provider} is turned off</string>
+    <string name="providerNoStreamUrl">{provider} didn't provide a playback URL for this song</string>
+
+    <!-- data/provider/NeteaseProvider.kt -->
+    <string name="neteaseSearchFailed">NetEase Cloud Music search request failed</string>
+
+    <!-- data/provider/ProviderId.kt -->
+    <string name="neteaseCloudMusic">NetEase Cloud Music</string>
+    <string name="qqMusic">QQ Music</string>
+
+    <!-- data/provider/ProviderModels.kt -->
+    <string name="paid">Paid</string>
+    <string name="lossless">Lossless</string>
+    <string name="unknownArtist">Unknown artist</string>
+
+    <!-- data/provider/QQProvider.kt -->
+    <string name="qqLyricsRequestFailed">QQ Music lyrics request failed</string>
+
+    <!-- di/Modules.kt -->
+    <string name="neteaseLoginIntro">RedefineNCM is a third-party NetEase Cloud Music client. Sign in to use your playlists, Daily picks and liked songs. You can also search and play without signing in.</string>
+    <string name="neteaseAccount">NetEase Cloud Music account</string>
+    <string name="neteaseSignedOutHint">Sign in to see your playlists, Daily picks and liked songs</string>
+    <string name="neteaseSignOutWarning">After you sign out, “Me”, Daily picks, likes and similar features won't be available. Downloaded songs are kept.</string>
+    <string name="neteaseServerAddress">NetEase Cloud Music server address</string>
+    <string name="serverAddressAppliesAfterRestart">The server address takes effect after a restart</string>
+    <string name="qqLoginIntro">When you're signed in, QQ Music search and playback use your account's entitlements. Without signing in, you can still search and play songs that are free to listen to.</string>
+    <string name="qqAccount">QQ Music account</string>
+    <string name="qqSignedOutHint">Sign in to search and play with your account's entitlements</string>
+    <string name="qqSignOutWarning">After you sign out, QQ Music searches and plays as a signed-out user.</string>
+    <string name="qqServerAddress">QQ Music server address</string>
+    <string name="serverAddressAppliesNow">The server address takes effect immediately</string>
+    <string name="enableQqMusic">Enable QQ Music</string>
+    <string name="enableQqMusicHint">Requires a self-hosted QQMusicApi server. When signed out, playback follows QQ's limits for signed-out users.</string>
+    <string name="qqWebSignInUnavailable">Browsers can't send the QQ Music sign-in credential, so the web version uses QQ Music signed out</string>
+    <string name="serverAvailableWithVersion">The server is available. Version: {version}</string>
+    <string name="serverRespondedWithError">The server responded but returned an error (code {code})</string>
+    <string name="serverUnreachable">Can't connect to this server. Check the address and that the service is running.</string>
+    <string name="serverAvailable">The server is available</string>
+    <string name="beatModelNoRuntime">This platform has no NPU or GPU inference runtime</string>
+
+    <!-- download/LocalMediaAssets.kt -->
+    <string name="lyricsNoOriginalContent">These lyrics have no original content that can be saved</string>
+    <string name="lyricsFileUnreadableAfterWrite">Couldn't read the lyrics file after writing it</string>
+    <string name="coverDownloadHttpError">Cover download failed: HTTP {statusCode}</string>
+    <string name="coverTooLarge">The cover file is over the {limitMib} MiB limit</string>
+    <string name="coverDownloadEmpty">The downloaded cover is empty</string>
+    <string name="coverNotImage">The downloaded cover isn't an image: {contentType}</string>
+    <string name="coverFormatUnsupported">This cover image format isn't supported</string>
+    <string name="coverFileUnreadableAfterWrite">Couldn't read the cover file after writing it</string>
+
+    <!-- download/SongDownloadManager.kt -->
+    <string name="downloadQueueSaveFailedNotStarted">Couldn't save the download queue, so the download didn't start</string>
+    <string name="localFileStatusUnknown">Couldn't check the local file status</string>
+    <string name="localSongDeleted">Deleted the local song</string>
+    <string name="localFileDeleted">The local file has been deleted</string>
+    <string name="assetCleanupFailedWithError">Audio deleted, but couldn't clean up the lyrics or cover: {error}</string>
+    <string name="assetCleanupFailed">Audio deleted, but couldn't clean up the lyrics or cover</string>
+    <string name="localSongDeleteFailed">Couldn't delete the local song</string>
+    <string name="localLibrarySyncFailed">Couldn't sync the local music library</string>
+    <string name="downloadQueueRestoreFailed">Couldn't restore the download queue</string>
+    <string name="downloadQueueSaveFailed">Couldn't save the download queue</string>
+    <string name="localLibraryReadFailed">Couldn't read the local music library</string>
+    <string name="downloadServiceStartFailedWithError">Couldn't start the background download service: {error}</string>
+    <string name="downloadServiceStartFailed">Couldn't start the background download service</string>
+    <string name="downloadQueueSaveFailedStopped">Couldn't save the download queue, so the remaining downloads were stopped</string>
+    <string name="downloadQualitySaveFailed">Couldn't save the audio quality for this download, so it didn't start</string>
+    <string name="downloadUrlUnavailable">Couldn't get the song's download link</string>
+    <string name="downloadFailed">Download failed</string>
+    <string name="lyricsSaveFailed">Couldn't save lyrics</string>
+    <string name="coverSaveFailed">Couldn't save cover</string>
+    <string name="partialDownloadCleanupFailedWithError">Couldn't clean up partial download files: {error}</string>
+    <string name="partialDownloadCleanupFailed">Couldn't clean up partial download files</string>
+    <string name="localSongFallbackTitle">Local song {id}</string>
+    <string name="localFile">Local file</string>
+
+    <!-- lyric/LyricResolver.kt -->
+    <string name="neteaseLyricsRequestFailed">Couldn't get lyrics from NetEase Cloud Music</string>
+    <string name="providerLyricsRequestFailed">Couldn't get lyrics from {provider}</string>
+    <string name="amllDbLookupTimedOut">AMLL DB lookup timed out</string>
+    <string name="amllDbTtmlUnparseable">Couldn't parse the TTML from AMLL DB</string>
+
+    <!-- lyric/LyricSourceMode.kt -->
+    <string name="lyricSourceTtmlPreferred">AMLL lyrics database first (NetEase if not found)</string>
+    <string name="lyricSourceBackendPreferred">NetEase lyrics first (AMLL lyrics database if not found)</string>
+    <string name="lyricSourceTtmlOnly">AMLL lyrics database only</string>
+    <string name="lyricSourceBackendOnly">NetEase lyrics only</string>
+
+    <!-- lyric/LyricStateOverlay.kt -->
+    <string name="restoringLyrics">Restoring lyrics…</string>
+    <string name="restoringPlayback">Restoring playback…</string>
+    <string name="nothingPlayingYet">Nothing playing yet</string>
+    <string name="lyricsAppearHere">Choose a song and its lyrics will appear here.</string>
+    <string name="loadingLyrics">Loading lyrics…</string>
+    <string name="lyricsUntimedTitle">Lyrics have no timestamps</string>
+    <string name="lyricsUntimedMessage">This song's lyrics have no timestamps, so they can't scroll with playback.</string>
+    <string name="songHasNoLyrics">This song has no lyrics yet.</string>
+    <string name="lyricsLoadFailed">Couldn't load lyrics</string>
+    <string name="retry">Retry</string>
+    <string name="lyricsUnsupported">Lyrics not supported</string>
+
+    <!-- notification/LyricNotificationController.kt -->
+    <string name="alignLeft">Left</string>
+    <string name="alignCenter">Center</string>
+    <string name="alignRight">Right</string>
+
+    <!-- player/PlaybackReportingCoordinator.kt -->
+    <string name="playbackReportProcessingFailed">Couldn't process the playback report</string>
+    <string name="playbackReportRejected">The server rejected the playback report</string>
+    <string name="relayReportUnsupported">This server doesn't support relay playback progress reports</string>
+    <string name="recentPlayReportUnsupported">This server doesn't support recently played reports</string>
+    <string name="playHistoryReportUnsupported">This server doesn't support play history reports</string>
+    <string name="playbackReportRequestFailed">Playback report request failed</string>
+
+    <!-- player/PlayerStatusRestorer.kt -->
+    <string name="playerStatusReadFailed">Couldn't read the playback state</string>
+    <string name="playerStatusRestoreFailed">Couldn't restore the playback state</string>
+    <string name="playerStatusInitFailed">Couldn't initialize the playback state</string>
+
+    <!-- recognition/MicrophoneRecorder.kt -->
+    <string name="microphonePermissionDenied">Microphone permission not granted</string>
+    <string name="microphoneUnavailable">Microphone unavailable</string>
+    <string name="microphoneBusy">The microphone is in use</string>
+    <string name="microphoneNeedsSecureContext">Browsers allow microphone access only on HTTPS or localhost pages</string>
+
+    <!-- recognition/PcmCapture.kt -->
+    <string name="recordingDurationMustBePositive">Recording duration must be greater than 0</string>
+
+    <!-- recognition/PcmResampler.kt -->
+    <string name="recordingSampleRateInvalid">Invalid recording sample rate</string>
+    <string name="recordingDurationOutOfRange">Recording duration is out of the supported range</string>
+    <string name="recordingSampleCountOutOfRange">Recording sample count is out of the supported range</string>
+    <string name="recordingSamplesInsufficient">Not enough recording samples: need {required}, got {captured}</string>
+    <string name="recordingSampleValueInvalid">Recording sample {index} has an invalid value</string>
+
+    <!-- ui/amll/NativeAmllScreen.kt -->
+    <string name="nowPlayingLyrics">Now playing lyrics</string>
+    <string name="closeLyrics">Close lyrics</string>
+    <string name="lyricsUntimedNote">This song's lyrics have no timestamps, so they can't scroll with playback</string>
+
+    <!-- ui/component/AddToLocalPlaylistDialog.kt -->
+    <string name="addToLocalPlaylist">Add to local playlist</string>
+    <plural name="addSongsToLocalPlaylist" by="count">
+        <one>Add {count} song to local playlist</one>
+        <other>Add {count} songs to local playlist</other>
+    </plural>
+    <string name="newPlaylistName">New playlist name</string>
+    <plural name="songCount" by="count">
+        <one>{count} song</one>
+        <other>{count} songs</other>
+    </plural>
+    <string name="newPlaylist">New playlist</string>
+    <string name="createAndAdd">Create and add</string>
+
+    <!-- ui/component/AutoHideMiniPlayerController.kt -->
+    <string name="liked">Liked</string>
+    <string name="like">Like</string>
+    <string name="queue">Queue</string>
+    <string name="comments">Comments</string>
+    <string name="shuffle">Shuffle</string>
+    <string name="outputVolumePercent">Output volume {percent}</string>
+    <string name="coverOf">Cover of {title}</string>
+    <string name="notPlaying">Not playing</string>
+    <string name="chooseSongToPlay">Choose a song to start playing</string>
+    <string name="collapsePlaybackControls">Collapse playback controls</string>
+    <string name="releaseForNextSong">Release for next song</string>
+    <string name="releaseForPreviousSong">Release for previous song</string>
+    <string name="playbackControlsFor">{title}, playback controls</string>
+    <string name="noSongPlaying">No song playing</string>
+    <string name="expandPlaybackControls">Expand playback controls</string>
+
+    <!-- ui/component/DesktopPlayerBar.kt -->
+    <string name="lyrics">Lyrics</string>
+    <string name="volumePercent">Volume {percent}</string>
+
+    <!-- ui/component/Expressive.kt -->
+    <string name="cachedDataUpdating">Cached data · Updating</string>
+    <string name="showingCachedData">Showing cached data</string>
+    <string name="errorStateDescription">Error: {title}</string>
+
+    <!-- ui/component/LyricCapabilityBadge.kt -->
+    <string name="lyricsBadgeGlyph">Lyr</string>
+    <string name="lyricLevelUnsynced">No timestamps</string>
+    <string name="lyricLevelUnsyncedDescription">Lyrics level: no timestamps</string>
+    <string name="lyricLevelLineSynced">Line by line (standard)</string>
+    <string name="lyricLevelLineSyncedDescription">Lyrics level: line by line (standard)</string>
+    <string name="lyricLevelNcmYrc">Word by word (NCM YRC)</string>
+    <string name="lyricLevelNcmYrcDescription">Lyrics level: NCM YRC</string>
+    <string name="lyricLevelTtmlFull">Full TTML support</string>
+    <string name="lyricLevelTtmlFullDescription">Lyrics level: full TTML support</string>
+    <string name="providerLyricsSource">{provider} lyrics</string>
+    <string name="neteaseLyricsSource">NetEase Cloud Music lyrics</string>
+    <string name="unknown">Unknown</string>
+    <string name="localLyricsFileSource">{source} · Local lyrics file</string>
+    <string name="viewLyricsInfo">View lyrics info</string>
+    <string name="lyricBadgeDescription">{level}, source: {source}</string>
+    <string name="lyricsInfo">Lyrics info</string>
+    <string name="level">Level</string>
+    <string name="source">Source</string>
+
+    <!-- ui/component/MiniNowPlayingBar.kt -->
+    <string name="openPlayerFor">Open player for {title}</string>
+    <string name="mutedSuffix"> (muted)</string>
+
+    <!-- ui/component/NativeDynamicCoverLayer.kt -->
+    <string name="animatedCover">Animated cover</string>
+
+    <!-- ui/component/PlaybackBottomSheets.kt -->
+    <string name="noSongsQueued">No songs queued</string>
+    <plural name="queueSubtitleShuffleOn" by="count">
+        <one>{count} song · Can't reorder while shuffle is on</one>
+        <other>{count} songs · Can't reorder while shuffle is on</other>
+    </plural>
+    <plural name="queueSubtitleDragToReorder" by="count">
+        <one>{count} song · Drag the handle on the right to reorder</one>
+        <other>{count} songs · Drag the handle on the right to reorder</other>
+    </plural>
+    <string name="oneSong">1 song</string>
+    <string name="clear">Clear</string>
+    <string name="queueEmpty">Queue is empty</string>
+    <string name="queueEmptyMessage">Queued songs will appear here once you start playing.</string>
+    <string name="clearQueueTitle">Clear the queue?</string>
+    <plural name="clearQueueMessage" by="count">
+        <one>This removes {count} song from the queue and stops playback.</one>
+        <other>This removes all {count} songs from the queue and stops playback.</other>
+    </plural>
+    <string name="unknownSong">Unknown song</string>
+    <string name="queueItemDescription">Song {position}, {title}, by {artist}</string>
+    <string name="playing">Playing</string>
+    <string name="nowPlaying">Now playing</string>
+    <string name="queued">Queued</string>
+    <string name="moveUp">Move up</string>
+    <string name="moveDown">Move down</string>
+    <string name="removeFromQueue">Remove from queue</string>
+    <string name="songComments">Song comments</string>
+    <string name="notSupported">Not supported</string>
+    <string name="commentsUnsupported">Comments not supported</string>
+    <string name="commentsUnsupportedMessage">This song is from a service that doesn't offer comments.</string>
+    <string name="commentsLoadingSubtitle">Loading comments</string>
+    <string name="commentsUnavailableSubtitle">Comments can't be loaded right now</string>
+    <plural name="commentCount" by="count">
+        <one>{count} comment</one>
+        <other>{count} comments</other>
+    </plural>
+    <string name="noComments">No comments</string>
+    <string name="popular">Popular</string>
+    <string name="newest">Newest</string>
+    <string name="loadingComments">Loading comments…</string>
+    <string name="commentsLoadFailed">Couldn't load comments</string>
+    <string name="noPopularCommentsYet">No popular comments yet</string>
+    <string name="noCommentsYet">No comments yet</string>
+    <string name="viewNewestCommentsHint">You can view the newest comments instead.</string>
+    <string name="noCommentsToShow">This song has no comments to show yet.</string>
+    <string name="showNewestComments">Show newest comments</string>
+    <string name="loadingMoreComments">Loading more comments…</string>
+    <string name="errorTapToRetry">{error}. Tap to retry</string>
+    <string name="loadMore">Load more</string>
+    <string name="noMoreComments">No more comments</string>
+    <string name="neteaseUserFallbackName">NetEase Cloud Music user</string>
+    <string name="avatarOf">Avatar of {nickname}</string>
+    <plural name="commentLikesDescription" by="count">
+        <one>{count} like</one>
+        <other>{count} likes</other>
+    </plural>
+    <plural name="commentLikeCount" by="count">
+        <one>{count} like</one>
+        <other>{count} likes</other>
+    </plural>
+    <string name="noTextContent">(No text)</string>
+    <string name="commentCountShort">{count} comments</string>
+
+    <!-- ui/component/SettingsRows.kt -->
+    <string name="hide">Hide</string>
+    <string name="show">Show</string>
+    <string name="notSignedIn">Not signed in</string>
+    <string name="signedIn">Signed in</string>
+    <string name="switchAccount">Switch account</string>
+    <string name="signIn">Sign in</string>
+    <string name="open">Open</string>
+    <string name="collapse">Collapse</string>
+    <string name="expand">Expand</string>
+
+    <!-- ui/component/SongWikiDetails.kt -->
+    <string name="loadingSongDetails">Loading song details…</string>
+    <string name="songDetailsLoadFailed">Couldn't load song details</string>
+    <string name="songDetailsUnsupported">No more details</string>
+    <string name="songDetailsUnsupportedMessage">This song is from a service that doesn't provide song details.</string>
+    <string name="noMoreSongDetails">No more information</string>
+    <string name="noSongDetailsToShow">This song has no details to show yet.</string>
+
+    <!-- ui/component/StartupPermissionRationale.kt -->
+    <string name="permissionRationaleTitle">Allow these permissions</string>
+    <string name="permissionRationaleNotifications">Notifications: show playback controls, lyrics, and download progress in the notification shade and on the lock screen.</string>
+    <string name="permissionRationaleAudio">Music and audio: find songs already downloaded to this device, so they can play without a network connection.</string>
+    <string name="permissionRationaleFooter">You can change these anytime in system settings.</string>
+    <string name="notNow">Not now</string>
+
+    <!-- ui/login/CredentialTextLoginPresenter.kt -->
+    <string name="credentialCleared">Credential cleared</string>
+    <string name="credentialSavedInUse">Saved. {field} is now in use</string>
+    <string name="credentialNotRecognized">Credential not recognized</string>
+    <string name="save">Save</string>
+
+    <!-- ui/login/PhoneCodeLoginPresenter.kt -->
+    <string name="phoneNumber">Phone number</string>
+    <plural name="resendIn" by="seconds">
+        <one>Resend in {seconds} second</one>
+        <other>Resend in {seconds} seconds</other>
+    </plural>
+    <string name="resend">Resend</string>
+    <string name="sendVerificationCode">Send verification code</string>
+    <string name="verificationCode">Verification code</string>
+
+    <!-- ui/login/QrLoginPresenter.kt -->
+    <string name="providerSignInQrCode">{provider} sign-in QR code</string>
+    <string name="qrCodeExpired">QR code expired</string>
+    <string name="tapToRefresh">Tap to refresh</string>
+    <string name="qrCodeDecodeFailed">Couldn't decode the QR code</string>
+    <string name="qrCodePlaceholder">The QR code\nwill appear here</string>
+    <string name="regenerateQrCode">Generate new QR code</string>
+    <string name="generateQrCode">Generate QR code</string>
+
+    <!-- ui/screen/AccountsScreen.kt -->
+    <string name="accountsAndServices">Accounts and services</string>
+    <string name="accountsSubtitle">One account per service; the local account is stored on this device</string>
+    <string name="back">Back</string>
+    <string name="goBack">Go back</string>
+    <string name="serverAddressHint">{appliesWhen}. Clear it to restore the default address</string>
+    <string name="checking">Checking…</string>
+    <string name="checkAddress">Check address</string>
+    <string name="enterFieldManually">Enter {field} manually</string>
+    <string name="advancedHint">Advanced: {hint}</string>
+    <string name="multipleServices">Multiple services</string>
+    <string name="groupByService">Group by service</string>
+    <string name="groupByServiceHint">When off, results from all services are mixed into one list</string>
+    <string name="mergeSameSongs">Merge the same song across services</string>
+    <string name="mergeSameSongsHint">Songs with the same title and first artist whose lengths differ by no more than 3 seconds share one row; use the menu to play from another service</string>
+    <string name="local">Local</string>
+    <string name="signOutOfProvider">Sign out of {provider}?</string>
+    <string name="signOutConfirm">Sign out</string>
+    <string name="localAccountName">Local account name</string>
+    <string name="name">Name</string>
+    <string name="localAccountNoSignInNeeded">No sign-in needed; saved only on this device</string>
+    <string name="rename">Rename</string>
+
+    <!-- ui/screen/AlbumScreen.kt -->
+    <string name="playbackSourceAlbum">album “{albumName}”</string>
+    <string name="albumLoading">Loading album…</string>
+    <string name="albumLoadFailed">Couldn't load the album</string>
+    <string name="checkNetworkAndRetry">Check your network connection and try again.</string>
+    <string name="albumReleaseDate">Released {releaseDate}</string>
+    <string name="playAll">Play all</string>
+
+    <!-- ui/screen/ArtistScreen.kt -->
+    <string name="playbackSourceArtist">artist “{artistName}”</string>
+    <string name="artistLoading">Loading artist…</string>
+    <string name="artistLoadFailed">Couldn't load the artist</string>
+    <string name="popularSongs">Popular songs</string>
+    <string name="albums">Albums</string>
+    <string name="loading">Loading…</string>
+    <string name="moreAlbums">More albums</string>
+    <string name="artistSongAndAlbumCount">Songs: {songCount} · Albums: {albumCount}</string>
+    <string name="playPopularSongs">Play popular songs</string>
+
+    <!-- ui/screen/DailySongsScreen.kt -->
+    <string name="dailyPicks">Daily picks</string>
+    <string name="todaysPicks">Today's picks</string>
+    <plural name="dailyPicksSongCount" by="count">
+        <one>{count} song picked for you today</one>
+        <other>{count} songs picked for you today</other>
+    </plural>
+    <string name="dailyPicksLoadFailed">Couldn't load Daily picks</string>
+    <string name="dailyPicksLoading">Loading Daily picks…</string>
+    <string name="dailyPicksEmpty">No Daily picks yet</string>
+    <string name="dailyPicksSignInHint">After you sign in, each day's recommended songs appear here.</string>
+
+    <!-- ui/screen/DownloadManagementScreen.kt -->
+    <string name="all">All</string>
+    <string name="filterDownloading">Downloading</string>
+    <string name="paused">Paused</string>
+    <string name="downloaded">Downloaded</string>
+    <string name="failed">Failed</string>
+    <string name="canceled">Canceled</string>
+    <string name="fileDeleted">File deleted</string>
+    <string name="downloadQueueSaveFailedTitle">Couldn't save the download queue</string>
+    <string name="scanningLocalLibrary">Scanning the local music library…</string>
+    <string name="saveSongToDeviceFailed">Couldn't save “{title}”: {error}</string>
+    <string name="rescanDownloadedFiles">Rescan downloaded files</string>
+    <string name="cancelAllDownloads">Cancel all downloads</string>
+    <string name="clearFinishedEntries">Clear finished entries from the list</string>
+    <string name="downloadsCompletedCount">{count} downloaded</string>
+    <string name="downloadsActiveCount">{count} downloading</string>
+    <string name="downloadsPausedCount">{count} paused</string>
+    <string name="downloadsFailedCount">{count} failed</string>
+    <string name="downloadsStoredInBrowserHint">Songs are stored in the browser, not in your system's Downloads folder. To get the audio file, choose “Save to this device” from the song's “More actions” menu.</string>
+    <string name="moreActions">More actions</string>
+    <string name="pauseAll">Pause all</string>
+    <string name="resumeAll">Resume all</string>
+    <string name="resumeDownload">Resume download</string>
+    <string name="downloadAgain">Download again</string>
+    <string name="cancelDownload">Cancel download</string>
+    <string name="saveToDevice">Save to this device</string>
+    <string name="resaveLyricsFromCurrentSource">Save lyrics again using the current lyrics source</string>
+    <string name="saveLyricsFile">Save lyrics file</string>
+    <string name="resaveCover">Save cover again</string>
+    <string name="saveCoverImage">Save cover image</string>
+    <string name="deleteDownloadedFile">Delete downloaded file</string>
+    <string name="removeFromListKeepFile">Remove from list (keep file)</string>
+    <string name="deleteLeftoverLyricsAndCover">Delete leftover lyrics and cover</string>
+    <string name="removeFromList">Remove from list</string>
+    <string name="pausedPrefix">Paused · </string>
+    <string name="waitingToDownload">Waiting to download</string>
+    <string name="gettingDownloadLink">Getting download link</string>
+    <string name="savingLyricsAndCover">Saving lyrics and cover</string>
+    <string name="lyricsSavedWithFormat">Lyrics ({format})</string>
+    <string name="lyricStatusNone">No lyrics</string>
+    <string name="savingLyrics">Saving lyrics</string>
+    <string name="lyricsNotSaved">Lyrics not saved</string>
+    <string name="coverSavedStatus">Cover</string>
+    <string name="noCover">No cover</string>
+    <string name="savingCover">Saving cover</string>
+    <string name="coverNotSaved">Cover not saved</string>
+    <string name="noDownloadedSongsYet">No downloaded songs yet</string>
+    <string name="noSongsInFilter">No songs in “{filter}”</string>
+    <string name="downloadsEmptyHint">Tap “Download all” on a playlist page, or choose “Download” from a song's “More actions” menu.</string>
+    <string name="switchFilterHint">Switch to another filter.</string>
+    <string name="cancelAllDownloadsTitle">Cancel all downloads?</string>
+    <string name="cancelAllDownloadsMessage">Downloading and paused songs will stop. You can retry them later from “Canceled”. Songs already downloaded aren't affected.</string>
+    <string name="cancelAll">Cancel all</string>
+    <string name="clearFinishedEntriesTitle">Clear finished entries?</string>
+    <string name="clearFinishedEntriesMessage">Downloaded, failed and canceled entries will be removed from this list. Downloaded song files won't be deleted.</string>
+    <string name="clearEntries">Clear entries</string>
+    <string name="cancelDownloadTitle">Cancel downloading “{title}”?</string>
+    <string name="cancelDownloadMessage">The download will stop. You can retry it later from “Canceled”.</string>
+    <string name="removeFromListTitle">Remove “{title}” from the list?</string>
+    <string name="removeFromListMessage">Only this entry is removed. The downloaded song file is kept.</string>
+    <string name="remove">Remove</string>
+    <string name="deleteSongFileTitle">Delete the file for “{title}”?</string>
+    <string name="deleteSongFileMessage">The audio file on this device will be permanently deleted. You can still download it again later.</string>
+    <string name="deleteFile">Delete file</string>
+    <string name="qualityStandard">Standard</string>
+    <string name="qualityHigh">High</string>
+    <string name="qualityVeryHigh">Very high</string>
+    <string name="qualityHdSurround">HD surround</string>
+    <string name="qualityImmersiveSurround">Immersive surround</string>
+    <string name="qualityDolbyAtmos">Dolby Atmos</string>
+    <string name="qualityMaster">Master</string>
+    <string name="downloadFailedWithReason">Download failed: {reason}</string>
+
+    <!-- ui/screen/HomeScreen.kt -->
+    <string name="recommendedPlaylists">Recommended playlists</string>
+    <string name="viewAllDailyPicks">View all songs in Daily picks</string>
+    <string name="openSongRecognition">Open song recognition</string>
+    <string name="songRecognitionCardHint">Record 3 seconds to find the song playing around you</string>
+    <string name="openUserProfile">Open {nickname}'s profile</string>
+
+    <!-- ui/screen/LocalLibraryScreen.kt -->
+    <string name="localPlaylists">Local playlists</string>
+    <string name="localPlaylistsSubtitle">Songs from any service; saved only on this device and exported with your settings backup</string>
+    <string name="importing">Importing…</string>
+    <string name="importPlaylist">Import playlist</string>
+    <string name="localPlaylistsLoading">Loading local playlists…</string>
+    <string name="noLocalPlaylistsYet">No local playlists yet</string>
+    <string name="localPlaylistsEmptyHint">Create one, or choose “Add to local playlist” from a song's “More actions” menu. Liking a song from QQ Music or a similar service also adds it to “Local likes”.</string>
+    <string name="newLocalPlaylistTitle">New local playlist</string>
+    <string name="playlistName">Playlist name</string>
+    <string name="create">Create</string>
+    <string name="playlistLinkOrId">Playlist link or ID</string>
+    <string name="importPlaylistHint">Accepts NetEase Cloud Music and QQ Music playlist links. A number on its own is read as a NetEase playlist ID; put qq: before a QQ Music playlist ID.</string>
+    <string name="importAction">Import</string>
+
+    <!-- ui/screen/LocalPlaylistScreen.kt -->
+    <string name="playbackSourceLocalPlaylist">local playlist “{playlistName}”</string>
+    <plural name="localPlaylistSongCount" by="count">
+        <one>{count} song · Local playlist</one>
+        <other>{count} songs · Local playlist</other>
+    </plural>
+    <string name="delete">Delete</string>
+    <string name="playlistEmpty">This playlist is empty</string>
+    <string name="localPlaylistEmptyHint">Choose “Add to local playlist” from any song's “More actions” menu.</string>
+    <string name="removeFromThisPlaylist">Remove from this playlist</string>
+    <string name="renamePlaylist">Rename playlist</string>
+    <string name="deletePlaylistTitle">Delete “{playlistName}”?</string>
+    <string name="deletePlaylistMessage">Only this local playlist is deleted. The songs in it aren't affected.</string>
+
+    <!-- ui/screen/LoginScreen.kt -->
+    <string name="signInLater">Sign in later</string>
+    <string name="signInToProvider">Sign in to {provider}</string>
+    <string name="serverAddress">Server address</string>
+    <string name="serverAddressResetHint">Leave empty to use the default address</string>
+    <string name="saveAddress">Save address</string>
+
+    <!-- ui/screen/NowPlayingScreen.kt -->
+    <string name="collapsePlayer">Collapse player</string>
+    <string name="playbackSourceFrom">From {source}</string>
+    <string name="songDetails">Song details</string>
+    <string name="mutedTapToRestoreVolume">Muted · Tap to restore volume</string>
+    <string name="artworkOf">Cover of {title}</string>
+    <string name="openLyrics">Open lyrics</string>
+    <string name="pickSongToStart">Pick a song from any list to start</string>
+    <string name="viewArtistAndAlbum">View artist and album</string>
+    <string name="lookingUp">Looking up…</string>
+    <string name="artistWithName">Artist: {artistName}</string>
+    <string name="albumWithName">Album: {albumName}</string>
+    <string name="playbackPosition">Playback position</string>
+
+    <!-- ui/screen/PlaylistDetailScreen.kt -->
+    <string name="playlist">Playlist</string>
+    <string name="playlistDetailsUnavailable">Playlist details unavailable</string>
+    <string name="playlistLoading">Loading playlist and songs…</string>
+    <string name="playlistLoadFailed">Couldn't load the playlist</string>
+    <string name="userPlaylistsLoadFailed">Couldn't load your playlists</string>
+    <string name="playlistNoSongsYet">No songs in this playlist yet</string>
+    <string name="playlistEmptyHint">Songs you add will appear here.</string>
+    <string name="downloadPlaylistTitle">Download “{playlistName}”?</string>
+    <plural name="downloadPlaylistMessage" by="count">
+        <one>{count} song will be downloaded at “{quality}” quality (you can change this in Settings). Songs already downloaded will be skipped.</one>
+        <other>{count} songs will be downloaded at “{quality}” quality (you can change this in Settings). Songs already downloaded will be skipped.</other>
+    </plural>
+    <plural name="addedToDownloadQueue" by="count">
+        <one>Added {count} song to the download queue</one>
+        <other>Added {count} songs to the download queue</other>
+    </plural>
+    <string name="view">View</string>
+    <string name="playbackSourcePlaylist">playlist “{playlistName}”</string>
+    <string name="playlistCover">Playlist cover</string>
+    <plural name="playlistSongCount" by="count">
+        <one>{count} song</one>
+        <other>{count} songs</other>
+    </plural>
+    <string name="downloadAll">Download all</string>
+    <string name="saveAsLocalPlaylist">Save as local playlist</string>
+
+    <!-- ui/screen/SearchScreen.kt -->
+    <string name="clearSearch">Clear</string>
+    <string name="searchingFor">Searching for “{query}”…</string>
+    <string name="searchFailed">Search failed</string>
+    <string name="playbackSourceSearch">search results for “{query}”</string>
+    <string name="noResultsFound">No results found</string>
+    <string name="noSongsMatchQuery">No songs match “{query}”. Try a shorter keyword or just the artist's name.</string>
+    <string name="readyToSearch">Ready to search</string>
+    <string name="searchPromptWithQuery">Tap the search button or press Enter to find songs related to “{query}”.</string>
+    <string name="searchEmptyTitle">Enter a song, artist or album name</string>
+    <string name="searchEmptyHint">Tap the search button or press Enter to search.</string>
+    <string name="searchHistory">Search history</string>
+    <string name="popularSearches">Popular searches</string>
+    <string name="loadingMoreResults">Loading more results…</string>
+    <string name="noMoreResults">No more results</string>
+    <string name="playFromProviderInstead">Play from {provider} instead</string>
+    <string name="searchSongs">Search songs</string>
+
+    <!-- ui/screen/SettingsScreen.kt -->
+    <string name="settingsSaveFailed">Couldn't save settings: {error}</string>
+    <string name="settingsLoadFailed">Couldn't load settings</string>
+    <string name="localPlaylistsImportFailed">Couldn't import local playlists: {error}</string>
+    <string name="settingsImported">Settings imported</string>
+    <string name="settingsImportInvalidFile">Import failed: the file isn't a valid settings backup</string>
+    <string name="settingsSubtitle">Accounts, playback, lyrics, downloads and servers</string>
+    <string name="settingsLoading">Loading settings…</string>
+    <string name="settingsSectionAccounts">Accounts</string>
+    <string name="streamingQuality">Streaming quality</string>
+    <string name="playWholeListOnTap">Play the whole list when you tap a song</string>
+    <string name="playWholeListOnTapHint">When off, only the song you tap plays</string>
+    <string name="useAnimatedCover">Use animated covers in the player</string>
+    <string name="desktopLyricsLockHint">When locked, the window stays where it is and can't be moved or resized; on Windows, mouse clicks pass through to the window below. You can unlock it here or from the system tray icon's menu.</string>
+    <string name="showTranslatedLyrics">Show translated lyrics</string>
+    <string name="showRomanization">Show romanization</string>
+    <string name="showRomanizationHint">Pronunciation for songs in Japanese and other languages</string>
+    <string name="downloadQuality">Download quality</string>
+    <string name="showDownloadStatus">Show download status in song lists</string>
+    <string name="showDownloadStatusHint">Downloaded, downloading and failed songs are marked</string>
+    <string name="settingsSectionGeneral">General</string>
+    <string name="theme">Theme</string>
+    <string name="useWallpaperColors">Use wallpaper colors</string>
+    <string name="useWallpaperColorsHint">Takes the app's colors from your system wallpaper (Android 12 and later)</string>
+    <string name="searchSuggestions">Search suggestions</string>
+    <string name="searchSuggestionsHint">Show suggestions as you type</string>
+    <string name="closeToTray">Stay in the system tray when the main window is closed</string>
+    <string name="closeToTrayHint">Playback doesn't stop. Click the system tray icon to reopen the window; to quit, choose “Quit” from its menu.</string>
+    <string name="checkUpdatesOnStartup">Check for updates at startup</string>
+    <string name="checkUpdatesNow">Check for updates now</string>
+    <string name="backup">Backup</string>
+    <string name="exportSettings">Export settings</string>
+    <string name="importSettings">Import settings</string>
+    <string name="about">About</string>
+    <string name="version">Version</string>
+    <string name="openSourceLicense">Open-source license</string>
+    <string name="amllComponentName">AMLL lyrics rendering and parsing component</string>
+    <string name="amllLicenseNote">Released under AGPL-3.0-only. The full license text is included in the app's resources.</string>
+    <string name="importSettingsConfirmTitle">Import and replace your current settings?</string>
+    <string name="importSettingsConfirmMessage">Importing a file replaces the server address and your playback and lyrics preferences. Sign-in status isn't in the backup and stays as it is. Consider exporting your current settings first as a backup.</string>
+    <string name="chooseFile">Choose file</string>
+    <string name="settingsHeroSubtitle">Accounts, playback, lyrics and backup</string>
+    <string name="audioQualityAvailabilityNote">If your account doesn't have access to a quality, you get the highest quality it can play</string>
+    <string name="audioOutputSystemDefault">System default</string>
+    <string name="audioOutputSystemDefaultMenu">System default (follows the system output device)</string>
+    <string name="audioOutputDeviceUnavailable">{deviceName} (unavailable)</string>
+    <string name="audioOutputDevice">Audio output device</string>
+    <string name="desktopLyricsAlignment">Desktop lyrics alignment</string>
+    <string name="lyricsSource">Lyrics source</string>
+    <string name="lyricsSourceAmllNote">The AMLL lyrics database is community-maintained and has more complete word-by-word lyrics. Lookups use only the song ID, and no account information is sent.</string>
+    <string name="settingsLanguage">Language</string>
+    <string name="songTransitions">Song transitions</string>
+    <string name="betweenSongs">Between songs</string>
+    <string name="transitionOff">Off</string>
+    <string name="transitionCrossfade">Crossfade</string>
+    <string name="transitionSmart">Smart transition</string>
+    <string name="transitionCrossfadeMenu">Crossfade (fixed length)</string>
+    <string name="transitionSmartMenu">Smart transition (joins songs on the beat)</string>
+    <string name="transitionUnsupported">This platform's player doesn't support song transitions yet</string>
+    <string name="transitionCrossfadeNote">The next song fades in as the previous one fades out</string>
+    <string name="transitionSmartFixedTempoNote">Analyzes both songs' loudness, beat and key, and joins them at a bar line. This platform doesn't change playback speed, so the beats aren't aligned</string>
+    <string name="transitionSmartNote">Analyzes both songs' loudness, beat and key, and joins them at a bar line. When their tempos are close, the previous song's speed is adjusted slightly so the beats line up</string>
+    <string name="transitionLength">Transition length</string>
+    <plural name="secondsValue" by="seconds">
+        <one>{seconds} second</one>
+        <other>{seconds} seconds</other>
+    </plural>
+    <string name="beatAnalysis">Beat analysis</string>
+    <string name="beatModelNotLoaded">Not loaded yet</string>
+    <string name="beatModelNotLoadedNote">Loads with the first smart transition, or check now</string>
+    <string name="beatModelLoading">Loading the beat model…</string>
+    <string name="beatModelReadyNote">The beat model runs only on the NPU or GPU and leaves the CPU free</string>
+    <string name="beatModelUnavailable">Unavailable</string>
+    <string name="beatModelUnavailableNote">{reason}. Transitions still follow loudness but don't align the beats</string>
+    <string name="beatAnalysisSourceNote">Analysis reads a separate standard-quality copy of each song; downloaded songs are read from their local files</string>
+    <string name="checkNow">Check</string>
+
+    <!-- ui/screen/SharedScreenParts.kt -->
+    <string name="songActionAddToQueue">Add to queue</string>
+    <string name="songActionCopyLink">Copy song link</string>
+    <string name="downloadFailedTapToRetry">Download failed. Tap to retry.</string>
+    <string name="downloading">Downloading</string>
+    <string name="sectionLoadFailed">{title} failed to load</string>
+    <string name="sectionLoading">Loading {title}…</string>
+    <string name="sectionEmpty">Nothing in {title} right now</string>
+    <string name="sectionEmptyTapReload">Tap Reload to try again.</string>
+    <string name="sectionEmptyCheckBackLater">Check back later.</string>
+    <string name="reload">Reload</string>
+    <string name="carouselScrollBack">Scroll back</string>
+    <string name="carouselScrollForward">Scroll forward</string>
+    <plural name="playlistCardStats" by="trackCount">
+        <one>{trackCount} song · {playCount} plays</one>
+        <other>{trackCount} songs · {playCount} plays</other>
+    </plural>
+    <string name="heartbeatModeStarting">Starting Heartbeat mode</string>
+    <string name="heartbeatMode">Heartbeat mode</string>
+
+    <!-- ui/screen/SongRecognitionScreen.kt -->
+    <string name="recognitionRequestingMicPermission">Requesting microphone permission…</string>
+    <string name="recognitionMatching">Creating a fingerprint and matching songs…</string>
+    <string name="recognitionResults">Recognition results</string>
+    <string name="recognizeAgain">Recognize again</string>
+    <string name="recognitionNoMatchTitle">No song recognized</string>
+    <string name="recognitionNoMatchMessage">Listened for {seconds} seconds without finding a match. Move closer to the source and try again during a clear part of the music.</string>
+    <string name="recognitionMicPermissionNeeded">Microphone permission needed</string>
+    <string name="recognitionMicPermissionHelp">Allow the microphone in your system settings or the browser's site settings, then come back to this page and check again. Song recognition only processes this one 3-second recording.</string>
+    <string name="checkAgain">Check again</string>
+    <string name="recognitionFailed">Song recognition failed</string>
+    <string name="recognitionIntro">Records 3 seconds of the music around you and matches it with NetEase songs</string>
+    <string name="recognitionReadyTitle">Move close to the music so the microphone can hear it clearly</string>
+    <string name="recognitionPausesPlayback">Recognition pauses the music that's playing. It resumes on its own when you leave this page.</string>
+    <string name="startRecognition">Start recognition</string>
+    <string name="recognitionListeningAgain">Listening a little longer… (attempt {attempt})</string>
+    <string name="recognitionListening">Listening…</string>
+    <string name="recognitionElapsed">{seconds} / 3.0 s</string>
+    <string name="addedToQueue">Added to queue</string>
+    <string name="addToQueue">Add to queue</string>
+
+    <!-- ui/screen/UserPlaylistScreen.kt -->
+    <string name="userLevelSummary">Lv.{level} · Songs played: {playCount} · Days signed in: {loginDays}</string>
+    <plural name="userLevelNextSongs" by="playCount">
+        <one>{playCount} song played</one>
+        <other>{playCount} songs played</other>
+    </plural>
+    <plural name="userLevelNextDays" by="loginDays">
+        <one>{loginDays} day signed in</one>
+        <other>{loginDays} days signed in</other>
+    </plural>
+    <string name="userLevelNextPrefix">Next level: </string>
+    <string name="userLevelMax">Highest level reached</string>
+    <string name="userLevelProgress">Level progress {percent}%</string>
+    <string name="downloadsShortcutSubtitle">Downloaded songs and download progress</string>
+    <string name="localPlaylistsShortcutSubtitle">Playlists saved only on this device</string>
+    <string name="localPlaylistsEmptySubtitle">Songs from any service; saved only on this device</string>
+    <plural name="localPlaylistCount" by="count">
+        <one>{count} playlist</one>
+        <other>{count} playlists</other>
+    </plural>
+    <plural name="localLikesCountSuffix" by="count">
+        <one> · {count} song in Local likes</one>
+        <other> · {count} songs in Local likes</other>
+    </plural>
+    <string name="accountDataLoadFailed">Couldn't load account data</string>
+    <string name="accountAndPlaylistsLoading">Loading account and playlists…</string>
+    <string name="signInToSeePlaylistsTitle">Sign in to see your playlists</string>
+    <string name="signInToSeePlaylistsMessage">Sign in to your NetEase Cloud Music account, and the playlists you've created and saved will show up here.</string>
+    <string name="profileUnavailableTitle">Profile unavailable</string>
+    <string name="profileUnavailableMessage">You're signed in, but your profile couldn't be loaded.</string>
+    <string name="heartbeatModeStartFailed">Couldn't start Heartbeat mode</string>
+    <string name="myPlaylistsLoading">Loading your playlists…</string>
+    <string name="noPlaylistsYetTitle">No playlists yet</string>
+    <string name="noPlaylistsYetMessage">Playlists you create or save will show up here.</string>
+    <string name="createdPlaylists">Created playlists</string>
+    <string name="savedPlaylists">Saved playlists</string>
+    <plural name="playlistSectionCount" by="count">
+        <one>{count} playlist</one>
+        <other>{count} playlists</other>
+    </plural>
+    <string name="userLevelLoading">Loading level…</string>
+    <string name="userLevelUnavailable">Level unavailable</string>
+
+    <!-- ui/theme/ThemePreferences.kt -->
+    <string name="followSystem">Follow system</string>
+    <string name="themeLight">Light</string>
+    <string name="themeDark">Dark</string>
+
+    <!-- viewmodel/AccountsViewModel.kt -->
+    <string name="serverSavedAppliesWhen">Saved. {appliesWhen}</string>
+    <string name="serverAddressUnreachable">Can't connect to this address</string>
+    <string name="providerCredentialCleared">Cleared the {provider} credential</string>
+    <string name="credentialSaved">Saved the {provider} credential</string>
+    <string name="signedOutOfProvider">Signed out of {provider}</string>
+    <string name="signOutFailed">Couldn't sign out: {error}</string>
+    <string name="localAccountRenamed">Local account renamed</string>
+    <string name="saveFailedWithError">Couldn't save: {error}</string>
+    <string name="settingSaveFailed">Couldn't save the setting</string>
+    <string name="providerStateOff">Off</string>
+
+    <!-- viewmodel/LocalLibraryViewModel.kt -->
+    <string name="songsAlreadyInPlaylist">Already in “{name}”</string>
+    <string name="addedToPlaylist">Added to “{name}”</string>
+    <plural name="addedSongsToPlaylist" by="count">
+        <one>Added {count} song to “{name}”</one>
+        <other>Added {count} songs to “{name}”</other>
+    </plural>
+    <string name="addToPlaylistFailed">Couldn't add to the playlist</string>
+    <string name="playlistCreated">Created “{name}”</string>
+    <plural name="playlistCreatedWithSongs" by="count">
+        <one>Created “{name}” with {count} song</one>
+        <other>Created “{name}” with {count} songs</other>
+    </plural>
+    <string name="playlistCreateFailed">Couldn't create the playlist</string>
+    <string name="playlistRenameFailed">Couldn't rename the playlist</string>
+    <string name="playlistDeleted">Playlist deleted</string>
+    <string name="playlistDeleteFailed">Couldn't delete the playlist</string>
+    <string name="playlistRemoveSongFailed">Couldn't remove the song</string>
+    <string name="playlistLinkUnrecognized">Couldn't recognize this playlist link</string>
+    <string name="providerPlaylistReadFailed">Couldn't read this {provider} playlist</string>
+    <plural name="playlistImported" by="count">
+        <one>Imported “{name}” with {count} song</one>
+        <other>Imported “{name}” with {count} songs</other>
+    </plural>
+    <string name="playlistImportFailed">Couldn't import the playlist</string>
+
+    <!-- viewmodel/MainViewModel.kt -->
+    <string name="updateAvailable">New version available: {version}</string>
+    <string name="updateCheckFailed">Couldn't check for updates. Try again later.</string>
+    <string name="alreadyLatestVersion">You're on the latest version ({version})</string>
+    <string name="playerStatusSaveFailed">Couldn't save the playback state</string>
+    <string name="userDetailLoadFailed">Couldn't load your profile. Check your network and try again.</string>
+    <string name="userLevelLoadFailed">Couldn't load your level. Check your network and try again.</string>
+    <string name="userPlaylistsLoadFailedRetry">Couldn't load playlists. Check your network and try again.</string>
+    <string name="recommendedPlaylistsLoadFailed">Couldn't load recommended playlists. Check your network and try again.</string>
+    <string name="dailyPicksLoadFailedRetry">Couldn't load Daily picks. Check your network and try again.</string>
+    <string name="likedPlaylistIdInvalid">Invalid liked songs playlist ID</string>
+    <string name="heartbeatModeSignInRequired">Sign in to use Heartbeat mode</string>
+    <string name="likedSongsFetchFailed">Couldn't get your liked songs. Check your network, sign-in status or the playlist's contents.</string>
+    <string name="heartbeatModeListFetchFailed">Couldn't get the Heartbeat mode list. Check your network and try again.</string>
+    <string name="heartbeatModeEmpty">Heartbeat mode returned no songs</string>
+    <string name="playlistDetailLoadFailed">Couldn't load the playlist details. Retry to show the cover and description.</string>
+    <string name="playlistTracksLoadFailed">Couldn't load the song list. Check your network and try again.</string>
+    <string name="searchFailedRetry">Search failed. Check your network and try again.</string>
+    <string name="searchPartiallyFailed">Search failed on {providers}. Showing results from other services only.</string>
+    <string name="searchMoreFailedFor">Couldn't load more results from {providers}</string>
+    <string name="searchMoreFailed">Couldn't load more results</string>
+
+    <!-- viewmodel/NowPlayingViewModel.kt -->
+    <string name="sourceSwitchShuffleBlocked">Can't switch source while shuffle is on</string>
+    <string name="sourceSwitchNoAlternate">Couldn't find the same song on another service</string>
+    <string name="sourceSwitched">Playing “{title}” from {provider} instead</string>
+    <string name="songIdInvalid">Invalid song ID</string>
+    <string name="providerLyricsUnsupported">Lyrics from {provider} can't be shown in the app yet</string>
+    <string name="lyricsTtmlOnlyForeignProvider">The lyrics source is set to “AMLL lyrics database only”, which only has NetEase songs. To see lyrics for {provider} songs, choose another lyrics source in Settings.</string>
+    <string name="lyricsRequestFailed">Couldn't fetch the lyrics</string>
+    <string name="lyricsParseFailed">Couldn't parse the lyrics</string>
+    <string name="commentsLoadFailedRetry">Couldn't load comments. Check your network and try again.</string>
+    <string name="moreCommentsLoadFailed">Couldn't load more comments</string>
+    <string name="nothingPlaying">Nothing is playing</string>
+    <string name="songDetailsLoadFailedLater">Couldn't load song details. Try again later.</string>
+
+    <!-- viewmodel/SongRecognitionViewModel.kt -->
+    <string name="recognitionRequestFailed">Recognition request failed. Check your network and try again.</string>
+    <string name="recognitionNoValidData">The recognition service returned no valid data</string>
+    <string name="recognitionUnknownStatus">The recognition service returned an unknown status (type={type})</string>
+    <string name="recognitionNoMatches">The recognition service returned no matches</string>
+    <string name="recognitionMicUnavailable">This page can't access the microphone</string>
+
+    <!-- recognition/IosMicrophoneRecorder.kt -->
+    <string name="iosAudioSessionCategoryFailed">Couldn't switch to the recording audio session</string>
+    <string name="iosAudioSessionModeFailed">Couldn't turn on measurement recording mode</string>
+    <string name="iosAudioSessionActivateFailed">Couldn't activate the recording audio session</string>
+    <string name="iosMicNoInputFormat">iOS has no usable microphone input format</string>
+    <string name="iosMicNoFloat32Channel">The iOS microphone has no Float32 channel</string>
+    <string name="iosRecordingEngineStartFailed">Couldn't start the iOS recording engine</string>
+
+    <!-- util/DownloadUtil.ios.kt -->
+    <string name="iosDownloadFolderUnreadable">Couldn't read the iOS download folder: {path}</string>
+    <string name="iosDownloadFolderScanFailed">Couldn't read the iOS download folder</string>
+
+    <!-- util/IosBackgroundDownloadCoordinator.kt -->
+    <string name="downloadFileNameInvalid">Invalid download file name</string>
+    <string name="downloadHttpFailed">Download failed: HTTP {statusCode}</string>
+    <string name="backgroundDownloadNoFileName">The background download has no valid file name</string>
+    <string name="backgroundDownloadMoveFailed">Couldn't move the background download's temporary file</string>
+    <string name="backgroundDownloadSaveFailed">Couldn't save the background download's file</string>
+
+    <!-- util/LocalMediaAssetStorage.ios.kt -->
+    <string name="lyricsFileSaveFailed">Couldn't save the lyrics file: {fileName}</string>
+    <string name="coverFileBackupFailed">Couldn't back up the cover file: {fileName}</string>
+    <string name="coverFileSaveFailed">Couldn't save the cover file: {fileName}</string>
+    <string name="coverFileRestoreFailed">Couldn't restore the original cover file: {fileName}</string>
+    <string name="assetFileCreateFailed">Couldn't create the lyrics or cover file: {fileName}</string>
+    <string name="assetFileIncomplete">The lyrics or cover file wasn't written completely: {fileName}</string>
+    <string name="assetFileWriteFailed">Couldn't write the lyrics or cover file: {fileName}</string>
+    <string name="assetFileSyncFailed">Couldn't sync the lyrics or cover file to storage: {fileName}</string>
+    <string name="assetFileReadFailed">Couldn't read the lyrics or cover file: {fileName}</string>
+
+    <!-- util/SongDownloader.ios.kt -->
+    <string name="downloadUrlInvalid">Invalid download URL</string>
+    <string name="downloadCanceledDeleteFailed">Download canceled, but the downloaded file couldn't be deleted</string>
+
+    <!-- util/LocalMediaAssetFiles.kt -->
+    <string name="assetDirectoryCreateFailed">Couldn't create {label}: {path}</string>
+    <string name="assetDirectoryNotFolder">The path for {label} isn't a folder: {path}</string>
+    <string name="assetDirectoryReadFailed">Couldn't read {label}: {path}</string>
+
+    <!-- notification/DesktopFloatingWindowController.kt -->
+    <string name="showDesktopLyricsSetting">Show desktop lyrics</string>
+
+    <!-- recognition/JvmMicrophoneRecorder.kt -->
+    <string name="jvmMicNoPcmInput">No microphone with PCM input found</string>
+
+    <!-- util/DownloadUtil.jvm.kt -->
+    <string name="downloadFolderNotFolder">The download folder path isn't a folder: {path}</string>
+    <string name="downloadFolderUnreadable">Couldn't read the download folder: {path}</string>
+    <string name="desktopDownloadFolderScanFailed">Couldn't read the download folder on this computer</string>
+
+    <!-- util/SettingsFileOps.jvm.kt -->
+    <string name="settingsFileFilter">JSON settings file (*.json)</string>
+    <string name="chooseSettingsFile">Choose a settings file</string>
+    <string name="saveSettingsFile">Save settings file</string>
+
+    <!-- recognition/WasmMicrophoneRecorder.kt -->
+    <string name="browserWebAudioUnavailable">Web Audio isn't available in this browser</string>
+    <string name="browserNoMediaRecorder">This browser doesn't support MediaRecorder</string>
+    <string name="browserRecordingError">The browser ran into an error while recording</string>
+    <string name="browserNoRecordingData">The browser returned no recording data</string>
+    <string name="browserInvalidRecordingFormat">The browser returned an invalid recording format</string>
+    <string name="browserMicPermissionDenied">The browser denied microphone permission</string>
+    <string name="browserMicNotFound">No microphone found</string>
+    <string name="browserMicUnreadable">The browser can't read from the microphone</string>
+    <string name="browserMicInsecureContext">This page can't access the microphone</string>
+    <string name="browserMicRecordingFailed">Microphone recording failed in the browser</string>
+
+    <!-- util/WebDownloadStorage.kt -->
+    <string name="browserDownloadsUnreadable">Couldn't read the downloads stored in the browser</string>
+    <string name="webDownloadNeedsOpfs">Downloading in the browser needs an HTTPS or localhost page and a browser that supports OPFS</string>
+    <string name="downloadCancelled">Download cancelled</string>
+    <string name="webDownloadUriInvalid">The browser download address is invalid</string>
+    <string name="webDownloadFileMissing">This song's file is no longer in the browser</string>
+
+    <!-- other -->
+    <string name="downloadChannelName">Downloads</string>
+    <string name="downloadChannelDescription">Shows progress while songs download in the background</string>
+    <string name="lyricChannelName">Live lyrics</string>
+    <string name="lyricChannelDescription">Shows the lyrics of the playing song in the notification shade</string>
+    <string name="currentSong">Current song</string>
+
+    <!-- util/LocalMediaAssetStorage.wasm.kt -->
+    <string name="webAssetsNeedOpfs">Saving lyrics and covers in the browser needs an HTTPS or localhost page and a browser that supports OPFS</string>
+    <string name="webLyricAssetsInvalid">The lyrics files to save are invalid</string>
+    <string name="webLyricNamesInvalid">The lyrics file names to read are invalid</string>
+    <string name="webArtworkInvalid">The cover file to save is invalid</string>
+
+    <!-- common -->
+    <string name="listSeparator">, </string>
+    <string name="clauseSeparator">; </string>
+    <string name="labelValue">{label}: {value}</string>
+
+    <!-- transition/OnnxBeatModelLoader.kt -->
+    <string name="beatModelLinuxNoRuntime">The Linux desktop app has no NPU or GPU inference runtime that Java can call</string>
+    <string name="onnxRuntimeLoadFailed">ONNX Runtime could not be loaded: {reason}</string>
+    <string name="directMLRuntimeMissing">The ONNX Runtime DirectML components that ship with the app are missing</string>
+    <string name="beatModelFileMissing">The beat model file is missing</string>
+    <string name="onnxDeviceListFailed">ONNX Runtime could not list its accelerators: {reason}</string>
+    <string name="directMLNoDevice">No GPU or NPU that DirectML can use was found (a DirectX 12 graphics driver is required)</string>
+    <string name="beatModelDevicesFailed">The accelerators could not run the beat model: {reasons}</string>
+    <string name="coreMlBeatModelFailed">Core ML could not run the beat model: {reasons}</string>
+
+    <!-- transition/WebBeatModelLoader.kt -->
+    <string name="onnxWebLoadFailed">ONNX Runtime Web failed to load: {reason}</string>
+    <string name="beatModelDownloadFailed">The beat model failed to download: {reason}</string>
+    <string name="browserNoWebNnOrWebGpu">The browser doesn't offer WebNN or WebGPU</string>
+    <string name="browserBeatModelDevicesFailed">The browser's accelerators could not run the beat model: {reasons}</string>
+</resources>

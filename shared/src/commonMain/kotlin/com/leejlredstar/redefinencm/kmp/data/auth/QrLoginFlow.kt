@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.data.auth
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -69,7 +70,7 @@ class QrLoginFlow(
                 _error.value = ""
                 _expired.value = false
                 _success.value = false
-                _status.value = "正在生成二维码…"
+                _status.value = strings.qrGenerating
                 _imagePng.value = null
 
                 val session = method.start()
@@ -89,25 +90,25 @@ class QrLoginFlow(
                         when (poll) {
                             QrLoginPoll.Unanswered -> {
                                 if (unanswered >= method.maxUnansweredPolls) {
-                                    val message = "${method.provider.displayName}服务器无响应"
+                                    val message = strings.providerServerNoResponse(method.provider.displayName)
                                     _status.value = message
                                     _error.value = message
                                     return@withTimeoutOrNull true
                                 }
-                                _status.value = "等待服务器响应…"
+                                _status.value = strings.waitingForServer
                             }
                             is QrLoginPoll.Waiting -> _status.value = poll.message ?: method.scanHint
-                            QrLoginPoll.Scanned -> _status.value = "请在手机上确认登录"
+                            QrLoginPoll.Scanned -> _status.value = strings.confirmLoginOnPhone
                             is QrLoginPoll.Confirmed -> {
                                 host.persist(poll.credential)
                                     .onSuccess {
-                                        _status.value = "登录成功"
+                                        _status.value = strings.signInSucceeded
                                         _success.value = true
                                         host.onSignedIn()
                                     }
                                     .onFailure { failure ->
-                                        _status.value = "登录状态保存失败"
-                                        _error.value = failure.message ?: "凭证保存失败"
+                                        _status.value = strings.loginStateSaveFailed
+                                        _error.value = failure.message ?: strings.credentialSaveFailed
                                     }
                                 return@withTimeoutOrNull true
                             }
@@ -117,7 +118,7 @@ class QrLoginFlow(
                             }
                             QrLoginPoll.Refused -> {
                                 _expired.value = true
-                                _status.value = "已在手机上取消登录，可重新生成二维码"
+                                _status.value = strings.loginCanceledOnPhone
                                 return@withTimeoutOrNull true
                             }
                             is QrLoginPoll.Failed -> {
@@ -134,13 +135,13 @@ class QrLoginFlow(
                 throw e
             } catch (e: LoginMethodException) {
                 if (myGeneration == generation) {
-                    _status.value = "生成二维码失败"
-                    _error.value = e.message ?: "未知错误"
+                    _status.value = strings.qrGenerateFailed
+                    _error.value = e.message ?: strings.unknownError
                 }
             } catch (e: Exception) {
                 if (myGeneration == generation) {
-                    _status.value = "网络错误"
-                    _error.value = e.message ?: "未知错误"
+                    _status.value = strings.networkError
+                    _error.value = e.message ?: strings.unknownError
                 }
             } finally {
                 if (myGeneration == generation) _loading.value = false
@@ -162,10 +163,10 @@ class QrLoginFlow(
 
     private fun expire() {
         _expired.value = true
-        _status.value = "二维码已过期，请重新生成"
+        _status.value = strings.qrExpired
     }
 
     private companion object {
-        const val IdleStatus = "点按生成二维码"
+        val IdleStatus: String get() = strings.tapToGenerateQr
     }
 }

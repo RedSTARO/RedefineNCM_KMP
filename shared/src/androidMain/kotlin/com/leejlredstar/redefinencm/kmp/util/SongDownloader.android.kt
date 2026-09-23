@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.system.Os
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -37,14 +38,14 @@ actual object SongDownloader {
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
         onReadyToPublish: () -> Boolean,
     ): DownloadedSongFile = withContext(Dispatchers.IO) {
-        require(item.url.isNotBlank()) { "下载地址为空" }
+        require(item.url.isNotBlank()) { strings.downloadUrlEmpty }
 
         val context = KoinPlatform.getKoin().get<Context>()
         val requestedExtension = extensionFromUrl(item.url)
         val partialFile = partialDownloadFile(context, item)
 
         findDownloadedSongSnapshot(item.id)?.let { existing ->
-            if (!onReadyToPublish()) throw CancellationException("下载已取消，文件未保存")
+            if (!onReadyToPublish()) throw CancellationException(strings.downloadCanceledNotSaved)
             deletePartialDownloads(context, item.id)
             return@withContext DownloadedSongFile(
                 fileName = existing.fileName,
@@ -59,7 +60,7 @@ actual object SongDownloader {
             requestedExtension = requestedExtension,
             onProgress = onProgress,
         )
-        if (!onReadyToPublish()) throw CancellationException("下载已取消，文件未保存")
+        if (!onReadyToPublish()) throw CancellationException(strings.downloadCanceledNotSaved)
         val fileName = "${item.id}.$fileExtension"
 
         withContext(NonCancellable) {
@@ -185,11 +186,10 @@ private suspend fun downloadToPartialFile(
             }
 
             val finalBytes = partialFile.length()
-            check(finalBytes > 0L) { "下载到的内容为空，没有保存" }
+            check(finalBytes > 0L) { strings.downloadEmptyNotSaved }
             if (authoritativeTotalBytes != null && finalBytes != authoritativeTotalBytes) {
                 error(
-                    "下载不完整：收到 $finalBytes 字节，" +
-                        "应为 $authoritativeTotalBytes 字节",
+                    strings.downloadIncomplete(finalBytes, authoritativeTotalBytes),
                 )
             }
             if (authoritativeTotalBytes == null) {
@@ -217,7 +217,7 @@ private fun openDownloadConnection(
     validator: ResumableEntityValidator?,
 ): HttpURLConnection {
     val connection = URI(url).toURL().openConnection() as? HttpURLConnection
-        ?: error("下载地址不是 HTTP 或 HTTPS 地址")
+        ?: error(strings.downloadUrlNotHttp)
     connection.connectTimeout = 15_000
     connection.readTimeout = 30_000
     connection.instanceFollowRedirects = true
@@ -281,7 +281,7 @@ private fun persistResumableMetadata(
         Os.rename(temporary.path, target.path)
     } catch (failure: Throwable) {
         temporary.delete()
-        throw IllegalStateException("无法保存断点下载信息", failure)
+        throw IllegalStateException(strings.partialDownloadInfoSaveFailed, failure)
     }
 }
 
@@ -296,12 +296,12 @@ private fun deleteResumableMetadata(partialFile: File, requireSuccess: Boolean) 
         temporaryResumableMetadataFile(partialFile),
     ).forEach { file ->
         val deleted = !file.exists() || file.delete()
-        if (requireSuccess) check(deleted) { "无法删除断点下载信息" }
+        if (requireSuccess) check(deleted) { strings.partialDownloadInfoDeleteFailed }
     }
 }
 
 private fun deletePartialArtifacts(partialFile: File) {
-    deleteFileOrThrow(partialFile, "无法删除未下载完的音频文件")
+    deleteFileOrThrow(partialFile, strings.unfinishedAudioDeleteFailed)
     deleteResumableMetadata(partialFile, requireSuccess = true)
 }
 
@@ -326,18 +326,18 @@ private suspend fun publishViaMediaStore(
         put(MediaStore.MediaColumns.IS_PENDING, 1)
     }
     val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-        ?: error("无法创建下载文件")
+        ?: error(strings.downloadFileCreateFailed)
 
     try {
         resolver.openOutputStream(uri, "w")?.use { output ->
             partialFile.inputStream().use { input -> copyStream(input, output) }
-        } ?: error("无法写入下载文件")
+        } ?: error(strings.downloadFileWriteFailed)
 
         ContentValues().apply {
             put(MediaStore.MediaColumns.IS_PENDING, 0)
         }.also { completedValues ->
             check(resolver.update(uri, completedValues, null, null) == 1) {
-                "无法完成下载文件的保存"
+                strings.downloadFileFinishSaveFailed
             }
         }
         deletePartialArtifacts(partialFile)
@@ -345,7 +345,7 @@ private suspend fun publishViaMediaStore(
     } catch (t: Throwable) {
         runCatching {
             check(resolver.delete(uri, null, null) == 1) {
-                "无法清理系统媒体库里没保存完的下载文件"
+                strings.mediaLibraryPendingCleanupFailed
             }
         }.exceptionOrNull()?.let(t::addSuppressed)
         throw t
@@ -359,7 +359,7 @@ private suspend fun publishLegacyFile(
     val dir = Environment.getExternalStoragePublicDirectory(
         Environment.DIRECTORY_DOWNLOADS + "/$DOWNLOAD_SUBDIR",
     )
-    if (!dir.exists() && !dir.mkdirs()) error("无法创建下载目录")
+    if (!dir.exists() && !dir.mkdirs()) error(strings.downloadFolderCreateFailed)
 
     val target = File(dir, fileName)
     if (target.exists()) {
@@ -373,16 +373,16 @@ private suspend fun publishLegacyFile(
         FileOutputStream(publishingFile, false).use { output ->
             partialFile.inputStream().use { input -> copyStream(input, output) }
         }
-        if (!publishingFile.renameTo(target)) error("无法保存下载文件")
+        if (!publishingFile.renameTo(target)) error(strings.downloadFileSaveFailed)
         targetCommitted = true
         deletePartialArtifacts(partialFile)
         return DownloadedSongFile(fileName = fileName, uri = target.toURI().toString())
     } catch (t: Throwable) {
         runCatching {
             if (targetCommitted) {
-                deleteFileOrThrow(target, "无法撤回已保存的下载文件")
+                deleteFileOrThrow(target, strings.downloadFileRollbackFailed)
             } else {
-                deleteFileOrThrow(publishingFile, "无法清理没保存完的下载文件")
+                deleteFileOrThrow(publishingFile, strings.unsavedDownloadCleanupFailed)
             }
         }.exceptionOrNull()?.let(t::addSuppressed)
         throw t
@@ -411,7 +411,7 @@ private fun deleteStalePendingMediaRows(context: Context, songId: Long) {
     }
     pendingUris.forEach { uri ->
         check(context.contentResolver.delete(uri, null, null) == 1) {
-            "无法清理系统媒体库里上次没保存完的下载文件"
+            strings.mediaLibraryStaleCleanupFailed
         }
     }
 }
@@ -453,31 +453,31 @@ private fun partialDownloadFile(
     item: DownloadRequestItem,
 ): File {
     val directory = File(context.filesDir, PARTIAL_DOWNLOAD_DIRECTORY)
-    check(directory.isDirectory || directory.mkdirs()) { "无法创建断点下载目录" }
+    check(directory.isDirectory || directory.mkdirs()) { strings.partialDownloadFolderCreateFailed }
 
     val partialFile = File(directory, resumablePartialFileName(item.id, item.resumeKey))
     val retainedNames = setOf(
         partialFile.name,
         resumableMetadataFile(partialFile).name,
     )
-    checkNotNull(directory.listFiles()) { "无法读取断点下载目录" }
+    checkNotNull(directory.listFiles()) { strings.partialDownloadFolderUnreadable }
         .asSequence()
         .filter(File::isFile)
         .filter {
             it.name !in retainedNames && isPartialArtifactForSong(it, item.id)
         }
-        .forEach { file -> deleteFileOrThrow(file, "无法删除旧的断点下载文件") }
+        .forEach { file -> deleteFileOrThrow(file, strings.oldPartialDownloadDeleteFailed) }
     return partialFile
 }
 
 private fun deletePartialDownloads(context: Context, songId: Long) {
     val directory = File(context.filesDir, PARTIAL_DOWNLOAD_DIRECTORY)
     if (!directory.exists()) return
-    checkNotNull(directory.listFiles()) { "无法读取断点下载目录" }
+    checkNotNull(directory.listFiles()) { strings.partialDownloadFolderUnreadable }
         .asSequence()
         .filter(File::isFile)
         .filter { isPartialArtifactForSong(it, songId) }
-        .forEach { file -> deleteFileOrThrow(file, "无法删除断点下载文件") }
+        .forEach { file -> deleteFileOrThrow(file, strings.partialDownloadDeleteFailed) }
 }
 
 private fun deleteFileOrThrow(file: File, message: String) {

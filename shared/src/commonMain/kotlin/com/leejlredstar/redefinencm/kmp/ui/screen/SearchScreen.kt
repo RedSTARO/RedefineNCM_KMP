@@ -18,6 +18,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ButtonDefaults
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
+import com.leejlredstar.redefinencm.kmp.i18n.UiText
+import com.leejlredstar.redefinencm.kmp.i18n.strings
+import com.leejlredstar.redefinencm.kmp.i18n.text
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -146,7 +150,7 @@ fun SearchScreen(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
         Text(
-            text = "搜索",
+            text = strings.search,
             style = MaterialTheme.typography.headlineLarge,
             fontWeight = FontWeight.ExtraBold,
             color = searchPalette.onPageStart,
@@ -170,13 +174,13 @@ fun SearchScreen(
                     if (query.isNotEmpty()) {
                         Row {
                             IconButton(onClick = { onQueryChange(""); viewModel.clearSearch() }) {
-                                Icon(AppIcons.Clear, contentDescription = "清除")
+                                Icon(AppIcons.Clear, contentDescription = strings.clearSearch)
                             }
                             // The keyboard's search key is not the only way to run a search.
                             IconButton(onClick = { submit(query) }) {
                                 Icon(
                                     AppIcons.Search,
-                                    contentDescription = "搜索",
+                                    contentDescription = strings.search,
                                     tint = searchPalette.accent,
                                 )
                             }
@@ -209,7 +213,7 @@ fun SearchScreen(
         when {
             loading && submittedMatchesQuery -> {
                 ExpressiveLoadingState(
-                    label = "正在搜索「${submittedQuery ?: query}」…",
+                    label = strings.searchingFor(submittedQuery ?: query),
                     accentColor = searchPalette.accent,
                     modifier = Modifier.padding(top = SearchSpacing.SectionGap),
                 )
@@ -219,12 +223,12 @@ fun SearchScreen(
             // that case instead.
             searchError != null && results.isEmpty() && submittedMatchesQuery -> {
                 ExpressiveStatePanel(
-                    title = "搜索失败",
-                    message = searchError.orEmpty(),
+                    title = strings.searchFailed,
+                    message = searchError?.text.orEmpty(),
                     icon = AppIcons.Refresh,
                     tone = ExpressiveStateTone.Error,
                     accentPalette = searchPalette,
-                    actionLabel = "重试",
+                    actionLabel = strings.retry,
                     onAction = { submit(submittedQuery ?: query) },
                     modifier = Modifier.padding(top = SearchSpacing.SectionGap),
                 )
@@ -243,7 +247,7 @@ fun SearchScreen(
                         list.map { it.toMediaInfo() },
                         index,
                         playWholeList,
-                        source = "搜索「${submittedQuery ?: query}」",
+                        source = (submittedQuery ?: query).let { searched -> UiText { it.playbackSourceSearch(searched) } },
                     )
                     player.play()
                 }
@@ -257,11 +261,11 @@ fun SearchScreen(
                     searchError?.let { partialFailure ->
                         item(key = "partial-failure") {
                             SearchProviderHeader(
-                                label = partialFailure,
+                                label = partialFailure.text,
                                 accent = MaterialTheme.colorScheme.error,
                                 // The failed providers are asked for the page they missed; the
                                 // results already shown stay where they are.
-                                actionLabel = if (failedProviders.isNotEmpty() && !loadingMore) "重试" else null,
+                                actionLabel = if (failedProviders.isNotEmpty() && !loadingMore) strings.retry else null,
                                 onAction = viewModel::retryFailedSearchProviders,
                             )
                         }
@@ -312,7 +316,7 @@ fun SearchScreen(
                         SearchResultsFooter(
                             hasMore = hasMore,
                             loadingMore = loadingMore,
-                            moreError = moreError,
+                            moreError = moreError?.text,
                             shownCount = results.size,
                             accent = searchPalette.secondaryOnQuietContainer,
                             linkColor = searchPalette.pageLinkColor(),
@@ -323,8 +327,8 @@ fun SearchScreen(
             }
             submittedMatchesQuery -> {
                 ExpressiveStatePanel(
-                    title = "没有找到结果",
-                    message = "没有找到与「$submittedQuery」匹配的歌曲，试试更短的关键词或只输入歌手名。",
+                    title = strings.noResultsFound,
+                    message = strings.noSongsMatchQuery(submittedQuery),
                     icon = AppIcons.Search,
                     accentPalette = searchPalette,
                     modifier = Modifier.padding(top = SearchSpacing.SectionGap),
@@ -372,8 +376,8 @@ fun SearchScreen(
             }
             query.isNotBlank() -> {
                 ExpressiveStatePanel(
-                    title = "准备搜索",
-                    message = "点按搜索按钮或按回车键，查找与「$query」相关的歌曲。",
+                    title = strings.readyToSearch,
+                    message = strings.searchPromptWithQuery(query),
                     icon = AppIcons.Search,
                     accentPalette = searchPalette,
                 )
@@ -406,8 +410,8 @@ private fun SearchStart(
 ) {
     if (history.isEmpty() && hotSearches.isEmpty()) {
         ExpressiveStatePanel(
-            title = "输入歌名、歌手或专辑名",
-            message = "点按搜索按钮或按回车键开始搜索。",
+            title = strings.searchEmptyTitle,
+            message = strings.searchEmptyHint,
             icon = AppIcons.Search,
             accentPalette = accentPalette,
             modifier = Modifier.padding(top = SearchSpacing.SectionGap),
@@ -422,14 +426,14 @@ private fun SearchStart(
         if (history.isNotEmpty()) {
             item(key = "history-title") {
                 ExpressiveSectionTitle(
-                    text = "搜索历史",
+                    text = strings.searchHistory,
                     action = {
                         TextButton(
                             onClick = onClearHistory,
                             colors = ButtonDefaults.textButtonColors(
                                 contentColor = accentPalette.pageLinkColor(),
                             ),
-                        ) { Text("清除") }
+                        ) { Text(strings.clearSearch) }
                     },
                     modifier = Modifier.padding(
                         start = SearchSpacing.Inset,
@@ -461,7 +465,7 @@ private fun SearchStart(
         if (hot.isNotEmpty()) {
             item(key = "hot-title") {
                 ExpressiveSectionTitle(
-                    text = "热门搜索",
+                    text = strings.popularSearches,
                     modifier = Modifier.padding(
                         start = SearchSpacing.Inset,
                         top = SearchSpacing.SectionGap,
@@ -534,24 +538,24 @@ private fun SearchResultsFooter(
     ) {
         when {
             loadingMore -> Text(
-                text = "正在加载更多结果…",
+                text = strings.loadingMoreResults,
                 style = MaterialTheme.typography.bodyMedium,
                 color = accent,
             )
             moreError != null -> TextButton(
                 onClick = onLoadMore,
                 colors = ButtonDefaults.textButtonColors(contentColor = linkColor),
-            ) { Text("$moreError，点按重试") }
+            ) { Text(strings.errorTapToRetry(moreError)) }
             hasMore -> {
                 // Reaching the end loads the next page; the button is there if that stalls.
                 LaunchedEffect(shownCount) { onLoadMore() }
                 TextButton(
                     onClick = onLoadMore,
                     colors = ButtonDefaults.textButtonColors(contentColor = linkColor),
-                ) { Text("加载更多") }
+                ) { Text(strings.loadMore) }
             }
             else -> Text(
-                text = "没有更多结果了",
+                text = strings.noMoreResults,
                 style = MaterialTheme.typography.bodyMedium,
                 color = accent,
             )
@@ -629,9 +633,9 @@ private fun SearchTrackRow(
         // A folded row names every provider it stands for, then what the played one says of itself.
         badges = alsoFrom.map { it.provider.displayName }.takeIf { showProviderBadge }.orEmpty() +
             track.tags.map { it.label },
-        actions = remember(rowActions, alsoFrom) {
+        actions = remember(rowActions, alsoFrom, I18n.language) {
             alsoFrom.map { alternate ->
-                SongRowAction("改用${alternate.provider.displayName}播放", AppIcons.PlayArrow) {
+                SongRowAction(strings.playFromProviderInstead(alternate.provider.displayName), AppIcons.PlayArrow) {
                     onPlayAlternate(alternate)
                 }
             } + rowActions
@@ -640,7 +644,7 @@ private fun SearchTrackRow(
 }
 
 /** The same words wherever search is offered: it finds songs, matched by title, artist or album. */
-internal const val SearchPlaceholder = "搜索歌曲"
+internal val SearchPlaceholder: String get() = strings.searchSongs
 
 /** A NetEase search hit in the DTO shape the downloader takes; null for other providers. */
 internal fun ProviderTrack.toNeteaseSongOrNull(): com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs? {

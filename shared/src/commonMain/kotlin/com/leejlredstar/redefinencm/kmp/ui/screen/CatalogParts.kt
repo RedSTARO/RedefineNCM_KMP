@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 
@@ -31,7 +32,7 @@ internal fun CatalogBackRow(accentPalette: ContentAccentPalette, onBack: () -> U
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onBack) {
-            Icon(AppIcons.ArrowBack, contentDescription = "返回", tint = accentPalette.onPageStart)
+            Icon(AppIcons.ArrowBack, contentDescription = strings.back, tint = accentPalette.onPageStart)
         }
     }
 }

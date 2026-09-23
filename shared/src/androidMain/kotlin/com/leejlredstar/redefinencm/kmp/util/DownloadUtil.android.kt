@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import org.koin.mp.KoinPlatform
 import java.io.File
 import java.io.FileNotFoundException
@@ -32,7 +33,7 @@ actual suspend fun scanDownloadedSongs(): DownloadScanResult =
     }.fold(
         onSuccess = DownloadScanResult::Success,
         onFailure = { error ->
-            DownloadScanResult.Failure("无法读取 Android 下载媒体库", error)
+            DownloadScanResult.Failure(strings.androidDownloadsLibraryUnreadable, error)
         },
     )
 
@@ -188,7 +189,7 @@ private fun scanLegacyDownloadDir(targetSongId: Long?): Map<Long, DownloadedSong
     if (!dir.exists() || !dir.isDirectory) {
         return emptyMap()
     } else {
-        val files = dir.listFiles() ?: error("无法读取旧版下载目录：$dir")
+        val files = dir.listFiles() ?: error(strings.legacyDownloadFolderUnreadable(dir))
         return files.asSequence()
             .filter(File::isFile)
             .mapNotNull { file ->

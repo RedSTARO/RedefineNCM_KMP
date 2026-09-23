@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.download
 
 import com.leejlredstar.redefinencm.kmp.data.api.ExternalHttpClient
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.lyric.LyricDocument
 import com.leejlredstar.redefinencm.kmp.lyric.LyricQuery
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSource
@@ -33,11 +34,11 @@ class LocalMediaAssets(
     ): LocalMediaAssetSnapshot {
         require(songId > 0L) { "songId must be positive" }
         val files = document.toOriginalLyricSidecars(songId)
-        require(files.isNotEmpty()) { "这份歌词没有可以保存的原始内容" }
+        require(files.isNotEmpty()) { strings.lyricsNoOriginalContent }
         LocalMediaAssetStorage.replaceLyrics(songId, files)
         val snapshot = LocalMediaAssetStorage.inspect(songId)
         check(snapshot.lyricFormat != null && snapshot.lyricFileName != null) {
-            "歌词文件写入后无法读取"
+            strings.lyricsFileUnreadableAfterWrite
         }
         return snapshot
     }
@@ -103,16 +104,16 @@ class LocalMediaAssets(
 
         val response = externalHttpClient.client.get(uri)
         check(response.status.isSuccess()) {
-            "封面下载失败：HTTP ${response.status.value}"
+            strings.coverDownloadHttpError(response.status.value)
         }
         val declaredLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
         check(declaredLength == null || declaredLength in 1..MAX_ARTWORK_BYTES) {
-            "封面文件超过 ${MAX_ARTWORK_BYTES / (1024 * 1024)} MiB 限制"
+            strings.coverTooLarge(MAX_ARTWORK_BYTES / (1024 * 1024))
         }
         val bytes = response.readArtworkBytesAtMost(MAX_ARTWORK_BYTES.toInt())
-        check(bytes.isNotEmpty()) { "下载到的封面为空" }
+        check(bytes.isNotEmpty()) { strings.coverDownloadEmpty }
         check(bytes.size.toLong() <= MAX_ARTWORK_BYTES) {
-            "封面文件超过 ${MAX_ARTWORK_BYTES / (1024 * 1024)} MiB 限制"
+            strings.coverTooLarge(MAX_ARTWORK_BYTES / (1024 * 1024))
         }
 
         val rawContentType = response.headers[HttpHeaders.ContentType]
@@ -125,10 +126,10 @@ class LocalMediaAssets(
                 rawContentType.startsWith("image/") ||
                 rawContentType == "application/octet-stream",
         ) {
-            "下载到的封面不是图片：$rawContentType"
+            strings.coverNotImage(rawContentType)
         }
         val format = detectArtworkFormat(bytes)
-            ?: error("不支持这种封面图片格式")
+            ?: error(strings.coverFormatUnsupported)
         val fileName = LocalMediaAssetStorage.replaceArtwork(
             songId = songId,
             fileExtension = format.extension,
@@ -138,7 +139,7 @@ class LocalMediaAssets(
             bytes = bytes,
         )
         val snapshot = LocalMediaAssetStorage.inspect(songId)
-        check(snapshot.artworkFileName == fileName) { "封面文件写入后无法读取" }
+        check(snapshot.artworkFileName == fileName) { strings.coverFileUnreadableAfterWrite }
         return fileName
     }
 
@@ -191,7 +192,7 @@ private suspend fun HttpResponse.readArtworkBytesAtMost(maxBytes: Int): ByteArra
     val channel = bodyAsChannel()
     if (headers[HttpHeaders.ContentLength]?.toLongOrNull()?.let { it > maxBytes } == true) {
         channel.cancel(IllegalStateException("Artwork response exceeded $maxBytes bytes"))
-        error("封面文件超过 ${maxBytes / (1024 * 1024)} MiB 限制")
+        error(strings.coverTooLarge(maxBytes / (1024 * 1024)))
     }
     val chunks = mutableListOf<ByteArray>()
     var total = 0
@@ -213,7 +214,7 @@ private suspend fun HttpResponse.readArtworkBytesAtMost(maxBytes: Int): ByteArra
         chunks += if (read == buffer.size) buffer else buffer.copyOf(read)
     }
     channel.cancel(IllegalStateException("Artwork response exceeded $maxBytes bytes"))
-    error("封面文件超过 ${maxBytes / (1024 * 1024)} MiB 限制")
+    error(strings.coverTooLarge(maxBytes / (1024 * 1024)))
 }
 
 private fun detectArtworkFormat(bytes: ByteArray): ArtworkFormat? = when {

@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.util
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
@@ -21,15 +22,15 @@ actual object SongDownloader {
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
         onReadyToPublish: () -> Boolean,
     ): DownloadedSongFile = withContext(Dispatchers.IO) {
-        require(item.url.isNotBlank()) { "下载地址为空" }
+        require(item.url.isNotBlank()) { strings.downloadUrlEmpty }
 
         val dir = jvmDownloadDirectory()
-        if (!dir.exists() && !dir.mkdirs()) error("无法创建下载目录")
+        if (!dir.exists() && !dir.mkdirs()) error(strings.downloadFolderCreateFailed)
 
         val extension = extensionFromUrl(item.url)
         val target = File(dir, "${item.id}.$extension")
         if (target.exists()) {
-            if (!onReadyToPublish()) throw CancellationException("下载已取消，文件未保存")
+            if (!onReadyToPublish()) throw CancellationException(strings.downloadCanceledNotSaved)
             return@withContext DownloadedSongFile(fileName = target.name, uri = target.toURI().toString())
         }
 
@@ -45,8 +46,8 @@ actual object SongDownloader {
                     copyWithProgress(input, output, totalBytes, onProgress)
                 }
             }
-            if (!onReadyToPublish()) throw CancellationException("下载已取消，文件未保存")
-            if (!partFile.renameTo(target)) error("无法保存下载文件")
+            if (!onReadyToPublish()) throw CancellationException(strings.downloadCanceledNotSaved)
+            if (!partFile.renameTo(target)) error(strings.downloadFileSaveFailed)
             DownloadedSongFile(fileName = target.name, uri = target.toURI().toString())
         } catch (t: Throwable) {
             partFile.delete()

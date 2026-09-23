@@ -466,6 +466,55 @@ changed and delegated the open choices. These bind until a later decision here r
    provider is not.
 9. **One account per provider stays locked**, as above.
 
+### D7 — Copy lives in per-language resource files — **DONE (recorded 2026-09-23)**
+
+The app ships in Simplified Chinese, English and Japanese. Every piece of copy it shows comes from
+`shared/src/commonMain/i18n/{zh,en,ja}.xml`; production Kotlin holds none. `:shared:generateI18nStrings`
+turns the three files into the `AppStrings` interface and one object per language (`ZhStrings`,
+`EnStrings`, `JaStrings`) under `shared/build/generated/i18n/`, and fails the build when a key or a
+`{placeholder}` is missing from any of them. Keys are lowerCamelCase and `zh.xml` sets their order. A
+string with placeholders becomes a function whose parameters are named after them. English plurals are
+`<plural by="count">` with `<one>` and `<other>`; Chinese and Japanese write the same key as a plain
+`<string>`, and the counted parameter is a `Number` in every language.
+
+**New copy goes into all three files in the same change.** `NoHardcodedCopyTest` (jvmTest) fails on a
+string literal in production Kotlin that holds kana, CJK ideographs, or CJK or full-width punctuation.
+Its allowlist is the server's own names the app matches against (`音乐百科`, `私人雷达`, `喜欢的音乐`,
+never shown as the app's words), the `、` an artist line is split on, and `i18n/I18n.kt`, which holds
+the languages' own names and each language's count units (`compactCount`: 万/亿, 万/億, K/M/B). Terms follow the Chinese copy conventions: 服务器 is "server" in English and サーバー in
+Japanese (never backend or gateway), and the providers are "NetEase Cloud Music" and "QQ Music" in both.
+
+**Choosing a language.** Settings → General has a language row: follow the system (the default),
+简体中文, English, 日本語, each language named in itself. The choice is stored under `appLanguage` and
+travels with the settings backup; an older backup without it keeps the current choice. Following the
+system takes the first of the system's preferred languages the app has copy for. Any Chinese script or
+region (zh-Hant, TW, HK) gets Simplified Chinese, and a system with none of the three gets English.
+Android re-reads the system languages on a configuration change and Web on `languagechange`; iOS
+restarts apps when the system language changes, and the desktop reads it at launch.
+
+**Runtime.** `I18n` holds the language as snapshot state, so a composable reading `strings`, or a getter
+such as an enum's `displayName`, recomposes on a switch without a restart. View models keep a message
+that stays on screen as a `UiText` — what to say, not the words — and the UI renders it with `.text`;
+two `UiText`s are equal when they read the same in all three languages. `remember` blocks that build copy
+take `I18n.language` as a key. Code outside composition reads the language when it builds a message or
+observes `I18n.languageFlow`; the Android notification channels rename themselves on a switch. Transient
+text (snackbars, the login and recognition status lines, playback-reporting diagnostics), failure
+reasons produced below the view models (the lyric providers, the beat-model loaders) and text written to
+the database (a download task's error) are worded once, in the language current at the time.
+
+**Per platform.** Typography carries the language's locale list, so native targets draw Japanese glyph
+forms for Japanese and Simplified Chinese forms for Chinese. The Web boot page
+(`wasmJsMain/resources/index.html`) shows its loading text from its own three-language table, read from
+the stored choice or `navigator.languages`, before Kotlin runs, and the document's `lang` follows the app.
+The OPFS JavaScript throws `redefinencm:` codes, which `webStorageMessage()` turns into copy. Not
+localized, by decision: the iOS `Info.plist` strings (the microphone usage description), a Japanese font
+for Web (the bundled Noto Sans SC covers every character in `ja.xml` but draws kanji in Chinese forms),
+and the documentation.
+
+**Tests.** A test that asserts Chinese copy pins it with `I18n.apply(LanguageSetting.ZH)` in
+`@BeforeTest` and restores `LanguageSetting.SYSTEM` in `@AfterTest`, so it passes whatever the machine's
+language is and leaves no language behind for the next class.
+
 ---
 
 ## Toolchain
@@ -559,6 +608,7 @@ RedefineNCM_KMP/
 │   └── src/
 │       ├── skiaMain/                    # JVM + iOS + Web: anything needing only a Skia bitmap
 │       ├── nonDesktopMain/              # Android + iOS + Web: no app-owned window, no route picker
+│       ├── commonMain/i18n/             # zh.xml, en.xml, ja.xml — every piece of copy (D7)
 │       ├── commonMain/kotlin/com/leejlredstar/redefinencm/kmp/
 │       │   ├── App.kt                   # Root composable + hand-rolled back-stack nav
 │       │   ├── Platform.kt              # expect fun getPlatform(): Platform
@@ -573,6 +623,7 @@ RedefineNCM_KMP/
 │       │   │   ├── local/                   # The local account and its provider-neutral library
 │       │   │   └── provider/                # MusicProvider, capabilities, registration, ids, adapters
 │       │   ├── di/Modules.kt            # Koin sharedModule + expect fun platformModule()
+│       │   ├── i18n/I18n.kt             # Language choice and resolution, UiText, compactCount (D7)
 │       │   ├── player/
 │       │   │   ├── PlatformPlayer.kt    # interface + PlayerState enum + MediaInfo + StreamUrlResolver
 │       │   │   └── LyricBus.kt          # Shared lyric/position event bus (MutableStateFlow)
@@ -962,6 +1013,8 @@ This is its own task and **must not be done from memory**:
   Android-only and replaced by SQLDelight / Ktor / Koin / kotlinx.serialization. (OkHttp may
   appear only as a Ktor *engine* in `androidMain`.)
 - **Preserve inline Chinese comments** — they carry porting intent from the original.
+- **Copy goes in `shared/src/commonMain/i18n/{zh,en,ja}.xml`, all three at once** — read it through
+  `strings`, and hold on-screen messages in view models as `UiText` (D7).
 
 ---
 

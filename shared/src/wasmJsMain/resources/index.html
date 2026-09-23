@@ -10,20 +10,70 @@
 <body>
     <div id="redefineNcmBoot" role="status" aria-live="polite">
         <div class="boot-spinner" aria-hidden="true"></div>
-        <span id="redefineNcmBootLabel">正在加载 Web 应用…</span>
+        <span id="redefineNcmBootLabel"></span>
         <div id="redefineNcmBootProgress" class="boot-progress" hidden>
-            <progress id="redefineNcmBootBar" max="1" aria-label="字体下载进度"></progress>
+            <progress id="redefineNcmBootBar" max="1"></progress>
             <span id="redefineNcmBootBytes" aria-hidden="true"></span>
         </div>
     </div>
     <div id="redefineNcmApp"></div>
     <script>
+        // This page runs before the app's own copy (src/commonMain/i18n) has loaded, so it keeps
+        // its few strings here in the same three languages. It picks one the way the app does:
+        // the stored choice, else the first of the browser's languages it has, else English.
+        const bootText = (() => {
+            const table = {
+                zh: {
+                    loading: "正在加载 Web 应用…",
+                    progress: "字体下载进度",
+                    fontFailed: "字体加载失败：HTTP ",
+                    firstRun: "首次打开需要下载中文字体",
+                    starting: "正在启动…",
+                },
+                en: {
+                    loading: "Loading the web app…",
+                    progress: "Font download progress",
+                    fontFailed: "Couldn't load the font: HTTP ",
+                    firstRun: "Downloading the Chinese font for the first launch",
+                    starting: "Starting…",
+                },
+                ja: {
+                    loading: "Webアプリを読み込んでいます…",
+                    progress: "フォントのダウンロード状況",
+                    fontFailed: "フォントを読み込めません：HTTP ",
+                    firstRun: "初回のみ中国語フォントをダウンロードします",
+                    starting: "起動しています…",
+                },
+            };
+            const known = tag => {
+                const code = String(tag || "").split(/[-_]/)[0].toLowerCase();
+                return code in table ? code : null;
+            };
+            let stored = null;
+            try {
+                stored = localStorage.getItem("appLanguage");
+            } catch (_) {
+                // Storage can be blocked; follow the browser then.
+            }
+            let language = stored && stored !== "system" ? known(stored) : null;
+            if (!language) {
+                const browser = navigator.languages && navigator.languages.length
+                    ? navigator.languages
+                    : [navigator.language];
+                language = browser.map(known).find(Boolean) || "en";
+            }
+            document.documentElement.lang = { zh: "zh-CN", en: "en", ja: "ja" }[language];
+            return table[language];
+        })();
+        document.getElementById("redefineNcmBootLabel").textContent = bootText.loading;
+        document.getElementById("redefineNcmBootBar").setAttribute("aria-label", bootText.progress);
+
         globalThis.__redefineNcmFontReady = (async () => {
             const response = await fetch(
                 "composeResources/redefinencm_kmp.shared.generated.resources/font/noto_sans_sc_variable.ttf",
                 { cache: "force-cache" }
             );
-            if (!response.ok) throw new Error("字体加载失败：HTTP " + response.status);
+            if (!response.ok) throw new Error(bootText.fontFailed + response.status);
             // Read the body through so the browser cache is warm, without keeping the 17 MB of it
             // as the resolved value of the page-lifetime readiness promise.
             const reader = response.body?.getReader();
@@ -44,7 +94,7 @@
             // A cached font reads through in a moment; only a real download shows the progress,
             // so a returning visit does not flash it.
             const reveal = setTimeout(() => {
-                label.textContent = "首次打开需要下载中文字体";
+                label.textContent = bootText.firstRun;
                 progress.hidden = false;
             }, 400);
             let loaded = 0;
@@ -61,7 +111,7 @@
             } finally {
                 clearTimeout(reveal);
                 progress.hidden = true;
-                label.textContent = "正在启动…";
+                label.textContent = bootText.starting;
             }
         })();
     </script>

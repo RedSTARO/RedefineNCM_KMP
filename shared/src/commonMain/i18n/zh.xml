@@ -1,0 +1,1028 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 简体中文。键和 {占位符} 必须与 en.xml、ja.xml 一致，构建时校验；这是键的来源顺序。 -->
+<resources>
+
+    <!-- DesktopWindowChrome.kt -->
+    <string name="minimize">最小化</string>
+    <string name="restoreWindow">还原</string>
+    <string name="maximize">最大化</string>
+    <string name="close">关闭</string>
+
+    <!-- main.kt -->
+    <string name="trayStillRunningTitle">RedefineNCM 仍在运行</string>
+    <string name="trayStillRunningMessage">点按托盘图标打开窗口；在托盘菜单里选「退出」才会退出。</string>
+    <string name="trayShowMainWindow">显示主窗口</string>
+    <string name="pause">暂停</string>
+    <string name="play">播放</string>
+    <string name="previous">上一首</string>
+    <string name="next">下一首</string>
+    <string name="closeDesktopLyrics">关闭桌面歌词</string>
+    <string name="showDesktopLyrics">打开桌面歌词</string>
+    <string name="unlockDesktopLyrics">解锁桌面歌词</string>
+    <string name="lockDesktopLyrics">锁定桌面歌词</string>
+    <string name="quit">退出</string>
+    <string name="signOut">退出</string>
+    <string name="desktopLyrics">桌面歌词</string>
+    <string name="makeLyricsSmaller">缩小歌词</string>
+    <string name="makeLyricsLarger">放大歌词</string>
+    <string name="lockDesktopLyricsWithHint">锁定桌面歌词（可在托盘菜单解锁）</string>
+    <string name="noLyrics">暂无歌词</string>
+
+    <!-- download/AndroidDownloadService.kt -->
+    <string name="downloadingTitle">正在下载：{title}</string>
+    <string name="downloadsPaused">下载已暂停</string>
+    <string name="downloadsFinishedWithFailures">下载完成，{failedCount} 项失败</string>
+    <string name="downloadsFinished">下载完成</string>
+    <string name="downloadsPreparing">下载准备中</string>
+    <string name="downloadQueuePreparing">正在准备下载队列</string>
+    <string name="downloadProgressWithArtist">{completed}/{total} 完成 · {artist}</string>
+    <string name="downloadProgressWithPaused">{pausedCount} 项暂停 · {completed}/{total} 完成</string>
+    <string name="downloadProgress">{completed}/{total} 完成</string>
+    <string name="resume">继续</string>
+    <string name="continueAction">继续</string>
+    <string name="cancel">取消</string>
+
+    <!-- notification/AndroidNotificationController.kt -->
+    <string name="enableLiveUpdateLyrics">启用额外 Live Update 歌词</string>
+
+    <!-- recognition/AndroidMicrophoneRecorder.kt -->
+    <string name="micMonoPcmUnsupported">设备不支持单声道 PCM 录音</string>
+    <string name="micRecorderInitFailed">录音设备初始化失败</string>
+    <string name="micNotRecording">麦克风未进入录音状态</string>
+    <string name="micReadFailed">读取麦克风失败，错误码 {errorCode}</string>
+
+    <!-- util/DownloadUtil.android.kt -->
+    <string name="androidDownloadsLibraryUnreadable">无法读取 Android 下载媒体库</string>
+    <string name="legacyDownloadFolderUnreadable">无法读取旧版下载目录：{path}</string>
+
+    <!-- util/LocalMediaAssetStorage.android.kt -->
+    <string name="localLyricsUnreadable">无法读取本地歌词：{fileName}</string>
+    <string name="legacyCoverUnreadable">无法读取需要迁移的旧封面文件：{fileName}</string>
+    <string name="legacyCoverEmpty">需要迁移的旧封面文件为空：{fileName}</string>
+    <string name="coverFolderUnreadable">无法读取应用的封面目录：{path}</string>
+    <string name="coverFolderNotDirectory">应用的封面目录不是文件夹：{path}</string>
+    <string name="coverFolderCreateFailed">无法创建应用的封面目录：{path}</string>
+    <string name="noMediaFileCreateFailed">无法创建阻止相册扫描封面的 .nomedia 文件：{path}</string>
+    <string name="legacyCoverTooLarge">需要迁移的旧封面文件超过 {limitMib} MiB 限制</string>
+    <string name="lyricsBackupFailed">无法备份歌词文件：{fileName}</string>
+    <string name="lyricsRestoreFailed">无法恢复原来的歌词文件：{fileName}</string>
+    <string name="lyricsOrCoverDeleteFailed">无法删除歌词或封面文件：{fileName}</string>
+    <string name="lyricsFileCreateFailed">无法创建歌词文件：{fileName}</string>
+    <string name="lyricsFileWriteFailed">无法写入歌词文件：{fileName}</string>
+    <string name="lyricsFileFinishSaveFailed">无法完成歌词文件的保存</string>
+    <string name="lyricsFileTypeUnsupported">不支持的本地歌词文件类型：{fileName}</string>
+    <string name="lyricsOrCoverMoveFailed">无法移动歌词或封面文件：{fileName}</string>
+    <string name="downloadFolder">下载目录</string>
+
+    <!-- util/SettingsFileOps.android.kt -->
+    <string name="exportSettingsFile">导出设置文件</string>
+
+    <!-- util/SongDownloader.android.kt -->
+    <string name="downloadUrlEmpty">下载地址为空</string>
+    <string name="downloadCanceledNotSaved">下载已取消，文件未保存</string>
+    <string name="downloadEmptyNotSaved">下载到的内容为空，没有保存</string>
+    <string name="downloadIncomplete">下载不完整：收到 {received} 字节，应为 {expected} 字节</string>
+    <string name="downloadUrlNotHttp">下载地址不是 HTTP 或 HTTPS 地址</string>
+    <string name="partialDownloadInfoSaveFailed">无法保存断点下载信息</string>
+    <string name="partialDownloadInfoDeleteFailed">无法删除断点下载信息</string>
+    <string name="unfinishedAudioDeleteFailed">无法删除未下载完的音频文件</string>
+    <string name="downloadFileCreateFailed">无法创建下载文件</string>
+    <string name="downloadFileWriteFailed">无法写入下载文件</string>
+    <string name="downloadFileFinishSaveFailed">无法完成下载文件的保存</string>
+    <string name="mediaLibraryPendingCleanupFailed">无法清理系统媒体库里没保存完的下载文件</string>
+    <string name="downloadFolderCreateFailed">无法创建下载目录</string>
+    <string name="downloadFileSaveFailed">无法保存下载文件</string>
+    <string name="downloadFileRollbackFailed">无法撤回已保存的下载文件</string>
+    <string name="unsavedDownloadCleanupFailed">无法清理没保存完的下载文件</string>
+    <string name="mediaLibraryStaleCleanupFailed">无法清理系统媒体库里上次没保存完的下载文件</string>
+    <string name="partialDownloadFolderCreateFailed">无法创建断点下载目录</string>
+    <string name="partialDownloadFolderUnreadable">无法读取断点下载目录</string>
+    <string name="oldPartialDownloadDeleteFailed">无法删除旧的断点下载文件</string>
+    <string name="partialDownloadDeleteFailed">无法删除断点下载文件</string>
+
+    <!-- App.kt -->
+    <string name="thisSong">这首歌</string>
+    <string name="playbackFailed">无法播放「{title}」：{reason}</string>
+    <string name="switchSource">换源</string>
+    <string name="forYou">推荐</string>
+    <string name="search">搜索</string>
+    <string name="me">我的</string>
+    <string name="downloads">下载</string>
+    <string name="download">下载</string>
+    <string name="sidebarExpanded">侧栏已展开</string>
+    <string name="sidebarCollapsed">侧栏已收起</string>
+    <string name="collapseSidebar">收起侧栏</string>
+    <string name="expandSidebar">展开侧栏</string>
+    <string name="tools">工具</string>
+    <string name="downloadManagement">下载管理</string>
+    <string name="songRecognition">听歌识曲</string>
+    <string name="settings">设置</string>
+
+    <!-- data/api/AmlldbApi.kt -->
+    <string name="amllDbIdLookupTimeout">AMLL DB 按歌曲 ID 获取 TTML 超时</string>
+    <string name="amllDbIdLookupInvalidXml">AMLL DB 按歌曲 ID 返回的 TTML 不是有效的 XML</string>
+    <string name="amllDbSearchHttpError">AMLL DB 搜索返回 HTTP {statusCode}</string>
+    <string name="amllDbSearchTooLarge">AMLL DB 搜索结果过大</string>
+    <string name="amllDbSearchInvalidFormat">AMLL DB 搜索结果格式无效</string>
+    <string name="amllDbSearchTimeout">AMLL DB 搜索超时</string>
+    <string name="amllDbSearchRequestFailed">AMLL DB 搜索请求失败</string>
+    <string name="amllDbLyricsDownloadTimeout">AMLL DB 歌词下载超时</string>
+    <string name="amllDbLyricsInvalidTtml">AMLL DB 歌词文件不是有效 TTML</string>
+    <string name="amllDbHttpError">AMLL DB 返回 HTTP {statusCode}</string>
+    <string name="amllDbLyricsTooLarge">AMLL DB 歌词文件过大</string>
+    <string name="amllDbRequestFailed">AMLL DB 请求失败</string>
+
+    <!-- data/auth/NeteaseLoginMethods.kt -->
+    <string name="signInWithQrCode">扫码登录</string>
+    <string name="neteaseQrScanHint">请用网易云音乐 App 扫码</string>
+    <string name="loginQrKeyEmpty">服务器返回的 key 为空</string>
+    <string name="loginQrMissing">服务器未返回二维码</string>
+    <string name="loginQrUnreadable">二维码数据无法解析</string>
+    <string name="loginNoCookie">登录成功，但未获取到 Cookie</string>
+    <string name="loginUnknownStatus">未知状态（{code}）</string>
+    <string name="enterManually">手动输入</string>
+    <string name="neteaseCookieHint">已有登录 Cookie 时可以直接粘贴</string>
+
+    <!-- data/auth/PhoneCodeLoginFlow.kt -->
+    <string name="phoneNumberInvalid">请输入正确的手机号</string>
+    <string name="verificationCodeSent">验证码已发送到 {phoneNumber}</string>
+    <string name="unknownError">未知错误</string>
+    <string name="networkErrorWithMessage">网络错误：{error}</string>
+    <string name="signInSucceeded">登录成功</string>
+    <string name="credentialSaveFailed">凭证保存失败</string>
+
+    <!-- data/auth/QQLoginMethods.kt -->
+    <string name="qqScanWithQq">QQ 扫码</string>
+    <string name="qqScanWithQqHint">请用手机 QQ 扫码</string>
+    <string name="qqScanWithWechat">微信扫码</string>
+    <string name="qqScanWithWechatHint">请用微信扫码</string>
+    <string name="qqServerNoResponse">QQ音乐服务器无响应</string>
+    <string name="loginNoCredential">登录成功，但服务器未返回凭证</string>
+    <string name="loginServerUnknownStatus">服务器返回了未知状态（{event}）</string>
+    <string name="phoneVerificationCode">手机验证码</string>
+    <string name="mainlandChinaPhoneHint">中国大陆手机号（+86）</string>
+    <string name="phoneNumberFormatInvalid">手机号格式不正确</string>
+    <string name="qqSliderCaptchaRequired">QQ 要求先完成滑块验证，应用内无法完成；请改用扫码登录</string>
+    <string name="verificationCodeTooFrequent">验证码发送过于频繁，请稍后再试</string>
+    <string name="verificationCodeSendFailed">验证码发送失败（{event}）</string>
+    <string name="verificationCodeRejected">验证码错误或已过期，也可能是服务器无响应</string>
+    <string name="serverNoCredential">服务器未返回凭证</string>
+    <string name="qqCredentialLabel">QQ音乐凭证</string>
+    <string name="qqCredentialHint">可粘贴 y.qq.com 登录后的 Cookie（含 uin 与 qm_keyst），或服务器返回的 Credential JSON</string>
+    <string name="qqCredentialUnrecognized">无法识别的凭证：需要同时包含 musicid 与 musickey，或 uin 与 qm_keyst</string>
+
+    <!-- data/auth/QrLoginFlow.kt -->
+    <string name="qrGenerating">正在生成二维码…</string>
+    <string name="providerServerNoResponse">{provider}服务器无响应</string>
+    <string name="waitingForServer">等待服务器响应…</string>
+    <string name="confirmLoginOnPhone">请在手机上确认登录</string>
+    <string name="loginStateSaveFailed">登录状态保存失败</string>
+    <string name="loginCanceledOnPhone">已在手机上取消登录，可重新生成二维码</string>
+    <string name="qrGenerateFailed">生成二维码失败</string>
+    <string name="networkError">网络错误</string>
+    <string name="qrExpired">二维码已过期，请重新生成</string>
+    <string name="tapToGenerateQr">点按生成二维码</string>
+
+    <!-- data/local/LocalAccount.kt -->
+    <string name="localAccountDefaultName">本地账号</string>
+
+    <!-- data/local/LocalLibrary.kt -->
+    <string name="localPlaylistNotFound">本地歌单不存在</string>
+    <string name="songUnidentifiable">无法识别这首歌</string>
+    <string name="localLikes">本地喜欢</string>
+    <string name="untitledPlaylist">未命名歌单</string>
+
+    <!-- data/provider/MusicProviderRegistry.kt -->
+    <string name="providerTurnedOff">{provider}已关闭</string>
+    <string name="providerNoStreamUrl">{provider}没有提供这首歌的播放地址</string>
+
+    <!-- data/provider/NeteaseProvider.kt -->
+    <string name="neteaseSearchFailed">网易云音乐搜索请求失败</string>
+
+    <!-- data/provider/ProviderId.kt -->
+    <string name="neteaseCloudMusic">网易云音乐</string>
+    <string name="qqMusic">QQ音乐</string>
+
+    <!-- data/provider/ProviderModels.kt -->
+    <string name="paid">付费</string>
+    <string name="lossless">无损</string>
+    <string name="unknownArtist">未知歌手</string>
+
+    <!-- data/provider/QQProvider.kt -->
+    <string name="qqLyricsRequestFailed">QQ音乐歌词请求失败</string>
+
+    <!-- di/Modules.kt -->
+    <string name="neteaseLoginIntro">RedefineNCM 是第三方网易云音乐客户端。登录后可以使用你的歌单、每日推荐和喜欢的音乐；不登录也可以搜索和播放。</string>
+    <string name="neteaseAccount">网易云音乐账号</string>
+    <string name="neteaseSignedOutHint">登录后可以查看歌单、每日推荐和喜欢的音乐</string>
+    <string name="neteaseSignOutWarning">退出后「我的」、每日推荐和喜欢等功能将不可用，已下载的歌曲会保留。</string>
+    <string name="neteaseServerAddress">网易云音乐服务器地址</string>
+    <string name="serverAddressAppliesAfterRestart">服务器地址重启后生效</string>
+    <string name="qqLoginIntro">登录后 QQ音乐的搜索和播放使用你账号的权益；不登录也可以搜索，并播放可免费收听的歌曲。</string>
+    <string name="qqAccount">QQ音乐账号</string>
+    <string name="qqSignedOutHint">登录后搜索和播放使用你账号的权益</string>
+    <string name="qqSignOutWarning">退出后 QQ音乐按未登录状态搜索和播放。</string>
+    <string name="qqServerAddress">QQ音乐服务器地址</string>
+    <string name="serverAddressAppliesNow">服务器地址立即生效</string>
+    <string name="enableQqMusic">启用 QQ音乐</string>
+    <string name="enableQqMusicHint">需要自建 QQMusicApi 服务器；未登录时按 QQ 对未登录用户的限制播放</string>
+    <string name="qqWebSignInUnavailable">浏览器无法携带 QQ音乐的登录凭证，Web 端以未登录身份使用 QQ音乐</string>
+    <string name="serverAvailableWithVersion">服务器可用，版本：{version}</string>
+    <string name="serverRespondedWithError">服务器有响应，但返回了错误（代码 {code}）</string>
+    <string name="serverUnreachable">无法连接到这个服务器，请检查地址是否正确、服务是否在运行</string>
+    <string name="serverAvailable">服务器可用</string>
+    <string name="beatModelNoRuntime">这个平台没有可用的 NPU 或 GPU 推理组件</string>
+
+    <!-- download/LocalMediaAssets.kt -->
+    <string name="lyricsNoOriginalContent">这份歌词没有可以保存的原始内容</string>
+    <string name="lyricsFileUnreadableAfterWrite">歌词文件写入后无法读取</string>
+    <string name="coverDownloadHttpError">封面下载失败：HTTP {statusCode}</string>
+    <string name="coverTooLarge">封面文件超过 {limitMib} MiB 限制</string>
+    <string name="coverDownloadEmpty">下载到的封面为空</string>
+    <string name="coverNotImage">下载到的封面不是图片：{contentType}</string>
+    <string name="coverFormatUnsupported">不支持这种封面图片格式</string>
+    <string name="coverFileUnreadableAfterWrite">封面文件写入后无法读取</string>
+
+    <!-- download/SongDownloadManager.kt -->
+    <string name="downloadQueueSaveFailedNotStarted">无法保存下载队列，下载未启动</string>
+    <string name="localFileStatusUnknown">无法确认本地文件状态</string>
+    <string name="localSongDeleted">已删除本地歌曲</string>
+    <string name="localFileDeleted">本地文件已删除</string>
+    <string name="assetCleanupFailedWithError">音频已删除，但歌词或封面清理失败：{error}</string>
+    <string name="assetCleanupFailed">音频已删除，但歌词或封面清理失败</string>
+    <string name="localSongDeleteFailed">删除本地歌曲失败</string>
+    <string name="localLibrarySyncFailed">本地音乐库同步失败</string>
+    <string name="downloadQueueRestoreFailed">无法恢复下载队列</string>
+    <string name="downloadQueueSaveFailed">无法保存下载队列</string>
+    <string name="localLibraryReadFailed">无法读取本地音乐库</string>
+    <string name="downloadServiceStartFailedWithError">无法启动后台下载服务：{error}</string>
+    <string name="downloadServiceStartFailed">无法启动后台下载服务</string>
+    <string name="downloadQueueSaveFailedStopped">无法保存下载队列，后续下载已停止</string>
+    <string name="downloadQualitySaveFailed">无法保存下载音质，下载未启动</string>
+    <string name="downloadUrlUnavailable">无法获取歌曲的下载地址</string>
+    <string name="downloadFailed">下载失败</string>
+    <string name="lyricsSaveFailed">歌词保存失败</string>
+    <string name="coverSaveFailed">封面保存失败</string>
+    <string name="partialDownloadCleanupFailedWithError">无法清理断点下载文件：{error}</string>
+    <string name="partialDownloadCleanupFailed">无法清理断点下载文件</string>
+    <string name="localSongFallbackTitle">本地歌曲 {id}</string>
+    <string name="localFile">本地文件</string>
+
+    <!-- lyric/LyricResolver.kt -->
+    <string name="neteaseLyricsRequestFailed">网易云音乐歌词请求失败</string>
+    <string name="providerLyricsRequestFailed">{provider}歌词请求失败</string>
+    <string name="amllDbLookupTimedOut">AMLL DB 查询超时</string>
+    <string name="amllDbTtmlUnparseable">AMLL DB 的 TTML 无法解析</string>
+
+    <!-- lyric/LyricSourceMode.kt -->
+    <string name="lyricSourceTtmlPreferred">优先用 AMLL 歌词库（找不到时用网易云）</string>
+    <string name="lyricSourceBackendPreferred">优先用网易云歌词（找不到时用 AMLL 歌词库）</string>
+    <string name="lyricSourceTtmlOnly">只用 AMLL 歌词库</string>
+    <string name="lyricSourceBackendOnly">只用网易云歌词</string>
+
+    <!-- lyric/LyricStateOverlay.kt -->
+    <string name="restoringLyrics">正在恢复歌词…</string>
+    <string name="restoringPlayback">正在恢复播放…</string>
+    <string name="nothingPlayingYet">还没有播放音乐</string>
+    <string name="lyricsAppearHere">选择一首歌曲后，歌词会显示在这里。</string>
+    <string name="loadingLyrics">正在加载歌词…</string>
+    <string name="lyricsUntimedTitle">歌词无时间戳</string>
+    <string name="lyricsUntimedMessage">这首歌的歌词没有时间戳，不能随播放滚动。</string>
+    <string name="songHasNoLyrics">这首歌暂时没有歌词。</string>
+    <string name="lyricsLoadFailed">歌词加载失败</string>
+    <string name="retry">重试</string>
+    <string name="lyricsUnsupported">暂不支持歌词</string>
+
+    <!-- notification/LyricNotificationController.kt -->
+    <string name="alignLeft">左对齐</string>
+    <string name="alignCenter">居中</string>
+    <string name="alignRight">右对齐</string>
+
+    <!-- player/PlaybackReportingCoordinator.kt -->
+    <string name="playbackReportProcessingFailed">上报处理失败</string>
+    <string name="playbackReportRejected">服务器拒绝了播放上报</string>
+    <string name="relayReportUnsupported">当前服务器不支持 relay 播放进度上报</string>
+    <string name="recentPlayReportUnsupported">当前服务器不支持最近播放上报</string>
+    <string name="playHistoryReportUnsupported">当前服务器不支持播放记录上报</string>
+    <string name="playbackReportRequestFailed">播放上报请求失败</string>
+
+    <!-- player/PlayerStatusRestorer.kt -->
+    <string name="playerStatusReadFailed">播放状态读取失败</string>
+    <string name="playerStatusRestoreFailed">播放状态恢复失败</string>
+    <string name="playerStatusInitFailed">播放状态初始化失败</string>
+
+    <!-- recognition/MicrophoneRecorder.kt -->
+    <string name="microphonePermissionDenied">没有麦克风权限</string>
+    <string name="microphoneUnavailable">麦克风不可用</string>
+    <string name="microphoneBusy">麦克风正在被使用</string>
+    <string name="microphoneNeedsSecureContext">浏览器仅允许 HTTPS 或 localhost 页面访问麦克风</string>
+
+    <!-- recognition/PcmCapture.kt -->
+    <string name="recordingDurationMustBePositive">录音时长必须大于 0</string>
+
+    <!-- recognition/PcmResampler.kt -->
+    <string name="recordingSampleRateInvalid">录音采样率无效</string>
+    <string name="recordingDurationOutOfRange">录音时长超出可处理范围</string>
+    <string name="recordingSampleCountOutOfRange">录音采样点数量超出可处理范围</string>
+    <string name="recordingSamplesInsufficient">录音采样点不足：需要 {required} 个，实际 {captured} 个</string>
+    <string name="recordingSampleValueInvalid">录音第 {index} 个采样点的数值无效</string>
+
+    <!-- ui/amll/NativeAmllScreen.kt -->
+    <string name="nowPlayingLyrics">正在播放歌词</string>
+    <string name="closeLyrics">收起歌词</string>
+    <string name="lyricsUntimedNote">这首歌的歌词没有时间戳，不能随播放滚动</string>
+
+    <!-- ui/component/AddToLocalPlaylistDialog.kt -->
+    <string name="addToLocalPlaylist">添加到本地歌单</string>
+    <string name="addSongsToLocalPlaylist">把 {count} 首歌添加到本地歌单</string>
+    <string name="newPlaylistName">新歌单名称</string>
+    <string name="songCount">{count} 首</string>
+    <string name="newPlaylist">新建歌单</string>
+    <string name="createAndAdd">新建并添加</string>
+
+    <!-- ui/component/AutoHideMiniPlayerController.kt -->
+    <string name="liked">已喜欢</string>
+    <string name="like">喜欢</string>
+    <string name="queue">播放队列</string>
+    <string name="comments">评论</string>
+    <string name="shuffle">随机播放</string>
+    <string name="outputVolumePercent">输出音量 {percent}</string>
+    <string name="coverOf">{title}封面</string>
+    <string name="notPlaying">未播放</string>
+    <string name="chooseSongToPlay">选择歌曲开始播放</string>
+    <string name="collapsePlaybackControls">收起播放控制</string>
+    <string name="releaseForNextSong">松手播放下一首</string>
+    <string name="releaseForPreviousSong">松手播放上一首</string>
+    <string name="playbackControlsFor">{title}，播放控制</string>
+    <string name="noSongPlaying">当前没有播放歌曲</string>
+    <string name="expandPlaybackControls">展开播放控制</string>
+
+    <!-- ui/component/DesktopPlayerBar.kt -->
+    <string name="lyrics">歌词</string>
+    <string name="volumePercent">音量 {percent}</string>
+
+    <!-- ui/component/Expressive.kt -->
+    <string name="cachedDataUpdating">缓存数据 · 正在更新</string>
+    <string name="showingCachedData">当前为缓存数据</string>
+    <string name="errorStateDescription">错误：{title}</string>
+
+    <!-- ui/component/LyricCapabilityBadge.kt -->
+    <string name="lyricsBadgeGlyph">词</string>
+    <string name="lyricLevelUnsynced">无时间戳</string>
+    <string name="lyricLevelUnsyncedDescription">歌词等级：无时间戳</string>
+    <string name="lyricLevelLineSynced">普通逐行</string>
+    <string name="lyricLevelLineSyncedDescription">歌词等级：普通逐行</string>
+    <string name="lyricLevelNcmYrc">NCM YRC 逐字</string>
+    <string name="lyricLevelNcmYrcDescription">歌词等级：NCM YRC</string>
+    <string name="lyricLevelTtmlFull">TTML 完全支持</string>
+    <string name="lyricLevelTtmlFullDescription">歌词等级：TTML 完全支持</string>
+    <string name="providerLyricsSource">{provider}歌词</string>
+    <string name="neteaseLyricsSource">网易云音乐歌词</string>
+    <string name="unknown">未知</string>
+    <string name="localLyricsFileSource">{source} · 本地歌词文件</string>
+    <string name="viewLyricsInfo">查看歌词信息</string>
+    <string name="lyricBadgeDescription">{level}，来源：{source}</string>
+    <string name="lyricsInfo">歌词信息</string>
+    <string name="level">等级</string>
+    <string name="source">来源</string>
+
+    <!-- ui/component/MiniNowPlayingBar.kt -->
+    <string name="openPlayerFor">打开{title}播放页</string>
+    <string name="mutedSuffix">（已静音）</string>
+
+    <!-- ui/component/NativeDynamicCoverLayer.kt -->
+    <string name="animatedCover">动态封面</string>
+
+    <!-- ui/component/PlaybackBottomSheets.kt -->
+    <string name="noSongsQueued">暂无待播放歌曲</string>
+    <string name="queueSubtitleShuffleOn">{count} 首 · 随机播放时不能调整顺序</string>
+    <string name="queueSubtitleDragToReorder">{count} 首 · 拖动右侧手柄调整顺序</string>
+    <string name="oneSong">1 首</string>
+    <string name="clear">清空</string>
+    <string name="queueEmpty">播放队列为空</string>
+    <string name="queueEmptyMessage">开始播放歌曲后，待播放曲目会显示在这里。</string>
+    <string name="clearQueueTitle">清空播放队列？</string>
+    <string name="clearQueueMessage">队列里的 {count} 首歌会全部移除，播放随之停止。</string>
+    <string name="unknownSong">未知歌曲</string>
+    <string name="queueItemDescription">第 {position} 首，{title}，歌手 {artist}</string>
+    <string name="playing">正在播放</string>
+    <string name="nowPlaying">正在播放</string>
+    <string name="queued">等待播放</string>
+    <string name="moveUp">上移</string>
+    <string name="moveDown">下移</string>
+    <string name="removeFromQueue">从队列移除</string>
+    <string name="songComments">歌曲评论</string>
+    <string name="notSupported">暂不支持</string>
+    <string name="commentsUnsupported">暂不支持评论</string>
+    <string name="commentsUnsupportedMessage">这首歌来自不提供评论的平台。</string>
+    <string name="commentsLoadingSubtitle">正在加载评论</string>
+    <string name="commentsUnavailableSubtitle">评论暂时无法加载</string>
+    <string name="commentCount">{count} 条</string>
+    <string name="noComments">暂无评论</string>
+    <string name="popular">热门</string>
+    <string name="newest">最新</string>
+    <string name="loadingComments">正在加载评论…</string>
+    <string name="commentsLoadFailed">评论加载失败</string>
+    <string name="noPopularCommentsYet">还没有热门评论</string>
+    <string name="noCommentsYet">还没有评论</string>
+    <string name="viewNewestCommentsHint">可以看看最新的评论。</string>
+    <string name="noCommentsToShow">这首歌暂时没有可显示的评论。</string>
+    <string name="showNewestComments">看最新评论</string>
+    <string name="loadingMoreComments">正在加载更多评论…</string>
+    <string name="errorTapToRetry">{error}，点按重试</string>
+    <string name="loadMore">加载更多</string>
+    <string name="noMoreComments">没有更多评论了</string>
+    <string name="neteaseUserFallbackName">网易云音乐用户</string>
+    <string name="avatarOf">{nickname} 的头像</string>
+    <string name="commentLikesDescription">获得 {count} 个赞</string>
+    <string name="commentLikeCount">{count} 赞</string>
+    <string name="noTextContent">（无文字内容）</string>
+    <string name="commentCountShort">{count} 条</string>
+
+    <!-- ui/component/SettingsRows.kt -->
+    <string name="hide">隐藏</string>
+    <string name="show">显示</string>
+    <string name="notSignedIn">未登录</string>
+    <string name="signedIn">已登录</string>
+    <string name="switchAccount">切换账号</string>
+    <string name="signIn">登录</string>
+    <string name="open">打开</string>
+    <string name="collapse">收起</string>
+    <string name="expand">展开</string>
+
+    <!-- ui/component/SongWikiDetails.kt -->
+    <string name="loadingSongDetails">正在加载歌曲详情…</string>
+    <string name="songDetailsLoadFailed">歌曲详情加载失败</string>
+    <string name="songDetailsUnsupported">暂无更多资料</string>
+    <string name="songDetailsUnsupportedMessage">这首歌来自不提供歌曲资料的平台。</string>
+    <string name="noMoreSongDetails">没有更多信息</string>
+    <string name="noSongDetailsToShow">这首歌暂时没有可显示的资料。</string>
+
+    <!-- ui/component/StartupPermissionRationale.kt -->
+    <string name="permissionRationaleTitle">开启以下权限</string>
+    <string name="permissionRationaleNotifications">通知：在通知栏和锁屏显示播放控制、歌词和下载进度。</string>
+    <string name="permissionRationaleAudio">音乐和音频：找到已经下载到本机的歌曲，没有网络时也能播放。</string>
+    <string name="permissionRationaleFooter">之后可以在系统设置里随时修改。</string>
+    <string name="notNow">暂不</string>
+
+    <!-- ui/login/CredentialTextLoginPresenter.kt -->
+    <string name="credentialCleared">已清除凭证</string>
+    <string name="credentialSavedInUse">已保存；{field}已生效</string>
+    <string name="credentialNotRecognized">凭证无法识别</string>
+    <string name="save">保存</string>
+
+    <!-- ui/login/PhoneCodeLoginPresenter.kt -->
+    <string name="phoneNumber">手机号</string>
+    <string name="resendIn">{seconds} 秒后可重发</string>
+    <string name="resend">重新发送</string>
+    <string name="sendVerificationCode">发送验证码</string>
+    <string name="verificationCode">验证码</string>
+
+    <!-- ui/login/QrLoginPresenter.kt -->
+    <string name="providerSignInQrCode">{provider}登录二维码</string>
+    <string name="qrCodeExpired">二维码已失效</string>
+    <string name="tapToRefresh">点按刷新</string>
+    <string name="qrCodeDecodeFailed">二维码解析失败</string>
+    <string name="qrCodePlaceholder">二维码\n会显示在这里</string>
+    <string name="regenerateQrCode">重新生成二维码</string>
+    <string name="generateQrCode">生成二维码</string>
+
+    <!-- ui/screen/AccountsScreen.kt -->
+    <string name="accountsAndServices">账号与平台</string>
+    <string name="accountsSubtitle">每个平台各一个账号；本地账号保存在此设备</string>
+    <string name="back">返回</string>
+    <string name="goBack">返回</string>
+    <string name="serverAddressHint">{appliesWhen}；清空则恢复默认地址</string>
+    <string name="checking">检查中…</string>
+    <string name="checkAddress">检查地址</string>
+    <string name="enterFieldManually">手动填写{field}</string>
+    <string name="advancedHint">高级：{hint}</string>
+    <string name="multipleServices">多平台</string>
+    <string name="groupByService">按平台分组显示</string>
+    <string name="groupByServiceHint">关闭时各平台结果混合为一个列表</string>
+    <string name="mergeSameSongs">合并各平台的同一首歌</string>
+    <string name="mergeSameSongsHint">歌名、第一位歌手相同且时长相差不超过 3 秒时合为一行，可在菜单中改用其他平台播放</string>
+    <string name="local">本地</string>
+    <string name="signOutOfProvider">退出{provider}登录？</string>
+    <string name="signOutConfirm">退出登录</string>
+    <string name="localAccountName">本地账号名称</string>
+    <string name="name">名称</string>
+    <string name="localAccountNoSignInNeeded">无需登录；只保存在此设备</string>
+    <string name="rename">重命名</string>
+
+    <!-- ui/screen/AlbumScreen.kt -->
+    <string name="playbackSourceAlbum">专辑「{albumName}」</string>
+    <string name="albumLoading">正在加载专辑…</string>
+    <string name="albumLoadFailed">专辑加载失败</string>
+    <string name="checkNetworkAndRetry">请检查网络后重试。</string>
+    <string name="albumReleaseDate">{releaseDate} 发行</string>
+    <string name="playAll">播放全部</string>
+
+    <!-- ui/screen/ArtistScreen.kt -->
+    <string name="playbackSourceArtist">歌手「{artistName}」</string>
+    <string name="artistLoading">正在加载歌手…</string>
+    <string name="artistLoadFailed">歌手加载失败</string>
+    <string name="popularSongs">热门歌曲</string>
+    <string name="albums">专辑</string>
+    <string name="loading">正在加载…</string>
+    <string name="moreAlbums">更多专辑</string>
+    <string name="artistSongAndAlbumCount">{songCount} 首歌 · {albumCount} 张专辑</string>
+    <string name="playPopularSongs">播放热门歌曲</string>
+
+    <!-- ui/screen/DailySongsScreen.kt -->
+    <string name="dailyPicks">每日推荐</string>
+    <string name="todaysPicks">今天的推荐</string>
+    <string name="dailyPicksSongCount">今天为你推荐的 {count} 首歌</string>
+    <string name="dailyPicksLoadFailed">每日推荐加载失败</string>
+    <string name="dailyPicksLoading">正在加载每日推荐…</string>
+    <string name="dailyPicksEmpty">暂无每日推荐</string>
+    <string name="dailyPicksSignInHint">登录后，每天的推荐歌曲会显示在这里。</string>
+
+    <!-- ui/screen/DownloadManagementScreen.kt -->
+    <string name="all">全部</string>
+    <string name="filterDownloading">下载中</string>
+    <string name="paused">已暂停</string>
+    <string name="downloaded">已下载</string>
+    <string name="failed">失败</string>
+    <string name="canceled">已取消</string>
+    <string name="fileDeleted">文件已删除</string>
+    <string name="downloadQueueSaveFailedTitle">下载队列保存失败</string>
+    <string name="scanningLocalLibrary">正在扫描本地音乐库…</string>
+    <string name="saveSongToDeviceFailed">没能保存「{title}」：{error}</string>
+    <string name="rescanDownloadedFiles">重新扫描已下载的文件</string>
+    <string name="cancelAllDownloads">取消全部下载</string>
+    <string name="clearFinishedEntries">从列表清除已结束的记录</string>
+    <string name="downloadsCompletedCount">已下载 {count} 首</string>
+    <string name="downloadsActiveCount">正在下载 {count} 首</string>
+    <string name="downloadsPausedCount">已暂停 {count} 首</string>
+    <string name="downloadsFailedCount">{count} 首失败</string>
+    <string name="downloadsStoredInBrowserHint">歌曲存放在浏览器里，不在系统的「下载」文件夹；要得到音频文件，在歌曲的「更多操作」里选「保存到本机」。</string>
+    <string name="moreActions">更多操作</string>
+    <string name="pauseAll">全部暂停</string>
+    <string name="resumeAll">全部继续</string>
+    <string name="resumeDownload">继续下载</string>
+    <string name="downloadAgain">重新下载</string>
+    <string name="cancelDownload">取消下载</string>
+    <string name="saveToDevice">保存到本机</string>
+    <string name="resaveLyricsFromCurrentSource">按当前歌词来源重新保存歌词</string>
+    <string name="saveLyricsFile">保存歌词文件</string>
+    <string name="resaveCover">重新保存封面</string>
+    <string name="saveCoverImage">保存封面图片</string>
+    <string name="deleteDownloadedFile">删除已下载的文件</string>
+    <string name="removeFromListKeepFile">从列表中移除（保留文件）</string>
+    <string name="deleteLeftoverLyricsAndCover">清理残留的歌词与封面</string>
+    <string name="removeFromList">从列表中移除</string>
+    <string name="pausedPrefix">已暂停 · </string>
+    <string name="waitingToDownload">等待下载</string>
+    <string name="gettingDownloadLink">正在获取下载地址</string>
+    <string name="savingLyricsAndCover">正在保存歌词和封面</string>
+    <string name="lyricsSavedWithFormat">歌词（{format}）</string>
+    <string name="lyricStatusNone">无歌词</string>
+    <string name="savingLyrics">正在保存歌词</string>
+    <string name="lyricsNotSaved">未保存歌词</string>
+    <string name="coverSavedStatus">封面</string>
+    <string name="noCover">无封面</string>
+    <string name="savingCover">正在保存封面</string>
+    <string name="coverNotSaved">未保存封面</string>
+    <string name="noDownloadedSongsYet">还没有下载过歌曲</string>
+    <string name="noSongsInFilter">没有「{filter}」的歌曲</string>
+    <string name="downloadsEmptyHint">在歌单页点按「下载全部」，或在歌曲的「更多操作」里选「下载」。</string>
+    <string name="switchFilterHint">切换到其他筛选查看。</string>
+    <string name="cancelAllDownloadsTitle">取消全部下载？</string>
+    <string name="cancelAllDownloadsMessage">正在下载和已暂停的歌曲都会停止，之后可以在「已取消」里重试。已下载的歌曲不受影响。</string>
+    <string name="cancelAll">取消全部</string>
+    <string name="clearFinishedEntriesTitle">清除已结束的记录？</string>
+    <string name="clearFinishedEntriesMessage">已下载、失败、已取消的记录会从这个列表里移除。已下载的歌曲文件不会被删除。</string>
+    <string name="clearEntries">清除记录</string>
+    <string name="cancelDownloadTitle">取消下载「{title}」？</string>
+    <string name="cancelDownloadMessage">下载会停止，之后可以在「已取消」里重试。</string>
+    <string name="removeFromListTitle">从列表中移除「{title}」？</string>
+    <string name="removeFromListMessage">只移除这条记录，已下载的歌曲文件会保留。</string>
+    <string name="remove">移除</string>
+    <string name="deleteSongFileTitle">删除「{title}」的文件？</string>
+    <string name="deleteSongFileMessage">本地音频文件会被永久删除，之后仍可重新下载。</string>
+    <string name="deleteFile">删除文件</string>
+    <string name="qualityStandard">标准</string>
+    <string name="qualityHigh">较高</string>
+    <string name="qualityVeryHigh">极高</string>
+    <string name="qualityHdSurround">高清环绕声</string>
+    <string name="qualityImmersiveSurround">沉浸环绕声</string>
+    <string name="qualityDolbyAtmos">杜比全景声</string>
+    <string name="qualityMaster">超清母带</string>
+    <string name="downloadFailedWithReason">下载失败：{reason}</string>
+
+    <!-- ui/screen/HomeScreen.kt -->
+    <string name="recommendedPlaylists">推荐歌单</string>
+    <string name="viewAllDailyPicks">查看每日推荐的全部歌曲</string>
+    <string name="openSongRecognition">打开听歌识曲</string>
+    <string name="songRecognitionCardHint">录制三秒，从周围声音里找出这首歌</string>
+    <string name="openUserProfile">打开{nickname}的个人页</string>
+
+    <!-- ui/screen/LocalLibraryScreen.kt -->
+    <string name="localPlaylists">本地歌单</string>
+    <string name="localPlaylistsSubtitle">歌曲可以来自任意平台；只保存在此设备，随设置备份导出</string>
+    <string name="importing">正在导入…</string>
+    <string name="importPlaylist">导入平台歌单</string>
+    <string name="localPlaylistsLoading">正在读取本地歌单…</string>
+    <string name="noLocalPlaylistsYet">还没有本地歌单</string>
+    <string name="localPlaylistsEmptyHint">新建一个，或在歌曲的「更多操作」里选「添加到本地歌单」。点亮 QQ音乐等平台歌曲的心形，也会收进「本地喜欢」。</string>
+    <string name="newLocalPlaylistTitle">新建本地歌单</string>
+    <string name="playlistName">歌单名称</string>
+    <string name="create">新建</string>
+    <string name="playlistLinkOrId">歌单链接或 ID</string>
+    <string name="importPlaylistHint">支持网易云音乐与 QQ音乐的歌单链接；纯数字按网易云歌单读取，QQ 歌单 ID 前加 qq:</string>
+    <string name="importAction">导入</string>
+
+    <!-- ui/screen/LocalPlaylistScreen.kt -->
+    <string name="playbackSourceLocalPlaylist">本地歌单「{playlistName}」</string>
+    <string name="localPlaylistSongCount">{count} 首 · 本地歌单</string>
+    <string name="delete">删除</string>
+    <string name="playlistEmpty">歌单是空的</string>
+    <string name="localPlaylistEmptyHint">在任意歌曲的「更多操作」里选「添加到本地歌单」。</string>
+    <string name="removeFromThisPlaylist">从本歌单移除</string>
+    <string name="renamePlaylist">重命名歌单</string>
+    <string name="deletePlaylistTitle">删除「{playlistName}」？</string>
+    <string name="deletePlaylistMessage">歌单里的歌曲不会受影响，只删除这个本地歌单。</string>
+
+    <!-- ui/screen/LoginScreen.kt -->
+    <string name="signInLater">稍后登录</string>
+    <string name="signInToProvider">登录{provider}</string>
+    <string name="serverAddress">服务器地址</string>
+    <string name="serverAddressResetHint">清空则恢复默认地址</string>
+    <string name="saveAddress">保存地址</string>
+
+    <!-- ui/screen/NowPlayingScreen.kt -->
+    <string name="collapsePlayer">收起播放页</string>
+    <string name="playbackSourceFrom">来自{source}</string>
+    <string name="songDetails">歌曲详细信息</string>
+    <string name="mutedTapToRestoreVolume">已静音 · 点按恢复音量</string>
+    <string name="artworkOf">{title} 的封面</string>
+    <string name="openLyrics">打开歌词</string>
+    <string name="pickSongToStart">从任意列表选一首歌开始</string>
+    <string name="viewArtistAndAlbum">查看歌手与专辑</string>
+    <string name="lookingUp">正在查找…</string>
+    <string name="artistWithName">歌手：{artistName}</string>
+    <string name="albumWithName">专辑：{albumName}</string>
+    <string name="playbackPosition">播放进度</string>
+
+    <!-- ui/screen/PlaylistDetailScreen.kt -->
+    <string name="playlist">歌单</string>
+    <string name="playlistDetailsUnavailable">歌单资料暂不可用</string>
+    <string name="playlistLoading">正在加载歌单与歌曲…</string>
+    <string name="playlistLoadFailed">歌单加载失败</string>
+    <string name="userPlaylistsLoadFailed">歌单加载失败</string>
+    <string name="playlistNoSongsYet">歌单里还没有歌曲</string>
+    <string name="playlistEmptyHint">添加的歌曲会显示在这里。</string>
+    <string name="downloadPlaylistTitle">下载「{playlistName}」？</string>
+    <string name="downloadPlaylistMessage">共 {count} 首，按「{quality}」音质下载（可在设置中修改）；已下载的歌曲会跳过。</string>
+    <string name="addedToDownloadQueue">已加入下载队列：{count} 首</string>
+    <string name="view">查看</string>
+    <string name="playbackSourcePlaylist">歌单「{playlistName}」</string>
+    <string name="playlistCover">歌单封面</string>
+    <string name="playlistSongCount">{count} 首歌曲</string>
+    <string name="downloadAll">下载全部</string>
+    <string name="saveAsLocalPlaylist">存为本地歌单</string>
+
+    <!-- ui/screen/SearchScreen.kt -->
+    <string name="clearSearch">清除</string>
+    <string name="searchingFor">正在搜索「{query}」…</string>
+    <string name="searchFailed">搜索失败</string>
+    <string name="playbackSourceSearch">搜索「{query}」</string>
+    <string name="noResultsFound">没有找到结果</string>
+    <string name="noSongsMatchQuery">没有找到与「{query}」匹配的歌曲，试试更短的关键词或只输入歌手名。</string>
+    <string name="readyToSearch">准备搜索</string>
+    <string name="searchPromptWithQuery">点按搜索按钮或按回车键，查找与「{query}」相关的歌曲。</string>
+    <string name="searchEmptyTitle">输入歌名、歌手或专辑名</string>
+    <string name="searchEmptyHint">点按搜索按钮或按回车键开始搜索。</string>
+    <string name="searchHistory">搜索历史</string>
+    <string name="popularSearches">热门搜索</string>
+    <string name="loadingMoreResults">正在加载更多结果…</string>
+    <string name="noMoreResults">没有更多结果了</string>
+    <string name="playFromProviderInstead">改用{provider}播放</string>
+    <string name="searchSongs">搜索歌曲</string>
+
+    <!-- ui/screen/SettingsScreen.kt -->
+    <string name="settingsSaveFailed">设置保存失败：{error}</string>
+    <string name="settingsLoadFailed">设置读取失败</string>
+    <string name="localPlaylistsImportFailed">本地歌单导入失败：{error}</string>
+    <string name="settingsImported">设置已导入</string>
+    <string name="settingsImportInvalidFile">导入失败：文件不是有效的设置备份</string>
+    <string name="settingsSubtitle">账号、播放、歌词、下载与服务器</string>
+    <string name="settingsLoading">正在加载设置…</string>
+    <string name="settingsSectionAccounts">账号</string>
+    <string name="streamingQuality">在线播放音质</string>
+    <string name="playWholeListOnTap">点按列表中的歌曲时播放整个列表</string>
+    <string name="playWholeListOnTapHint">关闭时只播放点按的那一首</string>
+    <string name="useAnimatedCover">播放页使用歌曲动态封面</string>
+    <string name="desktopLyricsLockHint">锁定后窗口固定在原处，不能拖动或调整大小；Windows 上鼠标会穿透到下面的窗口。解锁可以在这里，也可以在系统托盘图标的菜单里。</string>
+    <string name="showTranslatedLyrics">显示翻译歌词</string>
+    <string name="showRomanization">显示罗马音歌词</string>
+    <string name="showRomanizationHint">日语等歌曲的读音标注</string>
+    <string name="downloadQuality">下载音质</string>
+    <string name="showDownloadStatus">在歌曲列表中标出下载状态</string>
+    <string name="showDownloadStatusHint">已下载、正在下载和下载失败的歌曲会带标记</string>
+    <string name="settingsSectionGeneral">通用</string>
+    <string name="theme">主题</string>
+    <string name="useWallpaperColors">使用壁纸颜色</string>
+    <string name="useWallpaperColorsHint">界面配色取自系统壁纸（Android 12 及以上）</string>
+    <string name="searchSuggestions">搜索联想</string>
+    <string name="searchSuggestionsHint">输入时显示搜索建议</string>
+    <string name="closeToTray">关闭主窗口时留在托盘</string>
+    <string name="closeToTrayHint">播放不会中断；点按托盘图标重新打开窗口，在托盘菜单里选「退出」才会退出</string>
+    <string name="checkUpdatesOnStartup">启动时检查更新</string>
+    <string name="checkUpdatesNow">立即检查更新</string>
+    <string name="backup">备份</string>
+    <string name="exportSettings">导出设置</string>
+    <string name="importSettings">导入设置</string>
+    <string name="about">关于</string>
+    <string name="version">版本</string>
+    <string name="openSourceLicense">开源许可</string>
+    <string name="amllComponentName">AMLL 歌词渲染与解析组件</string>
+    <string name="amllLicenseNote">以 AGPL-3.0-only 发布；许可证全文随应用资源提供。</string>
+    <string name="importSettingsConfirmTitle">导入并覆盖当前设置？</string>
+    <string name="importSettingsConfirmMessage">导入文件会覆盖服务器地址、播放与歌词偏好；登录状态不在备份里，不受影响。建议先导出当前设置作为备份。</string>
+    <string name="chooseFile">选择文件</string>
+    <string name="settingsHeroSubtitle">账号、播放、歌词与备份</string>
+    <string name="audioQualityAvailabilityNote">账号没有对应权限时，会得到能播放的最高音质</string>
+    <string name="audioOutputSystemDefault">系统默认</string>
+    <string name="audioOutputSystemDefaultMenu">系统默认（跟随系统输出设备）</string>
+    <string name="audioOutputDeviceUnavailable">{deviceName}（不可用）</string>
+    <string name="audioOutputDevice">音频输出设备</string>
+    <string name="desktopLyricsAlignment">桌面歌词对齐</string>
+    <string name="lyricsSource">歌词来源</string>
+    <string name="lyricsSourceAmllNote">AMLL 歌词库由社区维护，逐字歌词更全；只按歌曲 ID 查询，不会发送账号信息。</string>
+    <string name="settingsLanguage">语言</string>
+    <string name="songTransitions">歌曲过渡</string>
+    <string name="betweenSongs">歌曲之间</string>
+    <string name="transitionOff">关闭</string>
+    <string name="transitionCrossfade">淡入淡出</string>
+    <string name="transitionSmart">智能过渡</string>
+    <string name="transitionCrossfadeMenu">淡入淡出（固定时长）</string>
+    <string name="transitionSmartMenu">智能过渡（分析节拍后衔接）</string>
+    <string name="transitionUnsupported">这个平台的播放器暂不支持歌曲过渡</string>
+    <string name="transitionCrossfadeNote">上一首淡出的同时，下一首淡入</string>
+    <string name="transitionSmartFixedTempoNote">分析两首歌的响度、节拍和调性，在小节线上衔接。这个平台不调整播放速度，所以不对齐节拍</string>
+    <string name="transitionSmartNote">分析两首歌的响度、节拍和调性，在小节线上衔接。两首歌速度相近时，微调上一首的速度，让节拍对齐</string>
+    <string name="transitionLength">过渡时长</string>
+    <string name="secondsValue">{seconds} 秒</string>
+    <string name="beatAnalysis">节拍分析</string>
+    <string name="beatModelNotLoaded">尚未加载</string>
+    <string name="beatModelNotLoadedNote">第一次智能过渡时加载，也可以现在检测</string>
+    <string name="beatModelLoading">正在加载节拍模型…</string>
+    <string name="beatModelReadyNote">节拍模型只在 NPU 或 GPU 上运行，不占用 CPU</string>
+    <string name="beatModelUnavailable">不可用</string>
+    <string name="beatModelUnavailableNote">{reason}。仍会按响度安排过渡，但不对齐节拍</string>
+    <string name="beatAnalysisSourceNote">分析时会另外读取歌曲的标准音质版本，已下载的歌曲直接读取本地文件</string>
+    <string name="checkNow">检测</string>
+
+    <!-- ui/screen/SharedScreenParts.kt -->
+    <string name="songActionAddToQueue">加入播放队列</string>
+    <string name="songActionCopyLink">复制歌曲链接</string>
+    <string name="downloadFailedTapToRetry">下载失败，点按重试</string>
+    <string name="downloading">正在下载</string>
+    <string name="sectionLoadFailed">{title}加载失败</string>
+    <string name="sectionLoading">正在加载{title}…</string>
+    <string name="sectionEmpty">暂无{title}</string>
+    <string name="sectionEmptyTapReload">点按「重新加载」再试一次。</string>
+    <string name="sectionEmptyCheckBackLater">稍后再来看看。</string>
+    <string name="reload">重新加载</string>
+    <string name="carouselScrollBack">向前翻</string>
+    <string name="carouselScrollForward">向后翻</string>
+    <string name="playlistCardStats">{trackCount} 首 · {playCount} 次播放</string>
+    <string name="heartbeatModeStarting">正在启动心动模式</string>
+    <string name="heartbeatMode">心动模式</string>
+
+    <!-- ui/screen/SongRecognitionScreen.kt -->
+    <string name="recognitionRequestingMicPermission">正在请求麦克风权限…</string>
+    <string name="recognitionMatching">正在生成指纹并匹配歌曲…</string>
+    <string name="recognitionResults">识别结果</string>
+    <string name="recognizeAgain">重新识别</string>
+    <string name="recognitionNoMatchTitle">没有识别到歌曲</string>
+    <string name="recognitionNoMatchMessage">已经听了 {seconds} 秒仍未找到。请靠近音源，在音乐清晰的段落再试。</string>
+    <string name="recognitionMicPermissionNeeded">需要麦克风权限</string>
+    <string name="recognitionMicPermissionHelp">请在系统或浏览器的站点设置中允许麦克风，然后返回此页重新检查。听歌识曲只处理本次三秒录音。</string>
+    <string name="checkAgain">重新检查</string>
+    <string name="recognitionFailed">听歌识曲失败</string>
+    <string name="recognitionIntro">录制三秒环境音乐并匹配网易云歌曲</string>
+    <string name="recognitionReadyTitle">靠近音源，让麦克风听清音乐</string>
+    <string name="recognitionPausesPlayback">识别时会暂停正在播放的音乐，离开这一页后自动继续。</string>
+    <string name="startRecognition">开始识别</string>
+    <string name="recognitionListeningAgain">再听一会儿…（第 {attempt} 次）</string>
+    <string name="recognitionListening">正在聆听…</string>
+    <string name="recognitionElapsed">{seconds} / 3.0 秒</string>
+    <string name="addedToQueue">已加入队列</string>
+    <string name="addToQueue">加入队列</string>
+
+    <!-- ui/screen/UserPlaylistScreen.kt -->
+    <string name="userLevelSummary">Lv.{level} · 听歌 {playCount} 首 · 登录 {loginDays} 天</string>
+    <string name="userLevelNextSongs">听歌 {playCount} 首</string>
+    <string name="userLevelNextDays">登录 {loginDays} 天</string>
+    <string name="userLevelNextPrefix">下一级门槛：</string>
+    <string name="userLevelMax">已达到最高等级</string>
+    <string name="userLevelProgress">等级进度 {percent}%</string>
+    <string name="downloadsShortcutSubtitle">已下载的歌曲与下载进度</string>
+    <string name="localPlaylistsShortcutSubtitle">只保存在此设备的歌单</string>
+    <string name="localPlaylistsEmptySubtitle">歌曲可来自任意平台；只保存在此设备</string>
+    <string name="localPlaylistCount">{count} 个歌单</string>
+    <string name="localLikesCountSuffix"> · 本地喜欢 {count} 首</string>
+    <string name="accountDataLoadFailed">账号数据加载失败</string>
+    <string name="accountAndPlaylistsLoading">正在加载账号与歌单…</string>
+    <string name="signInToSeePlaylistsTitle">登录后查看你的歌单</string>
+    <string name="signInToSeePlaylistsMessage">登录网易云音乐账号，这里会显示你创建和收藏的歌单。</string>
+    <string name="profileUnavailableTitle">用户资料暂不可用</string>
+    <string name="profileUnavailableMessage">账号已登录，但用户资料未能加载。</string>
+    <string name="heartbeatModeStartFailed">心动模式启动失败</string>
+    <string name="myPlaylistsLoading">正在加载我的歌单…</string>
+    <string name="noPlaylistsYetTitle">还没有歌单</string>
+    <string name="noPlaylistsYetMessage">你创建或收藏的歌单会显示在这里。</string>
+    <string name="createdPlaylists">创建的歌单</string>
+    <string name="savedPlaylists">收藏的歌单</string>
+    <string name="playlistSectionCount">{count} 个</string>
+    <string name="userLevelLoading">正在加载等级信息…</string>
+    <string name="userLevelUnavailable">等级信息暂不可用</string>
+
+    <!-- ui/theme/ThemePreferences.kt -->
+    <string name="followSystem">跟随系统</string>
+    <string name="themeLight">浅色</string>
+    <string name="themeDark">深色</string>
+
+    <!-- viewmodel/AccountsViewModel.kt -->
+    <string name="serverSavedAppliesWhen">已保存；{appliesWhen}</string>
+    <string name="serverAddressUnreachable">无法连接到这个地址</string>
+    <string name="providerCredentialCleared">已清除{provider}的凭证</string>
+    <string name="credentialSaved">已保存{provider}的凭证</string>
+    <string name="signedOutOfProvider">已退出{provider}</string>
+    <string name="signOutFailed">退出失败：{error}</string>
+    <string name="localAccountRenamed">已重命名本地账号</string>
+    <string name="saveFailedWithError">保存失败：{error}</string>
+    <string name="settingSaveFailed">设置保存失败</string>
+    <string name="providerStateOff">未启用</string>
+
+    <!-- viewmodel/LocalLibraryViewModel.kt -->
+    <string name="songsAlreadyInPlaylist">「{name}」里已经有这些歌</string>
+    <string name="addedToPlaylist">已添加到「{name}」</string>
+    <string name="addedSongsToPlaylist">已把 {count} 首歌添加到「{name}」</string>
+    <string name="addToPlaylistFailed">添加失败</string>
+    <string name="playlistCreated">已新建「{name}」</string>
+    <string name="playlistCreatedWithSongs">已新建「{name}」，共 {count} 首</string>
+    <string name="playlistCreateFailed">新建失败</string>
+    <string name="playlistRenameFailed">重命名失败</string>
+    <string name="playlistDeleted">已删除歌单</string>
+    <string name="playlistDeleteFailed">删除失败</string>
+    <string name="playlistRemoveSongFailed">移除失败</string>
+    <string name="playlistLinkUnrecognized">无法识别这个歌单链接</string>
+    <string name="providerPlaylistReadFailed">没能读取这个{provider}歌单</string>
+    <string name="playlistImported">已导入「{name}」，共 {count} 首</string>
+    <string name="playlistImportFailed">导入失败</string>
+
+    <!-- viewmodel/MainViewModel.kt -->
+    <string name="updateAvailable">发现新版本：{version}</string>
+    <string name="updateCheckFailed">检查更新失败，请稍后再试</string>
+    <string name="alreadyLatestVersion">已是最新版本（{version}）</string>
+    <string name="playerStatusSaveFailed">播放状态保存失败</string>
+    <string name="userDetailLoadFailed">用户资料加载失败，请检查网络后重试</string>
+    <string name="userLevelLoadFailed">用户等级信息加载失败，请检查网络后重试</string>
+    <string name="userPlaylistsLoadFailedRetry">歌单加载失败，请检查网络后重试</string>
+    <string name="recommendedPlaylistsLoadFailed">推荐歌单加载失败，请检查网络后重试</string>
+    <string name="dailyPicksLoadFailedRetry">每日推荐加载失败，请检查网络后重试</string>
+    <string name="likedPlaylistIdInvalid">喜欢歌单 ID 无效</string>
+    <string name="heartbeatModeSignInRequired">请先登录再使用心动模式</string>
+    <string name="likedSongsFetchFailed">无法获取喜欢的音乐，请检查网络、登录状态或歌单内容</string>
+    <string name="heartbeatModeListFetchFailed">心动模式列表获取失败，请检查网络后重试</string>
+    <string name="heartbeatModeEmpty">心动模式返回的歌曲列表为空</string>
+    <string name="playlistDetailLoadFailed">歌单资料加载失败，重试后可以显示封面和简介</string>
+    <string name="playlistTracksLoadFailed">歌曲列表加载失败，请检查网络后重试</string>
+    <string name="searchFailedRetry">搜索失败，请检查网络后重试</string>
+    <string name="searchPartiallyFailed">{providers}搜索失败，只显示其他平台的结果</string>
+    <string name="searchMoreFailedFor">{providers}没能加载更多结果</string>
+    <string name="searchMoreFailed">没能加载更多结果</string>
+
+    <!-- viewmodel/NowPlayingViewModel.kt -->
+    <string name="sourceSwitchShuffleBlocked">随机播放时不能换源</string>
+    <string name="sourceSwitchNoAlternate">没有在其他平台找到同一首歌</string>
+    <string name="sourceSwitched">已改用{provider}播放「{title}」</string>
+    <string name="songIdInvalid">歌曲 ID 无效</string>
+    <string name="providerLyricsUnsupported">{provider}的歌词暂不支持在应用内显示</string>
+    <string name="lyricsTtmlOnlyForeignProvider">当前歌词来源为「只用 AMLL 歌词库」，该歌词库只收录网易云歌曲；可在设置中改用其他歌词来源查看{provider}的歌词</string>
+    <string name="lyricsRequestFailed">歌词请求失败</string>
+    <string name="lyricsParseFailed">歌词解析失败</string>
+    <string name="commentsLoadFailedRetry">评论加载失败，请检查网络后重试</string>
+    <string name="moreCommentsLoadFailed">没能加载更多评论</string>
+    <string name="nothingPlaying">没有正在播放的歌曲</string>
+    <string name="songDetailsLoadFailedLater">歌曲详情加载失败，请稍后再试</string>
+
+    <!-- viewmodel/SongRecognitionViewModel.kt -->
+    <string name="recognitionRequestFailed">识曲请求失败，请检查网络后重试</string>
+    <string name="recognitionNoValidData">识曲服务未返回有效数据</string>
+    <string name="recognitionUnknownStatus">识曲服务返回了未知状态（type={type}）</string>
+    <string name="recognitionNoMatches">识曲服务未返回匹配结果</string>
+    <string name="recognitionMicUnavailable">当前页面无法访问麦克风</string>
+
+    <!-- recognition/IosMicrophoneRecorder.kt -->
+    <string name="iosAudioSessionCategoryFailed">无法切换到录音音频会话</string>
+    <string name="iosAudioSessionModeFailed">无法启用测量录音模式</string>
+    <string name="iosAudioSessionActivateFailed">无法激活录音音频会话</string>
+    <string name="iosMicNoInputFormat">iOS 没有可用的麦克风输入格式</string>
+    <string name="iosMicNoFloat32Channel">iOS 麦克风没有 Float32 声道</string>
+    <string name="iosRecordingEngineStartFailed">iOS 录音引擎启动失败</string>
+
+    <!-- util/DownloadUtil.ios.kt -->
+    <string name="iosDownloadFolderUnreadable">无法读取 iOS 下载目录：{path}</string>
+    <string name="iosDownloadFolderScanFailed">无法读取 iOS 下载目录</string>
+
+    <!-- util/IosBackgroundDownloadCoordinator.kt -->
+    <string name="downloadFileNameInvalid">下载文件名无效</string>
+    <string name="downloadHttpFailed">下载失败：HTTP {statusCode}</string>
+    <string name="backgroundDownloadNoFileName">后台下载任务没有有效的文件名</string>
+    <string name="backgroundDownloadMoveFailed">无法移动后台下载的临时文件</string>
+    <string name="backgroundDownloadSaveFailed">无法保存后台下载的文件</string>
+
+    <!-- util/LocalMediaAssetStorage.ios.kt -->
+    <string name="lyricsFileSaveFailed">无法保存歌词文件：{fileName}</string>
+    <string name="coverFileBackupFailed">无法备份封面文件：{fileName}</string>
+    <string name="coverFileSaveFailed">无法保存封面文件：{fileName}</string>
+    <string name="coverFileRestoreFailed">无法恢复原来的封面文件：{fileName}</string>
+    <string name="assetFileCreateFailed">无法创建歌词或封面文件：{fileName}</string>
+    <string name="assetFileIncomplete">歌词或封面文件没有写完整：{fileName}</string>
+    <string name="assetFileWriteFailed">无法写入歌词或封面文件：{fileName}</string>
+    <string name="assetFileSyncFailed">无法把歌词或封面文件同步到存储：{fileName}</string>
+    <string name="assetFileReadFailed">无法读取歌词或封面文件：{fileName}</string>
+
+    <!-- util/SongDownloader.ios.kt -->
+    <string name="downloadUrlInvalid">下载地址无效</string>
+    <string name="downloadCanceledDeleteFailed">下载已取消，但无法删除已下载的文件</string>
+
+    <!-- util/LocalMediaAssetFiles.kt -->
+    <string name="assetDirectoryCreateFailed">无法创建{label}：{path}</string>
+    <string name="assetDirectoryNotFolder">{label}不是文件夹：{path}</string>
+    <string name="assetDirectoryReadFailed">无法读取{label}：{path}</string>
+
+    <!-- notification/DesktopFloatingWindowController.kt -->
+    <string name="showDesktopLyricsSetting">显示桌面歌词</string>
+
+    <!-- recognition/JvmMicrophoneRecorder.kt -->
+    <string name="jvmMicNoPcmInput">未找到支持 PCM 输入的麦克风</string>
+
+    <!-- util/DownloadUtil.jvm.kt -->
+    <string name="downloadFolderNotFolder">下载目录不是文件夹：{path}</string>
+    <string name="downloadFolderUnreadable">无法读取下载目录：{path}</string>
+    <string name="desktopDownloadFolderScanFailed">无法读取桌面下载目录</string>
+
+    <!-- util/SettingsFileOps.jvm.kt -->
+    <string name="settingsFileFilter">JSON 设置文件 (*.json)</string>
+    <string name="chooseSettingsFile">选择设置文件</string>
+    <string name="saveSettingsFile">保存设置文件</string>
+
+    <!-- recognition/WasmMicrophoneRecorder.kt -->
+    <string name="browserWebAudioUnavailable">浏览器 Web Audio 不可用</string>
+    <string name="browserNoMediaRecorder">浏览器不支持 MediaRecorder</string>
+    <string name="browserRecordingError">浏览器录音出错</string>
+    <string name="browserNoRecordingData">浏览器没有返回录音数据</string>
+    <string name="browserInvalidRecordingFormat">浏览器返回了无效的录音格式</string>
+    <string name="browserMicPermissionDenied">浏览器拒绝了麦克风权限</string>
+    <string name="browserMicNotFound">没有找到麦克风</string>
+    <string name="browserMicUnreadable">浏览器无法读取麦克风</string>
+    <string name="browserMicInsecureContext">当前页面不能访问麦克风</string>
+    <string name="browserMicRecordingFailed">浏览器麦克风录音失败</string>
+
+    <!-- util/WebDownloadStorage.kt -->
+    <string name="browserDownloadsUnreadable">无法读取浏览器里的下载记录</string>
+    <string name="webDownloadNeedsOpfs">在浏览器里下载需要 HTTPS 或 localhost 页面，且浏览器要支持 OPFS</string>
+    <string name="downloadCancelled">下载已取消</string>
+    <string name="webDownloadUriInvalid">浏览器下载地址无效</string>
+    <string name="webDownloadFileMissing">浏览器里已经没有这首歌的文件</string>
+
+    <!-- other -->
+    <string name="downloadChannelName">下载</string>
+    <string name="downloadChannelDescription">后台下载歌曲时显示进度</string>
+    <string name="lyricChannelName">实时歌词</string>
+    <string name="lyricChannelDescription">在通知栏显示正在播放的歌词</string>
+    <string name="currentSong">当前歌曲</string>
+
+    <!-- util/LocalMediaAssetStorage.wasm.kt -->
+    <string name="webAssetsNeedOpfs">在浏览器里保存歌词和封面需要 HTTPS 或 localhost 页面，且浏览器要支持 OPFS</string>
+    <string name="webLyricAssetsInvalid">要保存的歌词文件无效</string>
+    <string name="webLyricNamesInvalid">要读取的歌词文件名无效</string>
+    <string name="webArtworkInvalid">要保存的封面文件无效</string>
+
+    <!-- common -->
+    <string name="listSeparator">、</string>
+    <string name="clauseSeparator">；</string>
+    <string name="labelValue">{label}：{value}</string>
+
+    <!-- transition/OnnxBeatModelLoader.kt -->
+    <string name="beatModelLinuxNoRuntime">Linux 桌面版没有 Java 能调用的 NPU 或 GPU 推理组件</string>
+    <string name="onnxRuntimeLoadFailed">ONNX Runtime 无法加载：{reason}</string>
+    <string name="directMLRuntimeMissing">缺少随应用分发的 ONNX Runtime DirectML 组件</string>
+    <string name="beatModelFileMissing">缺少节拍模型文件</string>
+    <string name="onnxDeviceListFailed">ONNX Runtime 无法列出加速设备：{reason}</string>
+    <string name="directMLNoDevice">没有找到 DirectML 可用的 GPU 或 NPU（需要 DirectX 12 显卡驱动）</string>
+    <string name="beatModelDevicesFailed">加速设备无法运行节拍模型：{reasons}</string>
+    <string name="coreMlBeatModelFailed">Core ML 无法运行节拍模型：{reasons}</string>
+
+    <!-- transition/WebBeatModelLoader.kt -->
+    <string name="onnxWebLoadFailed">ONNX Runtime Web 加载失败：{reason}</string>
+    <string name="beatModelDownloadFailed">节拍模型下载失败：{reason}</string>
+    <string name="browserNoWebNnOrWebGpu">浏览器没有开放 WebNN 或 WebGPU</string>
+    <string name="browserBeatModelDevicesFailed">浏览器的加速设备无法运行节拍模型：{reasons}</string>
+</resources>

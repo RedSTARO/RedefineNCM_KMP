@@ -32,6 +32,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusicComments
 import com.leejlredstar.redefinencm.kmp.getPlatform
+import com.leejlredstar.redefinencm.kmp.i18n.text
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
@@ -245,7 +246,7 @@ internal fun rememberComments(
         onShowHot = viewModel::setCommentsShowHot,
         moreAvailable = moreAvailable,
         moreLoading = moreLoading,
-        moreError = moreError,
+        moreError = moreError?.text,
         onLoadMore = viewModel::loadMoreComments,
     )
     return comments to paging

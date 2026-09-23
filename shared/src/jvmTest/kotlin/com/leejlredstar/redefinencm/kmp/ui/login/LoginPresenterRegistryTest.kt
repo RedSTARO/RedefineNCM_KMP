@@ -4,9 +4,13 @@ import com.leejlredstar.redefinencm.kmp.data.api.QQMusicApi
 import com.leejlredstar.redefinencm.kmp.data.auth.QQCredentialTextLoginMethod
 import com.leejlredstar.redefinencm.kmp.data.auth.QQPhoneCodeLoginMethod
 import com.leejlredstar.redefinencm.kmp.data.auth.QQQrLoginMethod
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
+import com.leejlredstar.redefinencm.kmp.i18n.LanguageSetting
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -16,6 +20,17 @@ import kotlin.test.assertNull
  * and never draws a method that has no presenter.
  */
 class LoginPresenterRegistryTest {
+    /** The expected copy below is the Chinese, so the test pins it whatever the machine's language. */
+    @BeforeTest
+    fun showChinese() {
+        I18n.apply(LanguageSetting.ZH)
+    }
+
+    @AfterTest
+    fun followTheSystemAgain() {
+        I18n.apply(LanguageSetting.SYSTEM)
+    }
+
     private val api = QQMusicApi(HttpClient(MockEngine { respond("") }), baseUrl = { "" })
     private val qq = QQQrLoginMethod(api, QQQrLoginMethod.Kind.QQ)
     private val wechat = QQQrLoginMethod(api, QQQrLoginMethod.Kind.WECHAT)

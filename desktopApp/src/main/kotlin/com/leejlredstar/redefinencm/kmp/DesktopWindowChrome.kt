@@ -45,6 +45,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowScope
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import java.awt.Toolkit
 
 private enum class CaptionButtonKind {
@@ -169,9 +170,9 @@ private fun Win10CaptionButton(
     val isFocused by interactionSource.collectIsFocusedAsState()
     val isClose = kind == CaptionButtonKind.Close
     val label = when (kind) {
-        CaptionButtonKind.Minimize -> "最小化"
-        CaptionButtonKind.Maximize -> if (isMaximized) "还原" else "最大化"
-        CaptionButtonKind.Close -> "关闭"
+        CaptionButtonKind.Minimize -> strings.minimize
+        CaptionButtonKind.Maximize -> if (isMaximized) strings.restoreWindow else strings.maximize
+        CaptionButtonKind.Close -> strings.close
     }
     val backgroundColor by animateColorAsState(
         targetValue = when {

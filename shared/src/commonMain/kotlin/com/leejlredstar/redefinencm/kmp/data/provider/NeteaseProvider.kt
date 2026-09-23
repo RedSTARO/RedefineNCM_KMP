@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.data.provider
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongAlbum
@@ -41,7 +42,7 @@ class NeteaseProvider(
         // the call itself failed. Flattening that to an empty list would report a dead backend as
         // "no results".
         val response = repository.search(keyword, limit = limit, offset = offset)
-            ?: throw ProviderUnavailableException(id, "网易云音乐搜索请求失败")
+            ?: throw ProviderUnavailableException(id, strings.neteaseSearchFailed)
         return response.result
             ?.songs
             .orEmpty()

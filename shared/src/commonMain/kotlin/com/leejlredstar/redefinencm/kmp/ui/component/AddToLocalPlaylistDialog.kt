@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.viewmodel.LocalLibraryViewModel
 import org.koin.compose.koinInject
@@ -42,7 +43,7 @@ fun AddToLocalPlaylistDialog(viewModel: LocalLibraryViewModel = koinInject()) {
         onDismissRequest = viewModel::dismissAddition,
         icon = { Icon(AppIcons.PlaylistAdd, contentDescription = null) },
         title = {
-            Text(if (addition.tracks.size == 1) "添加到本地歌单" else "把 ${addition.tracks.size} 首歌添加到本地歌单")
+            Text(if (addition.tracks.size == 1) strings.addToLocalPlaylist else strings.addSongsToLocalPlaylist(addition.tracks.size))
         },
         text = {
             Column {
@@ -50,7 +51,7 @@ fun AddToLocalPlaylistDialog(viewModel: LocalLibraryViewModel = koinInject()) {
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = it },
-                        label = { Text("新歌单名称") },
+                        label = { Text(strings.newPlaylistName) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -58,8 +59,8 @@ fun AddToLocalPlaylistDialog(viewModel: LocalLibraryViewModel = koinInject()) {
                     LazyColumn(Modifier.heightIn(max = 320.dp)) {
                         items(playlists, key = { it.id }) { playlist ->
                             ListItem(
-                                headlineContent = { Text(playlist.name) },
-                                supportingContent = { Text("${playlist.tracks.size} 首") },
+                                headlineContent = { Text(playlist.displayName) },
+                                supportingContent = { Text(strings.songCount(playlist.tracks.size)) },
                                 leadingContent = { Icon(AppIcons.QueueMusic, contentDescription = null) },
                                 modifier = Modifier.fillMaxWidth().clickableListItem {
                                     viewModel.addPendingTo(playlist.id)
@@ -69,7 +70,7 @@ fun AddToLocalPlaylistDialog(viewModel: LocalLibraryViewModel = koinInject()) {
                     }
                     HorizontalDivider()
                     ListItem(
-                        headlineContent = { Text("新建歌单") },
+                        headlineContent = { Text(strings.newPlaylist) },
                         leadingContent = { Icon(AppIcons.Add, contentDescription = null) },
                         modifier = Modifier.fillMaxWidth().clickableListItem { naming = true },
                     )
@@ -81,10 +82,10 @@ fun AddToLocalPlaylistDialog(viewModel: LocalLibraryViewModel = koinInject()) {
                 TextButton(
                     onClick = { viewModel.addPendingToNewPlaylist(name) },
                     enabled = name.isNotBlank(),
-                ) { Text("新建并添加") }
+                ) { Text(strings.createAndAdd) }
             }
         },
-        dismissButton = { TextButton(onClick = viewModel::dismissAddition) { Text("取消") } },
+        dismissButton = { TextButton(onClick = viewModel::dismissAddition) { Text(strings.cancel) } },
     )
 }
 

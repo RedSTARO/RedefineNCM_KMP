@@ -9,6 +9,8 @@ import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderRegistration
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderRegistrations
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.getBooleanAsync
@@ -78,8 +80,12 @@ class AccountsViewModel(
     private val checks = MutableStateFlow<Map<MusicProviderId, ServerCheckResult>>(emptyMap())
     private val checking = MutableStateFlow<Set<MusicProviderId>>(emptySet())
 
-    private val _localName = MutableStateFlow(LocalAccount.DefaultName)
-    val localName: StateFlow<String> = _localName.asStateFlow()
+    // Kept as stored (blank while the account keeps the default), so the default name follows a
+    // language switch instead of staying in the language it was first read in.
+    private val storedLocalName = MutableStateFlow("")
+    val localName: StateFlow<String> = combine(storedLocalName, I18n.languageFlow) { stored, _ ->
+        stored.ifBlank { LocalAccount.DefaultName }
+    }.stateIn(scope, SharingStarted.Eagerly, LocalAccount.DefaultName)
 
     private val _aggregationMode = MutableStateFlow(LibraryAggregationMode.Default)
     val aggregationMode: StateFlow<LibraryAggregationMode> = _aggregationMode.asStateFlow()
@@ -127,7 +133,7 @@ class AccountsViewModel(
                 )
             }
         }.stateIn(scope, SharingStarted.Eagerly, emptyList())
-        summary = combine(accounts, localName) { accounts, localName ->
+        summary = combine(accounts, localName, I18n.languageFlow) { accounts, localName, _ ->
             accountsSummaryLine(
                 accounts.map { account ->
                     AccountSummaryEntry(
@@ -156,7 +162,7 @@ class AccountsViewModel(
                     server = registration.descriptor.server?.let { settings.getStringAsync(it.key, it.default) },
                 )
             }
-            _localName.value = localAccount.name()
+            storedLocalName.value = localAccount.storedName()
             _aggregationMode.value = LibraryAggregationMode.fromWireValueOrDefault(
                 settings.getStringAsync(SettingKeys.LIBRARY_AGGREGATION_MODE, ""),
             )
@@ -187,7 +193,7 @@ class AccountsViewModel(
             onPersisted = {
                 updateConfig(provider) { it.copy(server = address) }
                 checks.update { it - provider }
-                _message.value = "已保存；${setting.appliesWhen}"
+                _message.value = strings.serverSavedAppliesWhen(setting.appliesWhen)
             },
         )
     }
@@ -205,7 +211,7 @@ class AccountsViewModel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
-                ServerCheckResult(false, "无法连接到这个地址")
+                ServerCheckResult(false, strings.serverAddressUnreachable)
             }
             checks.update { it + (provider to result) }
             checking.update { it - provider }
@@ -225,23 +231,23 @@ class AccountsViewModel(
                     registration.credentialSlot.write(normalized)
                         .onSuccess {
                             _message.value = if (normalized.isEmpty()) {
-                                "已清除${provider.displayName}的凭证"
+                                strings.providerCredentialCleared(provider.displayName)
                             } else {
-                                "已保存${provider.displayName}的凭证"
+                                strings.credentialSaved(provider.displayName)
                             }
                         }
-                        .onFailure { failure -> _message.value = failure.message ?: "凭证保存失败" }
+                        .onFailure { failure -> _message.value = failure.message ?: strings.credentialSaveFailed }
                 }
             }
-            .onFailure { failure -> _message.value = failure.message ?: "凭证无法识别" }
+            .onFailure { failure -> _message.value = failure.message ?: strings.credentialNotRecognized }
     }
 
     fun signOut(provider: MusicProviderId) {
         val slot = registrations[provider]?.credentialSlot ?: return
         scope.launch {
             slot.clear()
-                .onSuccess { _message.value = "已退出${provider.displayName}" }
-                .onFailure { failure -> _message.value = "退出失败：${failure.message ?: "未知错误"}" }
+                .onSuccess { _message.value = strings.signedOutOfProvider(provider.displayName) }
+                .onFailure { failure -> _message.value = strings.signOutFailed(failure.message ?: strings.unknownError) }
         }
     }
 
@@ -249,10 +255,10 @@ class AccountsViewModel(
         scope.launch {
             localAccount.rename(name)
                 .onSuccess {
-                    _localName.value = localAccount.name()
-                    _message.value = "已重命名本地账号"
+                    storedLocalName.value = localAccount.storedName()
+                    _message.value = strings.localAccountRenamed
                 }
-                .onFailure { failure -> _message.value = "保存失败：${failure.message ?: "未知错误"}" }
+                .onFailure { failure -> _message.value = strings.saveFailedWithError(failure.message ?: strings.unknownError) }
         }
     }
 
@@ -293,7 +299,7 @@ class AccountsViewModel(
                 throw cancelled
             } catch (failure: Exception) {
                 reload()
-                _message.value = failure.message ?: "设置保存失败"
+                _message.value = failure.message ?: strings.settingSaveFailed
             }
         }
     }
@@ -312,10 +318,10 @@ internal fun accountsSummaryLine(entries: List<AccountSummaryEntry>, localName: 
     (
         entries.map { entry ->
             val state = when {
-                !entry.enabled -> "未启用"
-                entry.signedIn -> entry.accountName?.takeIf(String::isNotBlank) ?: "已登录"
-                else -> "未登录"
+                !entry.enabled -> strings.providerStateOff
+                entry.signedIn -> entry.accountName?.takeIf(String::isNotBlank) ?: strings.signedIn
+                else -> strings.notSignedIn
             }
-            "${entry.providerName}：$state"
+            strings.labelValue(entry.providerName, state)
         } + localName
-        ).joinToString("；")
+        ).joinToString(strings.clauseSeparator)

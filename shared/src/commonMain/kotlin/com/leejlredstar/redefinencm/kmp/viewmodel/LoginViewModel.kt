@@ -7,6 +7,9 @@ import com.leejlredstar.redefinencm.kmp.data.auth.LoginMethodRegistry
 import com.leejlredstar.redefinencm.kmp.data.auth.ProviderLoginDescriptor
 import com.leejlredstar.redefinencm.kmp.data.auth.ProviderLoginDescriptorRegistry
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
+import com.leejlredstar.redefinencm.kmp.i18n.UiText
+import com.leejlredstar.redefinencm.kmp.i18n.strings
+import com.leejlredstar.redefinencm.kmp.i18n.uiText
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import kotlinx.coroutines.CoroutineScope
@@ -52,8 +55,8 @@ class LoginViewModel(
     val server: StateFlow<String> = _server.asStateFlow()
 
     /** The outcome of the last address save, for the line under the field. */
-    private val _serverMessage = MutableStateFlow<String?>(null)
-    val serverMessage: StateFlow<String?> = _serverMessage.asStateFlow()
+    private val _serverMessage = MutableStateFlow<ServerNotice?>(null)
+    val serverMessage: StateFlow<ServerNotice?> = _serverMessage.asStateFlow()
 
     init {
         scope.launch {
@@ -86,14 +89,20 @@ class LoginViewModel(
                 settings.setString(setting.key, value)
                 settings.flush()
                 _server.value = value
-                _serverMessage.value = "已保存；${setting.appliesWhen}"
+                _serverMessage.value = ServerNotice(
+                    UiText { it.serverSavedAppliesWhen(setting.appliesWhen) },
+                    isError = false,
+                )
             } catch (failure: Exception) {
                 runCatching {
                     settings.setString(setting.key, previous)
                     settings.flush()
                 }
                 _server.value = settings.getString(setting.key, previous)
-                _serverMessage.value = failure.message ?: "设置保存失败"
+                _serverMessage.value = ServerNotice(
+                    failure.message?.let(::uiText) ?: UiText { it.settingSaveFailed },
+                    isError = true,
+                )
             }
         }
     }
@@ -108,3 +117,6 @@ class LoginViewModel(
         scope.cancel()
     }
 }
+
+/** The line under the address field after a save, and whether it reports a failure. */
+data class ServerNotice(val text: UiText, val isError: Boolean)

@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.data.local
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.getStringAsync
@@ -12,8 +13,11 @@ import kotlinx.coroutines.withContext
  * the accounts page beside the online accounts.
  */
 class LocalAccount(private val settings: PlatformSettings) {
-    suspend fun name(): String =
-        settings.getStringAsync(SettingKeys.LOCAL_ACCOUNT_NAME, "").ifBlank { DefaultName }
+    suspend fun name(): String = storedName().ifBlank { DefaultName }
+
+    /** The name the user gave the account, or blank while it keeps the default. */
+    suspend fun storedName(): String =
+        settings.getStringAsync(SettingKeys.LOCAL_ACCOUNT_NAME, "").trim()
 
     /** Renames the account; a blank name falls back to [DefaultName]. */
     suspend fun rename(name: String): Result<Unit> {
@@ -34,6 +38,6 @@ class LocalAccount(private val settings: PlatformSettings) {
     }
 
     companion object {
-        const val DefaultName = "本地账号"
+        val DefaultName: String get() = strings.localAccountDefaultName
     }
 }

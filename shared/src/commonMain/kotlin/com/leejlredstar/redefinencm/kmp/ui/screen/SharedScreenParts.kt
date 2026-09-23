@@ -43,6 +43,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
+import com.leejlredstar.redefinencm.kmp.i18n.UiText
+import com.leejlredstar.redefinencm.kmp.i18n.compactCount
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.viewmodel.LocalLibraryViewModel
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderTrack
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
@@ -107,7 +111,7 @@ fun ProviderTrack.toMediaInfo(
 ): MediaInfo = toPlayerMediaInfo(sourceId)
 
 /** The song menu's entry that opens the add-to-local-playlist dialog. */
-internal const val AddToLocalPlaylistLabel = "添加到本地歌单"
+internal val AddToLocalPlaylistLabel: String get() = strings.addToLocalPlaylist
 
 /** One entry of a song row's overflow menu. */
 data class SongRowAction(
@@ -128,7 +132,7 @@ fun playFromList(
     items: List<MediaInfo>,
     index: Int,
     wholeList: Boolean,
-    source: String? = null,
+    source: UiText? = null,
 ) {
     val song = items.getOrNull(index) ?: return
     PlaybackSource.set(source)
@@ -154,14 +158,18 @@ fun rememberSongRowActions(
     // one; the text-only manager does the same job on every target.
     @Suppress("DEPRECATION")
     val clipboard = LocalClipboardManager.current
-    return remember(media, neteaseSong, playlistId, player, downloadManager, providers, localLibrary, clipboard) {
+    val language = I18n.language
+    return remember(
+        media, neteaseSong, playlistId, player, downloadManager, providers, localLibrary, clipboard,
+        language,
+    ) {
         buildList {
-            add(SongRowAction("加入播放队列", AppIcons.PlaylistAdd) { player.addToQueue(media) })
+            add(SongRowAction(strings.songActionAddToQueue, AppIcons.PlaylistAdd) { player.addToQueue(media) })
             // A song of any provider can go into a local playlist.
             add(SongRowAction(AddToLocalPlaylistLabel, AppIcons.Add) { localLibrary.requestAddition(listOf(media)) })
             if (neteaseSong != null) {
                 add(
-                    SongRowAction("下载", AppIcons.Download) {
+                    SongRowAction(strings.download, AppIcons.Download) {
                         downloadManager.enqueueSongs(listOf(neteaseSong), playlistId)
                     },
                 )
@@ -169,7 +177,7 @@ fun rememberSongRowActions(
             // Every provider with a web page for the song gets the link, not only NetEase.
             providers.shareUrl(media.id)?.let { url ->
                 add(
-                    SongRowAction("复制歌曲链接", AppIcons.Link) {
+                    SongRowAction(strings.songActionCopyLink, AppIcons.Link) {
                         clipboard.setText(AnnotatedString(url))
                     },
                 )
@@ -178,14 +186,14 @@ fun rememberSongRowActions(
                 // The names on a song lead to their pages.
                 neteaseSong.ar.filter { it.id != 0L }.take(MaxArtistActions).forEach { artist ->
                     add(
-                        SongRowAction("歌手：${artist.name}", AppIcons.Person) {
+                        SongRowAction(strings.artistWithName(artist.name), AppIcons.Person) {
                             AppNavigationRequests.openArtist(artist.id)
                         },
                     )
                 }
                 if (neteaseSong.al.id != 0L) {
                     add(
-                        SongRowAction("专辑：${neteaseSong.al.name}", AppIcons.Album) {
+                        SongRowAction(strings.albumWithName(neteaseSong.al.name), AppIcons.Album) {
                             AppNavigationRequests.openAlbum(neteaseSong.al.id)
                         },
                     )
@@ -254,7 +262,7 @@ fun SongRow(
                     interactionSource = interactionSource,
                     indication = ripple(),
                     onClick = onClick,
-                    onLongClickLabel = if (actions.isNotEmpty()) "更多操作" else null,
+                    onLongClickLabel = if (actions.isNotEmpty()) strings.moreActions else null,
                     onLongClick = if (actions.isNotEmpty()) {
                         { menuOpen = true }
                     } else {
@@ -274,7 +282,7 @@ fun SongRow(
                     if (isCurrent) {
                         Icon(
                             imageVector = if (isPlaying) AppIcons.GraphicEq else AppIcons.Pause,
-                            contentDescription = if (isPlaying) "正在播放" else "已暂停",
+                            contentDescription = if (isPlaying) strings.playing else strings.paused,
                             tint = accentPalette.accent,
                             modifier = Modifier.size(20.dp),
                         )
@@ -308,7 +316,7 @@ fun SongRow(
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        text = title.ifBlank { "未知歌曲" },
+                        text = title.ifBlank { strings.unknownSong },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = if (isCurrent) FontWeight.Bold else null,
                         maxLines = 1,
@@ -325,7 +333,7 @@ fun SongRow(
                             )
                         }
                         Text(
-                            text = artist.ifBlank { "未知歌手" },
+                            text = artist.ifBlank { strings.unknownArtist },
                             style = MaterialTheme.typography.bodyMedium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -373,7 +381,7 @@ fun SongRow(
                         IconButton(onClick = { menuOpen = true }) {
                             Icon(
                                 imageVector = AppIcons.MoreVert,
-                                contentDescription = "更多操作",
+                                contentDescription = strings.moreActions,
                                 tint = accentPalette.secondaryOnQuietContainer,
                             )
                         }
@@ -455,9 +463,9 @@ private fun SongDownloadMark(
         },
         modifier = Modifier.semantics {
             contentDescription = when {
-                isFailed -> "下载失败，点按重试"
-                downloaded -> "已下载"
-                else -> "正在下载"
+                isFailed -> strings.downloadFailedTapToRetry
+                downloaded -> strings.downloaded
+                else -> strings.downloading
             }
         },
     ) {
@@ -472,12 +480,6 @@ private fun SongDownloadMark(
             modifier = Modifier.padding(6.dp).size(18.dp),
         )
     }
-}
-
-fun compactCount(value: Long): String = when {
-    value >= 100_000_000L -> "${value / 100_000_000L}亿"
-    value >= 10_000L -> "${value / 10_000L}万"
-    else -> value.toString()
 }
 
 @Composable
@@ -609,7 +611,7 @@ fun CarouselItemScope.RecommendSquareCard(
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            text = if (isPlaying) "正在播放" else "已暂停",
+                            text = if (isPlaying) strings.playing else strings.paused,
                             style = MaterialTheme.typography.labelSmall,
                         )
                     }
@@ -668,25 +670,25 @@ fun <T> SectionWithCarousel(
         }
         if (errorMessage != null) {
             ExpressiveStatePanel(
-                title = "${title}加载失败",
+                title = strings.sectionLoadFailed(title),
                 message = errorMessage,
                 icon = AppIcons.Refresh,
                 tone = ExpressiveStateTone.Error,
-                actionLabel = onRetry?.let { "重试" },
+                actionLabel = onRetry?.let { strings.retry },
                 onAction = onRetry,
                 modifier = Modifier.fillMaxWidth(),
             )
         } else if (isLoading) {
             ExpressiveLoadingState(
-                label = "正在加载$title…",
+                label = strings.sectionLoading(title),
                 modifier = Modifier.fillMaxWidth(),
             )
         } else if (items.isEmpty()) {
             ExpressiveStatePanel(
-                title = "暂无$title",
-                message = if (onRetry != null) "点按「重新加载」再试一次。" else "稍后再来看看。",
+                title = strings.sectionEmpty(title),
+                message = if (onRetry != null) strings.sectionEmptyTapReload else strings.sectionEmptyCheckBackLater,
                 icon = AppIcons.QueueMusic,
-                actionLabel = onRetry?.let { "重新加载" },
+                actionLabel = onRetry?.let { strings.reload },
                 onAction = onRetry,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -744,13 +746,13 @@ private fun CarouselPager(
             onClick = { scope.launch { state.animateScrollBy(-stepPx) } },
             enabled = state.canScrollBackward,
         ) {
-            Icon(AppIcons.KeyboardArrowLeft, contentDescription = "向前翻")
+            Icon(AppIcons.KeyboardArrowLeft, contentDescription = strings.carouselScrollBack)
         }
         IconButton(
             onClick = { scope.launch { state.animateScrollBy(stepPx) } },
             enabled = state.canScrollForward,
         ) {
-            Icon(AppIcons.KeyboardArrowRight, contentDescription = "向后翻")
+            Icon(AppIcons.KeyboardArrowRight, contentDescription = strings.carouselScrollForward)
         }
     }
 }
@@ -827,7 +829,7 @@ fun PlaylistCard(
                     )
                 }
                 Text(
-                    text = "${userPlaylistEach.trackCount} 首 · ${compactCount(userPlaylistEach.playCount)} 次播放",
+                    text = strings.playlistCardStats(userPlaylistEach.trackCount, compactCount(userPlaylistEach.playCount)),
                     style = MaterialTheme.typography.labelMedium,
                     color = accentPalette.secondaryOnQuietContainer,
                     maxLines = 1,
@@ -856,7 +858,7 @@ fun PlaylistCard(
                                 CircularProgressIndicator(
                                     modifier = Modifier
                                         .size(18.dp)
-                                        .semantics { contentDescription = "正在启动心动模式" },
+                                        .semantics { contentDescription = strings.heartbeatModeStarting },
                                     color = accentPalette.onContainer,
                                     strokeWidth = 2.dp,
                                 )
@@ -869,7 +871,7 @@ fun PlaylistCard(
                             }
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                text = "心动模式",
+                                text = strings.heartbeatMode,
                                 style = MaterialTheme.typography.labelLarge,
                                 maxLines = 1,
                             )

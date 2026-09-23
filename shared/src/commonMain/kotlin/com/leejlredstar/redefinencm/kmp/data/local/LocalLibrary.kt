@@ -5,6 +5,7 @@ import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderItemId
 import com.leejlredstar.redefinencm.kmp.data.provider.mediaId
 import com.leejlredstar.redefinencm.kmp.data.provider.toProviderItemIdOrNull
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -55,6 +56,13 @@ data class LocalPlaylist(
 ) {
     @Serializable
     enum class Kind { PLAYLIST, FAVORITES }
+
+    /**
+     * The name to show. The favourites list is named for what it is, in the language shown now,
+     * whatever language it was created in; a playlist shows the name its owner gave it.
+     */
+    val displayName: String
+        get() = if (kind == Kind.FAVORITES) strings.localLikes else name
 }
 
 /**
@@ -162,7 +170,7 @@ class LocalLibraryStore(
 
     /** Appends the tracks the playlist does not hold yet; the answer is how many were added. */
     suspend fun addTracks(playlistId: String, tracks: List<MediaInfo>): Result<Int> = change { library ->
-        val playlist = library.playlist(playlistId) ?: error("本地歌单不存在")
+        val playlist = library.playlist(playlistId) ?: error(strings.localPlaylistNotFound)
         val time = now()
         val held = playlist.tracks.mapTo(mutableSetOf()) { it.key }
         val added = tracks.mapNotNull { LocalTrack.from(it, time) }
@@ -181,7 +189,7 @@ class LocalLibraryStore(
     /** Adds [media] to the local favourites or takes it out; the list is made on first use. */
     suspend fun setFavorite(media: MediaInfo, favorite: Boolean): Result<Unit> = change { library ->
         val time = now()
-        val track = LocalTrack.from(media, time) ?: error("无法识别这首歌")
+        val track = LocalTrack.from(media, time) ?: error(strings.songUnidentifiable)
         val favorites = library.favorites ?: LocalPlaylist(
             id = newId(time),
             name = FavoritesName,
@@ -258,15 +266,15 @@ class LocalLibraryStore(
         id: String,
         change: (LocalPlaylist) -> LocalPlaylist,
     ): LocalLibraryDocument {
-        require(playlists.any { it.id == id }) { "本地歌单不存在" }
+        require(playlists.any { it.id == id }) { strings.localPlaylistNotFound }
         return copy(playlists = playlists.map { if (it.id == id) change(it) else it })
     }
 
     private fun newId(time: Long): String = "local-$time-${Random.nextInt(0, 1_000_000)}"
 
     companion object {
-        const val FavoritesName = "本地喜欢"
-        const val UntitledPlaylistName = "未命名歌单"
+        val FavoritesName: String get() = strings.localLikes
+        val UntitledPlaylistName: String get() = strings.untitledPlaylist
 
         internal val LibraryJson = Json {
             ignoreUnknownKeys = true

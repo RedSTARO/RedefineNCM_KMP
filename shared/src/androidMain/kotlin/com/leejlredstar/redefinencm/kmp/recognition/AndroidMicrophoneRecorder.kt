@@ -8,6 +8,7 @@ import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import androidx.core.content.ContextCompat
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -38,7 +39,7 @@ class AndroidMicrophoneRecorder(
             encoding,
         )
         if (minimumBufferBytes <= 0) {
-            throw MicrophoneUnavailableException("设备不支持单声道 PCM 录音")
+            throw MicrophoneUnavailableException(strings.micMonoPcmUnsupported)
         }
 
         val source = if (supportsUnprocessedInput()) {
@@ -62,7 +63,7 @@ class AndroidMicrophoneRecorder(
 
         if (recorder.state != AudioRecord.STATE_INITIALIZED) {
             recorder.release()
-            throw MicrophoneUnavailableException("录音设备初始化失败")
+            throw MicrophoneUnavailableException(strings.micRecorderInitFailed)
         }
 
         val targetSamples =
@@ -74,7 +75,7 @@ class AndroidMicrophoneRecorder(
         try {
             recorder.startRecording()
             if (recorder.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
-                throw MicrophoneUnavailableException("麦克风未进入录音状态")
+                throw MicrophoneUnavailableException(strings.micNotRecording)
             }
 
             while (written < samples.size) {
@@ -87,7 +88,7 @@ class AndroidMicrophoneRecorder(
                     AudioRecord.READ_BLOCKING,
                 )
                 if (read < 0) {
-                    throw MicrophoneUnavailableException("读取麦克风失败，错误码 $read")
+                    throw MicrophoneUnavailableException(strings.micReadFailed(read))
                 }
                 if (read == 0) continue
 

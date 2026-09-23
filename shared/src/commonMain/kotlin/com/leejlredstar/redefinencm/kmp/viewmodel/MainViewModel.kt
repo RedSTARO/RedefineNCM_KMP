@@ -1,5 +1,8 @@
 package com.leejlredstar.redefinencm.kmp.viewmodel
 
+import com.leejlredstar.redefinencm.kmp.i18n.UiText
+import com.leejlredstar.redefinencm.kmp.i18n.strings
+import com.leejlredstar.redefinencm.kmp.i18n.uiText
 import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import com.leejlredstar.redefinencm.kmp.util.getBooleanAsync
 import com.leejlredstar.redefinencm.kmp.util.getLongAsync
@@ -100,8 +103,8 @@ class MainViewModel(
     private val lastAppliedPlaybackVerification = mutableMapOf<Long, Long>()
     private var lastSavedPlayerStatus: PlayerStatus? = null
     private val playerStatusSaveMutex = Mutex()
-    val playerStatusSaveError = MutableStateFlow<String?>(null)
-    val playerStatusLoadError = MutableStateFlow<String?>(null)
+    val playerStatusSaveError = MutableStateFlow<UiText?>(null)
+    val playerStatusLoadError = MutableStateFlow<UiText?>(null)
     val playerStatusRestoreState: StateFlow<PlayerStatusRestoreState> = playerStatusRestorer.state
 
     // ── User ──
@@ -113,10 +116,10 @@ class MainViewModel(
     val userPlaylists = MutableStateFlow<List<UserPlaylistEach>>(emptyList())
     val userPlaylistsLoaded = MutableStateFlow(false)
     val accountLoading = MutableStateFlow(false)
-    val accountLoadError = MutableStateFlow<String?>(null)
-    val userDetailLoadError = MutableStateFlow<String?>(null)
-    val userLevelLoadError = MutableStateFlow<String?>(null)
-    val userPlaylistsLoadError = MutableStateFlow<String?>(null)
+    val accountLoadError = MutableStateFlow<UiText?>(null)
+    val userDetailLoadError = MutableStateFlow<UiText?>(null)
+    val userLevelLoadError = MutableStateFlow<UiText?>(null)
+    val userPlaylistsLoadError = MutableStateFlow<UiText?>(null)
     val userDetailFromCache = MutableStateFlow(false)
     val userLevelFromCache = MutableStateFlow(false)
     val userPlaylistsFromCache = MutableStateFlow(false)
@@ -127,7 +130,7 @@ class MainViewModel(
 
     // ── Intelligence playback ──
     val intelligenceLoadingPlaylistId = MutableStateFlow<Long?>(null)
-    val intelligenceError = MutableStateFlow<String?>(null)
+    val intelligenceError = MutableStateFlow<UiText?>(null)
     private val intelligenceGeneration = MutableStateFlow(0L)
     private var intelligenceJob: Job? = null
 
@@ -135,8 +138,8 @@ class MainViewModel(
     val playlistDetail = MutableStateFlow<PlaylistDetail?>(null)
     val playlistSongs = MutableStateFlow<PlaylistTrackAll?>(null)
     val playlistLoading = MutableStateFlow(false)
-    val playlistLoadError = MutableStateFlow<String?>(null)
-    val playlistDetailLoadError = MutableStateFlow<String?>(null)
+    val playlistLoadError = MutableStateFlow<UiText?>(null)
+    val playlistDetailLoadError = MutableStateFlow<UiText?>(null)
     val playlistDetailFromCache = MutableStateFlow(false)
     val playlistSongsFromCache = MutableStateFlow(false)
     private val playlistGeneration = MutableStateFlow(0L)
@@ -146,8 +149,8 @@ class MainViewModel(
     // ── Recommend ──
     val recommendResource = MutableStateFlow<RecommendResource?>(null)
     val recommendSongs = MutableStateFlow<RecommendSongs?>(null)
-    val recommendResourceLoadError = MutableStateFlow<String?>(null)
-    val recommendSongsLoadError = MutableStateFlow<String?>(null)
+    val recommendResourceLoadError = MutableStateFlow<UiText?>(null)
+    val recommendSongsLoadError = MutableStateFlow<UiText?>(null)
     val recommendResourceFromCache = MutableStateFlow(false)
     val recommendSongsFromCache = MutableStateFlow(false)
 
@@ -167,7 +170,7 @@ class MainViewModel(
     /** Whether a provider may have results after the pages shown. */
     val searchHasMore = MutableStateFlow(false)
     val searchLoadingMore = MutableStateFlow(false)
-    val searchMoreError = MutableStateFlow<String?>(null)
+    val searchMoreError = MutableStateFlow<UiText?>(null)
     val searchHistory = MutableStateFlow<List<String>>(emptyList())
     val hotSearches = MutableStateFlow<List<SearchHotItem>>(emptyList())
     private val historyMutex = Mutex()
@@ -177,7 +180,7 @@ class MainViewModel(
     private var hotSearchJob: Job? = null
     val searchLoading = MutableStateFlow(false)
     val searchSubmittedQuery = MutableStateFlow<String?>(null)
-    val searchError = MutableStateFlow<String?>(null)
+    val searchError = MutableStateFlow<UiText?>(null)
     private var searchJob: Job? = null
     private var suggestionJob: Job? = null
 
@@ -239,7 +242,7 @@ class MainViewModel(
             val current = currentReleaseVersion()
             val latest = fetchLatestReleaseTag() ?: return@launch
             if (isNewerReleaseVersion(latest, current)) {
-                updateMessage.value = "发现新版本：$latest"
+                updateMessage.value = strings.updateAvailable(latest)
             }
         }
     }
@@ -250,9 +253,9 @@ class MainViewModel(
             val current = currentReleaseVersion()
             val latest = fetchLatestReleaseTag()
             updateMessage.value = when {
-                latest == null -> "检查更新失败，请稍后再试"
-                isNewerReleaseVersion(latest, current) -> "发现新版本：$latest"
-                else -> "已是最新版本（$current）"
+                latest == null -> strings.updateCheckFailed
+                isNewerReleaseVersion(latest, current) -> strings.updateAvailable(latest)
+                else -> strings.alreadyLatestVersion(current)
             }
         }
     }
@@ -299,7 +302,7 @@ class MainViewModel(
                     playerStatusSaveError.value = null
                 }
                 .onFailure { failure ->
-                    playerStatusSaveError.value = failure.message ?: "播放状态保存失败"
+                    playerStatusSaveError.value = failure.message?.let(::uiText) ?: UiText { it.playerStatusSaveFailed }
                 }
         }
     }
@@ -334,7 +337,7 @@ class MainViewModel(
                         playerStatusLoadError.value = null
                     }
                     is PlayerStatusRestoreState.Failed -> {
-                        playerStatusLoadError.value = state.message
+                        playerStatusLoadError.value = state.message?.let(::uiText)
                     }
                 }
             }
@@ -444,7 +447,7 @@ class MainViewModel(
                             accountGeneration.value == generation &&
                             _uid.value == resolvedUid
                         ) {
-                            userDetailLoadError.value = "用户资料加载失败，请检查网络后重试"
+                            userDetailLoadError.value = UiText { it.userDetailLoadFailed }
                         }
                     }
                     launch {
@@ -462,7 +465,7 @@ class MainViewModel(
                             accountGeneration.value == generation &&
                             _uid.value == resolvedUid
                         ) {
-                            userLevelLoadError.value = "用户等级信息加载失败，请检查网络后重试"
+                            userLevelLoadError.value = UiText { it.userLevelLoadFailed }
                         }
                     }
                     launch {
@@ -481,7 +484,7 @@ class MainViewModel(
                             accountGeneration.value == generation &&
                             _uid.value == resolvedUid
                         ) {
-                            userPlaylistsLoadError.value = "歌单加载失败，请检查网络后重试"
+                            userPlaylistsLoadError.value = UiText { it.userPlaylistsLoadFailedRetry }
                         }
                     }
                     launch {
@@ -502,7 +505,7 @@ class MainViewModel(
                             accountGeneration.value == generation &&
                             _uid.value == resolvedUid
                         ) {
-                            recommendResourceLoadError.value = "推荐歌单加载失败，请检查网络后重试"
+                            recommendResourceLoadError.value = UiText { it.recommendedPlaylistsLoadFailed }
                         }
                     }
                     launch {
@@ -523,7 +526,7 @@ class MainViewModel(
                             accountGeneration.value == generation &&
                             _uid.value == resolvedUid
                         ) {
-                            recommendSongsLoadError.value = "每日推荐加载失败，请检查网络后重试"
+                            recommendSongsLoadError.value = UiText { it.dailyPicksLoadFailedRetry }
                         }
                     }
                 }
@@ -548,7 +551,7 @@ class MainViewModel(
                     settings.setLong(SettingKeys.UID, 0L)
                     settings.setLong(SettingKeys.UID_COOKIE_FINGERPRINT, 0L)
                     runCatching { settings.flush() }
-                    accountLoadError.value = failure.message ?: "账号数据加载失败"
+                    accountLoadError.value = failure.message?.let(::uiText) ?: UiText { it.accountDataLoadFailed }
                 }
             } finally {
                 if (accountGeneration.value == generation) {
@@ -585,11 +588,11 @@ class MainViewModel(
 
         val requestUid = _uid.value
         if (playlistId <= 0L) {
-            intelligenceError.value = "喜欢歌单 ID 无效"
+            intelligenceError.value = UiText { it.likedPlaylistIdInvalid }
             return
         }
         if (requestUid <= 0L) {
-            intelligenceError.value = "请先登录再使用心动模式"
+            intelligenceError.value = UiText { it.heartbeatModeSignInRequired }
             return
         }
 
@@ -597,19 +600,19 @@ class MainViewModel(
         intelligenceJob = scope.launch(Dispatchers.Default) {
             try {
                 val seed = selectIntelligenceSeed(repo.getLikedSongIds(requestUid))
-                    ?: error("无法获取喜欢的音乐，请检查网络、登录状态或歌单内容")
+                    ?: error(strings.likedSongsFetchFailed)
                 ensureActive()
                 if (!isCurrentIntelligenceRequest(generation, requestUid)) return@launch
 
                 val response = repo.getIntelligenceList(
                     id = seed,
                     pid = playlistId,
-                ) ?: error("心动模式列表获取失败，请检查网络后重试")
+                ) ?: error(strings.heartbeatModeListFetchFailed)
                 val queue = buildIntelligenceQueue(
                     songInfos = response.data.orEmpty().map { it.songInfo },
                     playlistId = playlistId,
                 )
-                if (queue.isEmpty()) error("心动模式返回的歌曲列表为空")
+                if (queue.isEmpty()) error(strings.heartbeatModeEmpty)
                 ensureActive()
                 if (!isCurrentIntelligenceRequest(generation, requestUid)) return@launch
 
@@ -622,7 +625,7 @@ class MainViewModel(
                 throw cancelled
             } catch (failure: Exception) {
                 if (isCurrentIntelligenceRequest(generation, requestUid)) {
-                    intelligenceError.value = failure.message ?: "心动模式启动失败"
+                    intelligenceError.value = failure.message?.let(::uiText) ?: UiText { it.heartbeatModeStartFailed }
                 }
             } finally {
                 if (isCurrentIntelligenceRequest(generation, requestUid)) {
@@ -694,20 +697,20 @@ class MainViewModel(
                     playlistGeneration.value == generation &&
                     activePlaylistId.value == songlistID
                 ) {
-                    playlistDetailLoadError.value = "歌单资料加载失败，重试后可以显示封面和简介"
+                    playlistDetailLoadError.value = UiText { it.playlistDetailLoadFailed }
                 }
                 if (
                     !tracksEmitted &&
                     playlistGeneration.value == generation &&
                     activePlaylistId.value == songlistID
                 ) {
-                    playlistLoadError.value = "歌曲列表加载失败，请检查网络后重试"
+                    playlistLoadError.value = UiText { it.playlistTracksLoadFailed }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (failure: Exception) {
                 if (playlistGeneration.value == generation) {
-                    playlistLoadError.value = failure.message ?: "歌单加载失败"
+                    playlistLoadError.value = failure.message?.let(::uiText) ?: UiText { it.playlistLoadFailed }
                 }
             } finally {
                 if (playlistGeneration.value == generation) {
@@ -777,9 +780,12 @@ class MainViewModel(
                 searchFailedProviders.value = failed.map { it.provider }
                 searchError.value = when {
                     failed.isEmpty() -> null
-                    failed.size == groups.size -> "搜索失败，请检查网络后重试"
-                    else -> failed.joinToString("、") { it.provider.displayName }
-                        .let { "${it}搜索失败，只显示其他平台的结果" }
+                    failed.size == groups.size -> UiText { it.searchFailedRetry }
+                    else -> failed.map { it.provider }.let { providers ->
+                        UiText { s ->
+                            s.searchPartiallyFailed(providers.joinToString(s.listSeparator) { p -> p.displayName })
+                        }
+                    }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -787,7 +793,7 @@ class MainViewModel(
                 if (currentCoroutineContext()[Job] == searchJob) {
                     searchGroups.value = emptyList()
                     searchResults.value = emptyList()
-                    searchError.value = "搜索失败，请检查网络后重试"
+                    searchError.value = UiText { it.searchFailedRetry }
                 }
             } finally {
                 if (currentCoroutineContext()[Job] == searchJob) {
@@ -837,14 +843,18 @@ class MainViewModel(
                 val failed = groups.filter { it.failed }
                 searchFailedProviders.value = searchCursors.filterValues { it.failed }.keys.toList()
                 searchMoreError.value = failed.takeIf { it.isNotEmpty() }
-                    ?.joinToString("、") { it.provider.displayName }
-                    ?.let { "${it}没能加载更多结果" }
+                    ?.map { it.provider }
+                    ?.let { providers ->
+                        UiText { s ->
+                            s.searchMoreFailedFor(providers.joinToString(s.listSeparator) { p -> p.displayName })
+                        }
+                    }
                 // Every failed provider has now answered, so the partial-failure line goes.
                 if (searchFailedProviders.value.isEmpty()) searchError.value = null
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Throwable) {
-                if (searchSubmittedQuery.value == query) searchMoreError.value = "没能加载更多结果"
+                if (searchSubmittedQuery.value == query) searchMoreError.value = UiText { it.searchMoreFailed }
             } finally {
                 if (searchSubmittedQuery.value == query) searchLoadingMore.value = false
             }

@@ -2,6 +2,7 @@ package com.leejlredstar.redefinencm.kmp.util
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
@@ -18,8 +19,8 @@ actual fun rememberImportFileLauncher(onImported: (String) -> Unit): () -> Unit 
             var selected: File? = null
             SwingUtilities.invokeAndWait {
                 val chooser = JFileChooser().apply {
-                    fileFilter = FileNameExtensionFilter("JSON 设置文件 (*.json)", "json")
-                    dialogTitle = "选择设置文件"
+                    fileFilter = FileNameExtensionFilter(strings.settingsFileFilter, "json")
+                    dialogTitle = strings.chooseSettingsFile
                 }
                 if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
                     selected = chooser.selectedFile
@@ -37,8 +38,8 @@ actual fun rememberExportFileLauncher(): (String) -> Unit {
         scope.launch(Dispatchers.IO) {
             SwingUtilities.invokeAndWait {
                 val chooser = JFileChooser().apply {
-                    fileFilter = FileNameExtensionFilter("JSON 设置文件 (*.json)", "json")
-                    dialogTitle = "保存设置文件"
+                    fileFilter = FileNameExtensionFilter(strings.settingsFileFilter, "json")
+                    dialogTitle = strings.saveSettingsFile
                     selectedFile = File("RedefineNCM_KMP_settings.json")
                 }
                 if (chooser.showSaveDialog(null) == JFileChooser.APPROVE_OPTION) {

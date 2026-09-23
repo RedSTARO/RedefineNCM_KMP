@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp
 
 import android.app.Application
+import android.content.res.Configuration
 import android.database.ContentObserver
 import android.net.Uri
 import android.os.Build
@@ -13,6 +14,7 @@ import coil3.SingletonImageLoader
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import com.leejlredstar.redefinencm.kmp.di.initKoin
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
 import com.leejlredstar.redefinencm.kmp.notification.AndroidLyricNotification
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
@@ -43,11 +45,20 @@ class RedefineNCMApp : Application(), SingletonImageLoader.Factory {
         AndroidLyricNotification.init(applicationContext)
         appScope.launch {
             settings.awaitLoaded()
+            // Before the notifications and the services speak: they can start without the UI,
+            // which is where the language is otherwise first read.
+            I18n.loadStored(settings)
             AndroidLyricNotification.setEnabled(
                 settings.getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false),
             )
         }
         registerDownloadedSongsObserver()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // The system language may have changed; this only matters while the app follows it.
+        I18n.refreshSystemLanguage()
     }
 
     private fun registerDownloadedSongsObserver() {

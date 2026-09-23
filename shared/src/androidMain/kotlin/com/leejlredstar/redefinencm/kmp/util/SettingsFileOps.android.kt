@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import java.io.File
 
 @Composable
@@ -38,7 +39,7 @@ actual fun rememberExportFileLauncher(): (String) -> Unit {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             context.startActivity(
-                Intent.createChooser(shareIntent, "导出设置文件")
+                Intent.createChooser(shareIntent, strings.exportSettingsFile)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         } catch (_: Exception) { }

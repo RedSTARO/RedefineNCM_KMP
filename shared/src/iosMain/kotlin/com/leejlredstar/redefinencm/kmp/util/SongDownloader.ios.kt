@@ -2,6 +2,7 @@
 
 package com.leejlredstar.redefinencm.kmp.util
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -16,7 +17,7 @@ actual object SongDownloader {
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
         onReadyToPublish: () -> Boolean,
     ): DownloadedSongFile {
-        require(item.url.isNotBlank()) { "下载地址为空" }
+        require(item.url.isNotBlank()) { strings.downloadUrlEmpty }
 
         val existingSnapshots = when (val scan = scanDownloadedSongs()) {
             is DownloadScanResult.Success -> scan.snapshots
@@ -24,20 +25,20 @@ actual object SongDownloader {
                 ?: IllegalStateException(scan.message)
         }
         existingSnapshots.firstOrNull { it.id == item.id }?.let { existing ->
-            if (!onReadyToPublish()) throw CancellationException("下载已取消，文件未保存")
+            if (!onReadyToPublish()) throw CancellationException(strings.downloadCanceledNotSaved)
             return DownloadedSongFile(fileName = existing.fileName, uri = existing.uri)
         }
 
-        val url = NSURL.URLWithString(item.url) ?: error("下载地址无效")
+        val url = NSURL.URLWithString(item.url) ?: error(strings.downloadUrlInvalid)
         val extension = extensionFromUrl(item.url)
         val fileName = "${item.id}.$extension"
         onProgress(0L, item.expectedBytes)
         val downloadedFile = IosBackgroundDownloadCoordinator.download(url, fileName, onProgress)
         if (!onReadyToPublish()) {
             withContext(NonCancellable) {
-                check(deleteDownloadedSongFile(item.id)) { "下载已取消，但无法删除已下载的文件" }
+                check(deleteDownloadedSongFile(item.id)) { strings.downloadCanceledDeleteFailed }
             }
-            throw CancellationException("下载已取消，文件未保存")
+            throw CancellationException(strings.downloadCanceledNotSaved)
         }
         return downloadedFile
     }

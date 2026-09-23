@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.util
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -12,7 +13,7 @@ actual object SongDownloader {
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
         onReadyToPublish: () -> Boolean,
     ): DownloadedSongFile {
-        require(item.url.isNotBlank()) { "下载地址为空" }
+        require(item.url.isNotBlank()) { strings.downloadUrlEmpty }
         val extension = item.url.substringBefore('?')
             .substringAfterLast('/')
             .substringAfterLast('.', "mp3")
@@ -27,9 +28,9 @@ actual object SongDownloader {
         )
         if (!onReadyToPublish()) {
             withContext(NonCancellable) {
-                check(WebDownloadStorage.delete(item.id)) { "下载已取消，但无法删除已下载的文件" }
+                check(WebDownloadStorage.delete(item.id)) { strings.downloadCanceledDeleteFailed }
             }
-            throw CancellationException("下载已取消，文件未保存")
+            throw CancellationException(strings.downloadCanceledNotSaved)
         }
         return downloadedFile
     }

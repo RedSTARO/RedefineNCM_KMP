@@ -2,6 +2,7 @@
 
 package com.leejlredstar.redefinencm.kmp.recognition
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.browser.window
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -47,7 +48,7 @@ class WasmMicrophoneRecorder : ExclusiveMicrophoneRecorder() {
             val context = try {
                 WebAudioContext()
             } catch (error: Throwable) {
-                throw MicrophoneUnavailableException("浏览器 Web Audio 不可用", error)
+                throw MicrophoneUnavailableException(strings.browserWebAudioUnavailable, error)
             }
             audioContext = context
             // 权限弹窗返回后可能已经丢失瞬时用户激活；解码不要求 running 状态，
@@ -73,7 +74,7 @@ class WasmMicrophoneRecorder : ExclusiveMicrophoneRecorder() {
             val mediaRecorder = try {
                 WebMediaRecorder(stream)
             } catch (error: Throwable) {
-                throw MicrophoneUnavailableException("浏览器不支持 MediaRecorder", error)
+                throw MicrophoneUnavailableException(strings.browserNoMediaRecorder, error)
             }
             recorder = mediaRecorder
             mediaRecorder.ondataavailable = { event ->
@@ -81,13 +82,13 @@ class WasmMicrophoneRecorder : ExclusiveMicrophoneRecorder() {
             }
             mediaRecorder.onerror = {
                 completedBlob.completeExceptionally(
-                    MicrophoneUnavailableException("浏览器录音出错"),
+                    MicrophoneUnavailableException(strings.browserRecordingError),
                 )
             }
             mediaRecorder.onstop = {
                 if (!completedBlob.isCompleted) {
                     completedBlob.completeExceptionally(
-                        MicrophoneUnavailableException("浏览器没有返回录音数据"),
+                        MicrophoneUnavailableException(strings.browserNoRecordingData),
                     )
                 }
             }
@@ -122,7 +123,7 @@ class WasmMicrophoneRecorder : ExclusiveMicrophoneRecorder() {
             val encodedAudio = blob.arrayBuffer().await()
             val decoded = context.decodeAudioData(encodedAudio).await()
             if (decoded.numberOfChannels <= 0 || decoded.sampleRate <= 0.0) {
-                throw MicrophoneUnavailableException("浏览器返回了无效的录音格式")
+                throw MicrophoneUnavailableException(strings.browserInvalidRecordingFormat)
             }
             val channel = decoded.getChannelData(0)
             val samples = FloatArray(channel.length) { index ->
@@ -209,11 +210,11 @@ private fun mapWebMicrophoneError(error: Throwable): MicrophoneCaptureException 
     val jsError = (error as? JsException)?.thrownValue?.unsafeCast<WebDomError>()
     val detail = jsError?.message?.takeIf { it.isNotBlank() }
     return when (jsError?.name) {
-        "NotAllowedError" -> MicrophonePermissionDeniedException(detail ?: "浏览器拒绝了麦克风权限", error)
-        "NotFoundError" -> MicrophoneUnavailableException(detail ?: "没有找到麦克风", error)
-        "NotReadableError", "AbortError" -> MicrophoneBusyException(detail ?: "浏览器无法读取麦克风", error)
-        "SecurityError" -> InsecureMicrophoneContextException(detail ?: "当前页面不能访问麦克风", error)
-        else -> MicrophoneUnavailableException(detail ?: "浏览器麦克风录音失败", error)
+        "NotAllowedError" -> MicrophonePermissionDeniedException(detail ?: strings.browserMicPermissionDenied, error)
+        "NotFoundError" -> MicrophoneUnavailableException(detail ?: strings.browserMicNotFound, error)
+        "NotReadableError", "AbortError" -> MicrophoneBusyException(detail ?: strings.browserMicUnreadable, error)
+        "SecurityError" -> InsecureMicrophoneContextException(detail ?: strings.browserMicInsecureContext, error)
+        else -> MicrophoneUnavailableException(detail ?: strings.browserMicRecordingFailed, error)
     }
 }
 

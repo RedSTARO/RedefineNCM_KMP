@@ -2,6 +2,7 @@
 
 package com.leejlredstar.redefinencm.kmp.transition
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.await
 import org.khronos.webgl.Float32Array
@@ -29,14 +30,14 @@ internal class WebBeatModelLoader : BeatModelLoader {
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Throwable) {
-            return BeatModelAvailability.Unavailable("ONNX Runtime Web 加载失败：${failure.jsMessage()}")
+            return BeatModelAvailability.Unavailable(strings.onnxWebLoadFailed(failure.jsMessage()))
         }
         val model = try {
             fetchModel(MODEL_URL).await<JsAny>()
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Throwable) {
-            return BeatModelAvailability.Unavailable("节拍模型下载失败：${failure.jsMessage()}")
+            return BeatModelAvailability.Unavailable(strings.beatModelDownloadFailed(failure.jsMessage()))
         }
         val failures = mutableListOf<String>()
         val attempts = buildList {
@@ -47,7 +48,7 @@ internal class WebBeatModelLoader : BeatModelLoader {
             if (hasWebGpu()) add(Attempt("webgpu", "", InferenceAccelerator.GPU, "WebGPU"))
         }
         if (attempts.isEmpty()) {
-            return BeatModelAvailability.Unavailable("浏览器没有开放 WebNN 或 WebGPU")
+            return BeatModelAvailability.Unavailable(strings.browserNoWebNnOrWebGpu)
         }
         for (attempt in attempts) {
             val session = try {
@@ -55,7 +56,7 @@ internal class WebBeatModelLoader : BeatModelLoader {
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
-                failures += "${attempt.label}：${failure.jsMessage()}"
+                failures += strings.labelValue(attempt.label, failure.jsMessage())
                 continue
             }
             val beatModel = WebBeatActivationModel(ort, session, attempt.accelerator, attempt.label)
@@ -65,13 +66,15 @@ internal class WebBeatModelLoader : BeatModelLoader {
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
-                failures += "${attempt.label}：${failure.jsMessage()}"
+                failures += strings.labelValue(attempt.label, failure.jsMessage())
                 beatModel.close()
                 continue
             }
             return BeatModelAvailability.Ready(beatModel)
         }
-        return BeatModelAvailability.Unavailable("浏览器的加速设备无法运行节拍模型：${failures.joinToString("；")}")
+        return BeatModelAvailability.Unavailable(
+            strings.browserBeatModelDevicesFailed(failures.joinToString(strings.clauseSeparator)),
+        )
     }
 
     private class Attempt(

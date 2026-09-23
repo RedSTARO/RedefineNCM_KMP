@@ -11,6 +11,9 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.leejlredstar.redefinencm.kmp.i18n.AppLanguage
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.canPostNotifications
 import kotlinx.coroutines.CoroutineScope
@@ -172,20 +175,21 @@ class AndroidDownloadService : Service() {
         val activeTask = statistics.firstActiveTask
         val (total, _, completed, failed, _, paused) = statistics.summary
         val title = when {
-            activeTask != null -> "正在下载：${activeTask.title}"
-            paused > 0 -> "下载已暂停"
-            failed > 0 -> "下载完成，$failed 项失败"
-            total > 0 -> "下载完成"
-            else -> "下载准备中"
+            activeTask != null -> strings.downloadingTitle(activeTask.title)
+            paused > 0 -> strings.downloadsPaused
+            failed > 0 -> strings.downloadsFinishedWithFailures(failed)
+            total > 0 -> strings.downloadsFinished
+            else -> strings.downloadsPreparing
         }
         val text = when {
-            total == 0 -> "正在准备下载队列"
-            activeTask != null -> "$completed/$total 完成 · ${activeTask.artist}"
-            paused > 0 -> "$paused 项暂停 · $completed/$total 完成"
-            failed > 0 -> "$completed/$total 完成"
-            else -> "$completed/$total 完成"
+            total == 0 -> strings.downloadQueuePreparing
+            activeTask != null -> strings.downloadProgressWithArtist(completed, total, activeTask.artist)
+            paused > 0 -> strings.downloadProgressWithPaused(paused, completed, total)
+            failed > 0 -> strings.downloadProgress(completed, total)
+            else -> strings.downloadProgress(completed, total)
         }
 
+        ensureChannel()
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentTitle(title)
@@ -209,21 +213,21 @@ class AndroidDownloadService : Service() {
             }
             builder.addAction(
                 android.R.drawable.ic_media_pause,
-                "暂停",
+                strings.pause,
                 servicePendingIntent(ACTION_PAUSE_ALL, requestCode = 1),
             )
         }
         if (paused > 0) {
             builder.addAction(
                 android.R.drawable.ic_media_play,
-                "继续",
+                strings.resume,
                 servicePendingIntent(ACTION_RESUME_ALL, requestCode = 2),
             )
         }
         if (statistics.summary.active > 0 || paused > 0) {
             builder.addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
-                "取消",
+                strings.cancel,
                 servicePendingIntent(ACTION_CANCEL_ALL, requestCode = 3),
             )
         }
@@ -304,15 +308,23 @@ class AndroidDownloadService : Service() {
         }
     }
 
+    /**
+     * Creates the channel, or renames it after a language switch: creating a channel that exists
+     * only updates its name and description, and keeps the settings the user gave it.
+     */
+    private var channelLanguage: AppLanguage? = null
+
     private fun ensureChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        if (notificationManager.getNotificationChannel(CHANNEL_ID) != null) return
+        val language = I18n.language
+        if (channelLanguage == language) return
+        channelLanguage = language
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Download Service",
+            strings.downloadChannelName,
             NotificationManager.IMPORTANCE_LOW,
         ).apply {
-            description = "Shows background music download progress"
+            description = strings.downloadChannelDescription
             enableLights(false)
             enableVibration(false)
             setShowBadge(false)

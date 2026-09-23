@@ -1,8 +1,12 @@
 package com.leejlredstar.redefinencm.kmp.download
 
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
+import com.leejlredstar.redefinencm.kmp.i18n.LanguageSetting
 import com.leejlredstar.redefinencm.kmp.util.DownloadedSongSnapshot
 import com.leejlredstar.redefinencm.kmp.util.LocalLyricFormat
 import com.leejlredstar.redefinencm.kmp.util.LocalMediaAssetSnapshot
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlinx.coroutines.Job
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -12,6 +16,17 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class SongDownloadManagerTest {
+    /** The expected copy below is the Chinese, so the test pins it whatever the machine's language. */
+    @BeforeTest
+    fun showChinese() {
+        I18n.apply(LanguageSetting.ZH)
+    }
+
+    @AfterTest
+    fun followTheSystemAgain() {
+        I18n.apply(LanguageSetting.SYSTEM)
+    }
+
 
     @Test
     fun cancelledWorkerKeepsSlotUntilCompletionCallbackClearsIt() {

@@ -60,9 +60,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusicComments
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
-import com.leejlredstar.redefinencm.kmp.ui.screen.compactCount
+import com.leejlredstar.redefinencm.kmp.i18n.compactCount
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import kotlinx.coroutines.delay
 
@@ -172,15 +173,15 @@ internal fun QueuePanelContent(
 
     Column(modifier) {
         ExpressiveSectionTitle(
-            text = "播放队列",
+            text = strings.queue,
             supportingText = when {
-                playlist.isEmpty() -> "暂无待播放歌曲"
-                shuffleEnabled -> "${playlist.size} 首 · 随机播放时不能调整顺序"
-                playlist.size > 1 -> "${playlist.size} 首 · 拖动右侧手柄调整顺序"
-                else -> "1 首"
+                playlist.isEmpty() -> strings.noSongsQueued
+                shuffleEnabled -> strings.queueSubtitleShuffleOn(playlist.size)
+                playlist.size > 1 -> strings.queueSubtitleDragToReorder(playlist.size)
+                else -> strings.oneSong
             },
             action = if (playlist.isNotEmpty()) {
-                { TextButton(onClick = { confirmClear = true }) { Text("清空") } }
+                { TextButton(onClick = { confirmClear = true }) { Text(strings.clear) } }
             } else {
                 null
             },
@@ -195,8 +196,8 @@ internal fun QueuePanelContent(
             if (shown.isEmpty()) {
                 item(key = "empty-queue") {
                     ExpressiveStatePanel(
-                        title = "播放队列为空",
-                        message = "开始播放歌曲后，待播放曲目会显示在这里。",
+                        title = strings.queueEmpty,
+                        message = strings.queueEmptyMessage,
                         icon = AppIcons.QueueMusic,
                         accentPalette = accentPalette,
                         modifier = Modifier.padding(horizontal = 16.dp),
@@ -249,17 +250,17 @@ internal fun QueuePanelContent(
     if (confirmClear) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
-            title = { Text("清空播放队列？") },
-            text = { Text("队列里的 ${playlist.size} 首歌会全部移除，播放随之停止。") },
+            title = { Text(strings.clearQueueTitle) },
+            text = { Text(strings.clearQueueMessage(playlist.size)) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         confirmClear = false
                         actions.onClear()
                     },
-                ) { Text("清空") }
+                ) { Text(strings.clear) }
             },
-            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text(strings.cancel) } },
         )
     }
 }
@@ -279,8 +280,8 @@ private fun QueueRow(
     modifier: Modifier = Modifier,
 ) {
     val item = entry.media
-    val title = item.title.ifBlank { "未知歌曲" }
-    val artist = item.artist.ifBlank { "未知歌手" }
+    val title = item.title.ifBlank { strings.unknownSong }
+    val artist = item.artist.ifBlank { strings.unknownArtist }
     val interactionSource = remember { MutableInteractionSource() }
     Surface(
         onClick = onClick,
@@ -300,18 +301,18 @@ private fun QueueRow(
                 vertical = ExpressiveLayout.ConnectedItemGap,
             )
             .semantics(mergeDescendants = true) {
-                contentDescription = "第 ${index + 1} 首，$title，歌手 $artist"
+                contentDescription = strings.queueItemDescription(index + 1, title, artist)
                 selected = isCurrent
-                stateDescription = if (isCurrent) "正在播放" else "等待播放"
+                stateDescription = if (isCurrent) strings.playing else strings.queued
                 // Dragging is a pointer gesture; screen readers move rows through these instead.
                 customActions = buildList {
                     if (canReorder && index > 0) {
-                        add(CustomAccessibilityAction("上移") { onMove(index - 1); true })
+                        add(CustomAccessibilityAction(strings.moveUp) { onMove(index - 1); true })
                     }
                     if (canReorder && index < count - 1) {
-                        add(CustomAccessibilityAction("下移") { onMove(index + 1); true })
+                        add(CustomAccessibilityAction(strings.moveDown) { onMove(index + 1); true })
                     }
-                    add(CustomAccessibilityAction("从队列移除") { onRemove(); true })
+                    add(CustomAccessibilityAction(strings.removeFromQueue) { onRemove(); true })
                 }
             },
     ) {
@@ -369,7 +370,7 @@ private fun QueueRow(
                 }
             }
             IconButton(onClick = onRemove) {
-                Icon(AppIcons.Clear, contentDescription = "从队列移除")
+                Icon(AppIcons.Clear, contentDescription = strings.removeFromQueue)
             }
             if (canReorder) {
                 Box(
@@ -521,13 +522,13 @@ internal fun CommentPanelContent(
     if (unsupported) {
         Column(modifier) {
             ExpressiveSectionTitle(
-                text = "歌曲评论",
-                supportingText = "暂不支持",
+                text = strings.songComments,
+                supportingText = strings.notSupported,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
             )
             ExpressiveStatePanel(
-                title = "暂不支持评论",
-                message = "这首歌来自不提供评论的平台。",
+                title = strings.commentsUnsupported,
+                message = strings.commentsUnsupportedMessage,
                 icon = AppIcons.Comment,
                 accentPalette = accentPalette,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -555,13 +556,18 @@ internal fun CommentPanelContent(
 
     Column(modifier) {
         ExpressiveSectionTitle(
-            text = "歌曲评论",
+            text = strings.songComments,
             supportingText = when {
-                showInitialLoading -> "正在加载评论"
-                errorMessage != null -> "评论暂时无法加载"
-                totalCount > 0 -> "${compactCount(totalCount)} 条"
-                comments.isEmpty() -> "暂无评论"
-                else -> "${comments.size} 条"
+                showInitialLoading -> strings.commentsLoadingSubtitle
+                errorMessage != null -> strings.commentsUnavailableSubtitle
+                // The plural form needs the number itself; a shortened one ("12万", "12K") takes
+                // the plain form.
+                totalCount > 0 -> compactCount(totalCount.toLong()).let { short ->
+                    if (short == totalCount.toString()) strings.commentCount(totalCount)
+                    else strings.commentCountShort(short)
+                }
+                comments.isEmpty() -> strings.noComments
+                else -> strings.commentCount(comments.size)
             },
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
         )
@@ -569,7 +575,7 @@ internal fun CommentPanelContent(
             SingleChoiceSegmentedButtonRow(
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
             ) {
-                listOf(true to "热门", false to "最新").forEachIndexed { i, (hot, label) ->
+                listOf(true to strings.popular, false to strings.newest).forEachIndexed { i, (hot, label) ->
                     SegmentedButton(
                         selected = paging.showHot == hot,
                         onClick = { paging.onShowHot(hot) },
@@ -611,7 +617,7 @@ internal fun CommentPanelContent(
             if (showInitialLoading) {
                 item(key = "loading-comments") {
                     ExpressiveLoadingState(
-                        label = "正在加载评论…",
+                        label = strings.loadingComments,
                         accentColor = accentPalette.accent,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
@@ -619,12 +625,12 @@ internal fun CommentPanelContent(
             } else if (errorMessage != null) {
                 item(key = "error-comments") {
                     ExpressiveStatePanel(
-                        title = "评论加载失败",
+                        title = strings.commentsLoadFailed,
                         message = errorMessage,
                         icon = AppIcons.Comment,
                         tone = ExpressiveStateTone.Error,
                         accentPalette = accentPalette,
-                        actionLabel = onRetry?.let { "重试" },
+                        actionLabel = onRetry?.let { strings.retry },
                         onAction = onRetry,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
@@ -632,11 +638,11 @@ internal fun CommentPanelContent(
             } else if (commentEntries.isEmpty()) {
                 item(key = "empty-comments") {
                     ExpressiveStatePanel(
-                        title = if (paging.showHot) "还没有热门评论" else "还没有评论",
-                        message = if (paging.showHot) "可以看看最新的评论。" else "这首歌暂时没有可显示的评论。",
+                        title = if (paging.showHot) strings.noPopularCommentsYet else strings.noCommentsYet,
+                        message = if (paging.showHot) strings.viewNewestCommentsHint else strings.noCommentsToShow,
                         icon = AppIcons.Comment,
                         accentPalette = accentPalette,
-                        actionLabel = if (paging.showHot) "看最新评论" else null,
+                        actionLabel = if (paging.showHot) strings.showNewestComments else null,
                         onAction = if (paging.showHot) ({ paging.onShowHot(false) }) else null,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
@@ -676,20 +682,20 @@ private fun CommentsFooter(
     ) {
         when {
             paging.moreLoading -> Text(
-                text = "正在加载更多评论…",
+                text = strings.loadingMoreComments,
                 style = MaterialTheme.typography.bodyMedium,
                 color = accentPalette.secondaryOnQuietContainer,
             )
             paging.moreError != null -> TextButton(onClick = paging.onLoadMore) {
-                Text("${paging.moreError}，点按重试")
+                Text(strings.errorTapToRetry(paging.moreError))
             }
             paging.moreAvailable -> {
                 // Reaching the end loads the next page; the button is there if that stalls.
                 LaunchedEffect(shownCount) { paging.onLoadMore() }
-                TextButton(onClick = paging.onLoadMore) { Text("加载更多") }
+                TextButton(onClick = paging.onLoadMore) { Text(strings.loadMore) }
             }
             else -> Text(
-                text = "没有更多评论了",
+                text = strings.noMoreComments,
                 style = MaterialTheme.typography.bodyMedium,
                 color = accentPalette.secondaryOnQuietContainer,
             )
@@ -704,7 +710,7 @@ private fun CommentRow(
     count: Int,
     accentPalette: ContentAccentPalette,
 ) {
-    val nickname = comment.user.nickname.ifBlank { "网易云音乐用户" }
+    val nickname = comment.user.nickname.ifBlank { strings.neteaseUserFallbackName }
     Surface(
         shape = connectedListItemShape(index, count),
         color = accentPalette.quietContainer,
@@ -722,7 +728,7 @@ private fun CommentRow(
         ) {
             AsyncImage(
                 model = comment.user.avatarUrl,
-                contentDescription = "$nickname 的头像",
+                contentDescription = strings.avatarOf(nickname),
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .size(44.dp)
@@ -746,7 +752,7 @@ private fun CommentRow(
                             color = accentPalette.container,
                             contentColor = accentPalette.onContainer,
                             modifier = Modifier.clearAndSetSemantics {
-                                contentDescription = "获得 ${comment.likedCount} 个赞"
+                                contentDescription = strings.commentLikesDescription(comment.likedCount)
                             },
                         ) {
                             Row(
@@ -760,7 +766,7 @@ private fun CommentRow(
                                     modifier = Modifier.size(16.dp),
                                 )
                                 Text(
-                                    text = "${comment.likedCount} 赞",
+                                    text = strings.commentLikeCount(comment.likedCount),
                                     style = MaterialTheme.typography.labelMedium,
                                 )
                             }
@@ -768,7 +774,7 @@ private fun CommentRow(
                     }
                 }
                 Text(
-                    text = comment.content.ifBlank { "（无文字内容）" },
+                    text = comment.content.ifBlank { strings.noTextContent },
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = 6.dp),
                 )

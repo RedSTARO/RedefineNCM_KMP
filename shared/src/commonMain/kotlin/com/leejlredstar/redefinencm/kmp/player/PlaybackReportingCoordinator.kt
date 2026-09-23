@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.player
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import com.leejlredstar.redefinencm.kmp.util.getLongAsync
 import com.leejlredstar.redefinencm.kmp.data.PlaybackAccountComparison
@@ -170,7 +171,7 @@ class PlaybackReportingCoordinator(
                     credentialKey = action.credentialKey,
                     reportingGeneration = action.reportingGeneration,
                     phase = PlaybackReportingPhase.TRANSPORT_FAILURE,
-                    message = "上报处理失败",
+                    message = strings.playbackReportProcessingFailed,
                 ),
             )
         }
@@ -409,7 +410,7 @@ private fun PlaybackReportResult.toStatus(
         httpStatus = httpStatus,
         serverCode = serverCode,
         details = details,
-        message = details.message ?: "服务器拒绝了播放上报",
+        message = details.message ?: strings.playbackReportRejected,
     )
     is PlaybackReportResult.Unsupported -> PlaybackReportingStatus(
         kind = action.kind,
@@ -420,9 +421,9 @@ private fun PlaybackReportResult.toStatus(
         endpoint = endpoint,
         httpStatus = httpStatus,
         message = when (endpoint) {
-            PlaybackReportEndpoint.RELAY -> "当前服务器不支持 relay 播放进度上报"
-            PlaybackReportEndpoint.WEBLOG_STARTPLAY -> "当前服务器不支持最近播放上报"
-            else -> "当前服务器不支持播放记录上报"
+            PlaybackReportEndpoint.RELAY -> strings.relayReportUnsupported
+            PlaybackReportEndpoint.WEBLOG_STARTPLAY -> strings.recentPlayReportUnsupported
+            else -> strings.playHistoryReportUnsupported
         },
     )
     is PlaybackReportResult.TransportFailure -> PlaybackReportingStatus(
@@ -433,7 +434,7 @@ private fun PlaybackReportResult.toStatus(
         phase = PlaybackReportingPhase.TRANSPORT_FAILURE,
         endpoint = endpoint,
         httpStatus = httpStatus,
-        message = "播放上报请求失败",
+        message = strings.playbackReportRequestFailed,
     )
 }
 

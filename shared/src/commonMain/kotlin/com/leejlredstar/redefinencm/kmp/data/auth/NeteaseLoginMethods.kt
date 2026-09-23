@@ -2,6 +2,7 @@ package com.leejlredstar.redefinencm.kmp.data.auth
 
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 
 /**
  * NetEase's QR flow against a NeteaseCloudMusicApi backend: `/login/qr/key` → `/login/qr/create`
@@ -10,16 +11,16 @@ import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 class NeteaseQrLoginMethod(private val api: NCMApi) : QrLoginMethod {
     override val id: String = "ncm.qr"
     override val provider: MusicProviderId = MusicProviderId.NETEASE
-    override val displayName: String = "扫码登录"
-    override val scanHint: String = "请用网易云音乐 App 扫码"
+    override val displayName: String get() = strings.signInWithQrCode
+    override val scanHint: String get() = strings.neteaseQrScanHint
 
     override suspend fun start(): QrLoginSession {
         val key = api.loginQrKey().takeIf { it.code == SuccessCode }?.data?.unikey
-        if (key.isNullOrEmpty()) throw LoginMethodException("服务器返回的 key 为空")
+        if (key.isNullOrEmpty()) throw LoginMethodException(strings.loginQrKeyEmpty)
         val image = api.loginQrCreate(key, qrimg = true).takeIf { it.code == SuccessCode }?.data?.qrimg
-        if (image.isNullOrEmpty()) throw LoginMethodException("服务器未返回二维码")
+        if (image.isNullOrEmpty()) throw LoginMethodException(strings.loginQrMissing)
         val png = runCatching { decodeBase64Image(image) }
-            .getOrElse { throw LoginMethodException("二维码数据无法解析") }
+            .getOrElse { throw LoginMethodException(strings.loginQrUnreadable) }
         return QrLoginSession(token = key, imagePng = png)
     }
 
@@ -32,10 +33,10 @@ class NeteaseQrLoginMethod(private val api: NCMApi) : QrLoginMethod {
             803 -> if (check.cookie.isNotEmpty()) {
                 QrLoginPoll.Confirmed(check.cookie)
             } else {
-                QrLoginPoll.Failed("登录成功，但未获取到 Cookie")
+                QrLoginPoll.Failed(strings.loginNoCookie)
             }
             // Anything else is shown and polling continues.
-            else -> QrLoginPoll.Waiting(check.message.ifBlank { "未知状态（${check.code}）" })
+            else -> QrLoginPoll.Waiting(check.message.ifBlank { strings.loginUnknownStatus(check.code) })
         }
     }
 
@@ -48,9 +49,9 @@ class NeteaseQrLoginMethod(private val api: NCMApi) : QrLoginMethod {
 class NeteaseCookieLoginMethod : CredentialTextLoginMethod {
     override val id: String = "ncm.cookie"
     override val provider: MusicProviderId = MusicProviderId.NETEASE
-    override val displayName: String = "手动输入"
+    override val displayName: String get() = strings.enterManually
     override val fieldLabel: String = "Cookie"
-    override val supportingText: String = "已有登录 Cookie 时可以直接粘贴"
+    override val supportingText: String get() = strings.neteaseCookieHint
 
     override fun normalize(raw: String): Result<String> = Result.success(raw.trim())
 }

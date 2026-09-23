@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -87,8 +88,8 @@ fun MiniNowPlayingBar(
             .width(116.dp)
             .height(60.dp)
             .semantics {
-                contentDescription = "打开${media?.title ?: "当前歌曲"}播放页" +
-                    if (muted) "（已静音）" else ""
+                contentDescription = strings.openPlayerFor(media?.title ?: strings.currentSong) +
+                    if (muted) strings.mutedSuffix else ""
             },
         shape = CircleShape,
         color = containerColor,
@@ -160,7 +161,7 @@ fun MiniNowPlayingBar(
                     ) {
                         Icon(
                             imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
-                            contentDescription = if (isPlaying) "暂停" else "播放",
+                            contentDescription = if (isPlaying) strings.pause else strings.play,
                         )
                     }
                 }

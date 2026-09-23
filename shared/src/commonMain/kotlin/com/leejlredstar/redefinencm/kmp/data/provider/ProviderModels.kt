@@ -1,5 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.data.provider
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
+
 /**
  * Provider-neutral shapes for the capabilities more than one service can answer.
  *
@@ -23,15 +25,23 @@ data class ProviderAlbum(
  * What a service says about a track, for badges. These describe the track, not what the signed-in
  * account may do with it: a QQ "VIP" track has played at 128k without an account.
  */
-enum class TrackTag(val label: String) {
+enum class TrackTag {
     /** The service marks it as a members' track. */
-    VIP("VIP"),
+    VIP,
 
     /** Sold by album or by the song. */
-    PAID("付费"),
+    PAID,
 
     /** The service holds a lossless copy. */
-    LOSSLESS("无损"),
+    LOSSLESS,
+    ;
+
+    val label: String
+        get() = when (this) {
+            VIP -> "VIP"
+            PAID -> strings.paid
+            LOSSLESS -> strings.lossless
+        }
 }
 
 data class ProviderTrack(
@@ -50,7 +60,7 @@ data class ProviderTrack(
     val artworkUrl: String get() = album?.artworkUrl.orEmpty()
 
     companion object {
-        const val UnknownArtist = "未知歌手"
+        val UnknownArtist: String get() = strings.unknownArtist
     }
 }
 

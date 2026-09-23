@@ -2,12 +2,27 @@ package com.leejlredstar.redefinencm.kmp.ui.screen
 
 import com.leejlredstar.redefinencm.kmp.data.api.dto.UserLevelData
 import com.leejlredstar.redefinencm.kmp.data.api.dto.UserLevelResponse
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
+import com.leejlredstar.redefinencm.kmp.i18n.LanguageSetting
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class UserLevelDisplayTest {
+    /** The expected copy below is the Chinese, so the test pins it whatever the machine's language. */
+    @BeforeTest
+    fun showChinese() {
+        I18n.apply(LanguageSetting.ZH)
+    }
+
+    @AfterTest
+    fun followTheSystemAgain() {
+        I18n.apply(LanguageSetting.SYSTEM)
+    }
+
     @Test
     fun formatsCurrentLevelCountsAndProgress() {
         val display = userLevelDisplay(

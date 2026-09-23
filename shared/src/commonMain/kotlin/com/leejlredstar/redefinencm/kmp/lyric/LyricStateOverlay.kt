@@ -7,6 +7,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.leejlredstar.redefinencm.kmp.i18n.strings
+import com.leejlredstar.redefinencm.kmp.i18n.text
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
@@ -42,53 +44,53 @@ private fun BoxScope.LyricStateOverlayPanels(
     when (state) {
         is LyricUiState.Idle -> if (hasMedia || isPlayerRestoring) {
             ExpressiveLoadingState(
-                label = if (hasMedia) "正在恢复歌词…" else "正在恢复播放…",
+                label = if (hasMedia) strings.restoringLyrics else strings.restoringPlayback,
                 accentColor = statePalette.accent,
                 modifier = stateModifier,
             )
         } else {
             ExpressiveStatePanel(
-                title = "还没有播放音乐",
-                message = "选择一首歌曲后，歌词会显示在这里。",
+                title = strings.nothingPlayingYet,
+                message = strings.lyricsAppearHere,
                 icon = AppIcons.MusicNote,
                 accentPalette = statePalette,
                 modifier = stateModifier,
             )
         }
         is LyricUiState.Loading -> ExpressiveLoadingState(
-            label = "正在加载歌词…",
+            label = strings.loadingLyrics,
             accentColor = statePalette.accent,
             modifier = stateModifier,
         )
         is LyricUiState.Empty -> ExpressiveStatePanel(
             title = if (state.capabilityLevel == LyricCapabilityLevel.UNSYNCED) {
-                "歌词无时间戳"
+                strings.lyricsUntimedTitle
             } else {
-                "暂无歌词"
+                strings.noLyrics
             },
             message = if (state.capabilityLevel == LyricCapabilityLevel.UNSYNCED) {
-                "这首歌的歌词没有时间戳，不能随播放滚动。"
+                strings.lyricsUntimedMessage
             } else {
-                "这首歌暂时没有歌词。"
+                strings.songHasNoLyrics
             },
             icon = AppIcons.FormatQuote,
             accentPalette = statePalette,
             modifier = stateModifier,
         )
         is LyricUiState.Error -> ExpressiveStatePanel(
-            title = "歌词加载失败",
-            message = state.message,
+            title = strings.lyricsLoadFailed,
+            message = state.message.text,
             icon = AppIcons.Refresh,
             tone = ExpressiveStateTone.Error,
             accentPalette = statePalette,
-            actionLabel = "重试",
+            actionLabel = strings.retry,
             onAction = onRetry,
             modifier = stateModifier,
         )
         // Not an error: nothing failed, so there is nothing to retry.
         is LyricUiState.Unsupported -> ExpressiveStatePanel(
-            title = "暂不支持歌词",
-            message = state.message,
+            title = strings.lyricsUnsupported,
+            message = state.message.text,
             icon = AppIcons.FormatQuote,
             accentPalette = statePalette,
             modifier = stateModifier,

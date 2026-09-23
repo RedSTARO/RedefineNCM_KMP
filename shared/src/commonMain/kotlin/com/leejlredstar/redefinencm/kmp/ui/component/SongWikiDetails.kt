@@ -45,6 +45,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.data.SongWikiSection
+import com.leejlredstar.redefinencm.kmp.i18n.strings
+import com.leejlredstar.redefinencm.kmp.i18n.text
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.legibleAccentFor
@@ -128,19 +130,19 @@ private fun SongWikiDetailsContent(
         when {
             state is SongWikiUiState.Loading -> item(key = "wiki-loading") {
                 ExpressiveLoadingState(
-                    label = "正在加载歌曲详情…",
+                    label = strings.loadingSongDetails,
                     accentColor = accentPalette.accent,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                 )
             }
             state is SongWikiUiState.Error -> item(key = "wiki-error") {
                 ExpressiveStatePanel(
-                    title = "歌曲详情加载失败",
-                    message = state.message,
+                    title = strings.songDetailsLoadFailed,
+                    message = state.message.text,
                     icon = AppIcons.Refresh,
                     tone = ExpressiveStateTone.Error,
                     accentPalette = accentPalette,
-                    actionLabel = "重试",
+                    actionLabel = strings.retry,
                     onAction = onRetry,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                 )
@@ -149,8 +151,8 @@ private fun SongWikiDetailsContent(
             // NetEase's.
             state is SongWikiUiState.Unsupported -> item(key = "wiki-unsupported") {
                 ExpressiveStatePanel(
-                    title = "暂无更多资料",
-                    message = "这首歌来自不提供歌曲资料的平台。",
+                    title = strings.songDetailsUnsupported,
+                    message = strings.songDetailsUnsupportedMessage,
                     icon = AppIcons.Info,
                     accentPalette = accentPalette,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
@@ -158,8 +160,8 @@ private fun SongWikiDetailsContent(
             }
             sections.isEmpty() -> item(key = "wiki-empty") {
                 ExpressiveStatePanel(
-                    title = "没有更多信息",
-                    message = "这首歌暂时没有可显示的资料。",
+                    title = strings.noMoreSongDetails,
+                    message = strings.noSongDetailsToShow,
                     icon = AppIcons.Info,
                     accentPalette = accentPalette,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
@@ -224,7 +226,7 @@ private fun SongWikiHeader(
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
             Text(
-                text = songTitle?.takeIf { it.isNotBlank() } ?: "未播放",
+                text = songTitle?.takeIf { it.isNotBlank() } ?: strings.notPlaying,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.ExtraBold,
                 color = accentPalette.onQuietContainer,

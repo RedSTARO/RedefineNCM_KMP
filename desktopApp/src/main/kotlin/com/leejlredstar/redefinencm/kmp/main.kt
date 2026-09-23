@@ -72,6 +72,8 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberTrayState
 import androidx.compose.ui.window.rememberWindowState
 import com.leejlredstar.redefinencm.kmp.di.initKoin
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.notification.DesktopFloatingWindowNative
 import com.leejlredstar.redefinencm.kmp.notification.DesktopLyricWindow
 import com.leejlredstar.redefinencm.kmp.notification.FloatingLyricData
@@ -102,6 +104,7 @@ fun main() {
         settings.getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false),
     )
     ThemePreferences.load(settings)
+    I18n.load(settings)
     DesktopLyricWindow.setLocked(
         settings.getBoolean(SettingKeys.DESKTOP_LYRIC_LOCKED, false),
     )
@@ -244,7 +247,7 @@ private fun launchDesktopApplication(settings: PlatformSettings) = application {
     val trayState = rememberTrayState()
     var trayNoticeShown by remember { mutableStateOf(false) }
     // With the setting on (the default), closing the window keeps the app and its music
-    // running in the tray; the tray menu's 退出 is what quits. With it off, closing quits.
+    // running in the tray; the tray menu's quit item is what quits. With it off, closing quits.
     val closeMainWindow: () -> Unit = {
         val toTray = settings.getBoolean(
             SettingKeys.DESKTOP_CLOSE_TO_TRAY,
@@ -256,8 +259,8 @@ private fun launchDesktopApplication(settings: PlatformSettings) = application {
                 trayNoticeShown = true
                 trayState.sendNotification(
                     Notification(
-                        title = "RedefineNCM 仍在运行",
-                        message = "点按托盘图标打开窗口；在托盘菜单里选「退出」才会退出。",
+                        title = strings.trayStillRunningTitle,
+                        message = strings.trayStillRunningMessage,
                         type = Notification.Type.Info,
                     ),
                 )
@@ -388,24 +391,24 @@ private fun ApplicationScope.AppTray(
         tooltip = "RedefineNCM",
         onAction = onShowWindow,
         menu = {
-            Item("显示主窗口", onClick = onShowWindow)
+            Item(strings.trayShowMainWindow, onClick = onShowWindow)
             Separator()
-            Item(if (isPlaying) "暂停" else "播放", enabled = hasMedia, onClick = player::togglePlayPause)
-            Item("上一首", enabled = hasMedia, onClick = player::seekToPrevious)
-            Item("下一首", enabled = hasMedia, onClick = player::seekToNext)
+            Item(if (isPlaying) strings.pause else strings.play, enabled = hasMedia, onClick = player::togglePlayPause)
+            Item(strings.previous, enabled = hasMedia, onClick = player::seekToPrevious)
+            Item(strings.next, enabled = hasMedia, onClick = player::seekToNext)
             Separator()
             Item(
-                if (lyricEnabled) "关闭桌面歌词" else "打开桌面歌词",
+                if (lyricEnabled) strings.closeDesktopLyrics else strings.showDesktopLyrics,
                 onClick = { setDesktopLyricEnabled(settings, !lyricEnabled) },
             )
             if (lyricEnabled) {
                 Item(
-                    if (lyricLocked) "解锁桌面歌词" else "锁定桌面歌词",
+                    if (lyricLocked) strings.unlockDesktopLyrics else strings.lockDesktopLyrics,
                     onClick = { setDesktopLyricLocked(settings, !lyricLocked) },
                 )
             }
             Separator()
-            Item("退出", onClick = onExit)
+            Item(strings.quit, onClick = onExit)
         },
     )
 }
@@ -473,7 +476,7 @@ private fun ApplicationScope.FloatingLyricWindow(settings: PlatformSettings, pla
     Window(
         onCloseRequest = { DesktopLyricWindow.hide() },
         state = windowState,
-        title = "桌面歌词",
+        title = strings.desktopLyrics,
         undecorated = true,   // frameless
         transparent = true,   // translucent (requires undecorated)
         alwaysOnTop = true,
@@ -533,12 +536,12 @@ private fun FloatingLyricToolbar(
         contentColor = Color.White,
     ) {
         Row {
-            ToolbarButton(AppIcons.SkipPrevious, "上一首", onPrevious)
-            ToolbarButton(AppIcons.SkipNext, "下一首", onNext)
-            ToolbarButton(AppIcons.Remove, "缩小歌词", onSmaller)
-            ToolbarButton(AppIcons.Add, "放大歌词", onLarger)
-            ToolbarButton(AppIcons.Lock, "锁定桌面歌词（可在托盘菜单解锁）", onLock)
-            ToolbarButton(AppIcons.Clear, "关闭桌面歌词", onClose)
+            ToolbarButton(AppIcons.SkipPrevious, strings.previous, onPrevious)
+            ToolbarButton(AppIcons.SkipNext, strings.next, onNext)
+            ToolbarButton(AppIcons.Remove, strings.makeLyricsSmaller, onSmaller)
+            ToolbarButton(AppIcons.Add, strings.makeLyricsLarger, onLarger)
+            ToolbarButton(AppIcons.Lock, strings.lockDesktopLyricsWithHint, onLock)
+            ToolbarButton(AppIcons.Clear, strings.closeDesktopLyrics, onClose)
         }
     }
 }
@@ -585,7 +588,7 @@ private fun FloatingLyricContent(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .semantics { paneTitle = "桌面歌词" },
+            .semantics { paneTitle = strings.desktopLyrics },
         verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
         horizontalAlignment = when (alignment) {
             LyricSurfaceAlignment.START -> Alignment.Start
@@ -602,7 +605,7 @@ private fun FloatingLyricContent(
             label = "current lyric",
         ) { lyric ->
             Text(
-                text = lyric.ifBlank { "暂无歌词" },
+                text = lyric.ifBlank { strings.noLyrics },
                 style = currentStyle.copy(
                     shadow = lyricShadow,
                     fontSize = currentStyle.fontSize * textScale,

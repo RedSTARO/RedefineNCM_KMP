@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.core.content.FileProvider
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
@@ -56,7 +57,7 @@ actual object LocalMediaAssetStorage {
                             val content = context.contentResolver.openInputStream(row.uri)
                                 ?.bufferedReader(Charsets.UTF_8)
                                 ?.use { it.readText() }
-                                ?: error("无法读取本地歌词：${row.fileName}")
+                                ?: error(strings.localLyricsUnreadable(row.fileName))
                             LocalTextMediaAsset(row.fileName, content)
                         }
                 } else {
@@ -202,9 +203,9 @@ private fun migrateSharedArtworkToPrivate(
             val source = sharedRows.first()
             val bytes = context.contentResolver.openInputStream(source.uri)
                 ?.use { it.readBytesAtMost(MAX_MIGRATED_ARTWORK_BYTES) }
-                ?: error("无法读取需要迁移的旧封面文件：${source.fileName}")
+                ?: error(strings.legacyCoverUnreadable(source.fileName))
             check(bytes.isNotEmpty()) {
-                "需要迁移的旧封面文件为空：${source.fileName}"
+                strings.legacyCoverEmpty(source.fileName)
             }
             replacePrivateArtwork(context, songId, source.fileName, bytes)
         }
@@ -218,7 +219,7 @@ private fun migrateSharedArtworkToPrivate(
                 it.readBytesAtMost(MAX_MIGRATED_ARTWORK_BYTES)
             }
             check(bytes.isNotEmpty()) {
-                "需要迁移的旧封面文件为空：${source.name}"
+                strings.legacyCoverEmpty(source.name)
             }
             replacePrivateArtwork(context, songId, source.name, bytes)
         }
@@ -268,7 +269,7 @@ private fun privateArtworkFiles(
         .asSequence()
         .flatMap { directory ->
             checkNotNull(directory.listFiles()) {
-                "无法读取应用的封面目录：$directory"
+                strings.coverFolderUnreadable(directory)
             }.asSequence()
         }
         .filter(File::isFile)
@@ -288,7 +289,7 @@ private fun privateArtworkFileNames(context: Context): List<String> =
         .asSequence()
         .flatMap { directory ->
             checkNotNull(directory.listFiles()) {
-                "无法读取应用的封面目录：$directory"
+                strings.coverFolderUnreadable(directory)
             }.asSequence()
         }
         .filter(File::isFile)
@@ -303,7 +304,7 @@ private fun deletePrivateArtworkAssets(
         .asSequence()
         .flatMap { directory ->
             checkNotNull(directory.listFiles()) {
-                "无法读取应用的封面目录：$directory"
+                strings.coverFolderUnreadable(directory)
             }.asSequence()
         }
         .filter(File::isFile)
@@ -323,18 +324,18 @@ private fun privateArtworkDirectories(context: Context): List<File> =
         .filter(File::exists)
         .onEach { directory ->
             check(directory.isDirectory) {
-                "应用的封面目录不是文件夹：$directory"
+                strings.coverFolderNotDirectory(directory)
             }
         }
 
 internal fun ensureAndroidPrivateArtworkDirectory(storageRoot: File): File {
     val directory = File(storageRoot, ANDROID_LOCAL_ARTWORK_SUBDIR)
     check(directory.isDirectory || directory.mkdirs()) {
-        "无法创建应用的封面目录：$directory"
+        strings.coverFolderCreateFailed(directory)
     }
     val noMedia = File(directory, ANDROID_NO_MEDIA_FILE_NAME)
     check(noMedia.isFile || noMedia.createNewFile()) {
-        "无法创建阻止相册扫描封面的 .nomedia 文件：$noMedia"
+        strings.noMediaFileCreateFailed(noMedia)
     }
     return directory
 }
@@ -348,7 +349,7 @@ private fun InputStream.readBytesAtMost(maxBytes: Int): ByteArray {
         if (read < 0) return output.toByteArray()
         total += read
         check(total <= maxBytes) {
-            "需要迁移的旧封面文件超过 ${maxBytes / (1024 * 1024)} MiB 限制"
+            strings.legacyCoverTooLarge(maxBytes / (1024 * 1024))
         }
         output.write(buffer, 0, read)
     }
@@ -414,7 +415,7 @@ private fun backupMediaStoreAssets(
                 put(MediaStore.MediaColumns.IS_PENDING, 1)
             }
             check(context.contentResolver.update(row.uri, values, null, null) == 1) {
-                "无法备份歌词文件：${row.fileName}"
+                strings.lyricsBackupFailed(row.fileName)
             }
         }
 }
@@ -437,7 +438,7 @@ private fun rollbackMediaStoreReplacement(
                 put(MediaStore.MediaColumns.IS_PENDING, 0)
             }
             check(context.contentResolver.update(backup.uri, values, null, null) == 1) {
-                "无法恢复原来的歌词文件：${backup.originalFileName}"
+                strings.lyricsRestoreFailed(backup.originalFileName)
             }
         }.exceptionOrNull()?.let(failure::addSuppressed)
     }
@@ -500,7 +501,7 @@ private fun deleteMediaStoreAssets(
         .filter { predicate(songId, it.fileName) }
     rows.forEach { row ->
         check(context.contentResolver.delete(row.uri, null, null) > 0) {
-            "无法删除歌词或封面文件：${row.fileName}"
+            strings.lyricsOrCoverDeleteFailed(row.fileName)
         }
     }
     return rows.isNotEmpty()
@@ -550,12 +551,12 @@ private fun insertPendingMediaStoreAsset(
     val uri = context.contentResolver.insert(
         MediaStore.Downloads.EXTERNAL_CONTENT_URI,
         values,
-    ) ?: error("无法创建歌词文件：$fileName")
+    ) ?: error(strings.lyricsFileCreateFailed(fileName))
     try {
         context.contentResolver.openOutputStream(uri, "w")?.use { output ->
             output.write(bytes)
             output.flush()
-        } ?: error("无法写入歌词文件：$fileName")
+        } ?: error(strings.lyricsFileWriteFailed(fileName))
         return uri
     } catch (failure: Throwable) {
         context.contentResolver.delete(uri, null, null)
@@ -573,7 +574,7 @@ private fun publishMediaStoreAsset(
         put(MediaStore.MediaColumns.IS_PENDING, 0)
     }
     check(context.contentResolver.update(uri, values, null, null) == 1) {
-        "无法完成歌词文件的保存"
+        strings.lyricsFileFinishSaveFailed
     }
 }
 
@@ -587,7 +588,7 @@ internal fun androidLyricMimeType(fileName: String): String = when {
     fileName.endsWith(".ttml", ignoreCase = true) -> "application/ttml+xml"
     fileName.endsWith(".yrc", ignoreCase = true) -> "application/x-yrc"
     fileName.endsWith(".lrc", ignoreCase = true) -> "application/x-lrc"
-    else -> error("不支持的本地歌词文件类型：$fileName")
+    else -> error(strings.lyricsFileTypeUnsupported(fileName))
 }
 
 private fun replaceLegacyLyrics(
@@ -613,11 +614,11 @@ private fun replaceLegacyLyrics(
  */
 private fun renameLegacyAsset(source: File, target: File) {
     check(source.renameTo(target)) {
-        "无法移动歌词或封面文件：${source.name}"
+        strings.lyricsOrCoverMoveFailed(source.name)
     }
 }
 
-private const val LEGACY_DOWNLOAD_DIRECTORY_LABEL = "下载目录"
+private val LEGACY_DOWNLOAD_DIRECTORY_LABEL: String get() = strings.downloadFolder
 
 private fun legacyAssetFileNames(): List<String> =
     localMediaAssetFileNames(legacyAssetDirectory(), LEGACY_DOWNLOAD_DIRECTORY_LABEL)

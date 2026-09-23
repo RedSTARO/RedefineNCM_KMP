@@ -1,5 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.util
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
+
 /**
  * Platform-independent settings keys and defaults.
  * Each platform stores them through its [PlatformSettings] actual.
@@ -48,6 +50,8 @@ object SettingKeys {
     const val SEARCH_PREDICTION = "searchPrediction"
     /** Light, dark or the system's; see ThemeMode. */
     const val THEME_MODE = "themeMode"
+    /** The app's language, or "system" to follow the system's; see LanguageSetting. */
+    const val APP_LANGUAGE = "appLanguage"
     /** Android 12+ wallpaper colours instead of the app's own scheme. */
     const val DYNAMIC_COLOR = "dynamicColor"
     /** Recent searches, newest first, one per line. Kept on the device, not in the backup. */
@@ -83,16 +87,29 @@ object SettingKeys {
     const val AUDIO_OUTPUT_DEVICE = "audioOutputDevice"
 }
 
-enum class SoundQuality(val displayName: String) {
-    STANDARD("标准"),
-    HIGHER("较高"),
-    EXHIGH("极高"),
-    LOSSLESS("无损"),
-    HIRES("Hi-Res"),
-    JYEFFECT("高清环绕声"),
-    SKY("沉浸环绕声"),
-    DOLBY("杜比全景声"),
-    JYMASTER("超清母带");
+enum class SoundQuality {
+    STANDARD,
+    HIGHER,
+    EXHIGH,
+    LOSSLESS,
+    HIRES,
+    JYEFFECT,
+    SKY,
+    DOLBY,
+    JYMASTER;
+
+    val displayName: String
+        get() = when (this) {
+            STANDARD -> strings.qualityStandard
+            HIGHER -> strings.qualityHigh
+            EXHIGH -> strings.qualityVeryHigh
+            LOSSLESS -> strings.lossless
+            HIRES -> "Hi-Res"
+            JYEFFECT -> strings.qualityHdSurround
+            SKY -> strings.qualityImmersiveSurround
+            DOLBY -> strings.qualityDolbyAtmos
+            JYMASTER -> strings.qualityMaster
+        }
 
     override fun toString(): String = displayName
 }

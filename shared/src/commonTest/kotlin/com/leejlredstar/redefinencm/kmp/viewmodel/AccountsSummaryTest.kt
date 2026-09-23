@@ -1,10 +1,25 @@
 package com.leejlredstar.redefinencm.kmp.viewmodel
 
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
+import com.leejlredstar.redefinencm.kmp.i18n.LanguageSetting
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /** The settings page's line about accounts names every provider's state, then the local account. */
 class AccountsSummaryTest {
+    /** The expected copy below is the Chinese, so the test pins it whatever the machine's language. */
+    @BeforeTest
+    fun showChinese() {
+        I18n.apply(LanguageSetting.ZH)
+    }
+
+    @AfterTest
+    fun followTheSystemAgain() {
+        I18n.apply(LanguageSetting.SYSTEM)
+    }
+
     @Test
     fun eachProviderSaysWhoIsSignedInOrWhyNot() {
         val line = accountsSummaryLine(

@@ -1,0 +1,1028 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 日本語。キーと {プレースホルダー} は zh.xml と en.xml と一致させること（ビルド時に検査）。 -->
+<resources>
+
+    <!-- DesktopWindowChrome.kt -->
+    <string name="minimize">最小化</string>
+    <string name="restoreWindow">元に戻す</string>
+    <string name="maximize">最大化</string>
+    <string name="close">閉じる</string>
+
+    <!-- main.kt -->
+    <string name="trayStillRunningTitle">RedefineNCMはまだ実行中です</string>
+    <string name="trayStillRunningMessage">システムトレイのアイコンをクリックするとウィンドウが開きます。アプリを終了するには、システムトレイのメニューで「終了」を選んでください。</string>
+    <string name="trayShowMainWindow">メインウィンドウを表示</string>
+    <string name="pause">一時停止</string>
+    <string name="play">再生</string>
+    <string name="previous">前の曲</string>
+    <string name="next">次の曲</string>
+    <string name="closeDesktopLyrics">デスクトップ歌詞を閉じる</string>
+    <string name="showDesktopLyrics">デスクトップ歌詞を表示</string>
+    <string name="unlockDesktopLyrics">デスクトップ歌詞のロックを解除</string>
+    <string name="lockDesktopLyrics">デスクトップ歌詞をロック</string>
+    <string name="quit">終了</string>
+    <string name="signOut">ログアウト</string>
+    <string name="desktopLyrics">デスクトップ歌詞</string>
+    <string name="makeLyricsSmaller">歌詞を小さく</string>
+    <string name="makeLyricsLarger">歌詞を大きく</string>
+    <string name="lockDesktopLyricsWithHint">デスクトップ歌詞をロック（システムトレイのメニューで解除できます）</string>
+    <string name="noLyrics">歌詞はありません</string>
+
+    <!-- download/AndroidDownloadService.kt -->
+    <string name="downloadingTitle">ダウンロード中：{title}</string>
+    <string name="downloadsPaused">ダウンロード一時停止中</string>
+    <string name="downloadsFinishedWithFailures">ダウンロード完了、{failedCount}件失敗</string>
+    <string name="downloadsFinished">ダウンロード完了</string>
+    <string name="downloadsPreparing">ダウンロードの準備中</string>
+    <string name="downloadQueuePreparing">ダウンロードキューを準備しています</string>
+    <string name="downloadProgressWithArtist">{completed}/{total}完了 · {artist}</string>
+    <string name="downloadProgressWithPaused">{pausedCount}件一時停止 · {completed}/{total}完了</string>
+    <string name="downloadProgress">{completed}/{total}完了</string>
+    <string name="resume">再開</string>
+    <string name="continueAction">続ける</string>
+    <string name="cancel">キャンセル</string>
+
+    <!-- notification/AndroidNotificationController.kt -->
+    <string name="enableLiveUpdateLyrics">追加のLive Update歌詞を有効にする</string>
+
+    <!-- recognition/AndroidMicrophoneRecorder.kt -->
+    <string name="micMonoPcmUnsupported">この端末はモノラルのPCM録音に対応していません</string>
+    <string name="micRecorderInitFailed">録音デバイスの初期化に失敗しました</string>
+    <string name="micNotRecording">マイクが録音状態になりませんでした</string>
+    <string name="micReadFailed">マイクからの読み取りに失敗しました（エラーコード{errorCode}）</string>
+
+    <!-- util/DownloadUtil.android.kt -->
+    <string name="androidDownloadsLibraryUnreadable">Androidのメディアライブラリにあるダウンロードを読み込めません</string>
+    <string name="legacyDownloadFolderUnreadable">旧バージョンのダウンロードフォルダを読み込めません：{path}</string>
+
+    <!-- util/LocalMediaAssetStorage.android.kt -->
+    <string name="localLyricsUnreadable">ローカルの歌詞を読み込めません：{fileName}</string>
+    <string name="legacyCoverUnreadable">移行する古いカバーファイルを読み込めません：{fileName}</string>
+    <string name="legacyCoverEmpty">移行する古いカバーファイルが空です：{fileName}</string>
+    <string name="coverFolderUnreadable">アプリのカバーフォルダを読み込めません：{path}</string>
+    <string name="coverFolderNotDirectory">アプリのカバーの保存先がフォルダではありません：{path}</string>
+    <string name="coverFolderCreateFailed">アプリのカバーフォルダを作成できません：{path}</string>
+    <string name="noMediaFileCreateFailed">ギャラリーがカバーをスキャンしないようにする.nomediaファイルを作成できません：{path}</string>
+    <string name="legacyCoverTooLarge">移行する古いカバーファイルが{limitMib} MiBの上限を超えています</string>
+    <string name="lyricsBackupFailed">歌詞ファイルをバックアップできません：{fileName}</string>
+    <string name="lyricsRestoreFailed">元の歌詞ファイルを復元できません：{fileName}</string>
+    <string name="lyricsOrCoverDeleteFailed">歌詞またはカバーのファイルを削除できません：{fileName}</string>
+    <string name="lyricsFileCreateFailed">歌詞ファイルを作成できません：{fileName}</string>
+    <string name="lyricsFileWriteFailed">歌詞ファイルに書き込めません：{fileName}</string>
+    <string name="lyricsFileFinishSaveFailed">歌詞ファイルの保存を完了できません</string>
+    <string name="lyricsFileTypeUnsupported">対応していないローカル歌詞ファイルの形式です：{fileName}</string>
+    <string name="lyricsOrCoverMoveFailed">歌詞またはカバーのファイルを移動できません：{fileName}</string>
+    <string name="downloadFolder">ダウンロードフォルダ</string>
+
+    <!-- util/SettingsFileOps.android.kt -->
+    <string name="exportSettingsFile">設定ファイルをエクスポート</string>
+
+    <!-- util/SongDownloader.android.kt -->
+    <string name="downloadUrlEmpty">ダウンロードURLが空です</string>
+    <string name="downloadCanceledNotSaved">ダウンロードがキャンセルされたため、ファイルは保存されていません</string>
+    <string name="downloadEmptyNotSaved">ダウンロードした内容が空のため、保存しませんでした</string>
+    <string name="downloadIncomplete">ダウンロードが不完全です：{received}バイト受信、{expected}バイトの予定</string>
+    <string name="downloadUrlNotHttp">ダウンロードURLがHTTPまたはHTTPSのURLではありません</string>
+    <string name="partialDownloadInfoSaveFailed">途中までのダウンロードの情報を保存できません</string>
+    <string name="partialDownloadInfoDeleteFailed">途中までのダウンロードの情報を削除できません</string>
+    <string name="unfinishedAudioDeleteFailed">ダウンロード途中のオーディオファイルを削除できません</string>
+    <string name="downloadFileCreateFailed">ダウンロードファイルを作成できません</string>
+    <string name="downloadFileWriteFailed">ダウンロードファイルに書き込めません</string>
+    <string name="downloadFileFinishSaveFailed">ダウンロードファイルの保存を完了できません</string>
+    <string name="mediaLibraryPendingCleanupFailed">システムのメディアライブラリにある保存途中のダウンロードファイルを削除できません</string>
+    <string name="downloadFolderCreateFailed">ダウンロードフォルダを作成できません</string>
+    <string name="downloadFileSaveFailed">ダウンロードファイルを保存できません</string>
+    <string name="downloadFileRollbackFailed">保存したダウンロードファイルを取り消せません</string>
+    <string name="unsavedDownloadCleanupFailed">保存途中のダウンロードファイルを削除できません</string>
+    <string name="mediaLibraryStaleCleanupFailed">前回保存しきれなかったダウンロードファイルをシステムのメディアライブラリから削除できません</string>
+    <string name="partialDownloadFolderCreateFailed">途中までのダウンロード用のフォルダを作成できません</string>
+    <string name="partialDownloadFolderUnreadable">途中までのダウンロード用のフォルダを読み込めません</string>
+    <string name="oldPartialDownloadDeleteFailed">古い途中までのダウンロードファイルを削除できません</string>
+    <string name="partialDownloadDeleteFailed">途中までのダウンロードファイルを削除できません</string>
+
+    <!-- App.kt -->
+    <string name="thisSong">この曲</string>
+    <string name="playbackFailed">「{title}」を再生できません：{reason}</string>
+    <string name="switchSource">ソースを切り替え</string>
+    <string name="forYou">おすすめ</string>
+    <string name="search">検索</string>
+    <string name="me">マイページ</string>
+    <string name="downloads">ダウンロード</string>
+    <string name="download">ダウンロード</string>
+    <string name="sidebarExpanded">サイドバーは展開されています</string>
+    <string name="sidebarCollapsed">サイドバーは折りたたまれています</string>
+    <string name="collapseSidebar">サイドバーを折りたたむ</string>
+    <string name="expandSidebar">サイドバーを展開</string>
+    <string name="tools">ツール</string>
+    <string name="downloadManagement">ダウンロード管理</string>
+    <string name="songRecognition">曲の認識</string>
+    <string name="settings">設定</string>
+
+    <!-- data/api/AmlldbApi.kt -->
+    <string name="amllDbIdLookupTimeout">AMLL DBで曲IDによるTTMLの取得がタイムアウトしました</string>
+    <string name="amllDbIdLookupInvalidXml">AMLL DBから曲IDで取得したTTMLは有効なXMLではありません</string>
+    <string name="amllDbSearchHttpError">AMLL DBの検索がHTTP {statusCode}を返しました</string>
+    <string name="amllDbSearchTooLarge">AMLL DBの検索結果が大きすぎます</string>
+    <string name="amllDbSearchInvalidFormat">AMLL DBの検索結果の形式が無効です</string>
+    <string name="amllDbSearchTimeout">AMLL DBの検索がタイムアウトしました</string>
+    <string name="amllDbSearchRequestFailed">AMLL DBの検索リクエストに失敗しました</string>
+    <string name="amllDbLyricsDownloadTimeout">AMLL DBからの歌詞のダウンロードがタイムアウトしました</string>
+    <string name="amllDbLyricsInvalidTtml">AMLL DBの歌詞ファイルは有効なTTMLではありません</string>
+    <string name="amllDbHttpError">AMLL DBがHTTP {statusCode}を返しました</string>
+    <string name="amllDbLyricsTooLarge">AMLL DBの歌詞ファイルが大きすぎます</string>
+    <string name="amllDbRequestFailed">AMLL DBへのリクエストに失敗しました</string>
+
+    <!-- data/auth/NeteaseLoginMethods.kt -->
+    <string name="signInWithQrCode">QRコードでログイン</string>
+    <string name="neteaseQrScanHint">NetEase Cloud Musicアプリでスキャンしてください</string>
+    <string name="loginQrKeyEmpty">サーバーから返されたkeyが空です</string>
+    <string name="loginQrMissing">サーバーからQRコードが返されませんでした</string>
+    <string name="loginQrUnreadable">QRコードのデータを解析できません</string>
+    <string name="loginNoCookie">ログインしましたが、Cookieを取得できませんでした</string>
+    <string name="loginUnknownStatus">不明な状態（{code}）</string>
+    <string name="enterManually">手動で入力</string>
+    <string name="neteaseCookieHint">ログイン済みのCookieがあれば、ここに貼り付けられます</string>
+
+    <!-- data/auth/PhoneCodeLoginFlow.kt -->
+    <string name="phoneNumberInvalid">正しい電話番号を入力してください</string>
+    <string name="verificationCodeSent">認証コードを{phoneNumber}に送信しました</string>
+    <string name="unknownError">不明なエラー</string>
+    <string name="networkErrorWithMessage">ネットワークエラー：{error}</string>
+    <string name="signInSucceeded">ログインしました</string>
+    <string name="credentialSaveFailed">認証情報の保存に失敗しました</string>
+
+    <!-- data/auth/QQLoginMethods.kt -->
+    <string name="qqScanWithQq">QQでスキャン</string>
+    <string name="qqScanWithQqHint">スマートフォンのQQでスキャンしてください</string>
+    <string name="qqScanWithWechat">WeChatでスキャン</string>
+    <string name="qqScanWithWechatHint">WeChatでスキャンしてください</string>
+    <string name="qqServerNoResponse">QQ Musicのサーバーが応答しません</string>
+    <string name="loginNoCredential">ログインしましたが、サーバーから認証情報が返されませんでした</string>
+    <string name="loginServerUnknownStatus">サーバーが不明な状態を返しました（{event}）</string>
+    <string name="phoneVerificationCode">SMS認証コード</string>
+    <string name="mainlandChinaPhoneHint">中国本土の電話番号（+86）</string>
+    <string name="phoneNumberFormatInvalid">電話番号の形式が正しくありません</string>
+    <string name="qqSliderCaptchaRequired">QQから先にスライダー認証を求められましたが、アプリ内では完了できません。QRコードでログインしてください。</string>
+    <string name="verificationCodeTooFrequent">認証コードの送信回数が多すぎます。しばらくしてからもう一度お試しください。</string>
+    <string name="verificationCodeSendFailed">認証コードの送信に失敗しました（{event}）</string>
+    <string name="verificationCodeRejected">認証コードが間違っているか期限切れ、またはサーバーが応答していません</string>
+    <string name="serverNoCredential">サーバーから認証情報が返されませんでした</string>
+    <string name="qqCredentialLabel">QQ Musicの認証情報</string>
+    <string name="qqCredentialHint">ログイン後のy.qq.comのCookie（uinとqm_keystを含む）、またはサーバーが返したCredential JSONを貼り付けられます</string>
+    <string name="qqCredentialUnrecognized">認識できない認証情報です：musicidとmusickey、またはuinとqm_keystの両方が必要です</string>
+
+    <!-- data/auth/QrLoginFlow.kt -->
+    <string name="qrGenerating">QRコードを生成しています…</string>
+    <string name="providerServerNoResponse">{provider}のサーバーが応答しません</string>
+    <string name="waitingForServer">サーバーの応答を待っています…</string>
+    <string name="confirmLoginOnPhone">スマートフォンでログインを確認してください</string>
+    <string name="loginStateSaveFailed">ログイン状態の保存に失敗しました</string>
+    <string name="loginCanceledOnPhone">スマートフォンでログインがキャンセルされました。QRコードを再生成できます。</string>
+    <string name="qrGenerateFailed">QRコードの生成に失敗しました</string>
+    <string name="networkError">ネットワークエラー</string>
+    <string name="qrExpired">QRコードの有効期限が切れました。再生成してください。</string>
+    <string name="tapToGenerateQr">タップしてQRコードを生成</string>
+
+    <!-- data/local/LocalAccount.kt -->
+    <string name="localAccountDefaultName">ローカルアカウント</string>
+
+    <!-- data/local/LocalLibrary.kt -->
+    <string name="localPlaylistNotFound">ローカルプレイリストが存在しません</string>
+    <string name="songUnidentifiable">この曲を識別できません</string>
+    <string name="localLikes">ローカルのお気に入り</string>
+    <string name="untitledPlaylist">無題のプレイリスト</string>
+
+    <!-- data/provider/MusicProviderRegistry.kt -->
+    <string name="providerTurnedOff">{provider}はオフになっています</string>
+    <string name="providerNoStreamUrl">{provider}はこの曲の再生URLを提供していません</string>
+
+    <!-- data/provider/NeteaseProvider.kt -->
+    <string name="neteaseSearchFailed">NetEase Cloud Musicの検索リクエストに失敗しました</string>
+
+    <!-- data/provider/ProviderId.kt -->
+    <string name="neteaseCloudMusic">NetEase Cloud Music</string>
+    <string name="qqMusic">QQ Music</string>
+
+    <!-- data/provider/ProviderModels.kt -->
+    <string name="paid">有料</string>
+    <string name="lossless">ロスレス</string>
+    <string name="unknownArtist">不明なアーティスト</string>
+
+    <!-- data/provider/QQProvider.kt -->
+    <string name="qqLyricsRequestFailed">QQ Musicの歌詞リクエストに失敗しました</string>
+
+    <!-- di/Modules.kt -->
+    <string name="neteaseLoginIntro">RedefineNCMはサードパーティ製のNetEase Cloud Musicクライアントです。ログインすると、プレイリスト、毎日のおすすめ、お気に入りの曲を利用できます。ログインしなくても検索と再生はできます。</string>
+    <string name="neteaseAccount">NetEase Cloud Musicアカウント</string>
+    <string name="neteaseSignedOutHint">ログインすると、プレイリスト、毎日のおすすめ、お気に入りの曲を表示できます</string>
+    <string name="neteaseSignOutWarning">ログアウトすると、「マイページ」、毎日のおすすめ、お気に入りなどの機能は使えなくなります。ダウンロード済みの曲は残ります。</string>
+    <string name="neteaseServerAddress">NetEase Cloud Musicのサーバーアドレス</string>
+    <string name="serverAddressAppliesAfterRestart">サーバーアドレスは再起動後に反映されます</string>
+    <string name="qqLoginIntro">ログインすると、QQ Musicの検索と再生にアカウントの権限が使われます。ログインしなくても検索でき、無料で聴ける曲を再生できます。</string>
+    <string name="qqAccount">QQ Musicアカウント</string>
+    <string name="qqSignedOutHint">ログインすると、検索と再生にアカウントの権限が使われます</string>
+    <string name="qqSignOutWarning">ログアウトすると、QQ Musicはログインしていない状態で検索と再生を行います。</string>
+    <string name="qqServerAddress">QQ Musicのサーバーアドレス</string>
+    <string name="serverAddressAppliesNow">サーバーアドレスはすぐに反映されます</string>
+    <string name="enableQqMusic">QQ Musicを有効にする</string>
+    <string name="enableQqMusicHint">セルフホストのQQMusicApiサーバーが必要です。ログインしていない場合は、QQの未ログインユーザー向けの制限に従って再生します。</string>
+    <string name="qqWebSignInUnavailable">ブラウザではQQ Musicのログイン認証情報を送信できないため、Web版ではログインしていない状態でQQ Musicを使用します</string>
+    <string name="serverAvailableWithVersion">サーバーは利用できます。バージョン：{version}</string>
+    <string name="serverRespondedWithError">サーバーは応答しましたが、エラーを返しました（コード{code}）</string>
+    <string name="serverUnreachable">このサーバーに接続できません。アドレスが正しいか、サービスが実行中かを確認してください。</string>
+    <string name="serverAvailable">サーバーは利用できます</string>
+    <string name="beatModelNoRuntime">このプラットフォームには、使えるNPUやGPUの推論ランタイムがありません</string>
+
+    <!-- download/LocalMediaAssets.kt -->
+    <string name="lyricsNoOriginalContent">この歌詞には保存できる元のデータがありません</string>
+    <string name="lyricsFileUnreadableAfterWrite">書き込んだ歌詞ファイルを読み込めません</string>
+    <string name="coverDownloadHttpError">カバーのダウンロードに失敗しました：HTTP {statusCode}</string>
+    <string name="coverTooLarge">カバーファイルが{limitMib} MiBの上限を超えています</string>
+    <string name="coverDownloadEmpty">ダウンロードしたカバーが空です</string>
+    <string name="coverNotImage">ダウンロードしたカバーは画像ではありません：{contentType}</string>
+    <string name="coverFormatUnsupported">このカバー画像の形式には対応していません</string>
+    <string name="coverFileUnreadableAfterWrite">書き込んだカバーファイルを読み込めません</string>
+
+    <!-- download/SongDownloadManager.kt -->
+    <string name="downloadQueueSaveFailedNotStarted">ダウンロードキューを保存できなかったため、ダウンロードを開始しませんでした</string>
+    <string name="localFileStatusUnknown">ローカルファイルの状態を確認できません</string>
+    <string name="localSongDeleted">ローカルの曲を削除しました</string>
+    <string name="localFileDeleted">ローカルファイルは削除されています</string>
+    <string name="assetCleanupFailedWithError">オーディオは削除しましたが、歌詞またはカバーの削除に失敗しました：{error}</string>
+    <string name="assetCleanupFailed">オーディオは削除しましたが、歌詞またはカバーの削除に失敗しました</string>
+    <string name="localSongDeleteFailed">ローカルの曲の削除に失敗しました</string>
+    <string name="localLibrarySyncFailed">ローカルの音楽ライブラリの同期に失敗しました</string>
+    <string name="downloadQueueRestoreFailed">ダウンロードキューを復元できません</string>
+    <string name="downloadQueueSaveFailed">ダウンロードキューを保存できません</string>
+    <string name="localLibraryReadFailed">ローカルの音楽ライブラリを読み込めませんでした</string>
+    <string name="downloadServiceStartFailedWithError">バックグラウンドのダウンロードサービスを開始できませんでした：{error}</string>
+    <string name="downloadServiceStartFailed">バックグラウンドのダウンロードサービスを開始できませんでした</string>
+    <string name="downloadQueueSaveFailedStopped">ダウンロードキューを保存できなかったため、残りのダウンロードを停止しました</string>
+    <string name="downloadQualitySaveFailed">ダウンロードの音質を保存できなかったため、ダウンロードを開始しませんでした</string>
+    <string name="downloadUrlUnavailable">曲のダウンロードリンクを取得できませんでした</string>
+    <string name="downloadFailed">ダウンロードに失敗しました</string>
+    <string name="lyricsSaveFailed">歌詞を保存できませんでした</string>
+    <string name="coverSaveFailed">カバーを保存できませんでした</string>
+    <string name="partialDownloadCleanupFailedWithError">途中までのダウンロードファイルを削除できませんでした：{error}</string>
+    <string name="partialDownloadCleanupFailed">途中までのダウンロードファイルを削除できませんでした</string>
+    <string name="localSongFallbackTitle">ローカルの曲{id}</string>
+    <string name="localFile">ローカルファイル</string>
+
+    <!-- lyric/LyricResolver.kt -->
+    <string name="neteaseLyricsRequestFailed">NetEase Cloud Musicから歌詞を取得できませんでした</string>
+    <string name="providerLyricsRequestFailed">{provider}から歌詞を取得できませんでした</string>
+    <string name="amllDbLookupTimedOut">AMLL DBの検索がタイムアウトしました</string>
+    <string name="amllDbTtmlUnparseable">AMLL DBのTTMLを解析できませんでした</string>
+
+    <!-- lyric/LyricSourceMode.kt -->
+    <string name="lyricSourceTtmlPreferred">AMLL歌詞データベースを優先（見つからない場合はNetEase）</string>
+    <string name="lyricSourceBackendPreferred">NetEaseの歌詞を優先（見つからない場合はAMLL歌詞データベース）</string>
+    <string name="lyricSourceTtmlOnly">AMLL歌詞データベースのみ</string>
+    <string name="lyricSourceBackendOnly">NetEaseの歌詞のみ</string>
+
+    <!-- lyric/LyricStateOverlay.kt -->
+    <string name="restoringLyrics">歌詞を復元しています…</string>
+    <string name="restoringPlayback">再生を復元しています…</string>
+    <string name="nothingPlayingYet">まだ何も再生していません</string>
+    <string name="lyricsAppearHere">曲を選ぶと、ここに歌詞が表示されます。</string>
+    <string name="loadingLyrics">歌詞を読み込んでいます…</string>
+    <string name="lyricsUntimedTitle">歌詞にタイムスタンプがありません</string>
+    <string name="lyricsUntimedMessage">この曲の歌詞にはタイムスタンプがないため、再生に合わせてスクロールできません。</string>
+    <string name="songHasNoLyrics">この曲にはまだ歌詞がありません。</string>
+    <string name="lyricsLoadFailed">歌詞を読み込めませんでした</string>
+    <string name="retry">再試行</string>
+    <string name="lyricsUnsupported">歌詞は未対応</string>
+
+    <!-- notification/LyricNotificationController.kt -->
+    <string name="alignLeft">左揃え</string>
+    <string name="alignCenter">中央揃え</string>
+    <string name="alignRight">右揃え</string>
+
+    <!-- player/PlaybackReportingCoordinator.kt -->
+    <string name="playbackReportProcessingFailed">再生レポートを処理できませんでした</string>
+    <string name="playbackReportRejected">サーバーが再生レポートを拒否しました</string>
+    <string name="relayReportUnsupported">このサーバーはrelayの再生進捗レポートに対応していません</string>
+    <string name="recentPlayReportUnsupported">このサーバーは最近再生した曲のレポートに対応していません</string>
+    <string name="playHistoryReportUnsupported">このサーバーは再生履歴のレポートに対応していません</string>
+    <string name="playbackReportRequestFailed">再生レポートのリクエストに失敗しました</string>
+
+    <!-- player/PlayerStatusRestorer.kt -->
+    <string name="playerStatusReadFailed">再生状態を読み込めませんでした</string>
+    <string name="playerStatusRestoreFailed">再生状態を復元できませんでした</string>
+    <string name="playerStatusInitFailed">再生状態を初期化できませんでした</string>
+
+    <!-- recognition/MicrophoneRecorder.kt -->
+    <string name="microphonePermissionDenied">マイクの権限がありません</string>
+    <string name="microphoneUnavailable">マイクを使用できません</string>
+    <string name="microphoneBusy">マイクは使用中です</string>
+    <string name="microphoneNeedsSecureContext">ブラウザでは、HTTPSまたはlocalhostのページでのみマイクを使用できます</string>
+
+    <!-- recognition/PcmCapture.kt -->
+    <string name="recordingDurationMustBePositive">録音時間は0より大きい必要があります</string>
+
+    <!-- recognition/PcmResampler.kt -->
+    <string name="recordingSampleRateInvalid">録音のサンプルレートが無効です</string>
+    <string name="recordingDurationOutOfRange">録音時間が処理できる範囲を超えています</string>
+    <string name="recordingSampleCountOutOfRange">録音のサンプル数が処理できる範囲を超えています</string>
+    <string name="recordingSamplesInsufficient">録音のサンプルが不足しています：必要{required}個、実際{captured}個</string>
+    <string name="recordingSampleValueInvalid">録音の{index}番目のサンプルの値が無効です</string>
+
+    <!-- ui/amll/NativeAmllScreen.kt -->
+    <string name="nowPlayingLyrics">再生中の歌詞</string>
+    <string name="closeLyrics">歌詞を閉じる</string>
+    <string name="lyricsUntimedNote">この曲の歌詞にはタイムスタンプがないため、再生に合わせてスクロールできません</string>
+
+    <!-- ui/component/AddToLocalPlaylistDialog.kt -->
+    <string name="addToLocalPlaylist">ローカルプレイリストに追加</string>
+    <string name="addSongsToLocalPlaylist">{count}曲をローカルプレイリストに追加</string>
+    <string name="newPlaylistName">新しいプレイリストの名前</string>
+    <string name="songCount">{count}曲</string>
+    <string name="newPlaylist">新規プレイリスト</string>
+    <string name="createAndAdd">作成して追加</string>
+
+    <!-- ui/component/AutoHideMiniPlayerController.kt -->
+    <string name="liked">お気に入り済み</string>
+    <string name="like">お気に入り</string>
+    <string name="queue">再生キュー</string>
+    <string name="comments">コメント</string>
+    <string name="shuffle">シャッフル</string>
+    <string name="outputVolumePercent">出力音量{percent}</string>
+    <string name="coverOf">{title}のカバー</string>
+    <string name="notPlaying">再生停止中</string>
+    <string name="chooseSongToPlay">曲を選んで再生を開始</string>
+    <string name="collapsePlaybackControls">再生コントロールを折りたたむ</string>
+    <string name="releaseForNextSong">離すと次の曲を再生</string>
+    <string name="releaseForPreviousSong">離すと前の曲を再生</string>
+    <string name="playbackControlsFor">{title}、再生コントロール</string>
+    <string name="noSongPlaying">再生中の曲はありません</string>
+    <string name="expandPlaybackControls">再生コントロールを展開</string>
+
+    <!-- ui/component/DesktopPlayerBar.kt -->
+    <string name="lyrics">歌詞</string>
+    <string name="volumePercent">音量{percent}</string>
+
+    <!-- ui/component/Expressive.kt -->
+    <string name="cachedDataUpdating">キャッシュ · 更新中</string>
+    <string name="showingCachedData">キャッシュを表示中</string>
+    <string name="errorStateDescription">エラー：{title}</string>
+
+    <!-- ui/component/LyricCapabilityBadge.kt -->
+    <string name="lyricsBadgeGlyph">詞</string>
+    <string name="lyricLevelUnsynced">タイムスタンプなし</string>
+    <string name="lyricLevelUnsyncedDescription">歌詞のレベル：タイムスタンプなし</string>
+    <string name="lyricLevelLineSynced">行ごと（標準）</string>
+    <string name="lyricLevelLineSyncedDescription">歌詞のレベル：行ごと（標準）</string>
+    <string name="lyricLevelNcmYrc">単語ごと（NCM YRC）</string>
+    <string name="lyricLevelNcmYrcDescription">歌詞のレベル：NCM YRC</string>
+    <string name="lyricLevelTtmlFull">TTML完全対応</string>
+    <string name="lyricLevelTtmlFullDescription">歌詞のレベル：TTML完全対応</string>
+    <string name="providerLyricsSource">{provider}の歌詞</string>
+    <string name="neteaseLyricsSource">NetEase Cloud Musicの歌詞</string>
+    <string name="unknown">不明</string>
+    <string name="localLyricsFileSource">{source} · ローカルの歌詞ファイル</string>
+    <string name="viewLyricsInfo">歌詞の情報を表示</string>
+    <string name="lyricBadgeDescription">{level}、ソース：{source}</string>
+    <string name="lyricsInfo">歌詞の情報</string>
+    <string name="level">レベル</string>
+    <string name="source">ソース</string>
+
+    <!-- ui/component/MiniNowPlayingBar.kt -->
+    <string name="openPlayerFor">{title}の再生画面を開く</string>
+    <string name="mutedSuffix">（ミュート中）</string>
+
+    <!-- ui/component/NativeDynamicCoverLayer.kt -->
+    <string name="animatedCover">動くカバー</string>
+
+    <!-- ui/component/PlaybackBottomSheets.kt -->
+    <string name="noSongsQueued">再生待ちの曲はありません</string>
+    <string name="queueSubtitleShuffleOn">{count}曲 · シャッフル中は並べ替えできません</string>
+    <string name="queueSubtitleDragToReorder">{count}曲 · 右側のハンドルをドラッグして並べ替え</string>
+    <string name="oneSong">1曲</string>
+    <string name="clear">クリア</string>
+    <string name="queueEmpty">再生キューは空です</string>
+    <string name="queueEmptyMessage">再生を始めると、再生待ちの曲がここに表示されます。</string>
+    <string name="clearQueueTitle">再生キューをクリアしますか？</string>
+    <string name="clearQueueMessage">キュー内の{count}曲がすべて削除され、再生が停止します。</string>
+    <string name="unknownSong">不明な曲</string>
+    <string name="queueItemDescription">{position}曲目、{title}、アーティスト{artist}</string>
+    <string name="playing">再生中</string>
+    <string name="nowPlaying">再生中</string>
+    <string name="queued">再生待ち</string>
+    <string name="moveUp">上に移動</string>
+    <string name="moveDown">下に移動</string>
+    <string name="removeFromQueue">キューから削除</string>
+    <string name="songComments">曲のコメント</string>
+    <string name="notSupported">未対応</string>
+    <string name="commentsUnsupported">コメントは未対応</string>
+    <string name="commentsUnsupportedMessage">この曲は、コメント機能のないサービスのものです。</string>
+    <string name="commentsLoadingSubtitle">コメントを読み込み中</string>
+    <string name="commentsUnavailableSubtitle">現在コメントを読み込めません</string>
+    <string name="commentCount">{count}件</string>
+    <string name="noComments">コメントはありません</string>
+    <string name="popular">人気</string>
+    <string name="newest">新着</string>
+    <string name="loadingComments">コメントを読み込んでいます…</string>
+    <string name="commentsLoadFailed">コメントを読み込めませんでした</string>
+    <string name="noPopularCommentsYet">人気のコメントはまだありません</string>
+    <string name="noCommentsYet">コメントはまだありません</string>
+    <string name="viewNewestCommentsHint">新着のコメントを表示できます。</string>
+    <string name="noCommentsToShow">この曲には表示できるコメントがまだありません。</string>
+    <string name="showNewestComments">新着のコメントを表示</string>
+    <string name="loadingMoreComments">さらにコメントを読み込んでいます…</string>
+    <string name="errorTapToRetry">{error}。タップして再試行</string>
+    <string name="loadMore">さらに読み込む</string>
+    <string name="noMoreComments">これ以上コメントはありません</string>
+    <string name="neteaseUserFallbackName">NetEase Cloud Musicユーザー</string>
+    <string name="avatarOf">{nickname}のアバター</string>
+    <string name="commentLikesDescription">いいね{count}件</string>
+    <string name="commentLikeCount">{count}いいね</string>
+    <string name="noTextContent">（テキストなし）</string>
+    <string name="commentCountShort">{count}件</string>
+
+    <!-- ui/component/SettingsRows.kt -->
+    <string name="hide">非表示</string>
+    <string name="show">表示</string>
+    <string name="notSignedIn">未ログイン</string>
+    <string name="signedIn">ログイン済み</string>
+    <string name="switchAccount">アカウントを切り替え</string>
+    <string name="signIn">ログイン</string>
+    <string name="open">開く</string>
+    <string name="collapse">折りたたむ</string>
+    <string name="expand">展開</string>
+
+    <!-- ui/component/SongWikiDetails.kt -->
+    <string name="loadingSongDetails">曲の詳細を読み込んでいます…</string>
+    <string name="songDetailsLoadFailed">曲の詳細を読み込めませんでした</string>
+    <string name="songDetailsUnsupported">これ以上の詳細はありません</string>
+    <string name="songDetailsUnsupportedMessage">この曲は、曲の詳細を提供していないサービスのものです。</string>
+    <string name="noMoreSongDetails">これ以上の情報はありません</string>
+    <string name="noSongDetailsToShow">この曲には表示できる情報がまだありません。</string>
+
+    <!-- ui/component/StartupPermissionRationale.kt -->
+    <string name="permissionRationaleTitle">次の権限を許可</string>
+    <string name="permissionRationaleNotifications">通知：通知パネルとロック画面に、再生コントロール、歌詞、ダウンロードの進行状況を表示します。</string>
+    <string name="permissionRationaleAudio">音楽とオーディオ：この端末にダウンロード済みの曲を見つけ、ネットワークに接続していなくても再生できるようにします。</string>
+    <string name="permissionRationaleFooter">あとからシステム設定でいつでも変更できます。</string>
+    <string name="notNow">後で</string>
+
+    <!-- ui/login/CredentialTextLoginPresenter.kt -->
+    <string name="credentialCleared">認証情報を削除しました</string>
+    <string name="credentialSavedInUse">保存しました。{field}が有効になりました</string>
+    <string name="credentialNotRecognized">認証情報を認識できません</string>
+    <string name="save">保存</string>
+
+    <!-- ui/login/PhoneCodeLoginPresenter.kt -->
+    <string name="phoneNumber">電話番号</string>
+    <string name="resendIn">{seconds}秒後に再送信</string>
+    <string name="resend">再送信</string>
+    <string name="sendVerificationCode">認証コードを送信</string>
+    <string name="verificationCode">認証コード</string>
+
+    <!-- ui/login/QrLoginPresenter.kt -->
+    <string name="providerSignInQrCode">{provider}のログイン用QRコード</string>
+    <string name="qrCodeExpired">QRコードの有効期限切れ</string>
+    <string name="tapToRefresh">タップして更新</string>
+    <string name="qrCodeDecodeFailed">QRコードを解析できませんでした</string>
+    <string name="qrCodePlaceholder">QRコードは\nここに表示されます</string>
+    <string name="regenerateQrCode">QRコードを再生成</string>
+    <string name="generateQrCode">QRコードを生成</string>
+
+    <!-- ui/screen/AccountsScreen.kt -->
+    <string name="accountsAndServices">アカウントとサービス</string>
+    <string name="accountsSubtitle">サービスごとにアカウントは1つまで。ローカルアカウントはこの端末に保存されます</string>
+    <string name="back">戻る</string>
+    <string name="goBack">戻る</string>
+    <string name="serverAddressHint">{appliesWhen}。空欄にするとデフォルトのアドレスに戻ります</string>
+    <string name="checking">確認中…</string>
+    <string name="checkAddress">アドレスを確認</string>
+    <string name="enterFieldManually">{field}を手動で入力</string>
+    <string name="advancedHint">上級者向け：{hint}</string>
+    <string name="multipleServices">複数のサービス</string>
+    <string name="groupByService">サービスごとに分けて表示</string>
+    <string name="groupByServiceHint">オフにすると、すべてのサービスの結果を1つのリストにまとめて表示します</string>
+    <string name="mergeSameSongs">サービス間で同じ曲をまとめる</string>
+    <string name="mergeSameSongsHint">曲名と最初のアーティストが同じで長さの差が3秒以内の曲を1行にまとめ、メニューから別のサービスで再生できるようにします</string>
+    <string name="local">ローカル</string>
+    <string name="signOutOfProvider">{provider}からログアウトしますか？</string>
+    <string name="signOutConfirm">ログアウト</string>
+    <string name="localAccountName">ローカルアカウント名</string>
+    <string name="name">名前</string>
+    <string name="localAccountNoSignInNeeded">ログインは不要で、この端末だけに保存されます</string>
+    <string name="rename">名前を変更</string>
+
+    <!-- ui/screen/AlbumScreen.kt -->
+    <string name="playbackSourceAlbum">アルバム「{albumName}」</string>
+    <string name="albumLoading">アルバムを読み込み中…</string>
+    <string name="albumLoadFailed">アルバムを読み込めませんでした</string>
+    <string name="checkNetworkAndRetry">ネットワーク接続を確認して、もう一度お試しください。</string>
+    <string name="albumReleaseDate">{releaseDate}発売</string>
+    <string name="playAll">すべて再生</string>
+
+    <!-- ui/screen/ArtistScreen.kt -->
+    <string name="playbackSourceArtist">アーティスト「{artistName}」</string>
+    <string name="artistLoading">アーティストを読み込み中…</string>
+    <string name="artistLoadFailed">アーティストを読み込めませんでした</string>
+    <string name="popularSongs">人気曲</string>
+    <string name="albums">アルバム</string>
+    <string name="loading">読み込み中…</string>
+    <string name="moreAlbums">アルバムをもっと見る</string>
+    <string name="artistSongAndAlbumCount">{songCount}曲 · アルバム{albumCount}枚</string>
+    <string name="playPopularSongs">人気曲を再生</string>
+
+    <!-- ui/screen/DailySongsScreen.kt -->
+    <string name="dailyPicks">毎日のおすすめ</string>
+    <string name="todaysPicks">今日のおすすめ</string>
+    <string name="dailyPicksSongCount">今日のおすすめ{count}曲</string>
+    <string name="dailyPicksLoadFailed">毎日のおすすめを読み込めませんでした</string>
+    <string name="dailyPicksLoading">毎日のおすすめを読み込み中…</string>
+    <string name="dailyPicksEmpty">毎日のおすすめはまだありません</string>
+    <string name="dailyPicksSignInHint">ログインすると、毎日のおすすめ曲がここに表示されます。</string>
+
+    <!-- ui/screen/DownloadManagementScreen.kt -->
+    <string name="all">すべて</string>
+    <string name="filterDownloading">ダウンロード中</string>
+    <string name="paused">一時停止中</string>
+    <string name="downloaded">ダウンロード済み</string>
+    <string name="failed">失敗</string>
+    <string name="canceled">キャンセル済み</string>
+    <string name="fileDeleted">ファイル削除済み</string>
+    <string name="downloadQueueSaveFailedTitle">ダウンロードキューを保存できませんでした</string>
+    <string name="scanningLocalLibrary">ローカルの音楽ライブラリをスキャン中…</string>
+    <string name="saveSongToDeviceFailed">「{title}」を保存できませんでした：{error}</string>
+    <string name="rescanDownloadedFiles">ダウンロード済みのファイルを再スキャン</string>
+    <string name="cancelAllDownloads">すべてのダウンロードをキャンセル</string>
+    <string name="clearFinishedEntries">終了した項目をリストから消去</string>
+    <string name="downloadsCompletedCount">ダウンロード済み{count}曲</string>
+    <string name="downloadsActiveCount">ダウンロード中{count}曲</string>
+    <string name="downloadsPausedCount">一時停止中{count}曲</string>
+    <string name="downloadsFailedCount">失敗{count}曲</string>
+    <string name="downloadsStoredInBrowserHint">曲はブラウザ内に保存されていて、システムの「ダウンロード」フォルダにはありません。音声ファイルを取り出すには、曲の「その他の操作」から「この端末に保存」を選んでください。</string>
+    <string name="moreActions">その他の操作</string>
+    <string name="pauseAll">すべて一時停止</string>
+    <string name="resumeAll">すべて再開</string>
+    <string name="resumeDownload">ダウンロードを再開</string>
+    <string name="downloadAgain">再ダウンロード</string>
+    <string name="cancelDownload">ダウンロードをキャンセル</string>
+    <string name="saveToDevice">この端末に保存</string>
+    <string name="resaveLyricsFromCurrentSource">現在の歌詞のソースで歌詞を保存し直す</string>
+    <string name="saveLyricsFile">歌詞ファイルを保存</string>
+    <string name="resaveCover">カバーを保存し直す</string>
+    <string name="saveCoverImage">カバー画像を保存</string>
+    <string name="deleteDownloadedFile">ダウンロードしたファイルを削除</string>
+    <string name="removeFromListKeepFile">リストから外す（ファイルは残す）</string>
+    <string name="deleteLeftoverLyricsAndCover">残っている歌詞とカバーを削除</string>
+    <string name="removeFromList">リストから外す</string>
+    <string name="pausedPrefix">一時停止中 · </string>
+    <string name="waitingToDownload">ダウンロード待ち</string>
+    <string name="gettingDownloadLink">ダウンロードURLを取得中</string>
+    <string name="savingLyricsAndCover">歌詞とカバーを保存中</string>
+    <string name="lyricsSavedWithFormat">歌詞（{format}）</string>
+    <string name="lyricStatusNone">歌詞なし</string>
+    <string name="savingLyrics">歌詞を保存中</string>
+    <string name="lyricsNotSaved">歌詞は未保存</string>
+    <string name="coverSavedStatus">カバー</string>
+    <string name="noCover">カバーなし</string>
+    <string name="savingCover">カバーを保存中</string>
+    <string name="coverNotSaved">カバーは未保存</string>
+    <string name="noDownloadedSongsYet">ダウンロードした曲はまだありません</string>
+    <string name="noSongsInFilter">「{filter}」の曲はありません</string>
+    <string name="downloadsEmptyHint">プレイリストのページで「すべてダウンロード」をタップするか、曲の「その他の操作」から「ダウンロード」を選んでください。</string>
+    <string name="switchFilterHint">別のフィルターに切り替えてください。</string>
+    <string name="cancelAllDownloadsTitle">すべてのダウンロードをキャンセルしますか？</string>
+    <string name="cancelAllDownloadsMessage">ダウンロード中と一時停止中の曲はすべて停止します。あとで「キャンセル済み」から再試行できます。ダウンロード済みの曲には影響しません。</string>
+    <string name="cancelAll">すべてキャンセル</string>
+    <string name="clearFinishedEntriesTitle">終了した項目を消去しますか？</string>
+    <string name="clearFinishedEntriesMessage">ダウンロード済み、失敗、キャンセル済みの項目はこのリストから外されます。ダウンロードした曲のファイルは削除されません。</string>
+    <string name="clearEntries">項目を消去</string>
+    <string name="cancelDownloadTitle">「{title}」のダウンロードをキャンセルしますか？</string>
+    <string name="cancelDownloadMessage">ダウンロードは停止します。あとで「キャンセル済み」から再試行できます。</string>
+    <string name="removeFromListTitle">「{title}」をリストから外しますか？</string>
+    <string name="removeFromListMessage">この項目だけをリストから外します。ダウンロードした曲のファイルは残ります。</string>
+    <string name="remove">リストから外す</string>
+    <string name="deleteSongFileTitle">「{title}」のファイルを削除しますか？</string>
+    <string name="deleteSongFileMessage">この端末の音声ファイルは完全に削除されます。あとで再ダウンロードできます。</string>
+    <string name="deleteFile">ファイルを削除</string>
+    <string name="qualityStandard">標準</string>
+    <string name="qualityHigh">高音質</string>
+    <string name="qualityVeryHigh">最高音質</string>
+    <string name="qualityHdSurround">HDサラウンド</string>
+    <string name="qualityImmersiveSurround">イマーシブサラウンド</string>
+    <string name="qualityDolbyAtmos">ドルビーアトモス</string>
+    <string name="qualityMaster">マスター</string>
+    <string name="downloadFailedWithReason">ダウンロードに失敗しました：{reason}</string>
+
+    <!-- ui/screen/HomeScreen.kt -->
+    <string name="recommendedPlaylists">おすすめプレイリスト</string>
+    <string name="viewAllDailyPicks">毎日のおすすめの曲をすべて表示</string>
+    <string name="openSongRecognition">曲の認識を開く</string>
+    <string name="songRecognitionCardHint">3秒録音して、周りで流れている曲を探します</string>
+    <string name="openUserProfile">{nickname}のプロフィールを開く</string>
+
+    <!-- ui/screen/LocalLibraryScreen.kt -->
+    <string name="localPlaylists">ローカルプレイリスト</string>
+    <string name="localPlaylistsSubtitle">どのサービスの曲も追加でき、この端末だけに保存され、設定のバックアップと一緒にエクスポートされます</string>
+    <string name="importing">インポート中…</string>
+    <string name="importPlaylist">プレイリストをインポート</string>
+    <string name="localPlaylistsLoading">ローカルプレイリストを読み込み中…</string>
+    <string name="noLocalPlaylistsYet">ローカルプレイリストはまだありません</string>
+    <string name="localPlaylistsEmptyHint">新しく作成するか、曲の「その他の操作」から「ローカルプレイリストに追加」を選んでください。QQ Musicなどのサービスの曲をお気に入りにすると、「ローカルのお気に入り」にも追加されます。</string>
+    <string name="newLocalPlaylistTitle">ローカルプレイリストを作成</string>
+    <string name="playlistName">プレイリスト名</string>
+    <string name="create">作成</string>
+    <string name="playlistLinkOrId">プレイリストのリンクまたはID</string>
+    <string name="importPlaylistHint">NetEase Cloud MusicとQQ Musicのプレイリストのリンクに対応しています。数字だけの場合はNetEaseのプレイリストIDとして読み込みます。QQ MusicのプレイリストIDには先頭にqq:を付けてください。</string>
+    <string name="importAction">インポート</string>
+
+    <!-- ui/screen/LocalPlaylistScreen.kt -->
+    <string name="playbackSourceLocalPlaylist">ローカルプレイリスト「{playlistName}」</string>
+    <string name="localPlaylistSongCount">{count}曲 · ローカルプレイリスト</string>
+    <string name="delete">削除</string>
+    <string name="playlistEmpty">このプレイリストは空です</string>
+    <string name="localPlaylistEmptyHint">任意の曲の「その他の操作」から「ローカルプレイリストに追加」を選んでください。</string>
+    <string name="removeFromThisPlaylist">このプレイリストから外す</string>
+    <string name="renamePlaylist">プレイリスト名を変更</string>
+    <string name="deletePlaylistTitle">「{playlistName}」を削除しますか？</string>
+    <string name="deletePlaylistMessage">このローカルプレイリストだけが削除され、中の曲には影響しません。</string>
+
+    <!-- ui/screen/LoginScreen.kt -->
+    <string name="signInLater">あとでログイン</string>
+    <string name="signInToProvider">{provider}にログイン</string>
+    <string name="serverAddress">サーバーアドレス</string>
+    <string name="serverAddressResetHint">空欄にするとデフォルトのアドレスに戻ります</string>
+    <string name="saveAddress">アドレスを保存</string>
+
+    <!-- ui/screen/NowPlayingScreen.kt -->
+    <string name="collapsePlayer">再生画面を閉じる</string>
+    <string name="playbackSourceFrom">{source}から</string>
+    <string name="songDetails">曲の詳細</string>
+    <string name="mutedTapToRestoreVolume">ミュート中 · タップして音量を戻す</string>
+    <string name="artworkOf">{title}のカバー</string>
+    <string name="openLyrics">歌詞を開く</string>
+    <string name="pickSongToStart">いずれかのリストから曲を選んで始めましょう</string>
+    <string name="viewArtistAndAlbum">アーティストとアルバムを表示</string>
+    <string name="lookingUp">検索中…</string>
+    <string name="artistWithName">アーティスト：{artistName}</string>
+    <string name="albumWithName">アルバム：{albumName}</string>
+    <string name="playbackPosition">再生位置</string>
+
+    <!-- ui/screen/PlaylistDetailScreen.kt -->
+    <string name="playlist">プレイリスト</string>
+    <string name="playlistDetailsUnavailable">プレイリストの情報を表示できません</string>
+    <string name="playlistLoading">プレイリストと曲を読み込み中…</string>
+    <string name="playlistLoadFailed">プレイリストを読み込めませんでした</string>
+    <string name="userPlaylistsLoadFailed">プレイリストを読み込めませんでした</string>
+    <string name="playlistNoSongsYet">このプレイリストにはまだ曲がありません</string>
+    <string name="playlistEmptyHint">追加した曲はここに表示されます。</string>
+    <string name="downloadPlaylistTitle">「{playlistName}」をダウンロードしますか？</string>
+    <string name="downloadPlaylistMessage">全{count}曲を音質「{quality}」でダウンロードします（設定で変更できます）。ダウンロード済みの曲はスキップされます。</string>
+    <string name="addedToDownloadQueue">ダウンロードキューに追加しました：{count}曲</string>
+    <string name="view">表示</string>
+    <string name="playbackSourcePlaylist">プレイリスト「{playlistName}」</string>
+    <string name="playlistCover">プレイリストのカバー</string>
+    <string name="playlistSongCount">{count}曲</string>
+    <string name="downloadAll">すべてダウンロード</string>
+    <string name="saveAsLocalPlaylist">ローカルプレイリストとして保存</string>
+
+    <!-- ui/screen/SearchScreen.kt -->
+    <string name="clearSearch">クリア</string>
+    <string name="searchingFor">「{query}」を検索中…</string>
+    <string name="searchFailed">検索に失敗しました</string>
+    <string name="playbackSourceSearch">「{query}」の検索結果</string>
+    <string name="noResultsFound">結果が見つかりません</string>
+    <string name="noSongsMatchQuery">「{query}」に一致する曲が見つかりません。短いキーワードか、アーティスト名だけで試してください。</string>
+    <string name="readyToSearch">検索の準備完了</string>
+    <string name="searchPromptWithQuery">検索ボタンをタップするかEnterキーを押すと、「{query}」に関連する曲を検索します。</string>
+    <string name="searchEmptyTitle">曲名、アーティスト名、アルバム名を入力</string>
+    <string name="searchEmptyHint">検索ボタンをタップするかEnterキーを押すと、検索を開始します。</string>
+    <string name="searchHistory">検索履歴</string>
+    <string name="popularSearches">人気の検索</string>
+    <string name="loadingMoreResults">さらに結果を読み込み中…</string>
+    <string name="noMoreResults">これ以上の結果はありません</string>
+    <string name="playFromProviderInstead">代わりに{provider}で再生</string>
+    <string name="searchSongs">曲を検索</string>
+
+    <!-- ui/screen/SettingsScreen.kt -->
+    <string name="settingsSaveFailed">設定を保存できませんでした：{error}</string>
+    <string name="settingsLoadFailed">設定を読み込めませんでした</string>
+    <string name="localPlaylistsImportFailed">ローカルプレイリストをインポートできませんでした：{error}</string>
+    <string name="settingsImported">設定をインポートしました</string>
+    <string name="settingsImportInvalidFile">インポートに失敗しました：有効な設定のバックアップではありません</string>
+    <string name="settingsSubtitle">アカウント、再生、歌詞、ダウンロード、サーバー</string>
+    <string name="settingsLoading">設定を読み込み中…</string>
+    <string name="settingsSectionAccounts">アカウント</string>
+    <string name="streamingQuality">ストリーミング音質</string>
+    <string name="playWholeListOnTap">リストの曲をタップしたらリスト全体を再生</string>
+    <string name="playWholeListOnTapHint">オフにすると、タップした曲だけを再生します</string>
+    <string name="useAnimatedCover">再生画面で動くカバーを使用</string>
+    <string name="desktopLyricsLockHint">ロックするとウィンドウはその場に固定され、移動やサイズ変更ができなくなります。Windowsではマウス操作が下のウィンドウに届きます。ロックの解除は、ここかシステムトレイアイコンのメニューから行えます。</string>
+    <string name="showTranslatedLyrics">歌詞の翻訳を表示</string>
+    <string name="showRomanization">歌詞のローマ字を表示</string>
+    <string name="showRomanizationHint">日本語などの曲の発音表記</string>
+    <string name="downloadQuality">ダウンロード音質</string>
+    <string name="showDownloadStatus">曲リストにダウンロード状態を表示</string>
+    <string name="showDownloadStatusHint">ダウンロード済み、ダウンロード中、ダウンロードに失敗した曲に印が付きます</string>
+    <string name="settingsSectionGeneral">一般</string>
+    <string name="theme">テーマ</string>
+    <string name="useWallpaperColors">壁紙の色を使用</string>
+    <string name="useWallpaperColorsHint">アプリの配色をシステムの壁紙から取得します（Android 12以降）</string>
+    <string name="searchSuggestions">検索候補</string>
+    <string name="searchSuggestionsHint">入力中に検索候補を表示</string>
+    <string name="closeToTray">メインウィンドウを閉じてもシステムトレイに残る</string>
+    <string name="closeToTrayHint">再生は止まりません。システムトレイのアイコンをクリックするとウィンドウをもう一度開けます。終了するには、そのメニューから「終了」を選んでください。</string>
+    <string name="checkUpdatesOnStartup">起動時にアップデートを確認</string>
+    <string name="checkUpdatesNow">今すぐアップデートを確認</string>
+    <string name="backup">バックアップ</string>
+    <string name="exportSettings">設定をエクスポート</string>
+    <string name="importSettings">設定をインポート</string>
+    <string name="about">このアプリについて</string>
+    <string name="version">バージョン</string>
+    <string name="openSourceLicense">オープンソースライセンス</string>
+    <string name="amllComponentName">AMLL歌詞レンダリング・解析コンポーネント</string>
+    <string name="amllLicenseNote">AGPL-3.0-onlyで公開されています。ライセンスの全文はアプリのリソースに含まれています。</string>
+    <string name="importSettingsConfirmTitle">インポートして現在の設定を上書きしますか？</string>
+    <string name="importSettingsConfirmMessage">ファイルをインポートすると、サーバーアドレスと再生・歌詞の設定が上書きされます。ログイン状態はバックアップに含まれないため、影響を受けません。先に現在の設定をエクスポートしてバックアップしておくことをおすすめします。</string>
+    <string name="chooseFile">ファイルを選択</string>
+    <string name="settingsHeroSubtitle">アカウント、再生、歌詞、バックアップ</string>
+    <string name="audioQualityAvailabilityNote">アカウントに権限がない音質を選んだ場合は、再生できる最高の音質になります</string>
+    <string name="audioOutputSystemDefault">システムのデフォルト</string>
+    <string name="audioOutputSystemDefaultMenu">システムのデフォルト（システムの出力デバイスに従う）</string>
+    <string name="audioOutputDeviceUnavailable">{deviceName}（使用不可）</string>
+    <string name="audioOutputDevice">オーディオ出力デバイス</string>
+    <string name="desktopLyricsAlignment">デスクトップ歌詞の配置</string>
+    <string name="lyricsSource">歌詞のソース</string>
+    <string name="lyricsSourceAmllNote">AMLL歌詞データベースはコミュニティが管理しており、単語ごとの歌詞がより充実しています。曲IDだけで検索し、アカウント情報は送信しません。</string>
+    <string name="settingsLanguage">言語</string>
+    <string name="songTransitions">曲のつなぎ</string>
+    <string name="betweenSongs">曲と曲の間</string>
+    <string name="transitionOff">オフ</string>
+    <string name="transitionCrossfade">クロスフェード</string>
+    <string name="transitionSmart">スマートトランジション</string>
+    <string name="transitionCrossfadeMenu">クロスフェード（一定の長さ）</string>
+    <string name="transitionSmartMenu">スマートトランジション（ビートを解析してつなぐ）</string>
+    <string name="transitionUnsupported">このプラットフォームのプレーヤーは、まだ曲のつなぎに対応していません</string>
+    <string name="transitionCrossfadeNote">前の曲がフェードアウトすると同時に、次の曲がフェードインします</string>
+    <string name="transitionSmartFixedTempoNote">2曲のラウドネス、ビート、キーを解析し、小節の区切りでつなぎます。このプラットフォームは再生速度を変えないため、ビートは揃えません</string>
+    <string name="transitionSmartNote">2曲のラウドネス、ビート、キーを解析し、小節の区切りでつなぎます。テンポが近いときは、前の曲の速度を少し調整してビートを揃えます</string>
+    <string name="transitionLength">つなぎの長さ</string>
+    <string name="secondsValue">{seconds}秒</string>
+    <string name="beatAnalysis">ビート解析</string>
+    <string name="beatModelNotLoaded">まだ読み込んでいません</string>
+    <string name="beatModelNotLoadedNote">最初のスマートトランジションで読み込みます。今すぐ確認することもできます</string>
+    <string name="beatModelLoading">ビートモデルを読み込んでいます…</string>
+    <string name="beatModelReadyNote">ビートモデルはNPUかGPUだけで動き、CPUは使いません</string>
+    <string name="beatModelUnavailable">利用できません</string>
+    <string name="beatModelUnavailableNote">{reason}。つなぎはラウドネスに合わせて行いますが、ビートは揃えません</string>
+    <string name="beatAnalysisSourceNote">解析では曲の標準音質版を別に読み込みます。ダウンロード済みの曲はローカルファイルを読み込みます</string>
+    <string name="checkNow">確認</string>
+
+    <!-- ui/screen/SharedScreenParts.kt -->
+    <string name="songActionAddToQueue">再生キューに追加</string>
+    <string name="songActionCopyLink">曲のリンクをコピー</string>
+    <string name="downloadFailedTapToRetry">ダウンロードに失敗しました。タップすると再試行します。</string>
+    <string name="downloading">ダウンロード中</string>
+    <string name="sectionLoadFailed">{title}を読み込めませんでした</string>
+    <string name="sectionLoading">{title}を読み込んでいます…</string>
+    <string name="sectionEmpty">{title}は現在ありません</string>
+    <string name="sectionEmptyTapReload">「再読み込み」をタップしてもう一度お試しください。</string>
+    <string name="sectionEmptyCheckBackLater">しばらくしてからもう一度ご確認ください。</string>
+    <string name="reload">再読み込み</string>
+    <string name="carouselScrollBack">前へスクロール</string>
+    <string name="carouselScrollForward">次へスクロール</string>
+    <string name="playlistCardStats">{trackCount}曲 · {playCount}回再生</string>
+    <string name="heartbeatModeStarting">ハートビートモードを開始しています</string>
+    <string name="heartbeatMode">ハートビートモード</string>
+
+    <!-- ui/screen/SongRecognitionScreen.kt -->
+    <string name="recognitionRequestingMicPermission">マイクの権限をリクエストしています…</string>
+    <string name="recognitionMatching">フィンガープリントを生成して曲を照合しています…</string>
+    <string name="recognitionResults">認識結果</string>
+    <string name="recognizeAgain">もう一度認識</string>
+    <string name="recognitionNoMatchTitle">曲を認識できませんでした</string>
+    <string name="recognitionNoMatchMessage">{seconds}秒間聞き取りましたが、見つかりませんでした。音源に近づいて、音楽がはっきり聞こえる部分でもう一度お試しください。</string>
+    <string name="recognitionMicPermissionNeeded">マイクの権限が必要です</string>
+    <string name="recognitionMicPermissionHelp">システムまたはブラウザのサイト設定でマイクを許可してから、このページに戻って再確認してください。曲の認識で処理するのは今回の3秒間の録音だけです。</string>
+    <string name="checkAgain">再確認</string>
+    <string name="recognitionFailed">曲の認識に失敗しました</string>
+    <string name="recognitionIntro">周囲の音楽を3秒間録音して、NetEaseの曲と照合します</string>
+    <string name="recognitionReadyTitle">音源に近づいて、マイクに音楽がはっきり届くようにしてください</string>
+    <string name="recognitionPausesPlayback">認識中は再生中の音楽を一時停止し、このページを離れると自動的に再開します。</string>
+    <string name="startRecognition">認識を開始</string>
+    <string name="recognitionListeningAgain">もう少し聞き取っています…（{attempt}回目）</string>
+    <string name="recognitionListening">聞き取り中…</string>
+    <string name="recognitionElapsed">{seconds} / 3.0秒</string>
+    <string name="addedToQueue">キューに追加済み</string>
+    <string name="addToQueue">キューに追加</string>
+
+    <!-- ui/screen/UserPlaylistScreen.kt -->
+    <string name="userLevelSummary">Lv.{level} · 再生{playCount}曲 · ログイン{loginDays}日</string>
+    <string name="userLevelNextSongs">再生{playCount}曲</string>
+    <string name="userLevelNextDays">ログイン{loginDays}日</string>
+    <string name="userLevelNextPrefix">次のレベルの条件：</string>
+    <string name="userLevelMax">最高レベルに達しています</string>
+    <string name="userLevelProgress">レベルの進捗{percent}%</string>
+    <string name="downloadsShortcutSubtitle">ダウンロード済みの曲とダウンロードの進捗</string>
+    <string name="localPlaylistsShortcutSubtitle">この端末だけに保存されるプレイリスト</string>
+    <string name="localPlaylistsEmptySubtitle">どのサービスの曲も追加でき、この端末だけに保存されます</string>
+    <string name="localPlaylistCount">{count}個のプレイリスト</string>
+    <string name="localLikesCountSuffix"> · ローカルのお気に入り{count}曲</string>
+    <string name="accountDataLoadFailed">アカウントデータを読み込めませんでした</string>
+    <string name="accountAndPlaylistsLoading">アカウントとプレイリストを読み込んでいます…</string>
+    <string name="signInToSeePlaylistsTitle">ログインしてプレイリストを表示</string>
+    <string name="signInToSeePlaylistsMessage">NetEase Cloud Musicアカウントにログインすると、作成したプレイリストと保存したプレイリストがここに表示されます。</string>
+    <string name="profileUnavailableTitle">プロフィールを表示できません</string>
+    <string name="profileUnavailableMessage">ログインしていますが、プロフィールを読み込めませんでした。</string>
+    <string name="heartbeatModeStartFailed">ハートビートモードを開始できませんでした</string>
+    <string name="myPlaylistsLoading">プレイリストを読み込んでいます…</string>
+    <string name="noPlaylistsYetTitle">プレイリストはまだありません</string>
+    <string name="noPlaylistsYetMessage">作成または保存したプレイリストがここに表示されます。</string>
+    <string name="createdPlaylists">作成したプレイリスト</string>
+    <string name="savedPlaylists">保存したプレイリスト</string>
+    <string name="playlistSectionCount">{count}個</string>
+    <string name="userLevelLoading">レベル情報を読み込んでいます…</string>
+    <string name="userLevelUnavailable">レベル情報を表示できません</string>
+
+    <!-- ui/theme/ThemePreferences.kt -->
+    <string name="followSystem">システムに従う</string>
+    <string name="themeLight">ライト</string>
+    <string name="themeDark">ダーク</string>
+
+    <!-- viewmodel/AccountsViewModel.kt -->
+    <string name="serverSavedAppliesWhen">保存しました。{appliesWhen}</string>
+    <string name="serverAddressUnreachable">このアドレスに接続できません</string>
+    <string name="providerCredentialCleared">{provider}の認証情報を消去しました</string>
+    <string name="credentialSaved">{provider}の認証情報を保存しました</string>
+    <string name="signedOutOfProvider">{provider}からログアウトしました</string>
+    <string name="signOutFailed">ログアウトできませんでした：{error}</string>
+    <string name="localAccountRenamed">ローカルアカウントの名前を変更しました</string>
+    <string name="saveFailedWithError">保存できませんでした：{error}</string>
+    <string name="settingSaveFailed">設定を保存できませんでした</string>
+    <string name="providerStateOff">オフ</string>
+
+    <!-- viewmodel/LocalLibraryViewModel.kt -->
+    <string name="songsAlreadyInPlaylist">すでに「{name}」に入っています</string>
+    <string name="addedToPlaylist">「{name}」に追加しました</string>
+    <string name="addedSongsToPlaylist">{count}曲を「{name}」に追加しました</string>
+    <string name="addToPlaylistFailed">プレイリストに追加できませんでした</string>
+    <string name="playlistCreated">「{name}」を作成しました</string>
+    <string name="playlistCreatedWithSongs">「{name}」を作成しました（{count}曲）</string>
+    <string name="playlistCreateFailed">プレイリストを作成できませんでした</string>
+    <string name="playlistRenameFailed">プレイリストの名前を変更できませんでした</string>
+    <string name="playlistDeleted">プレイリストを削除しました</string>
+    <string name="playlistDeleteFailed">プレイリストを削除できませんでした</string>
+    <string name="playlistRemoveSongFailed">プレイリストから曲を削除できませんでした</string>
+    <string name="playlistLinkUnrecognized">このプレイリストのリンクを認識できません</string>
+    <string name="providerPlaylistReadFailed">この{provider}のプレイリストを読み込めませんでした</string>
+    <string name="playlistImported">「{name}」をインポートしました（{count}曲）</string>
+    <string name="playlistImportFailed">プレイリストをインポートできませんでした</string>
+
+    <!-- viewmodel/MainViewModel.kt -->
+    <string name="updateAvailable">新しいバージョンがあります：{version}</string>
+    <string name="updateCheckFailed">アップデートを確認できませんでした。しばらくしてからもう一度お試しください。</string>
+    <string name="alreadyLatestVersion">最新バージョンです（{version}）</string>
+    <string name="playerStatusSaveFailed">再生状態を保存できませんでした</string>
+    <string name="userDetailLoadFailed">プロフィールを読み込めませんでした。ネットワークを確認して、もう一度お試しください。</string>
+    <string name="userLevelLoadFailed">レベル情報を読み込めませんでした。ネットワークを確認して、もう一度お試しください。</string>
+    <string name="userPlaylistsLoadFailedRetry">プレイリストを読み込めませんでした。ネットワークを確認して、もう一度お試しください。</string>
+    <string name="recommendedPlaylistsLoadFailed">おすすめプレイリストを読み込めませんでした。ネットワークを確認して、もう一度お試しください。</string>
+    <string name="dailyPicksLoadFailedRetry">毎日のおすすめを読み込めませんでした。ネットワークを確認して、もう一度お試しください。</string>
+    <string name="likedPlaylistIdInvalid">お気に入りプレイリストのIDが無効です</string>
+    <string name="heartbeatModeSignInRequired">ハートビートモードを使うにはログインしてください</string>
+    <string name="likedSongsFetchFailed">お気に入りの曲を取得できませんでした。ネットワーク、ログイン状態、プレイリストの内容を確認してください。</string>
+    <string name="heartbeatModeListFetchFailed">ハートビートモードのリストを取得できませんでした。ネットワークを確認して、もう一度お試しください。</string>
+    <string name="heartbeatModeEmpty">ハートビートモードから曲が返されませんでした</string>
+    <string name="playlistDetailLoadFailed">プレイリストの情報を読み込めませんでした。再試行すると、カバーと説明が表示されます。</string>
+    <string name="playlistTracksLoadFailed">曲リストを読み込めませんでした。ネットワークを確認して、もう一度お試しください。</string>
+    <string name="searchFailedRetry">検索に失敗しました。ネットワークを確認して、もう一度お試しください。</string>
+    <string name="searchPartiallyFailed">{providers}の検索に失敗しました。他のサービスの結果のみ表示しています。</string>
+    <string name="searchMoreFailedFor">{providers}の追加の結果を読み込めませんでした</string>
+    <string name="searchMoreFailed">追加の結果を読み込めませんでした</string>
+
+    <!-- viewmodel/NowPlayingViewModel.kt -->
+    <string name="sourceSwitchShuffleBlocked">シャッフル中はソースを切り替えられません</string>
+    <string name="sourceSwitchNoAlternate">他のサービスで同じ曲が見つかりませんでした</string>
+    <string name="sourceSwitched">{provider}に切り替えて「{title}」を再生しています</string>
+    <string name="songIdInvalid">曲IDが無効です</string>
+    <string name="providerLyricsUnsupported">{provider}の歌詞はまだアプリ内で表示できません</string>
+    <string name="lyricsTtmlOnlyForeignProvider">歌詞のソースが「AMLL歌詞データベースのみ」に設定されています。このデータベースにはNetEaseの曲しか収録されていません。{provider}の曲の歌詞を表示するには、設定で別の歌詞のソースを選んでください。</string>
+    <string name="lyricsRequestFailed">歌詞を取得できませんでした</string>
+    <string name="lyricsParseFailed">歌詞を解析できませんでした</string>
+    <string name="commentsLoadFailedRetry">コメントを読み込めませんでした。ネットワークを確認して、もう一度お試しください。</string>
+    <string name="moreCommentsLoadFailed">追加のコメントを読み込めませんでした</string>
+    <string name="nothingPlaying">再生中の曲はありません</string>
+    <string name="songDetailsLoadFailedLater">曲の詳細を読み込めませんでした。しばらくしてからもう一度お試しください。</string>
+
+    <!-- viewmodel/SongRecognitionViewModel.kt -->
+    <string name="recognitionRequestFailed">認識のリクエストに失敗しました。ネットワークを確認して、もう一度お試しください。</string>
+    <string name="recognitionNoValidData">認識サービスから有効なデータが返されませんでした</string>
+    <string name="recognitionUnknownStatus">認識サービスが不明なステータスを返しました（type={type}）</string>
+    <string name="recognitionNoMatches">認識サービスから一致する結果が返されませんでした</string>
+    <string name="recognitionMicUnavailable">このページからマイクにアクセスできません</string>
+
+    <!-- recognition/IosMicrophoneRecorder.kt -->
+    <string name="iosAudioSessionCategoryFailed">録音用のオーディオセッションに切り替えられません</string>
+    <string name="iosAudioSessionModeFailed">測定用の録音モードを有効にできません</string>
+    <string name="iosAudioSessionActivateFailed">録音用のオーディオセッションをアクティブにできません</string>
+    <string name="iosMicNoInputFormat">iOSで使えるマイクの入力フォーマットがありません</string>
+    <string name="iosMicNoFloat32Channel">iOSのマイクにFloat32のチャンネルがありません</string>
+    <string name="iosRecordingEngineStartFailed">iOSの録音エンジンを起動できませんでした</string>
+
+    <!-- util/DownloadUtil.ios.kt -->
+    <string name="iosDownloadFolderUnreadable">iOSのダウンロードフォルダを読み込めません：{path}</string>
+    <string name="iosDownloadFolderScanFailed">iOSのダウンロードフォルダを読み込めません</string>
+
+    <!-- util/IosBackgroundDownloadCoordinator.kt -->
+    <string name="downloadFileNameInvalid">ダウンロードのファイル名が無効です</string>
+    <string name="downloadHttpFailed">ダウンロードに失敗しました：HTTP {statusCode}</string>
+    <string name="backgroundDownloadNoFileName">バックグラウンドダウンロードに有効なファイル名がありません</string>
+    <string name="backgroundDownloadMoveFailed">バックグラウンドダウンロードの一時ファイルを移動できません</string>
+    <string name="backgroundDownloadSaveFailed">バックグラウンドダウンロードのファイルを保存できません</string>
+
+    <!-- util/LocalMediaAssetStorage.ios.kt -->
+    <string name="lyricsFileSaveFailed">歌詞ファイルを保存できません：{fileName}</string>
+    <string name="coverFileBackupFailed">カバーファイルをバックアップできません：{fileName}</string>
+    <string name="coverFileSaveFailed">カバーファイルを保存できません：{fileName}</string>
+    <string name="coverFileRestoreFailed">元のカバーファイルを復元できません：{fileName}</string>
+    <string name="assetFileCreateFailed">歌詞またはカバーのファイルを作成できません：{fileName}</string>
+    <string name="assetFileIncomplete">歌詞またはカバーのファイルを最後まで書き込めませんでした：{fileName}</string>
+    <string name="assetFileWriteFailed">歌詞またはカバーのファイルに書き込めません：{fileName}</string>
+    <string name="assetFileSyncFailed">歌詞またはカバーのファイルをストレージに同期できません：{fileName}</string>
+    <string name="assetFileReadFailed">歌詞またはカバーのファイルを読み込めません：{fileName}</string>
+
+    <!-- util/SongDownloader.ios.kt -->
+    <string name="downloadUrlInvalid">ダウンロードURLが無効です</string>
+    <string name="downloadCanceledDeleteFailed">ダウンロードをキャンセルしましたが、ダウンロード済みのファイルを削除できませんでした</string>
+
+    <!-- util/LocalMediaAssetFiles.kt -->
+    <string name="assetDirectoryCreateFailed">{label}を作成できません：{path}</string>
+    <string name="assetDirectoryNotFolder">{label}がフォルダではありません：{path}</string>
+    <string name="assetDirectoryReadFailed">{label}を読み込めません：{path}</string>
+
+    <!-- notification/DesktopFloatingWindowController.kt -->
+    <string name="showDesktopLyricsSetting">デスクトップ歌詞を表示</string>
+
+    <!-- recognition/JvmMicrophoneRecorder.kt -->
+    <string name="jvmMicNoPcmInput">PCM入力に対応したマイクが見つかりません</string>
+
+    <!-- util/DownloadUtil.jvm.kt -->
+    <string name="downloadFolderNotFolder">ダウンロードフォルダのパスがフォルダではありません：{path}</string>
+    <string name="downloadFolderUnreadable">ダウンロードフォルダを読み込めません：{path}</string>
+    <string name="desktopDownloadFolderScanFailed">このコンピューターのダウンロードフォルダを読み込めません</string>
+
+    <!-- util/SettingsFileOps.jvm.kt -->
+    <string name="settingsFileFilter">JSON設定ファイル (*.json)</string>
+    <string name="chooseSettingsFile">設定ファイルを選択</string>
+    <string name="saveSettingsFile">設定ファイルを保存</string>
+
+    <!-- recognition/WasmMicrophoneRecorder.kt -->
+    <string name="browserWebAudioUnavailable">ブラウザでWeb Audioを利用できません</string>
+    <string name="browserNoMediaRecorder">このブラウザはMediaRecorderに対応していません</string>
+    <string name="browserRecordingError">ブラウザでの録音中にエラーが発生しました</string>
+    <string name="browserNoRecordingData">ブラウザから録音データが返されませんでした</string>
+    <string name="browserInvalidRecordingFormat">ブラウザから無効な録音フォーマットが返されました</string>
+    <string name="browserMicPermissionDenied">ブラウザがマイクの権限を拒否しました</string>
+    <string name="browserMicNotFound">マイクが見つかりません</string>
+    <string name="browserMicUnreadable">ブラウザがマイクから読み取れません</string>
+    <string name="browserMicInsecureContext">このページからマイクにアクセスできません</string>
+    <string name="browserMicRecordingFailed">ブラウザでのマイク録音に失敗しました</string>
+
+    <!-- util/WebDownloadStorage.kt -->
+    <string name="browserDownloadsUnreadable">ブラウザに保存されたダウンロードを読み込めません</string>
+    <string name="webDownloadNeedsOpfs">ブラウザでダウンロードするには、HTTPSまたはlocalhostのページと、OPFSに対応したブラウザが必要です</string>
+    <string name="downloadCancelled">ダウンロードをキャンセルしました</string>
+    <string name="webDownloadUriInvalid">ブラウザのダウンロードアドレスが無効です</string>
+    <string name="webDownloadFileMissing">この曲のファイルはブラウザにもうありません</string>
+
+    <!-- other -->
+    <string name="downloadChannelName">ダウンロード</string>
+    <string name="downloadChannelDescription">バックグラウンドで曲をダウンロードするときに進捗を表示します</string>
+    <string name="lyricChannelName">リアルタイム歌詞</string>
+    <string name="lyricChannelDescription">再生中の曲の歌詞を通知領域に表示します</string>
+    <string name="currentSong">現在の曲</string>
+
+    <!-- util/LocalMediaAssetStorage.wasm.kt -->
+    <string name="webAssetsNeedOpfs">ブラウザで歌詞とカバーを保存するには、HTTPSまたはlocalhostのページと、OPFSに対応したブラウザが必要です</string>
+    <string name="webLyricAssetsInvalid">保存する歌詞ファイルが無効です</string>
+    <string name="webLyricNamesInvalid">読み込む歌詞ファイル名が無効です</string>
+    <string name="webArtworkInvalid">保存するカバーファイルが無効です</string>
+
+    <!-- common -->
+    <string name="listSeparator">、</string>
+    <string name="clauseSeparator">、</string>
+    <string name="labelValue">{label}：{value}</string>
+
+    <!-- transition/OnnxBeatModelLoader.kt -->
+    <string name="beatModelLinuxNoRuntime">Linuxデスクトップ版には、Javaから呼び出せるNPUやGPUの推論ランタイムがありません</string>
+    <string name="onnxRuntimeLoadFailed">ONNX Runtimeを読み込めませんでした：{reason}</string>
+    <string name="directMLRuntimeMissing">アプリに同梱のONNX Runtime DirectMLコンポーネントがありません</string>
+    <string name="beatModelFileMissing">ビートモデルのファイルがありません</string>
+    <string name="onnxDeviceListFailed">ONNX Runtimeがアクセラレータを一覧できませんでした：{reason}</string>
+    <string name="directMLNoDevice">DirectMLで使えるGPUやNPUが見つかりません（DirectX 12対応のグラフィックドライバーが必要です）</string>
+    <string name="beatModelDevicesFailed">アクセラレータでビートモデルを実行できませんでした：{reasons}</string>
+    <string name="coreMlBeatModelFailed">Core MLでビートモデルを実行できませんでした：{reasons}</string>
+
+    <!-- transition/WebBeatModelLoader.kt -->
+    <string name="onnxWebLoadFailed">ONNX Runtime Webの読み込みに失敗しました：{reason}</string>
+    <string name="beatModelDownloadFailed">ビートモデルのダウンロードに失敗しました：{reason}</string>
+    <string name="browserNoWebNnOrWebGpu">ブラウザでWebNNもWebGPUも使えません</string>
+    <string name="browserBeatModelDevicesFailed">ブラウザのアクセラレータでビートモデルを実行できませんでした：{reasons}</string>
+</resources>

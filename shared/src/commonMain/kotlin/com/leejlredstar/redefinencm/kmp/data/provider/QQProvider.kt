@@ -5,6 +5,7 @@ import com.leejlredstar.redefinencm.kmp.data.api.QQSong
 import com.leejlredstar.redefinencm.kmp.data.api.QQSonglistDetail
 import com.leejlredstar.redefinencm.kmp.data.api.qqAlbumArtworkUrl
 import com.leejlredstar.redefinencm.kmp.data.auth.QQCredentialRenewer
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.getBooleanAsync
@@ -44,7 +45,7 @@ class QQProvider(
         // Null is a transport failure, not an empty result set (see NeteaseProvider.search).
         // This backend pages by page number rather than by offset.
         val response = api.search(keyword, limit, page = offset / limit.coerceAtLeast(1) + 1)
-            ?: throw ProviderUnavailableException(id, "QQ音乐服务器无响应")
+            ?: throw ProviderUnavailableException(id, strings.qqServerNoResponse)
         return response.song
             .filter { it.mid.isNotBlank() }
             .map { it.toProviderTrack() }
@@ -87,7 +88,7 @@ class QQProvider(
         if (id.provider != MusicProviderId.QQ || !isAvailable()) return null
         renewCredentialOnce()
         val lyric = api.lyric(id.rawId)
-            ?: throw ProviderUnavailableException(this.id, "QQ音乐歌词请求失败")
+            ?: throw ProviderUnavailableException(this.id, strings.qqLyricsRequestFailed)
         val qrc = QrcLyric.contentOrNull(lyric.lyric)
         return ProviderLyric(
             plain = (qrc?.let(QrcLyric::toLrc) ?: lyric.lyric).takeIf(String::isNotBlank),

@@ -1,8 +1,12 @@
 package com.leejlredstar.redefinencm.kmp.data.provider
 
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
+import com.leejlredstar.redefinencm.kmp.i18n.LanguageSetting
 import com.leejlredstar.redefinencm.kmp.player.resolveStreamUrl
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -14,6 +18,17 @@ import kotlin.test.assertTrue
  * from the registry's failure channel; the player in between only ever sees a URL or null.
  */
 class ProviderCapabilityAndFailureTest {
+    /** The expected copy below is the Chinese, so the test pins it whatever the machine's language. */
+    @BeforeTest
+    fun showChinese() {
+        I18n.apply(LanguageSetting.ZH)
+    }
+
+    @AfterTest
+    fun followTheSystemAgain() {
+        I18n.apply(LanguageSetting.SYSTEM)
+    }
+
     private class FixedProvider(
         override val id: MusicProviderId,
         override val capabilities: Set<ProviderCapability>,

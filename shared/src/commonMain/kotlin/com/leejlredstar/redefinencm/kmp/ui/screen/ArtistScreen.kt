@@ -43,6 +43,8 @@ import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.data.ArtistPage
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.dto.AlbumSummary
+import com.leejlredstar.redefinencm.kmp.i18n.UiText
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.player.PlaybackSource
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
@@ -92,7 +94,8 @@ fun ArtistScreen(
     }
     val songs = page?.topSongs.orEmpty()
     val queue = remember(songs) { songs.map { it.toMediaInfo() } }
-    val source = "歌手「${page?.profile?.name.orEmpty()}」"
+    val artistName = page?.profile?.name.orEmpty()
+    val source = UiText { it.playbackSourceArtist(artistName) }
 
     // Albums after the first page, fetched on request.
     var extraAlbums by remember(artistId) { mutableStateOf<List<AlbumSummary>>(emptyList()) }
@@ -106,7 +109,7 @@ fun ArtistScreen(
             CatalogLoad.Loading -> Column {
                 CatalogBackRow(palette, onBack)
                 ExpressiveLoadingState(
-                    label = "正在加载歌手…",
+                    label = strings.artistLoading,
                     accentColor = palette.accent,
                     modifier = Modifier.padding(16.dp),
                 )
@@ -114,12 +117,12 @@ fun ArtistScreen(
             CatalogLoad.Failed -> Column {
                 CatalogBackRow(palette, onBack)
                 ExpressiveStatePanel(
-                    title = "歌手加载失败",
-                    message = "请检查网络后重试。",
+                    title = strings.artistLoadFailed,
+                    message = strings.checkNetworkAndRetry,
                     icon = AppIcons.Refresh,
                     tone = ExpressiveStateTone.Error,
                     accentPalette = palette,
-                    actionLabel = "重试",
+                    actionLabel = strings.retry,
                     onAction = { reload++ },
                     modifier = Modifier.padding(16.dp),
                 )
@@ -153,7 +156,7 @@ fun ArtistScreen(
                 if (songs.isNotEmpty()) {
                     item(key = "songs-title") {
                         ExpressiveSectionTitle(
-                            text = "热门歌曲",
+                            text = strings.popularSongs,
                             modifier = Modifier.padding(start = 20.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
                         )
                     }
@@ -183,7 +186,7 @@ fun ArtistScreen(
                 if (albums.isNotEmpty()) {
                     item(key = "albums-title") {
                         ExpressiveSectionTitle(
-                            text = "专辑",
+                            text = strings.albums,
                             modifier = Modifier.padding(start = 20.dp, end = 16.dp, top = 24.dp, bottom = 8.dp),
                         )
                     }
@@ -213,7 +216,7 @@ fun ArtistScreen(
                                         }
                                     },
                                 ) {
-                                    Text(if (albumsLoading) "正在加载…" else "更多专辑")
+                                    Text(if (albumsLoading) strings.loading else strings.moreAlbums)
                                 }
                             }
                         }
@@ -266,7 +269,7 @@ private fun ArtistHeader(
                     )
                 }
                 Text(
-                    text = "$songCount 首歌 · $albumCount 张专辑",
+                    text = strings.artistSongAndAlbumCount(songCount, albumCount),
                     style = MaterialTheme.typography.bodyMedium,
                     color = accentPalette.secondaryOnPageStart,
                     modifier = Modifier.padding(top = 4.dp),
@@ -302,7 +305,7 @@ private fun ArtistHeader(
             ) {
                 Icon(AppIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("播放热门歌曲")
+                Text(strings.playPopularSongs)
             }
         }
         Spacer(Modifier.height(4.dp))
@@ -347,7 +350,7 @@ internal fun AlbumRow(
                 Text(
                     text = listOfNotNull(
                         formatReleaseDate(album.publishTime).ifBlank { null },
-                        album.size.takeIf { it > 0 }?.let { "$it 首" },
+                        album.size.takeIf { it > 0 }?.let { strings.songCount(it) },
                     ).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = accentPalette.secondaryOnQuietContainer,

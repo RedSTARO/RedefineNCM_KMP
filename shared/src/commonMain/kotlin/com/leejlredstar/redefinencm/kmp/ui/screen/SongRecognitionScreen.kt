@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.recognition.AudioFingerprint
 import com.leejlredstar.redefinencm.kmp.recognition.rememberMicrophonePermissionRequester
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveWavyProgress
@@ -116,7 +117,7 @@ fun SongRecognitionScreen(
                 }
                 SongRecognitionUiState.RequestingPermission -> item(key = "recognition-permission") {
                     RecognitionLoadingPanel(
-                        label = "正在请求麦克风权限…",
+                        label = strings.recognitionRequestingMicPermission,
                         accentPalette = accentPalette,
                         onCancel = viewModel::cancelRecognition,
                     )
@@ -132,7 +133,7 @@ fun SongRecognitionScreen(
                 }
                 SongRecognitionUiState.Recognizing -> item(key = "recognition-processing") {
                     RecognitionLoadingPanel(
-                        label = "正在生成指纹并匹配歌曲…",
+                        label = strings.recognitionMatching,
                         accentPalette = accentPalette,
                         onCancel = viewModel::cancelRecognition,
                     )
@@ -140,7 +141,7 @@ fun SongRecognitionScreen(
                 is SongRecognitionUiState.Results -> {
                     item(key = "recognition-results-title") {
                         Text(
-                            text = "识别结果",
+                            text = strings.recognitionResults,
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.ExtraBold,
                             modifier = Modifier.padding(top = 12.dp, bottom = 12.dp),
@@ -173,50 +174,50 @@ fun SongRecognitionScreen(
                         ) {
                             Icon(AppIcons.Refresh, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text("重新识别")
+                            Text(strings.recognizeAgain)
                         }
                     }
                 }
                 is SongRecognitionUiState.NoMatch -> item(key = "recognition-no-match") {
                     ExpressiveStatePanel(
-                        title = "没有识别到歌曲",
-                        message = "已经听了 ${MaxRecognitionAttempts * 3} 秒仍未找到。请靠近音源，在音乐清晰的段落再试。",
+                        title = strings.recognitionNoMatchTitle,
+                        message = strings.recognitionNoMatchMessage(MaxRecognitionAttempts * 3),
                         icon = AppIcons.MusicNote,
                         accentPalette = accentPalette,
-                        actionLabel = "重新识别",
+                        actionLabel = strings.recognizeAgain,
                         onAction = ::requestRecognition,
                         modifier = Modifier.padding(top = 12.dp),
                     )
                 }
                 SongRecognitionUiState.PermissionDenied -> item(key = "recognition-denied") {
                     ExpressiveStatePanel(
-                        title = "需要麦克风权限",
-                        message = "请在系统或浏览器的站点设置中允许麦克风，然后返回此页重新检查。听歌识曲只处理本次三秒录音。",
+                        title = strings.recognitionMicPermissionNeeded,
+                        message = strings.recognitionMicPermissionHelp,
                         icon = AppIcons.Mic,
                         tone = ExpressiveStateTone.Error,
-                        actionLabel = "重新检查",
+                        actionLabel = strings.checkAgain,
                         onAction = ::requestRecognition,
                         modifier = Modifier.padding(top = 12.dp),
                     )
                 }
                 is SongRecognitionUiState.MicrophoneUnavailable -> item(key = "recognition-unavailable") {
                     ExpressiveStatePanel(
-                        title = "麦克风不可用",
+                        title = strings.microphoneUnavailable,
                         message = current.message,
                         icon = AppIcons.Mic,
                         tone = ExpressiveStateTone.Error,
-                        actionLabel = if (current.canRetry) "重试" else null,
+                        actionLabel = if (current.canRetry) strings.retry else null,
                         onAction = if (current.canRetry) ::requestRecognition else null,
                         modifier = Modifier.padding(top = 12.dp),
                     )
                 }
                 is SongRecognitionUiState.Error -> item(key = "recognition-error") {
                     ExpressiveStatePanel(
-                        title = "听歌识曲失败",
+                        title = strings.recognitionFailed,
                         message = current.message,
                         icon = AppIcons.Refresh,
                         tone = ExpressiveStateTone.Error,
-                        actionLabel = "重试",
+                        actionLabel = strings.retry,
                         onAction = ::requestRecognition,
                         modifier = Modifier.padding(top = 12.dp),
                     )
@@ -240,7 +241,7 @@ private fun RecognitionHeader(onBack: () -> Unit) {
             ) {
                 Icon(
                     imageVector = AppIcons.ArrowBack,
-                    contentDescription = "返回",
+                    contentDescription = strings.back,
                     modifier = Modifier.padding(10.dp),
                 )
             }
@@ -248,12 +249,12 @@ private fun RecognitionHeader(onBack: () -> Unit) {
         Spacer(Modifier.width(12.dp))
         Column {
             Text(
-                text = "听歌识曲",
+                text = strings.songRecognition,
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.ExtraBold,
             )
             Text(
-                text = "录制三秒环境音乐并匹配网易云歌曲",
+                text = strings.recognitionIntro,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -303,19 +304,19 @@ private fun RecognitionIdlePanel(
                 }
             }
             Text(
-                text = "靠近音源，让麦克风听清音乐",
+                text = strings.recognitionReadyTitle,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = "识别时会暂停正在播放的音乐，离开这一页后自动继续。",
+                text = strings.recognitionPausesPlayback,
                 style = MaterialTheme.typography.bodyMedium,
                 color = accentPalette.secondaryOnQuietContainer,
             )
             FilledTonalButton(onClick = onStart, shape = CircleShape) {
                 Icon(AppIcons.Mic, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("开始识别")
+                Text(strings.startRecognition)
             }
         }
     }
@@ -333,7 +334,7 @@ private fun RecognitionLoadingPanel(
             accentColor = accentPalette.accent,
             modifier = Modifier.padding(top = 12.dp),
         )
-        TextButton(onClick = onCancel) { Text("取消") }
+        TextButton(onClick = onCancel) { Text(strings.cancel) }
     }
 }
 
@@ -384,7 +385,7 @@ private fun RecognitionListeningPanel(
                 }
             }
             Text(
-                text = if (attempt > 1) "再听一会儿…（第 $attempt 次）" else "正在聆听…",
+                text = if (attempt > 1) strings.recognitionListeningAgain(attempt) else strings.recognitionListening,
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
             )
@@ -395,11 +396,11 @@ private fun RecognitionListeningPanel(
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
-                text = "${elapsedMillis.coerceAtMost(AudioFingerprint.DURATION_MILLIS) / 100L / 10.0} / 3.0 秒",
+                text = strings.recognitionElapsed(elapsedMillis.coerceAtMost(AudioFingerprint.DURATION_MILLIS) / 100L / 10.0),
                 style = MaterialTheme.typography.labelLarge,
                 color = accentPalette.secondaryOnQuietContainer,
             )
-            TextButton(onClick = onCancel) { Text("取消") }
+            TextButton(onClick = onCancel) { Text(strings.cancel) }
         }
     }
 }
@@ -434,14 +435,14 @@ private fun RecognitionResultCard(
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        text = song.name.ifBlank { "未知歌曲" },
+                        text = song.name.ifBlank { strings.unknownSong },
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = song.ar.joinToString(" / ") { it.name }.ifBlank { "未知歌手" },
+                        text = song.ar.joinToString(" / ") { it.name }.ifBlank { strings.unknownArtist },
                         style = MaterialTheme.typography.bodyMedium,
                         color = accentPalette.secondaryOnQuietContainer,
                         maxLines = 1,
@@ -465,13 +466,13 @@ private fun RecognitionResultCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TextButton(onClick = onAddToQueue, enabled = !queued) {
-                    Text(if (queued) "已加入队列" else "加入队列")
+                    Text(if (queued) strings.addedToQueue else strings.addToQueue)
                 }
                 Spacer(Modifier.width(8.dp))
                 FilledTonalButton(onClick = onPlay, shape = CircleShape) {
                     Icon(AppIcons.PlayArrow, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
-                    Text("播放")
+                    Text(strings.play)
                 }
             }
         }

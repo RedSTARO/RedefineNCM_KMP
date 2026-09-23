@@ -37,6 +37,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.local.LocalPlaylist
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
+import com.leejlredstar.redefinencm.kmp.i18n.UiText
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlaybackSource
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
@@ -71,7 +74,8 @@ fun LocalPlaylistScreen(
         settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT)
     }
     val palette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
-    val source = "本地歌单「${playlist?.name.orEmpty()}」"
+    val playlistForSource = playlist
+    val source = UiText { it.playbackSourceLocalPlaylist(playlistForSource?.displayName.orEmpty()) }
 
     var renaming by remember { mutableStateOf(false) }
     var confirmingDelete by remember { mutableStateOf(false) }
@@ -91,13 +95,13 @@ fun LocalPlaylistScreen(
                         BackButton(palette, onBack)
                         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                             Text(
-                                text = playlist?.name.orEmpty(),
+                                text = playlist?.displayName.orEmpty(),
                                 style = MaterialTheme.typography.headlineLarge,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = palette.onPageStart,
                             )
                             Text(
-                                text = "${tracks.size} 首 · 本地歌单",
+                                text = strings.localPlaylistSongCount(tracks.size),
                                 style = MaterialTheme.typography.labelLarge,
                                 color = palette.secondaryOnPageStart,
                             )
@@ -117,7 +121,7 @@ fun LocalPlaylistScreen(
                                 ) {
                                     Icon(AppIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
                                     Spacer(Modifier.width(8.dp))
-                                    Text("播放全部")
+                                    Text(strings.playAll)
                                 }
                                 // The favourites list is the hearts' own; it is not renamed or deleted.
                                 if (playlist?.kind == LocalPlaylist.Kind.PLAYLIST) {
@@ -128,7 +132,7 @@ fun LocalPlaylistScreen(
                                             containerColor = palette.container,
                                             contentColor = palette.onContainer,
                                         ),
-                                    ) { Text("重命名") }
+                                    ) { Text(strings.rename) }
                                     FilledTonalButton(
                                         onClick = { confirmingDelete = true },
                                         shape = CircleShape,
@@ -136,7 +140,7 @@ fun LocalPlaylistScreen(
                                             containerColor = palette.container,
                                             contentColor = palette.onContainer,
                                         ),
-                                    ) { Text("删除") }
+                                    ) { Text(strings.delete) }
                                 }
                             }
                         }
@@ -145,8 +149,8 @@ fun LocalPlaylistScreen(
                 if (tracks.isEmpty()) {
                     item(key = "local-playlist-empty") {
                         ExpressiveStatePanel(
-                            title = "歌单是空的",
-                            message = "在任意歌曲的「更多操作」里选「添加到本地歌单」。",
+                            title = strings.playlistEmpty,
+                            message = strings.localPlaylistEmptyHint,
                             icon = AppIcons.PlaylistAdd,
                             accentPalette = palette,
                             modifier = Modifier.padding(horizontal = 16.dp),
@@ -175,9 +179,9 @@ fun LocalPlaylistScreen(
                             durationMs = track.durationMillis,
                             album = track.album,
                             badge = media?.id?.let(::foreignProviderName),
-                            actions = remember(baseActions, track.key) {
+                            actions = remember(baseActions, track.key, I18n.language) {
                                 baseActions.filterNot { it.label == AddToLocalPlaylistLabel } +
-                                    SongRowAction("从本歌单移除", AppIcons.Remove) {
+                                    SongRowAction(strings.removeFromThisPlaylist, AppIcons.Remove) {
                                         viewModel.removeTrack(playlistId, track.key)
                                     }
                             },
@@ -190,9 +194,9 @@ fun LocalPlaylistScreen(
 
     if (renaming && playlist != null) {
         TextEntryDialog(
-            title = "重命名歌单",
-            label = "歌单名称",
-            confirmLabel = "保存",
+            title = strings.renamePlaylist,
+            label = strings.playlistName,
+            confirmLabel = strings.save,
             initialValue = playlist.name,
             onDismiss = { renaming = false },
             onConfirm = { name ->
@@ -205,17 +209,17 @@ fun LocalPlaylistScreen(
         AlertDialog(
             onDismissRequest = { confirmingDelete = false },
             icon = { Icon(AppIcons.Delete, contentDescription = null) },
-            title = { Text("删除「${playlist.name}」？") },
-            text = { Text("歌单里的歌曲不会受影响，只删除这个本地歌单。") },
+            title = { Text(strings.deletePlaylistTitle(playlist.displayName)) },
+            text = { Text(strings.deletePlaylistMessage) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         confirmingDelete = false
                         viewModel.deletePlaylist(playlistId)
                     },
-                ) { Text("删除") }
+                ) { Text(strings.delete) }
             },
-            dismissButton = { TextButton(onClick = { confirmingDelete = false }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { confirmingDelete = false }) { Text(strings.cancel) } },
         )
     }
 }

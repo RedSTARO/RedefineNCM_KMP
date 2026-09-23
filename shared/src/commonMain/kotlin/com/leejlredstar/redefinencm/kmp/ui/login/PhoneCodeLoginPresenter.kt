@@ -27,6 +27,7 @@ import com.leejlredstar.redefinencm.kmp.data.auth.LoginHost
 import com.leejlredstar.redefinencm.kmp.data.auth.LoginMethod
 import com.leejlredstar.redefinencm.kmp.data.auth.PhoneCodeLoginFlow
 import com.leejlredstar.redefinencm.kmp.data.auth.PhoneCodeLoginMethod
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 
 /**
@@ -37,7 +38,7 @@ class PhoneCodeLoginPresenter : LoginMethodPresenter {
     override fun supports(method: LoginMethod): Boolean = method is PhoneCodeLoginMethod
 
     override fun sectionTitle(methods: List<LoginMethod>): String =
-        methods.singleOrNull()?.displayName ?: "手机验证码"
+        methods.singleOrNull()?.displayName ?: strings.phoneVerificationCode
 
     @Composable
     override fun Content(method: LoginMethod, host: LoginHost, palette: ContentAccentPalette) {
@@ -59,7 +60,7 @@ class PhoneCodeLoginPresenter : LoginMethodPresenter {
                 OutlinedTextField(
                     value = phone,
                     onValueChange = flow::setPhone,
-                    label = { Text("手机号") },
+                    label = { Text(strings.phoneNumber) },
                     supportingText = { Text(flow.phoneHint, color = palette.secondaryOnQuietContainer) },
                     singleLine = true,
                     enabled = !success,
@@ -76,9 +77,9 @@ class PhoneCodeLoginPresenter : LoginMethodPresenter {
                 ) {
                     Text(
                         when {
-                            resendIn > 0 -> "$resendIn 秒后可重发"
-                            codeSent -> "重新发送"
-                            else -> "发送验证码"
+                            resendIn > 0 -> strings.resendIn(resendIn)
+                            codeSent -> strings.resend
+                            else -> strings.sendVerificationCode
                         },
                     )
                 }
@@ -87,7 +88,7 @@ class PhoneCodeLoginPresenter : LoginMethodPresenter {
             OutlinedTextField(
                 value = code,
                 onValueChange = flow::setCode,
-                label = { Text("验证码") },
+                label = { Text(strings.verificationCode) },
                 singleLine = true,
                 enabled = codeSent && !success,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
@@ -106,7 +107,7 @@ class PhoneCodeLoginPresenter : LoginMethodPresenter {
                     contentColor = palette.onContainer,
                 ),
             ) {
-                Text(if (success) "已登录" else "登录", style = MaterialTheme.typography.titleMedium)
+                Text(if (success) strings.signedIn else strings.signIn, style = MaterialTheme.typography.titleMedium)
             }
             if (message.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))

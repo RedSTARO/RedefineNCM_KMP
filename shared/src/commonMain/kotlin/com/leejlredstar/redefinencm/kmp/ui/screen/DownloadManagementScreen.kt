@@ -64,6 +64,8 @@ import com.leejlredstar.redefinencm.kmp.download.DownloadTaskStatus
 import com.leejlredstar.redefinencm.kmp.download.LocalLibrarySyncState
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadTask
+import com.leejlredstar.redefinencm.kmp.i18n.UiText
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
@@ -87,14 +89,26 @@ import org.koin.compose.koinInject
  * The views the list can be narrowed to. Each maps to exactly one task status family, and the
  * label is the one the status itself shows, so a filter and the rows it keeps say the same word.
  */
-private enum class DownloadFilter(val label: String) {
-    All("全部"),
-    Active("下载中"),
-    Paused("已暂停"),
-    Completed("已下载"),
-    Failed("失败"),
-    Cancelled("已取消"),
-    Deleted("文件已删除"),
+private enum class DownloadFilter {
+    All,
+    Active,
+    Paused,
+    Completed,
+    Failed,
+    Cancelled,
+    Deleted,
+    ;
+
+    val label: String
+        get() = when (this) {
+            All -> strings.all
+            Active -> strings.filterDownloading
+            Paused -> strings.paused
+            Completed -> strings.downloaded
+            Failed -> strings.failed
+            Cancelled -> strings.canceled
+            Deleted -> strings.fileDeleted
+        }
 }
 
 private fun DownloadFilter.matches(task: SongDownloadTask): Boolean = when (this) {
@@ -203,12 +217,12 @@ fun DownloadManagementScreen(
             if (localLibrarySyncState is LocalLibrarySyncState.Error) {
                 item(key = "local-library-sync-error") {
                     ExpressiveStatePanel(
-                        title = "本地音乐库同步失败",
+                        title = strings.localLibrarySyncFailed,
                         message = (localLibrarySyncState as LocalLibrarySyncState.Error).message,
                         icon = AppIcons.Refresh,
                         tone = ExpressiveStateTone.Error,
                         accentPalette = palette,
-                        actionLabel = "重试",
+                        actionLabel = strings.retry,
                         onAction = downloadManager::syncWithLocalLibrary,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
@@ -217,7 +231,7 @@ fun DownloadManagementScreen(
             persistenceError?.let { message ->
                 item(key = "download-persistence-error") {
                     ExpressiveStatePanel(
-                        title = "下载队列保存失败",
+                        title = strings.downloadQueueSaveFailedTitle,
                         message = message,
                         icon = AppIcons.Download,
                         tone = ExpressiveStateTone.Error,
@@ -229,7 +243,7 @@ fun DownloadManagementScreen(
             if (localLibrarySyncState is LocalLibrarySyncState.Syncing && tasks.isEmpty()) {
                 item(key = "local-library-syncing") {
                     ExpressiveLoadingState(
-                        label = "正在扫描本地音乐库…",
+                        label = strings.scanningLocalLibrary,
                         accentColor = palette.accent,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
@@ -256,7 +270,7 @@ fun DownloadManagementScreen(
                                     completedQueue,
                                     queueIndex,
                                     playWholeList,
-                                    source = "下载",
+                                    source = UiText { it.downloads },
                                 )
                             }
                         } else {
@@ -271,7 +285,7 @@ fun DownloadManagementScreen(
                                             exportDownloadedSong(fileName, "${task.artist} - ${task.title}")
                                         }.onFailure { error ->
                                             snackbarHostState.showSnackbar(
-                                                "没能保存「${task.title}」：${error.message ?: "未知错误"}",
+                                                strings.saveSongToDeviceFailed(task.title, error.message ?: strings.unknownError),
                                             )
                                         }
                                     }
@@ -353,15 +367,15 @@ private fun DownloadHeader(
     val syncing = localLibrarySyncState is LocalLibrarySyncState.Syncing
     val menu = buildList {
         add(
-            DownloadMenuAction("重新扫描已下载的文件", AppIcons.Refresh) {
+            DownloadMenuAction(strings.rescanDownloadedFiles, AppIcons.Refresh) {
                 if (!syncing) onSyncLocalLibrary()
             },
         )
         if (active > 0 || paused > 0) {
-            add(DownloadMenuAction("取消全部下载", AppIcons.Clear, destructive = true, onClick = onCancelAll))
+            add(DownloadMenuAction(strings.cancelAllDownloads, AppIcons.Clear, destructive = true, onClick = onCancelAll))
         }
         if (finished > 0) {
-            add(DownloadMenuAction("从列表清除已结束的记录", AppIcons.Delete, onClick = onClearFinished))
+            add(DownloadMenuAction(strings.clearFinishedEntries, AppIcons.Delete, onClick = onClearFinished))
         }
     }
 
@@ -375,13 +389,13 @@ private fun DownloadHeader(
                         contentColor = accentPalette.onQuietContainer,
                     ),
                 ) {
-                    Icon(AppIcons.ArrowBack, contentDescription = "返回")
+                    Icon(AppIcons.ArrowBack, contentDescription = strings.back)
                 }
                 Spacer(Modifier.width(12.dp))
             }
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = "下载管理",
+                    text = strings.downloadManagement,
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.ExtraBold,
                     color = accentPalette.onPageStart,
@@ -390,18 +404,17 @@ private fun DownloadHeader(
                 )
                 Text(
                     text = buildList {
-                        add("已下载 $completed 首")
-                        if (active > 0) add("正在下载 $active 首")
-                        if (paused > 0) add("已暂停 $paused 首")
-                        if (failed > 0) add("$failed 首失败")
+                        add(strings.downloadsCompletedCount(completed))
+                        if (active > 0) add(strings.downloadsActiveCount(active))
+                        if (paused > 0) add(strings.downloadsPausedCount(paused))
+                        if (failed > 0) add(strings.downloadsFailedCount(failed))
                     }.joinToString(" · "),
                     style = MaterialTheme.typography.bodyMedium,
                     color = accentPalette.secondaryOnPageStart,
                 )
                 if (storedInBrowser && completed > 0) {
                     Text(
-                        text = "歌曲存放在浏览器里，不在系统的「下载」文件夹；" +
-                            "要得到音频文件，在歌曲的「更多操作」里选「保存到本机」。",
+                        text = strings.downloadsStoredInBrowserHint,
                         style = MaterialTheme.typography.bodySmall,
                         color = accentPalette.secondaryOnPageStart,
                         modifier = Modifier.padding(top = 4.dp),
@@ -413,7 +426,7 @@ private fun DownloadHeader(
             }
             Box {
                 IconButton(onClick = { menuOpen = true }) {
-                    Icon(AppIcons.MoreVert, contentDescription = "更多操作")
+                    Icon(AppIcons.MoreVert, contentDescription = strings.moreActions)
                 }
                 DownloadMenu(expanded = menuOpen, actions = menu, onDismiss = { menuOpen = false })
             }
@@ -434,7 +447,7 @@ private fun DownloadHeader(
                     ) {
                         Icon(AppIcons.Pause, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("全部暂停")
+                        Text(strings.pauseAll)
                     }
                 }
                 if (paused > 0) {
@@ -448,7 +461,7 @@ private fun DownloadHeader(
                     ) {
                         Icon(AppIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("全部继续")
+                        Text(strings.resumeAll)
                     }
                 }
             }
@@ -540,11 +553,11 @@ private fun DownloadTaskRow(
     val primary: Pair<ImageVector, Pair<String, () -> Unit>>? = when (task.status) {
         DownloadTaskStatus.Queued,
         DownloadTaskStatus.Resolving,
-        DownloadTaskStatus.Downloading -> AppIcons.Pause to ("暂停" to onPause)
-        DownloadTaskStatus.Paused -> AppIcons.PlayArrow to ("继续下载" to onResume)
+        DownloadTaskStatus.Downloading -> AppIcons.Pause to (strings.pause to onPause)
+        DownloadTaskStatus.Paused -> AppIcons.PlayArrow to (strings.resumeDownload to onResume)
         DownloadTaskStatus.Failed,
-        DownloadTaskStatus.Cancelled -> AppIcons.Refresh to ("重试" to onRetry)
-        DownloadTaskStatus.Deleted -> AppIcons.Download to ("重新下载" to onRetry)
+        DownloadTaskStatus.Cancelled -> AppIcons.Refresh to (strings.retry to onRetry)
+        DownloadTaskStatus.Deleted -> AppIcons.Download to (strings.downloadAgain to onRetry)
         DownloadTaskStatus.SavingLyrics,
         DownloadTaskStatus.Completed -> null
     }
@@ -554,39 +567,39 @@ private fun DownloadTaskRow(
             DownloadTaskStatus.Resolving,
             DownloadTaskStatus.Downloading,
             DownloadTaskStatus.Paused -> add(
-                DownloadMenuAction("取消下载", AppIcons.Clear, destructive = true, onClick = onCancel),
+                DownloadMenuAction(strings.cancelDownload, AppIcons.Clear, destructive = true, onClick = onCancel),
             )
             DownloadTaskStatus.Completed -> {
                 val savingLocalAsset = task.lyricStatus == DownloadLyricStatus.Saving ||
                     task.artworkStatus == DownloadArtworkStatus.Saving
-                onExport?.let { add(DownloadMenuAction("保存到本机", AppIcons.Download, onClick = it)) }
+                onExport?.let { add(DownloadMenuAction(strings.saveToDevice, AppIcons.Download, onClick = it)) }
                 if (!savingLocalAsset) {
                     add(
                         DownloadMenuAction(
-                            if (task.lyricStatus == DownloadLyricStatus.Saved) "按当前歌词来源重新保存歌词" else "保存歌词文件",
+                            if (task.lyricStatus == DownloadLyricStatus.Saved) strings.resaveLyricsFromCurrentSource else strings.saveLyricsFile,
                             AppIcons.FormatQuote,
                             onClick = onSaveLyrics,
                         ),
                     )
                     add(
                         DownloadMenuAction(
-                            if (task.artworkStatus == DownloadArtworkStatus.Saved) "重新保存封面" else "保存封面图片",
+                            if (task.artworkStatus == DownloadArtworkStatus.Saved) strings.resaveCover else strings.saveCoverImage,
                             AppIcons.Image,
                             onClick = onSaveArtwork,
                         ),
                     )
                 }
-                add(DownloadMenuAction("删除已下载的文件", AppIcons.Delete, destructive = true, onClick = onDeleteSong))
-                add(DownloadMenuAction("从列表中移除（保留文件）", AppIcons.Clear, onClick = onRemove))
+                add(DownloadMenuAction(strings.deleteDownloadedFile, AppIcons.Delete, destructive = true, onClick = onDeleteSong))
+                add(DownloadMenuAction(strings.removeFromListKeepFile, AppIcons.Clear, onClick = onRemove))
             }
             DownloadTaskStatus.Deleted -> {
                 if (task.lyricFileName != null || task.artworkFileName != null) {
-                    add(DownloadMenuAction("清理残留的歌词与封面", AppIcons.Delete, destructive = true, onClick = onDeleteSong))
+                    add(DownloadMenuAction(strings.deleteLeftoverLyricsAndCover, AppIcons.Delete, destructive = true, onClick = onDeleteSong))
                 }
-                add(DownloadMenuAction("从列表中移除", AppIcons.Clear, onClick = onRemove))
+                add(DownloadMenuAction(strings.removeFromList, AppIcons.Clear, onClick = onRemove))
             }
             DownloadTaskStatus.Failed,
-            DownloadTaskStatus.Cancelled -> add(DownloadMenuAction("从列表中移除", AppIcons.Clear, onClick = onRemove))
+            DownloadTaskStatus.Cancelled -> add(DownloadMenuAction(strings.removeFromList, AppIcons.Clear, onClick = onRemove))
             DownloadTaskStatus.SavingLyrics -> Unit
         }
     }
@@ -636,7 +649,7 @@ private fun DownloadTaskRow(
                     IconButton(onClick = { menuOpen = true }) {
                         Icon(
                             AppIcons.MoreVert,
-                            contentDescription = "更多操作",
+                            contentDescription = strings.moreActions,
                             tint = accentPalette.secondaryOnQuietContainer,
                         )
                     }
@@ -679,7 +692,7 @@ private fun DownloadTaskStatusLine(
             }
             Text(
                 text = buildString {
-                    append(if (task.status == DownloadTaskStatus.Paused) "已暂停 · " else "")
+                    append(if (task.status == DownloadTaskStatus.Paused) strings.pausedPrefix else "")
                     append(task.progressText())
                 },
                 style = MaterialTheme.typography.labelSmall,
@@ -703,30 +716,30 @@ private fun DownloadTaskStatusLine(
 
 /** A one-line account of a task that is not transferring, and whether it is a failure. */
 private fun SongDownloadTask.statusSummary(): Pair<String, Boolean> = when (status) {
-    DownloadTaskStatus.Queued -> "等待下载" to false
-    DownloadTaskStatus.Resolving -> "正在获取下载地址" to false
-    DownloadTaskStatus.SavingLyrics -> "正在保存歌词和封面" to false
-    DownloadTaskStatus.Failed -> ("下载失败" + (errorMessage?.let { "：$it" } ?: "")) to true
-    DownloadTaskStatus.Cancelled -> "已取消" to false
-    DownloadTaskStatus.Deleted -> (errorMessage ?: "文件已删除") to false
+    DownloadTaskStatus.Queued -> strings.waitingToDownload to false
+    DownloadTaskStatus.Resolving -> strings.gettingDownloadLink to false
+    DownloadTaskStatus.SavingLyrics -> strings.savingLyricsAndCover to false
+    DownloadTaskStatus.Failed -> (errorMessage?.let { strings.downloadFailedWithReason(it) } ?: strings.downloadFailed) to true
+    DownloadTaskStatus.Cancelled -> strings.canceled to false
+    DownloadTaskStatus.Deleted -> (errorMessage ?: strings.fileDeleted) to false
     DownloadTaskStatus.Completed -> buildList {
         qualityDisplayName(actualQuality)?.let(::add)
         add(
             when (lyricStatus) {
-                DownloadLyricStatus.Saved -> lyricFormat?.name?.let { "歌词（$it）" } ?: "歌词"
-                DownloadLyricStatus.NoLyric -> "无歌词"
-                DownloadLyricStatus.Failed -> "歌词保存失败"
-                DownloadLyricStatus.Saving -> "正在保存歌词"
-                DownloadLyricStatus.NotStarted -> "未保存歌词"
+                DownloadLyricStatus.Saved -> lyricFormat?.name?.let { strings.lyricsSavedWithFormat(it) } ?: strings.lyrics
+                DownloadLyricStatus.NoLyric -> strings.lyricStatusNone
+                DownloadLyricStatus.Failed -> strings.lyricsSaveFailed
+                DownloadLyricStatus.Saving -> strings.savingLyrics
+                DownloadLyricStatus.NotStarted -> strings.lyricsNotSaved
             },
         )
         add(
             when (artworkStatus) {
-                DownloadArtworkStatus.Saved -> "封面"
-                DownloadArtworkStatus.NoArtwork -> "无封面"
-                DownloadArtworkStatus.Failed -> "封面保存失败"
-                DownloadArtworkStatus.Saving -> "正在保存封面"
-                DownloadArtworkStatus.NotStarted -> "未保存封面"
+                DownloadArtworkStatus.Saved -> strings.coverSavedStatus
+                DownloadArtworkStatus.NoArtwork -> strings.noCover
+                DownloadArtworkStatus.Failed -> strings.coverSaveFailed
+                DownloadArtworkStatus.Saving -> strings.savingCover
+                DownloadArtworkStatus.NotStarted -> strings.coverNotSaved
             },
         )
     }.joinToString(" · ") to false
@@ -740,12 +753,12 @@ private fun DownloadEmptyState(
     accentPalette: ContentAccentPalette,
 ) {
     val title = when (filter) {
-        DownloadFilter.All -> "还没有下载过歌曲"
-        else -> "没有「${filter.label}」的歌曲"
+        DownloadFilter.All -> strings.noDownloadedSongsYet
+        else -> strings.noSongsInFilter(filter.label)
     }
     val message = when (filter) {
-        DownloadFilter.All -> "在歌单页点按「下载全部」，或在歌曲的「更多操作」里选「下载」。"
-        else -> "切换到其他筛选查看。"
+        DownloadFilter.All -> strings.downloadsEmptyHint
+        else -> strings.switchFilterHint
     }
     ExpressiveStatePanel(
         title = title,
@@ -767,29 +780,29 @@ private fun DownloadDestructiveConfirmationDialog(
     val confirmLabel: String
     when (action) {
         DownloadDestructiveAction.CancelAll -> {
-            title = "取消全部下载？"
-            message = "正在下载和已暂停的歌曲都会停止，之后可以在「已取消」里重试。已下载的歌曲不受影响。"
-            confirmLabel = "取消全部"
+            title = strings.cancelAllDownloadsTitle
+            message = strings.cancelAllDownloadsMessage
+            confirmLabel = strings.cancelAll
         }
         DownloadDestructiveAction.ClearFinished -> {
-            title = "清除已结束的记录？"
-            message = "已下载、失败、已取消的记录会从这个列表里移除。已下载的歌曲文件不会被删除。"
-            confirmLabel = "清除记录"
+            title = strings.clearFinishedEntriesTitle
+            message = strings.clearFinishedEntriesMessage
+            confirmLabel = strings.clearEntries
         }
         is DownloadDestructiveAction.CancelTask -> {
-            title = "取消下载「${action.title}」？"
-            message = "下载会停止，之后可以在「已取消」里重试。"
-            confirmLabel = "取消下载"
+            title = strings.cancelDownloadTitle(action.title)
+            message = strings.cancelDownloadMessage
+            confirmLabel = strings.cancelDownload
         }
         is DownloadDestructiveAction.RemoveTask -> {
-            title = "从列表中移除「${action.title}」？"
-            message = "只移除这条记录，已下载的歌曲文件会保留。"
-            confirmLabel = "移除"
+            title = strings.removeFromListTitle(action.title)
+            message = strings.removeFromListMessage
+            confirmLabel = strings.remove
         }
         is DownloadDestructiveAction.DeleteSong -> {
-            title = "删除「${action.title}」的文件？"
-            message = "本地音频文件会被永久删除，之后仍可重新下载。"
-            confirmLabel = "删除文件"
+            title = strings.deleteSongFileTitle(action.title)
+            message = strings.deleteSongFileMessage
+            confirmLabel = strings.deleteFile
         }
     }
 
@@ -814,7 +827,7 @@ private fun DownloadDestructiveConfirmationDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("返回")
+                Text(strings.goBack)
             }
         },
     )
@@ -823,26 +836,26 @@ private fun DownloadDestructiveConfirmationDialog(
 private fun qualityDisplayName(level: String?): String? {
     val normalized = level?.trim()?.takeIf { it.isNotEmpty() }?.lowercase() ?: return null
     val aliases = mapOf(
-        "standard" to "标准",
-        "normal" to "标准",
-        "lq" to "标准",
-        "higher" to "较高",
-        "high" to "较高",
-        "exhigh" to "极高",
-        "ex-high" to "极高",
-        "hq" to "极高",
-        "lossless" to "无损",
-        "sq" to "无损",
+        "standard" to strings.qualityStandard,
+        "normal" to strings.qualityStandard,
+        "lq" to strings.qualityStandard,
+        "higher" to strings.qualityHigh,
+        "high" to strings.qualityHigh,
+        "exhigh" to strings.qualityVeryHigh,
+        "ex-high" to strings.qualityVeryHigh,
+        "hq" to strings.qualityVeryHigh,
+        "lossless" to strings.lossless,
+        "sq" to strings.lossless,
         "hires" to "Hi-Res",
         "hi-res" to "Hi-Res",
         "hr" to "Hi-Res",
-        "jyeffect" to "高清环绕声",
-        "jy-effect" to "高清环绕声",
-        "sky" to "沉浸环绕声",
-        "dolby" to "杜比全景声",
-        "jymaster" to "超清母带",
-        "jy-master" to "超清母带",
-        "master" to "超清母带",
+        "jyeffect" to strings.qualityHdSurround,
+        "jy-effect" to strings.qualityHdSurround,
+        "sky" to strings.qualityImmersiveSurround,
+        "dolby" to strings.qualityDolbyAtmos,
+        "jymaster" to strings.qualityMaster,
+        "jy-master" to strings.qualityMaster,
+        "master" to strings.qualityMaster,
     )
     aliases[normalized]?.let { return it }
     return SoundQuality.entries

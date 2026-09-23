@@ -2,6 +2,7 @@
 
 package com.leejlredstar.redefinencm.kmp.util
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSDocumentDirectory
 import platform.Foundation.NSSearchPathForDirectoriesInDomains
@@ -15,7 +16,7 @@ actual suspend fun scanDownloadedSongs(): DownloadScanResult = runCatching {
     val manager = NSFileManager.defaultManager
     if (!manager.fileExistsAtPath(dir)) return@runCatching emptyList()
     val entries = manager.contentsOfDirectoryAtPath(dir, error = null)
-        ?: error("无法读取 iOS 下载目录：$dir")
+        ?: error(strings.iosDownloadFolderUnreadable(dir))
     entries
         .asSequence()
         .mapNotNull { entry -> (entry as? String)?.toDownloadedSongSnapshot(dir) }
@@ -26,7 +27,7 @@ actual suspend fun scanDownloadedSongs(): DownloadScanResult = runCatching {
         .toList()
 }.fold(
     onSuccess = DownloadScanResult::Success,
-    onFailure = { error -> DownloadScanResult.Failure("无法读取 iOS 下载目录", error) },
+    onFailure = { error -> DownloadScanResult.Failure(strings.iosDownloadFolderScanFailed, error) },
 )
 
 actual suspend fun deleteDownloadedSongFile(songId: Long): Boolean {
@@ -61,7 +62,7 @@ internal fun ensureIosDownloadDirectory(): String {
             attributes = null,
             error = null,
         )
-        if (!created) error("无法创建下载目录")
+        if (!created) error(strings.downloadFolderCreateFailed)
     }
     return dir
 }

@@ -39,6 +39,7 @@ import com.leejlredstar.redefinencm.kmp.data.auth.LoginHost
 import com.leejlredstar.redefinencm.kmp.data.auth.LoginMethod
 import com.leejlredstar.redefinencm.kmp.data.auth.QrLoginFlow
 import com.leejlredstar.redefinencm.kmp.data.auth.QrLoginMethod
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.decodePngToImageBitmap
@@ -52,7 +53,7 @@ class QrLoginPresenter : LoginMethodPresenter {
     override fun supports(method: LoginMethod): Boolean = method is QrLoginMethod
 
     override fun sectionTitle(methods: List<LoginMethod>): String =
-        if (methods.size == 1) methods.single().displayName else "扫码登录"
+        if (methods.size == 1) methods.single().displayName else strings.signInWithQrCode
 
     @OptIn(ExperimentalMaterial3ExpressiveApi::class)
     @Composable
@@ -89,7 +90,7 @@ class QrLoginPresenter : LoginMethodPresenter {
                 } else if (bitmap != null) {
                     Image(
                         painter = BitmapPainter(bitmap),
-                        contentDescription = "${host.provider.displayName}登录二维码",
+                        contentDescription = strings.providerSignInQrCode(host.provider.displayName),
                         modifier = Modifier.fillMaxSize().padding(12.dp),
                         contentScale = ContentScale.Fit,
                     )
@@ -107,8 +108,8 @@ class QrLoginPresenter : LoginMethodPresenter {
                             ) {
                                 Icon(AppIcons.Refresh, contentDescription = null)
                                 Spacer(Modifier.height(8.dp))
-                                Text("二维码已失效", style = MaterialTheme.typography.titleSmall)
-                                Text("点按刷新", style = MaterialTheme.typography.bodySmall)
+                                Text(strings.qrCodeExpired, style = MaterialTheme.typography.titleSmall)
+                                Text(strings.tapToRefresh, style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
@@ -123,7 +124,7 @@ class QrLoginPresenter : LoginMethodPresenter {
                             tint = MaterialTheme.colorScheme.error,
                         )
                         Text(
-                            "二维码解析失败",
+                            strings.qrCodeDecodeFailed,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.error,
                             textAlign = TextAlign.Center,
@@ -131,7 +132,7 @@ class QrLoginPresenter : LoginMethodPresenter {
                     }
                 } else {
                     Text(
-                        "二维码\n会显示在这里",
+                        strings.qrCodePlaceholder,
                         style = MaterialTheme.typography.bodyMedium,
                         color = palette.secondaryOnQuietContainer,
                         textAlign = TextAlign.Center,
@@ -166,7 +167,7 @@ class QrLoginPresenter : LoginMethodPresenter {
                         contentColor = palette.onAccent,
                     ),
                 ) {
-                    Text(if (decodeFailed || expired) "重新生成二维码" else "生成二维码")
+                    Text(if (decodeFailed || expired) strings.regenerateQrCode else strings.generateQrCode)
                 }
             } else {
                 OutlinedButton(
@@ -175,7 +176,7 @@ class QrLoginPresenter : LoginMethodPresenter {
                     shapes = ButtonDefaults.shapes(),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = palette.accent),
                 ) {
-                    Text("取消")
+                    Text(strings.cancel)
                 }
             }
         }

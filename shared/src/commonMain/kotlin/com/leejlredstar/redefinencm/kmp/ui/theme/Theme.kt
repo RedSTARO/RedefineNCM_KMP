@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.amll.compose.rememberReducedMotionEnabled
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
 
 /**
  * Material 3 Expressive shape scale, pushed past the baseline expressive values.
@@ -75,7 +76,10 @@ fun RedefineNCMTheme(
         artworkColorScheme(seed = animatedSeed.takeIf { seed != null }, dark = dark)
     }
     val fontFamily = LocalPreloadedFontFamily.current ?: FontFamily.Default
-    val typography = ExpressiveTypography.withFontFamily(fontFamily)
+    val language = I18n.language
+    val typography = remember(fontFamily, language) {
+        ExpressiveTypography.withFontFamily(fontFamily).withLocaleList(language.textLocales())
+    }
     MaterialExpressiveTheme(
         colorScheme = dynamicScheme ?: artworkScheme,
         motionScheme = MotionScheme.expressive(),

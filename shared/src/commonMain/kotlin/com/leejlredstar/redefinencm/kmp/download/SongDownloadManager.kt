@@ -1,5 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.download
 
+import com.leejlredstar.redefinencm.kmp.i18n.AppLanguage
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
@@ -275,7 +277,7 @@ class SongDownloadManager(
         }
         if (!enqueued) return
         if (!persistCurrentQueue()) {
-            failQueuedTasks("无法保存下载队列，下载未启动")
+            failQueuedTasks(strings.downloadQueueSaveFailedNotStarted)
             return
         }
         ensureWorker()
@@ -387,7 +389,7 @@ class SongDownloadManager(
             ?: return
 
         var task = originalTask
-        if (task.artworkUri.isBlank() || task.title.startsWith("本地歌曲 ")) {
+        if (task.artworkUri.isBlank() || isLocalSongFallbackTitle(task.title)) {
             repo.getSongDetails(listOf(taskId)).firstOrNull { it.id == taskId }?.let { detail ->
                 task = task.copy(
                     title = detail.downloadDisplayTitle(),
@@ -502,7 +504,7 @@ class SongDownloadManager(
                     val localFiles = when (val scanResult = DownloadedSongsCache.refreshSnapshots()) {
                         is DownloadScanResult.Failure -> {
                             updateTask(taskId) { task ->
-                                task.copy(errorMessage = scanResult.message.ifBlank { "无法确认本地文件状态" })
+                                task.copy(errorMessage = scanResult.message.ifBlank { strings.localFileStatusUnknown })
                             }
                             return@withLock
                         }
@@ -520,9 +522,9 @@ class SongDownloadManager(
                                     markDownloadTaskDeleted(
                                         task = task,
                                         message = if (deleted || deletedAssets) {
-                                            "已删除本地歌曲"
+                                            strings.localSongDeleted
                                         } else {
-                                            "本地文件已删除"
+                                            strings.localFileDeleted
                                         },
                                     )
                                 } else {
@@ -535,8 +537,8 @@ class SongDownloadManager(
                                         fileName = null,
                                         errorMessage = assetDeleteFailure.message
                                             ?.takeIf(String::isNotBlank)
-                                            ?.let { "音频已删除，但歌词或封面清理失败：$it" }
-                                            ?: "音频已删除，但歌词或封面清理失败",
+                                            ?.let { strings.assetCleanupFailedWithError(it) }
+                                            ?: strings.assetCleanupFailed,
                                     )
                                 }
                                 else -> task.copy(
@@ -557,7 +559,7 @@ class SongDownloadManager(
                                     lyricFormat = if (assetDeleteFailure == null) null else task.lyricFormat,
                                     lyricFileName = if (assetDeleteFailure == null) null else task.lyricFileName,
                                     artworkFileName = if (assetDeleteFailure == null) null else task.artworkFileName,
-                                    errorMessage = "删除本地歌曲失败",
+                                    errorMessage = strings.localSongDeleteFailed,
                                 )
                             }
                         }
@@ -678,7 +680,7 @@ class SongDownloadManager(
                 throw cancelled
             } catch (failure: Throwable) {
                 _localLibrarySyncState.value = LocalLibrarySyncState.Error(
-                    failure.message ?: "本地音乐库同步失败",
+                    failure.message ?: strings.localLibrarySyncFailed,
                 )
             }
         }
@@ -699,7 +701,7 @@ class SongDownloadManager(
             val restored = repo.getDownloadQueue().fold(
                 onSuccess = { queue -> queue?.toDownloadTasks().orEmpty() },
                 onFailure = { failure ->
-                    _persistenceError.value = failure.message ?: "无法恢复下载队列"
+                    _persistenceError.value = failure.message ?: strings.downloadQueueRestoreFailed
                     emptyList()
                 },
             )
@@ -709,7 +711,7 @@ class SongDownloadManager(
             throw cancelled
         } catch (failure: Throwable) {
             _tasks.value = emptyList()
-            _persistenceError.value = failure.message ?: "无法恢复下载队列"
+            _persistenceError.value = failure.message ?: strings.downloadQueueRestoreFailed
         } finally {
             if (!restoreCompleted.isCompleted) restoreCompleted.complete(Unit)
         }
@@ -728,7 +730,7 @@ class SongDownloadManager(
                     true
                 },
                 onFailure = { failure ->
-                    _persistenceError.value = failure.message ?: "无法保存下载队列"
+                    _persistenceError.value = failure.message ?: strings.downloadQueueSaveFailed
                     false
                 },
             )
@@ -746,7 +748,7 @@ class SongDownloadManager(
     private suspend fun reconcileWithLocalLibrary(): String? {
         val localFiles = when (val scan = DownloadedSongsCache.refreshSnapshots()) {
             is DownloadScanResult.Failure ->
-                return scan.message.ifBlank { "无法读取本地音乐库" }
+                return scan.message.ifBlank { strings.localLibraryReadFailed }
             is DownloadScanResult.Success -> scan.snapshots.associateBy { it.id }
         }
         val knownIds = _tasks.value.mapTo(mutableSetOf()) { it.id }
@@ -793,7 +795,7 @@ class SongDownloadManager(
                     return@withLock
                 }
                 if (!persistCurrentQueue()) {
-                    failQueuedTasks("无法保存下载队列，下载未启动")
+                    failQueuedTasks(strings.downloadQueueSaveFailedNotStarted)
                     return@withLock
                 }
                 val serviceStartFailure = runCatching {
@@ -801,8 +803,8 @@ class SongDownloadManager(
                 }.exceptionOrNull()
                 if (serviceStartFailure != null) {
                     failQueuedTasks(
-                        serviceStartFailure.message?.let { "无法启动后台下载服务：$it" }
-                            ?: "无法启动后台下载服务",
+                        serviceStartFailure.message?.let { strings.downloadServiceStartFailedWithError(it) }
+                            ?: strings.downloadServiceStartFailed,
                     )
                     return@withLock
                 }
@@ -813,7 +815,7 @@ class SongDownloadManager(
                         // A running worker can observe tasks appended while it was downloading.
                         // Persist the latest ordered queue before it claims each next item.
                         if (!persistCurrentQueue()) {
-                            failQueuedTasks("无法保存下载队列，后续下载已停止")
+                            failQueuedTasks(strings.downloadQueueSaveFailedStopped)
                             break
                         }
                         val taskJob = scope.launch(start = CoroutineStart.LAZY) {
@@ -887,7 +889,7 @@ class SongDownloadManager(
                 transitionTask(taskId, generation, DownloadTaskStatus.Resolving) {
                     it.copy(
                         status = DownloadTaskStatus.Failed,
-                        errorMessage = "无法保存下载音质，下载未启动",
+                        errorMessage = strings.downloadQualitySaveFailed,
                     )
                 }
                 return
@@ -900,7 +902,7 @@ class SongDownloadManager(
                 transitionTask(taskId, generation, DownloadTaskStatus.Resolving) {
                     it.copy(
                         status = DownloadTaskStatus.Failed,
-                        errorMessage = "无法获取歌曲的下载地址",
+                        errorMessage = strings.downloadUrlUnavailable,
                     )
                 }
                 return
@@ -1009,7 +1011,7 @@ class SongDownloadManager(
                 } else {
                     it.copy(
                         status = DownloadTaskStatus.Failed,
-                        errorMessage = t.message?.takeIf(String::isNotBlank) ?: "下载失败",
+                        errorMessage = t.message?.takeIf(String::isNotBlank) ?: strings.downloadFailed,
                     )
                 }
             }
@@ -1087,7 +1089,7 @@ class SongDownloadManager(
         } catch (failure: Throwable) {
             LocalLyricAssetResult(
                 status = DownloadLyricStatus.Failed,
-                errorMessage = failure.message?.takeIf(String::isNotBlank) ?: "歌词保存失败",
+                errorMessage = failure.message?.takeIf(String::isNotBlank) ?: strings.lyricsSaveFailed,
             )
         }
     }
@@ -1108,7 +1110,7 @@ class SongDownloadManager(
         } catch (failure: Throwable) {
             LocalArtworkAssetResult(
                 status = DownloadArtworkStatus.Failed,
-                errorMessage = failure.message?.takeIf(String::isNotBlank) ?: "封面保存失败",
+                errorMessage = failure.message?.takeIf(String::isNotBlank) ?: strings.coverSaveFailed,
             )
         }
     }
@@ -1124,8 +1126,8 @@ class SongDownloadManager(
             task.copy(
                 errorMessage = failure.message
                     ?.takeIf(String::isNotBlank)
-                    ?.let { "无法清理断点下载文件：$it" }
-                    ?: "无法清理断点下载文件",
+                    ?.let { strings.partialDownloadCleanupFailedWithError(it) }
+                    ?: strings.partialDownloadCleanupFailed,
             )
         }
         return false
@@ -1296,7 +1298,7 @@ private data class LocalAssetSaveResults(
         get() = listOfNotNull(
             lyric?.errorMessage?.takeIf(String::isNotBlank),
             artwork?.errorMessage?.takeIf(String::isNotBlank),
-        ).joinToString("；").ifBlank { null }
+        ).joinToString(strings.clauseSeparator).ifBlank { null }
 }
 
 private fun SongDownloadTask.withLocalAssetResults(
@@ -1462,7 +1464,7 @@ private fun syncDownloadTaskWithLocalLibrary(
     val existsOnDisk = snapshot != null
     return when {
         task.status == DownloadTaskStatus.Completed && !existsOnDisk ->
-            markDownloadTaskDeleted(task, "本地文件已删除")
+            markDownloadTaskDeleted(task, strings.localFileDeleted)
         !task.isActive && existsOnDisk -> {
             val localSize = snapshot.sizeBytes
             task.copy(
@@ -1566,8 +1568,8 @@ private fun importedDownloadTask(
     val size = snapshot.sizeBytes
     return SongDownloadTask(
         id = snapshot.id,
-        title = songDetail?.downloadDisplayTitle() ?: "本地歌曲 ${snapshot.id}",
-        artist = songDetail?.downloadDisplayArtist() ?: "本地文件",
+        title = songDetail?.downloadDisplayTitle() ?: strings.localSongFallbackTitle(snapshot.id),
+        artist = songDetail?.downloadDisplayArtist() ?: strings.localFile,
         artworkUri = songDetail?.al?.picUrl.orEmpty(),
         status = DownloadTaskStatus.Completed,
         lyricStatus = if (assetSnapshot?.lyricFormat != null) {
@@ -1591,10 +1593,17 @@ private fun importedDownloadTask(
 }
 
 private fun SongDetailSongs.downloadDisplayTitle(): String =
-    name.ifBlank { "本地歌曲 $id" }
+    name.ifBlank { strings.localSongFallbackTitle(id) }
 
 private fun SongDetailSongs.downloadDisplayArtist(): String =
-    ar.joinToString(" / ") { it.name }.ifBlank { "未知歌手" }
+    ar.joinToString(" / ") { it.name }.ifBlank { strings.unknownArtist }
+
+/**
+ * Whether [title] is the stand-in a download found on disk carries until its metadata arrives.
+ * A stored row keeps the language it was created in, so the form of every language counts.
+ */
+private fun isLocalSongFallbackTitle(title: String): Boolean =
+    AppLanguage.entries.any { title.startsWith(it.strings.localSongFallbackTitle("")) }
 
 private const val PERSISTENCE_INTERVAL_MS = 500L
 private const val MAX_CONCURRENT_ASSET_SAVES = 2

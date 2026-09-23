@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.RoundedPolygon
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.lyric.LyricCapabilityLevel
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSource
@@ -62,30 +63,30 @@ internal fun lyricCapabilityBadgeSpec(
     level: LyricCapabilityLevel,
 ): LyricCapabilityBadgeSpec = when (level) {
     LyricCapabilityLevel.UNSYNCED -> LyricCapabilityBadgeSpec(
-        visibleText = "词",
-        levelLabel = "无时间戳",
-        contentDescription = "歌词等级：无时间戳",
+        visibleText = strings.lyricsBadgeGlyph,
+        levelLabel = strings.lyricLevelUnsynced,
+        contentDescription = strings.lyricLevelUnsyncedDescription,
         tone = LyricCapabilityBadgeTone.NEUTRAL,
         shape = { MaterialShapes.Square },
     )
     LyricCapabilityLevel.LINE_SYNCED -> LyricCapabilityBadgeSpec(
-        visibleText = "词",
-        levelLabel = "普通逐行",
-        contentDescription = "歌词等级：普通逐行",
+        visibleText = strings.lyricsBadgeGlyph,
+        levelLabel = strings.lyricLevelLineSynced,
+        contentDescription = strings.lyricLevelLineSyncedDescription,
         tone = LyricCapabilityBadgeTone.PRIMARY,
         shape = { MaterialShapes.Circle },
     )
     LyricCapabilityLevel.NCM_YRC -> LyricCapabilityBadgeSpec(
-        visibleText = "词",
-        levelLabel = "NCM YRC 逐字",
-        contentDescription = "歌词等级：NCM YRC",
+        visibleText = strings.lyricsBadgeGlyph,
+        levelLabel = strings.lyricLevelNcmYrc,
+        contentDescription = strings.lyricLevelNcmYrcDescription,
         tone = LyricCapabilityBadgeTone.SECONDARY,
         shape = { MaterialShapes.Cookie6Sided },
     )
     LyricCapabilityLevel.TTML_FULL -> LyricCapabilityBadgeSpec(
-        visibleText = "词",
-        levelLabel = "TTML 完全支持",
-        contentDescription = "歌词等级：TTML 完全支持",
+        visibleText = strings.lyricsBadgeGlyph,
+        levelLabel = strings.lyricLevelTtmlFull,
+        contentDescription = strings.lyricLevelTtmlFullDescription,
         tone = LyricCapabilityBadgeTone.TERTIARY,
         shape = { MaterialShapes.Clover4Leaf },
     )
@@ -101,11 +102,11 @@ internal fun lyricSourceDisplayName(
         LyricSource.NCM_BACKEND -> endpoint.removePrefix("provider:")
             .takeIf { endpoint.startsWith("provider:") }
             ?.let(MusicProviderId::fromKey)
-            ?.let { "${it.displayName}歌词" }
-            ?: "网易云音乐歌词"
-        null -> "未知"
+            ?.let { strings.providerLyricsSource(it.displayName) }
+            ?: strings.neteaseLyricsSource
+        null -> strings.unknown
     }
-    return if (endpoint == "local-sidecar") "$provider · 本地歌词文件" else provider
+    return if (endpoint == "local-sidecar") strings.localLyricsFileSource(provider) else provider
 }
 
 @Composable
@@ -135,14 +136,14 @@ internal fun LyricCapabilityBadge(
             .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
             .clickable(
                 role = Role.Button,
-                onClickLabel = "查看歌词信息",
+                onClickLabel = strings.viewLyricsInfo,
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = { onDetailsExpandedChange(!detailsExpanded) },
             )
             .semantics {
                 contentDescription =
-                    "${spec.contentDescription}，来源：$sourceLabel"
+                    strings.lyricBadgeDescription(spec.contentDescription, sourceLabel)
             },
         contentAlignment = Alignment.Center,
     ) {
@@ -175,13 +176,13 @@ internal fun LyricCapabilityBadge(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(
-                    text = "歌词信息",
+                    text = strings.lyricsInfo,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                LyricDetailRow(label = "等级", value = spec.levelLabel)
-                LyricDetailRow(label = "来源", value = sourceLabel)
+                LyricDetailRow(label = strings.level, value = spec.levelLabel)
+                LyricDetailRow(label = strings.source, value = sourceLabel)
             }
         }
     }

@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.recognition
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -26,7 +27,7 @@ class JvmMicrophoneRecorder : ExclusiveMicrophoneRecorder() {
             .firstOrNull { candidate ->
                 AudioSystem.isLineSupported(DataLine.Info(TargetDataLine::class.java, candidate))
             }
-            ?: throw MicrophoneUnavailableException("未找到支持 PCM 输入的麦克风")
+            ?: throw MicrophoneUnavailableException(strings.jvmMicNoPcmInput)
 
         val line = try {
             AudioSystem.getTargetDataLine(format).apply {

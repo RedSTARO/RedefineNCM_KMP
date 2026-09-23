@@ -2,6 +2,8 @@ package com.leejlredstar.redefinencm.kmp.viewmodel
 
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
 import com.leejlredstar.redefinencm.kmp.data.toPlayerMediaInfo
+import com.leejlredstar.redefinencm.kmp.i18n.UiText
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import kotlin.random.Random
@@ -45,7 +47,7 @@ internal fun replaceQueueWithIntelligenceList(
     queue: List<MediaInfo>,
 ) {
     require(queue.isNotEmpty()) { "Intelligence queue must not be empty" }
-    PlaybackSource.set("心动模式")
+    PlaybackSource.set(UiText { it.heartbeatMode })
     player.setShuffleEnabled(false)
     player.setQueue(queue, startIndex = 0)
     player.play()

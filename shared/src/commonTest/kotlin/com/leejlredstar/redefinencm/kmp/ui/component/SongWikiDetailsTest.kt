@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.ui.component
 
 import com.leejlredstar.redefinencm.kmp.data.SongWikiSummary
+import com.leejlredstar.redefinencm.kmp.i18n.uiText
 import com.leejlredstar.redefinencm.kmp.viewmodel.SongWikiUiState
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -30,7 +31,7 @@ class SongWikiDetailsTest {
             SongWikiUiState.Loading(mediaId = "123"),
             SongWikiUiState.Content(mediaId = "123", summary = summary),
             SongWikiUiState.Empty(mediaId = "123"),
-            SongWikiUiState.Error(mediaId = "123", message = "network"),
+            SongWikiUiState.Error(mediaId = "123", message = uiText("network")),
         )
 
         states.forEach { state ->
@@ -50,7 +51,7 @@ class SongWikiDetailsTest {
         // Reopening an error keeps the error on screen; its own retry is the way to try again.
         assertFalse(
             shouldRequestSongWikiOnOpen(
-                state = SongWikiUiState.Error(mediaId = "123", message = "network"),
+                state = SongWikiUiState.Error(mediaId = "123", message = uiText("network")),
                 mediaId = "123",
             ),
         )

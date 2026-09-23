@@ -5,6 +5,7 @@ import com.leejlredstar.redefinencm.kmp.data.auth.CredentialTextLoginMethod
 import com.leejlredstar.redefinencm.kmp.data.auth.ProviderCredentialSlot
 import com.leejlredstar.redefinencm.kmp.data.auth.ProviderEnabledSetting
 import com.leejlredstar.redefinencm.kmp.data.auth.ProviderLoginDescriptor
+import com.leejlredstar.redefinencm.kmp.i18n.uiText
 import com.leejlredstar.redefinencm.kmp.util.DEFAULT_SETTINGS_NODE
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import kotlinx.coroutines.flow.Flow
@@ -72,13 +73,15 @@ class ProviderRegistrationTest {
         signInUnavailableReason: String? = null,
     ) = ProviderLoginDescriptor(
         provider = provider,
-        introduction = "",
-        accountLabel = "",
-        signedOutHint = "",
-        logoutWarning = "",
+        introductionText = uiText(""),
+        accountLabelText = uiText(""),
+        signedOutHintText = uiText(""),
+        logoutWarningText = uiText(""),
         server = null,
-        enabledSetting = switchKey?.let { ProviderEnabledSetting(it, default = false, label = "", supportingText = "") },
-        signInUnavailableReason = signInUnavailableReason,
+        enabledSetting = switchKey?.let {
+            ProviderEnabledSetting(it, default = false, labelText = uiText(""), supportingTextText = uiText(""))
+        },
+        signInUnavailableReasonText = signInUnavailableReason?.let(::uiText),
     )
 
     private fun registration(

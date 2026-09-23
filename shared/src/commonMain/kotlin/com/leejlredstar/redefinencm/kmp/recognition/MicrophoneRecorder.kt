@@ -1,5 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.recognition
 
+import com.leejlredstar.redefinencm.kmp.i18n.strings
+
 /** 一段已复制到 Kotlin 内存中的单声道 PCM。样本值应位于 -1f..1f。 */
 data class CapturedPcm(
     val monoSamples: FloatArray,
@@ -24,21 +26,21 @@ sealed class MicrophoneCaptureException(
 ) : Exception(message, cause)
 
 class MicrophonePermissionDeniedException(
-    message: String = "没有麦克风权限",
+    message: String = strings.microphonePermissionDenied,
     cause: Throwable? = null,
 ) : MicrophoneCaptureException(message, cause)
 
 class MicrophoneUnavailableException(
-    message: String = "麦克风不可用",
+    message: String = strings.microphoneUnavailable,
     cause: Throwable? = null,
 ) : MicrophoneCaptureException(message, cause)
 
 class MicrophoneBusyException(
-    message: String = "麦克风正在被使用",
+    message: String = strings.microphoneBusy,
     cause: Throwable? = null,
 ) : MicrophoneCaptureException(message, cause)
 
 class InsecureMicrophoneContextException(
-    message: String = "浏览器仅允许 HTTPS 或 localhost 页面访问麦克风",
+    message: String = strings.microphoneNeedsSecureContext,
     cause: Throwable? = null,
 ) : MicrophoneCaptureException(message, cause)
