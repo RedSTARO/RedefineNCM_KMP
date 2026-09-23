@@ -73,6 +73,10 @@ object SettingKeys {
     const val LYRIC_SOURCE_MODE = "lyricSourceMode"
     const val USE_DYNAMIC_COVER = "useDynamicCover"
     const val PLAYER_VOLUME = "playerVolume"
+    /** Off, crossfade or smart; see SongTransitionMode. Backed up with the rest. */
+    const val SONG_TRANSITION_MODE = "songTransitionMode"
+    /** The fixed crossfade's length in whole seconds, 1..12. */
+    const val SONG_TRANSITION_CROSSFADE_SECONDS = "songTransitionCrossfadeSeconds"
     // A per-session override, not a preference: desktop startup resets it so playback follows
     // the current system output device. Left out of the settings backup for the same reason it
     // is not carried across restarts: it names one machine's hardware at one moment in time.

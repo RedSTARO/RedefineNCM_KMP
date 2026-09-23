@@ -1,5 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.player
 
+import com.leejlredstar.redefinencm.kmp.transition.TransitionCapability
+import com.leejlredstar.redefinencm.kmp.transition.TransitionPlan
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.roundToLong
@@ -95,6 +97,27 @@ interface PlatformPlayer {
     // ── Volume ──
 
     fun setVolume(volume: Float)
+
+    // ── Song transitions ──
+
+    /** What [armTransition] can do on this backend; [TransitionCapability.NONE] ignores it. */
+    val transitionCapability: TransitionCapability get() = TransitionCapability.NONE
+
+    /**
+     * Arms [plan]: when the current track reaches [TransitionPlan.startMs] in continuous
+     * playback, the next track starts under it, becomes the current track after
+     * [TransitionPlan.swapAfterMs], and the old one fades out and stops.
+     *
+     * Replaces any plan armed before. A backend ignores a plan whose outgoing and incoming ids
+     * are not its current and next track, and a blend already under way is not replaced. Until
+     * the swap the incoming track is invisible: it publishes no state, no queue, no position,
+     * no playback occurrence and no stream failure. Any transport or queue action during the
+     * blend ends it — the outgoing track is faded out quickly and the action applies as usual.
+     */
+    fun armTransition(plan: TransitionPlan) {}
+
+    /** Drops an armed plan that has not started yet. */
+    fun disarmTransition() {}
 
     // ── Lifecycle ──
 
