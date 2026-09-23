@@ -27,10 +27,12 @@ class QQProvider(
     override val id: MusicProviderId = MusicProviderId.QQ
 
     /**
-     * Only a link for now. Lyrics join once the lyric pipeline reads them; likes, comments,
-     * details, downloads and reporting are NetEase features with no QQ counterpart wired.
+     * Lyrics, read through the lyric pipeline as this provider's own backend source, and a link.
+     * Likes, comments, details, downloads and reporting are NetEase features with no QQ
+     * counterpart wired.
      */
-    override val capabilities: Set<ProviderCapability> = setOf(ProviderCapability.SHARE_LINK)
+    override val capabilities: Set<ProviderCapability> =
+        setOf(ProviderCapability.LYRIC, ProviderCapability.SHARE_LINK)
 
     override suspend fun isAvailable(): Boolean =
         settings.getBooleanAsync(SettingKeys.QQ_ENABLED, false) &&
@@ -74,18 +76,29 @@ class QQProvider(
         )
     }
 
+    /**
+     * The track's lyrics: QQ's word timing (QRC) converted to the YRC the pipeline parses, a line
+     * lyric derived from the same lines, and the translation and romanization beside them.
+     *
+     * @throws ProviderUnavailableException when the gateway did not answer, so the lyric page can
+     *   offer a retry instead of saying the song has no lyrics.
+     */
     override suspend fun lyric(id: ProviderItemId): ProviderLyric? {
         if (id.provider != MusicProviderId.QQ || !isAvailable()) return null
-        val lyric = api.lyric(id.rawId) ?: return null
+        renewCredentialOnce()
+        val lyric = api.lyric(id.rawId)
+            ?: throw ProviderUnavailableException(this.id, "QQ音乐歌词请求失败")
+        val qrc = QrcLyric.contentOrNull(lyric.lyric)
         return ProviderLyric(
-            plain = lyric.lyric.takeIf(String::isNotBlank),
-            translation = lyric.trans.takeIf(String::isNotBlank),
-            // The gateway can also hand over QRC, QQ's word-level format, but the lyric pipeline
-            // parses YRC; converting one into the other is that pipeline's change, not this one's.
-            wordByWord = null,
-            romanization = lyric.roma.takeIf(String::isNotBlank),
+            plain = (qrc?.let(QrcLyric::toLrc) ?: lyric.lyric).takeIf(String::isNotBlank),
+            translation = lyric.trans.asLineLyric().takeIf(String::isNotBlank),
+            wordByWord = qrc?.let(QrcLyric::toYrc)?.takeIf(String::isNotBlank),
+            romanization = lyric.roma.asLineLyric().takeIf(String::isNotBlank),
         ).takeIf { !it.isEmpty }
     }
+
+    /** A supplement asked for alongside QRC may come back as QRC too; the pipeline wants LRC. */
+    private fun String.asLineLyric(): String = QrcLyric.contentOrNull(this)?.let(QrcLyric::toLrc) ?: this
 
     /**
      * Walks down from the requested tier until one answers.

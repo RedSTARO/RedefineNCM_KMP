@@ -6,6 +6,11 @@ import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.AmlldbApi
 import com.leejlredstar.redefinencm.kmp.data.api.AmlldbTtmlResult
 import com.leejlredstar.redefinencm.kmp.data.api.dto.Lyric
+import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
+import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
+import com.leejlredstar.redefinencm.kmp.data.provider.ProviderItemId
+import com.leejlredstar.redefinencm.kmp.data.provider.ProviderLyric
+import com.leejlredstar.redefinencm.kmp.data.provider.mediaId
 import com.leejlredstar.redefinencm.kmp.download.LocalMediaAssets
 import com.leejlredstar.amll.compose.lyric.LyricParser
 import com.leejlredstar.amll.compose.lyric.TtmlLyricParser
@@ -20,13 +25,30 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
 import kotlin.time.Clock
 
+/**
+ * The track lyrics are asked for. [itemId] names it with its provider; the TTML source and the
+ * local sidecars are NetEase's and read [songId], which is 0 for another provider's track.
+ */
 data class LyricQuery(
-    val songId: Long,
+    val itemId: ProviderItemId,
     val title: String = "",
     val artist: String = "",
     val album: String = "",
     val durationMs: Long = 0L,
-)
+) {
+    constructor(
+        songId: Long,
+        title: String = "",
+        artist: String = "",
+        album: String = "",
+        durationMs: Long = 0L,
+    ) : this(ProviderItemId.netease(songId), title, artist, album, durationMs)
+
+    val songId: Long get() = itemId.neteaseIdOrNull ?: 0L
+
+    /** Whether the track is NetEase's, which the TTML source and the local sidecars need. */
+    val isNetease: Boolean get() = itemId.provider == MusicProviderId.NETEASE
+}
 
 data class LyricDocument(
     val source: LyricSource,
@@ -73,10 +95,11 @@ class LyricResolver(
         repository: Repository,
         amlldbApi: AmlldbApi,
         localMediaAssets: LocalMediaAssets,
+        providers: MusicProviderRegistry,
     ) : this(
         listOf(
             TtmlLyricProvider(repository, amlldbApi),
-            BackendLyricProvider(repository),
+            BackendLyricProvider(repository::getLyric, foreignLyric = providers::lyric),
         ),
         localMediaAssets::loadLyrics,
     )
@@ -86,9 +109,9 @@ class LyricResolver(
         mode: LyricSourceMode,
         preferLocal: Boolean = false,
     ): Flow<LyricResolution> = flow {
-        require(query.songId > 0) { "songId must be positive" }
+        require(!query.isNetease || query.songId > 0) { "songId must be positive" }
         val cacheKey = LyricMemoryCacheKey(
-            songId = query.songId,
+            item = query.itemId.toString(),
             durationMs = query.durationMs,
             mode = mode,
             preferLocal = preferLocal,
@@ -194,7 +217,7 @@ class LyricResolver(
         preferLocal: Boolean = false,
     ): LyricResolution? = memoryCache.value[
         LyricMemoryCacheKey(
-            songId = query.songId,
+            item = query.itemId.toString(),
             durationMs = query.durationMs,
             mode = mode,
             preferLocal = preferLocal,
@@ -267,21 +290,32 @@ private fun LyricDocument.outranks(current: LyricDocument?): Boolean =
     current == null || capabilityLevel.ordinal > current.capabilityLevel.ordinal
 
 private data class LyricMemoryCacheKey(
-    val songId: Long,
+    /** The provider-qualified id, so two providers' tracks never share an entry. */
+    val item: String,
     val durationMs: Long,
     val mode: LyricSourceMode,
     val preferLocal: Boolean,
 )
 
+/**
+ * The "backend" source: the lyrics of the service the track came from.
+ *
+ * NetEase's come from the configured NeteaseCloudMusicApi server through the SQLDelight cache.
+ * Another provider's come from that provider once per request and are never cached — the cache
+ * tables are keyed by a NetEase song id (AGENTS.md D6).
+ */
 internal class BackendLyricProvider(
     private val lyricFlow: (Long) -> Flow<Lyric?>,
     private val retryDelayMillis: Long = BACKEND_RETRY_DELAY_MILLIS,
+    private val foreignLyric: (suspend (ProviderItemId) -> Result<ProviderLyric?>)? = null,
 ) : LyricSourceProvider {
-    constructor(repository: Repository) : this(repository::getLyric)
-
     override val source = LyricSource.NCM_BACKEND
 
     override fun load(query: LyricQuery): Flow<LyricProviderResult> = flow {
+        if (!query.isNetease) {
+            emit(loadForeign(query))
+            return@flow
+        }
         var lastFailureReason: String? = null
         repeat(BACKEND_MAX_ATTEMPTS) { attempt ->
             var emitted = false
@@ -312,8 +346,38 @@ internal class BackendLyricProvider(
         emit(
             LyricProviderResult.Unavailable(
                 lastFailureReason?.takeIf(String::isNotBlank)
-                    ?: "鐜版湁姝岃瘝鍚庣璇锋眰澶辫触",
+                    ?: "现有歌词后端请求失败",
             ),
+        )
+    }
+
+    private suspend fun loadForeign(query: LyricQuery): LyricProviderResult {
+        val answer = foreignLyric?.invoke(query.itemId) ?: return LyricProviderResult.NoMatch
+        return answer.fold(
+            onSuccess = { lyric ->
+                val document = lyric?.let {
+                    backendLyricDocument(
+                        query = query,
+                        lrcText = it.plain.orEmpty(),
+                        yrcText = it.wordByWord.orEmpty(),
+                        translatedText = it.translation.orEmpty(),
+                        romanText = it.romanization.orEmpty(),
+                        endpoint = providerLyricEndpoint(query.itemId.provider),
+                    )
+                }
+                when {
+                    document == null -> LyricProviderResult.NoMatch
+                    document.capabilityLevel == LyricCapabilityLevel.UNSYNCED ->
+                        LyricProviderResult.Untimed(document)
+                    else -> LyricProviderResult.Found(document)
+                }
+            },
+            onFailure = { failure ->
+                LyricProviderResult.Unavailable(
+                    failure.message?.takeIf(String::isNotBlank)
+                        ?: "${query.itemId.provider.displayName}歌词请求失败",
+                )
+            },
         )
     }
 
@@ -323,13 +387,25 @@ internal class BackendLyricProvider(
     }
 }
 
-private class TtmlLyricProvider(
+/**
+ * The endpoint a provider's own lyrics are labelled with, so the lyric badge can name the service
+ * rather than "网易云歌词后端".
+ */
+internal fun providerLyricEndpoint(provider: MusicProviderId): String = "provider:${provider.key}"
+
+internal class TtmlLyricProvider(
     private val repository: Repository,
     private val amlldbApi: AmlldbApi,
 ) : LyricSourceProvider {
     override val source = LyricSource.AMLL_TTML
 
     override fun load(query: LyricQuery): Flow<LyricProviderResult> = flow {
+        // The AMLL TTML database is indexed by NetEase song id: another provider's track is never
+        // looked up, so no id of it leaves the app.
+        if (!query.isNetease) {
+            emit(LyricProviderResult.NoMatch)
+            return@flow
+        }
         val cached = repository.cachedExternalTtml(query.songId)
         if (cached != null) {
             val cachedDocument = cached.toDocumentOrNull()
@@ -349,12 +425,12 @@ private class TtmlLyricProvider(
 
         val lookup = withTimeoutOrNull(TTML_LOOKUP_TIMEOUT_MILLIS) {
             amlldbApi.findByNcmId(query.songId)
-        } ?: AmlldbTtmlResult.Unavailable("AMLL DB 鏌ヨ瓒呮椂")
+        } ?: AmlldbTtmlResult.Unavailable("AMLL DB 查询超时")
         when (val result = lookup) {
             is AmlldbTtmlResult.Found -> {
                 val lines = runCatching { TtmlLyricParser.parse(result.ttml) }.getOrNull()
                 if (lines == null || !lines.hasPrimaryTimedLine()) {
-                    emit(LyricProviderResult.Malformed("AMLL DB 鐨?TTML 鏃犳硶瑙ｆ瀽"))
+                    emit(LyricProviderResult.Malformed("AMLL DB 的 TTML 无法解析"))
                 } else {
                     try {
                         repository.cacheExternalTtml(
@@ -491,7 +567,7 @@ internal fun backendLyricDocument(
             rawWordLyric = normalizedYrcText.orEmpty(),
             rawTranslatedLyric = normalizedTranslatedText,
             rawRomanLyric = normalizedRomanText,
-            providerItemId = query.songId.toString(),
+            providerItemId = query.itemId.mediaId,
             endpoint = endpoint,
         )
     }
@@ -512,7 +588,7 @@ internal fun backendLyricDocument(
         rawWordLyric = normalizedYrcText.orEmpty(),
         rawTranslatedLyric = normalizedTranslatedText,
         rawRomanLyric = normalizedRomanText,
-        providerItemId = query.songId.toString(),
+        providerItemId = query.itemId.mediaId,
         endpoint = endpoint,
     )
 }

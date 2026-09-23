@@ -583,19 +583,32 @@ class NowPlayingViewModel(
     private var favoriteActionJob: Job? = null
     private var favoriteStatusGeneration = 0L
 
+    /**
+     * The lyric query for [media], or null when its provider offers no lyrics. Any provider with
+     * lyrics gets one; the resolver sends a non-NetEase track to that provider's own backend and
+     * never to the NetEase-indexed TTML database.
+     */
+    private fun lyricQueryFor(media: MediaInfo): LyricQuery? {
+        if (!supports(media.id, ProviderCapability.LYRIC)) return null
+        val itemId = media.id.toProviderItemIdOrNull() ?: return null
+        if (itemId.provider == MusicProviderId.NETEASE && neteaseSongId(media.id) == null) return null
+        return LyricQuery(
+            itemId = itemId,
+            title = media.title,
+            artist = media.artist,
+            album = media.albumTitle,
+            durationMs = media.duration,
+        )
+    }
+
+    /** Only a downloaded NetEase track has local lyric sidecars. */
+    private fun preferLocalLyrics(mediaId: String): Boolean =
+        neteaseSongId(mediaId)?.let(DownloadedSongsCache::isDownloaded) == true
+
     private fun preparePendingLyricsForMedia(media: MediaInfo) {
-        val songId = neteaseSongId(media.id)?.takeIf { supports(media.id, ProviderCapability.LYRIC) }
         val mode = lyricSourceModeGate.currentModeOrNull()
-        val preferLocal = songId != null && DownloadedSongsCache.isDownloaded(songId)
-        val query = songId?.let {
-            LyricQuery(
-                songId = it,
-                title = media.title,
-                artist = media.artist,
-                album = media.albumTitle,
-                durationMs = media.duration,
-            )
-        }
+        val preferLocal = preferLocalLyrics(media.id)
+        val query = lyricQueryFor(media)
         val cachedResolution = if (query != null && mode != null) {
             lyricResolver.cachedResolution(query, mode, preferLocal)
         } else {
@@ -606,7 +619,7 @@ class NowPlayingViewModel(
 
     private fun fetchLyrics(
         media: MediaInfo,
-        preferLocal: Boolean = DownloadedSongsCache.isDownloaded(neteaseSongId(media.id) ?: -1L),
+        preferLocal: Boolean = preferLocalLyrics(media.id),
         requestGeneration: Long = beginLyricRequest(),
     ) {
         val mediaId = media.id
@@ -616,16 +629,7 @@ class NowPlayingViewModel(
         ) {
             return
         }
-        val songId = neteaseSongId(mediaId)?.takeIf { supports(mediaId, ProviderCapability.LYRIC) }
-        val query = songId?.let {
-            LyricQuery(
-                songId = it,
-                title = media.title,
-                artist = media.artist,
-                album = media.albumTitle,
-                durationMs = media.duration,
-            )
-        }
+        val query = lyricQueryFor(media)
         val readyMode = lyricSourceModeGate.currentModeOrNull()
         val initialCachedResolution = if (query != null && readyMode != null) {
             lyricResolver.cachedResolution(query, readyMode, preferLocal)
@@ -637,7 +641,7 @@ class NowPlayingViewModel(
         // 运行其上Ktor 连接协程避免超时（特别是 lyric 连环 ConnectTimeout 的根因）
         lyricFetchJob = scope.launch(Dispatchers.Default) {
             val mode = lyricSourceModeGate.awaitMode()
-            if (songId == null) {
+            if (query == null) {
                 applyLyricsForMedia(mediaId, requestGeneration) {
                     if (supports(mediaId, ProviderCapability.LYRIC)) {
                         applyLyricError("歌曲 id 无效")
@@ -647,7 +651,18 @@ class NowPlayingViewModel(
                 }
                 return@launch
             }
-            val resolvedQuery = checkNotNull(query)
+            // The TTML database only knows NetEase songs, and "TTML only" forbids the other source,
+            // so another provider's track has nothing to show and nothing is requested for it.
+            if (!query.isNetease && mode == LyricSourceMode.TTML_ONLY) {
+                applyLyricsForMedia(mediaId, requestGeneration) {
+                    applyLyricUnsupported(
+                        "当前歌词来源为「只用 AMLL 歌词库」，该歌词库只收录网易云歌曲；" +
+                            "可在设置中改用其他歌词来源查看${providerName(mediaId)}的歌词",
+                    )
+                }
+                return@launch
+            }
+            val resolvedQuery = query
             var displayedResolution = initialCachedResolution
             val cachedAfterModeLoad = lyricResolver.cachedResolution(resolvedQuery, mode, preferLocal)
             if (cachedAfterModeLoad != null && cachedAfterModeLoad != displayedResolution) {
@@ -669,7 +684,7 @@ class NowPlayingViewModel(
                 throw cancelled
             } catch (_: Exception) {
                 applyLyricsForMedia(mediaId, requestGeneration) {
-                    applyLyricError("Failed to request lyrics")
+                    applyLyricError("歌词请求失败")
                 }
             }
         }

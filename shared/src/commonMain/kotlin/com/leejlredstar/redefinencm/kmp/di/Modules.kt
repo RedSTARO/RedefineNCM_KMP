@@ -248,7 +248,7 @@ val sharedModule = module {
     single { LocalAccount(get()) }
 
     single { LocalMediaAssets(get()) }
-    single { LyricResolver(get(), get(), get()) }
+    single { LyricResolver(get(), get(), get(), get()) }
 
     // Download queue — one process-wide queue drives the manager page and row status chips.
     single { SongDownloadManager(get(), get(), get(), get()) }

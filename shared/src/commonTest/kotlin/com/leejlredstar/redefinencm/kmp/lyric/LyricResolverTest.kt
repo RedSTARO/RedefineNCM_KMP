@@ -1,5 +1,8 @@
 ﻿package com.leejlredstar.redefinencm.kmp.lyric
 
+import com.leejlredstar.redefinencm.kmp.data.provider.ProviderItemId
+import com.leejlredstar.redefinencm.kmp.data.provider.ProviderLyric
+
 import com.leejlredstar.redefinencm.kmp.data.api.dto.Lyric
 import com.leejlredstar.redefinencm.kmp.data.api.dto.LyricLrc
 import com.leejlredstar.amll.compose.lyric.LyricParser
@@ -311,6 +314,52 @@ class LyricResolverTest {
 
         assertEquals(4, calls)
         assertIs<LyricProviderResult.Found>(results.single())
+    }
+
+    @Test
+    fun anotherProvidersTrackReadsThatProvidersLyricsAndNeverNetEases() = runTest {
+        var neteaseCalls = 0
+        val asked = mutableListOf<ProviderItemId>()
+        val provider = BackendLyricProvider(
+            lyricFlow = {
+                neteaseCalls += 1
+                flowOf(Lyric())
+            },
+            retryDelayMillis = 0,
+            foreignLyric = { id ->
+                asked += id
+                Result.success(
+                    ProviderLyric(
+                        plain = "[00:01.00]一句",
+                        wordByWord = "[1000,2000](1000,1000,0)一(2000,1000,0)句",
+                    ),
+                )
+            },
+        )
+
+        val results = mutableListOf<LyricProviderResult>()
+        provider.load(LyricQuery(itemId = ProviderItemId.qq("0039MnYb0qxYhV"))).collect(results::add)
+
+        assertEquals(0, neteaseCalls)
+        assertEquals(listOf(ProviderItemId.qq("0039MnYb0qxYhV")), asked)
+        val found = assertIs<LyricProviderResult.Found>(results.single())
+        assertEquals(LyricCapabilityLevel.NCM_YRC, found.document.capabilityLevel)
+        assertEquals("provider:qq", found.document.endpoint)
+        assertEquals("qq:0039MnYb0qxYhV", found.document.providerItemId)
+    }
+
+    @Test
+    fun anotherProvidersBackendNotAnsweringIsNotReportedAsNoLyrics() = runTest {
+        val provider = BackendLyricProvider(
+            lyricFlow = { flowOf(Lyric()) },
+            retryDelayMillis = 0,
+            foreignLyric = { Result.failure(IllegalStateException("QQ音乐歌词请求失败")) },
+        )
+
+        val results = mutableListOf<LyricProviderResult>()
+        provider.load(LyricQuery(itemId = ProviderItemId.qq("m"))).collect(results::add)
+
+        assertEquals(LyricProviderResult.Unavailable("QQ音乐歌词请求失败"), results.single())
     }
 
     @Test

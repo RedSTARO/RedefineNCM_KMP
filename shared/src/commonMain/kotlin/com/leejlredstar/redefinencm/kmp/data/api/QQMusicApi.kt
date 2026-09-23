@@ -56,8 +56,10 @@ class QQMusicApi(
             parameter("userinfo", true)
         }
 
+    /** With `qrc`, [QQLyric.lyric] is the decrypted QRC document when QQ has word timing. */
     suspend fun lyric(mid: String): QQLyric? =
         fetchData<QQLyric>("song/$mid/lyric") {
+            parameter("qrc", true)
             parameter("trans", true)
             parameter("roma", true)
         }

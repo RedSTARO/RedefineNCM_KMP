@@ -186,6 +186,12 @@ interface MusicProvider {
 
     suspend fun playlistDetail(id: ProviderItemId): ProviderPlaylist?
 
+    /**
+     * The track's lyrics, or null when it has none.
+     *
+     * @throws ProviderUnavailableException when the backend could not be reached — a different
+     *   answer from "no lyrics", which the lyric page shows differently.
+     */
     suspend fun lyric(id: ProviderItemId): ProviderLyric?
 
     /**

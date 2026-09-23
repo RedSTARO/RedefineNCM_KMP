@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.RoundedPolygon
 import com.leejlredstar.redefinencm.kmp.lyric.LyricCapabilityLevel
+import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSource
 
 internal enum class LyricCapabilityBadgeTone {
@@ -96,7 +97,12 @@ internal fun lyricSourceDisplayName(
 ): String {
     val provider = when (source) {
         LyricSource.AMLL_TTML -> "AMLL TTML"
-        LyricSource.NCM_BACKEND -> "网易云歌词后端"
+        // The backend source is the track's own service; another provider's names itself.
+        LyricSource.NCM_BACKEND -> endpoint.removePrefix("provider:")
+            .takeIf { endpoint.startsWith("provider:") }
+            ?.let(MusicProviderId::fromKey)
+            ?.let { "${it.displayName}歌词" }
+            ?: "网易云歌词后端"
         null -> "未知"
     }
     return if (endpoint == "local-sidecar") "$provider · 本地歌词文件" else provider

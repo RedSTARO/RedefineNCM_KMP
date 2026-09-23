@@ -124,10 +124,10 @@ class MusicProviderRegistry(
         }
     }
 
-    suspend fun lyric(id: ProviderItemId): ProviderLyric? =
-        this[id.provider]?.let { provider ->
-            providerCall { provider.lyric(id) }.getOrNull()
-        }
+    /** The track's lyrics; a failure is the backend not answering, a null that it has none. */
+    suspend fun lyric(id: ProviderItemId): Result<ProviderLyric?> =
+        this[id.provider]?.let { provider -> providerCall { provider.lyric(id) } }
+            ?: Result.success(null)
 
     suspend fun playlistDetail(id: ProviderItemId): ProviderPlaylist? =
         this[id.provider]?.let { provider ->
