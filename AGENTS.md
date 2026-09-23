@@ -95,14 +95,16 @@ otherwise a late response can start audio after the page has been left.
 ### D3 — Local cache is SQLDelight — **DONE (updated 2026-07-13)**
 
 The original caches via Room (cache-then-network). The KMP replacement is **SQLDelight**, now
-fully wired: plugin + 11 `.sq` tables under `shared/src/commonMain/sqldelight/` (user detail /
+fully wired: plugin + 12 `.sq` tables under `shared/src/commonMain/sqldelight/` (user detail /
 user level / user playlist / playlist detail / playlist tracks / recommend ×2 / lyric / comment /
-**PlayerStatus** / **DownloadQueue**) + `DatabaseDriverFactory` expect/actuals
+**PlayerStatus** / **DownloadQueue** / **LocalLibrary**) + `DatabaseDriverFactory` expect/actuals
 (android/native/sqlite/browser storage). `Repository`
 implements cache-then-network for all cached endpoints and persists/restores the play queue
-via the `PlayerStatus` table. Schema version 4 includes formal `1.sqm`, `2.sqm`, and `3.sqm` migrations
-for the playlist detail/tracks, comment, player-status, user-level, and download-queue tables; platform drivers must use
-`AppDatabase.Schema` migrations rather than ad-hoc `onOpen` table creation.
+via the `PlayerStatus` table. Schema version 5 includes formal `1.sqm` to `4.sqm` migrations
+for the playlist detail/tracks, comment, player-status, user-level, download-queue and local-library
+tables; platform drivers must use `AppDatabase.Schema` migrations rather than ad-hoc `onOpen` table
+creation. The browser driver accepts only single-key JSON tables and lists every statement it
+supports, so a new table must be registered there as well.
 
 The Home/user-playlist profile hero follows the same cache-then-network contract: cached user
 detail and level data render immediately in the status surface below the avatar, remain visible
@@ -219,7 +221,7 @@ Desktop/JVM decodes FFmpeg frames into Compose `ImageBitmap`, and Web/WASM hosts
 `HTMLVideoElement` beneath the CanvasKit scene. Dynamic-cover capability must never decide
 renderer availability, renderer selection, Desktop overlay ownership, or navigation routing.
 
-### D6 — Multiple music providers, keyed by provider — **PLANNED (recorded 2026-08-20)**
+### D6 — Multiple music providers, keyed by provider — **IN PROGRESS (recorded 2026-08-20, updated 2026-09-23)**
 
 The app aggregates more than one music service. NetEase Cloud Music is the first; QQ Music is
 the second. The decisions below are settled; the work is not started.
@@ -241,8 +243,9 @@ provider, and per-provider tabs. Neither is the default-and-only view. This mean
 model must carry provider identity all the way to the UI, because rows in the merged view have
 to say where they came from.
 
-**The UI must not bind to a provider's DTOs.** Today eight files under `ui/` and `viewmodel/`
-import `data.api.dto` directly and read NetEase-shaped fields such as `song.al.picUrl`. A
+**The UI must not bind to a provider's DTOs.** As of 2026-09-23 fourteen files under `ui/` and
+`viewmodel/` import `data.api.dto` directly and read NetEase-shaped fields such as `song.al.picUrl`
+(the count was eight when this was written; the artist, album and daily-songs pages added to it). A
 provider-neutral domain model (`Track`, `Playlist`, `Album`, `UserProfile`) is mapped at the
 `Repository` boundary, and provider clients sit behind one interface. This is worth doing on its
 own merits and does not depend on QQ Music shipping.
@@ -323,10 +326,16 @@ is the only way the Android build can sign in at all. The gateway does not read 
 `qm_keyst`, the `psrf_*` and `wx*` pairs) and the gateway's `Credential` JSON into the stored form.
 
 The gateway keeps alive only the accounts installed in its own pool, so an account sent per
-request is the caller's to renew: `QQProvider` asks `/login/check_expired` once per process before
-the first QQ call and, if expired, writes the answer of `/login/refresh_credential` back through
-the credential slot. Web/WASM cannot set a `Cookie` header from `fetch`, and the gateway takes the
-credential nowhere else, so the Web build stays anonymous towards QQ.
+request is the caller's to renew. `QQCredentialRenewer` asks `/login/check_expired` once per stored
+credential (not once per process) before the first QQ call that uses it, and renews once per
+credential when the gateway refuses a signed-in request with 401, which is then sent again. The
+answer of `/login/refresh_credential` is written with the slot's compare-and-write against the
+value the renewal started from, so a renewal that raced a sign-out or an account switch is dropped.
+Web/WASM cannot set a `Cookie` header from `fetch`, and the gateway takes the credential nowhere
+else, so the Web build stays anonymous towards QQ: it offers no QQ sign-in, says why on the accounts
+page, and never sends the header. The stored form also carries the account's encrypted UIN under
+`encrypt_uin`, a name the gateway ignores, so the accounts page can name the account from
+`/user/{euin}/homepage`.
 
 Shape notes for the client: every answer is `{code, msg, data}` with `code == 0` on success and
 `401 {"code": -1}` for an account-only route; enumerated parameters are integers (`search_type=0`,
@@ -337,11 +346,28 @@ Shape notes for the client: every answer is `{code, msg, data}` with `code == 0`
 or without QQ Music, and it removes an existing coupling. Provider abstraction follows, then the
 schema and credential migrations, then aggregation UX, then the QQ Music client itself.
 
-**Shipped so far (2026-08-27, backend switched 2026-09-22).** `ProviderItemId`, `MusicProvider`
-and `MusicProviderRegistry`, a `NeteaseProvider` adapter over the untouched `Repository`, a
-`QQProvider` over the L-1124 gateway, provider dispatch in all four platform stream resolvers,
-provider-neutral search end to end, the settings to turn QQ Music on, point it at a gateway and
-choose merged or per-provider grouping, and a login page per provider.
+**Shipped so far (2026-08-27, backend switched 2026-09-22, extended 2026-09-23).** `ProviderItemId`,
+`MusicProvider` and `MusicProviderRegistry`, a `NeteaseProvider` adapter over the untouched
+`Repository`, a `QQProvider` over the L-1124 gateway, provider dispatch in all four platform stream
+resolvers, provider-neutral search end to end, a login page per provider, and — from the
+2026-09-23 decisions below — provider capabilities, one registration per provider, an accounts page,
+QQ lyrics, per-provider search paging, a same-song merge, a provider-neutral local library, and
+user-confirmed source switching.
+
+**Capabilities (2026-09-23).** `MusicProvider.capabilities` is a set of `ProviderCapability`
+(lyric, like, comments, song wiki, credits, dynamic cover, download, share link, playback
+reporting). `NowPlayingViewModel` asks `MusicProviderRegistry.capabilitiesOf(mediaId)` before each
+NetEase-era feature and parses a NetEase song id in one helper; an unsupported feature gets its own
+`Unsupported` state (lyrics, song details) or a disabled control (comments, credits), never an
+English internal error. The heart works for every track: a provider without account likes keeps
+it in the local favourites. `NowPlayingUiState.providerBadge` names a non-NetEase track's provider
+on the now-playing page, the lyric-page island, the desktop bar and the queue.
+
+**Why a track did not play (2026-09-23).** `MusicProvider.resolveStream` answers a
+`StreamResolution` with a `StreamFailureReason` (provider disabled, unreachable, no source). The
+players still see a URL or null; `MusicProviderRegistry.streamFailures` is a side channel the
+now-playing view model reads, and the app shows the reason in a snackbar. That snackbar offers
+换源 as decided below.
 
 **Login sources are plugins in two halves (2026-09-22).** The logic half lives in `data/auth`: a
 `LoginMethod` implements one shape — `QrLoginMethod` (issue a code, poll it into the one
@@ -354,16 +380,23 @@ state machines it drives), and `LoginPresenterRegistry` lists presenters in sect
 (a chooser where a section holds several methods), and hands each presenter the `LoginHost` —
 `LoginViewModel` — for persistence and "done". Persisting goes through the provider's
 `ProviderCredentialSlot` in `CredentialStore`, which owns that provider's change rules (NetEase's
-clears the UID binding and restarts account work; QQ's just writes). What a page says about a
-provider — introduction, account label, sign-out warning, backend-address setting — is a
-`ProviderLoginDescriptor` in `ProviderLoginDescriptorRegistry`; the login and settings pages hold
-no provider branches.
+clears the UID binding and restarts account work; QQ's just writes), publishes its value
+(`credentialUpdates`), and owns the one definition of "signed in" (`isSignedIn`). What a page says
+about a provider — introduction, account label, sign-out warning, backend address with its check,
+on/off switch, why this platform cannot sign in — is a `ProviderLoginDescriptor`; who the account
+is comes from its `AccountIdentitySource`. The accounts page (`AccountsScreen` + `AccountsViewModel`)
+holds every provider's account, switch, backend address and pasted credential, the multi-provider
+view choices, and the local account; the settings page keeps one summary row that opens it. No page
+holds a provider branch.
 
 Registered today: NetEase QR and cookie; QQ Music QR by QQ and by WeChat, SMS code, and pasted
-credential. The cost of extending: a method of an existing shape is one class plus a line in the
-`LoginMethodRegistry` list in `Modules.kt`; a new shape is a method interface, a presenter, and
-their two registrations; a new provider is a descriptor, a credential slot, its methods, and the
-`MusicProviderId` entry. `PushedDest.Login(provider)` carries the provider through navigation
+credential. Each provider is one `ProviderRegistration` in `Modules.kt` — its `MusicProvider`,
+credential slot, descriptor, login methods and identity source — and `ProviderRegistrations`
+derives the registries from that list, rejecting a part filed under another provider. The cost of
+extending: a method of an existing shape is one class plus a line in its provider's
+`loginMethods`; a new shape is a method interface, a presenter, and their two registrations; a new
+provider is a `ProviderRegistration`, the `MusicProviderId` entry, its setting keys, and its
+fields in `SettingsBackupData`, which stay explicit per provider. `PushedDest.Login(provider)` carries the provider through navigation
 (saved as `login` for NetEase, `login:<key>` otherwise). The QQ SMS method is unverified against
 a real phone; the gateway answers event 1 when QQ wants a slider captcha first, which the app
 cannot show, so that answer ends the attempt and points at the QR methods.
@@ -371,28 +404,26 @@ cannot show, so that answer ends the attempt and points at the QR methods.
 Credentials stay additive: `qqEnabled` / `qqServer` / `qqCookie` sit beside the existing
 `cookie` / `server` keys rather than renaming them, so nothing migrates and no user data is at
 risk. `qqCookie` is excluded from the settings backup for the same reason `cookie` is — a shared
-export must never carry a credential — while `qqServer` and the aggregation choice travel with a
-backup the way `server` does.
+export must never carry a credential — while `qqEnabled`, `qqServer`, the aggregation choice, the
+same-song merge switch, the local account's name and its library travel with a backup. Fields added
+for multiple providers are nullable, so importing an older backup keeps the current choice.
 
-`MediaInfo.id` keeps NetEase ids bare and prefixes only foreign providers. Around fifteen call
-sites read `MediaInfo.id.toLongOrNull()` to reach NetEase-only features — lyrics, the local
-download lookup, the song wiki, the download-status chip — and prefixing NetEase's own ids would
-switch all of them off at once. A bare id still parses back to NetEase, so dispatch is unaffected,
-while a `qq:` id is correctly read by those sites as "not a NetEase song".
+`MediaInfo.id` keeps NetEase ids bare and prefixes only foreign providers. A bare id still parses
+back to NetEase, so dispatch is unaffected. The sites that reach NetEase-only features no longer
+read the id as a number on their own: they ask for the provider's capabilities, and the NetEase
+song id is parsed once where a NetEase endpoint needs it.
 
 **Still open, in the order they matter.** QQ results are uncached, because the provider column on
 the eleven cache tables is the data-destroying step and belongs in its own change. The library
 and playlist screens still bind to NetEase DTOs, so the aggregation setting currently only reaches
 search — the per-provider tabs the setting promises are not built, and the signed-in QQ account's
-own playlists (`/user/{euin}/fav/songs`, `/user/{uin}/created_songlists`) are not fetched. QQ
-tracks cannot be downloaded, since the download queue is keyed by a numeric song id. The lyric
-source-mode privacy gate is still a closed policy over two NetEase-era sources: QQ lyrics are
-reachable through the provider interface but are not wired into that pipeline, which is a
-redesign of the policy rather than a new enum entry, and the gateway's QRC word timing would need
-converting to the YRC shape the pipeline parses. What a signed-in account unlocks above MP3 128 is
-unmeasured.
+own playlists (`/user/{euin}/fav/songs`, `/user/{uin}/created_songlists`) are not fetched; a QQ
+playlist can be copied into a local playlist from its link. QQ tracks cannot be downloaded, since
+the download queue is keyed by a numeric song id. QQ account likes, comments and song details are
+not wired (the gateway has `/songlist/add_songs`, unverified against a signed-in account). What a
+signed-in account unlocks above MP3 128 is unmeasured.
 
-**Decisions of 2026-09-23 (delegated; in progress).** After the review in
+**Decisions of 2026-09-23 (delegated; implemented the same day).** After the review in
 [docs/MULTI_PROVIDER_REVIEW.md](docs/MULTI_PROVIDER_REVIEW.md) the user asked for every item to be
 changed and delegated the open choices. These bind until a later decision here replaces them:
 
@@ -402,29 +433,37 @@ changed and delegated the open choices. These bind until a later decision here r
    media id's capabilities instead of parsing the id. An unsupported feature is its own state and
    never an error; "not signed in" stays a separate state from "not supported".
 2. **Providers register once.** Each provider is one `ProviderRegistration` (provider, credential
-   slot, login descriptor, login methods, setting keys); the registries are derived from that list.
+   slot, login descriptor, login methods, account identity source); the registries are derived from
+   that list.
 3. **NetEase cannot be switched off.** Home, library, daily songs and reporting are NetEase-bound, so
    a switch would only hide it from search. Search reports and retries a failing provider on its
    own instead. The startup rule changes with it: the NetEase login page opens at launch only when
    no provider holds a signed-in account (it used to open whenever the NetEase cookie was blank).
 4. **Web does not offer QQ sign-in.** A browser cannot send the `Cookie` header the gateway reads, so
    the QQ card on Web says QQ is reached anonymously, and `QQMusicApi` never attaches the header there.
-5. **The local account owns a provider-neutral library.** Local playlists and local favourites live in
-   new SQLDelight tables keyed by `(provider TEXT, raw_id TEXT)` from their first version, added by a
-   formal migration. They do not wait for the eleven cache tables' provider column — a deliberate
-   reordering of the "Order of work" above, allowed because new tables need no destructive step. The
+5. **The local account owns a provider-neutral library.** Local playlists and local favourites are one
+   JSON document in a new `LocalLibrary` table (schema 5, `4.sqm`); every track in it is keyed by
+   `(provider, rawId)`. The decision first said relational tables keyed that way; the browser driver
+   keeps only single-key JSON tables, the reason `PlayerStatus` and `DownloadQueue` are stored the same
+   way. The library does not wait for the eleven cache tables' provider column — a deliberate
+   reordering of the "Order of work" above, allowed because a new table needs no destructive step. The
    local account's name and library travel with the settings backup; importing replaces playlists
-   with the same id and keeps the rest.
+   with the same id, keeps the rest, and joins favourites from another device into these.
 6. **Switching source (换源) is user-confirmed only.** When a track cannot be played, the app may offer
    the same song from another provider, matched strictly on normalised title, primary artist and
-   duration; it never switches on its own. The replacement is an ordinary queue item of its provider,
-   so a NetEase replacement is reported like any other NetEase track.
+   duration within 3 seconds; it never switches on its own. The replacement goes through the players'
+   ordinary `setQueue`, so it is offered only while shuffle is off — setting the queue again under
+   shuffle would re-shuffle the rest. The replacement is an ordinary queue item of its provider, so a
+   NetEase replacement is reported like any other NetEase track.
 7. **A provider's own lyrics are the "backend" source for its tracks.** QQ tracks read QQ lyrics from
    the gateway, QRC converted to YRC for word timing, and are never cached. AMLL TTML is NetEase-only,
    so under `TTML_ONLY` a QQ track has no lyrics and makes no request. Cross-provider lyric fallback
    is not done: it would apply fuzzy matches automatically and needs the privacy gate redesigned.
 8. **Merged search may queue several providers.** Playing from the merged view keeps the mixed queue;
-   capabilities and a provider badge make the mix visible.
+   capabilities and a provider badge make the mix visible. The merged view folds the same song from
+   several providers into one row by the 换源 rule; a switch on the accounts page turns that off.
+   Search pages each provider on its own cursor, so a failed page is asked for again and an exhausted
+   provider is not.
 9. **One account per provider stays locked**, as above.
 
 ---
@@ -530,8 +569,9 @@ RedefineNCM_KMP/
 │       │   │   │   ├── NCMApi.kt              # NeteaseCloudMusicApi client (Ktor)
 │       │   │   │   ├── QQMusicApi.kt          # L-1124/QQMusicApi web-gateway client + DTOs
 │       │   │   │   └── dto/Models.kt          # @Serializable DTOs
-│       │   │   ├── auth/                    # Login sources: LoginMethod, registry, credential slots
-│       │   │   └── provider/                # MusicProvider abstraction, ids, NetEase/QQ adapters
+│       │   │   ├── auth/                    # Login sources, credential slots, account identity, QQ renewal
+│       │   │   ├── local/                   # The local account and its provider-neutral library
+│       │   │   └── provider/                # MusicProvider, capabilities, registration, ids, adapters
 │       │   ├── di/Modules.kt            # Koin sharedModule + expect fun platformModule()
 │       │   ├── player/
 │       │   │   ├── PlatformPlayer.kt    # interface + PlayerState enum + MediaInfo + StreamUrlResolver
@@ -628,6 +668,11 @@ account-data retries or an in-process login, and is cancelled if the account is 
    window).
 
 ### Lyric source contract
+
+A track's "backend" source is its own provider's lyrics: NetEase's backend for a NetEase track,
+the QQ gateway for a QQ track (QRC converted to YRC, never cached). AMLL TTML is looked up only for
+NetEase tracks, so under `TTML_ONLY` another provider's track shows why it has no lyrics and makes
+no request. There is no cross-provider lyric fallback.
 
 The persisted source policy has four stable values: AMLL TTML first with backend fallback
 (default), backend first with TTML fallback, TTML only, and backend only. `TTML_ONLY` and
@@ -1075,8 +1120,10 @@ feature gap; platform integrations use target-specific actuals:
 - **Responsive nav**: non-Desktop targets use NavigationRail on ≥600dp. Desktop keeps a collapsed
   modal wide navigation rail at every supported window size; expansion overlays content instead of
   resizing it. Full-screen playback remains one `AmllPlayerScreen` destination regardless of
-  window size or dynamic-cover capability. No-cookie startup routes to Login.
-- **Settings**: server availability check (`/inner/version/`); the legacy-persisted
+  window size or dynamic-cover capability. Startup routes to the NetEase login page only when no
+  switched-on provider holds an account (it used to whenever the NetEase cookie was blank).
+- **Settings**: server availability check (`/inner/version/`, now on the accounts page beside the
+  QQ gateway's check); the legacy-persisted
   `adaptOriginalAndroidLyric` value now controls the optional Android Live Update notification
   and Desktop floating-lyrics window (default off, immediate enable/disable); iOS Live Activity
   and Web lyrics remain independent. There is no AMLL renderer switch: the removed
