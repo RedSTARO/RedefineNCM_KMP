@@ -11,6 +11,7 @@ import com.leejlredstar.redefinencm.kmp.data.provider.ProviderRegistration
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderRegistrations
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
+import com.leejlredstar.redefinencm.kmp.util.getBooleanAsync
 import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -82,6 +83,9 @@ class AccountsViewModel(
 
     private val _aggregationMode = MutableStateFlow(LibraryAggregationMode.Default)
     val aggregationMode: StateFlow<LibraryAggregationMode> = _aggregationMode.asStateFlow()
+
+    private val _mergeSameSongs = MutableStateFlow(SettingKeys.MERGE_SAME_SONGS_DEFAULT)
+    val mergeSameSongs: StateFlow<Boolean> = _mergeSameSongs.asStateFlow()
 
     /** The outcome of the last action, for the page's snackbar; consumed once shown. */
     private val _message = MutableStateFlow<String?>(null)
@@ -155,6 +159,10 @@ class AccountsViewModel(
             _localName.value = localAccount.name()
             _aggregationMode.value = LibraryAggregationMode.fromWireValueOrDefault(
                 settings.getStringAsync(SettingKeys.LIBRARY_AGGREGATION_MODE, ""),
+            )
+            _mergeSameSongs.value = settings.getBooleanAsync(
+                SettingKeys.MERGE_SAME_SONGS,
+                SettingKeys.MERGE_SAME_SONGS_DEFAULT,
             )
         }
     }
@@ -252,6 +260,13 @@ class AccountsViewModel(
         persist(
             write = { settings.setString(SettingKeys.LIBRARY_AGGREGATION_MODE, mode.wireValue) },
             onPersisted = { _aggregationMode.value = mode },
+        )
+    }
+
+    fun setMergeSameSongs(merge: Boolean) {
+        persist(
+            write = { settings.setBoolean(SettingKeys.MERGE_SAME_SONGS, merge) },
+            onPersisted = { _mergeSameSongs.value = merge },
         )
     }
 

@@ -37,3 +37,33 @@ class ProviderSearchPagingTest {
         assertEquals(listOf(30 to 0, 30 to 30), qq.requests)
     }
 }
+
+/** Later pages go only to the providers named, each at its own offset. */
+class ProviderSearchPagesTest {
+    private class RecordingProvider(override val id: MusicProviderId) : MusicProvider {
+        val requests = mutableListOf<Int>()
+        override val capabilities: Set<ProviderCapability> = emptySet()
+        override suspend fun isAvailable(): Boolean = true
+        override suspend fun search(keyword: String, limit: Int, offset: Int): List<ProviderTrack> {
+            requests += offset
+            return emptyList()
+        }
+        override suspend fun playlistDetail(id: ProviderItemId): ProviderPlaylist? = null
+        override suspend fun lyric(id: ProviderItemId): ProviderLyric? = null
+        override suspend fun resolveStream(id: ProviderItemId, quality: SoundQualityPreference) =
+            StreamResolution.Failed(StreamFailureReason.NO_SOURCE)
+    }
+
+    @Test
+    fun onlyTheNamedProvidersAreAskedEachAtItsOwnOffset() = runTest {
+        val netease = RecordingProvider(MusicProviderId.NETEASE)
+        val qq = RecordingProvider(MusicProviderId.QQ)
+        val registry = MusicProviderRegistry(listOf(netease, qq), PlatformSettings())
+
+        // NetEase has run out; QQ failed its first page and is asked for it again.
+        registry.searchPages("x", mapOf(MusicProviderId.QQ to 0))
+
+        assertEquals(emptyList(), netease.requests)
+        assertEquals(listOf(0), qq.requests)
+    }
+}

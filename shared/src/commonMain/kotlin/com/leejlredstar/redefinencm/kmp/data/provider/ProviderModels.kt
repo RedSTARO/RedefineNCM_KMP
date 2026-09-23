@@ -19,12 +19,28 @@ data class ProviderAlbum(
     val artworkUrl: String = "",
 )
 
+/**
+ * What a service says about a track, for badges. These describe the track, not what the signed-in
+ * account may do with it: a QQ "VIP" track has played at 128k without an account.
+ */
+enum class TrackTag(val label: String) {
+    /** The service marks it as a members' track. */
+    VIP("VIP"),
+
+    /** Sold by album or by the song. */
+    PAID("付费"),
+
+    /** The service holds a lossless copy. */
+    LOSSLESS("无损"),
+}
+
 data class ProviderTrack(
     val id: ProviderItemId,
     val title: String,
     val artists: List<ProviderArtist> = emptyList(),
     val album: ProviderAlbum? = null,
     val durationMillis: Long = 0,
+    val tags: Set<TrackTag> = emptySet(),
 ) {
     val provider: MusicProviderId get() = id.provider
 

@@ -85,6 +85,7 @@ fun AccountsScreen(
     val accounts by viewModel.accounts.collectAsState()
     val localName by viewModel.localName.collectAsState()
     val aggregationMode by viewModel.aggregationMode.collectAsState()
+    val mergeSameSongs by viewModel.mergeSameSongs.collectAsState()
     val message by viewModel.message.collectAsState()
 
     // Settings can change behind this page — a backup import — so each visit reads them afresh.
@@ -259,13 +260,14 @@ fun AccountsScreen(
 
                         // Only worth choosing once there is more than one provider to show.
                         if (accounts.count { it.enabled } > 1) {
+                            val merged = aggregationMode == LibraryAggregationMode.MERGED
                             SettingsSectionLabel("多平台", palette)
                             SettingsSwitch(
-                                checked = aggregationMode == LibraryAggregationMode.PER_PROVIDER,
+                                checked = !merged,
                                 label = "按平台分组显示",
                                 accentPalette = palette,
                                 index = 0,
-                                count = 1,
+                                count = if (merged) 2 else 1,
                                 supportingText = "关闭时各平台结果混合为一个列表",
                             ) { perProvider ->
                                 viewModel.setAggregationMode(
@@ -275,6 +277,16 @@ fun AccountsScreen(
                                         LibraryAggregationMode.MERGED
                                     },
                                 )
+                            }
+                            if (merged) {
+                                SettingsSwitch(
+                                    checked = mergeSameSongs,
+                                    label = "合并各平台的同一首歌",
+                                    accentPalette = palette,
+                                    index = 1,
+                                    count = 2,
+                                    supportingText = "歌名、第一位歌手相同且时长相差不超过 3 秒时合为一行，可在菜单中改用其他平台播放",
+                                ) { merge -> viewModel.setMergeSameSongs(merge) }
                             }
                         }
 

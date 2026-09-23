@@ -78,6 +78,8 @@ class QQMusicMappingTest {
         assertEquals("周杰伦", track.artistLine)
         assertEquals("叶惠美", track.album?.name)
         assertEquals(ProviderItemId.qq("000MkMni19ClKG"), track.album?.id)
+        // pay_month=1 is QQ's members' mark; no FLAC size means no lossless tag.
+        assertEquals(setOf(TrackTag.VIP), track.tags)
         // QQ reports seconds where NetEase reports milliseconds.
         assertEquals(269_000L, track.durationMillis)
         assertTrue(track.artworkUrl.endsWith("000MkMni19ClKG.jpg"))

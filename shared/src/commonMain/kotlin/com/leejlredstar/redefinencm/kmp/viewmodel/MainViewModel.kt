@@ -9,7 +9,10 @@ import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
 import com.leejlredstar.redefinencm.kmp.data.api.dto.*
 import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
+import com.leejlredstar.redefinencm.kmp.data.provider.MergedSearchEntry
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProvider
+import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
+import com.leejlredstar.redefinencm.kmp.data.provider.mergeSameSongs
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderSearchResults
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderTrack
@@ -49,6 +52,33 @@ internal fun shouldApplyPlaybackVerification(
 ): Boolean = currentUid == event.uid &&
     currentCredentialKey == event.credentialKey &&
     (lastAppliedGeneration ?: Long.MIN_VALUE) < event.reportingGeneration
+
+/**
+ * Where one provider's search results continue.
+ *
+ * Each provider pages on its own: one that failed is asked for the page it missed — skipping it
+ * would lose its first results for good — and one that has run out is not asked again.
+ */
+internal data class SearchCursor(
+    val nextOffset: Int,
+    val exhausted: Boolean,
+    val failed: Boolean,
+) {
+    val hasMore: Boolean get() = !exhausted
+
+    companion object {
+        fun after(requestedOffset: Int, results: ProviderSearchResults, pageSize: Int): SearchCursor =
+            if (results.failed) {
+                SearchCursor(nextOffset = requestedOffset, exhausted = false, failed = true)
+            } else {
+                SearchCursor(
+                    nextOffset = requestedOffset + pageSize,
+                    exhausted = results.tracks.size < pageSize,
+                    failed = false,
+                )
+            }
+    }
+}
 
 /**
  * Ported from the original Android MainViewModel.
@@ -126,6 +156,12 @@ class MainViewModel(
     /** The same hits interleaved, for the merged view. */
     val searchResults = MutableStateFlow<List<ProviderTrack>>(emptyList())
     val searchAggregationMode = MutableStateFlow(LibraryAggregationMode.Default)
+    /** Whether the merged view folds the same song from several providers into one row. */
+    val searchMergeSameSongs = MutableStateFlow(SettingKeys.MERGE_SAME_SONGS_DEFAULT)
+    /** The merged view's rows: [searchResults], with the same song folded when that is on. */
+    val searchEntries: StateFlow<List<MergedSearchEntry>>
+    /** Providers whose last page failed; the page offers to ask them again. */
+    val searchFailedProviders = MutableStateFlow<List<MusicProviderId>>(emptyList())
     val searchSuggestions = MutableStateFlow<List<String>>(emptyList())
     /** Whether a provider may have results after the pages shown. */
     val searchHasMore = MutableStateFlow(false)
@@ -134,7 +170,8 @@ class MainViewModel(
     val searchHistory = MutableStateFlow<List<String>>(emptyList())
     val hotSearches = MutableStateFlow<List<SearchHotItem>>(emptyList())
     private val historyMutex = Mutex()
-    private var searchOffset = 0
+    /** Where each provider's next page starts, and whether it has one. */
+    private var searchCursors: Map<MusicProviderId, SearchCursor> = emptyMap()
     private var searchMoreJob: Job? = null
     private var hotSearchJob: Job? = null
     val searchLoading = MutableStateFlow(false)
@@ -147,6 +184,14 @@ class MainViewModel(
     val updateMessage = MutableStateFlow<String?>(null)
 
     init {
+        searchEntries = combine(searchResults, searchAggregationMode, searchMergeSameSongs) {
+                results, mode, merge ->
+            if (mode == LibraryAggregationMode.MERGED && merge) {
+                results.mergeSameSongs()
+            } else {
+                results.map { MergedSearchEntry(it) }
+            }
+        }.stateIn(scope, SharingStarted.Eagerly, emptyList())
         scope.launch(Dispatchers.Default) {
             historyMutex.withLock { searchHistory.value = storedSearchHistory() }
         }
@@ -713,14 +758,22 @@ class MainViewModel(
             searchLoading.value = true
             try {
                 searchAggregationMode.value = providers.aggregationMode()
-                val groups = providers.searchAll(query)
+                searchMergeSameSongs.value = settings.getBooleanAsync(
+                    SettingKeys.MERGE_SAME_SONGS,
+                    SettingKeys.MERGE_SAME_SONGS_DEFAULT,
+                )
+                val groups = providers.searchAll(query, SearchPageSize)
+                searchCursors = groups.associate { group ->
+                    group.provider to SearchCursor.after(requestedOffset = 0, group, SearchPageSize)
+                }
                 searchGroups.value = groups.filter { it.tracks.isNotEmpty() }
                 searchResults.value = groups.interleaved()
-                searchHasMore.value = groups.any { !it.failed && it.tracks.size >= SearchPageSize }
+                searchHasMore.value = searchCursors.values.any { it.hasMore }
 
                 // "Nothing matched" and "the backend is down" are different answers, and with two
                 // providers configured a partial failure must not be reported as either.
                 val failed = groups.filter { it.failed }
+                searchFailedProviders.value = failed.map { it.provider }
                 searchError.value = when {
                     failed.isEmpty() -> null
                     failed.size == groups.size -> "搜索失败，请检查网络后重试"
@@ -744,30 +797,49 @@ class MainViewModel(
     }
 
     /**
-     * Appends the next page of every provider that may have one. Results already on screen keep
-     * their places: the new page is interleaved on its own and added after them.
+     * Appends the next page of every provider that may have one, each from its own cursor: one
+     * that failed is asked for the page it missed, and one that ran out is not asked at all.
+     * Results already on screen keep their places; the new page is interleaved on its own and
+     * added after them.
      */
     fun loadMoreSearchResults() {
+        if (!searchHasMore.value) return
+        loadSearchPages { it.hasMore }
+    }
+
+    /** Asks the providers whose last page failed for that page again. */
+    fun retryFailedSearchProviders() {
+        loadSearchPages { it.failed }
+    }
+
+    private fun loadSearchPages(which: (SearchCursor) -> Boolean) {
         val query = searchSubmittedQuery.value ?: return
-        if (!searchHasMore.value || searchLoadingMore.value || searchLoading.value) return
-        val offset = searchOffset + SearchPageSize
+        if (searchLoadingMore.value || searchLoading.value) return
+        val offsets = searchCursors.filterValues(which).mapValues { (_, cursor) -> cursor.nextOffset }
+        if (offsets.isEmpty()) return
         searchLoadingMore.value = true
         searchMoreError.value = null
         searchMoreJob = scope.launch(Dispatchers.Default) {
             try {
-                val groups = providers.searchAll(query, SearchPageSize, offset)
+                val groups = providers.searchPages(query, offsets, SearchPageSize)
                 if (searchSubmittedQuery.value != query) return@launch
                 val shownIds = searchResults.value.mapTo(mutableSetOf()) { it.id }
                 val fresh = groups.map { group ->
                     group.copy(tracks = group.tracks.filterNot { it.id in shownIds })
                 }
-                searchOffset = offset
+                searchCursors = searchCursors + groups.associate { group ->
+                    group.provider to SearchCursor.after(offsets.getValue(group.provider), group, SearchPageSize)
+                }
                 searchResults.value = searchResults.value + fresh.interleaved()
                 searchGroups.value = mergeSearchGroups(searchGroups.value, fresh)
-                searchHasMore.value = groups.any { !it.failed && it.tracks.size >= SearchPageSize }
-                if (groups.isNotEmpty() && groups.all { it.failed }) {
-                    searchMoreError.value = "没能加载更多结果"
-                }
+                searchHasMore.value = searchCursors.values.any { it.hasMore }
+                val failed = groups.filter { it.failed }
+                searchFailedProviders.value = searchCursors.filterValues { it.failed }.keys.toList()
+                searchMoreError.value = failed.takeIf { it.isNotEmpty() }
+                    ?.joinToString("、") { it.provider.displayName }
+                    ?.let { "$it 没能加载更多结果" }
+                // Every failed provider has now answered, so the partial-failure line goes.
+                if (searchFailedProviders.value.isEmpty()) searchError.value = null
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Throwable) {
@@ -794,7 +866,8 @@ class MainViewModel(
 
     private fun resetSearchPaging() {
         searchMoreJob?.cancel()
-        searchOffset = 0
+        searchCursors = emptyMap()
+        searchFailedProviders.value = emptyList()
         searchHasMore.value = false
         searchLoadingMore.value = false
         searchMoreError.value = null

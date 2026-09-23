@@ -119,6 +119,12 @@ internal fun SongDetailSongs.toProviderTrack(): ProviderTrack = ProviderTrack(
     artists = ar.map { it.toProviderArtist() },
     album = al.toProviderAlbum(),
     durationMillis = dt,
+    // The same reading the playlist pages give `fee`; NetEase's search rows carry no quality list.
+    tags = when (fee) {
+        1 -> setOf(TrackTag.VIP)
+        4 -> setOf(TrackTag.PAID)
+        else -> emptySet()
+    },
 )
 
 private fun SongArtist.toProviderArtist(): ProviderArtist = ProviderArtist(

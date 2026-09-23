@@ -146,12 +146,25 @@ class MusicProviderRegistry(
         keyword: String,
         limit: Int = MusicProvider.DefaultSearchLimit,
         offset: Int = 0,
+    ): List<ProviderSearchResults> =
+        searchPages(keyword, providers.associate { it.id to offset }, limit)
+
+    /**
+     * One page from each provider named in [offsets], each at its own offset: a provider that has
+     * run out of results is not asked again, and one whose last page failed is asked for that page
+     * again rather than skipped past it. Providers that are no longer available are left out.
+     */
+    suspend fun searchPages(
+        keyword: String,
+        offsets: Map<MusicProviderId, Int>,
+        limit: Int = MusicProvider.DefaultSearchLimit,
     ): List<ProviderSearchResults> = coroutineScope {
-        if (keyword.isBlank()) return@coroutineScope emptyList()
+        if (keyword.isBlank() || offsets.isEmpty()) return@coroutineScope emptyList()
         available()
+            .filter { it.id in offsets }
             .map { provider ->
                 provider to async {
-                    providerCall { provider.search(keyword, limit, offset) }
+                    providerCall { provider.search(keyword, limit, offsets.getValue(provider.id)) }
                 }
             }
             .map { (provider, deferred) ->

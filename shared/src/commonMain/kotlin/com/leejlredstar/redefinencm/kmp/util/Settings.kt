@@ -28,6 +28,10 @@ object SettingKeys {
     /** Whether the library merges every provider into one view or keeps a tab per provider. */
     const val LIBRARY_AGGREGATION_MODE = "libraryAggregationMode"
 
+    /** Whether the merged view folds the same song from several providers into one row. */
+    const val MERGE_SAME_SONGS = "mergeSameSongs"
+    const val MERGE_SAME_SONGS_DEFAULT = true
+
     /** The device-local account's display name; blank means the default. */
     const val LOCAL_ACCOUNT_NAME = "localAccountName"
     const val UID = "uid"

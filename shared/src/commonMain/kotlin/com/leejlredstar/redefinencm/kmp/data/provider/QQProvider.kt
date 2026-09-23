@@ -204,4 +204,9 @@ internal fun QQSong.toProviderTrack(): ProviderTrack = ProviderTrack(
         )
     },
     durationMillis = interval * 1000,
+    tags = buildSet {
+        // Either flag is QQ's members' mark; neither says the track will not play.
+        if (pay?.payPlay == 1 || pay?.payMonth == 1) add(TrackTag.VIP)
+        if ((file?.sizeFlac ?: 0L) > 0L) add(TrackTag.LOSSLESS)
+    },
 )

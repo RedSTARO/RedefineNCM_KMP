@@ -209,6 +209,8 @@ fun SongRow(
     durationMs: Long = 0L,
     album: String = "",
     badge: String? = null,
+    /** More labels after [badge]: the providers a merged search row stands for, VIP, 无损. */
+    badges: List<String> = emptyList(),
     actions: List<SongRowAction> = emptyList(),
 ) {
     val settings = koinInject<PlatformSettings>()
@@ -307,7 +309,7 @@ fun SongRow(
                         color = if (isCurrent) accentPalette.accent else accentPalette.onQuietContainer,
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        badge?.let { label ->
+                        (listOfNotNull(badge) + badges).forEach { label ->
                             ProviderBadge(
                                 label = label,
                                 contentColor = accentPalette.secondaryOnQuietContainer,

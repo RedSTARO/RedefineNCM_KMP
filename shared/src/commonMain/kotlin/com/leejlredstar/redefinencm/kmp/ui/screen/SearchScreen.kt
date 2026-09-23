@@ -90,6 +90,8 @@ fun SearchScreen(
     settings: PlatformSettings = koinInject(),
 ) {
     val results by viewModel.searchResults.collectAsState()
+    val entries by viewModel.searchEntries.collectAsState()
+    val failedProviders by viewModel.searchFailedProviders.collectAsState()
     val groups by viewModel.searchGroups.collectAsState()
     val aggregationMode by viewModel.searchAggregationMode.collectAsState()
     val suggestions by viewModel.searchSuggestions.collectAsState()
@@ -258,6 +260,10 @@ fun SearchScreen(
                             SearchProviderHeader(
                                 label = partialFailure,
                                 accent = MaterialTheme.colorScheme.error,
+                                // The failed providers are asked for the page they missed; the
+                                // results already shown stay where they are.
+                                actionLabel = if (failedProviders.isNotEmpty() && !loadingMore) "重试" else null,
+                                onAction = viewModel::retryFailedSearchProviders,
                             )
                         }
                     }
@@ -283,16 +289,23 @@ fun SearchScreen(
                             }
                         }
                     } else {
+                        // One row per song: the same song from several providers is folded into
+                        // one row that names them all, and the others can be played from its menu.
+                        val played = entries.map { it.track }
                         itemsIndexed(
-                            items = results,
-                            key = { _, track -> track.id.toString() },
-                        ) { index, track ->
+                            items = entries,
+                            key = { _, entry -> entry.track.id.toString() },
+                        ) { index, entry ->
                             SearchTrackRow(
                                 index = index,
-                                track = track,
-                                count = results.size,
+                                track = entry.track,
+                                count = entries.size,
                                 showProviderBadge = showProviderBadge,
-                                onClick = { play(results, index) },
+                                alsoFrom = entry.alternates,
+                                onClick = { play(played, index) },
+                                onPlayAlternate = { alternate ->
+                                    play(played.toMutableList().also { it[index] = alternate }, index)
+                                },
                             )
                         }
                     }
@@ -550,17 +563,30 @@ private fun SearchResultsFooter(
 
 /** Section label for the per-provider view, and for the partial-failure notice. */
 @Composable
-private fun SearchProviderHeader(label: String, accent: Color) {
-    Text(
-        text = label,
-        style = MaterialTheme.typography.labelLarge,
-        color = accent,
+private fun SearchProviderHeader(
+    label: String,
+    accent: Color,
+    actionLabel: String? = null,
+    onAction: () -> Unit = {},
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(
             start = SearchSpacing.Inset,
             top = SearchSpacing.SectionGap,
             bottom = SearchSpacing.TitleGap,
         ),
-    )
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = accent,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        actionLabel?.let { action ->
+            TextButton(onClick = onAction) { Text(action) }
+        }
+    }
 }
 
 /**
@@ -577,8 +603,15 @@ private fun SearchTrackRow(
     count: Int,
     showProviderBadge: Boolean,
     onClick: () -> Unit,
+    /** The same song from other providers, folded into this row. */
+    alsoFrom: List<ProviderTrack> = emptyList(),
+    onPlayAlternate: (ProviderTrack) -> Unit = {},
 ) {
     val media = remember(track) { track.toMediaInfo() }
+    val rowActions = rememberSongRowActions(
+        media = media,
+        neteaseSong = remember(track) { track.toNeteaseSongOrNull() },
+    )
     // One accent for the whole result list. Tinting each row from its own cover striped the list
     // in unrelated colours. The provider, when several are mixed, is a chip in the row rather than
     // a line of its own above it.
@@ -595,10 +628,16 @@ private fun SearchTrackRow(
         durationMs = track.durationMillis,
         album = track.album?.name.orEmpty(),
         badge = track.provider.displayName.takeIf { showProviderBadge },
-        actions = rememberSongRowActions(
-            media = media,
-            neteaseSong = remember(track) { track.toNeteaseSongOrNull() },
-        ),
+        // A folded row names every provider it stands for, then what the played one says of itself.
+        badges = alsoFrom.map { it.provider.displayName }.takeIf { showProviderBadge }.orEmpty() +
+            track.tags.map { it.label },
+        actions = remember(rowActions, alsoFrom) {
+            alsoFrom.map { alternate ->
+                SongRowAction("改用${alternate.provider.displayName}播放", AppIcons.PlayArrow) {
+                    onPlayAlternate(alternate)
+                }
+            } + rowActions
+        },
     )
 }
 
