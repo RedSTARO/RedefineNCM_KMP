@@ -10,7 +10,7 @@ import kotlin.math.sqrt
  * This is the part of the analysis that needs no model, which is why it exists on every device:
  * where the music really starts after a silent lead-in, where it really stops before a long
  * silent tail or a hidden track, and how loud the section is. A crossfade placed by it already
- * avoids the two failures a fixed-length crossfade has — fading the end of a song into seconds
+ * avoids the two failures a fixed-length crossfade has: fading the end of a song into seconds
  * of nothing, and bringing the next one in over its own silence.
  */
 @Serializable

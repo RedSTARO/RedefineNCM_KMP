@@ -4,18 +4,21 @@ import org.bytedeco.ffmpeg.global.avutil
 import org.bytedeco.javacv.FFmpegFrameGrabber
 import org.bytedeco.javacv.FrameGrabber
 import java.net.URI
-import java.nio.ShortBuffer
+import java.nio.FloatBuffer
 import java.nio.file.Paths
 import javax.sound.sampled.AudioFormat
 
 /**
- * Signed 16-bit PCM decoded out of anything FFmpeg can open, which on desktop is every stream
+ * Interleaved float PCM decoded out of anything FFmpeg can open, which on desktop is every stream
  * and every download this app produces: MP3, FLAC, M4A, and the Hi-Res masters above them.
  *
  * Java Sound's own SPI decoding is not used. `AudioSystem.getAudioInputStream()` reaches only
  * MP3, through mp3spi, so every lossless tier would have to be downgraded to a 320k MP3 before
  * it was requested. That path also decodes through JLayer, whose tables are loaded with a
  * package-relative `Class.getResourceAsStream()` that release obfuscation silently breaks.
+ *
+ * Samples come out as float so the player can mix two tracks and change one's tempo during a
+ * song transition. [format] is the 16-bit format they are written to the device in.
  *
  * FFmpeg is already shipped for the dynamic-cover decoder, so this adds no new native payload.
  */
@@ -27,41 +30,100 @@ internal class FfmpegAudioSource private constructor(
     val durationMs: Long,
 ) : AutoCloseable {
 
+    val channels: Int get() = format.channels
+    val sampleRate: Int get() = format.sampleRate.toInt()
+
+    private var pending: FloatArray? = null
+    private var pendingOffset = 0
+    private var awaitingLanding = false
+
     /**
-     * The next block of interleaved PCM, or null once the track is decoded.
-     *
-     * Frames arrive on a direct buffer FFmpeg reuses for the next grab, so every block is copied
-     * out before returning. Grabs that carry no samples are skipped rather than reported as the
-     * end of the track: a container can hand back metadata-only frames mid-stream.
+     * The decoder's timestamp for the first sample after the last [seekTo], in milliseconds, once
+     * it has been read. For an MP3 it is off from the decoded-from-the-start timeline by the
+     * encoder delay; [FfmpegTrackEndsDecoder] measures that offset and corrects for it.
      */
-    fun read(): ByteArray? {
+    var landedAtMs: Double? = null
+        private set
+
+    /**
+     * Fills [target] from frame [offset] with up to [frames] interleaved frames; returns how many
+     * were written, fewer only once the track is decoded to its end.
+     */
+    fun read(target: FloatArray, offset: Int, frames: Int): Int {
+        var written = 0
+        while (written < frames) {
+            val block = pending ?: nextBlock() ?: break
+            val available = (block.size - pendingOffset) / channels
+            val take = minOf(available, frames - written)
+            block.copyInto(
+                target,
+                (offset + written) * channels,
+                pendingOffset,
+                pendingOffset + take * channels,
+            )
+            written += take
+            pendingOffset += take * channels
+            if (pendingOffset >= block.size) {
+                pending = null
+                pendingOffset = 0
+            }
+        }
+        return written
+    }
+
+    /**
+     * The next decoded block. Frames arrive on a direct buffer FFmpeg reuses for the next grab,
+     * so every block is copied out. Grabs that carry no samples are skipped rather than reported
+     * as the end of the track: a container can hand back metadata-only frames mid-stream.
+     */
+    private fun nextBlock(): FloatArray? {
         while (true) {
             val frame = grabber.grabSamples() ?: return null
             val samples = frame.samples ?: continue
             if (samples.isEmpty()) continue
-            // AV_SAMPLE_FMT_S16 is a packed format, so swresample always emits exactly one
+            // AV_SAMPLE_FMT_FLT is a packed format, so swresample always emits exactly one
             // plane. Fail loudly if that ever stops holding: silently taking plane 0 of a
             // planar frame would play one channel at double speed.
             check(samples.size == 1) {
                 "Expected packed PCM from FFmpeg, got ${samples.size} planes"
             }
-            val buffer = samples[0] as? ShortBuffer ?: continue
+            val buffer = samples[0] as? FloatBuffer ?: continue
             val pcm = buffer.duplicate()
-            val count = pcm.remaining()
+            val count = pcm.remaining() - pcm.remaining() % channels
             if (count == 0) continue
-            val bytes = ByteArray(count * 2)
-            var at = 0
-            while (pcm.hasRemaining()) {
-                val sample = pcm.get().toInt()
-                bytes[at++] = sample.toByte()
-                bytes[at++] = (sample shr 8).toByte()
+            if (awaitingLanding) {
+                awaitingLanding = false
+                landedAtMs = frame.timestamp / 1_000.0
             }
-            return bytes
+            val block = FloatArray(count)
+            pcm.get(block)
+            pending = block
+            pendingOffset = 0
+            return block
+        }
+    }
+
+    /**
+     * Decodes and drops [frames] frames. Slower than [seekTo] but exact: a position reached by
+     * decoding from the start is the same position analysis measured, while a seek into an MP3
+     * lands a frame's worth of encoder delay away from it.
+     */
+    fun skip(frames: Long) {
+        val scratch = FloatArray(4_096 * channels)
+        var left = frames
+        while (left > 0) {
+            val got = read(scratch, 0, minOf(left, 4_096L).toInt())
+            if (got == 0) return
+            left -= got
         }
     }
 
     /** Seeks the decoder itself, which lands on a real frame boundary at any bit rate. */
     fun seekTo(positionMs: Long) {
+        pending = null
+        pendingOffset = 0
+        landedAtMs = null
+        awaitingLanding = true
         grabber.setAudioTimestamp(positionMs.coerceAtLeast(0L) * 1_000L)
     }
 
@@ -85,20 +147,23 @@ internal class FfmpegAudioSource private constructor(
         /**
          * Opens [source] (a local file URI or a CDN URL) positioned at [startMs].
          *
-         * [forcedSampleRate] makes FFmpeg resample on the way out; leaving it null keeps the
-         * track's own rate so a Hi-Res tier is not quietly downsampled on a device that can
-         * take it.
+         * [forcedSampleRate] and [forcedChannels] make FFmpeg convert on the way out. Leaving
+         * them null keeps the track's own, so a Hi-Res tier is not quietly downsampled on a
+         * device that can take it. A song transition forces the incoming track to the outgoing
+         * one's format, because both are mixed into one line.
          */
         fun open(
             source: String,
             startMs: Long = 0L,
             forcedSampleRate: Int? = null,
+            forcedChannels: Int? = null,
         ): FfmpegAudioSource {
             val grabber = FFmpegFrameGrabber(ffmpegAudioInput(source)).apply {
-                sampleMode = FrameGrabber.SampleMode.SHORT
-                sampleFormat = avutil.AV_SAMPLE_FMT_S16
+                sampleMode = FrameGrabber.SampleMode.FLOAT
+                sampleFormat = avutil.AV_SAMPLE_FMT_FLT
                 setOption("rw_timeout", NetworkTimeoutMicros.toString())
                 forcedSampleRate?.let { sampleRate = it }
+                forcedChannels?.let { audioChannels = it }
             }
             val opened = runCatching {
                 grabber.start()
@@ -128,6 +193,22 @@ internal class FfmpegAudioSource private constructor(
             return opened
         }
     }
+}
+
+/**
+ * Writes [frames] interleaved float frames from [source] into [target] as signed 16-bit
+ * little-endian, clipping at full scale; returns the byte count.
+ */
+internal fun floatToPcm16(source: FloatArray, frames: Int, channels: Int, target: ByteArray): Int {
+    val samples = frames * channels
+    var at = 0
+    for (i in 0 until samples) {
+        val scaled = source[i].coerceIn(-1f, 1f) * 32767f
+        val value = (if (scaled >= 0f) scaled + 0.5f else scaled - 0.5f).toInt()
+        target[at++] = value.toByte()
+        target[at++] = (value shr 8).toByte()
+    }
+    return at
 }
 
 /**

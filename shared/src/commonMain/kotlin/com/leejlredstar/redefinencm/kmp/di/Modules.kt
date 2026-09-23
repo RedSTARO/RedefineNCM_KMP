@@ -47,6 +47,13 @@ import com.leejlredstar.redefinencm.kmp.player.InMemoryPlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlaybackReportingCoordinator
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlayerStatusRestorer
+import com.leejlredstar.redefinencm.kmp.transition.AnalysisLocalAudio
+import com.leejlredstar.redefinencm.kmp.transition.BeatModelLoader
+import com.leejlredstar.redefinencm.kmp.transition.ProviderAnalysisUrlResolver
+import com.leejlredstar.redefinencm.kmp.transition.SongTransitionCoordinator
+import com.leejlredstar.redefinencm.kmp.transition.TrackAnalyzer
+import com.leejlredstar.redefinencm.kmp.transition.TrackEndsDecoder
+import com.leejlredstar.redefinencm.kmp.transition.UnavailableBeatModelLoader
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.LoginViewModel
@@ -280,6 +287,20 @@ val sharedModule = module {
     // Eager process-wide reporter: playback accounting must not depend on whether a particular
     // screen or ViewModel has already been composed.
     single(createdAtStart = true) { PlaybackReportingCoordinator(get(), get(), get()) }
+
+    // Smart song transitions. A platform without an accelerated beat model or an analysis decoder
+    // binds neither, and gets crossfades placed without beat grids.
+    single {
+        val local = getOrNull<AnalysisLocalAudio>()
+        TrackAnalyzer(
+            decoder = getOrNull<TrackEndsDecoder>() ?: TrackEndsDecoder { _, _, _ -> null },
+            urls = ProviderAnalysisUrlResolver(get(), get()) { id -> local?.uri(id) },
+            modelLoader = getOrNull<BeatModelLoader>()
+                ?: UnavailableBeatModelLoader("这个平台没有可用的 NPU 或 GPU 推理组件"),
+        )
+    }
+    // Eager, like the reporter: a transition must be planned whether or not a screen is open.
+    single(createdAtStart = true) { SongTransitionCoordinator(get(), get(), get()) }
 
     // ViewModels
     // One login page per provider; the provider is the injection parameter.

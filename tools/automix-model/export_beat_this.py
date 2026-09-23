@@ -77,10 +77,16 @@ class FeedForward(nn.Module):
 
 
 class Attention(nn.Module):
-    """(N, L, C) -> (N, L, C), rotary positions 0..L-1 for a fixed L."""
+    """(rows, length, C) -> (rows, length, C), rotary positions 0..length-1.
 
-    def __init__(self, orig, length):
+    Both sizes are fixed at construction and never read from the input: a traced x.shape
+    becomes a runtime shape computation that Core ML's converter cannot lower.
+    """
+
+    def __init__(self, orig, rows, length):
         super().__init__()
+        self.rows = rows
+        self.length = length
         self.h = orig.heads
         self.norm = RMSNorm(orig.norm)
         self.qkv = orig.to_qkv
@@ -99,7 +105,7 @@ class Attention(nn.Module):
         return t * self.cos + torch.matmul(t, self.rot) * self.sin
 
     def forward(self, x):
-        n, length, _ = x.shape
+        n, length = self.rows, self.length
         x = self.norm(x)
         qkv = self.qkv(x)
         hd = self.h * self.d
@@ -120,15 +126,16 @@ class Attention(nn.Module):
 
 
 class PartialFT(nn.Module):
-    def __init__(self, orig, freqs, frames):
+    def __init__(self, orig, channels, freqs, frames):
         super().__init__()
-        self.attn_f = Attention(orig.attnF, freqs)
+        self.c, self.f, self.t = channels, freqs, frames
+        self.attn_f = Attention(orig.attnF, frames, freqs)
         self.ff_f = FeedForward(orig.ffF)
-        self.attn_t = Attention(orig.attnT, frames)
+        self.attn_t = Attention(orig.attnT, freqs, frames)
         self.ff_t = FeedForward(orig.ffT)
 
     def forward(self, x):  # (1, c, f, t)
-        b, c, f, t = x.shape
+        b, c, f, t = 1, self.c, self.f, self.t
         x = x.permute(0, 3, 2, 1).reshape(b * t, f, c)
         x = x + self.attn_f(x)
         x = x + self.ff_f(x)
@@ -149,16 +156,23 @@ class BeatThisExport(nn.Module):
         self.act = Gelu()
         blocks = []
         freqs = 128 // 4  # the stem convolves 128 mel bins with stride 4
+        channels = stem.conv2d.out_channels
         for block in model.frontend.blocks:
             blocks.append(nn.ModuleDict(dict(
-                partial=PartialFT(block.partial, freqs, frames),
+                partial=PartialFT(block.partial, channels, freqs, frames),
                 conv=fold_conv_bn(block.conv2d, block.norm),
             )))
             freqs //= 2
+            channels *= 2
+        self.frames = frames
+        self.out_channels = channels
+        self.out_freqs = freqs
         self.blocks = nn.ModuleList(blocks)
         self.proj = model.frontend.linear
         layers = model.transformer_blocks
-        self.layers = nn.ModuleList([nn.ModuleList([Attention(a, frames), FeedForward(f)]) for a, f in layers.layers])
+        self.layers = nn.ModuleList([
+            nn.ModuleList([Attention(a, 1, frames), FeedForward(f)]) for a, f in layers.layers
+        ])
         self.norm = RMSNorm(layers.norm)
         self.head = model.task_heads.beat_downbeat_lin
 
@@ -169,8 +183,7 @@ class BeatThisExport(nn.Module):
         for block in self.blocks:
             x = block["partial"](x)
             x = self.act(block["conv"](x))
-        b, c, f, t = x.shape
-        x = self.proj(x.permute(0, 3, 1, 2).reshape(b, t, c * f))
+        x = self.proj(x.permute(0, 3, 1, 2).reshape(1, self.frames, self.out_channels * self.out_freqs))
         for attn, ff in self.layers:
             x = attn(x) + x
             x = ff(x) + x

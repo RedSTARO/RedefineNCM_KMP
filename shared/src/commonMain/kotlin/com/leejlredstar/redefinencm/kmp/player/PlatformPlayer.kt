@@ -112,7 +112,7 @@ interface PlatformPlayer {
      * are not its current and next track, and a blend already under way is not replaced. Until
      * the swap the incoming track is invisible: it publishes no state, no queue, no position,
      * no playback occurrence and no stream failure. Any transport or queue action during the
-     * blend ends it — the outgoing track is faded out quickly and the action applies as usual.
+     * blend ends it: the outgoing track is faded out quickly and the action applies as usual.
      */
     fun armTransition(plan: TransitionPlan) {}
 

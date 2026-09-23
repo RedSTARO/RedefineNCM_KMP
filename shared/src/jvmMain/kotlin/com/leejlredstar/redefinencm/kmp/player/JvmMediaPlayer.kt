@@ -2,32 +2,28 @@ package com.leejlredstar.redefinencm.kmp.player
 
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
-import com.leejlredstar.redefinencm.kmp.data.provider.toProviderItemIdOrNull
+import com.leejlredstar.redefinencm.kmp.transition.TransitionCapability
+import com.leejlredstar.redefinencm.kmp.transition.TransitionPlan
+import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
-import com.leejlredstar.redefinencm.kmp.util.SoundQuality
-import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
-import java.net.URI
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import javax.sound.sampled.*
 import kotlin.math.log10
 
 /**
- * Desktop (JVM) [PlatformPlayer] backed by [javax.sound.sampled] with MP3 support
- * via the mp3spi (JavaZOOM) service-provider interface.
+ * Desktop (JVM) [PlatformPlayer]: FFmpeg decodes, [DeckMixer] renders, and a Java Sound
+ * [SourceDataLine] plays.
  *
  * Placeholder URIs are resolved by [StreamUrlResolver]: if the song has been downloaded
- * to `~/Music/RedefineNCM/` in a JVM-decodable format it uses the scanned local file URI
- * directly; otherwise it fetches a supported CDN stream URL via [Repository.getSongUrl].
+ * to `~/Music/RedefineNCM/` in a decodable format it uses the scanned local file URI
+ * directly; otherwise it fetches a CDN stream URL via [Repository.getSongUrl].
  *
- * Position is tracked via system-clock elapsed time to handle variable-bit-rate MP3
- * without relying on frame-level seeking.
+ * Position comes from the line's own count of frames played, mapped back to a track by the
+ * mixer's [PlaybackClock]. A wall clock cannot follow a track whose tempo a song transition is
+ * stretching, nor the second track that takes over halfway through a blend.
  */
 class JvmMediaPlayer(
     private val repo: Repository,
@@ -38,20 +34,25 @@ class JvmMediaPlayer(
 
     // ── URL resolver with offline check ──
 
-    private val resolver = StreamUrlResolver { mediaId ->
+    private fun resolverFor(recordFailures: Boolean) = StreamUrlResolver { mediaId ->
         resolveStreamUrl(
             mediaId = mediaId,
             providers = providers,
             localAudioUri = { id ->
-                // Skip unsupported lossless files: this backend is Java Sound + mp3spi, not a
-                // general FFmpeg-style decoder.
                 DownloadedSongsCache.ensureInitialized()
                 DownloadedSongsCache.snapshot()[id]?.uri?.takeIf(::isJvmPlayableAudioUri)
             },
             onlineUrl = { id, quality -> repo.getSongUrl(id, jvmPlaybackQualityLevel(quality)) },
             quality = { settings.onlinePlaybackQuality() },
+            recordFailures = recordFailures,
         )
     }
+
+    private val resolver = resolverFor(recordFailures = true)
+
+    // The next track of a song transition is prepared before anyone is listening to it; its
+    // failure must not reach the "this track cannot play" channel.
+    private val quietResolver = resolverFor(recordFailures = false)
 
     // ── Queue state ──
 
@@ -71,11 +72,17 @@ class JvmMediaPlayer(
     @Volatile private var resolveJob: Job? = null
     @Volatile private var playbackThread: Thread? = null
     @Volatile private var line: SourceDataLine? = null
-    @Volatile private var audioSource: FfmpegAudioSource? = null
+    @Volatile private var mixer: DeckMixer? = null
+    @Volatile private var clock: PlaybackClock? = null
     @Volatile private var pauseRequested = false
 
-    @Volatile private var playStartNano = 0L
+    /** Where playback resumes when no line is open: after a pause that closed it, or a seek. */
     @Volatile private var seekOffsetMs = 0L
+
+    // ── Song transitions ──
+
+    @Volatile private var armedPlan: TransitionPlan? = null
+    @Volatile private var preparingPlan: TransitionPlan? = null
 
     private var pollJob: Job? = null
 
@@ -107,17 +114,58 @@ class JvmMediaPlayer(
 
     private fun currentQueueModel(): PlayQueue<MediaInfo> = currentQueueClaim().model
 
+    /** The line's position mapped back to a track, or null when nothing is playing. */
+    private fun clockReading(): ClockReading? {
+        val audioLine = line ?: return null
+        val playbackClock = clock ?: return null
+        return playbackClock.at(runCatching { audioLine.longFramePosition }.getOrDefault(0L))
+    }
+
     @Synchronized
-    private fun startPolling() {
+    private fun startPolling(generation: Long) {
         stopPolling()
         pollJob = scope.launch {
             while (isActive) {
-                if (_isPlaying.value && playStartNano > 0) {
-                    val elapsed = (System.nanoTime() - playStartNano) / 1_000_000L
-                    _position.value = seekOffsetMs + elapsed
+                if (_isPlaying.value) {
+                    clockReading()?.let { reading -> onClockReading(reading, generation) }
                 }
                 delay(100)
             }
+        }
+    }
+
+    private fun onClockReading(reading: ClockReading, generation: Long) {
+        val current = currentQueueModel().currentItem ?: return
+        if (reading.mediaId == current.id) {
+            _position.value = reading.positionMs
+            return
+        }
+        publishTransitionSwap(reading, generation)
+    }
+
+    /**
+     * The blend reached the point where the incoming track becomes the current one: advance the
+     * queue through the one publication path, without restarting playback, and count the new
+     * selection. When the queue no longer has that track next, the blend is abandoned instead.
+     */
+    private fun publishTransitionSwap(reading: ClockReading, generation: Long) {
+        synchronized(queueOperationLock) {
+            if (!isPlaybackCurrent(generation)) return
+            val model = currentQueueModel()
+            val current = model.currentItem ?: return
+            if (reading.mediaId == current.id) return
+            val next = model.next(repeat = false)
+            if (next.currentIndex == model.currentIndex || next.currentItem?.id != reading.mediaId) {
+                mixer?.abandonBlend(keepMediaId = current.id)
+                return
+            }
+            mutateQueue(invalidatesPlaybackClaim = true) { it.next(repeat = false) }
+            armedPlan = null
+            seekOffsetMs = reading.positionMs
+            _position.value = reading.positionMs
+            mixer?.audibleDurationMs?.takeIf { it > 0L }?.let { _duration.value = it }
+            // Last, so observers reading currentMedia on this change already see the new track.
+            _playbackOccurrence.advancePlaybackOccurrence()
         }
     }
 
@@ -173,13 +221,15 @@ class JvmMediaPlayer(
 
     private fun stopPlaybackLocked() {
         val threadToStop = playbackThread
-        val sourceToClose = audioSource
+        val mixerToClose = mixer
         val lineToClose = line
 
         playbackThread = null
-        audioSource = null
+        mixer = null
+        clock = null
         line = null
         pauseRequested = false
+        preparingPlan = null
 
         if (threadToStop !== Thread.currentThread()) {
             threadToStop?.interrupt()
@@ -191,10 +241,9 @@ class JvmMediaPlayer(
         } catch (_: Exception) {
         }
         try {
-            sourceToClose?.close()
+            mixerToClose?.close()
         } catch (_: Exception) {
         }
-        playStartNano = 0L
     }
 
     private fun applyVolumeToLine(targetLine: SourceDataLine?, volume: Float = _volume.value) {
@@ -229,7 +278,7 @@ class JvmMediaPlayer(
     ) {
         if (!queueState.isPlaybackClaimCurrent(selectionRevision, media)) return
         val thread = Thread(
-            { runPlayback(generation, streamUrl, startMs) },
+            { runPlayback(generation, media, streamUrl, startMs) },
             "JvmMediaPlayer-audio-$generation",
         ).apply { isDaemon = true }
 
@@ -241,11 +290,11 @@ class JvmMediaPlayer(
         }
 
         thread.start()
-        startPolling()
+        startPolling(generation)
     }
 
-    private fun runPlayback(generation: Long, streamUrl: String, startMs: Long) {
-        var source: FfmpegAudioSource? = null
+    private fun runPlayback(generation: Long, media: MediaInfo, streamUrl: String, startMs: Long) {
+        var deckMixer: DeckMixer? = null
         var audioLine: SourceDataLine? = null
         var completedNaturally = false
 
@@ -258,13 +307,13 @@ class JvmMediaPlayer(
             // FFmpeg seeks the decoder itself, so nothing discards PCM bytes at the head of the
             // stream to approximate a seek; that approximation could misalign the channels.
             var decoded = FfmpegAudioSource.open(streamUrl, startMs)
-            source = decoded
             audioLine = try {
                 openAudioOutputLine(decoded.format, deviceId)
             } catch (rateRefused: Exception) {
                 if (rateRefused !is LineUnavailableException &&
                     rateRefused !is IllegalArgumentException
                 ) {
+                    decoded.close()
                     throw rateRefused
                 }
                 // A master can carry a rate no output line will take. Resampling costs one
@@ -279,23 +328,33 @@ class JvmMediaPlayer(
                     startMs,
                     FfmpegAudioSource.FallbackSampleRate,
                 )
-                source = decoded
-                openAudioOutputLine(decoded.format, deviceId)
+                try {
+                    openAudioOutputLine(decoded.format, deviceId)
+                } catch (failure: Exception) {
+                    decoded.close()
+                    throw failure
+                }
             }
             applyVolumeToLine(audioLine)
+            val playbackClock = PlaybackClock(decoded.sampleRate)
+            deckMixer = DeckMixer(decoded, media.id, startMs, playbackClock)
+            deckMixer.armedPlan = armedPlan?.takeIf { it.outgoingMediaId == media.id }
 
             synchronized(playbackLock) {
                 if (generation != playbackGeneration) return
                 line = audioLine
-                audioSource = decoded
+                mixer = deckMixer
+                clock = playbackClock
             }
 
             decoded.durationMs.takeIf { it > 0L }?.let { _duration.value = it }
 
             if (!isPlaybackCurrent(generation)) return
 
+            val channels = deckMixer.channels
+            val block = FloatArray(BLOCK_FRAMES * channels)
+            val bytes = ByteArray(BLOCK_FRAMES * channels * 2)
             audioLine.start()
-            playStartNano = System.nanoTime()
             seekOffsetMs = startMs
             _position.value = startMs
             _isPlaying.value = true
@@ -319,16 +378,18 @@ class JvmMediaPlayer(
                     shouldStop = true
                 } else if (!audioLine.isRunning) {
                     audioLine.start()
-                    playStartNano = System.nanoTime()
                 }
                 if (shouldStop) break
-                val block = decoded.read()
-                if (block == null) {
+                val frames = deckMixer.render(block, BLOCK_FRAMES)
+                if (frames == 0) {
                     completedNaturally = true
                     break
                 }
                 if (!isPlaybackCurrent(generation)) break
-                audioLine.write(block, 0, block.size)
+                audioLine.write(bytes, 0, floatToPcm16(block, frames, channels, bytes))
+                deckMixer.planNeedingIncoming(PREPARE_LEAD_MS)?.let { plan ->
+                    prepareIncoming(generation, deckMixer, plan)
+                }
             }
 
             if (completedNaturally && isPlaybackCurrent(generation)) {
@@ -353,13 +414,16 @@ class JvmMediaPlayer(
             } catch (_: Exception) {
             }
             try {
-                source?.close()
+                deckMixer?.close()
             } catch (_: Exception) {
             }
             synchronized(playbackLock) {
                 if (generation == playbackGeneration) {
                     if (line === audioLine) line = null
-                    if (audioSource === source) audioSource = null
+                    if (mixer === deckMixer) {
+                        mixer = null
+                        clock = null
+                    }
                     if (playbackThread === Thread.currentThread()) playbackThread = null
                 }
             }
@@ -384,6 +448,36 @@ class JvmMediaPlayer(
                     _state.value = PlayerState.ENDED
                 }
             }
+        }
+    }
+
+    /**
+     * Opens the incoming track of [plan] on an IO thread, in the outgoing track's own sample rate
+     * and channel count, and hands it to [deckMixer]. A failure just means no blend: the mixer
+     * lets the outgoing track play out when the blend's start arrives with nothing to blend in.
+     */
+    private fun prepareIncoming(generation: Long, deckMixer: DeckMixer, plan: TransitionPlan) {
+        if (preparingPlan == plan) return
+        preparingPlan = plan
+        scope.launch(Dispatchers.IO) {
+            val url = runCatching { quietResolver.resolve(plan.incomingMediaId) }.getOrNull()
+            if (url == null || !isPlaybackCurrent(generation)) return@launch
+            val source = runCatching {
+                // Decoded from the start and skipped to the entry rather than seeked. The entry is
+                // a downbeat analysis found by decoding from the start, and a seek into an MP3
+                // lands up to a frame away from it, which is heard as a flam against the other
+                // track.
+                FfmpegAudioSource.open(url, 0L, deckMixer.sampleRate, deckMixer.channels).also { opened ->
+                    opened.skip(plan.incomingEntryMs * deckMixer.sampleRate / 1_000L)
+                }
+            }.onFailure { failure ->
+                System.err.println("JvmMediaPlayer: next track not opened for the blend: ${failure.message}")
+            }.getOrNull() ?: return@launch
+            if (!isPlaybackCurrent(generation) || mixer !== deckMixer) {
+                source.close()
+                return@launch
+            }
+            deckMixer.offerIncoming(plan, source)
         }
     }
 
@@ -453,6 +547,27 @@ class JvmMediaPlayer(
         }
     }
 
+    /**
+     * After a queue change that keeps the current track playing: a plan for a pair that is no
+     * longer current-and-next is dropped, and a blend towards a track that is no longer next is
+     * abandoned, keeping the track the queue says is current.
+     */
+    private fun revalidateTransition() {
+        val model = currentQueueModel()
+        val current = model.currentItem
+        val next = model.next(repeat = false).takeIf { it.currentIndex != model.currentIndex }?.currentItem
+        val plan = armedPlan
+        if (plan != null && (plan.outgoingMediaId != current?.id || plan.incomingMediaId != next?.id)) {
+            armedPlan = null
+            mixer?.let { deckMixer -> if (deckMixer.blendIncomingMediaId == null) deckMixer.armedPlan = null }
+        }
+        val deckMixer = mixer ?: return
+        val incoming = deckMixer.blendIncomingMediaId ?: return
+        if (current != null && incoming != next?.id && incoming != current.id) {
+            deckMixer.abandonBlend(keepMediaId = current.id)
+        }
+    }
+
     // ── PlatformPlayer implementation ──
 
     override fun play() {
@@ -473,7 +588,6 @@ class JvmMediaPlayer(
                 currentLine != null
             ) {
                 pauseRequested = false
-                playStartNano = System.nanoTime()
                 currentLine.start()
                 _isPlaying.value = true
                 _state.value = PlayerState.PLAYING
@@ -484,7 +598,7 @@ class JvmMediaPlayer(
         }
         if (resumed) {
             signalPauseStateChanged()
-            startPolling()
+            startPolling(playbackGeneration)
             return
         }
         synchronized(queueOperationLock) {
@@ -498,8 +612,8 @@ class JvmMediaPlayer(
 
     override fun pause() {
         if (!_isPlaying.value && _state.value != PlayerState.BUFFERING) return
-        if (playStartNano > 0) seekOffsetMs += (System.nanoTime() - playStartNano) / 1_000_000L
-        playStartNano = 0L
+        val currentId = currentQueueModel().currentItem?.id
+        seekOffsetMs = clockReading()?.takeIf { it.mediaId == currentId }?.positionMs ?: _position.value
         _position.value = seekOffsetMs
         val pausedActivePlayback = synchronized(playbackLock) {
             val currentLine = line
@@ -507,6 +621,8 @@ class JvmMediaPlayer(
             if (_isPlaying.value && currentLine != null && thread != null && thread.isAlive) {
                 pauseRequested = true
                 currentLine.stop()
+                // A transport action ends a blend; the track the queue calls current stays.
+                currentId?.let { mixer?.abandonBlend(keepMediaId = it) }
                 _isPlaying.value = false
                 _state.value = PlayerState.PAUSED
                 stopPolling()
@@ -600,6 +716,7 @@ class JvmMediaPlayer(
     override fun addToQueue(item: MediaInfo) {
         synchronized(queueOperationLock) {
             mutateQueue(invalidatesPlaybackClaim = false) { it.addItem(item) }
+            revalidateTransition()
         }
     }
 
@@ -630,6 +747,7 @@ class JvmMediaPlayer(
             if (itemIndex != previous.currentIndex) {
                 // The current track keeps playing; only the rows around it change.
                 mutateQueue(invalidatesPlaybackClaim = false) { it.removeAtPlayOrderPosition(position) }
+                revalidateTransition()
                 return@synchronized
             }
             val autoplay = _isPlaying.value || _state.value == PlayerState.BUFFERING
@@ -641,12 +759,14 @@ class JvmMediaPlayer(
     override fun moveInQueue(from: Int, to: Int) {
         synchronized(queueOperationLock) {
             mutateQueue(invalidatesPlaybackClaim = false) { it.movePlayOrderPosition(from, to) }
+            revalidateTransition()
         }
     }
 
     override fun setShuffleEnabled(enabled: Boolean) {
         synchronized(queueOperationLock) {
             mutateQueue(invalidatesPlaybackClaim = false) { it.setShuffle(enabled) }
+            revalidateTransition()
         }
     }
 
@@ -658,9 +778,42 @@ class JvmMediaPlayer(
         }
     }
 
+    override val transitionCapability: TransitionCapability = TransitionCapability.TEMPO_MATCHED
+
+    override fun armTransition(plan: TransitionPlan) {
+        synchronized(queueOperationLock) {
+            val model = currentQueueModel()
+            val next = model.next(repeat = false).takeIf { it.currentIndex != model.currentIndex }
+            if (model.currentItem?.id != plan.outgoingMediaId || next?.currentItem?.id != plan.incomingMediaId) {
+                return
+            }
+            armedPlan = plan
+            mixer?.let { deckMixer ->
+                if (deckMixer.currentMediaId == plan.outgoingMediaId) deckMixer.armedPlan = plan
+            }
+        }
+    }
+
+    override fun disarmTransition() {
+        synchronized(queueOperationLock) {
+            armedPlan = null
+            mixer?.let { deckMixer ->
+                // A blend already under way finishes; only a plan that has not started is dropped.
+                if (deckMixer.blendIncomingMediaId == null) deckMixer.armedPlan = null
+            }
+        }
+    }
+
     override fun release() {
         cancelPlaybackSession()
         scope.cancel()
+    }
+
+    private companion object {
+        const val BLOCK_FRAMES = 2_048
+
+        /** How long before a blend its incoming track is opened: a CDN round trip plus a skip. */
+        const val PREPARE_LEAD_MS = 12_000L
     }
 }
 

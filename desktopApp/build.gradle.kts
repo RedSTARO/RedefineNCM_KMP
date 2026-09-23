@@ -64,15 +64,28 @@ val verifyDesktopNativePackagingHost by tasks.registering(VerifyDesktopNativePac
 }
 
 val desktopLegalResourcesRoot = layout.buildDirectory.dir("generated/desktopLegalResources")
+// ONNX Runtime's DirectML build for the smart-transition beat model, staged by :shared. Only a
+// Windows package carries it; the app finds it under the resources directory Compose names in
+// `compose.application.resources.dir`.
+val desktopOnnxRuntimeDirectML = project(":shared").layout.buildDirectory.dir("onnxruntime-directml")
+val desktopPackagingIsWindows = desktopPackagingOsName.contains("windows")
+
 val prepareDesktopLegalResources by tasks.registering(Sync::class) {
     group = "distribution"
-    description = "Stages third-party notices and full license texts for Desktop distributions."
+    description = "Stages third-party notices, full license texts and the Windows ONNX Runtime " +
+        "build for Desktop distributions."
     into(desktopLegalResourcesRoot)
     from(rootProject.layout.projectDirectory.file("THIRD_PARTY_NOTICES.md")) {
         into("common")
     }
     from(rootProject.layout.projectDirectory.dir("LICENSES")) {
         into("common/LICENSES")
+    }
+    if (desktopPackagingIsWindows) {
+        dependsOn(":shared:prepareOnnxRuntimeDirectML")
+        from(desktopOnnxRuntimeDirectML) {
+            into("windows/onnxruntime")
+        }
     }
 }
 

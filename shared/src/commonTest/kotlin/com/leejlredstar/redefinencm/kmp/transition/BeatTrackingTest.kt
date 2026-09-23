@@ -85,7 +85,7 @@ class BeatTrackingTest {
         val base = events(period, 60) { i -> if (i % 7 == 0) 0.012 else -0.006 }
         // One spurious beat between two real ones must not bend the tempo.
         val beats = (base.beats.toList() + 10.45).sorted().toDoubleArray()
-        val grid = assertNotNull(fitBeatGrid(BeatEvents(beats, base.downbeats), 60_000L, 30_000L))
+        val grid = assertNotNull(fitBeatGrid(BeatEvents(beats, base.downbeats), 60_000L, 60_000L, 90_000L))
         assertTrue(abs(grid.bpm - 120.0) < 0.2, "bpm ${grid.bpm}")
         assertEquals(4, grid.beatsPerBar)
         assertTrue(grid.confidence > 0.8, "confidence ${grid.confidence}")
@@ -97,7 +97,19 @@ class BeatTrackingTest {
 
     @Test
     fun gridRefusesTooFewBeats() {
-        assertNull(fitBeatGrid(events(0.5, 5), 0L, 3_000L))
+        assertNull(fitBeatGrid(events(0.5, 5), 0L, 0L, 3_000L))
+    }
+
+    @Test
+    fun gridSurvivesFrameQuantisation() {
+        // A 128 BPM (468.75 ms) beat detected on 20 ms frames: intervals alternate 460 and 480.
+        val times = DoubleArray(64) { k -> kotlin.math.round((0.3 + k * 0.46875) * 50.0) / 50.0 }
+        val events = BeatEvents(times, DoubleArray(16) { times[it * 4] })
+        for (edge in GridEdge.entries) {
+            val grid = assertNotNull(fitBeatGrid(events, 0L, 0L, 30_000L, edge))
+            assertTrue(abs(grid.periodMs - 468.75) < 1.0, "$edge period ${grid.periodMs}")
+            assertTrue(grid.confidence > 0.7, "$edge confidence ${grid.confidence}")
+        }
     }
 
     @Test

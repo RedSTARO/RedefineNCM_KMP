@@ -79,7 +79,7 @@ internal class SpectralAnalyzer {
             }
             for (bin in chromaBins.indices) {
                 val pitchClass = chromaBins[bin]
-                if (pitchClass >= 0) chroma[pitchClass] += magnitude[bin] * magnitude[bin]
+                if (pitchClass >= 0) chroma[pitchClass] += magnitude[bin]
             }
         }
         return SpectralFeatures(MelFrames(frameCount, values), chroma)
@@ -114,7 +114,12 @@ internal class SpectralAnalyzer {
         }
     }
 
-    /** Pitch class of each FFT bin between C2 and C7, or -1 outside the range chroma uses. */
+    /**
+     * Pitch class of each FFT bin the key estimate uses, or -1. A 1024-point bin at 22 050 Hz is
+     * 21.5 Hz wide, more than a semitone below about 370 Hz, so the bass bins would each smear
+     * across pitch classes, and the kick drum alone would pull every song towards whichever class
+     * 86 Hz rounds to (F). Only bins narrow enough to name a note are counted.
+     */
     private fun chromaBinMap(): IntArray {
         val binHz = BeatModelFeatures.SAMPLE_RATE_HZ.toDouble() / BeatModelFeatures.FFT_SIZE
         return IntArray(BeatModelFeatures.FFT_SIZE / 2 + 1) { bin ->
@@ -129,8 +134,8 @@ internal class SpectralAnalyzer {
     }
 
     private companion object {
-        const val CHROMA_MIN_HZ = 65.0
-        const val CHROMA_MAX_HZ = 2_100.0
+        const val CHROMA_MIN_HZ = 300.0
+        const val CHROMA_MAX_HZ = 2_500.0
     }
 }
 

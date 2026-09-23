@@ -1,11 +1,23 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.gradle.api.DefaultTask
+import org.gradle.api.GradleException
+import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFiles
+import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
+import org.gradle.api.tasks.testing.Test
+import java.net.URI
+import java.security.MessageDigest
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 
 abstract class GenerateAppBuildInfoTask : DefaultTask() {
     @get:Input
@@ -88,6 +100,95 @@ abstract class GenerateWebVersionManifestTask : DefaultTask() {
     }
 }
 
+/**
+ * Stages ONNX Runtime's DirectML build for the Windows desktop app: `onnxruntime.dll` and
+ * `onnxruntime_providers_shared.dll` from Microsoft's MIT-licensed NuGet package, pinned by
+ * SHA-256, next to the Java binding's own JNI library from the Maven jar. DirectML.dll is not
+ * staged: the build loads the copy Windows ships in System32, so nothing proprietary is
+ * redistributed with this AGPL application.
+ */
+abstract class PrepareOnnxRuntimeDirectMLTask : DefaultTask() {
+    @get:Input
+    abstract val packageUrl: Property<String>
+
+    @get:Input
+    abstract val packageSha256: Property<String>
+
+    @get:InputFiles
+    abstract val javaBindingJar: ConfigurableFileCollection
+
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    @TaskAction
+    fun prepare() {
+        val output = outputDirectory.get().asFile
+        output.deleteRecursively()
+        output.mkdirs()
+        val bytes = URI(packageUrl.get()).toURL().openStream().use { it.readBytes() }
+        val digest = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+        if (digest != packageSha256.get()) {
+            throw GradleException("ONNX Runtime DirectML package checksum mismatch: $digest")
+        }
+        val wanted = mapOf(
+            "runtimes/win-x64/native/onnxruntime.dll" to "onnxruntime.dll",
+            "runtimes/win-x64/native/onnxruntime_providers_shared.dll" to "onnxruntime_providers_shared.dll",
+            "LICENSE" to "LICENSE-onnxruntime.txt",
+        )
+        ZipInputStream(bytes.inputStream()).use { zip ->
+            generateSequence { zip.nextEntry }.forEach { entry ->
+                wanted[entry.name]?.let { name -> output.resolve(name).writeBytes(zip.readBytes()) }
+            }
+        }
+        ZipFile(javaBindingJar.singleFile).use { jar ->
+            val jni = jar.getEntry("ai/onnxruntime/native/win-x64/onnxruntime4j_jni.dll")
+                ?: throw GradleException("ONNX Runtime Java jar has no Windows JNI library")
+            jar.getInputStream(jni).use { output.resolve("onnxruntime4j_jni.dll").writeBytes(it.readBytes()) }
+        }
+        wanted.values.forEach { name ->
+            if (!output.resolve(name).isFile) throw GradleException("ONNX Runtime package is missing $name")
+        }
+    }
+}
+
+/**
+ * Copies ONNX Runtime's Java jar without the native libraries a host cannot use and without their
+ * debug symbols. Plain java.util.zip rather than a Jar task over zipTree(): the configuration cache
+ * cannot serialise a script closure that calls back into the project.
+ */
+abstract class StripOnnxRuntimeNativesTask : DefaultTask() {
+    @get:InputFiles
+    abstract val sourceJar: ConfigurableFileCollection
+
+    /** Native path prefix to keep, such as `ai/onnxruntime/native/osx-aarch64/`; empty keeps none. */
+    @get:Input
+    abstract val keptNativePrefix: Property<String>
+
+    @get:OutputFile
+    abstract val outputJar: RegularFileProperty
+
+    @TaskAction
+    fun strip() {
+        val kept = keptNativePrefix.get()
+        val target = outputJar.get().asFile
+        target.parentFile.mkdirs()
+        ZipFile(sourceJar.singleFile).use { source ->
+            ZipOutputStream(target.outputStream().buffered()).use { out ->
+                source.entries().asSequence().forEach { entry ->
+                    val name = entry.name
+                    val native = name.startsWith("ai/onnxruntime/native/")
+                    val dropped = name.contains(".dSYM/") ||
+                        (native && !entry.isDirectory && (kept.isEmpty() || !name.startsWith(kept)))
+                    if (dropped) return@forEach
+                    out.putNextEntry(ZipEntry(name))
+                    if (!entry.isDirectory) source.getInputStream(entry).use { it.copyTo(out) }
+                    out.closeEntry()
+                }
+            }
+        }
+    }
+}
+
 val resolvedAppBaseTag = rootProject.extra["redefineNcmBaseTag"] as String
 val resolvedAppBaseVersion = rootProject.extra["redefineNcmBaseVersion"] as String
 val resolvedAppCommitHash = rootProject.extra["redefineNcmCommitHash"] as String
@@ -114,6 +215,43 @@ val bytedecoNativeClassifier = run {
         else -> null
     }
 }
+
+// ONNX Runtime's Java jar carries native libraries for every OS, and debug symbols: about 140 MB
+// unpacked. Desktop packaging keeps only what its host can use: the macOS arm64 library, whose
+// build includes the Core ML execution provider. Windows gets the DirectML build staged separately
+// below. Linux has no accelerated execution provider for the JVM and gets none.
+val onnxRuntimeJava: Configuration by configurations.creating {
+    isTransitive = false
+}
+dependencies {
+    onnxRuntimeJava(libs.onnxruntime)
+}
+val onnxRuntimeKeptNatives: String? = run {
+    val osName = System.getProperty("os.name").lowercase()
+    val architecture = System.getProperty("os.arch").lowercase()
+    val isArm64 = architecture == "aarch64" || architecture == "arm64"
+    if ((osName.contains("mac") || osName.contains("darwin")) && isArm64) "ai/onnxruntime/native/osx-aarch64/" else null
+}
+val hostOnnxRuntimeJar by tasks.registering(StripOnnxRuntimeNativesTask::class) {
+    group = "build"
+    description = "Repackages ONNX Runtime's Java jar with only the native libraries this host ships."
+    sourceJar.from(onnxRuntimeJava)
+    keptNativePrefix.set(onnxRuntimeKeptNatives.orEmpty())
+    outputJar.set(layout.buildDirectory.file("onnxruntime/onnxruntime-${libs.versions.onnxruntimeJava.get()}-host.jar"))
+}
+val onnxRuntimeDirectMLVersion = libs.versions.onnxruntimeDirectml.get()
+val prepareOnnxRuntimeDirectML by tasks.registering(PrepareOnnxRuntimeDirectMLTask::class) {
+    group = "build"
+    description = "Stages ONNX Runtime's DirectML build for the Windows desktop app."
+    packageUrl.set(
+        "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime.directml/" +
+            "$onnxRuntimeDirectMLVersion/microsoft.ml.onnxruntime.directml.$onnxRuntimeDirectMLVersion.nupkg",
+    )
+    packageSha256.set("57e9f11b73437bef7a309496135d4c1f96b1a8e9ddba60013fa27bfc1d788681")
+    javaBindingJar.from(onnxRuntimeJava)
+    outputDirectory.set(layout.buildDirectory.dir("onnxruntime-directml"))
+}
+val isWindowsBuildHost = System.getProperty("os.name").lowercase().contains("windows")
 
 val generateAppBuildInfo by tasks.registering(GenerateAppBuildInfoTask::class) {
     group = "versioning"
@@ -313,17 +451,24 @@ kotlin {
                 }
                 implementation(libs.javacpp)
                 implementation(libs.ffmpeg)
+                // Beat-model inference for smart song transitions; see hostOnnxRuntimeJar.
+                implementation(files(hostOnnxRuntimeJar.flatMap { it.outputJar }))
                 bytedecoNativeClassifier?.let { nativeClassifier ->
                     runtimeOnly("org.bytedeco:javacpp:${libs.versions.javacv.get()}:$nativeClassifier")
                     runtimeOnly("org.bytedeco:ffmpeg:${libs.versions.ffmpeg.get()}:$nativeClassifier")
                 }
             }
         }
+        jvmMain {
+            // The beat model, shared with the browser build, which serves it as a static file.
+            resources.srcDir("src/beatModel/resources")
+        }
         jvmTest.dependencies {
             implementation(libs.ktor.client.mock)
         }
         wasmJsMain {
             resources.srcDir(generateWebVersionManifest)
+            resources.srcDir("src/beatModel/resources")
             dependencies {
                 implementation(libs.kotlinx.browser)
                 implementation(libs.ktor.client.js)
@@ -342,4 +487,17 @@ sqldelight {
 
 dependencies {
     androidRuntimeClasspath(libs.compose.uiTooling)
+}
+
+// On a Windows host the JVM tests can reach the DirectML build; elsewhere the harness skips.
+tasks.withType<Test>().matching { it.name == "jvmTest" }.configureEach {
+    if (isWindowsBuildHost) {
+        dependsOn(prepareOnnxRuntimeDirectML)
+        systemProperty(
+            "redefinencm.onnxruntime.dir",
+            layout.buildDirectory.dir("onnxruntime-directml").get().asFile.absolutePath,
+        )
+    }
+    System.getProperty("redefinencm.harness.audio")?.let { systemProperty("redefinencm.harness.audio", it) }
+    System.getProperty("redefinencm.harness.out")?.let { systemProperty("redefinencm.harness.out", it) }
 }

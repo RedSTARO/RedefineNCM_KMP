@@ -10,8 +10,8 @@ import kotlin.math.sqrt
  * `anchorMs + k * periodMs`, and every [beatsPerBar]th beat starting at [downbeatIndex] is a
  * downbeat.
  *
- * A grid rather than the raw beat list, because beat matching needs to extrapolate — where the
- * next downbeat will be, how far two tracks drift over eight bars — and a raw list answers
+ * A grid rather than the raw beat list, because beat matching needs to extrapolate: where the
+ * next downbeat will be, and how far two tracks drift over eight bars. A raw list answers
  * neither. Songs whose tempo drifts inside the section fit badly and get a low [confidence],
  * which keeps them out of beat matching instead of mismatching them.
  */
@@ -53,39 +53,65 @@ data class BeatGrid(
 private fun floorModLong(x: Long, y: Long): Long = ((x % y) + y) % y
 
 /**
- * Fits a [BeatGrid] to [events], whose times are seconds from [sectionStartMs]; the grid is in
- * track milliseconds. Returns null when there are too few beats to call it a tempo.
+ * Fits a [BeatGrid] to the beats of [events] that fall between [fromMs] and [untilMs]; event
+ * times are seconds from [sectionStartMs], the grid is in track milliseconds. Returns null when
+ * there are too few beats there to call it a tempo.
  *
- * The period starts from the median inter-beat interval, beats are then numbered against it
- * and a least-squares line through (number, time) refines anchor and period together; that is
- * repeated with outliers (more than 40 ms off the line) dropped, which is what keeps one
- * doubled or missed beat from bending a whole section's tempo.
+ * Beats come quantised to the model's 20 ms frames, so a 469 ms beat is detected as 460 and
+ * 480 alternately, and the median interval alone can be 2 % off. Numbering a whole section
+ * against a period that far off slips a beat halfway through, and no least-squares line survives
+ * the slip. So the fit starts from the eight beats at [growFrom]'s end of the region, where a 2 %
+ * error cannot slip, and doubles the span it numbers and refits until it covers the region. At
+ * every step beats more than 40 ms off the line are left out, which is what keeps a doubled or
+ * missed beat from bending the tempo.
+ *
+ * [confidence][BeatGrid.confidence] is the share of the region's expected beats that sit on the
+ * grid. Only the region is scored because only the region is blended: a song whose tempo
+ * changes after its first thirty seconds still has a usable grid for handing over into it.
  */
-fun fitBeatGrid(events: BeatEvents, sectionStartMs: Long, sectionLengthMs: Long): BeatGrid? {
-    val beats = events.beats.map { sectionStartMs + it * 1000.0 }
-    if (beats.size < MIN_BEATS) return null
-    val intervals = beats.zipWithNext { a, b -> b - a }.sorted()
+fun fitBeatGrid(
+    events: BeatEvents,
+    sectionStartMs: Long,
+    fromMs: Long,
+    untilMs: Long,
+    growFrom: GridEdge = GridEdge.START,
+): BeatGrid? {
+    val beats = events.beats.map { sectionStartMs + it * 1000.0 }.filter { it >= fromMs && it <= untilMs }
+    if (beats.size < MIN_BEATS || untilMs <= fromMs) return null
+    val intervals = beats.zipWithNext { a, b -> b - a }.filter { it in MIN_PERIOD_MS..MAX_PERIOD_MS }.sorted()
+    if (intervals.isEmpty()) return null
     var period = intervals[intervals.size / 2]
-    if (period !in MIN_PERIOD_MS..MAX_PERIOD_MS) return null
-    var anchor = beats.first()
-    var inliers = beats
-    repeat(3) {
-        val indexed = inliers.map { t -> ((t - anchor) / period).roundToLong() to t }
-        val fit = leastSquares(indexed) ?: return null
+    val ordered = if (growFrom == GridEdge.START) beats else beats.asReversed()
+    var anchor = ordered.first()
+    var span = SEED_BEATS
+    var inliers: List<Double>
+    while (true) {
+        val window = ordered.take(span)
+        val numbered = window.map { t -> ((t - anchor) / period).roundToLong() to t }
+            .filter { (k, t) -> abs(t - (anchor + k * period)) <= INLIER_TOLERANCE_MS || span == SEED_BEATS }
+        val fit = leastSquares(numbered) ?: return null
         anchor = fit.first
         period = fit.second
-        inliers = beats.filter { t ->
-            val k = ((t - anchor) / period).roundToLong()
-            abs(t - (anchor + k * period)) <= INLIER_TOLERANCE_MS
-        }
-        if (inliers.size < MIN_BEATS) return null
+        if (period !in MIN_PERIOD_MS..MAX_PERIOD_MS) return null
+        if (span >= ordered.size) break
+        span = minOf(ordered.size, span * 2)
+    }
+    // A last pass over every beat in the region with the refined grid.
+    inliers = beats.filter { t ->
+        val k = ((t - anchor) / period).roundToLong()
+        abs(t - (anchor + k * period)) <= INLIER_TOLERANCE_MS
+    }
+    if (inliers.size < MIN_BEATS) return null
+    leastSquares(inliers.map { t -> ((t - anchor) / period).roundToLong() to t })?.let { (a, p) ->
+        anchor = a
+        period = p
     }
     if (period !in MIN_PERIOD_MS..MAX_PERIOD_MS) return null
-    // Keep the anchor near the section so beatTimeMs() stays well-conditioned.
-    val shift = ((sectionStartMs - anchor) / period).roundToLong()
+    // Keep the anchor near the region so beatTimeMs() stays well-conditioned.
+    val shift = ((fromMs - anchor) / period).roundToLong()
     anchor += shift * period
 
-    val expected = (sectionLengthMs / period).coerceAtLeast(1.0)
+    val expected = ((untilMs - fromMs) / period).coerceAtLeast(1.0)
     val residuals = inliers.map { t ->
         val k = ((t - anchor) / period).roundToLong()
         t - (anchor + k * period)
@@ -94,9 +120,10 @@ fun fitBeatGrid(events: BeatEvents, sectionStartMs: Long, sectionLengthMs: Long)
     val coverage = (inliers.size / expected).coerceIn(0.0, 1.0)
     val confidence = (coverage * (1.0 - rms / INLIER_TOLERANCE_MS)).coerceIn(0.0, 1.0)
 
-    val downbeatIndices = events.downbeats.map { d ->
-        (((sectionStartMs + d * 1000.0) - anchor) / period).roundToLong()
-    }
+    val downbeatIndices = events.downbeats
+        .map { sectionStartMs + it * 1000.0 }
+        .filter { it >= fromMs && it <= untilMs }
+        .map { d -> ((d - anchor) / period).roundToLong() }
     var bestMeter = 4
     var bestPhase = 0
     var bestShare = 0.0
@@ -124,6 +151,9 @@ fun fitBeatGrid(events: BeatEvents, sectionStartMs: Long, sectionLengthMs: Long)
         downbeatConfidence = bestShare,
     )
 }
+
+/** Which end of a region a grid fit grows from: the end a transition happens at. */
+enum class GridEdge { START, END }
 
 private fun leastSquares(points: List<Pair<Long, Double>>): Pair<Double, Double>? {
     val n = points.size.toDouble()
@@ -156,6 +186,7 @@ fun tempoRatio(outgoing: BeatGrid, incoming: BeatGrid): Double? {
 }
 
 private const val MIN_BEATS = 8
+private const val SEED_BEATS = 8
 private const val MIN_PERIOD_MS = 240.0   // 250 BPM
 private const val MAX_PERIOD_MS = 1_200.0 // 50 BPM
 private const val INLIER_TOLERANCE_MS = 40.0

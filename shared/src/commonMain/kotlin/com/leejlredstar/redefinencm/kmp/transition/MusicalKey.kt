@@ -6,7 +6,7 @@ import kotlin.math.sqrt
 
 /**
  * A section's most likely key, from its pitch-class energy correlated against the
- * Krumhansl–Kessler major and minor profiles.
+ * Krumhansl-Kessler major and minor profiles.
  *
  * This is the classic estimator, right on roughly two songs in three for pop; [strength] (the
  * winning correlation) lets the planner trust it only when it is clear. It decides one thing:

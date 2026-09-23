@@ -48,9 +48,9 @@ class SpectralFeaturesTest {
     @Test
     fun chromaFindsTheSineTonic() {
         val sr = BeatModelFeatures.SAMPLE_RATE_HZ.toDouble()
-        // A3, C#4 and E4: an A major triad.
+        // A4, C#5 and E5: an A major triad.
         val signal = FloatArray(BeatModelFeatures.SAMPLE_RATE_HZ * 3) { i ->
-            (sin(2 * PI * 220.0 * i / sr) + sin(2 * PI * 277.18 * i / sr) + sin(2 * PI * 329.63 * i / sr))
+            (sin(2 * PI * 440.0 * i / sr) + sin(2 * PI * 554.37 * i / sr) + sin(2 * PI * 659.26 * i / sr))
                 .toFloat() / 3f
         }
         val chroma = SpectralAnalyzer().analyze(signal).chroma

@@ -34,8 +34,8 @@ data class SongTransitionPreferences(
 /**
  * Plans the hand-over from the current track to the next one and arms it on the player.
  *
- * It owns no audio. The player executes a plan — starting the next track under the current one
- * at the planned moment, and making it current halfway through — because only the player knows
+ * It owns no audio. The player executes a plan, starting the next track under the current one
+ * at the planned moment and making it current halfway through, because only the player knows
  * where playback really is. Everything that decides the plan lives here, in common code:
  * reading the preference, analysing the two tracks, and choosing between a beat-matched blend,
  * a placed crossfade, or nothing.
@@ -172,9 +172,14 @@ class SongTransitionCoordinator(
     }
 }
 
+/** A platform's own copy of a downloaded NetEase track, in a form its analysis decoder opens. */
+fun interface AnalysisLocalAudio {
+    suspend fun uri(neteaseId: Long): String?
+}
+
 /**
  * Where to read a track for analysis: a local download when there is one, otherwise the lowest
- * quality the provider serves — analysis needs rhythm and loudness, not fidelity, and the lowest
+ * quality the provider serves. Analysis needs rhythm and loudness, not fidelity, and the lowest
  * tier costs a fraction of the bandwidth.
  *
  * It asks the provider directly rather than through [MusicProviderRegistry.streamUrl], which

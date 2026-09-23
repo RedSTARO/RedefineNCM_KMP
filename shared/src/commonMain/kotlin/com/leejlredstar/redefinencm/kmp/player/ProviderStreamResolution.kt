@@ -4,6 +4,8 @@ import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderItemId
 import com.leejlredstar.redefinencm.kmp.data.provider.StreamFailureReason
+import com.leejlredstar.redefinencm.kmp.data.provider.StreamResolution
+import kotlinx.coroutines.CancellationException
 import com.leejlredstar.redefinencm.kmp.data.provider.toProviderItemIdOrNull
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
@@ -22,12 +24,24 @@ import com.leejlredstar.redefinencm.kmp.util.SoundQuality
  * time is a crash rather than a skipped track. A platform resolver must not parse the media id
  * with `mediaId.toLong()`, which throws on a composite id like `qq:0039MnYb0qxYhV`.
  */
-suspend fun MusicProviderRegistry.streamUrlForForeignProvider(itemId: ProviderItemId): String? =
-    if (itemId.provider == MusicProviderId.NETEASE) {
-        null
-    } else {
-        streamUrl(itemId, playbackQuality())
+suspend fun MusicProviderRegistry.streamUrlForForeignProvider(
+    itemId: ProviderItemId,
+    recordFailures: Boolean = true,
+): String? = when {
+    itemId.provider == MusicProviderId.NETEASE -> null
+    recordFailures -> streamUrl(itemId, playbackQuality())
+    else -> {
+        val provider = this[itemId.provider]
+        val resolution = try {
+            provider?.resolveStream(itemId, playbackQuality())
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            null
+        }
+        (resolution as? StreamResolution.Playable)?.url
     }
+}
 
 /**
  * The stream-resolution order every platform player follows.
@@ -48,15 +62,21 @@ suspend fun resolveStreamUrl(
     localAudioUri: suspend (neteaseId: Long) -> String?,
     onlineUrl: suspend (neteaseId: Long, quality: SoundQuality) -> String?,
     quality: () -> SoundQuality,
+    // False for a track the player prepares ahead of time, such as the next track of a song
+    // transition: it is not playing, so its failure is not the "this track cannot play" the
+    // now-playing screen reports. It is resolved again, recording, if it is ever played.
+    recordFailures: Boolean = true,
 ): String? {
     val itemId = mediaId.toProviderItemIdOrNull() ?: return null
     // Other providers carry their own quality ladders and have no local-download support yet.
-    val neteaseId = itemId.neteaseIdOrNull ?: return providers.streamUrlForForeignProvider(itemId)
+    val neteaseId = itemId.neteaseIdOrNull
+        ?: return providers.streamUrlForForeignProvider(itemId, recordFailures)
     localAudioUri(neteaseId)?.let { local ->
-        providers.clearStreamFailure(mediaId)
+        if (recordFailures) providers.clearStreamFailure(mediaId)
         return local
     }
     val url = onlineUrl(neteaseId, quality())
+    if (!recordFailures) return url
     if (url == null) {
         providers.recordStreamFailure(mediaId, MusicProviderId.NETEASE, StreamFailureReason.NO_SOURCE)
     } else {

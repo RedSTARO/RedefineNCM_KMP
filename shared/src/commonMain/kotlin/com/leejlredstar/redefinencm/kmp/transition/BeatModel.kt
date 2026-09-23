@@ -48,7 +48,7 @@ sealed interface BeatModelAvailability {
 
 /**
  * Loads the platform's model on the best accelerator it has: NPU first, GPU second, never the
- * CPU. Each target implements it over its own runtime — LiteRT on Android, Core ML on iOS, ONNX
+ * CPU. Each target implements it over its own runtime: LiteRT on Android, Core ML on iOS, ONNX
  * Runtime with DirectML or Core ML on the desktop, ONNX Runtime Web with WebNN or WebGPU in the
  * browser.
  */

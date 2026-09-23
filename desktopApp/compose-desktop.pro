@@ -111,3 +111,9 @@
 # Neither is loaded by the Desktop runtime, and their Maven/OSGi APIs are deliberately absent.
 -dontwarn org.bytedeco.javacpp.tools.**
 -dontwarn org.osgi.annotation.**
+
+# ONNX Runtime's JNI library looks up its Java classes, fields and methods by name (OnnxTensor,
+# OrtSession$Result, OrtException, the EP device wrappers, ...). Obfuscating or shrinking any of
+# them breaks the native side with a NoSuchMethodError at the first inference.
+-keep class ai.onnxruntime.** { *; }
+-dontwarn ai.onnxruntime.**

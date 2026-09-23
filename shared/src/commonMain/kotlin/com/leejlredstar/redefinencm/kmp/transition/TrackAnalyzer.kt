@@ -19,6 +19,9 @@ import kotlin.time.TimeSource
 
 private val RETRY_AFTER = 5.minutes
 
+/** How much of each end's music the beat grid is fitted to. */
+private const val GRID_FOCUS_MS = 30_000L
+
 /** Where the beat model stands, for the Settings row that explains what smart transitions use. */
 sealed interface BeatAcceleratorState {
     /** Not asked for yet: smart transitions have not needed it this session. */
@@ -45,8 +48,8 @@ fun interface AnalysisUrlResolver {
 /**
  * Analyses the two ends of a track once and remembers the answer.
  *
- * Results are cached in memory by media id (never the URL — stream URLs expire and are never
- * stored), and concurrent requests for the same track share one decode. The beat model is
+ * Results are cached in memory by media id, never by URL, because stream URLs expire and are
+ * never stored. Concurrent requests for the same track share one decode. The beat model is
  * loaded on first use and kept; when it cannot be loaded on an NPU or GPU, analysis still runs
  * and simply carries no beat grids.
  */
@@ -127,23 +130,40 @@ class TrackAnalyzer(
             TrackAnalysis(
                 mediaId = media.id,
                 durationMs = duration,
-                head = decoded.head?.let { analyzeSection(it, beatModel) },
-                tail = decoded.tail?.let { analyzeSection(it, beatModel) },
+                head = decoded.head?.let { analyzeSection(it, GridEdge.START, beatModel) },
+                tail = decoded.tail?.let { analyzeSection(it, GridEdge.END, beatModel) },
                 beatAccelerator = beatModel?.accelerator,
             )
         }
     }
 
-    private suspend fun analyzeSection(window: AnalysisWindow, beatModel: BeatActivationModel?): SectionAnalysis {
+    private suspend fun analyzeSection(
+        window: AnalysisWindow,
+        edge: GridEdge,
+        beatModel: BeatActivationModel?,
+    ): SectionAnalysis {
         val energy = EnergyProfile.measure(window.samples, BeatModelFeatures.SAMPLE_RATE_HZ, window.startMs)
         val features = SpectralAnalyzer().analyze(window.samples)
+        val sectionEnd = window.startMs + window.lengthMs
+        // The grid is fitted where a blend can happen: the first half minute of music at the
+        // head, the last half minute of music at the tail.
+        val (focusFrom, focusUntil) = when (edge) {
+            GridEdge.START -> {
+                val from = energy.firstAudibleMs() ?: window.startMs
+                from to minOf(from + GRID_FOCUS_MS, sectionEnd)
+            }
+            GridEdge.END -> {
+                val until = energy.lastAudibleEndMs() ?: sectionEnd
+                maxOf(until - GRID_FOCUS_MS, window.startMs) to until
+            }
+        }
         val grid = beatModel?.let { model ->
             val activations = modelLock.withLock { runBeatModel(model, features.mel) }
-            fitBeatGrid(pickBeatEvents(activations), window.startMs, window.lengthMs)
+            fitBeatGrid(pickBeatEvents(activations), window.startMs, focusFrom, focusUntil, edge)
         }
         return SectionAnalysis(
             startMs = window.startMs,
-            endMs = window.startMs + window.lengthMs,
+            endMs = sectionEnd,
             energy = energy,
             grid = grid,
             key = estimateKey(features.chroma),

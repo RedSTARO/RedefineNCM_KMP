@@ -245,3 +245,63 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Beat This! beat and downbeat tracker
+
+Smart song transitions find beats and downbeats with the `small0` checkpoint of
+[CPJKU/beat_this](https://github.com/CPJKU/beat_this) (Foscarin, Schlüter, Widmer, "Beat This!
+Accurate Beat Tracking Without DBN Postprocessing", ISMIR 2024), commit
+`b95c8ab0c58c2d9fcfd40508ae8dffbc05ac4f5c`. The bundled model files
+(`beat_this_small0_t750.onnx` and its LiteRT and Core ML conversions) are made from that
+checkpoint by `tools/automix-model`. The Kotlin log-mel front end, the chunk split and
+aggregation, and the minimal peak picking are ports of `beat_this.preprocessing`,
+`beat_this.inference` and `beat_this.model.postprocessor`. The model's transformer is adapted
+upstream from Phil Wang's BS-RoFormer, also under the MIT License.
+
+Copyright (c) 2024 Institute of Computational Perception, JKU Linz, Austria
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## ONNX Runtime
+
+The desktop app runs the beat model with [ONNX Runtime](https://github.com/microsoft/onnxruntime)
+through its Java binding (`com.microsoft.onnxruntime:onnxruntime` 1.24.3). The Windows package
+ships the DirectML build of `onnxruntime.dll` and `onnxruntime_providers_shared.dll` from the
+`Microsoft.ML.OnnxRuntime.DirectML` 1.24.4 NuGet package. That build loads `DirectML.dll` from
+Windows itself; the app does not ship DirectML.
+
+Copyright (c) Microsoft Corporation
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

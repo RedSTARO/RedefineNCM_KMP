@@ -6,6 +6,12 @@ import com.leejlredstar.redefinencm.kmp.player.JvmMediaPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.recognition.JvmMicrophoneRecorder
 import com.leejlredstar.redefinencm.kmp.recognition.MicrophoneRecorder
+import com.leejlredstar.redefinencm.kmp.transition.AnalysisLocalAudio
+import com.leejlredstar.redefinencm.kmp.transition.BeatModelLoader
+import com.leejlredstar.redefinencm.kmp.transition.FfmpegTrackEndsDecoder
+import com.leejlredstar.redefinencm.kmp.transition.OnnxBeatModelLoader
+import com.leejlredstar.redefinencm.kmp.transition.TrackEndsDecoder
+import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -30,4 +36,15 @@ actual fun platformModule() = module {
 
     // Java Sound 麦克风输入；录音生命周期由调用协程控制。
     single<MicrophoneRecorder> { JvmMicrophoneRecorder() }
+
+    // Smart song transitions: the beat model on DirectML (Windows) or Core ML (macOS), and the
+    // track ends decoded by the same FFmpeg that plays them.
+    single<BeatModelLoader> { OnnxBeatModelLoader() }
+    single<TrackEndsDecoder> { FfmpegTrackEndsDecoder() }
+    single {
+        AnalysisLocalAudio { id ->
+            DownloadedSongsCache.ensureInitialized()
+            DownloadedSongsCache.snapshot()[id]?.uri
+        }
+    }
 }
