@@ -58,7 +58,9 @@ import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -512,12 +514,30 @@ private fun AppContent(
                     ?.title
                     ?.takeIf(String::isNotBlank)
                     ?: "这首歌"
+                // The other provider's copy is offered, never taken without asking.
+                val offerSwitch = nowPlayingViewModel.canOfferSourceSwitch(failure)
                 desktopSnackbarVisible = true
-                try {
-                    snackbarHostState.showSnackbar("无法播放「$title」：${failure.message}")
+                val result = try {
+                    snackbarHostState.showSnackbar(
+                        message = "无法播放「$title」：${failure.message}",
+                        actionLabel = if (offerSwitch) "换源" else null,
+                        duration = if (offerSwitch) SnackbarDuration.Long else SnackbarDuration.Short,
+                    )
                 } finally {
                     desktopSnackbarVisible = false
                 }
+                if (result == SnackbarResult.ActionPerformed) nowPlayingViewModel.switchSourceForCurrent()
+            }
+            val sourceSwitchMessage by nowPlayingViewModel.sourceSwitchMessage.collectAsState()
+            LaunchedEffect(sourceSwitchMessage) {
+                val message = sourceSwitchMessage ?: return@LaunchedEffect
+                desktopSnackbarVisible = true
+                try {
+                    snackbarHostState.showSnackbar(message)
+                } finally {
+                    desktopSnackbarVisible = false
+                }
+                nowPlayingViewModel.consumeSourceSwitchMessage()
             }
 
             // The navigation stays on the pages opened from a tab; it used to vanish on every one,

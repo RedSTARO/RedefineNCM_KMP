@@ -47,6 +47,16 @@ fun List<ProviderTrack>.mergeSameSongs(): List<MergedSearchEntry> {
     return entries
 }
 
+/**
+ * Whether [other] is this song from another provider, by the same strict rule the merged search
+ * rows use. Switching source (换源) relies on it, so a wrong match plays a different recording.
+ */
+fun ProviderTrack.isSameSongAs(other: ProviderTrack): Boolean {
+    if (provider == other.provider) return false
+    val key = sameSongKey() ?: return false
+    return other.sameSongKey() == key && durationsAgree(durationMillis, other.durationMillis)
+}
+
 private fun ProviderTrack.sameSongKey(): Pair<String, String>? {
     val title = title.comparable()
     val artist = artists.firstOrNull()?.name?.comparable().orEmpty()

@@ -68,4 +68,13 @@ class SearchMergingTest {
         ).mergeSameSongs()
         assertEquals(2, entries.size)
     }
+
+    @Test
+    fun aSourceSwitchMatchesOnlyTheSameSongOfAnotherProvider() {
+        val failed = qq("a", "晴天", "周杰伦", 269_000)
+        assertEquals(true, failed.isSameSongAs(ncm(1, "晴天", "周杰伦", 268_000)))
+        assertEquals(false, failed.isSameSongAs(ncm(2, "晴天 (Live)", "周杰伦", 269_000)))
+        assertEquals(false, failed.isSameSongAs(qq("b", "晴天", "周杰伦", 269_000)))
+        assertEquals(false, failed.isSameSongAs(ncm(3, "晴天", "周杰伦", 0)))
+    }
 }

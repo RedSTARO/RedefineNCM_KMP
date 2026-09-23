@@ -8,6 +8,10 @@ import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusic
 import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusicComments
 import com.leejlredstar.redefinencm.kmp.data.local.LocalLibraryStore
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
+import com.leejlredstar.redefinencm.kmp.data.provider.ProviderArtist
+import com.leejlredstar.redefinencm.kmp.data.provider.ProviderTrack
+import com.leejlredstar.redefinencm.kmp.data.provider.isSameSongAs
+import com.leejlredstar.redefinencm.kmp.data.toPlayerMediaInfo
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderCapability
 import com.leejlredstar.redefinencm.kmp.data.provider.StreamFailure
@@ -70,6 +74,16 @@ sealed interface SongWikiUiState {
     /** The track's provider has no song details. */
     data class Unsupported(val mediaId: String) : SongWikiUiState
 }
+
+/**
+ * The first name of a queue item's artist line, which each list joins its own way: "A, B" from
+ * NetEase's lists, "A / B" from the provider-neutral ones.
+ */
+internal fun firstArtistOf(artistLine: String): String =
+    artistLine.split(", ", " / ", "/", "、").first().trim()
+
+/** How many hits of each other provider a source switch looks through for the same song. */
+private const val SourceSwitchSearchLimit = 10
 
 data class FavoriteUiState(
     val mediaId: String? = null,
@@ -155,6 +169,70 @@ class NowPlayingViewModel(
     /** The NetEase song id behind [mediaId]; null for any other provider's track. */
     private fun neteaseSongId(mediaId: String?): Long? =
         mediaId?.toProviderItemIdOrNull()?.neteaseIdOrNull?.takeIf { it > 0L }
+
+    /** The outcome of the last 换源, for the app's snackbar; consumed once shown. */
+    val sourceSwitchMessage = MutableStateFlow<String?>(null)
+
+    fun consumeSourceSwitchMessage() {
+        sourceSwitchMessage.value = null
+    }
+
+    /**
+     * Whether a failed track can be offered in another provider's copy. Not under shuffle: the
+     * players re-shuffle a queue that is set again, so replacing one item would reorder the rest,
+     * and the queue order is the one thing a switch must not change.
+     */
+    fun canOfferSourceSwitch(failure: StreamFailure): Boolean =
+        !player.queueSnapshot.value.shuffleEnabled &&
+            providers.all.any { it.id != failure.provider }
+
+    /**
+     * Plays the same song from another provider in place of the current track, which just failed.
+     *
+     * Only ever run from the snackbar's "换源" — the app never switches on its own, because the
+     * match is by title, first artist and length rather than by id. The match is the strict one the
+     * merged search rows use. The replacement is an ordinary queue item of its provider: a NetEase
+     * replacement is reported to NetEase like any NetEase track (AGENTS.md D6, 2026-09-23).
+     */
+    fun switchSourceForCurrent() {
+        val media = player.currentMedia.value ?: return
+        val failure = playbackFailure.value?.takeIf { it.mediaId == media.id } ?: return
+        if (!canOfferSourceSwitch(failure)) {
+            sourceSwitchMessage.value = "随机播放时不能换源"
+            return
+        }
+        scope.launch {
+            val alternate = withContext(Dispatchers.Default) {
+                findSameSongElsewhere(media, excluding = failure.provider)
+            }
+            if (alternate == null) {
+                sourceSwitchMessage.value = "没有在其他平台找到同一首歌"
+                return@launch
+            }
+            val snapshot = player.queueSnapshot.value
+            val index = snapshot.currentIndex
+            // The queue moved on while the search ran; replacing now would hit another track.
+            if (snapshot.shuffleEnabled || snapshot.items.getOrNull(index)?.id != media.id) return@launch
+            val replacement = alternate.toPlayerMediaInfo(sourceId = media.sourceId)
+            player.setQueue(snapshot.items.toMutableList().also { it[index] = replacement }, index)
+            sourceSwitchMessage.value = "已改用${alternate.provider.displayName}播放「${media.title}」"
+        }
+    }
+
+    private suspend fun findSameSongElsewhere(media: MediaInfo, excluding: MusicProviderId): ProviderTrack? {
+        val original = ProviderTrack(
+            id = media.id.toProviderItemIdOrNull() ?: return null,
+            title = media.title,
+            artists = listOf(ProviderArtist(id = null, name = firstArtistOf(media.artist))),
+            durationMillis = media.duration,
+        )
+        val others = providers.available().filter { it.id != excluding }.associate { it.id to 0 }
+        if (others.isEmpty()) return null
+        return providers.searchPages("${media.title} ${firstArtistOf(media.artist)}", others, SourceSwitchSearchLimit)
+            .filterNot { it.failed }
+            .flatMap { it.tracks }
+            .firstOrNull { original.isSameSongAs(it) }
+    }
 
     private fun supports(mediaId: String?, capability: ProviderCapability): Boolean =
         capability in providers.capabilitiesOf(mediaId)
