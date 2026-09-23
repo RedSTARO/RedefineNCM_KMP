@@ -392,6 +392,41 @@ redesign of the policy rather than a new enum entry, and the gateway's QRC word 
 converting to the YRC shape the pipeline parses. What a signed-in account unlocks above MP3 128 is
 unmeasured.
 
+**Decisions of 2026-09-23 (delegated; in progress).** After the review in
+[docs/MULTI_PROVIDER_REVIEW.md](docs/MULTI_PROVIDER_REVIEW.md) the user asked for every item to be
+changed and delegated the open choices. These bind until a later decision here replaces them:
+
+1. **Capabilities are declared by the provider.** `MusicProvider.capabilities` says which
+   NetEase-era features — lyrics, like, comments, song wiki, credits, download, share link, playback
+   reporting — its tracks support, and screens and view models ask the registry for the current
+   media id's capabilities instead of parsing the id. An unsupported feature is its own state and
+   never an error; "not signed in" stays a separate state from "not supported".
+2. **Providers register once.** Each provider is one `ProviderRegistration` (provider, credential
+   slot, login descriptor, login methods, setting keys); the registries are derived from that list.
+3. **NetEase cannot be switched off.** Home, library, daily songs and reporting are NetEase-bound, so
+   a switch would only hide it from search. Search reports and retries a failing provider on its
+   own instead. The startup rule changes with it: the NetEase login page opens at launch only when
+   no provider holds a signed-in account (it used to open whenever the NetEase cookie was blank).
+4. **Web does not offer QQ sign-in.** A browser cannot send the `Cookie` header the gateway reads, so
+   the QQ card on Web says QQ is reached anonymously, and `QQMusicApi` never attaches the header there.
+5. **The local account owns a provider-neutral library.** Local playlists and local favourites live in
+   new SQLDelight tables keyed by `(provider TEXT, raw_id TEXT)` from their first version, added by a
+   formal migration. They do not wait for the eleven cache tables' provider column — a deliberate
+   reordering of the "Order of work" above, allowed because new tables need no destructive step. The
+   local account's name and library travel with the settings backup; importing replaces playlists
+   with the same id and keeps the rest.
+6. **Switching source (换源) is user-confirmed only.** When a track cannot be played, the app may offer
+   the same song from another provider, matched strictly on normalised title, primary artist and
+   duration; it never switches on its own. The replacement is an ordinary queue item of its provider,
+   so a NetEase replacement is reported like any other NetEase track.
+7. **A provider's own lyrics are the "backend" source for its tracks.** QQ tracks read QQ lyrics from
+   the gateway, QRC converted to YRC for word timing, and are never cached. AMLL TTML is NetEase-only,
+   so under `TTML_ONLY` a QQ track has no lyrics and makes no request. Cross-provider lyric fallback
+   is not done: it would apply fuzzy matches automatically and needs the privacy gate redesigned.
+8. **Merged search may queue several providers.** Playing from the merged view keeps the mixed queue;
+   capabilities and a provider badge make the mix visible.
+9. **One account per provider stays locked**, as above.
+
 ---
 
 ## Toolchain
