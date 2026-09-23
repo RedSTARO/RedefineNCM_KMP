@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderTrack
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
 import com.leejlredstar.redefinencm.kmp.data.api.dto.UserPlaylistEach
@@ -49,6 +50,7 @@ import com.leejlredstar.redefinencm.kmp.data.toPlayerMediaInfo
 import com.leejlredstar.redefinencm.kmp.download.DownloadTaskStatus
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
+import com.leejlredstar.redefinencm.kmp.ui.component.ProviderBadge
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveCacheHint
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveArtwork
@@ -142,11 +144,12 @@ fun rememberSongRowActions(
 ): List<SongRowAction> {
     val player = koinInject<PlatformPlayer>()
     val downloadManager = koinInject<SongDownloadManager>()
+    val providers = koinInject<MusicProviderRegistry>()
     // LocalClipboard needs a platform ClipEntry and common code has no plain-text factory for
     // one; the text-only manager does the same job on every target.
     @Suppress("DEPRECATION")
     val clipboard = LocalClipboardManager.current
-    return remember(media, neteaseSong, playlistId, player, downloadManager, clipboard) {
+    return remember(media, neteaseSong, playlistId, player, downloadManager, providers, clipboard) {
         buildList {
             add(SongRowAction("加入播放队列", AppIcons.PlaylistAdd) { player.addToQueue(media) })
             if (neteaseSong != null) {
@@ -155,11 +158,16 @@ fun rememberSongRowActions(
                         downloadManager.enqueueSongs(listOf(neteaseSong), playlistId)
                     },
                 )
+            }
+            // Every provider with a web page for the song gets the link, not only NetEase.
+            providers.shareUrl(media.id)?.let { url ->
                 add(
                     SongRowAction("复制歌曲链接", AppIcons.Link) {
-                        clipboard.setText(AnnotatedString(neteaseSongUrl(neteaseSong.id)))
+                        clipboard.setText(AnnotatedString(url))
                     },
                 )
+            }
+            if (neteaseSong != null) {
                 // The names on a song lead to their pages now that there are pages.
                 neteaseSong.ar.filter { it.id != 0L }.take(MaxArtistActions).forEach { artist ->
                     add(
@@ -179,8 +187,6 @@ fun rememberSongRowActions(
         }
     }
 }
-
-internal fun neteaseSongUrl(songId: Long): String = "https://music.163.com/song?id=$songId"
 
 /**
  * Connected-list song row, shared by search results, playlists and the daily list.
@@ -302,19 +308,12 @@ fun SongRow(
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         badge?.let { label ->
-                            Surface(
-                                shape = MaterialTheme.shapes.extraSmall,
-                                color = accentPalette.onQuietContainer.copy(alpha = 0.10f),
+                            ProviderBadge(
+                                label = label,
                                 contentColor = accentPalette.secondaryOnQuietContainer,
+                                containerColor = accentPalette.onQuietContainer.copy(alpha = 0.10f),
                                 modifier = Modifier.padding(end = 6.dp),
-                            ) {
-                                Text(
-                                    text = label,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    maxLines = 1,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
-                                )
-                            }
+                            )
                         }
                         Text(
                             text = artist.ifBlank { "未知歌手" },

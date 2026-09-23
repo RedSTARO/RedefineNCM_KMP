@@ -85,6 +85,14 @@ private fun BoxScope.LyricStateOverlayPanels(
             onAction = onRetry,
             modifier = stateModifier,
         )
+        // Not an error: nothing failed, so there is nothing to retry.
+        is LyricUiState.Unsupported -> ExpressiveStatePanel(
+            title = "暂不支持歌词",
+            message = state.message,
+            icon = AppIcons.FormatQuote,
+            accentPalette = statePalette,
+            modifier = stateModifier,
+        )
         is LyricUiState.Content -> Unit
     }
 }

@@ -70,15 +70,23 @@ class QQMusicApi(
      * here. An empty `purl` — the gateway reports it beside a non-zero `result` — means the track
      * is not available to the configured account at that tier.
      */
-    suspend fun songUrl(mid: String, fileType: Int): String? =
-        fetchData<QQSongUrls>("song/$mid/url") {
+    suspend fun songUrl(mid: String, fileType: Int): String? = songUrlAnswer(mid, fileType)?.url
+
+    /**
+     * The gateway's answer at one file type: null when it could not be reached or errored, and an
+     * answer without a [QQStreamAnswer.url] when QQ serves no copy at that tier. The two are kept
+     * apart so a dead gateway is not reported as a track nobody may play.
+     */
+    suspend fun songUrlAnswer(mid: String, fileType: Int): QQStreamAnswer? {
+        val urls = fetchData<QQSongUrls>("song/$mid/url") {
             parameter("file_type", fileType)
-        }
-            ?.data
-            ?.firstOrNull { it.mid == mid }
-            ?.purl
-            ?.takeIf(String::isNotBlank)
-            ?.let { StreamHost + it }
+        } ?: return null
+        val item = urls.data.firstOrNull { it.mid == mid }
+        return QQStreamAnswer(
+            url = item?.purl?.takeIf(String::isNotBlank)?.let { StreamHost + it },
+            result = item?.result ?: 0,
+        )
+    }
 
     // The login routes obtain a new account, so a refusal there is never a reason to renew the old
     // one; the renewal routes are what a refusal elsewhere calls, so they must not call back.
@@ -293,6 +301,12 @@ data class QQSongUrlItem(
     val mid: String = "",
     val purl: String = "",
     val result: Int = 0,
+)
+
+/** See [QQMusicApi.songUrlAnswer]; [result] is QQ's own code beside an empty path, 0 otherwise. */
+data class QQStreamAnswer(
+    val url: String?,
+    val result: Int,
 )
 
 @Serializable

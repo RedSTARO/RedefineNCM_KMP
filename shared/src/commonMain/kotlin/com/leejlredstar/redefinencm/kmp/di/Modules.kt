@@ -237,7 +237,7 @@ val sharedModule = module {
     // Single — the now-playing state is inherently global (only one song plays at a time).
     // The eager status restorer resolves this singleton after settings and queue restoration, so
     // restored/background playback also resolves lyrics without waiting for a screen composition.
-    single { NowPlayingViewModel(get(), get(), get(), get(), get(), get()) }
+    single { NowPlayingViewModel(get(), get(), get(), get(), get(), get(), get()) }
     // Factory — recording and cancellation are scoped to one pushed recognition page.
     factory { SongRecognitionViewModel(get(), get(), get()) }
 }

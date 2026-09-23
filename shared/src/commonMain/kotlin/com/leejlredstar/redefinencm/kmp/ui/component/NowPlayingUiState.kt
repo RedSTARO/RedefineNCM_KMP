@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusic
+import com.leejlredstar.redefinencm.kmp.data.provider.ProviderCapability
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlayerQueueSnapshot
@@ -31,6 +32,8 @@ internal data class NowPlayingUiState(
     val commentsLoadError: String?,
     val commentsFromCache: Boolean,
     val favoriteState: FavoriteUiState,
+    /** What the current track's provider offers; see [ProviderCapability]. */
+    val capabilities: Set<ProviderCapability>,
 ) {
     val playList: List<MediaInfo> get() = queueSnapshot.items
     val currentIndex: Int get() = queueSnapshot.currentIndex
@@ -43,6 +46,15 @@ internal data class NowPlayingUiState(
 
     val isFavorite: Boolean
         get() = favoriteState.mediaId == media?.id && favoriteState.isLiked
+
+    /** Whether the heart does anything for this track's provider. */
+    val canFavorite: Boolean get() = hasMedia && ProviderCapability.LIKE in capabilities
+
+    /** Whether this track's provider has comments to show. */
+    val canComment: Boolean get() = hasMedia && ProviderCapability.COMMENTS in capabilities
+
+    /** The provider to name beside the artist, when it is not NetEase. */
+    val providerBadge: String? get() = foreignProviderName(media?.id)
 
     /** A player that has not reported a duration yet still knows one from the queue metadata. */
     val totalDuration: Long
@@ -76,6 +88,7 @@ internal fun rememberNowPlayingUiState(
     val commentsLoadError by viewModel.commentsLoadError.collectAsState()
     val commentsFromCache by viewModel.commentsFromCache.collectAsState()
     val favoriteState by viewModel.favoriteUiState.collectAsState()
+    val capabilities by viewModel.currentCapabilities.collectAsState()
     return remember(
         media,
         isPlaying,
@@ -87,6 +100,7 @@ internal fun rememberNowPlayingUiState(
         commentsLoadError,
         commentsFromCache,
         favoriteState,
+        capabilities,
     ) {
         NowPlayingUiState(
             media = media,
@@ -99,6 +113,7 @@ internal fun rememberNowPlayingUiState(
             commentsLoadError = commentsLoadError,
             commentsFromCache = commentsFromCache,
             favoriteState = favoriteState,
+            capabilities = capabilities,
         )
     }
 }

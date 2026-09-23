@@ -23,6 +23,9 @@ class NeteaseProvider(
 ) : MusicProvider {
     override val id: MusicProviderId = MusicProviderId.NETEASE
 
+    /** Every feature was built for NetEase, so it has them all. */
+    override val capabilities: Set<ProviderCapability> = ProviderCapability.entries.toSet()
+
     /**
      * Always available.
      *
@@ -77,17 +80,31 @@ class NeteaseProvider(
         ).takeIf { !it.isEmpty }
     }
 
-    override suspend fun streamUrl(id: ProviderItemId, quality: SoundQualityPreference): String? {
-        val numericId = id.neteaseIdOrNull ?: return null
+    override suspend fun resolveStream(
+        id: ProviderItemId,
+        quality: SoundQualityPreference,
+    ): StreamResolution {
+        val numericId = id.neteaseIdOrNull
+            ?: return StreamResolution.Failed(StreamFailureReason.NO_SOURCE)
         // The stored setting is the full NetEase ladder, which the backend accepts verbatim.
         // Round-tripping it through SoundQualityPreference would collapse the spatial tiers.
         val storedQuality = settings.getStringAsync(
             SettingKeys.ONLINE_PLAY_QUALITY,
             quality.neteaseQualityName(),
         )
+        // The repository answers null both when the backend is down and when it has no URL for
+        // the track; "returned no address" is true of both.
         return repository.getSongUrl(numericId, storedQuality)
+            ?.let(StreamResolution::Playable)
+            ?: StreamResolution.Failed(StreamFailureReason.NO_SOURCE)
     }
+
+    override fun shareUrl(id: ProviderItemId): String? =
+        id.neteaseIdOrNull?.let(::neteaseSongPageUrl)
 }
+
+/** The public web page of a NetEase song. */
+internal fun neteaseSongPageUrl(songId: Long): String = "https://music.163.com/song?id=$songId"
 
 private fun SoundQualityPreference.neteaseQualityName(): String = when (this) {
     SoundQualityPreference.STANDARD -> "standard"

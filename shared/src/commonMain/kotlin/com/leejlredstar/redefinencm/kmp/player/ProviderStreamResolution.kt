@@ -3,6 +3,7 @@ package com.leejlredstar.redefinencm.kmp.player
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderItemId
+import com.leejlredstar.redefinencm.kmp.data.provider.StreamFailureReason
 import com.leejlredstar.redefinencm.kmp.data.provider.toProviderItemIdOrNull
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
@@ -38,7 +39,8 @@ suspend fun MusicProviderRegistry.streamUrlForForeignProvider(itemId: ProviderIt
  * store at all, and Desktop asks the backend for a different quality name than the others.
  *
  * Returning null means "nothing to play"; the caller treats that as a skipped selection rather
- * than an error.
+ * than an error. Why there was nothing is recorded in [MusicProviderRegistry.streamFailures] under
+ * [mediaId], where the now-playing screen reads it; a URL clears it.
  */
 suspend fun resolveStreamUrl(
     mediaId: String,
@@ -50,8 +52,17 @@ suspend fun resolveStreamUrl(
     val itemId = mediaId.toProviderItemIdOrNull() ?: return null
     // Other providers carry their own quality ladders and have no local-download support yet.
     val neteaseId = itemId.neteaseIdOrNull ?: return providers.streamUrlForForeignProvider(itemId)
-    localAudioUri(neteaseId)?.let { return it }
-    return onlineUrl(neteaseId, quality())
+    localAudioUri(neteaseId)?.let { local ->
+        providers.clearStreamFailure(mediaId)
+        return local
+    }
+    val url = onlineUrl(neteaseId, quality())
+    if (url == null) {
+        providers.recordStreamFailure(mediaId, MusicProviderId.NETEASE, StreamFailureReason.NO_SOURCE)
+    } else {
+        providers.clearStreamFailure(mediaId)
+    }
+    return url
 }
 
 /** The configured online playback quality, falling back when the stored name is unrecognised. */

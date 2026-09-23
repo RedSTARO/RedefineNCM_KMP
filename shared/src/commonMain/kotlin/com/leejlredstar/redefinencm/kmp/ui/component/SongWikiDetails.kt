@@ -149,6 +149,17 @@ private fun SongWikiDetailsContent(
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                 )
             }
+            // The header above is the song's own metadata and still shows; only the wiki is
+            // NetEase's.
+            state is SongWikiUiState.Unsupported -> item(key = "wiki-unsupported") {
+                ExpressiveStatePanel(
+                    title = "暂无更多资料",
+                    message = "这首歌来自不提供歌曲资料的平台。",
+                    icon = AppIcons.Info,
+                    accentPalette = accentPalette,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                )
+            }
             sections.isEmpty() -> item(key = "wiki-empty") {
                 ExpressiveStatePanel(
                     title = "没有更多信息",
@@ -328,6 +339,7 @@ internal fun SongWikiUiState.scopedToMedia(mediaId: String?): SongWikiUiState {
         is SongWikiUiState.Content -> this.mediaId
         is SongWikiUiState.Empty -> this.mediaId
         is SongWikiUiState.Error -> this.mediaId
+        is SongWikiUiState.Unsupported -> this.mediaId
     }
     return if (stateMediaId == mediaId) this else SongWikiUiState.Idle
 }

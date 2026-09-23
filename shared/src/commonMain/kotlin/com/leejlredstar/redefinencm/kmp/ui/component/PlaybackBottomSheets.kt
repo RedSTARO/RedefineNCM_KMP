@@ -345,17 +345,28 @@ private fun QueueRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    text = artist,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (isCurrent) {
-                        accentPalette.secondaryOnContainer
-                    } else {
-                        accentPalette.secondaryOnQuietContainer
-                    },
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                val secondaryColor = if (isCurrent) {
+                    accentPalette.secondaryOnContainer
+                } else {
+                    accentPalette.secondaryOnQuietContainer
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // A queue can mix providers; the other providers' tracks say whose they are.
+                    foreignProviderName(item.id)?.let { label ->
+                        ProviderBadge(
+                            label = label,
+                            contentColor = secondaryColor,
+                            modifier = Modifier.padding(end = 6.dp),
+                        )
+                    }
+                    Text(
+                        text = artist,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = secondaryColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             IconButton(onClick = onRemove) {
                 Icon(AppIcons.Clear, contentDescription = "从队列移除")
@@ -464,6 +475,7 @@ internal fun CommentBottomSheet(
     errorMessage: String? = null,
     onRetry: (() -> Unit)? = null,
     totalCount: Long = 0L,
+    unsupported: Boolean = false,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -480,6 +492,7 @@ internal fun CommentBottomSheet(
             errorMessage = errorMessage,
             onRetry = onRetry,
             totalCount = totalCount,
+            unsupported = unsupported,
         )
     }
 }
@@ -503,7 +516,26 @@ internal fun CommentPanelContent(
     errorMessage: String? = null,
     onRetry: (() -> Unit)? = null,
     totalCount: Long = 0L,
+    /** The track's provider has no comments; the sheet says so instead of "no comments yet". */
+    unsupported: Boolean = false,
 ) {
+    if (unsupported) {
+        Column(modifier) {
+            ExpressiveSectionTitle(
+                text = "歌曲评论",
+                supportingText = "暂不支持",
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+            )
+            ExpressiveStatePanel(
+                title = "暂不支持评论",
+                message = "这首歌来自不提供评论的平台。",
+                icon = AppIcons.Comment,
+                accentPalette = accentPalette,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
+        return
+    }
     val showInitialLoading = isLoading && !hasLoadedData
     val commentEntries = remember(comments) {
         val occurrences = mutableMapOf<String, Int>()

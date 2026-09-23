@@ -26,6 +26,12 @@ class QQProvider(
 ) : MusicProvider {
     override val id: MusicProviderId = MusicProviderId.QQ
 
+    /**
+     * Only a link for now. Lyrics join once the lyric pipeline reads them; likes, comments,
+     * details, downloads and reporting are NetEase features with no QQ counterpart wired.
+     */
+    override val capabilities: Set<ProviderCapability> = setOf(ProviderCapability.SHARE_LINK)
+
     override suspend fun isAvailable(): Boolean =
         settings.getBooleanAsync(SettingKeys.QQ_ENABLED, false) &&
             settings.getStringAsync(SettingKeys.QQ_SERVER, SettingKeys.QQ_SERVER_DEFAULT).isNotBlank()
@@ -95,15 +101,32 @@ class QQProvider(
      * minutes before admitting defeat. The per-attempt bound keeps one slow rung from eating the
      * whole budget; the overall bound caps the walk however many rungs remain.
      */
-    override suspend fun streamUrl(id: ProviderItemId, quality: SoundQualityPreference): String? {
-        if (id.provider != MusicProviderId.QQ || !isAvailable()) return null
+    override suspend fun resolveStream(
+        id: ProviderItemId,
+        quality: SoundQualityPreference,
+    ): StreamResolution {
+        if (id.provider != MusicProviderId.QQ) {
+            return StreamResolution.Failed(StreamFailureReason.NO_SOURCE)
+        }
+        if (!isAvailable()) return StreamResolution.Failed(StreamFailureReason.PROVIDER_DISABLED)
         renewCredentialOnce()
-        return withTimeoutOrNull(StreamResolveBudgetMillis) {
+        var answered = false
+        val url = withTimeoutOrNull(StreamResolveBudgetMillis) {
             quality.qqFileTypeLadder().firstNotNullOfOrNull { fileType ->
-                withTimeoutOrNull(StreamResolveAttemptMillis) { api.songUrl(id.rawId, fileType) }
+                withTimeoutOrNull(StreamResolveAttemptMillis) { api.songUrlAnswer(id.rawId, fileType) }
+                    ?.also { answered = true }
+                    ?.url
             }
         }
+        return when {
+            url != null -> StreamResolution.Playable(url)
+            answered -> StreamResolution.Failed(StreamFailureReason.NO_SOURCE)
+            else -> StreamResolution.Failed(StreamFailureReason.UNREACHABLE)
+        }
     }
+
+    override fun shareUrl(id: ProviderItemId): String? =
+        id.takeIf { it.provider == MusicProviderId.QQ }?.let { "https://y.qq.com/n/ryqq/songDetail/${it.rawId}" }
 
     /** See [QQCredentialRenewer.ensureFresh]: asks once per stored credential, not once per call. */
     private suspend fun renewCredentialOnce() {

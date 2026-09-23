@@ -6,6 +6,12 @@ import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.SongWikiSummary
 import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusic
 import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusicComments
+import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
+import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
+import com.leejlredstar.redefinencm.kmp.data.provider.ProviderCapability
+import com.leejlredstar.redefinencm.kmp.data.provider.StreamFailure
+import com.leejlredstar.redefinencm.kmp.data.provider.providerIdOrLegacy
+import com.leejlredstar.redefinencm.kmp.data.provider.toProviderItemIdOrNull
 import com.leejlredstar.redefinencm.kmp.download.LocalMediaAssets
 import com.leejlredstar.redefinencm.kmp.lyric.LyricCapabilityLevel
 import com.leejlredstar.redefinencm.kmp.lyric.LyricQuery
@@ -37,6 +43,9 @@ sealed interface LyricUiState {
         val capabilityLevel: LyricCapabilityLevel,
     ) : LyricUiState
     data class Error(val message: String) : LyricUiState
+
+    /** The track's provider offers no lyrics through the app; [message] says so. */
+    data class Unsupported(val message: String) : LyricUiState
 }
 
 val LyricUiState.lyricCapabilityLevel: LyricCapabilityLevel?
@@ -46,6 +55,7 @@ val LyricUiState.lyricCapabilityLevel: LyricCapabilityLevel?
         is LyricUiState.Idle,
         is LyricUiState.Loading,
         is LyricUiState.Error,
+        is LyricUiState.Unsupported,
         -> null
     }
 
@@ -55,6 +65,9 @@ sealed interface SongWikiUiState {
     data class Content(val mediaId: String, val summary: SongWikiSummary) : SongWikiUiState
     data class Empty(val mediaId: String) : SongWikiUiState
     data class Error(val mediaId: String, val message: String) : SongWikiUiState
+
+    /** The track's provider has no song details. */
+    data class Unsupported(val mediaId: String) : SongWikiUiState
 }
 
 data class FavoriteUiState(
@@ -112,8 +125,38 @@ class NowPlayingViewModel(
     private val settings: PlatformSettings,
     private val lyricResolver: LyricResolver,
     private val localMediaAssets: LocalMediaAssets,
+    private val providers: MusicProviderRegistry,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    // ── Provider ──
+    /**
+     * What the current track's provider offers. Every NetEase-only feature below checks this
+     * rather than whether the id parses as a number, and shows "not offered" instead of an error.
+     */
+    val currentCapabilities: StateFlow<Set<ProviderCapability>> = player.currentMedia
+        .map { media -> providers.capabilitiesOf(media?.id) }
+        .stateIn(scope, SharingStarted.Eagerly, providers.capabilitiesOf(player.currentMedia.value?.id))
+
+    /**
+     * Why the current track could not be played, while that is still the case. The players only
+     * report that nothing resolved; the reason comes from the provider registry.
+     */
+    val playbackFailure: StateFlow<StreamFailure?> = combine(
+        player.currentMedia,
+        providers.streamFailures,
+    ) { media, failure -> failure?.takeIf { media != null && it.mediaId == media.id } }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    /** The NetEase song id behind [mediaId]; null for any other provider's track. */
+    private fun neteaseSongId(mediaId: String?): Long? =
+        mediaId?.toProviderItemIdOrNull()?.neteaseIdOrNull?.takeIf { it > 0L }
+
+    private fun supports(mediaId: String?, capability: ProviderCapability): Boolean =
+        capability in providers.capabilitiesOf(mediaId)
+
+    private fun providerName(mediaId: String?): String =
+        (mediaId?.providerIdOrLegacy() ?: MusicProviderId.Legacy).displayName
 
     // ── Player state ──
     val currentMedia = MutableStateFlow(player.currentMedia.value)
@@ -245,7 +288,9 @@ class NowPlayingViewModel(
                 resetMoreComments()
                 if (media != null) {
                     preparePendingLyricsForMedia(media)
-                    val songId = media.id.toLongOrNull()?.takeIf { it > 0L }
+                    // Only a provider with downloads can have a local copy.
+                    val songId = neteaseSongId(media.id)
+                        ?.takeIf { supports(media.id, ProviderCapability.DOWNLOAD) }
                     val localAudioAvailable = songId != null && withContext(Dispatchers.Default) {
                         when (DownloadedSongsCache.ensureInitialized()) {
                             is DownloadScanResult.Success ->
@@ -394,7 +439,8 @@ class NowPlayingViewModel(
                 .collectLatest { (mediaId, uid) ->
                     favoriteActionJob?.cancel()
                     val requestGeneration = ++favoriteStatusGeneration
-                    val songId = mediaId?.toLongOrNull()?.takeIf { it > 0 }
+                    val songId = neteaseSongId(mediaId)
+                        ?.takeIf { supports(mediaId, ProviderCapability.LIKE) }
                     if (songId == null || uid <= 0) {
                         favoriteUiState.value = FavoriteUiState()
                         return@collectLatest
@@ -490,7 +536,8 @@ class NowPlayingViewModel(
                     val uid = request.uid
                     val enabled = request.enabled
                     dynamicCoverUiState.value = DynamicCoverUiState(mediaId = mediaId)
-                    val songId = mediaId?.toLongOrNull()?.takeIf { it > 0 }
+                    val songId = neteaseSongId(mediaId)
+                        ?.takeIf { supports(mediaId, ProviderCapability.DYNAMIC_COVER) }
                     if (
                         !enabled ||
                         !request.localArtworkAllowsDynamicCover ||
@@ -537,7 +584,7 @@ class NowPlayingViewModel(
     private var favoriteStatusGeneration = 0L
 
     private fun preparePendingLyricsForMedia(media: MediaInfo) {
-        val songId = media.id.toLongOrNull()
+        val songId = neteaseSongId(media.id)?.takeIf { supports(media.id, ProviderCapability.LYRIC) }
         val mode = lyricSourceModeGate.currentModeOrNull()
         val preferLocal = songId != null && DownloadedSongsCache.isDownloaded(songId)
         val query = songId?.let {
@@ -559,7 +606,7 @@ class NowPlayingViewModel(
 
     private fun fetchLyrics(
         media: MediaInfo,
-        preferLocal: Boolean = DownloadedSongsCache.isDownloaded(media.id.toLongOrNull() ?: -1L),
+        preferLocal: Boolean = DownloadedSongsCache.isDownloaded(neteaseSongId(media.id) ?: -1L),
         requestGeneration: Long = beginLyricRequest(),
     ) {
         val mediaId = media.id
@@ -569,7 +616,7 @@ class NowPlayingViewModel(
         ) {
             return
         }
-        val songId = mediaId.toLongOrNull()
+        val songId = neteaseSongId(mediaId)?.takeIf { supports(mediaId, ProviderCapability.LYRIC) }
         val query = songId?.let {
             LyricQuery(
                 songId = it,
@@ -592,7 +639,11 @@ class NowPlayingViewModel(
             val mode = lyricSourceModeGate.awaitMode()
             if (songId == null) {
                 applyLyricsForMedia(mediaId, requestGeneration) {
-                    applyLyricError("Current media id is invalid")
+                    if (supports(mediaId, ProviderCapability.LYRIC)) {
+                        applyLyricError("歌曲 id 无效")
+                    } else {
+                        applyLyricUnsupported("${providerName(mediaId)}的歌词暂不支持在应用内显示")
+                    }
                 }
                 return@launch
             }
@@ -707,7 +758,9 @@ class NowPlayingViewModel(
             val mode = lyricSourceModeGate.awaitMode()
             val localLibraryReady =
                 DownloadedSongsCache.ensureInitialized() is DownloadScanResult.Success
-            val songId = candidate.id.toLongOrNull()?.takeIf { it > 0L } ?: return@launch
+            val songId = neteaseSongId(candidate.id)
+                ?.takeIf { supports(candidate.id, ProviderCapability.LYRIC) }
+                ?: return@launch
             val preferLocal = localLibraryReady && DownloadedSongsCache.isDownloaded(songId)
             val query = LyricQuery(
                 songId = songId,
@@ -761,6 +814,12 @@ class NowPlayingViewModel(
         lyricMap.value = linkedMapOf()
     }
 
+    private fun applyLyricUnsupported(message: String) {
+        clearLyricPayload()
+        lyricLoadError.value = null
+        lyricUiState.value = LyricUiState.Unsupported(message)
+    }
+
     private fun applyLyricError(message: String) {
         clearLyricPayload()
         lyricLoadError.value = message
@@ -802,7 +861,14 @@ class NowPlayingViewModel(
     fun getComments() {
         commentsFetchJob?.cancel()
         val mediaId = currentMedia.value?.id ?: return
-        val id = mediaId.toLongOrNull() ?: return
+        // A provider without comments shows that on the sheet; there is nothing to load.
+        val id = neteaseSongId(mediaId)?.takeIf { supports(mediaId, ProviderCapability.COMMENTS) }
+        if (id == null) {
+            comments.value = null
+            commentsLoading.value = false
+            commentsLoadError.value = null
+            return
+        }
         commentsLoading.value = true
         commentsLoadError.value = null
         commentsFetchJob = scope.launch(Dispatchers.Default) {
@@ -857,7 +923,7 @@ class NowPlayingViewModel(
     fun loadMoreComments() {
         if (moreCommentsLoading.value || !moreCommentsAvailable.value) return
         val mediaId = currentMedia.value?.id ?: return
-        val id = mediaId.toLongOrNull() ?: return
+        val id = neteaseSongId(mediaId)?.takeIf { supports(mediaId, ProviderCapability.COMMENTS) } ?: return
         val firstPage = comments.value ?: return
         val hot = commentsShowHot.value
         val shown = (if (hot) firstPage.hotComments else firstPage.comments).size + moreComments.value.size
@@ -903,7 +969,7 @@ class NowPlayingViewModel(
             songWikiRequestGeneration += 1
             songWikiUiState.value = SongWikiUiState.Error(
                 mediaId = "",
-                message = "No song is currently playing",
+                message = "没有正在播放的歌曲",
             )
             return
         }
@@ -911,15 +977,20 @@ class NowPlayingViewModel(
             is SongWikiUiState.Loading -> if (state.mediaId == mediaId) return
             is SongWikiUiState.Content -> if (state.mediaId == mediaId) return
             is SongWikiUiState.Empty -> if (state.mediaId == mediaId) return
+            is SongWikiUiState.Unsupported -> if (state.mediaId == mediaId) return
             else -> Unit
         }
         songWikiFetchJob?.cancel()
         val requestGeneration = ++songWikiRequestGeneration
-        val id = mediaId.toLongOrNull()?.takeIf { it > 0 }
+        if (!supports(mediaId, ProviderCapability.SONG_WIKI)) {
+            songWikiUiState.value = SongWikiUiState.Unsupported(mediaId)
+            return
+        }
+        val id = neteaseSongId(mediaId)
         if (id == null) {
             songWikiUiState.value = SongWikiUiState.Error(
                 mediaId = mediaId,
-                message = "Current song id is invalid",
+                message = "歌曲 id 无效",
             )
             return
         }
@@ -935,7 +1006,7 @@ class NowPlayingViewModel(
                 songWikiUiState.value = when {
                     summary == null -> SongWikiUiState.Error(
                         mediaId = mediaId,
-                        message = "Failed to load song details; please try again later",
+                        message = "歌曲详情加载失败，请稍后再试",
                     )
                     summary.sections.isEmpty() -> SongWikiUiState.Empty(mediaId)
                     else -> SongWikiUiState.Content(mediaId, summary)
@@ -949,7 +1020,7 @@ class NowPlayingViewModel(
                 ) {
                     songWikiUiState.value = SongWikiUiState.Error(
                         mediaId = mediaId,
-                        message = failure.message ?: "Failed to load song details",
+                        message = failure.message ?: "歌曲详情加载失败",
                     )
                 }
             }
@@ -960,7 +1031,7 @@ class NowPlayingViewModel(
     fun onFavClick() {
         val uid = mainViewModel.uid.value.takeIf { it > 0 } ?: return
         val mediaId = player.currentMedia.value?.id ?: return
-        val songId = mediaId.toLongOrNull()?.takeIf { it > 0 } ?: return
+        val songId = neteaseSongId(mediaId)?.takeIf { supports(mediaId, ProviderCapability.LIKE) } ?: return
         if (favoriteUiState.value.let { it.mediaId == mediaId && it.isLiked }) return
         if (favoriteActionJob?.isActive == true) return
 

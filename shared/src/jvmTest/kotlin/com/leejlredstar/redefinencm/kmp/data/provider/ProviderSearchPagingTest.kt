@@ -17,10 +17,11 @@ class ProviderSearchPagingTest {
         }
         override suspend fun playlistDetail(id: ProviderItemId): ProviderPlaylist? = null
         override suspend fun lyric(id: ProviderItemId): ProviderLyric? = null
-        override suspend fun streamUrl(
+        override val capabilities: Set<ProviderCapability> = emptySet()
+        override suspend fun resolveStream(
             id: ProviderItemId,
             quality: SoundQualityPreference,
-        ): String? = null
+        ): StreamResolution = StreamResolution.Failed(StreamFailureReason.NO_SOURCE)
     }
 
     @Test

@@ -6,7 +6,7 @@ package com.leejlredstar.redefinencm.kmp.data.provider
  * These are deliberately narrower than the NetEase DTOs. Only search, playlist detail, lyrics and
  * stream URLs are cross-provider today; user profiles, liked songs, listening records, daily
  * recommendations and playback reporting remain NetEase-only and keep speaking their own DTOs.
- * Widening this model to cover them is a separate decision, not an oversight.
+ * Which of those a provider's tracks support is its [ProviderCapability] set.
  */
 data class ProviderArtist(
     val id: ProviderItemId?,
@@ -82,15 +82,74 @@ class ProviderUnavailableException(
 ) : Exception(message)
 
 /**
- * One music service, reduced to the four things every provider must be able to answer.
+ * The features built for NetEase that a provider's tracks may or may not have.
+ *
+ * Screens and view models ask [MusicProviderRegistry.capabilitiesOf] for the current track instead
+ * of parsing its id: a missing capability is shown as "not offered by this provider", never as an
+ * error. It says what the provider can do, not what the signed-in account may do — a feature the
+ * account is not signed in for is a separate state its screen shows on its own.
+ */
+enum class ProviderCapability {
+    /** Lyrics through the app's lyric pipeline. */
+    LYRIC,
+
+    /** The account's own "liked" list. */
+    LIKE,
+    COMMENTS,
+
+    /** The song-details sheet. */
+    SONG_WIKI,
+
+    /** The animated cover some tracks carry. */
+    DYNAMIC_COVER,
+
+    /** Artist and album pages reached from the song. */
+    CREDITS,
+
+    /** Downloads, and the local copies they leave. */
+    DOWNLOAD,
+
+    /** A web link to the song, see [MusicProvider.shareUrl]. */
+    SHARE_LINK,
+
+    /** Listening records reported to the account. */
+    PLAYBACK_REPORTING,
+}
+
+/** Why a provider produced no stream for a track. */
+enum class StreamFailureReason {
+    /** The provider is switched off in settings. */
+    PROVIDER_DISABLED,
+
+    /** Its backend could not be reached or errored. */
+    UNREACHABLE,
+
+    /**
+     * Its backend answered without a playable copy: a VIP-only or unlicensed track, or one the
+     * service has no file for. The gateways do not say which, so neither does the app.
+     */
+    NO_SOURCE,
+}
+
+/** One provider's answer to "what do I play for this track". */
+sealed interface StreamResolution {
+    data class Playable(val url: String) : StreamResolution
+    data class Failed(val reason: StreamFailureReason) : StreamResolution
+}
+
+/**
+ * One music service, reduced to what every provider must be able to answer.
  *
  * [search] throws [ProviderUnavailableException] on transport failure, because its caller
- * aggregates across providers and has to tell an empty result from a broken one. The other three
- * address a single item on a single provider, where the caller has no such distinction to draw
- * and a null is the whole answer.
+ * aggregates across providers and has to tell an empty result from a broken one. The rest address
+ * a single item on a single provider, where a null — or, for streams, a [StreamResolution.Failed]
+ * with its reason — is the whole answer.
  */
 interface MusicProvider {
     val id: MusicProviderId
+
+    /** The NetEase-era features this provider's tracks support. */
+    val capabilities: Set<ProviderCapability>
 
     /**
      * Whether this provider has enough configuration to be worth calling. A provider that is not
@@ -114,12 +173,15 @@ interface MusicProvider {
     suspend fun lyric(id: ProviderItemId): ProviderLyric?
 
     /**
-     * A playable URL, or null when this provider cannot serve the track at any reachable quality.
+     * A playable URL, or why there is none.
      *
      * [quality] is the user's preference, not a demand: providers whose tiers do not line up with
      * it are expected to degrade rather than fail.
      */
-    suspend fun streamUrl(id: ProviderItemId, quality: SoundQualityPreference): String?
+    suspend fun resolveStream(id: ProviderItemId, quality: SoundQualityPreference): StreamResolution
+
+    /** A web page for the track, for "copy link"; null when the provider has none. */
+    fun shareUrl(id: ProviderItemId): String? = null
 
     companion object {
         const val DefaultSearchLimit = 30

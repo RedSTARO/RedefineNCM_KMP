@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.ui.component
 
+import com.leejlredstar.redefinencm.kmp.data.provider.ProviderCapability
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlayerQueueSnapshot
 import com.leejlredstar.redefinencm.kmp.viewmodel.FavoriteUiState
@@ -23,6 +24,7 @@ class NowPlayingUiStateTest {
         duration: Long = -1L,
         queueSnapshot: PlayerQueueSnapshot = PlayerQueueSnapshot(),
         favoriteState: FavoriteUiState = FavoriteUiState(),
+        capabilities: Set<ProviderCapability> = ProviderCapability.entries.toSet(),
     ) = NowPlayingUiState(
         media = media,
         isPlaying = false,
@@ -34,6 +36,7 @@ class NowPlayingUiStateTest {
         commentsLoadError = null,
         commentsFromCache = false,
         favoriteState = favoriteState,
+        capabilities = capabilities,
     )
 
     @Test
@@ -103,5 +106,21 @@ class NowPlayingUiStateTest {
     fun hasMediaTracksTheCurrentSelection() {
         assertTrue(state().hasMedia)
         assertFalse(state(media = null).hasMedia)
+    }
+
+    @Test
+    fun aProviderWithoutLikesOrCommentsTurnsThoseActionsOffAndIsNamed() {
+        val qqTrack = MediaInfo(id = "qq:0039MnYb0qxYhV", title = "t", artist = "a")
+        val qq = state(media = qqTrack, capabilities = setOf(ProviderCapability.SHARE_LINK))
+        assertFalse(qq.canFavorite)
+        assertFalse(qq.canComment)
+        assertEquals("QQ音乐", qq.providerBadge)
+
+        // NetEase's own tracks stay unmarked, and nothing is offered with nothing playing.
+        val netease = state()
+        assertTrue(netease.canFavorite)
+        assertTrue(netease.canComment)
+        assertEquals(null, netease.providerBadge)
+        assertFalse(state(media = null).canFavorite)
     }
 }

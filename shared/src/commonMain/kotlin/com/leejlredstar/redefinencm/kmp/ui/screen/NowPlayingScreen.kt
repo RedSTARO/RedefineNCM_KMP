@@ -85,6 +85,10 @@ import com.leejlredstar.redefinencm.kmp.player.PlaybackSource
 import com.leejlredstar.redefinencm.kmp.ui.component.SongWikiDetailsSheet
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
 import com.leejlredstar.redefinencm.kmp.data.Repository
+import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
+import com.leejlredstar.redefinencm.kmp.data.provider.ProviderCapability
+import com.leejlredstar.redefinencm.kmp.data.provider.toProviderItemIdOrNull
+import com.leejlredstar.redefinencm.kmp.ui.component.ProviderBadge
 import com.leejlredstar.redefinencm.kmp.AppNavigationRequests
 import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.produceState
@@ -176,6 +180,8 @@ fun NowPlayingScreen(
                 NowPlayingTitle(
                     media = media,
                     isFavorite = nowPlaying.isFavorite,
+                    canFavorite = nowPlaying.canFavorite,
+                    providerBadge = nowPlaying.providerBadge,
                     palette = palette,
                     onFavorite = viewModel::onFavClick,
                 )
@@ -215,6 +221,7 @@ fun NowPlayingScreen(
                         sheets.openQueue()
                     },
                     onComments = sheets::openComments,
+                    commentsEnabled = nowPlaying.canComment,
                     onLyrics = onOpenLyrics,
                 )
             }
@@ -478,6 +485,9 @@ private fun NowPlayingArtwork(
 private fun NowPlayingTitle(
     media: MediaInfo?,
     isFavorite: Boolean,
+    /** False for a provider without likes: the heart stays, dimmed, so the row keeps its shape. */
+    canFavorite: Boolean,
+    providerBadge: String?,
     palette: ContentAccentPalette,
     onFavorite: () -> Unit,
 ) {
@@ -496,7 +506,16 @@ private fun NowPlayingTitle(
                 modifier = Modifier.basicMarquee(),
             )
             Spacer(Modifier.height(4.dp))
-            NowPlayingCredits(media = media, palette = palette)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                providerBadge?.let { label ->
+                    ProviderBadge(
+                        label = label,
+                        contentColor = palette.secondaryOnPageMiddle,
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                }
+                NowPlayingCredits(media = media, palette = palette)
+            }
         }
         Spacer(Modifier.width(12.dp))
         FilledIconToggleButton(
@@ -504,7 +523,7 @@ private fun NowPlayingTitle(
             onCheckedChange = { onFavorite() },
             shapes = IconButtonDefaults.toggleableShapes(),
             modifier = Modifier.size(IconButtonDefaults.mediumContainerSize()),
-            enabled = media != null,
+            enabled = canFavorite,
             colors = IconButtonDefaults.filledIconToggleButtonColors(
                 containerColor = palette.container.copy(alpha = 0.72f),
                 contentColor = palette.onContainer,
@@ -530,9 +549,14 @@ private fun NowPlayingCredits(
     media: MediaInfo?,
     palette: ContentAccentPalette,
     repository: Repository = koinInject(),
+    providers: MusicProviderRegistry = koinInject(),
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val songId = media?.id?.toLongOrNull()
+    // Artist and album pages are NetEase's; another provider's names are plain text.
+    val songId = media?.id
+        ?.takeIf { ProviderCapability.CREDITS in providers.capabilitiesOf(it) }
+        ?.toProviderItemIdOrNull()
+        ?.neteaseIdOrNull
     val credits by produceState<SongDetailSongs?>(null, songId, expanded) {
         if (expanded && songId != null && value?.id != songId) value = repository.getSongCredits(songId)
     }
@@ -759,6 +783,8 @@ private fun NowPlayingToolbar(
     onShuffle: (Boolean) -> Unit,
     onQueue: () -> Unit,
     onComments: () -> Unit,
+    /** False for a provider without comments. */
+    commentsEnabled: Boolean,
     onLyrics: () -> Unit,
 ) {
     HorizontalFloatingToolbar(
@@ -809,7 +835,7 @@ private fun NowPlayingToolbar(
             IconButton(
                 onClick = onComments,
                 shapes = IconButtonDefaults.shapes(),
-                enabled = hasMedia,
+                enabled = hasMedia && commentsEnabled,
             ) {
                 Icon(imageVector = AppIcons.Comment, contentDescription = "评论")
             }

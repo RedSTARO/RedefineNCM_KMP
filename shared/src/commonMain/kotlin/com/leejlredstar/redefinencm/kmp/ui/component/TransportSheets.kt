@@ -131,6 +131,7 @@ internal fun TransportSheets(
                     errorMessage = nowPlaying.commentsLoadError,
                     onRetry = viewModel::getComments,
                     totalCount = nowPlaying.comments?.total ?: 0L,
+                    unsupported = nowPlaying.hasMedia && !nowPlaying.canComment,
                 )
             }
         }
@@ -159,6 +160,7 @@ internal fun TransportSheets(
             errorMessage = nowPlaying.commentsLoadError,
             onRetry = viewModel::getComments,
             totalCount = nowPlaying.comments?.total ?: 0L,
+            unsupported = nowPlaying.hasMedia && !nowPlaying.canComment,
         )
     }
 }

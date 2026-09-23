@@ -120,21 +120,35 @@ internal fun DesktopPlayerBar(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            Text(
-                                text = media?.artist.orEmpty(),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = accentPalette.secondaryOnQuietContainer,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                nowPlaying.providerBadge?.let { label ->
+                                    ProviderBadge(
+                                        label = label,
+                                        contentColor = accentPalette.secondaryOnQuietContainer,
+                                        modifier = Modifier.padding(end = 6.dp),
+                                    )
+                                }
+                                Text(
+                                    text = media?.artist.orEmpty(),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = accentPalette.secondaryOnQuietContainer,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                     }
                 }
-                IconButton(onClick = viewModel::onFavClick, enabled = hasMedia) {
+                IconButton(onClick = viewModel::onFavClick, enabled = nowPlaying.canFavorite) {
                     Icon(
                         imageVector = if (nowPlaying.isFavorite) AppIcons.Favorite else AppIcons.FavoriteBorder,
                         contentDescription = if (nowPlaying.isFavorite) "已喜欢" else "喜欢",
-                        tint = if (nowPlaying.isFavorite) accentPalette.accent else accentPalette.onQuietContainer,
+                        // An explicit tint ignores the button's disabled state, so dim it here.
+                        tint = when {
+                            !nowPlaying.canFavorite -> accentPalette.onQuietContainer.copy(alpha = 0.38f)
+                            nowPlaying.isFavorite -> accentPalette.accent
+                            else -> accentPalette.onQuietContainer
+                        },
                     )
                 }
 
@@ -222,7 +236,7 @@ internal fun DesktopPlayerBar(
                     ) {
                         Icon(AppIcons.QueueMusic, contentDescription = "播放队列")
                     }
-                    IconButton(onClick = sheets::openComments, enabled = hasMedia) {
+                    IconButton(onClick = sheets::openComments, enabled = nowPlaying.canComment) {
                         Icon(AppIcons.Comment, contentDescription = "评论")
                     }
                     val volumeIcon = when (outputVolumeLevel(volume)) {

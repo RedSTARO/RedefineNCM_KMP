@@ -469,6 +469,24 @@ private fun AppContent(
                 mainViewModel.consumeUpdateMessage()
             }
 
+            // A track that resolved to nothing used to leave the player silent with no word of
+            // why. The reason comes from the provider that failed, once per failure.
+            val playbackFailure by nowPlayingViewModel.playbackFailure.collectAsState()
+            LaunchedEffect(playbackFailure?.sequence) {
+                val failure = playbackFailure ?: return@LaunchedEffect
+                val title = player.currentMedia.value
+                    ?.takeIf { it.id == failure.mediaId }
+                    ?.title
+                    ?.takeIf(String::isNotBlank)
+                    ?: "这首歌"
+                desktopSnackbarVisible = true
+                try {
+                    snackbarHostState.showSnackbar("无法播放「$title」：${failure.message}")
+                } finally {
+                    desktopSnackbarVisible = false
+                }
+            }
+
             // The navigation stays on the pages opened from a tab; it used to vanish on every one,
             // so changing tabs meant backing out first. The player, the lyrics and sign-in are
             // full-screen and still hide it.

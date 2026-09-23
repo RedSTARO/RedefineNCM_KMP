@@ -7,6 +7,11 @@ import com.leejlredstar.redefinencm.kmp.util.SoundQuality
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 
 /** How a merged view interleaves results from more than one provider. */
 enum class LibraryAggregationMode(val wireValue: String) {
@@ -59,10 +64,65 @@ class MusicProviderRegistry(
             settings.getStringAsync(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.EXHIGH.name),
         )
 
-    suspend fun streamUrl(id: ProviderItemId, quality: SoundQualityPreference): String? =
-        this[id.provider]?.let { provider ->
-            providerCall { provider.streamUrl(id, quality) }.getOrNull()
+    /** The capabilities of the provider [mediaId] belongs to; none for an id no provider claims. */
+    fun capabilitiesOf(mediaId: String?): Set<ProviderCapability> {
+        val itemId = mediaId?.toProviderItemIdOrNull() ?: return emptySet()
+        return this[itemId.provider]?.capabilities.orEmpty()
+    }
+
+    /** A web page for the track behind [mediaId], when its provider has one. */
+    fun shareUrl(mediaId: String): String? {
+        val itemId = mediaId.toProviderItemIdOrNull() ?: return null
+        return this[itemId.provider]?.shareUrl(itemId)
+    }
+
+    private val _streamFailures = MutableStateFlow<StreamFailure?>(null)
+    private val failureSequence = MutableStateFlow(0L)
+
+    /**
+     * Why the most recent stream resolution produced nothing, until that track resolves.
+     *
+     * A side channel rather than a player API: the player keeps seeing a URL or null and never
+     * learns what a provider is, while the now-playing screen reads the reason from here.
+     */
+    val streamFailures: StateFlow<StreamFailure?> = _streamFailures.asStateFlow()
+
+    fun recordStreamFailure(mediaId: String, provider: MusicProviderId, reason: StreamFailureReason) {
+        val sequence = failureSequence.updateAndGet { it + 1 }
+        _streamFailures.value = StreamFailure(mediaId, provider, reason, sequence)
+    }
+
+    fun clearStreamFailure(mediaId: String) {
+        _streamFailures.update { current -> if (current?.mediaId == mediaId) null else current }
+    }
+
+    /**
+     * The URL to play [id], or null — with the reason recorded in [streamFailures] under
+     * [mediaId], the id the queue carries.
+     */
+    suspend fun streamUrl(
+        id: ProviderItemId,
+        quality: SoundQualityPreference,
+        mediaId: String = id.mediaId,
+    ): String? {
+        val provider = this[id.provider]
+        val resolution = if (provider == null) {
+            StreamResolution.Failed(StreamFailureReason.NO_SOURCE)
+        } else {
+            providerCall { provider.resolveStream(id, quality) }
+                .getOrElse { StreamResolution.Failed(StreamFailureReason.UNREACHABLE) }
         }
+        return when (resolution) {
+            is StreamResolution.Playable -> {
+                clearStreamFailure(mediaId)
+                resolution.url
+            }
+            is StreamResolution.Failed -> {
+                recordStreamFailure(mediaId, id.provider, resolution.reason)
+                null
+            }
+        }
+    }
 
     suspend fun lyric(id: ProviderItemId): ProviderLyric? =
         this[id.provider]?.let { provider ->
@@ -116,6 +176,22 @@ internal inline fun <T> providerCall(block: () -> T): Result<T> = try {
     throw cancelled
 } catch (failure: Exception) {
     Result.failure(failure)
+}
+
+/** Why [mediaId] could not be played; [sequence] tells two failures of the same track apart. */
+data class StreamFailure(
+    val mediaId: String,
+    val provider: MusicProviderId,
+    val reason: StreamFailureReason,
+    val sequence: Long,
+) {
+    /** A clause fit for "无法播放「…」：" on screen. */
+    val message: String
+        get() = when (reason) {
+            StreamFailureReason.PROVIDER_DISABLED -> "${provider.displayName}已关闭"
+            StreamFailureReason.UNREACHABLE -> "${provider.displayName}后端无响应"
+            StreamFailureReason.NO_SOURCE -> "${provider.displayName}没有提供这首歌的播放地址"
+        }
 }
 
 data class ProviderSearchResults(

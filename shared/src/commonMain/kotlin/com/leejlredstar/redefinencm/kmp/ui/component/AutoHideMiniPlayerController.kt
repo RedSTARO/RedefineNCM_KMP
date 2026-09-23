@@ -268,6 +268,8 @@ fun AutoHideMiniPlayerController(
                     progress = progress,
                     shuffleEnabled = shuffleEnabled,
                     isFavorite = isFavorite,
+                    canFavorite = nowPlaying.canFavorite,
+                    canComment = nowPlaying.canComment,
                     lyricCapabilityLevel = lyricCapabilityLevel,
                     lyricSource = displayedLyricSource,
                     lyricEndpoint = displayedLyricEndpoint,
@@ -407,6 +409,8 @@ private fun FullLyricControlConsole(
     progress: Float,
     shuffleEnabled: Boolean,
     isFavorite: Boolean,
+    canFavorite: Boolean,
+    canComment: Boolean,
     lyricCapabilityLevel: LyricCapabilityLevel?,
     lyricSource: LyricSource?,
     lyricEndpoint: String,
@@ -494,6 +498,7 @@ private fun FullLyricControlConsole(
             val joinShape = RoundedCornerShape(8.dp)
             FilledTonalIconButton(
                 onClick = onFavorite,
+                enabled = canFavorite,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
@@ -531,6 +536,7 @@ private fun FullLyricControlConsole(
             }
             FilledTonalIconButton(
                 onClick = onComments,
+                enabled = canComment,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
@@ -767,13 +773,22 @@ private fun ExpandedPlaybackCard(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        Text(
-                            text = media?.artist?.takeIf { it.isNotBlank() } ?: "选择歌曲开始播放",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = accentPalette.secondaryOnContainer,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            foreignProviderName(media?.id)?.let { label ->
+                                ProviderBadge(
+                                    label = label,
+                                    contentColor = accentPalette.secondaryOnContainer,
+                                    modifier = Modifier.padding(end = 6.dp),
+                                )
+                            }
+                            Text(
+                                text = media?.artist?.takeIf { it.isNotBlank() } ?: "选择歌曲开始播放",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = accentPalette.secondaryOnContainer,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                     lyricCapabilityLevel?.let { level ->
                         LyricCapabilityBadge(
