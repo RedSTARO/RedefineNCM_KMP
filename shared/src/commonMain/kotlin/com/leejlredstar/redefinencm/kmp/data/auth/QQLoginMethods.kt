@@ -32,25 +32,11 @@ class QQQrLoginMethod(
     }
 
     /**
-     * How many polls in a row have gone unanswered, per code. The WeChat status route is a long
-     * poll that the gateway holds for around fifteen seconds, so a single unanswered poll is a
-     * slow upstream, not a dead gateway; only a run of them ends the flow.
+     * The WeChat status route is a long poll the gateway holds for around fifteen seconds, so one
+     * unanswered poll is a slow upstream rather than a dead gateway. The flow counts the run.
      */
-    private val unansweredPolls = mutableMapOf<String, Int>()
-
     override suspend fun poll(session: QrLoginSession): QrLoginPoll {
-        val status = api.qrCodeStatus(kind.loginType, session.token)
-        if (status == null) {
-            val unanswered = (unansweredPolls[session.token] ?: 0) + 1
-            unansweredPolls[session.token] = unanswered
-            return if (unanswered >= MaxUnansweredPolls) {
-                unansweredPolls.remove(session.token)
-                QrLoginPoll.Failed("QQ音乐后端无响应")
-            } else {
-                QrLoginPoll.Waiting("等待后端响应…")
-            }
-        }
-        unansweredPolls.remove(session.token)
+        val status = api.qrCodeStatus(kind.loginType, session.token) ?: return QrLoginPoll.Unanswered
         return when (status.event) {
             EventDone -> status.credential
                 ?.let(QQCredential::fromGateway)
@@ -66,7 +52,6 @@ class QQQrLoginMethod(
     }
 
     private companion object {
-        const val MaxUnansweredPolls = 3
         const val EventDone = 0
         const val EventWaiting = 1
         const val EventScanned = 2

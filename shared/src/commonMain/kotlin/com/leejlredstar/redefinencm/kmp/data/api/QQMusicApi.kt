@@ -8,6 +8,7 @@ import io.ktor.client.request.parameter
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -29,6 +30,12 @@ class QQMusicApi(
     private val client: HttpClient,
     private val baseUrl: suspend () -> String,
     private val cookie: suspend () -> String = { "" },
+    /**
+     * Called when the gateway refuses (401) a request that carried an account, with the account it
+     * carried. True means the request is sent once more with the account stored by then — see
+     * `QQCredentialRenewer.renewAfterRejection`. The renewal's own requests never come back here.
+     */
+    private val onRejected: (suspend (rejectedCredential: String) -> Boolean)? = null,
 ) {
     /** One page of song hits; null when the gateway could not be reached or errored. */
     suspend fun search(keyword: String, num: Int, page: Int = 1): QQSearchData? =
@@ -73,39 +80,45 @@ class QQMusicApi(
             ?.takeIf(String::isNotBlank)
             ?.let { StreamHost + it }
 
+    // The login routes obtain a new account, so a refusal there is never a reason to renew the old
+    // one; the renewal routes are what a refusal elsewhere calls, so they must not call back.
+
     /** Issues a login QR code for [loginType], `qq` or `wx`. */
-    suspend fun qrCodeStart(loginType: String): QQQrCode? = fetchData<QQQrCode>("login/qrcode/$loginType")
+    suspend fun qrCodeStart(loginType: String): QQQrCode? =
+        fetchData<QQQrCode>("login/qrcode/$loginType", renewOnRejection = false)
 
     suspend fun qrCodeStatus(loginType: String, identifier: String): QQQrStatus? =
-        fetchData<QQQrStatus>("login/qrcode/$loginType/status") {
+        fetchData<QQQrStatus>("login/qrcode/$loginType/status", renewOnRejection = false) {
             parameter("identifier", identifier)
         }
 
     /** Whether the account sent as the cookie has expired; null without one, or on failure. */
-    suspend fun credentialExpired(): Boolean? = fetchEnvelope<Boolean>("login/check_expired")?.data
+    suspend fun credentialExpired(): Boolean? =
+        fetchEnvelope<Boolean>("login/check_expired", renewOnRejection = false)?.data
 
     /** Renews the account sent as the cookie; the answer is the account to store from now on. */
     suspend fun refreshCredential(): QQGatewayCredential? =
-        fetchData<QQGatewayCredential>("login/refresh_credential")
+        fetchData<QQGatewayCredential>("login/refresh_credential", renewOnRejection = false)
 
     /** Asks QQ to text a login code; the answer's `event` is 0 sent, 1 captcha wanted, 2 too frequent. */
     suspend fun phoneSendCode(phone: Long, countryCode: Int = 86): QQPhoneAuthCode? =
-        fetchData<QQPhoneAuthCode>("login/phone/authcode") {
+        fetchData<QQPhoneAuthCode>("login/phone/authcode", renewOnRejection = false) {
             parameter("phone", phone)
             parameter("country_code", countryCode)
         }
 
     /** Exchanges a texted code for the account; null for a wrong or stale code. */
     suspend fun phoneAuthorize(phone: Long, code: String): QQGatewayCredential? =
-        fetchData<QQGatewayCredential>("login/phone/authorize") {
+        fetchData<QQGatewayCredential>("login/phone/authorize", renewOnRejection = false) {
             parameter("phone", phone)
             parameter("auth_code", code)
         }
 
     private suspend inline fun <reified T> fetchData(
         path: String,
-        crossinline block: HttpRequestBuilder.() -> Unit = {},
-    ): T? = fetchEnvelope<T>(path, block)?.data
+        renewOnRejection: Boolean = true,
+        noinline block: HttpRequestBuilder.() -> Unit = {},
+    ): T? = fetchEnvelope<T>(path, renewOnRejection, block)?.data
 
     /**
      * The decoded envelope of a successful call, or null for a transport failure, a non-2xx
@@ -115,23 +128,45 @@ class QQMusicApi(
      */
     private suspend inline fun <reified T> fetchEnvelope(
         path: String,
-        crossinline block: HttpRequestBuilder.() -> Unit = {},
+        renewOnRejection: Boolean = true,
+        noinline block: HttpRequestBuilder.() -> Unit = {},
     ): QQApiResponse<T>? {
+        val body = fetchBody(path, renewOnRejection, block) ?: return null
+        return try {
+            ApiJson.decodeFromString<QQApiResponse<T>>(body).takeIf { it.code == SuccessCode }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * The body of a 2xx answer, or null for a transport failure or any other status. A 401 to a
+     * request that carried an account goes to [onRejected] first, and the request is sent once
+     * more if that renewed the account.
+     */
+    private suspend fun fetchBody(
+        path: String,
+        renewOnRejection: Boolean,
+        block: HttpRequestBuilder.() -> Unit,
+    ): String? {
         val root = baseUrl().trimEnd('/')
         if (root.isEmpty()) return null
-        val account = cookie().trim()
         return try {
-            val response: HttpResponse = client.get("$root/$path") {
-                // Credentials travel per request rather than being installed into the gateway, so
-                // one gateway can serve several clients and the Android build can sign in at all.
-                if (account.isNotEmpty()) header(HttpHeaders.Cookie, account)
-                block()
+            val account = cookie().trim()
+            var response = send("$root/$path", account, block)
+            if (
+                response.status == HttpStatusCode.Unauthorized &&
+                account.isNotEmpty() &&
+                renewOnRejection &&
+                onRejected?.invoke(account) == true
+            ) {
+                response = send("$root/$path", cookie().trim(), block)
             }
             // The gateway answers 4xx with a JSON body; decoding that as the success shape would
             // yield an empty result that reads like "no such song".
-            if (response.status.value !in 200..299) return null
-            ApiJson.decodeFromString<QQApiResponse<T>>(response.bodyAsText())
-                .takeIf { it.code == SuccessCode }
+            if (response.status.value !in 200..299) null else response.bodyAsText()
         } catch (cancelled: CancellationException) {
             // A cancelled caller is not a dead gateway: swallowing this turned switching QR
             // methods mid-poll into a "后端无响应" banner on the next method's page.
@@ -139,6 +174,17 @@ class QQMusicApi(
         } catch (_: Exception) {
             null
         }
+    }
+
+    private suspend fun send(
+        url: String,
+        account: String,
+        block: HttpRequestBuilder.() -> Unit,
+    ): HttpResponse = client.get(url) {
+        // Credentials travel per request rather than being installed into the gateway, so one
+        // gateway can serve several clients and the Android build can sign in at all.
+        if (account.isNotEmpty()) header(HttpHeaders.Cookie, account)
+        block()
     }
 
     companion object {

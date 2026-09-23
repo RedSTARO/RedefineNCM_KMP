@@ -125,6 +125,35 @@ class LoginFlowsTest {
     }
 
     @Test
+    fun qrFlowSitsThroughUnansweredPollsUntilARunReachesTheLimit() = runTest {
+        // Two unanswered, an answer, then three unanswered: only the second run ends the flow.
+        val method = ScriptedQr(
+            listOf(
+                QrLoginPoll.Unanswered,
+                QrLoginPoll.Unanswered,
+                QrLoginPoll.Waiting(),
+                QrLoginPoll.Unanswered,
+                QrLoginPoll.Unanswered,
+                QrLoginPoll.Unanswered,
+            ),
+        )
+        val (flow, host) = qrFlow(method)
+
+        flow.start()
+        runCurrent()
+        advanceTimeBy(2_100)
+        runCurrent()
+        assertEquals("等待后端响应…", flow.status.value)
+        assertEquals("", flow.error.value)
+
+        advanceUntilIdle()
+        assertEquals(6, method.polls)
+        assertEquals("QQ音乐后端无响应", flow.error.value)
+        assertFalse(flow.success.value)
+        assertTrue(host.persisted.isEmpty())
+    }
+
+    @Test
     fun qrFlowReportsAMethodThatCannotIssueACode() = runTest {
         val (flow, _) = qrFlow(ScriptedQr(emptyList(), startFailure = "nope"))
         flow.start()

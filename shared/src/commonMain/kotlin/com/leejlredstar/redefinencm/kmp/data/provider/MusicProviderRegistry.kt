@@ -4,6 +4,7 @@ import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 
@@ -44,7 +45,7 @@ class MusicProviderRegistry(
      * configured is skipped rather than allowed to contribute an error to an aggregated result.
      */
     suspend fun available(): List<MusicProvider> = providers.filter {
-        runCatching { it.isAvailable() }.getOrDefault(false)
+        providerCall { it.isAvailable() }.getOrDefault(false)
     }
 
     suspend fun aggregationMode(): LibraryAggregationMode =
@@ -60,17 +61,17 @@ class MusicProviderRegistry(
 
     suspend fun streamUrl(id: ProviderItemId, quality: SoundQualityPreference): String? =
         this[id.provider]?.let { provider ->
-            runCatching { provider.streamUrl(id, quality) }.getOrNull()
+            providerCall { provider.streamUrl(id, quality) }.getOrNull()
         }
 
     suspend fun lyric(id: ProviderItemId): ProviderLyric? =
         this[id.provider]?.let { provider ->
-            runCatching { provider.lyric(id) }.getOrNull()
+            providerCall { provider.lyric(id) }.getOrNull()
         }
 
     suspend fun playlistDetail(id: ProviderItemId): ProviderPlaylist? =
         this[id.provider]?.let { provider ->
-            runCatching { provider.playlistDetail(id) }.getOrNull()
+            providerCall { provider.playlistDetail(id) }.getOrNull()
         }
 
     /**
@@ -90,7 +91,7 @@ class MusicProviderRegistry(
         available()
             .map { provider ->
                 provider to async {
-                    runCatching { provider.search(keyword, limit, offset) }
+                    providerCall { provider.search(keyword, limit, offset) }
                 }
             }
             .map { (provider, deferred) ->
@@ -102,6 +103,19 @@ class MusicProviderRegistry(
                 )
             }
     }
+}
+
+/**
+ * [runCatching] that lets cancellation through. A caller that was cancelled — a new search typed,
+ * a track skipped — is not a provider that failed, and recording it as one would report a healthy
+ * backend as down.
+ */
+internal inline fun <T> providerCall(block: () -> T): Result<T> = try {
+    Result.success(block())
+} catch (cancelled: CancellationException) {
+    throw cancelled
+} catch (failure: Exception) {
+    Result.failure(failure)
 }
 
 data class ProviderSearchResults(

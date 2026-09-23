@@ -142,8 +142,9 @@ class LoginMethodsTest {
     }
 
     @Test
-    fun qqQrKeepsWaitingThroughUnansweredPollsUntilTheyRepeat() = runTest {
-        // The WeChat status route is a long poll; one unanswered poll is a slow upstream.
+    fun qqQrReportsAnUnansweredPollWithoutCountingIt() = runTest {
+        // The WeChat status route is a long poll; one unanswered poll is a slow upstream. The flow
+        // counts a run of them, so the method answers each poll on its own.
         var answer = false
         val api = QQMusicApi(
             jsonClient { path, _ ->
@@ -160,15 +161,12 @@ class LoginMethodsTest {
         val method = QQQrLoginMethod(api, QQQrLoginMethod.Kind.WECHAT)
         val session = method.start()
 
-        assertIs<QrLoginPoll.Waiting>(method.poll(session))
-        assertIs<QrLoginPoll.Waiting>(method.poll(session))
-        // An answer in between resets the run.
+        assertEquals(QrLoginPoll.Unanswered, method.poll(session))
         answer = true
         assertEquals(QrLoginPoll.Scanned, method.poll(session))
         answer = false
-        assertIs<QrLoginPoll.Waiting>(method.poll(session))
-        assertIs<QrLoginPoll.Waiting>(method.poll(session))
-        assertIs<QrLoginPoll.Failed>(method.poll(session))
+        // However many come in a row, the method itself never gives up.
+        repeat(5) { assertEquals(QrLoginPoll.Unanswered, method.poll(session)) }
     }
 
     @Test

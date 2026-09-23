@@ -4,14 +4,11 @@ import com.leejlredstar.redefinencm.kmp.data.api.QQMusicApi
 import com.leejlredstar.redefinencm.kmp.data.api.QQSong
 import com.leejlredstar.redefinencm.kmp.data.api.QQSonglistDetail
 import com.leejlredstar.redefinencm.kmp.data.api.qqAlbumArtworkUrl
-import com.leejlredstar.redefinencm.kmp.data.auth.ProviderCredentialSlot
-import com.leejlredstar.redefinencm.kmp.data.auth.QQCredential
+import com.leejlredstar.redefinencm.kmp.data.auth.QQCredentialRenewer
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.getBooleanAsync
 import com.leejlredstar.redefinencm.kmp.util.getStringAsync
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
@@ -24,13 +21,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 class QQProvider(
     private val api: QQMusicApi,
     private val settings: PlatformSettings,
-    /** Where the signed-in account lives, so a renewed key can be written back. Null disables renewal. */
-    private val credentials: ProviderCredentialSlot? = null,
+    /** Keeps the signed-in account's key alive; null disables renewal. */
+    private val renewer: QQCredentialRenewer? = null,
 ) : MusicProvider {
     override val id: MusicProviderId = MusicProviderId.QQ
-
-    private val renewal = Mutex()
-    private var renewalAttempted = false
 
     override suspend fun isAvailable(): Boolean =
         settings.getBooleanAsync(SettingKeys.QQ_ENABLED, false) &&
@@ -111,37 +105,14 @@ class QQProvider(
         }
     }
 
-    /**
-     * Renews an expired key once per process, before the first call that would use it.
-     *
-     * The gateway keeps alive only the accounts installed in its own pool; an account sent per
-     * request is the caller's to keep alive. Checking on every call would double the round trips,
-     * so the check runs once and its outcome, either way, is not revisited until restart. It is
-     * time-bounded for the same reason the stream walk is: the first call may be on the player's
-     * IO thread.
-     */
+    /** See [QQCredentialRenewer.ensureFresh]: asks once per stored credential, not once per call. */
     private suspend fun renewCredentialOnce() {
-        val slot = credentials ?: return
-        renewal.withLock {
-            if (renewalAttempted) return
-            renewalAttempted = true
-            val stored = QQCredential.parse(slot.read()) ?: return
-            if (!stored.canRefresh) return
-            withTimeoutOrNull(RenewalBudgetMillis) {
-                if (api.credentialExpired() != true) return@withTimeoutOrNull
-                val renewed = api.refreshCredential()
-                    ?.let(QQCredential::fromGateway)
-                    ?.takeIf { it.isSignedIn }
-                    ?: return@withTimeoutOrNull
-                slot.write(renewed.toCookieHeader())
-            }
-        }
+        renewer?.ensureFresh()
     }
 
     private companion object {
         const val StreamResolveAttemptMillis = 6_000L
         const val StreamResolveBudgetMillis = 15_000L
-        const val RenewalBudgetMillis = 8_000L
 
         /** The gateway pages playlists; 200 a page keeps a typical list to one or two calls. */
         const val PlaylistPageSize = 200

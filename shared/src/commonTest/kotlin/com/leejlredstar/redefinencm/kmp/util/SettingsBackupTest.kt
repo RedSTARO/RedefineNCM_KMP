@@ -99,15 +99,31 @@ class SettingsBackupTest {
     @Test
     fun aBackupMadeBeforeMultiProviderSupportKeepsTheCurrentChoice() {
         val writtenStrings = mutableMapOf<String, String>()
+        val writtenBooleans = mutableMapOf<String, Boolean>()
         val applied = applySettingsBackup(
             json = """{"server":"http://server/"}""",
             setString = { key, value -> writtenStrings[key] = value },
-            setBoolean = { _, _ -> },
+            setBoolean = { key, value -> writtenBooleans[key] = value },
         )
 
         assertTrue(applied)
         assertFalse(SettingKeys.LIBRARY_AGGREGATION_MODE in writtenStrings)
         assertFalse(SettingKeys.QQ_SERVER in writtenStrings)
+        // Such a backup never said anything about QQ, so importing it must not switch QQ off.
+        assertFalse(SettingKeys.QQ_ENABLED in writtenBooleans)
+    }
+
+    @Test
+    fun aBackupThatNamesTheQqSwitchRestoresIt() {
+        val writtenBooleans = mutableMapOf<String, Boolean>()
+        assertTrue(
+            applySettingsBackup(
+                json = """{"qqEnabled":false}""",
+                setString = { _, _ -> },
+                setBoolean = { key, value -> writtenBooleans[key] = value },
+            ),
+        )
+        assertEquals(false, writtenBooleans[SettingKeys.QQ_ENABLED])
     }
 
     @Test

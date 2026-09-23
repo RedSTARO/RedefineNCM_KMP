@@ -16,7 +16,8 @@ data class SettingsBackupData(
     val server: String = "",
     // The QQ backend address and view preference travel with a backup the way `server` does.
     // Its cookie deliberately does not — same rule as `cookie` above.
-    val qqEnabled: Boolean = false,
+    /** Null keeps the current choice when importing a backup made before multi-provider support. */
+    val qqEnabled: Boolean? = null,
     val qqServer: String = "",
     /** Null keeps the current choice when importing a backup made before multi-provider support. */
     val libraryAggregationMode: String? = null,
@@ -109,7 +110,7 @@ internal fun applySettingsBackup(
         LyricSurfaceAlignment.fromWireValueOrNull(stored) ?: return false
     }
     if (data.server.isNotEmpty()) setString(SettingKeys.SERVER, data.server)
-    setBoolean(SettingKeys.QQ_ENABLED, data.qqEnabled)
+    data.qqEnabled?.let { setBoolean(SettingKeys.QQ_ENABLED, it) }
     if (data.qqServer.isNotEmpty()) setString(SettingKeys.QQ_SERVER, data.qqServer)
     data.libraryAggregationMode?.let { setString(SettingKeys.LIBRARY_AGGREGATION_MODE, it) }
     setString(SettingKeys.ONLINE_PLAY_QUALITY, data.onlinePlayQuality)

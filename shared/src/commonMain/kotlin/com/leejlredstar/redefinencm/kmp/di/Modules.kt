@@ -16,6 +16,7 @@ import com.leejlredstar.redefinencm.kmp.data.auth.NeteaseQrLoginMethod
 import com.leejlredstar.redefinencm.kmp.data.auth.ProviderLoginDescriptor
 import com.leejlredstar.redefinencm.kmp.data.auth.ProviderLoginDescriptorRegistry
 import com.leejlredstar.redefinencm.kmp.data.auth.ProviderServerSetting
+import com.leejlredstar.redefinencm.kmp.data.auth.QQCredentialRenewer
 import com.leejlredstar.redefinencm.kmp.data.auth.QQCredentialSlot
 import com.leejlredstar.redefinencm.kmp.data.auth.QQCredentialTextLoginMethod
 import com.leejlredstar.redefinencm.kmp.data.auth.QQPhoneCodeLoginMethod
@@ -87,13 +88,20 @@ val sharedModule = module {
     // constant so it works the same way the NetEase server address already does.
     single {
         val settings = get<PlatformSettings>()
+        val koin = getKoin()
         QQMusicApi(
             client = get<ExternalHttpClient>().client,
             baseUrl = {
                 settings.getStringAsync(SettingKeys.QQ_SERVER, SettingKeys.QQ_SERVER_DEFAULT)
             },
             cookie = { settings.getStringAsync(SettingKeys.QQ_COOKIE, "") },
+            // Resolved lazily: the renewer calls this API itself.
+            onRejected = { rejected -> koin.get<QQCredentialRenewer>().renewAfterRejection(rejected) },
         )
+    }
+    single {
+        val koin = getKoin()
+        QQCredentialRenewer(api = { koin.get() }, slot = get<QQCredentialSlot>())
     }
 
     // Database — DatabaseDriverFactory is provided by platformModule()
@@ -185,7 +193,7 @@ val sharedModule = module {
         MusicProviderRegistry(
             providers = listOf(
                 NeteaseProvider(get(), get()),
-                QQProvider(get(), get(), get<QQCredentialSlot>()),
+                QQProvider(get(), get(), get<QQCredentialRenewer>()),
             ),
             settings = get(),
         )

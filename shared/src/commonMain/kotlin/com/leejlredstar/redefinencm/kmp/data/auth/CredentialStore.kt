@@ -5,6 +5,8 @@ import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -28,7 +30,47 @@ interface ProviderCredentialSlot {
      */
     suspend fun write(credential: String): Result<Unit>
 
+    /**
+     * Writes [credential] only while the stored value is still [expected], atomically with respect
+     * to every other write through this slot.
+     *
+     * Background writers use this: a key renewal that raced a sign-out or an account switch must
+     * not bring the old account back. `Result.success(false)` means the stored value had moved on
+     * and nothing was written.
+     */
+    suspend fun replace(expected: String, credential: String): Result<Boolean>
+
     suspend fun clear(): Result<Unit> = write("")
+}
+
+/**
+ * A slot persisted under one settings key.
+ *
+ * Writes are serialized, so the comparison in [replace] and the write that follows it cannot
+ * interleave with a sign-out running on another thread.
+ */
+abstract class SettingsCredentialSlot(
+    protected val settings: PlatformSettings,
+    private val key: String,
+) : ProviderCredentialSlot {
+    private val writes = Mutex()
+
+    override suspend fun read(): String = settings.getStringAsync(key, "")
+
+    override suspend fun write(credential: String): Result<Unit> = writes.withLock {
+        settings.awaitLoaded()
+        persist(credential)
+    }
+
+    override suspend fun replace(expected: String, credential: String): Result<Boolean> =
+        writes.withLock {
+            settings.awaitLoaded()
+            if (settings.getString(key, "") != expected) return@withLock Result.success(false)
+            persist(credential).map { true }
+        }
+
+    /** Stores [credential] and applies the provider's change rules; runs under the write lock. */
+    protected abstract suspend fun persist(credential: String): Result<Unit>
 }
 
 /** The registered slots, one per provider. */
@@ -55,15 +97,12 @@ class CredentialStore(slots: List<ProviderCredentialSlot>) {
  * points it at the main view model's account refresh.
  */
 class NeteaseCredentialSlot(
-    private val settings: PlatformSettings,
+    settings: PlatformSettings,
     private val onChanged: () -> Unit,
-) : ProviderCredentialSlot {
+) : SettingsCredentialSlot(settings, SettingKeys.COOKIE) {
     override val provider: MusicProviderId = MusicProviderId.NETEASE
 
-    override suspend fun read(): String = settings.getStringAsync(SettingKeys.COOKIE, "")
-
-    override suspend fun write(credential: String): Result<Unit> {
-        settings.awaitLoaded()
+    override suspend fun persist(credential: String): Result<Unit> {
         val previousCookie = settings.getString(SettingKeys.COOKIE, "")
         val previousUid = settings.getLong(SettingKeys.UID, 0L)
         val previousFingerprint = settings.getLong(SettingKeys.UID_COOKIE_FINGERPRINT, 0L)
@@ -93,13 +132,11 @@ class NeteaseCredentialSlot(
  * (`musicid=…; musickey=…; …`, see [QQCredential]). Nothing else in the app is keyed by the QQ
  * account yet, so a change has no cache to invalidate.
  */
-class QQCredentialSlot(private val settings: PlatformSettings) : ProviderCredentialSlot {
+class QQCredentialSlot(settings: PlatformSettings) :
+    SettingsCredentialSlot(settings, SettingKeys.QQ_COOKIE) {
     override val provider: MusicProviderId = MusicProviderId.QQ
 
-    override suspend fun read(): String = settings.getStringAsync(SettingKeys.QQ_COOKIE, "")
-
-    override suspend fun write(credential: String): Result<Unit> {
-        settings.awaitLoaded()
+    override suspend fun persist(credential: String): Result<Unit> {
         val previous = settings.getString(SettingKeys.QQ_COOKIE, "")
         return withContext(NonCancellable) {
             try {

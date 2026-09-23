@@ -42,6 +42,13 @@ interface QrLoginMethod : LoginMethod {
     val lifetimeMillis: Long get() = DefaultLifetimeMillis
 
     /**
+     * How many [QrLoginPoll.Unanswered] polls in a row the caller sits through before it gives up
+     * on the backend. A status route that long-polls upstream can miss one answer without being
+     * down.
+     */
+    val maxUnansweredPolls: Int get() = DefaultMaxUnansweredPolls
+
+    /**
      * Issues a fresh code.
      *
      * @throws LoginMethodException when the provider could not issue one, with a message fit for
@@ -55,6 +62,7 @@ interface QrLoginMethod : LoginMethod {
     companion object {
         const val DefaultPollIntervalMillis = 2_000L
         const val DefaultLifetimeMillis = 5 * 60_000L
+        const val DefaultMaxUnansweredPolls = 3
     }
 }
 
@@ -75,6 +83,12 @@ sealed interface QrLoginPoll {
 
     /** Scanned; the phone is asking the user to confirm. */
     data object Scanned : QrLoginPoll
+
+    /**
+     * The backend did not answer this poll. Counting a run of these is the caller's job, so a
+     * method holds no state between polls.
+     */
+    data object Unanswered : QrLoginPoll
 
     /** Approved. [credential] is what the provider's slot stores. */
     data class Confirmed(val credential: String) : QrLoginPoll

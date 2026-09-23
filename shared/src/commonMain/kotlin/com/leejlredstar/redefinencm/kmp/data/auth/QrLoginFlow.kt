@@ -80,9 +80,22 @@ class QrLoginFlow(
                 // Poll until a terminal answer, bounded by the code's lifetime. Keeping issue and
                 // polling in one structured job guarantees that cancel stops both.
                 val finished = withTimeoutOrNull(method.lifetimeMillis) {
+                    // Unanswered polls in a row, for this code only; any answer ends the run.
+                    var unanswered = 0
                     while (isActive) {
                         delay(method.pollIntervalMillis)
-                        when (val poll = method.poll(session)) {
+                        val poll = method.poll(session)
+                        unanswered = if (poll == QrLoginPoll.Unanswered) unanswered + 1 else 0
+                        when (poll) {
+                            QrLoginPoll.Unanswered -> {
+                                if (unanswered >= method.maxUnansweredPolls) {
+                                    val message = "${method.provider.displayName}后端无响应"
+                                    _status.value = message
+                                    _error.value = message
+                                    return@withTimeoutOrNull true
+                                }
+                                _status.value = "等待后端响应…"
+                            }
                             is QrLoginPoll.Waiting -> _status.value = poll.message ?: method.scanHint
                             QrLoginPoll.Scanned -> _status.value = "请在手机上确认登录"
                             is QrLoginPoll.Confirmed -> {
