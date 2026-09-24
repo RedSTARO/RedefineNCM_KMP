@@ -7,6 +7,7 @@ import com.google.ai.edge.litert.BuiltinNpuAcceleratorProvider
 import com.google.ai.edge.litert.CompiledModel
 import com.google.ai.edge.litert.Environment
 import com.google.ai.edge.litert.TensorBuffer
+import com.google.ai.edge.litert.TensorBufferType
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
@@ -29,9 +30,15 @@ import java.util.concurrent.Executors
  *
  * LiteRT quietly runs any op its GPU backend lacks on the CPU. The model used here was rewritten
  * until LiteRT reports it fully accelerated on a GPU (`tools/automix-model/litert_gpu_rewrite.py`
- * and `check_litert_gpu.py`). It is not in the APK: [BeatModelDownloads.liteRt] is downloaded the
- * first time the model is needed, after LiteRT itself has loaded, so a device that cannot run
- * LiteRT never downloads it.
+ * and `check_litert_gpu.py`); on a Snapdragon 8 Gen 3 all 1158 of its ops run in one OpenCL
+ * partition. Worse, when the accelerator a model asks for cannot start at all, LiteRT runs the
+ * whole model on the CPU and still succeeds: on that phone, with no dispatch library, asking for
+ * the NPU gave an XNNPACK CPU model. So the NPU is asked for only when a dispatch library is
+ * there, and a compiled model is accepted only when the input buffers LiteRT offers for it belong
+ * to the accelerator ([acceleratorBuffers]).
+ *
+ * The model is not in the APK: [BeatModelDownloads.liteRt] is downloaded the first time it is
+ * needed, after LiteRT itself has loaded, so a device that cannot run LiteRT never downloads it.
  *
  * Every LiteRT call runs on one thread of its own: an OpenGL ES context belongs to the thread
  * that created it.
@@ -91,8 +98,9 @@ internal class LiteRtBeatModelLoader(
         val attempts = listOf(Accelerator.NPU to InferenceAccelerator.NPU, Accelerator.GPU to InferenceAccelerator.GPU)
         for ((accelerator, kind) in attempts) {
             // The GPU is always tried: LiteRT may register its GPU accelerator only when a model
-            // asks for it.
-            if (accelerator == Accelerator.NPU && accelerator !in available) {
+            // asks for it. LiteRT registers its NPU accelerator even with no vendor library to
+            // reach the NPU, so that is checked for directly.
+            if (accelerator == Accelerator.NPU && (accelerator !in available || !hasNpuDispatchLibrary())) {
                 failures += strings.labelValue("NPU", strings.liteRtNpuRuntimeMissing)
                 continue
             }
@@ -113,6 +121,13 @@ internal class LiteRtBeatModelLoader(
         var model: CompiledModel? = null
         return try {
             model = CompiledModel.create(path, CompiledModel.Options(accelerator), environment)
+            val buffers = model.getInputBufferRequirements(MODEL_INPUT).supportedTypes
+            println("LiteRtBeatModelLoader: ${accelerator.name} input buffers $buffers")
+            if (buffers.none { it in acceleratorBuffers.getValue(accelerator) }) {
+                failures += strings.labelValue(accelerator.name, strings.liteRtFellBackToCpu)
+                model.close()
+                return null
+            }
             // A model that compiles can still fail its first run on a driver; find out now.
             LiteRtBeatActivationModel.runOnce(model, FloatArray(BEAT_MODEL_CHUNK_FRAMES * BeatModelFeatures.MEL_BINS))
             model
@@ -123,6 +138,9 @@ internal class LiteRtBeatModelLoader(
         }
     }
 
+    private fun hasNpuDispatchLibrary(): Boolean =
+        File(context.applicationInfo.nativeLibraryDir).list().orEmpty().any { it.startsWith("libLiteRtDispatch") }
+
     private fun socName(): String? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
         return listOf(Build.SOC_MANUFACTURER, Build.SOC_MODEL)
@@ -131,6 +149,21 @@ internal class LiteRtBeatModelLoader(
             .ifEmpty { null }
     }
 }
+
+/** The model's one input, as the converter named it. */
+private const val MODEL_INPUT = "args_0"
+
+/**
+ * Input buffer types that only exist when a model runs on that accelerator. A model LiteRT has
+ * quietly put on the CPU offers host memory alone.
+ */
+private val acceleratorBuffers = mapOf(
+    Accelerator.NPU to setOf(TensorBufferType.Ahwb, TensorBufferType.Ion, TensorBufferType.DmaBuf, TensorBufferType.FastRpc),
+    Accelerator.GPU to TensorBufferType.entries.filter { type ->
+        type.name.startsWith("Gl") || type.name.startsWith("OpenCl") ||
+            type.name.startsWith("Vulkan") || type.name.startsWith("WebGpu")
+    }.toSet(),
+)
 
 private class LiteRtBeatActivationModel(
     private val model: CompiledModel,

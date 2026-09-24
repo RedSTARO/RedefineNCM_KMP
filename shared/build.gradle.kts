@@ -595,7 +595,12 @@ kotlin {
             implementation(libs.androidx.palette)
             // The beat model for smart song transitions, on the GPU (or a vendor NPU runtime).
             // The model itself is downloaded on first use; see BeatModelDownloads.
-            implementation(libs.litert)
+            implementation("com.google.ai.edge.litert:litert:${libs.versions.litert.get()}") {
+                // Play AI Pack delivery, used only by LiteRT's AiPackModelProvider, which the app
+                // does not use. It drags in WorkManager, whose start-up initializer runs on every
+                // launch and whose Room database R8 breaks: release builds crashed at start.
+                exclude(group = "com.google.android.play", module = "ai-delivery")
+            }
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)

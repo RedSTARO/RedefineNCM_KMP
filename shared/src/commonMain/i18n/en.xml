@@ -1103,6 +1103,7 @@
     <!-- transition/LiteRtBeatModelLoader.kt -->
     <string name="liteRtLoadFailed">LiteRT could not be loaded: {reason}</string>
     <string name="liteRtNpuRuntimeMissing">this build doesn't include the chip maker's NPU runtime</string>
+    <string name="liteRtFellBackToCpu">LiteRT fell back to the CPU</string>
 
     <!-- transition/ModelDownload.kt -->
     <string name="beatModelChecksumMismatch">the downloaded file doesn't match its checksum</string>

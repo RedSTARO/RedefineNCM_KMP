@@ -42,9 +42,12 @@
 # Media3 / ExoPlayer
 -dontwarn androidx.media3.**
 
-# LiteRT (smart transitions' beat model): its JNI library constructs and calls these by name
--keep class com.google.ai.edge.litert.** { *; }
+# LiteRT (smart transitions' beat model): its JNI library constructs and calls these by name.
+# The deployment package is Play AI Pack delivery, excluded from the build (see shared's
+# build.gradle.kts), so it is neither kept nor warned about.
+-keep class !com.google.ai.edge.litert.deployment.**, com.google.ai.edge.litert.** { *; }
 -dontwarn com.google.ai.edge.litert.**
+-dontwarn com.google.android.play.**
 
 # Preserve stack traces
 -keepattributes SourceFile,LineNumberTable

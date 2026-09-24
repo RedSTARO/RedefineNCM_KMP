@@ -1031,6 +1031,7 @@
     <!-- transition/LiteRtBeatModelLoader.kt -->
     <string name="liteRtLoadFailed">LiteRT 无法加载：{reason}</string>
     <string name="liteRtNpuRuntimeMissing">这个版本没有附带芯片厂商的 NPU 运行库</string>
+    <string name="liteRtFellBackToCpu">LiteRT 退回了 CPU</string>
 
     <!-- transition/ModelDownload.kt -->
     <string name="beatModelChecksumMismatch">下载的文件与校验值不符</string>
