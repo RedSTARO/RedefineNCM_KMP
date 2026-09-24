@@ -95,6 +95,9 @@ internal class DeckMixer(
         var keepIncoming = false
     }
 
+    /** A blend's plan, and [elapsedMs] of it heard. */
+    class HeardBlend(val plan: TransitionPlan, val elapsedMs: Long)
+
     @Volatile private var blend: Blend? = null
     private var blendAttempted: TransitionPlan? = null
     private var mixBuffer = FloatArray(0)
@@ -105,15 +108,15 @@ internal class DeckMixer(
     val blendIncomingMediaId: String? get() = blend?.incoming?.mediaId
 
     /**
-     * How far the blend has gone at [outputFrame], the frame the listener is hearing: 0 at its
-     * start and 1 at its end. Null outside a blend, before its first frame is heard, and while an
-     * abandoned one fades out.
+     * The blend the listener hears at [outputFrame], and how far into it that frame is. Null outside
+     * a blend, before its first frame is heard, and while an abandoned one fades out. The plan is
+     * kept here, with the blend, because the player drops its armed plan at the swap, halfway.
      */
-    fun blendProgressAt(outputFrame: Long): Float? {
+    fun blendAt(outputFrame: Long): HeardBlend? {
         val active = blend ?: return null
         if (active.fadeFrom != null || outputFrame < active.startFrame) return null
-        val length = (active.endFrame - active.startFrame).coerceAtLeast(1L)
-        return ((outputFrame - active.startFrame).toFloat() / length).coerceIn(0f, 1f)
+        val frames = (outputFrame - active.startFrame).coerceAtMost(active.endFrame - active.startFrame)
+        return HeardBlend(active.plan, frames * 1_000L / sampleRate)
     }
 
     /** The decoder-reported length of the track the listener is hearing as current. */

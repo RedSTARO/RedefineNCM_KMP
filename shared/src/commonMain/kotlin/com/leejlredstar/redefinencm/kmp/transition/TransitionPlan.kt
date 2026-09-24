@@ -38,6 +38,11 @@ enum class TransitionKind {
  * The incoming track is never time-stretched. It becomes the current track halfway through, and
  * a current track playing at its own speed keeps its position, its lyrics and the playback
  * report exactly as they are without a blend.
+ *
+ * A beat-matched plan also carries [incomingBeat], where the incoming track's beats fall. That
+ * track plays at its own speed and the outgoing one is held on its beats, so through the blend it
+ * is the beat both tracks share; screens use it to move with the music. A crossfade has no shared
+ * beat and leaves it null.
  */
 data class TransitionPlan(
     val outgoingMediaId: String,
@@ -49,6 +54,7 @@ data class TransitionPlan(
     val overlapMs: Long,
     val outgoingRate: Double,
     val swapAfterMs: Long,
+    val incomingBeat: BeatTiming? = null,
 ) {
     init {
         require(rampStartMs <= startMs) { "ramp must precede the blend" }
@@ -77,6 +83,20 @@ data class TransitionPlan(
 }
 
 data class BlendGains(val outgoing: Float, val incoming: Float)
+
+/**
+ * Where one track's beats fall: every [periodMs] of its media time from the downbeat at
+ * [downbeatMs], every [beatsPerBar]th beat a downbeat.
+ */
+data class BeatTiming(val downbeatMs: Double, val periodMs: Double, val beatsPerBar: Int) {
+    init {
+        require(periodMs > 0.0) { "a beat must have a length" }
+        require(beatsPerBar > 0)
+    }
+
+    /** Beats from that downbeat to media position [positionMs], fractional, negative before it. */
+    fun beatsAt(positionMs: Double): Double = (positionMs - downbeatMs) / periodMs
+}
 
 /** Why a plan came out the way it did, kept for the diagnostics line in Settings. */
 data class PlannedTransition(val plan: TransitionPlan?, val note: String)
@@ -197,7 +217,8 @@ object TransitionPlanner {
         while (bars > 2 && bars * barWallMs > MAX_BLEND_MS) bars /= 2
         while (bars < 16 && bars * barWallMs < MIN_BLEND_MS) bars *= 2
 
-        val entry = inGrid.downbeatAtOrAfterMs(inStart - inGrid.periodMs * 0.25).toLong().coerceAtLeast(0L)
+        val entryDownbeat = inGrid.downbeatAtOrAfterMs(inStart - inGrid.periodMs * 0.25)
+        val entry = entryDownbeat.toLong().coerceAtLeast(0L)
         if (incomingDurationMs > 0 && entry > incomingDurationMs / 3) return null
         while (bars >= 2) {
             val overlapWall = bars * barWallMs
@@ -216,6 +237,7 @@ object TransitionPlanner {
                     overlapMs = overlapWall.toLong(),
                     outgoingRate = if (abs(rate - 1.0) < 0.002) 1.0 else rate,
                     swapAfterMs = (overlapWall / 2).toLong(),
+                    incomingBeat = BeatTiming(entryDownbeat, inGrid.periodMs, inGrid.beatsPerBar),
                 )
             }
             bars /= 2

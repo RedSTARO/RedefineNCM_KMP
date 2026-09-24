@@ -112,6 +112,12 @@ class TransitionPlannerTest {
         assertTrue(p.outgoingEndMs <= 200_000L)
         assertTrue(p.rampStartMs < p.startMs)
         assertEquals(8_000L, p.swapAfterMs)
+        // Screens move on the incoming beat: 500 ms, four to the bar, from the entry downbeat.
+        val beat = assertNotNull(p.incomingBeat)
+        assertEquals(500.0, beat.periodMs, 1e-9)
+        assertEquals(4, beat.beatsPerBar)
+        assertEquals(400.0, beat.downbeatMs, 1e-9)
+        assertEquals(0.0, beat.beatsAt(p.incomingEntryMs.toDouble()), 1e-9)
     }
 
     @Test
@@ -131,6 +137,8 @@ class TransitionPlannerTest {
         val inc = analysis("in", 180_000L, headGrid = grid(100.0), headAudibleFrom = 2_000L)
         val p = assertNotNull(plan(out, inc).plan)
         assertEquals(TransitionKind.CROSSFADE, p.kind)
+        // Two tempi that are not matched share no beat to move on.
+        assertNull(p.incomingBeat)
         // The blend ends where the music ends, not at the silent end of the file.
         assertTrue(p.outgoingEndMs <= 195_000L)
         assertTrue(p.incomingEntryMs >= 2_000L)

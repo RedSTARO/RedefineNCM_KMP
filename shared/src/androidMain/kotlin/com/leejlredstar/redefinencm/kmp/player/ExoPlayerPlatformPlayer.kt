@@ -622,7 +622,7 @@ class ExoPlayerPlatformPlayer(
         _transitionBlend.value = if (beforeEntry || outgoingInfo == null || incomingInfo == null) {
             null
         } else {
-            TransitionBlend(outgoingInfo, incomingInfo, (elapsedMs.toFloat() / plan.overlapMs).coerceIn(0f, 1f))
+            TransitionBlend(outgoingInfo, incomingInfo, plan, elapsedMs.coerceAtMost(plan.overlapMs))
         }
         if (beforeEntry) {
             // A long entry can start the pre-roll before the outgoing tempo ramp; keep ramping.

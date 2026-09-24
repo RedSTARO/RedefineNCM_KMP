@@ -809,7 +809,7 @@ class WebPlatformPlayer(
         _transitionBlend.value = if (elapsedMs <= 0.0 || outgoingInfo == null || incomingInfo == null) {
             null
         } else {
-            TransitionBlend(outgoingInfo, incomingInfo, (elapsedMs / plan.overlapMs).toFloat().coerceIn(0f, 1f))
+            TransitionBlend(outgoingInfo, incomingInfo, plan, elapsedMs.toLong().coerceAtMost(plan.overlapMs))
         }
         // Keep the outgoing beat on the incoming one: nudge its rate by the phase error, up to
         // 4 %, the way a DJ rides the pitch fader. Browsers start play() tens of milliseconds late.

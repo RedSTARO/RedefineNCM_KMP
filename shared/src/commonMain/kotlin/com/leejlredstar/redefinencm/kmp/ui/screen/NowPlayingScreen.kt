@@ -103,6 +103,13 @@ import com.leejlredstar.redefinencm.kmp.ui.component.TransitionArtworkStack
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Surface
+import com.leejlredstar.redefinencm.kmp.transition.TransitionKind
 
 /**
  * The Now Playing entry page: what the mini player, the desktop rail and every OS
@@ -227,6 +234,7 @@ fun NowPlayingScreen(
                     nowPlaying = nowPlaying,
                     palette = palette,
                     reducedMotion = reducedMotion,
+                    transitionKind = visual?.kind,
                     onSeek = player::seekTo,
                 )
                 // A muted app volume gets a chip here; otherwise the silence would have no visible
@@ -493,14 +501,17 @@ private fun NowPlayingArtwork(
     TransitionArtworkStack(
         current = media,
         visual = visual,
-        focusPull = !reducedMotion,
+        // A beat-matched blend brings the next cover into focus and kicks on the beat; a plain
+        // crossfade only dissolves, so the two read differently at a glance.
+        focusPull = visual?.movesWithBeat == true,
         onCurrentImage = onArtworkLoaded,
         onIncomingImage = onIncomingArtworkLoaded,
         modifier = modifier
             .aspectRatio(1f)
             .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
+                val kick = 1f + BEAT_KICK_SCALE * (visual?.beatPulse ?: 0f)
+                scaleX = scale * kick
+                scaleY = scale * kick
             }
             .dropShadow(
                 shape = frameShape,
@@ -675,6 +686,7 @@ private fun NowPlayingProgress(
     nowPlaying: NowPlayingUiState,
     palette: ContentAccentPalette,
     reducedMotion: Boolean,
+    transitionKind: TransitionKind?,
     onSeek: (Long) -> Unit,
 ) {
     val seek = rememberSeekDragState(nowPlaying.media?.id)
@@ -721,19 +733,78 @@ private fun NowPlayingProgress(
                 )
             },
         )
-        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
-            val clockStyle = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum")
-            Text(
-                text = formatPlaybackClock(displayPosition),
-                style = clockStyle,
-                color = palette.secondaryOnPageMiddle,
-            )
-            Spacer(Modifier.weight(1f))
-            Text(
-                text = formatPlaybackClock(totalDuration),
-                style = clockStyle,
-                color = palette.secondaryOnPageMiddle,
-            )
+        Box(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+            Row(Modifier.fillMaxWidth()) {
+                val clockStyle = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum")
+                Text(
+                    text = formatPlaybackClock(displayPosition),
+                    style = clockStyle,
+                    color = palette.secondaryOnPageMiddle,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = formatPlaybackClock(totalDuration),
+                    style = clockStyle,
+                    color = palette.secondaryOnPageMiddle,
+                )
+            }
+            // Between the times, where nothing else sits; it may stand taller than the row
+            // without moving anything below it.
+            Box(Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
+                TransitionKindLabel(
+                    kind = transitionKind,
+                    palette = palette,
+                    modifier = Modifier.wrapContentHeight(unbounded = true),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Names the transition the listener is hearing while it lasts: 智能过渡 for a beat-matched blend,
+ * 淡入淡出 for a plain crossfade, which is also what the smart mode falls back to when two songs'
+ * tempi are too far apart to match.
+ */
+@Composable
+private fun TransitionKindLabel(
+    kind: TransitionKind?,
+    palette: ContentAccentPalette,
+    modifier: Modifier = Modifier,
+) {
+    // Kept through the fade-out, when the blend has already ended.
+    var lastKind by remember { mutableStateOf(kind) }
+    LaunchedEffect(kind) { if (kind != null) lastKind = kind }
+    AnimatedVisibility(
+        visible = kind != null,
+        enter = fadeIn(MaterialTheme.motionScheme.slowEffectsSpec()),
+        exit = fadeOut(MaterialTheme.motionScheme.slowEffectsSpec()),
+        modifier = modifier,
+    ) {
+        val shown = kind ?: lastKind ?: return@AnimatedVisibility
+        val beatMatched = shown == TransitionKind.BEAT_MATCHED
+        Surface(
+            shape = CircleShape,
+            color = if (beatMatched) palette.accent.copy(alpha = 0.22f) else palette.onPageMiddle.copy(alpha = 0.10f),
+            contentColor = if (beatMatched) palette.onPageMiddle else palette.secondaryOnPageMiddle,
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (beatMatched) {
+                    Icon(
+                        imageVector = AppIcons.GraphicEq,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 4.dp).size(12.dp),
+                    )
+                }
+                Text(
+                    text = if (beatMatched) strings.transitionSmart else strings.transitionCrossfade,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
@@ -907,3 +978,6 @@ private fun NowPlayingToolbar(
 }
 
 private const val TITLE_CROSSFADE_MILLIS = 480
+
+/** How much a downbeat enlarges the cover through a beat-matched blend. */
+private const val BEAT_KICK_SCALE = 0.02f

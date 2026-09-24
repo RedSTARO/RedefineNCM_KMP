@@ -83,10 +83,19 @@ class DeckMixerTest {
         val rendered = ArrayList<Float>()
         val block = FloatArray(2_048 * 2)
         var offered = false
+        var renderedFrames = 0L
+        var reportedAfterSwap = false
         while (true) {
             val frames = mixer.render(block, 2_048)
             if (frames == 0) break
             for (i in 0 until frames * 2) rendered += block[i]
+            renderedFrames += frames
+            // What screens are told: the same plan all through, also past the swap.
+            mixer.blendAt(renderedFrames)?.let { heard ->
+                assertEquals(plan, heard.plan)
+                assertTrue(heard.elapsedMs in 0L..plan.overlapMs, "elapsed ${heard.elapsedMs}")
+                if (heard.elapsedMs > plan.swapAfterMs) reportedAfterSwap = true
+            }
             mixer.planNeedingIncoming(12_000L)?.let { wanted ->
                 assertEquals(plan, wanted)
                 assertTrue(!offered)
@@ -96,6 +105,7 @@ class DeckMixerTest {
         }
         mixer.close()
         assertTrue(offered, "the incoming track was never requested")
+        assertTrue(reportedAfterSwap, "the blend was not reported past its swap")
         val output = rendered.toFloatArray()
         val rate = 44_100
 

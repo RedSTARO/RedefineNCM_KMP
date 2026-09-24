@@ -188,11 +188,23 @@ internal fun MutableStateFlow<Long>.advancePlaybackOccurrence() {
 }
 
 /**
- * A song transition while both tracks sound: the two tracks, and how far the blend has gone, from
- * 0 when the incoming track becomes audible to 1 when the outgoing one has faded out. The swap,
- * where the incoming track becomes the current one, is at the plan's swap point, the middle for
- * every plan made today.
+ * A song transition while both tracks sound: the two tracks, the [plan] they follow, and
+ * [elapsedMs] of it heard so far, from 0 when the incoming track becomes audible to the plan's
+ * overlap when the outgoing one has faded out. The swap, where the incoming track becomes the
+ * current one, is at the plan's swap point, the middle for every plan made today.
+ *
+ * The plan says what kind of blend the listener hears, beat matched or a plain crossfade, and for
+ * a beat-matched one where the shared beats fall: the incoming track is then at
+ * `plan.incomingEntryMs + elapsedMs` of its own media time.
  */
-data class TransitionBlend(val outgoing: MediaInfo, val incoming: MediaInfo, val progress: Float)
+data class TransitionBlend(
+    val outgoing: MediaInfo,
+    val incoming: MediaInfo,
+    val plan: TransitionPlan,
+    val elapsedMs: Long,
+) {
+    /** How far the blend has gone, 0 to 1. */
+    val progress: Float get() = (elapsedMs.toFloat() / plan.overlapMs).coerceIn(0f, 1f)
+}
 
 private val NoTransitionBlend: StateFlow<TransitionBlend?> = MutableStateFlow(null)

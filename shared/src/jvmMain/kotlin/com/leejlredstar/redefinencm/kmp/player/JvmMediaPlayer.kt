@@ -172,22 +172,24 @@ class JvmMediaPlayer(
 
     /**
      * What the listener hears of a blend, from the line's position against the mixer's blend
-     * frames. The two tracks are looked up in the queue by the ids the mixer holds: until the
-     * blend ends, its primary deck is the outgoing track even after the swap.
+     * frames. The two tracks are looked up in the queue by the ids of the blend's plan: the queue
+     * has moved on at the swap, but both stay in it until the blend ends.
      */
     private fun publishTransitionBlend() {
-        val deckMixer = mixer
         val frame = line?.let { runCatching { it.longFramePosition }.getOrNull() }
-        val progress = if (_isPlaying.value && deckMixer != null && frame != null) deckMixer.blendProgressAt(frame) else null
-        val incomingId = deckMixer?.blendIncomingMediaId
-        if (progress == null || deckMixer == null || incomingId == null) {
+        val heard = if (_isPlaying.value && frame != null) mixer?.blendAt(frame) else null
+        if (heard == null) {
             _transitionBlend.value = null
             return
         }
         val items = currentQueueModel().items
-        val outgoing = items.firstOrNull { it.id == deckMixer.currentMediaId }
-        val incoming = items.firstOrNull { it.id == incomingId }
-        _transitionBlend.value = if (outgoing != null && incoming != null) TransitionBlend(outgoing, incoming, progress) else null
+        val outgoing = items.firstOrNull { it.id == heard.plan.outgoingMediaId }
+        val incoming = items.firstOrNull { it.id == heard.plan.incomingMediaId }
+        _transitionBlend.value = if (outgoing != null && incoming != null) {
+            TransitionBlend(outgoing, incoming, heard.plan, heard.elapsedMs)
+        } else {
+            null
+        }
     }
 
     @Synchronized
