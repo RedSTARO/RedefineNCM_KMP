@@ -53,8 +53,8 @@ abstract class BasePlatformPlayer(
     protected val _volume = MutableStateFlow(normalizePlayerVolume(initialVolume))
     final override val volume: StateFlow<Float> = _volume.asStateFlow()
 
-    protected val _transitionAudible = MutableStateFlow(false)
-    final override val transitionAudible: StateFlow<Boolean> = _transitionAudible.asStateFlow()
+    protected val _transitionBlend = MutableStateFlow<TransitionBlend?>(null)
+    final override val transitionBlend: StateFlow<TransitionBlend?> = _transitionBlend.asStateFlow()
 
     /**
      * Fans one timeline snapshot out to the five queue-derived flows.

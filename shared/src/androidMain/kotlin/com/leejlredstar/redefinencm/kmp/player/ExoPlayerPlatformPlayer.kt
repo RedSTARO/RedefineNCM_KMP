@@ -474,7 +474,13 @@ class ExoPlayerPlatformPlayer(
      * start: a seek into an MP3 lands up to a frame away from the entry analysis found, which is
      * heard as a flam, while a player that plays from the start agrees with the analysis.
      */
-    private class AndroidBlend(val plan: TransitionPlan, val incoming: ExoPlayer, val outgoing: ExoPlayer) {
+    private class AndroidBlend(
+        val plan: TransitionPlan,
+        val incoming: ExoPlayer,
+        val outgoing: ExoPlayer,
+        val incomingInfo: MediaInfo?,
+        val outgoingInfo: MediaInfo?,
+    ) {
         var swapped = false
         var lastRateChangeAt = 0L
         var outgoingRate = 1f
@@ -591,7 +597,13 @@ class ExoPlayerPlatformPlayer(
         outgoing.pauseAtEndOfMediaItems = true
         other.volume = 0f
         other.play()
-        blend = AndroidBlend(plan, other, outgoing).also { it.outgoingRate = outgoing.playbackParameters.speed }
+        blend = AndroidBlend(
+            plan = plan,
+            incoming = other,
+            outgoing = outgoing,
+            incomingInfo = other.currentMediaItem?.info(),
+            outgoingInfo = outgoing.currentMediaItem?.info(),
+        ).also { it.outgoingRate = outgoing.playbackParameters.speed }
     }
 
     private fun tickBlend(blend: AndroidBlend) {
@@ -605,7 +617,13 @@ class ExoPlayerPlatformPlayer(
         val userVolume = _volume.value
         blend.outgoing.volume = userVolume * gains.outgoing
         blend.incoming.volume = if (beforeEntry) 0f else userVolume * gains.incoming
-        _transitionAudible.value = !beforeEntry
+        val outgoingInfo = blend.outgoingInfo
+        val incomingInfo = blend.incomingInfo
+        _transitionBlend.value = if (beforeEntry || outgoingInfo == null || incomingInfo == null) {
+            null
+        } else {
+            TransitionBlend(outgoingInfo, incomingInfo, (elapsedMs.toFloat() / plan.overlapMs).coerceIn(0f, 1f))
+        }
         if (beforeEntry) {
             // A long entry can start the pre-roll before the outgoing tempo ramp; keep ramping.
             val position = blend.outgoing.currentPosition
@@ -673,7 +691,7 @@ class ExoPlayerPlatformPlayer(
         if (!blend.swapped) swapToIncoming(blend)
         if (this.blend !== blend) return
         this.blend = null
-        _transitionAudible.value = false
+        _transitionBlend.value = null
         emptyDeck(blend.outgoing)
         active.volume = _volume.value
         setSpeed(active, 1f)
@@ -688,7 +706,7 @@ class ExoPlayerPlatformPlayer(
         val running = blend
         if (running != null) {
             blend = null
-            _transitionAudible.value = false
+            _transitionBlend.value = null
             if (running.swapped) emptyDeck(running.outgoing) else emptyDeck(running.incoming)
             active.volume = _volume.value
         }
@@ -761,6 +779,8 @@ class ExoPlayerPlatformPlayer(
         )
         .setTag(this)
         .build()
+
+    private fun MediaItem.info(): MediaInfo = (localConfiguration?.tag as? MediaInfo) ?: toMediaInfo()
 
     private fun MediaItem.toMediaInfo(): MediaInfo {
         val meta = mediaMetadata

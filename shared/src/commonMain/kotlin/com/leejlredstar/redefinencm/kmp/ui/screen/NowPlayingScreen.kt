@@ -96,10 +96,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.produceState
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
-import com.leejlredstar.redefinencm.kmp.ui.component.TransitionAura
-import com.leejlredstar.redefinencm.kmp.ui.component.FlowingLightRing
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.lerp
+import com.leejlredstar.redefinencm.kmp.ui.component.rememberTransitionVisual
+import com.leejlredstar.redefinencm.kmp.ui.component.TransitionVisual
+import com.leejlredstar.redefinencm.kmp.ui.component.TransitionArtworkStack
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.Crossfade
 
 /**
  * The Now Playing entry page: what the mini player, the desktop rail and every OS
@@ -138,6 +141,21 @@ fun NowPlayingScreen(
     val palette = artworkAccent.palette
     val extractAccent = artworkAccent.extract
 
+    // Through a song transition the page travels with the music: the incoming cover dissolves
+    // in over the outgoing one and the page's colours follow it, from the outgoing cover's to the
+    // incoming one's, instead of jumping at the swap.
+    val visual = rememberTransitionVisual(player)
+    val blendKey = visual?.incoming?.id
+    val startPalette = remember(blendKey) { palette }
+    val startAccent = remember(blendKey) { accent }
+    val incomingAccent = rememberArtworkAccent(
+        requestKey = visual?.incoming?.artworkUri,
+        fallback = startAccent,
+        animationSpec = motionScheme.slowEffectsSpec(),
+        label = "nowPlayingIncomingAccent",
+    )
+    val incomingPalette = incomingAccent.palette
+
     val sheets = rememberTransportSheetsState()
     val playbackSource by PlaybackSource.label.collectAsState()
     val songWikiState by viewModel.songWikiUiState.collectAsState()
@@ -146,18 +164,28 @@ fun NowPlayingScreen(
     val localArtworkActive by viewModel.localArtworkActive.collectAsState()
     val remoteArtworkUri by viewModel.remoteArtworkUri.collectAsState()
     val outputVolume by player.volume.collectAsState()
-    val transitionAudible by player.transitionAudible.collectAsState()
     var showSongWiki by remember { mutableStateOf(false) }
     LaunchedEffect(media?.id) { showSongWiki = false }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(palette.pageStart, palette.pageMiddle, palette.pageEnd),
-                ),
-            )
+            .drawBehind {
+                // Read at draw time, so a blend repaints the page without recomposing it.
+                val weight = visual?.weight
+                val from = if (weight == null) palette else startPalette
+                val to = if (weight == null) palette else incomingPalette
+                val t = weight ?: 0f
+                drawRect(
+                    Brush.verticalGradient(
+                        listOf(
+                            lerp(from.pageStart, to.pageStart, t),
+                            lerp(from.pageMiddle, to.pageMiddle, t),
+                            lerp(from.pageEnd, to.pageEnd, t),
+                        ),
+                    ),
+                )
+            }
             .semantics { contentDescription = strings.nowPlaying },
     ) {
         BoxWithConstraints(
@@ -177,10 +205,10 @@ fun NowPlayingScreen(
                 NowPlayingArtwork(
                     media = media,
                     isPlaying = nowPlaying.isPlaying,
-                    transitioning = transitionAudible && nowPlaying.hasMedia,
-                    palette = palette,
+                    visual = visual,
                     reducedMotion = reducedMotion,
                     onArtworkLoaded = extractAccent,
+                    onIncomingArtworkLoaded = incomingAccent.extract,
                     onOpenLyrics = { if (nowPlaying.hasMedia) onOpenLyrics() },
                     modifier = modifier,
                 )
@@ -438,19 +466,19 @@ private fun MutedChip(
  * (`ExpressiveArtwork`'s press morph). Paused: it settles to 86%, Apple Music's cue that
  * nothing is moving.
  *
- * While a song transition sounds, a glow breathes around it and light runs round its rim, in the
- * page's accent. The accent follows the artwork, so at the swap the glow shifts from the old
- * song's colour to the new one's.
+ * Through a song transition the next song's cover dissolves in over this one in step with the
+ * music, settling into focus as it comes ([TransitionArtworkStack]); the frame, its shadow and
+ * its press morph stay one.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun NowPlayingArtwork(
     media: MediaInfo?,
     isPlaying: Boolean,
-    transitioning: Boolean,
-    palette: ContentAccentPalette,
+    visual: TransitionVisual?,
     reducedMotion: Boolean,
     onArtworkLoaded: (coil3.Image) -> Unit,
+    onIncomingArtworkLoaded: (coil3.Image) -> Unit,
     onOpenLyrics: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -462,65 +490,47 @@ private fun NowPlayingArtwork(
         label = "nowPlayingArtworkScale",
     )
     val frameShape = MaterialTheme.shapes.extraLarge
-    // On a dark page the light burns near white. On a light page the accent itself would read as
-    // a stain, so the glow is a paler tint of it.
-    val darkPage = palette.onPageMiddle.luminance() > 0.5f
-    val light = lerp(palette.accent, Color.White, if (darkPage) 0.7f else 0.45f)
-    val glow = if (darkPage) palette.accent else lerp(palette.accent, Color.White, 0.35f)
-    Box(
+    TransitionArtworkStack(
+        current = media,
+        visual = visual,
+        focusPull = !reducedMotion,
+        onCurrentImage = onArtworkLoaded,
+        onIncomingImage = onIncomingArtworkLoaded,
         modifier = modifier
             .aspectRatio(1f)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
-            },
-    ) {
-        TransitionAura(
-            visible = transitioning,
-            color = glow,
-            highlight = light,
-            corner = frameShape.topStart,
-            animate = !reducedMotion,
-            modifier = Modifier.matchParentSize(),
-        )
-        ExpressiveArtwork(
-            model = media?.artworkUri?.takeIf(String::isNotBlank),
-            contentDescription = media?.title?.let { strings.artworkOf(it) },
-            modifier = Modifier
-                .fillMaxSize()
-                .dropShadow(
-                    shape = frameShape,
-                    shadow = Shadow(
-                        radius = 36.dp,
-                        color = Color.Black,
-                        spread = 0.dp,
-                        offset = DpOffset(x = 0.dp, y = 18.dp),
-                        alpha = 0.32f,
-                    ),
-                )
-                .clickable(
-                    interactionSource = interactionSource,
-                    indication = null,
-                    enabled = media != null,
-                    // The cover opens the lyrics, one tap instead of the quote button; play and pause
-                    // have their own button right beside it.
-                    onClickLabel = strings.openLyrics,
-                    onClick = onOpenLyrics,
+            }
+            .dropShadow(
+                shape = frameShape,
+                shadow = Shadow(
+                    radius = 36.dp,
+                    color = Color.Black,
+                    spread = 0.dp,
+                    offset = DpOffset(x = 0.dp, y = 18.dp),
+                    alpha = 0.32f,
                 ),
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = media != null,
+                // The cover opens the lyrics, one tap instead of the quote button; play and pause
+                // have their own button right beside it.
+                onClickLabel = strings.openLyrics,
+                onClick = onOpenLyrics,
+            ),
+    ) { layerMedia, layerModifier, imageModifier, onLoaded ->
+        ExpressiveArtwork(
+            model = layerMedia?.artworkUri?.takeIf(String::isNotBlank),
+            // Only the current track's cover is described; the other is on its way in or out.
+            contentDescription = layerMedia?.takeIf { it.id == media?.id }?.title?.let { strings.artworkOf(it) },
+            modifier = Modifier.matchParentSize().then(layerModifier),
+            imageModifier = imageModifier,
             shape = frameShape,
             pressInteractionSource = interactionSource,
-            onImageLoaded = onArtworkLoaded,
-        )
-        FlowingLightRing(
-            visible = transitioning,
-            color = palette.accent,
-            headColor = light,
-            corner = frameShape.topStart,
-            strokeWidth = 3.dp,
-            glowWidth = 16.dp,
-            lapMillis = 5_600,
-            animate = !reducedMotion,
-            modifier = Modifier.matchParentSize(),
+            onImageLoaded = onLoaded,
         )
     }
 }
@@ -540,7 +550,14 @@ private fun NowPlayingTitle(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
+        // The words change at the swap; they cross-fade there rather than cut.
+        Crossfade(
+            targetState = media,
+            animationSpec = tween(TITLE_CROSSFADE_MILLIS),
+            label = "nowPlayingTitle",
+            modifier = Modifier.weight(1f),
+        ) { media ->
+        Column {
             Text(
                 text = media?.title ?: strings.notPlaying,
                 style = MaterialTheme.typography.headlineMedium,
@@ -561,6 +578,7 @@ private fun NowPlayingTitle(
                 }
                 NowPlayingCredits(media = media, palette = palette)
             }
+        }
         }
         Spacer(Modifier.width(12.dp))
         FilledIconToggleButton(
@@ -887,3 +905,5 @@ private fun NowPlayingToolbar(
         },
     )
 }
+
+private const val TITLE_CROSSFADE_MILLIS = 480

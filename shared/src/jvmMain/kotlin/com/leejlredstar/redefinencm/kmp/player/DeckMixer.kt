@@ -104,6 +104,18 @@ internal class DeckMixer(
     /** The track a blend in progress is bringing in, or null outside a blend. */
     val blendIncomingMediaId: String? get() = blend?.incoming?.mediaId
 
+    /**
+     * How far the blend has gone at [outputFrame], the frame the listener is hearing: 0 at its
+     * start and 1 at its end. Null outside a blend, before its first frame is heard, and while an
+     * abandoned one fades out.
+     */
+    fun blendProgressAt(outputFrame: Long): Float? {
+        val active = blend ?: return null
+        if (active.fadeFrom != null || outputFrame < active.startFrame) return null
+        val length = (active.endFrame - active.startFrame).coerceAtLeast(1L)
+        return ((outputFrame - active.startFrame).toFloat() / length).coerceIn(0f, 1f)
+    }
+
     /** The decoder-reported length of the track the listener is hearing as current. */
     val audibleDurationMs: Long
         get() = blend?.takeIf { it.swapped }?.incoming?.source?.durationMs ?: primary.source.durationMs

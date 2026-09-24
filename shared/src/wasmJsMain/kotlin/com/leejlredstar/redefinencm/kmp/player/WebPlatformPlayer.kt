@@ -86,7 +86,13 @@ class WebPlatformPlayer(
     private var blend: WebBlend? = null
 
     /** A blend under way: [deck] plays the incoming track, [ghost] the outgoing one after the swap. */
-    private class WebBlend(val plan: TransitionPlan, val deck: HTMLAudioElement, val outgoing: HTMLAudioElement) {
+    private class WebBlend(
+        val plan: TransitionPlan,
+        val deck: HTMLAudioElement,
+        val outgoing: HTMLAudioElement,
+        val outgoingInfo: MediaInfo?,
+        val incomingInfo: MediaInfo?,
+    ) {
         var swapped = false
     }
 
@@ -773,7 +779,13 @@ class WebPlatformPlayer(
             return
         }
         deck.volume = 0.0
-        val active = WebBlend(plan, deck, audio)
+        val active = WebBlend(
+            plan = plan,
+            deck = deck,
+            outgoing = audio,
+            outgoingInfo = queueModel.currentItem,
+            incomingInfo = queueModel.next(repeat = false).currentItem?.takeIf { it.id == plan.incomingMediaId },
+        )
         blend = active
         deck.play().then(
             onFulfilled = { null },
@@ -792,7 +804,13 @@ class WebPlatformPlayer(
         val userVolume = _volume.value.toDouble()
         active.outgoing.volume = (userVolume * gains.outgoing).coerceIn(0.0, 1.0)
         active.deck.volume = (userVolume * gains.incoming).coerceIn(0.0, 1.0)
-        _transitionAudible.value = elapsedMs > 0.0
+        val outgoingInfo = active.outgoingInfo
+        val incomingInfo = active.incomingInfo
+        _transitionBlend.value = if (elapsedMs <= 0.0 || outgoingInfo == null || incomingInfo == null) {
+            null
+        } else {
+            TransitionBlend(outgoingInfo, incomingInfo, (elapsedMs / plan.overlapMs).toFloat().coerceIn(0f, 1f))
+        }
         // Keep the outgoing beat on the incoming one: nudge its rate by the phase error, up to
         // 4 %, the way a DJ rides the pitch fader. Browsers start play() tens of milliseconds late.
         if (!active.outgoing.ended && elapsedMs > 0.0) {
@@ -836,7 +854,7 @@ class WebPlatformPlayer(
         audio.volume = _volume.value.toDouble()
         audio.playbackRate = 1.0
         blend = null
-        _transitionAudible.value = false
+        _transitionBlend.value = null
     }
 
     /**
@@ -848,7 +866,7 @@ class WebPlatformPlayer(
         val active = blend
         if (active != null) {
             blend = null
-            _transitionAudible.value = false
+            _transitionBlend.value = null
             if (active.swapped) {
                 releaseDeck(active.outgoing)
             } else {

@@ -120,11 +120,11 @@ interface PlatformPlayer {
     fun disarmTransition() {}
 
     /**
-     * True while a transition's two tracks sound together: from the moment the incoming track
-     * becomes audible until the outgoing one has faded out or the blend was abandoned. For
-     * screens that show a transition playing; it changes nothing about playback.
+     * The transition under way while its two tracks sound together, from the moment the incoming
+     * track becomes audible until the outgoing one has faded out or the blend was abandoned; null
+     * otherwise. For screens that show the hand-over; it changes nothing about playback.
      */
-    val transitionAudible: StateFlow<Boolean> get() = NoTransitionAudible
+    val transitionBlend: StateFlow<TransitionBlend?> get() = NoTransitionBlend
 
     // ── Lifecycle ──
 
@@ -187,4 +187,12 @@ internal fun MutableStateFlow<Long>.advancePlaybackOccurrence() {
     value += 1L
 }
 
-private val NoTransitionAudible: StateFlow<Boolean> = MutableStateFlow(false)
+/**
+ * A song transition while both tracks sound: the two tracks, and how far the blend has gone, from
+ * 0 when the incoming track becomes audible to 1 when the outgoing one has faded out. The swap,
+ * where the incoming track becomes the current one, is at the plan's swap point, the middle for
+ * every plan made today.
+ */
+data class TransitionBlend(val outgoing: MediaInfo, val incoming: MediaInfo, val progress: Float)
+
+private val NoTransitionBlend: StateFlow<TransitionBlend?> = MutableStateFlow(null)

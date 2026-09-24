@@ -26,7 +26,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -39,6 +38,7 @@ import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentColorFor
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberArtworkAccent
 import org.koin.compose.koinInject
+import androidx.compose.runtime.remember
 
 /**
  * 迷你播放条 FAB：右下角紧凑入口，只保留封面、播放状态和细进度，避免遮挡页面内容。
@@ -54,7 +54,6 @@ fun MiniNowPlayingBar(
     val position by player.position.collectAsState()
     val duration by player.duration.collectAsState()
     val volume by player.volume.collectAsState()
-    val transitionAudible by player.transitionAudible.collectAsState()
     val hasMedia = media != null
     // Without a muted badge, silence would be the one state the pill gives no sign of.
     val muted = hasMedia && volume <= 0.001f
@@ -77,14 +76,28 @@ fun MiniNowPlayingBar(
     )
     val extractThemeColor = artworkAccent.extract
     val accentPalette = artworkAccent.palette
-    val containerColor = accentPalette.container
-    val contentColor = contentColorFor(containerColor)
-    // On a dark container the comets' heads burn near white; on a light one white would vanish
-    // into it, so they stay the accent.
-    val ringHead = if (contentColor.luminance() > 0.5f) {
-        lerp(accentPalette.accent, Color.White, 0.7f)
+
+    // Through a song transition the pill travels with the music: the next cover dissolves in over
+    // this one and the pill's colour flows from one cover's to the other's, instead of jumping at
+    // the swap. The pill is small, so it simply recomposes as the blend moves.
+    val visual = rememberTransitionVisual(player)
+    val blendKey = visual?.incoming?.id
+    val startContainer = remember(blendKey) { accentPalette.container }
+    val incomingAccent = rememberArtworkAccent(
+        requestKey = visual?.incoming?.artworkUri,
+        fallback = remember(blendKey) { artworkAccent.color },
+        label = "miniPlayerIncomingColor",
+    )
+    val weight = visual?.weight
+    val containerColor = if (weight == null) {
+        accentPalette.container
     } else {
-        accentPalette.accent
+        lerp(startContainer, incomingAccent.palette.container, weight)
+    }
+    val contentColor = if (weight == null) {
+        contentColorFor(containerColor)
+    } else {
+        lerp(contentColorFor(startContainer), contentColorFor(incomingAccent.palette.container), weight)
     }
 
     // The whole pill opens the player; only the play button does something else. Limiting that
@@ -120,16 +133,28 @@ fun MiniNowPlayingBar(
                                 contentColor = contentColor,
                             ) {
                                 if (hasMedia) {
-                                    AsyncImage(
-                                        model = ImageRequest.Builder(LocalPlatformContext.current)
-                                            .data(media?.artworkUri)
-                                            .crossfade(true)
-                                            .build(),
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize().clip(CircleShape),
-                                        onSuccess = { state -> extractThemeColor(state.result.image) },
-                                    )
+                                    TransitionArtworkStack(
+                                        current = media,
+                                        visual = visual,
+                                        onCurrentImage = extractThemeColor,
+                                        onIncomingImage = incomingAccent.extract,
+                                        modifier = Modifier.fillMaxSize(),
+                                    ) { layerMedia, layerModifier, imageModifier, onLoaded ->
+                                        AsyncImage(
+                                            model = ImageRequest.Builder(LocalPlatformContext.current)
+                                                .data(layerMedia?.artworkUri)
+                                                .crossfade(true)
+                                                .build(),
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier
+                                                .matchParentSize()
+                                                .then(layerModifier)
+                                                .clip(CircleShape)
+                                                .then(imageModifier),
+                                            onSuccess = { state -> onLoaded(state.result.image) },
+                                        )
+                                    }
                                 } else {
                                     Box(contentAlignment = Alignment.Center) {
                                         Icon(
@@ -189,12 +214,5 @@ fun MiniNowPlayingBar(
                 }
             }
         }
-        // While a song transition sounds, light runs around the pill.
-        FlowingLightRing(
-            visible = transitionAudible && hasMedia,
-            color = accentPalette.accent,
-            headColor = ringHead,
-            modifier = Modifier.matchParentSize(),
-        )
     }
 }

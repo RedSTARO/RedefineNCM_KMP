@@ -29,6 +29,9 @@ import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
  * artwork into the expressive shape morph: the frame blooms from a soft squircle into a
  * scalloped cookie while held, then springs back on release. It is off by default so callers
  * that are not interactive keep a plain rectangle and pay nothing for the morph path.
+ *
+ * [imageModifier] applies to the image inside the frame, so it can move or soften the picture
+ * while the frame and its clip stay put.
  */
 @Composable
 fun ExpressiveArtwork(
@@ -43,6 +46,7 @@ fun ExpressiveArtwork(
     pressInteractionSource: InteractionSource? = null,
     morphPair: ExpressiveMorphPair = ExpressiveMorphPair.ArtworkBloom,
     onImageLoaded: (Image) -> Unit = {},
+    imageModifier: Modifier = Modifier,
 ) {
     val morphProgress = pressInteractionSource?.let { rememberPressMorphProgress(it) }
     val resolvedShape = if (morphProgress != null) {
@@ -69,7 +73,7 @@ fun ExpressiveArtwork(
                 model = model,
                 contentDescription = contentDescription,
                 contentScale = contentScale,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().then(imageModifier),
                 onSuccess = { state -> onImageLoaded(state.result.image) },
             )
         }
