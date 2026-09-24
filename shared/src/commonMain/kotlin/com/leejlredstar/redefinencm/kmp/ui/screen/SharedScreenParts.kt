@@ -154,6 +154,7 @@ fun rememberSongRowActions(
     val downloadManager = koinInject<SongDownloadManager>()
     val providers = koinInject<MusicProviderRegistry>()
     val localLibrary = koinInject<LocalLibraryViewModel>()
+    val localLibraryEnabled by localLibrary.enabled.collectAsState()
     // LocalClipboard needs a platform ClipEntry and common code has no plain-text factory for
     // one; the text-only manager does the same job on every target.
     @Suppress("DEPRECATION")
@@ -161,12 +162,14 @@ fun rememberSongRowActions(
     val language = I18n.language
     return remember(
         media, neteaseSong, playlistId, player, downloadManager, providers, localLibrary, clipboard,
-        language,
+        localLibraryEnabled, language,
     ) {
         buildList {
             add(SongRowAction(strings.songActionAddToQueue, AppIcons.PlaylistAdd) { player.addToQueue(media) })
-            // A song of any provider can go into a local playlist.
-            add(SongRowAction(AddToLocalPlaylistLabel, AppIcons.Add) { localLibrary.requestAddition(listOf(media)) })
+            // A song of any provider can go into a local playlist, while the local account is on.
+            if (localLibraryEnabled) {
+                add(SongRowAction(AddToLocalPlaylistLabel, AppIcons.Add) { localLibrary.requestAddition(listOf(media)) })
+            }
             if (neteaseSong != null) {
                 add(
                     SongRowAction(strings.download, AppIcons.Download) {

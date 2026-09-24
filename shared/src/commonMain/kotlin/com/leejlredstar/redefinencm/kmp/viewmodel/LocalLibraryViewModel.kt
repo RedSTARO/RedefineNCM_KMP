@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.viewmodel
 
+import com.leejlredstar.redefinencm.kmp.data.local.LocalAccount
 import com.leejlredstar.redefinencm.kmp.data.local.LocalLibraryDocument
 import com.leejlredstar.redefinencm.kmp.data.local.LocalLibraryStore
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
@@ -21,16 +22,27 @@ import kotlinx.coroutines.launch
 /**
  * The local account's playlists and favourites for the pages that show and change them, and the
  * "add to a local playlist" dialog every song menu opens.
+ *
+ * While the local account is switched off, every way into the library is hidden and this adds
+ * nothing to it; what it holds is kept.
  */
 class LocalLibraryViewModel(
     private val store: LocalLibraryStore,
     private val providers: MusicProviderRegistry,
+    private val localAccount: LocalAccount,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     /** Null until the stored library has been read. */
     val library: StateFlow<LocalLibraryDocument?> = store.updates()
         .stateIn(scope, SharingStarted.Eagerly, null)
+
+    /**
+     * Whether the local account is switched on, for showing the ways into its library. False until
+     * the stored switch has been read, so nothing of it appears before that.
+     */
+    val enabled: StateFlow<Boolean> = localAccount.enabledUpdates()
+        .stateIn(scope, SharingStarted.Eagerly, false)
 
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
@@ -48,13 +60,25 @@ class LocalLibraryViewModel(
         val suggestedName: String = "",
     )
 
+    init {
+        // An add dialog still open when the account is switched off closes. This follows the
+        // stored switch only, never the default the state above starts from.
+        scope.launch {
+            localAccount.enabledUpdates().collect { on ->
+                if (!on) _pendingAddition.value = null
+            }
+        }
+    }
+
     fun consumeMessage() {
         _message.value = null
     }
 
-    /** Opens the add dialog for [tracks]. */
+    /** Opens the add dialog for [tracks], while the local account is switched on. */
     fun requestAddition(tracks: List<MediaInfo>, suggestedName: String = "") {
-        if (tracks.isNotEmpty()) _pendingAddition.value = PendingAddition(tracks, suggestedName)
+        if (tracks.isNotEmpty() && enabled.value) {
+            _pendingAddition.value = PendingAddition(tracks, suggestedName)
+        }
     }
 
     fun dismissAddition() {

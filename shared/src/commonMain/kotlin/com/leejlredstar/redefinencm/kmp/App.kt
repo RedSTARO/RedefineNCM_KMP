@@ -120,6 +120,7 @@ import com.leejlredstar.redefinencm.kmp.ui.screen.LocalLibraryScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.LocalPlaylistScreen
 import com.leejlredstar.redefinencm.kmp.ui.component.AddToLocalPlaylistDialog
 import com.leejlredstar.redefinencm.kmp.viewmodel.LocalLibraryViewModel
+import com.leejlredstar.redefinencm.kmp.data.local.LocalAccount
 import com.leejlredstar.redefinencm.kmp.ui.screen.LoginScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.PlaylistDetailScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.SearchScreen
@@ -254,6 +255,12 @@ internal fun decodePushedDestination(saved: String): PushedDest? = when (saved) 
         else -> null
     }
 }
+
+/** How many pages of the local library lie on top of [stack], counted down from the top. */
+internal fun localLibraryPagesOnTop(stack: List<PushedDest>): Int =
+    stack.asReversed()
+        .takeWhile { it is PushedDest.LocalLibrary || it is PushedDest.LocalPlaylist }
+        .size
 
 internal fun <T> MutableList<T>.focusOrPush(destination: T) {
     val existingIndex = lastIndexOf(destination)
@@ -405,10 +412,27 @@ private fun AppContent(
                 }
             }
             fun push(dest: PushedDest) = pushedStack.add(dest)
+            // Null until the local account's stored switch has been read. Only a value read from
+            // settings may drop pages; the default would empty a restored stack at every launch.
+            val localAccount: LocalAccount = koinInject()
+            val localAccountEnabled by remember(localAccount) { localAccount.enabledUpdates() }
+                .collectAsState(initial = null)
+            // Pages of the local library left beneath the page that switched the local account
+            // off are passed over instead of returned to. They are not removed when the switch
+            // flips: the pages above them would move to another depth, which resets their state
+            // and replays the page transition on screen.
+            fun dropSwitchedOffLocalPages() {
+                if (localAccountEnabled != false) return
+                repeat(localLibraryPagesOnTop(pushedStack)) {
+                    forgetPushed(fromDepth = pushedStack.size)
+                    pushedStack.removeAt(pushedStack.lastIndex)
+                }
+            }
             fun back() {
                 if (pushedStack.isEmpty()) return
                 forgetPushed(fromDepth = pushedStack.size)
                 pushedStack.removeAt(pushedStack.lastIndex)
+                dropSwitchedOffLocalPages()
             }
             fun clearPushed() {
                 if (pushedStack.isEmpty()) return
@@ -433,6 +457,8 @@ private fun AppContent(
             }
 
             BackHandler(enabled = pushedStack.isNotEmpty()) { back() }
+            // A saved stack restored with a local page on top while the account is switched off.
+            LaunchedEffect(localAccountEnabled) { dropSwitchedOffLocalPages() }
 
             LaunchedEffect(Unit) {
                 AppNavigationRequests.openDownloadsRequestId.collect { requestId ->

@@ -509,6 +509,8 @@
     <string name="name">名称</string>
     <string name="localAccountNoSignInNeeded">无需登录；只保存在此设备</string>
     <string name="rename">重命名</string>
+    <string name="enableLocalAccount">启用本地账号</string>
+    <string name="enableLocalAccountHint">关闭后隐藏本地歌单和「本地喜欢」，QQ音乐等平台的歌曲不能再点亮心形；已保存的内容不会删除</string>
 
     <!-- ui/screen/AlbumScreen.kt -->
     <string name="playbackSourceAlbum">专辑「{albumName}」</string>

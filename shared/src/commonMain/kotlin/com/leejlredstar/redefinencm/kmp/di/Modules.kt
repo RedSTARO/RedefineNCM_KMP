@@ -313,13 +313,13 @@ val sharedModule = module {
     // Single: the now-playing state is global (only one song plays at a time).
     // The eager status restorer resolves this singleton after settings and queue restoration, so
     // restored/background playback also resolves lyrics without waiting for a screen composition.
-    single { NowPlayingViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { NowPlayingViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     // Factory: recording and cancellation are scoped to one pushed recognition page.
     factory { SongRecognitionViewModel(get(), get(), get()) }
     // Single: the settings summary and the accounts page read the same account state.
     single { AccountsViewModel(get(), get(), get()) }
     // Single: the song menus of every page share one add-to-local-playlist dialog.
-    single { LocalLibraryViewModel(get(), get()) }
+    single { LocalLibraryViewModel(get(), get(), get()) }
 }
 
 /** NetEase's server check: `/inner/version/` answers with the backend's version. */

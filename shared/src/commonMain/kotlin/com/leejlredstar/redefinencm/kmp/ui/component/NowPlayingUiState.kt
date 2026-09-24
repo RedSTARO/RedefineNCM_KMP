@@ -35,6 +35,8 @@ internal data class NowPlayingUiState(
     val favoriteState: FavoriteUiState,
     /** What the current track's provider offers; see [ProviderCapability]. */
     val capabilities: Set<ProviderCapability>,
+    /** Whether the local account is switched on to keep the hearts a provider cannot. */
+    val localFavorites: Boolean,
 ) {
     val playList: List<MediaInfo> get() = queueSnapshot.items
     val currentIndex: Int get() = queueSnapshot.currentIndex
@@ -49,13 +51,15 @@ internal data class NowPlayingUiState(
         get() = favoriteState.mediaId == media?.id && favoriteState.isLiked
 
     /**
-     * Whether the heart can be used: always with a track playing. A provider without the account's
-     * own likes keeps its hearts in the local account's favourites instead.
+     * Whether the heart can be used: with a track playing, when its provider keeps the account's
+     * likes, or when the local account is switched on to keep them in its favourites instead.
      */
-    val canFavorite: Boolean get() = hasMedia
+    val canFavorite: Boolean
+        get() = hasMedia && (ProviderCapability.LIKE in capabilities || localFavorites)
 
     /** Whether the heart writes to the local favourites rather than the provider account. */
-    val favoriteIsLocal: Boolean get() = hasMedia && ProviderCapability.LIKE !in capabilities
+    val favoriteIsLocal: Boolean
+        get() = hasMedia && ProviderCapability.LIKE !in capabilities && localFavorites
 
     /** Whether this track's provider has comments to show. */
     val canComment: Boolean get() = hasMedia && ProviderCapability.COMMENTS in capabilities
@@ -96,6 +100,7 @@ internal fun rememberNowPlayingUiState(
     val commentsFromCache by viewModel.commentsFromCache.collectAsState()
     val favoriteState by viewModel.favoriteUiState.collectAsState()
     val capabilities by viewModel.currentCapabilities.collectAsState()
+    val localFavorites by viewModel.localFavoritesEnabled.collectAsState()
     return remember(
         media,
         isPlaying,
@@ -108,6 +113,7 @@ internal fun rememberNowPlayingUiState(
         commentsFromCache,
         favoriteState,
         capabilities,
+        localFavorites,
     ) {
         NowPlayingUiState(
             media = media,
@@ -121,6 +127,7 @@ internal fun rememberNowPlayingUiState(
             commentsFromCache = commentsFromCache,
             favoriteState = favoriteState,
             capabilities = capabilities,
+            localFavorites = localFavorites,
         )
     }
 }

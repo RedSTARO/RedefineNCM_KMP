@@ -221,7 +221,7 @@ Desktop/JVM decodes FFmpeg frames into Compose `ImageBitmap`, and Web/WASM hosts
 `HTMLVideoElement` beneath the CanvasKit scene. Dynamic-cover capability must never decide
 renderer availability, renderer selection, Desktop overlay ownership, or navigation routing.
 
-### D6 — Multiple music providers, keyed by provider — **IN PROGRESS (recorded 2026-08-20, updated 2026-09-23)**
+### D6 — Multiple music providers, keyed by provider — **IN PROGRESS (recorded 2026-08-20, updated 2026-09-24)**
 
 The app aggregates more than one music service. NetEase Cloud Music is the first; QQ Music is
 the second. The decisions below are settled; the work is not started.
@@ -359,8 +359,9 @@ user-confirmed source switching.
 reporting). `NowPlayingViewModel` asks `MusicProviderRegistry.capabilitiesOf(mediaId)` before each
 NetEase-era feature and parses a NetEase song id in one helper; an unsupported feature gets its own
 `Unsupported` state (lyrics, song details) or a disabled control (comments, credits), never an
-English internal error. The heart works for every track: a provider without account likes keeps
-it in the local favourites. `NowPlayingUiState.providerBadge` names a non-NetEase track's provider
+English internal error. While the local account is switched on the heart works for every track: a
+provider without account likes keeps it in the local favourites; switched off, that provider's heart
+is disabled like its comments (decision 10 below). `NowPlayingUiState.providerBadge` names a non-NetEase track's provider
 on the now-playing page, the lyric-page island, the desktop bar and the queue.
 
 **Why a track did not play (2026-09-23).** `MusicProvider.resolveStream` answers a
@@ -386,7 +387,7 @@ about a provider — introduction, account label, sign-out warning, backend addr
 on/off switch, why this platform cannot sign in — is a `ProviderLoginDescriptor`; who the account
 is comes from its `AccountIdentitySource`. The accounts page (`AccountsScreen` + `AccountsViewModel`)
 holds every provider's account, switch, backend address and pasted credential, the multi-provider
-view choices, and the local account; the settings page keeps one summary row that opens it. No page
+view choices, and the local account with its switch; the settings page keeps one summary row that opens it. No page
 holds a provider branch.
 
 Registered today: NetEase QR and cookie; QQ Music QR by QQ and by WeChat, SMS code, and pasted
@@ -405,7 +406,7 @@ Credentials stay additive: `qqEnabled` / `qqServer` / `qqCookie` sit beside the 
 `cookie` / `server` keys rather than renaming them, so nothing migrates and no user data is at
 risk. `qqCookie` is excluded from the settings backup for the same reason `cookie` is — a shared
 export must never carry a credential — while `qqEnabled`, `qqServer`, the aggregation choice, the
-same-song merge switch, the local account's name and its library travel with a backup. Fields added
+same-song merge switch, the local account's name, switch and library travel with a backup. Fields added
 for multiple providers are nullable, so importing an older backup keeps the current choice.
 
 `MediaInfo.id` keeps NetEase ids bare and prefixes only foreign providers. A bare id still parses
@@ -465,6 +466,17 @@ changed and delegated the open choices. These bind until a later decision here r
    Search pages each provider on its own cursor, so a failed page is asked for again and an exhausted
    provider is not.
 9. **One account per provider stays locked**, as above.
+10. **The local account can be switched off (2026-09-24, at the user's request).** Its switch
+    (`localAccountEnabled`, on by default because the account existed before it could be turned off)
+    heads its group on the accounts page, the way QQ's heads QQ's. Off hides every way into its
+    library: the 我的 page's 本地歌单 shortcut, the song menus' 添加到本地歌单, the playlist page's
+    save-as-local button, and the hearts of providers without account likes. It deletes nothing: the
+    library stays stored, still travels with the settings backup, and returns unchanged when the
+    account is switched on again. Pages of the local library left in the back stack are passed over
+    by back rather than removed when the switch flips, because removing them would move the pages
+    above to another depth; only a value read from settings may drop a page. `LocalAccount` is the
+    switch's only writer, and a backup import reaches it through `AccountsViewModel.reload()`. The
+    NetEase-startup rule of decision 3 does not count the local account either way.
 
 ### D7 — Copy lives in per-language resource files — **DONE (recorded 2026-09-23)**
 

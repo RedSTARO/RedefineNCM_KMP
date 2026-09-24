@@ -536,6 +536,8 @@
     <string name="name">Name</string>
     <string name="localAccountNoSignInNeeded">No sign-in needed; saved only on this device</string>
     <string name="rename">Rename</string>
+    <string name="enableLocalAccount">Enable local account</string>
+    <string name="enableLocalAccountHint">When off, local playlists and “Local likes” are hidden, and songs from QQ Music or a similar service can't be liked. Nothing you saved is deleted.</string>
 
     <!-- ui/screen/AlbumScreen.kt -->
     <string name="playbackSourceAlbum">album “{albumName}”</string>

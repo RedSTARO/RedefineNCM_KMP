@@ -9,6 +9,7 @@ import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.SongWikiSummary
 import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusic
 import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusicComments
+import com.leejlredstar.redefinencm.kmp.data.local.LocalAccount
 import com.leejlredstar.redefinencm.kmp.data.local.LocalLibraryStore
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderArtist
@@ -146,6 +147,7 @@ class NowPlayingViewModel(
     private val localMediaAssets: LocalMediaAssets,
     private val providers: MusicProviderRegistry,
     private val localLibrary: LocalLibraryStore,
+    private val localAccount: LocalAccount,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -157,6 +159,13 @@ class NowPlayingViewModel(
     val currentCapabilities: StateFlow<Set<ProviderCapability>> = player.currentMedia
         .map { media -> providers.capabilitiesOf(media?.id) }
         .stateIn(scope, SharingStarted.Eagerly, providers.capabilitiesOf(player.currentMedia.value?.id))
+
+    /**
+     * Whether the local account is switched on, and so keeps the hearts of a provider without the
+     * account's own likes. False until the stored switch has been read.
+     */
+    val localFavoritesEnabled: StateFlow<Boolean> = localAccount.enabledUpdates()
+        .stateIn(scope, SharingStarted.Eagerly, false)
 
     /**
      * Why the current track could not be played, while that is still the case. The players only
@@ -524,14 +533,22 @@ class NowPlayingViewModel(
                     favoriteActionJob?.cancel()
                     val requestGeneration = ++favoriteStatusGeneration
                     // A provider without the account's own likes keeps its heart in the local
-                    // account's favourites, which need no sign-in.
+                    // account's favourites, which need no sign-in, while that account is switched
+                    // on. The switch is followed here rather than beside the track above, so
+                    // flipping it never repeats NetEase's like check or cancels a like in flight.
                     if (mediaId != null && !supports(mediaId, ProviderCapability.LIKE)) {
-                        localLibrary.updates().collect { library ->
-                            favoriteUiState.value = FavoriteUiState(
-                                mediaId = mediaId,
-                                isLiked = library.isFavorite(mediaId),
-                                local = true,
-                            )
+                        localAccount.enabledUpdates().collectLatest { enabled ->
+                            if (enabled) {
+                                localLibrary.updates().collect { library ->
+                                    favoriteUiState.value = FavoriteUiState(
+                                        mediaId = mediaId,
+                                        isLiked = library.isFavorite(mediaId),
+                                        local = true,
+                                    )
+                                }
+                            } else {
+                                favoriteUiState.value = FavoriteUiState()
+                            }
                         }
                         return@collectLatest
                     }
@@ -1142,7 +1159,10 @@ class NowPlayingViewModel(
     fun onFavClick() {
         val media = player.currentMedia.value ?: return
         if (!supports(media.id, ProviderCapability.LIKE)) {
-            // The local favourites toggle both ways, unlike NetEase's like below.
+            // The local favourites toggle both ways, unlike NetEase's like below. With the local
+            // account switched off there is nowhere to keep the heart; the island calls this
+            // without asking whether the heart is enabled, so the check is here.
+            if (!localFavoritesEnabled.value) return
             val liked = favoriteUiState.value.let { it.mediaId == media.id && it.isLiked }
             scope.launch { localLibrary.setFavorite(media, favorite = !liked) }
             return

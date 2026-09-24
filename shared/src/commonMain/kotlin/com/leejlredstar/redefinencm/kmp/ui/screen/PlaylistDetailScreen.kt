@@ -98,6 +98,7 @@ fun PlaylistDetailScreen(
     val detailLoadError by viewModel.playlistDetailLoadError.collectAsState()
     val detailFromCache by viewModel.playlistDetailFromCache.collectAsState()
     val songsFromCache by viewModel.playlistSongsFromCache.collectAsState()
+    val localLibraryEnabled by localLibrary.enabled.collectAsState()
     val playlist = detail?.playlist?.takeIf { it.id == playlistId }
     val songs = tracks?.songs.orEmpty()
     val hasCachedContent = detailFromCache || songsFromCache
@@ -178,7 +179,11 @@ fun PlaylistDetailScreen(
                     onPlayAll = { playAll() },
                     onDownloadAll = { confirmDownloadAll = true },
                     // A copy in the local account keeps the list even if the account loses it.
-                    onSaveLocal = { localLibrary.requestAddition(queueItems, suggestedName = title) },
+                    onSaveLocal = if (localLibraryEnabled) {
+                        { localLibrary.requestAddition(queueItems, suggestedName = title) }
+                    } else {
+                        null
+                    },
                 )
             }
             if (hasCachedContent) {
@@ -379,7 +384,8 @@ private fun PlaylistHeader(
     onBack: () -> Unit,
     onPlayAll: () -> Unit,
     onDownloadAll: () -> Unit,
-    onSaveLocal: () -> Unit,
+    /** Null while the local account is switched off, which leaves the button out. */
+    onSaveLocal: (() -> Unit)?,
 ) {
     val fallbackAccentColor = MaterialTheme.colorScheme.primaryContainer
     val extractAccent = rememberThemeColorExtractor(
@@ -449,16 +455,18 @@ private fun PlaylistHeader(
                     Spacer(Modifier.width(8.dp))
                     Text(strings.downloadAll)
                 }
-                FilledTonalIconButton(
-                    onClick = onSaveLocal,
-                    enabled = actionsEnabled,
-                    modifier = Modifier.size(52.dp),
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = accentPalette.container,
-                        contentColor = accentPalette.onContainer,
-                    ),
-                ) {
-                    Icon(AppIcons.Add, contentDescription = strings.saveAsLocalPlaylist)
+                if (onSaveLocal != null) {
+                    FilledTonalIconButton(
+                        onClick = onSaveLocal,
+                        enabled = actionsEnabled,
+                        modifier = Modifier.size(52.dp),
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = accentPalette.container,
+                            contentColor = accentPalette.onContainer,
+                        ),
+                    ) {
+                        Icon(AppIcons.Add, contentDescription = strings.saveAsLocalPlaylist)
+                    }
                 }
             }
         }

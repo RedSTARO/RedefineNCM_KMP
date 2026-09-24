@@ -67,7 +67,7 @@ import org.koin.compose.koinInject
 
 /**
  * Every account and every provider's configuration: one group per provider, then how several
- * providers are shown together, then the device-local account.
+ * providers are shown together, then the device-local account with its own switch.
  *
  * A provider's group holds its switch (when it can be turned off), its account, its backend
  * address with a check, and its pasted credential folded away as an advanced option. The groups
@@ -85,6 +85,7 @@ fun AccountsScreen(
     val palette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
     val accounts by viewModel.accounts.collectAsState()
     val localName by viewModel.localName.collectAsState()
+    val localEnabled by viewModel.localEnabled.collectAsState()
     val aggregationMode by viewModel.aggregationMode.collectAsState()
     val mergeSameSongs by viewModel.mergeSameSongs.collectAsState()
     val message by viewModel.message.collectAsState()
@@ -292,12 +293,26 @@ fun AccountsScreen(
                             }
                         }
 
+                        // The local account's group has the shape of a provider's: its switch, and
+                        // the account itself only while it is on.
                         SettingsSectionLabel(strings.local, palette)
-                        LocalAccountCard(
-                            name = localName,
+                        SettingsSwitch(
+                            checked = localEnabled,
+                            label = strings.enableLocalAccount,
                             accentPalette = palette,
-                            onRename = { renamingLocal = true },
-                        )
+                            index = 0,
+                            count = if (localEnabled) 2 else 1,
+                            supportingText = strings.enableLocalAccountHint,
+                        ) { enabled -> viewModel.setLocalEnabled(enabled) }
+                        if (localEnabled) {
+                            LocalAccountCard(
+                                name = localName,
+                                accentPalette = palette,
+                                index = 1,
+                                count = 2,
+                                onRename = { renamingLocal = true },
+                            )
+                        }
                         Spacer(Modifier.height(24.dp))
                     }
                 }
@@ -394,10 +409,12 @@ private fun ServerCheckLine(
 private fun LocalAccountCard(
     name: String,
     accentPalette: ContentAccentPalette,
+    index: Int,
+    count: Int,
     onRename: () -> Unit,
 ) {
     Surface(
-        shape = connectedListItemShape(index = 0, count = 1),
+        shape = connectedListItemShape(index = index, count = count),
         color = accentPalette.quietContainer,
         contentColor = accentPalette.onQuietContainer,
         modifier = Modifier

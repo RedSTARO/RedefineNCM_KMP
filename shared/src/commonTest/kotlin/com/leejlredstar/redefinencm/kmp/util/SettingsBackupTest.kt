@@ -127,6 +127,37 @@ class SettingsBackupTest {
     }
 
     @Test
+    fun theLocalAccountSwitchTravelsWithABackupAndAnOlderOneLeavesItAlone() {
+        val json = encodeSettingsBackup(
+            getString = { _, default -> default },
+            getBoolean = { key, default -> if (key == SettingKeys.LOCAL_ACCOUNT_ENABLED) false else default },
+        )
+        assertTrue(json.contains("\"localAccountEnabled\":false"))
+
+        val restored = mutableMapOf<String, Boolean>()
+        assertTrue(
+            applySettingsBackup(
+                json = json,
+                setString = { _, _ -> },
+                setBoolean = { key, value -> restored[key] = value },
+            ),
+        )
+        assertEquals(false, restored[SettingKeys.LOCAL_ACCOUNT_ENABLED])
+
+        // A backup made before the switch existed says nothing about it, so importing it must not
+        // switch the local account on or off.
+        val older = mutableMapOf<String, Boolean>()
+        assertTrue(
+            applySettingsBackup(
+                json = """{"localAccountName":"我的设备"}""",
+                setString = { _, _ -> },
+                setBoolean = { key, value -> older[key] = value },
+            ),
+        )
+        assertFalse(SettingKeys.LOCAL_ACCOUNT_ENABLED in older)
+    }
+
+    @Test
     fun extraLyricSurfaceSettingKeepsLegacyBackupCompatibility() {
         val json = encodeSettingsBackup(
             getString = { _, default -> default },

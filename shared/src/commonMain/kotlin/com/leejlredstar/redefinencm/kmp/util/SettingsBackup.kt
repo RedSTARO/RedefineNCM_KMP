@@ -29,12 +29,14 @@ data class SettingsBackupData(
     val libraryAggregationMode: String? = null,
     /** The device-local account's name; null keeps the current one for an older backup. */
     val localAccountName: String? = null,
+    /** Whether the local account is switched on; null keeps the current choice for an older backup. */
+    val localAccountEnabled: Boolean? = null,
     /** Null keeps the current choice when importing a backup made before the setting existed. */
     val mergeSameSongs: Boolean? = null,
     /**
      * The local account's playlists and favourites. They are user data rather than a setting,
-     * carried so a reinstall does not lose them. Null in a backup made before the local library
-     * existed.
+     * carried so a reinstall does not lose them, and carried while the account is switched off
+     * too. Null in a backup made before the local library existed.
      */
     val localLibrary: List<LocalPlaylist>? = null,
     val onlinePlayQuality: String = SoundQuality.STANDARD.name,
@@ -95,6 +97,10 @@ internal fun encodeSettingsBackup(
             getString(SettingKeys.LIBRARY_AGGREGATION_MODE, ""),
         ).wireValue,
         localAccountName = getString(SettingKeys.LOCAL_ACCOUNT_NAME, ""),
+        localAccountEnabled = getBoolean(
+            SettingKeys.LOCAL_ACCOUNT_ENABLED,
+            SettingKeys.LOCAL_ACCOUNT_ENABLED_DEFAULT,
+        ),
         mergeSameSongs = getBoolean(SettingKeys.MERGE_SAME_SONGS, SettingKeys.MERGE_SAME_SONGS_DEFAULT),
         localLibrary = localLibrary?.playlists,
         onlinePlayQuality = getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name),
@@ -167,6 +173,7 @@ internal fun applySettingsBackup(
     if (data.qqServer.isNotEmpty()) setString(SettingKeys.QQ_SERVER, data.qqServer)
     data.libraryAggregationMode?.let { setString(SettingKeys.LIBRARY_AGGREGATION_MODE, it) }
     data.localAccountName?.let { setString(SettingKeys.LOCAL_ACCOUNT_NAME, it.trim()) }
+    data.localAccountEnabled?.let { setBoolean(SettingKeys.LOCAL_ACCOUNT_ENABLED, it) }
     data.mergeSameSongs?.let { setBoolean(SettingKeys.MERGE_SAME_SONGS, it) }
     setString(SettingKeys.ONLINE_PLAY_QUALITY, data.onlinePlayQuality)
     setString(SettingKeys.DOWNLOAD_QUALITY, data.downloadQuality)

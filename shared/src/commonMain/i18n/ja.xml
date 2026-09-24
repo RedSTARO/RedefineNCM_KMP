@@ -509,6 +509,8 @@
     <string name="name">名前</string>
     <string name="localAccountNoSignInNeeded">ログインは不要で、この端末だけに保存されます</string>
     <string name="rename">名前を変更</string>
+    <string name="enableLocalAccount">ローカルアカウントを有効にする</string>
+    <string name="enableLocalAccountHint">オフにすると、ローカルプレイリストと「ローカルのお気に入り」が非表示になり、QQ Musicなどのサービスの曲をお気に入りにできなくなります。保存した内容は削除されません。</string>
 
     <!-- ui/screen/AlbumScreen.kt -->
     <string name="playbackSourceAlbum">アルバム「{albumName}」</string>

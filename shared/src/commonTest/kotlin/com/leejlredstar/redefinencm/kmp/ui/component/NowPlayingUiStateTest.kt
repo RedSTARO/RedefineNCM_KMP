@@ -40,6 +40,7 @@ class NowPlayingUiStateTest {
         queueSnapshot: PlayerQueueSnapshot = PlayerQueueSnapshot(),
         favoriteState: FavoriteUiState = FavoriteUiState(),
         capabilities: Set<ProviderCapability> = ProviderCapability.entries.toSet(),
+        localFavorites: Boolean = true,
     ) = NowPlayingUiState(
         media = media,
         isPlaying = false,
@@ -52,6 +53,7 @@ class NowPlayingUiStateTest {
         commentsFromCache = false,
         favoriteState = favoriteState,
         capabilities = capabilities,
+        localFavorites = localFavorites,
     )
 
     @Test
@@ -140,5 +142,21 @@ class NowPlayingUiStateTest {
         assertTrue(netease.canComment)
         assertEquals(null, netease.providerBadge)
         assertFalse(state(media = null).canFavorite)
+    }
+
+    @Test
+    fun withTheLocalAccountSwitchedOffOnlyAProvidersOwnLikesKeepAHeart() {
+        val qqTrack = MediaInfo(id = "qq:0039MnYb0qxYhV", title = "t", artist = "a")
+        val qq = state(
+            media = qqTrack,
+            capabilities = setOf(ProviderCapability.SHARE_LINK),
+            localFavorites = false,
+        )
+        assertFalse(qq.canFavorite)
+        assertFalse(qq.favoriteIsLocal)
+
+        val netease = state(localFavorites = false)
+        assertTrue(netease.canFavorite)
+        assertFalse(netease.favoriteIsLocal)
     }
 }

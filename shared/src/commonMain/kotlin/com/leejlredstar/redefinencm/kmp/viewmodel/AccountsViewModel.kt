@@ -87,6 +87,10 @@ class AccountsViewModel(
         stored.ifBlank { LocalAccount.DefaultName }
     }.stateIn(scope, SharingStarted.Eagerly, LocalAccount.DefaultName)
 
+    /** Whether the local account is switched on. */
+    val localEnabled: StateFlow<Boolean> = localAccount.enabledUpdates()
+        .stateIn(scope, SharingStarted.Eagerly, SettingKeys.LOCAL_ACCOUNT_ENABLED_DEFAULT)
+
     private val _aggregationMode = MutableStateFlow(LibraryAggregationMode.Default)
     val aggregationMode: StateFlow<LibraryAggregationMode> = _aggregationMode.asStateFlow()
 
@@ -133,7 +137,7 @@ class AccountsViewModel(
                 )
             }
         }.stateIn(scope, SharingStarted.Eagerly, emptyList())
-        summary = combine(accounts, localName, I18n.languageFlow) { accounts, localName, _ ->
+        summary = combine(accounts, localName, localEnabled, I18n.languageFlow) { accounts, localName, localEnabled, _ ->
             accountsSummaryLine(
                 accounts.map { account ->
                     AccountSummaryEntry(
@@ -144,14 +148,16 @@ class AccountsViewModel(
                     )
                 },
                 localName,
+                localEnabled,
             )
         }.stateIn(scope, SharingStarted.Eagerly, "")
         reload()
     }
 
     /**
-     * Re-reads the switches, addresses, local name and view preference from settings. The accounts
-     * page calls it on opening, the settings page after importing a backup.
+     * Re-reads the switches, addresses, local account and view preference from settings. The
+     * accounts page calls it on opening, the settings page after importing a backup; the local
+     * account's switch is re-read for everything that shows its library, not only this page.
      */
     fun reload() {
         scope.launch {
@@ -163,6 +169,7 @@ class AccountsViewModel(
                 )
             }
             storedLocalName.value = localAccount.storedName()
+            localAccount.reload()
             _aggregationMode.value = LibraryAggregationMode.fromWireValueOrDefault(
                 settings.getStringAsync(SettingKeys.LIBRARY_AGGREGATION_MODE, ""),
             )
@@ -262,6 +269,14 @@ class AccountsViewModel(
         }
     }
 
+    /** Switches the local account on or off; its playlists and favourites are kept either way. */
+    fun setLocalEnabled(enabled: Boolean) {
+        scope.launch {
+            localAccount.setEnabled(enabled)
+                .onFailure { failure -> _message.value = failure.message ?: strings.settingSaveFailed }
+        }
+    }
+
     fun setAggregationMode(mode: LibraryAggregationMode) {
         persist(
             write = { settings.setString(SettingKeys.LIBRARY_AGGREGATION_MODE, mode.wireValue) },
@@ -313,8 +328,15 @@ internal data class AccountSummaryEntry(
     val accountName: String?,
 )
 
-/** Who is signed in where, in registration order: "网易云音乐：昵称；QQ音乐：未启用；本地账号". */
-internal fun accountsSummaryLine(entries: List<AccountSummaryEntry>, localName: String): String =
+/**
+ * Who is signed in where, in registration order, then the local account:
+ * "网易云音乐：昵称；QQ音乐：未启用；本地账号", or "…；本地账号：未启用" while it is switched off.
+ */
+internal fun accountsSummaryLine(
+    entries: List<AccountSummaryEntry>,
+    localName: String,
+    localEnabled: Boolean,
+): String =
     (
         entries.map { entry ->
             val state = when {
@@ -323,5 +345,5 @@ internal fun accountsSummaryLine(entries: List<AccountSummaryEntry>, localName: 
                 else -> strings.notSignedIn
             }
             strings.labelValue(entry.providerName, state)
-        } + localName
+        } + if (localEnabled) localName else strings.labelValue(localName, strings.providerStateOff)
         ).joinToString(strings.clauseSeparator)

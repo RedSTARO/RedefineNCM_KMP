@@ -36,6 +36,13 @@ object SettingKeys {
 
     /** The device-local account's display name; blank means the default. */
     const val LOCAL_ACCOUNT_NAME = "localAccountName"
+
+    /**
+     * Whether the device-local account is switched on. Off hides its library and its hearts and
+     * deletes nothing. On by default: the account existed before it could be switched off.
+     */
+    const val LOCAL_ACCOUNT_ENABLED = "localAccountEnabled"
+    const val LOCAL_ACCOUNT_ENABLED_DEFAULT = true
     const val UID = "uid"
     const val UID_COOKIE_FINGERPRINT = "uidCookieFingerprint"
     const val ONLINE_PLAY_QUALITY = "onlinePlayQuality"

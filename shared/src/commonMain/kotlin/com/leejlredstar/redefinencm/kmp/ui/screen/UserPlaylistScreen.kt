@@ -123,6 +123,7 @@ fun UserPlaylistScreen(
     localLibraryViewModel: LocalLibraryViewModel = koinInject(),
 ) {
     val localLibrary by localLibraryViewModel.library.collectAsState()
+    val localLibraryEnabled by localLibraryViewModel.enabled.collectAsState()
     val userDetail by viewModel.userDetail.collectAsState()
     val userLevel by viewModel.userLevel.collectAsState()
     val playlists by viewModel.userPlaylists.collectAsState()
@@ -234,7 +235,8 @@ fun UserPlaylistScreen(
                 )
             }
             // The local account's library needs no sign-in either, and holds any provider's songs.
-            item(key = "library-local") {
+            // Switching the local account off takes the way to it away, not the library.
+            if (localLibraryEnabled) item(key = "library-local") {
                 val library = localLibrary
                 LibraryShortcut(
                     title = strings.localPlaylists,
