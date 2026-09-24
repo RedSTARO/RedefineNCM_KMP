@@ -96,6 +96,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.produceState
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
+import com.leejlredstar.redefinencm.kmp.ui.component.TransitionAura
+import com.leejlredstar.redefinencm.kmp.ui.component.FlowingLightRing
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.lerp
 
 /**
  * The Now Playing entry page: what the mini player, the desktop rail and every OS
@@ -142,6 +146,7 @@ fun NowPlayingScreen(
     val localArtworkActive by viewModel.localArtworkActive.collectAsState()
     val remoteArtworkUri by viewModel.remoteArtworkUri.collectAsState()
     val outputVolume by player.volume.collectAsState()
+    val transitionAudible by player.transitionAudible.collectAsState()
     var showSongWiki by remember { mutableStateOf(false) }
     LaunchedEffect(media?.id) { showSongWiki = false }
 
@@ -172,6 +177,8 @@ fun NowPlayingScreen(
                 NowPlayingArtwork(
                     media = media,
                     isPlaying = nowPlaying.isPlaying,
+                    transitioning = transitionAudible && nowPlaying.hasMedia,
+                    palette = palette,
                     reducedMotion = reducedMotion,
                     onArtworkLoaded = extractAccent,
                     onOpenLyrics = { if (nowPlaying.hasMedia) onOpenLyrics() },
@@ -430,12 +437,18 @@ private fun MutedChip(
  * The artwork. Tapped: opens the lyrics. Held: the frame blooms into a cookie
  * (`ExpressiveArtwork`'s press morph). Paused: it settles to 86%, Apple Music's cue that
  * nothing is moving.
+ *
+ * While a song transition sounds, a glow breathes around it and light runs round its rim, in the
+ * page's accent. The accent follows the artwork, so at the swap the glow shifts from the old
+ * song's colour to the new one's.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun NowPlayingArtwork(
     media: MediaInfo?,
     isPlaying: Boolean,
+    transitioning: Boolean,
+    palette: ContentAccentPalette,
     reducedMotion: Boolean,
     onArtworkLoaded: (coil3.Image) -> Unit,
     onOpenLyrics: () -> Unit,
@@ -449,38 +462,67 @@ private fun NowPlayingArtwork(
         label = "nowPlayingArtworkScale",
     )
     val frameShape = MaterialTheme.shapes.extraLarge
-    ExpressiveArtwork(
-        model = media?.artworkUri?.takeIf(String::isNotBlank),
-        contentDescription = media?.title?.let { strings.artworkOf(it) },
+    // On a dark page the light burns near white. On a light page the accent itself would read as
+    // a stain, so the glow is a paler tint of it.
+    val darkPage = palette.onPageMiddle.luminance() > 0.5f
+    val light = lerp(palette.accent, Color.White, if (darkPage) 0.7f else 0.45f)
+    val glow = if (darkPage) palette.accent else lerp(palette.accent, Color.White, 0.35f)
+    Box(
         modifier = modifier
             .aspectRatio(1f)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
-            }
-            .dropShadow(
-                shape = frameShape,
-                shadow = Shadow(
-                    radius = 36.dp,
-                    color = Color.Black,
-                    spread = 0.dp,
-                    offset = DpOffset(x = 0.dp, y = 18.dp),
-                    alpha = 0.32f,
+            },
+    ) {
+        TransitionAura(
+            visible = transitioning,
+            color = glow,
+            highlight = light,
+            corner = frameShape.topStart,
+            animate = !reducedMotion,
+            modifier = Modifier.matchParentSize(),
+        )
+        ExpressiveArtwork(
+            model = media?.artworkUri?.takeIf(String::isNotBlank),
+            contentDescription = media?.title?.let { strings.artworkOf(it) },
+            modifier = Modifier
+                .fillMaxSize()
+                .dropShadow(
+                    shape = frameShape,
+                    shadow = Shadow(
+                        radius = 36.dp,
+                        color = Color.Black,
+                        spread = 0.dp,
+                        offset = DpOffset(x = 0.dp, y = 18.dp),
+                        alpha = 0.32f,
+                    ),
+                )
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    enabled = media != null,
+                    // The cover opens the lyrics, one tap instead of the quote button; play and pause
+                    // have their own button right beside it.
+                    onClickLabel = strings.openLyrics,
+                    onClick = onOpenLyrics,
                 ),
-            )
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                enabled = media != null,
-                // The cover opens the lyrics, one tap instead of the quote button; play and pause
-                // have their own button right beside it.
-                onClickLabel = strings.openLyrics,
-                onClick = onOpenLyrics,
-            ),
-        shape = frameShape,
-        pressInteractionSource = interactionSource,
-        onImageLoaded = onArtworkLoaded,
-    )
+            shape = frameShape,
+            pressInteractionSource = interactionSource,
+            onImageLoaded = onArtworkLoaded,
+        )
+        FlowingLightRing(
+            visible = transitioning,
+            color = palette.accent,
+            headColor = light,
+            corner = frameShape.topStart,
+            strokeWidth = 3.dp,
+            glowWidth = 16.dp,
+            lapMillis = 5_600,
+            animate = !reducedMotion,
+            modifier = Modifier.matchParentSize(),
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationApi::class)

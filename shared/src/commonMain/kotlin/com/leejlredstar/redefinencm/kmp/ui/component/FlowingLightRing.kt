@@ -7,11 +7,13 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
@@ -21,18 +23,20 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.min
 
 /**
- * Light running around the rim of a pill: two comets chasing each other along the outline at a
- * constant speed, over a faint glow of the whole rim, with a soft halo that reaches past the
- * edge. It fades in when [visible] turns true and out when it turns false; faded out, nothing is
- * drawn and nothing animates.
+ * Light running around the rim of a rounded shape: two comets chasing each other along the
+ * outline at a constant speed, over a faint glow of the whole rim, with a soft halo that reaches
+ * past the edge. It fades in when [visible] turns true and out when it turns false; faded out,
+ * nothing is drawn and nothing animates.
  *
- * Place it over the pill with the pill's own bounds. It draws past them, so no ancestor may clip
- * there, and it takes no input, so taps go through to the pill.
+ * Place it over the element with the element's own bounds. [corner] is the element's corner
+ * size; null means a pill. It draws past the bounds, so no ancestor may clip there, and it takes
+ * no input, so taps go through. With [animate] false the comets stand still.
  */
 @Composable
 fun FlowingLightRing(
@@ -40,9 +44,11 @@ fun FlowingLightRing(
     color: Color,
     headColor: Color,
     modifier: Modifier = Modifier,
+    corner: CornerSize? = null,
     strokeWidth: Dp = 2.5.dp,
     glowWidth: Dp = 8.dp,
     lapMillis: Int = 2_600,
+    animate: Boolean = true,
 ) {
     val strength by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
@@ -50,12 +56,16 @@ fun FlowingLightRing(
         label = "flowingLightStrength",
     )
     if (strength <= 0f) return
-    val phase by rememberInfiniteTransition(label = "flowingLight").animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(lapMillis, easing = LinearEasing)),
-        label = "flowingLightPhase",
-    )
+    val phase: State<Float> = if (animate) {
+        rememberInfiniteTransition(label = "flowingLight").animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(lapMillis, easing = LinearEasing)),
+            label = "flowingLightPhase",
+        )
+    } else {
+        StillPhase
+    }
     Spacer(
         modifier
             // The fade is the layer's opacity, so the tails' stacked strokes keep their profile
@@ -66,23 +76,28 @@ fun FlowingLightRing(
                 val glow = glowWidth.toPx()
                 val inset = stroke / 2f
                 val rim = Rect(inset, inset, size.width - inset, size.height - inset)
-                val radius = min(rim.width, rim.height) / 2f
+                val pill = min(rim.width, rim.height) / 2f
+                val radius = corner?.toPx(size, this)?.minus(inset)?.coerceIn(0f, pill) ?: pill
                 val outline = Path().apply { addRoundRect(RoundRect(rim, CornerRadius(radius))) }
-                val measure = PathMeasure().apply { setPath(outline, forceClosed = true) }
-                val length = measure.length
+                val length = PathMeasure().apply { setPath(outline, forceClosed = true) }.length
+                // The tails are cut from the outline traced twice, so one that passes the point
+                // where the outline starts is still one stroke: two ends meeting there would
+                // leave a seam across the glow.
+                val measure = PathMeasure().apply { setPath(twoLaps(rim, radius), forceClosed = false) }
                 val tail = length * TAIL_FRACTION
                 val piece = Path()
                 val rimStroke = Stroke(stroke)
                 val coreStroke = Stroke(stroke, cap = StrokeCap.Butt)
                 // A stroke has a hard edge; three of falling width stacked make a halo that
-                // softens outwards, which a blur would do better but not on every platform.
-                val glowStrokes = GlowLayers.map { (width, _) -> Stroke(glow * width, cap = StrokeCap.Butt) }
+                // softens outwards, which a blur would do better but not on every platform. Round
+                // caps keep the halo's front, where every piece ends, from being a flat cut.
+                val glowStrokes = GlowLayers.map { (width, _) -> Stroke(glow * width, cap = StrokeCap.Round) }
                 val coreAlphas = nestedAlphas(CORE_PIECES) { 1f }
                 val headAlphas = nestedAlphas(HEAD_PIECES) { HEAD_OPACITY }
                 val glowAlphas = GlowLayers.map { (_, opacity) -> nestedAlphas(GLOW_PIECES) { opacity } }
                 onDrawBehind {
                     // Read here, not in composition, so each frame redraws without recomposing.
-                    val lap = phase
+                    val lap = phase.value
                     drawPath(outline, color.copy(alpha = RIM_ALPHA), style = rimStroke)
                     for (comet in 0 until COMETS) {
                         val head = ((lap + comet.toFloat() / COMETS) % 1f) * length
@@ -121,6 +136,9 @@ fun FlowingLightRing(
     )
 }
 
+/** The phase of comets that do not move: reduced motion. */
+private val StillPhase: State<Float> = mutableFloatStateOf(0.125f)
+
 /**
  * Opacities for [pieces] nested strokes, the k-th reaching k + 1 steps back from the head, such
  * that where they overlap they add up to [peak] times a quadratic fall-off: full at the head, zero
@@ -135,16 +153,30 @@ private fun nestedAlphas(pieces: Int, peak: () -> Float): List<Float> {
     return List(pieces) { k -> 1f - (1f - target(k)) / (1f - target(k + 1)) }
 }
 
-/** The piece of the closed outline between two distances, which may wrap past its start. */
+/**
+ * The piece between two distances along an outline of [length], cut from [measure] over the
+ * outline traced twice, so a piece that passes the start needs no second stroke.
+ */
 private fun extract(measure: PathMeasure, length: Float, from: Float, to: Float, into: Path) {
     into.reset()
     val start = ((from % length) + length) % length
-    val stop = start + (to - from)
-    if (stop <= length) {
-        measure.getSegment(start, stop, into, startWithMoveTo = true)
-    } else {
-        measure.getSegment(start, length, into, startWithMoveTo = true)
-        measure.getSegment(0f, stop - length, into, startWithMoveTo = true)
+    measure.getSegment(start, start + (to - from), into, startWithMoveTo = true)
+}
+
+/** A rounded rectangle traced clockwise twice from the start of its top edge, left open. */
+private fun twoLaps(rim: Rect, radius: Float): Path = Path().apply {
+    val r = radius.coerceAtLeast(0.01f)
+    val (left, top, right, bottom) = rim
+    moveTo(left + r, top)
+    repeat(2) {
+        lineTo(right - r, top)
+        arcTo(Rect(right - 2 * r, top, right, top + 2 * r), -90f, 90f, forceMoveTo = false)
+        lineTo(right, bottom - r)
+        arcTo(Rect(right - 2 * r, bottom - 2 * r, right, bottom), 0f, 90f, forceMoveTo = false)
+        lineTo(left + r, bottom)
+        arcTo(Rect(left, bottom - 2 * r, left + 2 * r, bottom), 90f, 90f, forceMoveTo = false)
+        lineTo(left, top + r)
+        arcTo(Rect(left, top, left + 2 * r, top + 2 * r), 180f, 90f, forceMoveTo = false)
     }
 }
 
