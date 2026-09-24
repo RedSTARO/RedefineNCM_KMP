@@ -139,8 +139,31 @@ class ExoPlayerPlatformPlayer(
             if (dur != C.TIME_UNSET) _duration.value = dur
         }
 
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int,
+        ) {
+            if (reason != Player.DISCONTINUITY_REASON_SEEK) return
+            // MediaSession commands (the notification, the lock screen, a headset) reach the
+            // players directly, not through seekTo(); a seek on either player of a blend ends it
+            // the same way, and one on the active player ends a tempo ramp.
+            val running = blend
+            if (running != null && (deck === running.incoming || deck === running.outgoing)) {
+                abandonTransition()
+            } else if (deck === active && armedPlan != null) {
+                abandonTransition()
+            }
+        }
+
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             if (deck !== active) return
+            // A track change no blend made, from a session command or a track that ended before
+            // its plan could start: the plan was for another pair, and a ramp must not carry on.
+            val plan = armedPlan
+            if (blend == null && plan != null && mediaItem?.mediaId != plan.outgoingMediaId) {
+                abandonTransition(dropPlan = true)
+            }
             val isNewOccurrence = if (mediaItem != null) {
                 val currentWindowIndex = deck.currentMediaItemIndex
                 val shouldAdvance = shouldAdvanceMedia3PlaybackOccurrence(
