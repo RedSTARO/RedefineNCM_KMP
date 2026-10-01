@@ -21,4 +21,19 @@ object ArtworkTheme {
     fun setSeed(color: Color?) {
         _seed.value = color
     }
+
+    /**
+     * Follows the player: [extracted] is the accent read from the current track's cover, or null
+     * while that cover has not been read.
+     *
+     * A track whose cover is still loading keeps the colour that was there. Dropping to grey
+     * between two covers would flash the whole app at every track change. Only a player with
+     * nothing in it returns the app to grey.
+     */
+    fun follow(extracted: Color?, hasMedia: Boolean) {
+        when {
+            extracted != null -> _seed.value = extracted
+            !hasMedia -> _seed.value = null
+        }
+    }
 }

@@ -161,9 +161,18 @@ internal fun buildContentAccentPalette(
     // The accent is the one role allowed real colour, but still bounded: an album cover can be
     // far more saturated than anything Material would put on a control, and it has to stay
     // legible against its own container.
+    //
+    // A source with no colour of its own (the neutral scheme, before any cover has been read)
+    // stays grey. Its hue is rounding noise, and raising its chroma to the floor would paint
+    // every control in whatever colour that noise happens to point at.
+    val sourceChroma = hue.toOklch().chroma
     val accent = hue.withTone(
         lightness = if (isDark) AccentToneDark else AccentToneLight,
-        chroma = hue.toOklch().chroma.coerceIn(AccentChromaMin, AccentChromaMax),
+        chroma = if (sourceChroma < AchromaticChroma) {
+            sourceChroma
+        } else {
+            sourceChroma.coerceIn(AccentChromaMin, AccentChromaMax)
+        },
     )
 
     return ContentAccentPalette(
@@ -192,6 +201,9 @@ private const val SurfaceTintChroma = 0.030f
 
 /** Ceiling for tonal containers: visibly coloured, but still a surface rather than a swatch. */
 private const val ContainerChroma = 0.055f
+
+/** Below this a colour is grey to the eye and the hue measured from it means nothing. */
+private const val AchromaticChroma = 0.02f
 
 private const val AccentChromaMin = 0.055f
 private const val AccentChromaMax = 0.135f

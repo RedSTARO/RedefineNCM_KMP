@@ -389,6 +389,12 @@ private fun AppContent(
                 label = "appChromeAccent",
             )
             val chromePalette = contentAccentPalette(chromeAccent)
+            // The cover's colour is the whole app's, not only the navigation chrome's: the scheme
+            // is generated from it, so settings, dialogs and switches follow the song as well.
+            val hasMedia = currentMedia != null
+            LaunchedEffect(rawChromeAccent, hasMedia) {
+                ArtworkTheme.follow(rawChromeAccent, hasMedia)
+            }
             val platform = remember { getPlatform() }
             val desktopRailState = rememberWideNavigationRailState()
             var currentTab by rememberSaveable(stateSaver = tabDestSaver) {
@@ -763,6 +769,9 @@ private fun AppContent(
                                             is PushedDest.NowPlaying -> NowPlayingScreen(
                                                 onBack = ::back,
                                                 onOpenLyrics = ::openFullLyric,
+                                                // The mini player is hidden under this page, so a
+                                                // track that changes here reports its colour itself.
+                                                onAccentColor = { rawChromeAccent = it },
                                             )
                                             is PushedDest.FullLyric -> AmllPlayerScreen(
                                                 onBack = ::back,

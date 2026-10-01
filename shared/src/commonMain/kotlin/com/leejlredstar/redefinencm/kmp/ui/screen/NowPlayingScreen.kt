@@ -131,6 +131,8 @@ import com.leejlredstar.redefinencm.kmp.transition.TransitionKind
 fun NowPlayingScreen(
     onBack: () -> Unit,
     onOpenLyrics: () -> Unit,
+    /** Each colour read from the current track's cover, for the caller that themes the app from it. */
+    onAccentColor: (Color) -> Unit = {},
     viewModel: NowPlayingViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
 ) {
@@ -143,6 +145,7 @@ fun NowPlayingScreen(
         requestKey = media?.artworkUri,
         animationSpec = motionScheme.slowEffectsSpec(),
         label = "nowPlayingAccent",
+        onAccentColor = onAccentColor,
     )
     val accent = artworkAccent.color
     val palette = artworkAccent.palette

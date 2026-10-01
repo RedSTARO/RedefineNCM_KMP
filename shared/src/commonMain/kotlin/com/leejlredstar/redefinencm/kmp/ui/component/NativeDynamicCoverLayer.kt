@@ -213,8 +213,10 @@ internal fun DynamicCoverBadge(modifier: Modifier) {
     Surface(
         modifier = modifier,
         shape = CircleShape,
-        color = Color(0xFF005144).copy(alpha = 0.92f),
-        contentColor = Color(0xFF9CF2DC),
+        // Drawn over video, so neither the scheme nor the cover can promise contrast: a dark
+        // scrim and white text read over any frame.
+        color = Color.Black.copy(alpha = 0.6f),
+        contentColor = Color.White,
     ) {
         Text(
             text = strings.animatedCover,

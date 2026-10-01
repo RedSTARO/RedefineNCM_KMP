@@ -62,6 +62,31 @@ class ContentAccentPaletteTest {
         assertTrue(palette.pageStart.toOklch().chroma < 0.02f)
     }
 
+    /**
+     * With nothing playing the scheme is grey, and the pages that take their accent from it pass
+     * a grey here. A grey has no hue to keep: forcing the accent's minimum chroma onto it painted
+     * every switch and section label in whatever colour its rounding noise pointed at.
+     */
+    @Test
+    fun aSourceWithNoColourGetsNoneInvented() {
+        listOf(LightColors, DarkColors).forEach { scheme ->
+            listOf(scheme.primaryContainer, scheme.primary, Color(0xFF808080)).forEach { grey ->
+                val accent = buildContentAccentPalette(grey, scheme).accent
+                assertTrue(
+                    accent.toOklch().chroma < 0.02f,
+                    "a grey source produced a tinted accent: ${accent.toOklch().chroma}",
+                )
+            }
+        }
+    }
+
+    @Test
+    fun aFaintlyColouredSourceStillGetsALegibleAccent() {
+        // Just past grey: the hue is real, so the accent is raised to its floor as before.
+        val accent = buildContentAccentPalette(Color(0xFF7FA09A), DarkColors).accent
+        assertTrue(accent.toOklch().chroma >= 0.05f, "accent lost its floor: ${accent.toOklch().chroma}")
+    }
+
     private val labelSources = listOf(
         0xFFFFE94A, 0xFF006B5B, 0xFFB03060, 0xFF3355FF, 0xFF9E9E9E, 0xFFFF7043,
     )
