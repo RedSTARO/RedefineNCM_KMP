@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- What the window shows until Compose draws its first frame. MainActivity waits for the
+         stored settings and the saved queue before it calls setContent, so this is on screen for
+         a moment at every cold start. The background is the surface of the scheme the app starts
+         in (ArtworkColorScheme.kt, neutral: Oklch 0.985 in light and 0.19 in dark), so the first
+         frame arrives on the colour it is about to draw instead of a white window in dark mode. -->
+    <style name="Theme.RedefineNCM" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/launch_background</item>
+    </style>
+</resources>
