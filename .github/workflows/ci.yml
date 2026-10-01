@@ -518,9 +518,17 @@ jobs:
           merge-multiple: true
 
       - name: Send artifacts to Telegram
+        # Everything that comes from the commit or the ref reaches the script as an environment
+        # variable. Written into the script text with ${{ }}, a commit subject holding a
+        # backtick, a quote or $( ) would be run by the shell, next to the bot token.
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RAW_MSG: ${{ steps.gitinfo.outputs.commit_msg }}
+          SHA: ${{ steps.gitinfo.outputs.commit_sha }}
+          COUNT: ${{ steps.commitcount.outputs.count }}
+          REF: ${{ github.ref_name }}
+          VERSION: ${{ needs.test.outputs.app_version }}
         run: |
           APK=$(find dist/ -name "RedefineNCM_KMP-v*.apk" ! -name '*unsigned*' -print -quit)
           DEB=$(find dist/ -name "*.deb" 2>/dev/null | head -1)
@@ -531,12 +539,7 @@ jobs:
           # Returns ✅ if the file exists, ❌ otherwise
           status() { [ -n "$1" ] && [ -f "$1" ] && printf '✅' || printf '❌'; }
 
-          RAW_MSG="${{ steps.gitinfo.outputs.commit_msg }}"
-          MSG=$(echo "$RAW_MSG" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
-          SHA="${{ steps.gitinfo.outputs.commit_sha }}"
-          COUNT="${{ steps.commitcount.outputs.count }}"
-          REF="${{ github.ref_name }}"
-          VERSION="${{ needs.test.outputs.app_version }}"
+          MSG=$(printf '%s' "$RAW_MSG" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
 
           CAPTION=$(printf '<b>RedefineNCM KMP</b>  ·  <code>%s</code>\n\n📝 %s\n🔖 <code>%s</code>  ·  <code>%s</code>  ·  +%s commits\n\n──────────────────\n🤖 Android  %s  APK (attached)\n🐧 Linux    %s  .deb\n🪟 Windows  %s  .msi\n🍎 macOS    %s  .dmg\n🌐 Web      %s  .zip\n\n<i>桌面端与 Web 产物见 CI artifacts。</i>' \
             "$REF" "$MSG" "$VERSION" "$SHA" "$COUNT" \
@@ -590,7 +593,7 @@ jobs:
         id: changelog
         run: |
           git fetch --force --tags
-          current="${{ github.ref_name }}"
+          current="$GITHUB_REF_NAME"
           previous=$(git describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' --abbrev=0 "${current}^" 2>/dev/null || true)
           if [ -z "$previous" ]; then
             log=$(git log --oneline "$current")
