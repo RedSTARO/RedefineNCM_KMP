@@ -26,6 +26,10 @@ __pycache__/
 /dump.rdb
 /out.kt
 /desktopApp/webview.dll
+# A JVM that dies (a Gradle or Kotlin daemon out of memory, the desktop app) writes these
+# into whichever directory it was started from.
+hs_err_pid*.log
+replay_pid*.log
 
 # Generated from Git by iosApp/Scripts/stamp-version.sh.
 /iosApp/Configuration/Version.xcconfig
