@@ -25,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -60,6 +61,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.ApplicationScope
+import androidx.compose.ui.window.LocalWindowExceptionHandlerFactory
 import androidx.compose.ui.window.Notification
 import androidx.compose.ui.window.Tray
 import androidx.compose.ui.window.TrayState
@@ -71,6 +73,9 @@ import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberTrayState
 import androidx.compose.ui.window.rememberWindowState
+import com.leejlredstar.redefinencm.kmp.data.db.desktopDataDirectory
+import com.leejlredstar.redefinencm.kmp.data.db.desktopDatabaseFile
+import com.leejlredstar.redefinencm.kmp.data.db.verifyDesktopDatabase
 import com.leejlredstar.redefinencm.kmp.di.initKoin
 import com.leejlredstar.redefinencm.kmp.i18n.I18n
 import com.leejlredstar.redefinencm.kmp.i18n.strings
@@ -85,6 +90,7 @@ import com.leejlredstar.redefinencm.kmp.ui.component.DesktopDynamicCoverWindowLi
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
 import com.leejlredstar.redefinencm.kmp.ui.theme.ThemePreferences
+import com.leejlredstar.redefinencm.kmp.util.BuildInfo
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.mouseBackNavigation
@@ -94,9 +100,54 @@ import org.koin.core.context.GlobalContext
 import java.awt.Dimension
 import java.awt.GraphicsEnvironment
 import java.awt.Rectangle
+import java.io.File
+import kotlin.system.exitProcess
+
+/** Held for the life of the process: the instance lock is released when this is collected. */
+private var singleInstance: DesktopSingleInstance? = null
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
+    val dataDirectory = desktopDataDirectory()
+    // A development run beside an installed app sets this; nothing else should.
+    if (System.getProperty("redefinencm.allowMultipleInstances") != "true") {
+        when (val launch = DesktopSingleInstance.launch(dataDirectory, DesktopActivation::requestShowWindow)) {
+            is DesktopSingleInstance.Launch.First -> singleInstance = launch.instance
+            is DesktopSingleInstance.Launch.AlreadyRunning -> {
+                // The running app has raised its window. If it did not answer, say why this
+                // launch does nothing instead of leaving a double-click with no effect.
+                if (!launch.shown) showDesktopError("RedefineNCM", strings.desktopAlreadyRunning)
+                exitProcess(0)
+            }
+        }
+    }
+    // After the lock: two processes appending to and rotating one file would lose lines.
+    val logFile = DesktopLog.install(File(dataDirectory, "logs"))
+    // What a bug report needs first: which build, on what.
+    System.err.println(
+        "RedefineNCM ${BuildInfo.VERSION_NAME} on ${System.getProperty("os.name")} " +
+            "${System.getProperty("os.version")} (${System.getProperty("os.arch")}), " +
+            "Java ${System.getProperty("java.version")}",
+    )
+    // Nothing has drawn a window yet, so a failure here would otherwise be a process that ends
+    // without a word: an installed app has no console to show the exception on.
+    val settings = try {
+        prepareDesktopApp()
+    } catch (failure: Throwable) {
+        failure.printStackTrace()
+        showDesktopError(strings.desktopStartFailedTitle, startFailureMessage(failure, logFile))
+        exitProcess(1)
+    }
+    launchDesktopApplication(settings, logFile)
+}
+
+/** Everything between taking the instance lock and the first window. Throws when any of it fails. */
+private fun prepareDesktopApp(): PlatformSettings {
+    // Before Koin: its eager singletons open the database, and a file they cannot open would
+    // fail inside initKoin() instead of where the user can be asked what to do about it. The
+    // language is read first so that question is asked in the one the user picked.
+    I18n.load(PlatformSettings())
+    if (!openLocalDataOrExplain(desktopDatabaseFile(), ::verifyDesktopDatabase)) exitProcess(1)
     initKoin()
     val settings = GlobalContext.get().get<PlatformSettings>()
     startFromTheSystemAudioOutput(settings::getString, settings::setString)
@@ -116,7 +167,7 @@ fun main() {
     DesktopLyricWindow.setTextScale(
         settings.getString(SettingKeys.DESKTOP_LYRIC_TEXT_SCALE, "1").toFloatOrNull() ?: 1f,
     )
-    launchDesktopApplication(settings)
+    return settings
 }
 
 /**
@@ -227,7 +278,17 @@ private fun RememberWindowBounds(
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
-private fun launchDesktopApplication(settings: PlatformSettings) = application {
+private fun launchDesktopApplication(settings: PlatformSettings, logFile: File?) = application {
+    // Every window of the app answers a failure the same way; see DesktopCrashHandlerFactory.
+    val crashHandler = remember { DesktopCrashHandlerFactory(logFile) }
+    CompositionLocalProvider(LocalWindowExceptionHandlerFactory provides crashHandler) {
+        DesktopWindows(settings)
+    }
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun ApplicationScope.DesktopWindows(settings: PlatformSettings) {
     // Where the window was left last time, if that place is still on a screen.
     val savedBounds = remember { settings.savedBounds(SettingKeys.DESKTOP_WINDOW_BOUNDS) }
     val mainWindowState = rememberWindowState(
@@ -270,6 +331,16 @@ private fun launchDesktopApplication(settings: PlatformSettings) = application {
         }
     }
 
+    val showMainWindow: () -> Unit = {
+        mainWindowVisible = true
+        mainWindowState.isMinimized = false
+        showWindowRequest++
+    }
+    // Starting the app again while it sits in the tray brings this window back.
+    LaunchedEffect(Unit) {
+        DesktopActivation.showWindowRequests.collect { showMainWindow() }
+    }
+
     Window(
         onCloseRequest = closeMainWindow,
         visible = mainWindowVisible,
@@ -282,8 +353,13 @@ private fun launchDesktopApplication(settings: PlatformSettings) = application {
         mainWindowHolder[0] = window
         LaunchedEffect(showWindowRequest) {
             if (showWindowRequest > 0) {
+                // Windows refuses a bare toFront() from a process that is not in the foreground
+                // and only flashes the taskbar button; passing through always-on-top raises the
+                // window for real.
+                window.isAlwaysOnTop = true
                 window.toFront()
                 window.requestFocus()
+                window.isAlwaysOnTop = false
             }
         }
         val mediaControls = remember(player) { DesktopMediaControls(player) }
@@ -339,11 +415,7 @@ private fun launchDesktopApplication(settings: PlatformSettings) = application {
         player = player,
         settings = settings,
         state = trayState,
-        onShowWindow = {
-            mainWindowVisible = true
-            mainWindowState.isMinimized = false
-            showWindowRequest++
-        },
+        onShowWindow = showMainWindow,
         onExit = ::exitApplication,
     )
 

@@ -28,6 +28,19 @@
     <string name="lockDesktopLyricsWithHint">Lock desktop lyrics (unlock from the system tray menu)</string>
     <string name="noLyrics">No lyrics</string>
 
+    <!-- DesktopStartup.kt -->
+    <string name="desktopAlreadyRunning">RedefineNCM is already running but didn't respond. Open it from the system tray icon, or end its process and try again.</string>
+    <string name="desktopDataOpenFailedTitle">Couldn't open local data</string>
+    <string name="desktopDataTooNew">{path} was left by a newer version of RedefineNCM, and this version can't read it. Install the latest version to keep using it.\n\nYou can also rename the file and start from scratch: the queue, local playlists and “Local likes” stay in the renamed file, and downloaded song files aren't affected.</string>
+    <string name="desktopDataUnreadable">Couldn't read {path}: {reason}\n\nYou can rename the file and start from scratch: the queue, local playlists and “Local likes” stay in the renamed file, and downloaded song files aren't affected.</string>
+    <string name="desktopDataStartOver">Rename and start over</string>
+    <string name="desktopDataRenameFailed">Couldn't rename {path}; another program may be using it. Close that program, or move the file yourself, then open RedefineNCM again.</string>
+    <string name="desktopCrashTitle">RedefineNCM ran into a problem</string>
+    <string name="desktopCrashMessage">The window failed and the app has to quit. Open it again to keep going.</string>
+    <string name="desktopLogHint">What happened is recorded in {path}; attach it if you report the problem.</string>
+    <string name="desktopStartFailedTitle">RedefineNCM couldn't start</string>
+    <string name="desktopStartFailed">Something went wrong while starting: {reason}</string>
+
     <!-- download/AndroidDownloadService.kt -->
     <string name="downloadingTitle">Downloading: {title}</string>
     <string name="downloadsPaused">Downloads paused</string>

@@ -28,6 +28,19 @@
     <string name="lockDesktopLyricsWithHint">デスクトップ歌詞をロック（システムトレイのメニューで解除できます）</string>
     <string name="noLyrics">歌詞はありません</string>
 
+    <!-- DesktopStartup.kt -->
+    <string name="desktopAlreadyRunning">RedefineNCMはすでに実行中ですが、応答がありません。システムトレイのアイコンから開くか、プロセスを終了してからもう一度お試しください。</string>
+    <string name="desktopDataOpenFailedTitle">ローカルデータを開けません</string>
+    <string name="desktopDataTooNew">{path} は新しいバージョンのRedefineNCMが作成したもので、このバージョンでは読み込めません。最新バージョンをインストールすると引き続き使えます。\n\nファイル名を変えて保存し、空の状態から始めることもできます。再生キュー、ローカルプレイリスト、「ローカルのお気に入り」は名前を変えたファイルに残り、ダウンロード済みの曲のファイルには影響しません。</string>
+    <string name="desktopDataUnreadable">{path} を読み込めませんでした：{reason}\n\nファイル名を変えて保存し、空の状態から始めることができます。再生キュー、ローカルプレイリスト、「ローカルのお気に入り」は名前を変えたファイルに残り、ダウンロード済みの曲のファイルには影響しません。</string>
+    <string name="desktopDataStartOver">名前を変えてやり直す</string>
+    <string name="desktopDataRenameFailed">{path} の名前を変更できません。別のプログラムが使用している可能性があります。そのプログラムを閉じるか、ファイルを手動で移動してから、RedefineNCMをもう一度開いてください。</string>
+    <string name="desktopCrashTitle">RedefineNCMで問題が発生しました</string>
+    <string name="desktopCrashMessage">画面でエラーが発生したため、アプリを終了します。もう一度開くと引き続き使えます。</string>
+    <string name="desktopLogHint">経過は {path} に記録されています。問題を報告するときに添付してください。</string>
+    <string name="desktopStartFailedTitle">RedefineNCMを起動できません</string>
+    <string name="desktopStartFailed">起動中にエラーが発生しました：{reason}</string>
+
     <!-- download/AndroidDownloadService.kt -->
     <string name="downloadingTitle">ダウンロード中：{title}</string>
     <string name="downloadsPaused">ダウンロード一時停止中</string>

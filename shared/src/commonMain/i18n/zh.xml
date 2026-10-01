@@ -28,6 +28,19 @@
     <string name="lockDesktopLyricsWithHint">锁定桌面歌词（可在托盘菜单解锁）</string>
     <string name="noLyrics">暂无歌词</string>
 
+    <!-- DesktopStartup.kt -->
+    <string name="desktopAlreadyRunning">RedefineNCM 已经在运行，但没有回应。请从系统托盘图标打开它，或者结束它的进程后再试。</string>
+    <string name="desktopDataOpenFailedTitle">打不开本机数据</string>
+    <string name="desktopDataTooNew">{path} 是更新版本的 RedefineNCM 留下的，这个版本读不了。安装最新版本就能继续使用。\n\n也可以把它改名保存，从空白开始：播放队列、本地歌单和「本地喜欢」会留在改名后的文件里，已下载的歌曲文件不受影响。</string>
+    <string name="desktopDataUnreadable">读取 {path} 时出错：{reason}\n\n可以把它改名保存，从空白开始：播放队列、本地歌单和「本地喜欢」会留在改名后的文件里，已下载的歌曲文件不受影响。</string>
+    <string name="desktopDataStartOver">改名保存并重新开始</string>
+    <string name="desktopDataRenameFailed">无法给 {path} 改名，可能有别的程序正在使用它。请关闭那个程序，或者自己移走这个文件，然后重新打开 RedefineNCM。</string>
+    <string name="desktopCrashTitle">RedefineNCM 遇到了问题</string>
+    <string name="desktopCrashMessage">界面出错，应用需要退出。重新打开就能继续使用。</string>
+    <string name="desktopLogHint">出错经过记录在 {path}，反馈问题时可以附上。</string>
+    <string name="desktopStartFailedTitle">RedefineNCM 无法启动</string>
+    <string name="desktopStartFailed">启动时出错：{reason}</string>
+
     <!-- download/AndroidDownloadService.kt -->
     <string name="downloadingTitle">正在下载：{title}</string>
     <string name="downloadsPaused">下载已暂停</string>
