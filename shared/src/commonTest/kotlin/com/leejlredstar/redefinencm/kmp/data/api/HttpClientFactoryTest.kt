@@ -3,6 +3,7 @@ package com.leejlredstar.redefinencm.kmp.data.api
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class HttpClientFactoryTest {
     @Test
@@ -18,5 +19,14 @@ class HttpClientFactoryTest {
         )
         assertFalse("abc%2Bdef" in redacted)
         assertFalse("secret" in redacted)
+    }
+
+    @Test
+    fun theSessionIsACredentialInBothDirections() {
+        assertTrue(isCredentialHeader("Cookie"))
+        assertTrue(isCredentialHeader("Set-Cookie"))
+        // HTTP/2 lowercases header names, and engines differ in what they hand back.
+        assertTrue(isCredentialHeader("set-cookie"))
+        assertFalse(isCredentialHeader("Content-Type"))
     }
 }

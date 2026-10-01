@@ -24,11 +24,19 @@ internal fun redactSensitiveQueryParameters(message: String): String =
         "${match.groupValues[1]}<redacted>"
     }
 
-private object SensitiveQueryRedactingLogger : Logger {
+private class SensitiveQueryRedactingLogger(private val sink: Logger) : Logger {
     override fun log(message: String) {
-        Logger.DEFAULT.log(redactSensitiveQueryParameters(message))
+        sink.log(redactSensitiveQueryParameters(message))
     }
 }
+
+/**
+ * Headers that carry the account. A login answer sets the session in `Set-Cookie`, so the
+ * response side is as much a credential as the request's `Cookie`.
+ */
+internal fun isCredentialHeader(name: String): Boolean =
+    name.equals(HttpHeaders.Cookie, ignoreCase = true) ||
+        name.equals(HttpHeaders.SetCookie, ignoreCase = true)
 
 /**
  * Creates and configures a Ktor HttpClient for the NCM API. The engine is provided by each
@@ -62,6 +70,7 @@ object HttpClientFactory {
         cookieProvider: () -> String,
         engineFactory: HttpClientEngineFactory<*>,
         cookieTransport: CookieTransport = CookieTransport.HEADER,
+        logSink: Logger = Logger.DEFAULT,
     ): HttpClient {
         return HttpClient(engineFactory) {
             install(ContentNegotiation) {
@@ -70,17 +79,20 @@ object HttpClientFactory {
             install(Logging) {
                 // Request URLs can contain the microphone-derived audioFP. Redact it before
                 // forwarding Ktor's log line to logcat/console.
-                logger = SensitiveQueryRedactingLogger
+                logger = SensitiveQueryRedactingLogger(logSink)
                 // Browsers forbid setting Cookie headers, so the Web target sends the cookie as
                 // an API query parameter. Disable request logging there or the credential would
                 // be printed as part of the URL.
+                // Elsewhere one line per request and per answer is enough to diagnose a server;
+                // headers add nothing to that and are where the session travels.
                 level = if (cookieTransport == CookieTransport.QUERY_PARAMETER) {
                     LogLevel.NONE
                 } else {
-                    LogLevel.HEADERS
+                    LogLevel.INFO
                 }
-                // 绝不把会话 Cookie（账号凭证）打进日志：只留占位，避免凭证泄漏到 logcat/控制台
-                sanitizeHeader { header -> header == HttpHeaders.Cookie }
+                // 绝不把会话 Cookie（账号凭证）打进日志：只留占位，避免凭证泄漏到 logcat/控制台。
+                // 登录应答用 Set-Cookie 下发会话，所以应答头同样要遮住；日志级别以后调高也不会漏。
+                sanitizeHeader(predicate = ::isCredentialHeader)
             }
             // 宽松超时：直连（不走系统代理）时 TCP 首次握手实测可达 3s+ 且有丢包重传，
             // CIO 默认 connect 超时太紧会导致零星 ConnectTimeout（如 /lyric 反复失败）。
