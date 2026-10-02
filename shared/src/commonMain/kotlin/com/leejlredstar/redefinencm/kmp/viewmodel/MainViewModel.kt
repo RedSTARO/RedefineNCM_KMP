@@ -62,19 +62,26 @@ internal sealed interface AccountLookup {
 }
 
 /**
- * [response] is null when the request failed, and carries no account when the service does not
- * recognise the credential. The two used to be read alike, so one failed request showed a
- * signed-in user the sign-in prompt, with nothing to retry.
+ * [response] is null when the request failed. An answer with no account, or the service's "needs
+ * sign-in" code, means the credential is not accepted any more; any other code is the service
+ * failing or refusing the request itself, which says nothing about the account. Before these were
+ * told apart one failed request showed a signed-in user the sign-in prompt, with nothing to retry.
  */
 internal fun classifyAccountLookup(cookie: String, response: UserAccount?): AccountLookup {
-    val uid = response?.account?.id ?: 0L
+    val uid = response?.takeIf { it.code == ACCOUNT_LOOKUP_OK }?.account?.id ?: 0L
     return when {
         uid != 0L -> AccountLookup.SignedIn(uid)
         cookie.isBlank() -> AccountLookup.SignedOut
         response == null -> AccountLookup.Unreachable
-        else -> AccountLookup.Expired
+        response.code == ACCOUNT_LOOKUP_OK || response.code == ACCOUNT_LOOKUP_NEEDS_SIGN_IN -> AccountLookup.Expired
+        else -> AccountLookup.Unreachable
     }
 }
+
+private const val ACCOUNT_LOOKUP_OK = 200
+
+/** NeteaseCloudMusicApi's answer for a request that needs an account it was not given. */
+private const val ACCOUNT_LOOKUP_NEEDS_SIGN_IN = 301
 
 /** The account service did not answer; the account pages offer to ask again. */
 internal class AccountLookupUnreachableException : IllegalStateException()

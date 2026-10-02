@@ -88,9 +88,13 @@ class Repository(
 
     // ── User ──
 
-    /** 网络获取当前登录账号（用于首次解析 UID，原版 fetchUID 的 userAccount 调用）。 */
-    suspend fun getUserAccount(): UserAccount? =
-        safeApiCall { api.userAccount() }?.takeIf { it.code == API_SUCCESS_CODE }
+    /**
+     * 网络获取当前登录账号（用于首次解析 UID，原版 fetchUID 的 userAccount 调用）。
+     *
+     * The answer comes back whatever its code: a refusal says something about the credential,
+     * and only a request that failed is null. The caller tells them apart.
+     */
+    suspend fun getUserAccount(): UserAccount? = safeApiCall { api.userAccount() }
 
     /** Process-start action: claim every completed VIP task reward once for the logged-in account. */
     suspend fun claimAllVipGrowthPoints(
