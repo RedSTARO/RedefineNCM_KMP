@@ -88,9 +88,11 @@ offline playback, palette extraction, settings import/export, and a visible lyri
 also bundles Noto Sans SC and preloads it before exposing the Compose canvas, because CanvasKit
 cannot rely on host CJK fonts for dynamic Chinese song titles and lyrics.
 
-Page lifecycle is a locked behavior: `visibilitychange` to hidden, `pagehide`, and
-`beforeunload` must pause playback. Pausing must also invalidate an in-flight stream-URL lookup,
-otherwise a late response can start audio after the page has been left.
+Page lifecycle is a locked behavior: `pagehide` and `beforeunload` pause playback, and pausing
+invalidates an in-flight stream-URL lookup, otherwise a late response can start audio after the
+page has been left. A tab that is only hidden keeps playing: pausing on `visibilitychange` stopped
+the music whenever the user switched tabs or minimised the browser, and the owner chose background
+playback on 2026-09-19 (docs/UI_UX_AUDIT.md M1). Mobile browsers may still suspend a hidden page.
 
 ### D3 — Local cache is SQLDelight — **DONE (updated 2026-07-13)**
 
@@ -549,7 +551,7 @@ separate, verified upgrade pass; see [Dependency management](#dependency-managem
 ### Application versioning
 
 App version metadata is Git-derived from `gradle/app-version.gradle.kts`. The required base
-tag format is `v<major>.<minor>.<patch>`; the current base tag is `v0.0.2`. Full app version
+tag format is `v<major>.<minor>.<patch>`; the current base tag is `v0.0.4`. Full app version
 names are `baseTag.shortCommitHash`, e.g. `v0.0.2.cf6cea74`. Build numbers are
 `git rev-list --count HEAD`.
 
@@ -713,6 +715,39 @@ On a process start that resolves an already logged-in account, the app calls
 `/vip/growthpoint/getall` once to claim all completed VIP task rewards. This action uses the
 startup credential snapshot, runs independently from account-page loading, is not repeated by
 account-data retries or an in-process login, and is cancelled if the account is cleared or switched.
+
+The account lookup (`/user/account`) has three outcomes besides an account, and the pages treat
+them differently (`classifyAccountLookup`): no stored credential is signed out; an answer with no
+account, or code 301, is an expired session, which asks the user to sign in again; a request that
+failed or any other code is unreachable, which offers a retry and keeps the credential.
+
+## Desktop process and data directory
+
+The desktop app keeps what it stores itself in `~/.redefinencm/`:
+
+| Path | What it is |
+|---|---|
+| `redefinencm.db` | The SQLDelight database: caches, the saved queue, download tasks, the local library |
+| `redefinencm.db.<yyyyMMdd-HHmmss>[-n].bak` | A database put aside by "rename and start over" (below); never deleted by the app |
+| `logs/redefinencm.log`, `logs/redefinencm.previous.log` | Standard output and error, 2 MB each, one rotation kept |
+| `instance.lock`, `instance.port` | The single-instance lock, and the port and token of the running app |
+| `models/` | The beat model, downloaded on first use |
+
+- **One instance per user.** The first process holds an exclusive lock on `instance.lock` and
+  listens on a loopback port written to `instance.port` with a random token; the file is readable
+  by its owner only. A later launch sends `show <token>`, the running app raises its window, and
+  the later process exits. A request is at most 96 bytes read within 1.5 s. macOS never starts a
+  second process: a Dock click is an app-reopen event, which the app answers the same way. A
+  development run beside an installed app passes `-Dredefinencm.allowMultipleInstances=true`.
+- **The log file is for bug reports**, so it holds less than the console: each line is written
+  once complete, with a timestamp, and every URL loses its query (stream tokens, the QQ account
+  number, search text, account ids, QR keys). The HTTP client logs one line per request and per
+  answer, never headers or bodies.
+- **Startup failures are dialogs, not silent exits.** The database is opened before Koin starts.
+  A file from a newer schema, or one that cannot be read, gets a dialog that offers to put it
+  aside under a `.bak` name and start with empty data, or to quit. Any other startup failure, and
+  any exception a window throws while composing or drawing, is logged and shown, and the app quits
+  rather than leaving a window that can no longer draw in the tray.
 
 ---
 
@@ -1120,6 +1155,11 @@ xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug 
 
 `usesCleartextTraffic="true"` must be set in `androidApp`'s manifest (self-hosted HTTP API).
 
+Release builds rename their symbols. R8 writes `androidApp/build/outputs/mapping/release/mapping.txt`
+and the desktop ProGuard pass writes `desktopApp/build/proguard/mapping.txt` (it keeps line numbers);
+CI uploads both as `symbol-map-*` artifacts beside the packages. A stack trace from an installed
+build is readable only with the map of that exact build.
+
 The Web production distribution is emitted at
 `shared/build/dist/wasmJs/productionExecutable/`. Deploy it as a static site with the correct
 `.wasm` MIME type. Browser networking requires CORS from the configured API/audio/image hosts;
@@ -1266,8 +1306,8 @@ feature gap; platform integrations use target-specific actuals:
       reconciliation code, and tracked runtime artifacts removed** (2026-07-10).
 - [x] **`wasmJsMain/` enabled and completed** (2026-07-11) — target, entry point, dependencies,
       real browser player, Media Session, local persistence, OPFS download/offline playback,
-      platform actuals, browser tests and production distribution are wired. Page hiding/exiting
-      pauses playback and cancels pending stream resolution.
+      platform actuals, browser tests and production distribution are wired. Leaving the page
+      pauses playback and cancels pending stream resolution; a hidden tab keeps playing (D2).
 
 ### Latent runtime gaps (compile fine; will surface when exercised)
 - [x] **HttpClient base URL / cookie wired** (updated 2026-07-11) — every `platformModule()` now builds
