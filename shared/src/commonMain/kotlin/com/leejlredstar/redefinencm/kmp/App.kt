@@ -841,6 +841,7 @@ private fun AppContent(
                                                 onOpenRecognition = { push(PushedDest.SongRecognition) },
                                                 onOpenDailySongs = { push(PushedDest.DailySongs) },
                                                 onOpenSearch = ::openSearch,
+                                                onOpenLogin = { push(PushedDest.Login()) },
                                             )
                                             is TabDest.Search -> SearchScreen(
                                                 bottomPadding = screenPadding.calculateBottomPadding() + 16.dp,

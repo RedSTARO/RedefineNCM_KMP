@@ -846,6 +846,10 @@
     <string name="accountAndPlaylistsLoading">アカウントとプレイリストを読み込んでいます…</string>
     <string name="signInToSeePlaylistsTitle">ログインしてプレイリストを表示</string>
     <string name="signInToSeePlaylistsMessage">NetEase Cloud Musicアカウントにログインすると、作成したプレイリストと保存したプレイリストがここに表示されます。</string>
+    <string name="signInToSeeRecommendationsTitle">ログインしておすすめを表示</string>
+    <string name="signInToSeeRecommendationsMessage">NetEase Cloud Musicアカウントにログインすると、おすすめプレイリストと毎日のおすすめがここに表示されます。ログインしなくても検索と再生はできます。</string>
+    <string name="signInExpiredTitle">ログインの有効期限が切れました</string>
+    <string name="signInExpiredMessage">NetEase Cloud Musicが保存済みのログイン情報を受け付けなくなりました。もう一度ログインしてください。</string>
     <string name="profileUnavailableTitle">プロフィールを表示できません</string>
     <string name="profileUnavailableMessage">ログインしていますが、プロフィールを読み込めませんでした。</string>
     <string name="heartbeatModeStartFailed">ハートビートモードを開始できませんでした</string>

@@ -47,6 +47,38 @@ internal fun isCachedAccountIdentityValid(
 ): Boolean =
     cookie.isNotBlank() && uid != 0L && fingerprint == accountCookieFingerprint(cookie)
 
+/** What asking the service "who is signed in" came back with. */
+internal sealed interface AccountLookup {
+    data class SignedIn(val uid: Long) : AccountLookup
+
+    /** No credential is stored: nobody is signed in. */
+    data object SignedOut : AccountLookup
+
+    /** A credential is stored and the service answered that it belongs to nobody any more. */
+    data object Expired : AccountLookup
+
+    /** A credential is stored and the service could not be asked. */
+    data object Unreachable : AccountLookup
+}
+
+/**
+ * [response] is null when the request failed, and carries no account when the service does not
+ * recognise the credential. The two used to be read alike, so one failed request showed a
+ * signed-in user the sign-in prompt, with nothing to retry.
+ */
+internal fun classifyAccountLookup(cookie: String, response: UserAccount?): AccountLookup {
+    val uid = response?.account?.id ?: 0L
+    return when {
+        uid != 0L -> AccountLookup.SignedIn(uid)
+        cookie.isBlank() -> AccountLookup.SignedOut
+        response == null -> AccountLookup.Unreachable
+        else -> AccountLookup.Expired
+    }
+}
+
+/** The account service did not answer; the account pages offer to ask again. */
+internal class AccountLookupUnreachableException : IllegalStateException()
+
 internal fun shouldApplyPlaybackVerification(
     currentUid: Long,
     currentCredentialKey: Long?,
@@ -117,6 +149,8 @@ class MainViewModel(
     val userPlaylistsLoaded = MutableStateFlow(false)
     val accountLoading = MutableStateFlow(false)
     val accountLoadError = MutableStateFlow<UiText?>(null)
+    /** A credential is stored but the service no longer accepts it: the prompt says sign in again. */
+    val sessionExpired = MutableStateFlow(false)
     val userDetailLoadError = MutableStateFlow<UiText?>(null)
     val userLevelLoadError = MutableStateFlow<UiText?>(null)
     val userPlaylistsLoadError = MutableStateFlow<UiText?>(null)
@@ -352,7 +386,16 @@ class MainViewModel(
                 return cachedUid
             }
         }
-        return repo.getUserAccount()?.account?.id ?: 0L
+        return when (val lookup = classifyAccountLookup(cookie, repo.getUserAccount())) {
+            is AccountLookup.SignedIn -> lookup.uid
+            AccountLookup.SignedOut -> 0L
+            AccountLookup.Expired -> {
+                sessionExpired.value = true
+                0L
+            }
+            // Caught by loadAccount, which shows the account-data failure with a retry.
+            AccountLookup.Unreachable -> throw AccountLookupUnreachableException()
+        }
     }
 
     /** Login/account changes invalidate all work started for the previous credential. */
@@ -370,6 +413,7 @@ class MainViewModel(
         }
         accountLoading.value = true
         accountLoadError.value = null
+        sessionExpired.value = false
         userDetailLoadError.value = null
         userLevelLoadError.value = null
         userPlaylistsLoadError.value = null

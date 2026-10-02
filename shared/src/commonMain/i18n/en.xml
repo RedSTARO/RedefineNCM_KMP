@@ -906,6 +906,10 @@
     <string name="accountAndPlaylistsLoading">Loading account and playlists…</string>
     <string name="signInToSeePlaylistsTitle">Sign in to see your playlists</string>
     <string name="signInToSeePlaylistsMessage">Sign in to your NetEase Cloud Music account, and the playlists you've created and saved will show up here.</string>
+    <string name="signInToSeeRecommendationsTitle">Sign in to see your recommendations</string>
+    <string name="signInToSeeRecommendationsMessage">Sign in to your NetEase Cloud Music account, and Recommended playlists and Daily picks will show up here. You can still search and play without signing in.</string>
+    <string name="signInExpiredTitle">Your sign-in has expired</string>
+    <string name="signInExpiredMessage">NetEase Cloud Music no longer accepts the saved sign-in. Sign in again to continue.</string>
     <string name="profileUnavailableTitle">Profile unavailable</string>
     <string name="profileUnavailableMessage">You're signed in, but your profile couldn't be loaded.</string>
     <string name="heartbeatModeStartFailed">Couldn't start Heartbeat mode</string>

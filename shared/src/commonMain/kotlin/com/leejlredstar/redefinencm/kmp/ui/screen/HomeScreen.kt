@@ -55,6 +55,7 @@ import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.theme.AccentColorSaver
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
@@ -86,6 +87,7 @@ fun HomeScreen(
     onOpenDailySongs: () -> Unit = {},
     /** The search pill: search is a tab of its own, so this switches to it. */
     onOpenSearch: () -> Unit = {},
+    onOpenLogin: () -> Unit = {},
     viewModel: MainViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
     settings: PlatformSettings = koinInject(),
@@ -98,6 +100,12 @@ fun HomeScreen(
     val resourceFromCache by viewModel.recommendResourceFromCache.collectAsState()
     val songsFromCache by viewModel.recommendSongsFromCache.collectAsState()
     val userDetail by viewModel.userDetail.collectAsState()
+    val uid by viewModel.uid.collectAsState()
+    val accountLoadError by viewModel.accountLoadError.collectAsState()
+    val sessionExpired by viewModel.sessionExpired.collectAsState()
+    // Recommendations belong to an account. Signed out there is nothing to reload, so the page
+    // says what signing in would put here instead of two empty sections asking to be reloaded.
+    val signedOut = uid == 0L && !accountLoading && accountLoadError == null
     val dailySongs = recommend?.data?.dailySongs ?: emptyList()
     val dailyQueue = remember(dailySongs) { dailySongs.map { it.toMediaInfo() } }
     val currentMedia by player.currentMedia.collectAsState()
@@ -186,14 +194,31 @@ fun HomeScreen(
                 Spacer(Modifier.height(4.dp))
             }
 
-            item {
+            if (signedOut) item(key = "sign-in") {
+                ExpressiveStatePanel(
+                    title = if (sessionExpired) strings.signInExpiredTitle else strings.signInToSeeRecommendationsTitle,
+                    message = if (sessionExpired) {
+                        strings.signInExpiredMessage
+                    } else {
+                        strings.signInToSeeRecommendationsMessage
+                    },
+                    icon = AppIcons.Person,
+                    accentPalette = pagePalette,
+                    actionLabel = strings.signIn,
+                    onAction = onOpenLogin,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+            }
+
+            if (!signedOut) item {
                 SectionWithCarousel(
                     title = strings.recommendedPlaylists,
                     items = resources,
                     isLoading = accountLoading && recommendResource == null,
                     isFromCache = resourceFromCache,
                     isRefreshing = accountLoading,
-                    errorMessage = resourceLoadError?.text,
+                    // A failed account lookup loads neither section; say so in both.
+                    errorMessage = (resourceLoadError ?: accountLoadError)?.text,
                     onRetry = viewModel::retryAccountData,
                     key = { resource -> resource.id },
                     itemContent = { res ->
@@ -211,7 +236,7 @@ fun HomeScreen(
                 )
             }
 
-            item {
+            if (!signedOut) item {
                 SectionWithCarousel(
                     title = strings.dailyPicks,
                     // The heading is the way into the full list, and the count is what the
@@ -225,7 +250,7 @@ fun HomeScreen(
                     isLoading = accountLoading && recommend == null,
                     isFromCache = songsFromCache,
                     isRefreshing = accountLoading,
-                    errorMessage = songsLoadError?.text,
+                    errorMessage = (songsLoadError ?: accountLoadError)?.text,
                     onRetry = viewModel::retryAccountData,
                     key = { song -> song.id },
                     action = {

@@ -846,6 +846,10 @@
     <string name="accountAndPlaylistsLoading">正在加载账号与歌单…</string>
     <string name="signInToSeePlaylistsTitle">登录后查看你的歌单</string>
     <string name="signInToSeePlaylistsMessage">登录网易云音乐账号，这里会显示你创建和收藏的歌单。</string>
+    <string name="signInToSeeRecommendationsTitle">登录后查看推荐</string>
+    <string name="signInToSeeRecommendationsMessage">登录网易云音乐账号，这里会显示推荐歌单和每日推荐；不登录也可以搜索和播放。</string>
+    <string name="signInExpiredTitle">登录已失效</string>
+    <string name="signInExpiredMessage">网易云音乐不再接受保存的登录信息，请重新登录。</string>
     <string name="profileUnavailableTitle">用户资料暂不可用</string>
     <string name="profileUnavailableMessage">账号已登录，但用户资料未能加载。</string>
     <string name="heartbeatModeStartFailed">心动模式启动失败</string>

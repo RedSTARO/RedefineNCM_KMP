@@ -139,6 +139,7 @@ fun UserPlaylistScreen(
     val userLevelFromCache by viewModel.userLevelFromCache.collectAsState()
     val userPlaylistsFromCache by viewModel.userPlaylistsFromCache.collectAsState()
     val uid by viewModel.uid.collectAsState()
+    val sessionExpired by viewModel.sessionExpired.collectAsState()
     var lastIntelligencePlaylistId by remember { mutableStateOf<Long?>(null) }
     val hasCachedContent =
         (userDetailFromCache && userDetail != null) ||
@@ -277,8 +278,12 @@ fun UserPlaylistScreen(
                 }
                 uid == 0L -> item(key = "login-hint") {
                     ExpressiveStatePanel(
-                        title = strings.signInToSeePlaylistsTitle,
-                        message = strings.signInToSeePlaylistsMessage,
+                        title = if (sessionExpired) strings.signInExpiredTitle else strings.signInToSeePlaylistsTitle,
+                        message = if (sessionExpired) {
+                            strings.signInExpiredMessage
+                        } else {
+                            strings.signInToSeePlaylistsMessage
+                        },
                         icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Person,
                         accentPalette = accentPalette,
                         actionLabel = strings.signIn,
