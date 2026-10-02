@@ -20,6 +20,7 @@ class PushedDestinationCodecTest {
         PushedDest.DailySongs,
         PushedDest.Settings,
         PushedDest.Accounts,
+        PushedDest.Licenses,
         PushedDest.LocalLibrary,
         PushedDest.LocalPlaylist("local-1727000000000-42"),
         PushedDest.Playlist(123L),

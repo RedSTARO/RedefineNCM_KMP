@@ -752,8 +752,12 @@
     <string name="about">このアプリについて</string>
     <string name="version">バージョン</string>
     <string name="openSourceLicense">オープンソースライセンス</string>
-    <string name="amllComponentName">AMLL歌詞レンダリング・解析コンポーネント</string>
-    <string name="amllLicenseNote">AGPL-3.0-onlyで公開されています。ライセンスの全文はアプリのリソースに含まれています。</string>
+    <string name="openSourceLicensesHint">サードパーティの通知とライセンス全文。AMLL歌詞レンダリング・解析コンポーネントはAGPL-3.0-onlyで公開されています。</string>
+    <string name="thirdPartyNotices">サードパーティの通知</string>
+    <string name="licenseTextLoadFailed">この文書を読み込めません</string>
+    <string name="sourceCode">ソースコード</string>
+    <string name="sourceCodeHint">このバージョンのもとになったソースコードをブラウザで開きます</string>
+    <string name="buildNumber">ビルド {number}</string>
     <string name="importSettingsConfirmTitle">インポートして現在の設定を上書きしますか？</string>
     <string name="importSettingsConfirmMessage">ファイルをインポートすると、サーバーアドレスと再生・歌詞の設定が上書きされます。ログイン状態はバックアップに含まれないため、影響を受けません。先に現在の設定をエクスポートしてバックアップしておくことをおすすめします。</string>
     <string name="chooseFile">ファイルを選択</string>

@@ -472,14 +472,17 @@ internal fun SettingsLinkRow(
     label: String,
     supportingText: String,
     accentPalette: ContentAccentPalette,
+    /** The row's place in its group, for the connected shape. */
+    index: Int = 0,
+    count: Int = 1,
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     Surface(
         onClick = onClick,
         shape = rememberConnectedListItemShape(
-            index = 0,
-            count = 1,
+            index = index,
+            count = count,
             interactionSource = interactionSource,
         ),
         color = accentPalette.quietContainer,

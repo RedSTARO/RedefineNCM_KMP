@@ -752,8 +752,12 @@
     <string name="about">关于</string>
     <string name="version">版本</string>
     <string name="openSourceLicense">开源许可</string>
-    <string name="amllComponentName">AMLL 歌词渲染与解析组件</string>
-    <string name="amllLicenseNote">以 AGPL-3.0-only 发布；许可证全文随应用资源提供。</string>
+    <string name="openSourceLicensesHint">第三方声明和许可证全文；AMLL 歌词渲染与解析组件以 AGPL-3.0-only 发布</string>
+    <string name="thirdPartyNotices">第三方声明</string>
+    <string name="licenseTextLoadFailed">无法读取这份文本</string>
+    <string name="sourceCode">源代码</string>
+    <string name="sourceCodeHint">在浏览器中打开这个版本对应的源代码</string>
+    <string name="buildNumber">构建 {number}</string>
     <string name="importSettingsConfirmTitle">导入并覆盖当前设置？</string>
     <string name="importSettingsConfirmMessage">导入文件会覆盖服务器地址、播放与歌词偏好；登录状态不在备份里，不受影响。建议先导出当前设置作为备份。</string>
     <string name="chooseFile">选择文件</string>

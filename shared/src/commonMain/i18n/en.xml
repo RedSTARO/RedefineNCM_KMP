@@ -794,8 +794,12 @@
     <string name="about">About</string>
     <string name="version">Version</string>
     <string name="openSourceLicense">Open-source license</string>
-    <string name="amllComponentName">AMLL lyrics rendering and parsing component</string>
-    <string name="amllLicenseNote">Released under AGPL-3.0-only. The full license text is included in the app's resources.</string>
+    <string name="openSourceLicensesHint">Third-party notices and full license texts. The AMLL lyrics rendering and parsing component is released under AGPL-3.0-only.</string>
+    <string name="thirdPartyNotices">Third-party notices</string>
+    <string name="licenseTextLoadFailed">Couldn't load this text</string>
+    <string name="sourceCode">Source code</string>
+    <string name="sourceCodeHint">Opens the source code this version was built from in your browser</string>
+    <string name="buildNumber">Build {number}</string>
     <string name="importSettingsConfirmTitle">Import and replace your current settings?</string>
     <string name="importSettingsConfirmMessage">Importing a file replaces the server address and your playback and lyrics preferences. Sign-in status isn't in the backup and stays as it is. Consider exporting your current settings first as a backup.</string>
     <string name="chooseFile">Choose file</string>

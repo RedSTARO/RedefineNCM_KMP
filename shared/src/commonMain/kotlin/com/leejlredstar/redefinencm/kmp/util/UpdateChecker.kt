@@ -10,6 +10,13 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
+/** The project's repository on GitHub: where releases are published and the source lives. */
+const val PROJECT_REPOSITORY: String = "RedSTARO/RedefineNCM_KMP"
+
+/** The source tree a build was made from, by the commit stamped into it. */
+fun sourceCodeUrl(commitHash: String): String =
+    "https://github.com/$PROJECT_REPOSITORY/tree/$commitHash"
+
 /** 当前发布基线版本，来自最近的 v<major>.<minor>.<patch> Git tag。 */
 fun currentReleaseVersion(): String = BuildInfo.BASE_TAG
 
@@ -86,7 +93,7 @@ private data class SemanticVersion(
  * 不能发给 GitHub。
  */
 suspend fun fetchLatestReleaseTag(
-    repoSlug: String = "RedSTARO/RedefineNCM_KMP",
+    repoSlug: String = PROJECT_REPOSITORY,
 ): String? {
     val client = HttpClient {
         install(ContentNegotiation) {

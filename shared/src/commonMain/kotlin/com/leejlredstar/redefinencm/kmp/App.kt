@@ -113,6 +113,7 @@ import com.leejlredstar.redefinencm.kmp.ui.screen.ArtistScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.DailySongsScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.DownloadManagementScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.HomeScreen
+import com.leejlredstar.redefinencm.kmp.ui.screen.LicensesScreen
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderRegistrations
 import com.leejlredstar.redefinencm.kmp.ui.screen.AccountsScreen
@@ -172,6 +173,8 @@ internal sealed interface PushedDest {
     data object Settings : PushedDest
     /** Every account the app holds, opened from settings. */
     data object Accounts : PushedDest
+    /** The third-party notices and license texts, opened from settings. */
+    data object Licenses : PushedDest
     /** The local account's playlists and favourites. */
     data object LocalLibrary : PushedDest
     data class LocalPlaylist(val id: String) : PushedDest
@@ -226,6 +229,7 @@ internal fun encodePushedDestination(destination: PushedDest): String = when (de
     PushedDest.DailySongs -> "daily-songs"
     PushedDest.Settings -> "settings"
     PushedDest.Accounts -> "accounts"
+    PushedDest.Licenses -> "licenses"
     PushedDest.LocalLibrary -> "local-library"
     is PushedDest.LocalPlaylist -> "local-playlist:${destination.id}"
     is PushedDest.Playlist -> "playlist:${destination.id}"
@@ -243,6 +247,7 @@ internal fun decodePushedDestination(saved: String): PushedDest? = when (saved) 
     "daily-songs" -> PushedDest.DailySongs
     "settings" -> PushedDest.Settings
     "accounts" -> PushedDest.Accounts
+    "licenses" -> PushedDest.Licenses
     "local-library" -> PushedDest.LocalLibrary
     else -> when {
         saved.startsWith("local-playlist:") ->
@@ -797,6 +802,11 @@ private fun AppContent(
                                             is PushedDest.Settings -> SettingsScreen(
                                                 scaffoldPadding = screenPadding,
                                                 onOpenAccounts = { push(PushedDest.Accounts) },
+                                                onOpenLicenses = { push(PushedDest.Licenses) },
+                                                onBack = ::back,
+                                            )
+                                            is PushedDest.Licenses -> LicensesScreen(
+                                                scaffoldPadding = screenPadding,
                                                 onBack = ::back,
                                             )
                                             is PushedDest.Accounts -> AccountsScreen(

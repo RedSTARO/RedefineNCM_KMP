@@ -120,6 +120,7 @@ import com.leejlredstar.redefinencm.kmp.ui.component.SettingsExpanderRow
 import com.leejlredstar.redefinencm.kmp.util.BuildInfo
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
+import com.leejlredstar.redefinencm.kmp.util.sourceCodeUrl
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
 import com.leejlredstar.redefinencm.kmp.util.applySettingsBackup
 import com.leejlredstar.redefinencm.kmp.util.encodeSettingsBackup
@@ -169,6 +170,8 @@ fun SettingsScreen(
     scaffoldPadding: PaddingValues,
     /** Opens the accounts page, where every provider's account and the local one live. */
     onOpenAccounts: () -> Unit,
+    /** Opens the third-party notices and license texts. */
+    onOpenLicenses: () -> Unit = {},
     /** Settings is a page opened from the library and the sidebar, so it has a way back. */
     onBack: (() -> Unit)? = null,
     settings: PlatformSettings = koinInject(),
@@ -801,18 +804,30 @@ fun SettingsScreen(
                 SettingsValue(
                     label = strings.version,
                     value = BuildInfo.VERSION_NAME,
-                    supportingText = "Build ${BuildInfo.VERSION_CODE}",
+                    supportingText = strings.buildNumber(BuildInfo.VERSION_CODE),
                     accentPalette = settingsPalette,
                     index = 0,
-                    count = 2,
+                    count = 3,
                 )
-                SettingsValue(
+                // The texts are packaged with the app; this is the way to read them.
+                SettingsLinkRow(
                     label = strings.openSourceLicense,
-                    value = strings.amllComponentName,
-                    supportingText = strings.amllLicenseNote,
+                    supportingText = strings.openSourceLicensesHint,
                     accentPalette = settingsPalette,
                     index = 1,
-                    count = 2,
+                    count = 3,
+                    onClick = onOpenLicenses,
+                )
+                // The source this very build was made from: what AGPL asks a network service to
+                // offer the people using it, and what a bug report can point at.
+                val uriHandler = LocalUriHandler.current
+                SettingsLinkRow(
+                    label = strings.sourceCode,
+                    supportingText = strings.sourceCodeHint,
+                    accentPalette = settingsPalette,
+                    index = 2,
+                    count = 3,
+                    onClick = { runCatching { uriHandler.openUri(sourceCodeUrl(BuildInfo.COMMIT_HASH)) } },
                 )
 
                     Spacer(Modifier.height(48.dp))
