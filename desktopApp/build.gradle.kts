@@ -89,9 +89,31 @@ val prepareDesktopLegalResources by tasks.registering(Sync::class) {
     }
 }
 
+// ProGuard's map from the renamed symbols of a release build back to the source names. A stack
+// trace from an installed app is unreadable without the map of that exact build, so every release
+// build writes one and CI keeps it beside the package.
+val desktopProguardMapping = layout.buildDirectory.file("proguard/mapping.txt")
+val desktopProguardMappingConfig = layout.buildDirectory.file("proguard/mapping.pro")
+val writeDesktopProguardMappingConfig by tasks.registering {
+    group = "build"
+    description = "Tells ProGuard where to write this build's symbol mapping."
+    val mapping = desktopProguardMapping.map { it.asFile.absolutePath }
+    val config = desktopProguardMappingConfig
+    inputs.property("mapping", mapping)
+    outputs.file(config)
+    doLast {
+        val file = config.get().asFile
+        file.parentFile.mkdirs()
+        file.writeText("-printmapping '${mapping.get()}'\n")
+    }
+}
+
 tasks.configureEach {
     if (name == "prepareAppResources") {
         dependsOn(prepareDesktopLegalResources)
+    }
+    if (name == "proguardReleaseJars") {
+        dependsOn(writeDesktopProguardMappingConfig)
     }
     if (name.startsWith("package") || name.contains("Distributable")) {
         dependsOn(verifyDesktopNativePackagingHost)
@@ -139,6 +161,7 @@ compose.desktop {
             obfuscate.set(true)
             joinOutputJars.set(true)
             configurationFiles.from(project.file("compose-desktop.pro"))
+            configurationFiles.from(desktopProguardMappingConfig)
         }
 
         nativeDistributions {

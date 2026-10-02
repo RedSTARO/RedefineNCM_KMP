@@ -17,6 +17,12 @@
 # callbacks, and Structure field names at runtime.
 -keepattributes Signature,Exceptions,InnerClasses,EnclosingMethod,*Annotation*
 
+# The app writes its stack traces to a log file the user attaches to a bug report. Keep line
+# numbers in them; the file name is replaced, and the mapping the build writes beside the jar
+# (see desktopApp/build.gradle.kts) turns the renamed symbols back.
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
+
 # Native method names and descriptor types are part of the JNI ABI (SQLite and JNA's
 # jnidispatch both reach native implementations by those exact signatures).
 -keepclasseswithmembernames,includedescriptorclasses class * {

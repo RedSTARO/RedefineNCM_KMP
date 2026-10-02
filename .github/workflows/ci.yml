@@ -100,9 +100,10 @@ jobs:
           # The JVM suite covers the common native TTML/LRC/YRC parser, AMLL lyric
           # engine, and a real Linux MPRIS client/server smoke test.
           dbus-run-session -- ./gradlew --no-daemon :shared:jvmTest
+          # :desktopApp:test covers the instance lock, the log file and the start-up checks.
           ./gradlew \
             :shared:testAndroidHostTest \
-            :desktopApp:compileKotlin \
+            :desktopApp:test \
             :desktopApp:prepareDesktopLegalResources
           diff --recursive --brief \
             LICENSES \
@@ -151,6 +152,13 @@ jobs:
         with:
           name: android-apk-verification
           path: androidApp/build/outputs/apk/**/RedefineNCM_KMP-${{ needs.test.outputs.app_version }}-release-unsigned.apk
+          if-no-files-found: error
+
+      # R8 renames the app's symbols; a stack trace from this build needs this build's map.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: symbol-map-android
+          path: androidApp/build/outputs/mapping/release/mapping.txt
           if-no-files-found: error
 
   # ─── Web · Wasm ────────────────────────────────────────────────────────────
@@ -293,6 +301,12 @@ jobs:
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
+          name: symbol-map-desktop-linux
+          path: desktopApp/build/proguard/mapping.txt
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
           name: desktop-linux-deb
           path: desktopApp/build/compose/binaries/main-release/deb/RedefineNCM_KMP-${{ needs.test.outputs.app_version }}.deb
           if-no-files-found: error
@@ -323,7 +337,7 @@ jobs:
 
       - name: Build .msi installer
         run: |
-          ./gradlew :shared:jvmTest :desktopApp:packageReleaseMsi
+          ./gradlew :shared:jvmTest :desktopApp:test :desktopApp:packageReleaseMsi
           $package = Get-ChildItem -Path desktopApp/build/compose/binaries/main-release/msi -Filter *.msi | Select-Object -First 1
           if (-not $package) { throw "MSI package was not produced." }
           $installer = $null
@@ -353,6 +367,12 @@ jobs:
           }
           $target = Join-Path $package.DirectoryName "RedefineNCM_KMP-$env:APP_VERSION.msi"
           Move-Item -LiteralPath $package.FullName -Destination $target
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: symbol-map-desktop-windows
+          path: desktopApp/build/proguard/mapping.txt
+          if-no-files-found: error
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -389,7 +409,7 @@ jobs:
           chmod +x gradlew
           # jvmTest executes the native MPNowPlayingInfoCenter/remote-command smoke on macOS.
           # packageReleaseDmg runs the same ProGuard release pipeline as the .msi and .deb.
-          ./gradlew :shared:jvmTest :desktopApp:packageReleaseDmg
+          ./gradlew :shared:jvmTest :desktopApp:test :desktopApp:packageReleaseDmg
           plist=$(find desktopApp/build/compose/binaries/main-release -path '*/RedefineNCM.app/Contents/Info.plist' -print -quit)
           test -n "$plist"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")" = "$NATIVE_PACKAGE_VERSION"
@@ -406,6 +426,12 @@ jobs:
           name: desktop-macos-jpackage-logs
           path: desktopApp/build/compose/logs/**
           if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: symbol-map-desktop-macos
+          path: desktopApp/build/proguard/mapping.txt
+          if-no-files-found: error
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
