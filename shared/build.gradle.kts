@@ -712,6 +712,11 @@ dependencies {
 
 // On a Windows host the JVM tests can reach the DirectML build; elsewhere the harness skips.
 tasks.withType<Test>().matching { it.name == "jvmTest" }.configureEach {
+    // AndroidLaunchBackgroundTest compares the Android app's launch colours with the scheme.
+    // Declared here, or a change to those files alone would leave this task up to date.
+    inputs.files(
+        rootProject.fileTree("androidApp/src/main/res") { include("values*/colors.xml") },
+    ).withPropertyName("androidLaunchColours").withPathSensitivity(PathSensitivity.RELATIVE)
     if (isWindowsBuildHost) {
         dependsOn(prepareOnnxRuntimeDirectML)
         systemProperty(

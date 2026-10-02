@@ -91,7 +91,8 @@ object HttpClientFactory {
                     LogLevel.INFO
                 }
                 // 绝不把会话 Cookie（账号凭证）打进日志：只留占位，避免凭证泄漏到 logcat/控制台。
-                // 登录应答用 Set-Cookie 下发会话，所以应答头同样要遮住；日志级别以后调高也不会漏。
+                // 登录应答用 Set-Cookie 下发会话，所以应答头同样要遮住。这只管得住请求头和应答头：
+                // 登录应答的正文里还有一份 cookie 字段，级别调到 BODY 之前必须先把它遮掉。
                 sanitizeHeader(predicate = ::isCredentialHeader)
             }
             // 宽松超时：直连（不走系统代理）时 TCP 首次握手实测可达 3s+ 且有丢包重传，

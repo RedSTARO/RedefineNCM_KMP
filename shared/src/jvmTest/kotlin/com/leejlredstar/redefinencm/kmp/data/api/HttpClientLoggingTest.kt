@@ -9,7 +9,6 @@ import kotlinx.coroutines.runBlocking
 import java.net.InetSocketAddress
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class HttpClientLoggingTest {
@@ -17,7 +16,8 @@ class HttpClientLoggingTest {
     fun aLoginAnswerLeavesNoSessionInTheLog() = runBlocking {
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
             createContext("/") { exchange ->
-                val body = """{"code":803}""".encodeToByteArray()
+                // The login answer carries the session twice: as a header and as a field.
+                val body = """{"code":803,"cookie":"MUSIC_U=body-session"}""".encodeToByteArray()
                 exchange.responseHeaders.add("Content-Type", "application/json")
                 exchange.responseHeaders.add("Set-Cookie", "MUSIC_U=answer-session; Path=/")
                 exchange.sendResponseHeaders(200, body.size.toLong())
@@ -39,12 +39,13 @@ class HttpClientLoggingTest {
         )
 
         try {
-            assertEquals("""{"code":803}""", client.get("/login/qr/check").bodyAsText())
+            assertTrue("body-session" in client.get("/login/qr/check").bodyAsText())
 
             val log = logged.joinToString("\n")
             assertTrue("/login/qr/check" in log, "the request line is what the log is for")
             assertTrue("request-session" !in log)
             assertTrue("answer-session" !in log)
+            assertTrue("body-session" !in log)
         } finally {
             client.close()
             server.stop(0)
