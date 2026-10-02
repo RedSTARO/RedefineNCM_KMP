@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp
 
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
@@ -9,6 +10,7 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.nio.channels.FileLock
 import java.nio.channels.OverlappingFileLockException
+import java.util.UUID
 import kotlin.concurrent.thread
 
 /**
@@ -23,6 +25,10 @@ import kotlin.concurrent.thread
  * loopback port it writes next to that file. A later process that cannot take the lock asks that
  * port to show the window, and exits. The operating system drops the lock when its holder dies,
  * so a crash never leaves the app unable to start.
+ *
+ * A loopback port can be reached by every account on the machine, so the request carries a token
+ * that only the owner of the port file can read, and what the listener reads from a connection is
+ * bounded in size and in time.
  */
 internal class DesktopSingleInstance private constructor(
     private val lockFile: RandomAccessFile?,
@@ -52,6 +58,9 @@ internal class DesktopSingleInstance private constructor(
         private const val SHOW_REQUEST = "show"
         private const val SHOW_ACKNOWLEDGED = "ok"
         private const val ANSWER_TIMEOUT_MS = 1_500
+
+        /** Longer than any request this protocol has; a connection that sends more is dropped. */
+        private const val MAX_REQUEST_BYTES = 96
 
         /**
          * Takes the instance lock in [directory], or asks the process holding it to show its
@@ -89,7 +98,8 @@ internal class DesktopSingleInstance private constructor(
 
         private fun listen(portFile: File, onActivate: () -> Unit): ServerSocket {
             val server = ServerSocket(0, 16, InetAddress.getLoopbackAddress())
-            portFile.writeText(server.localPort.toString())
+            val token = UUID.randomUUID().toString()
+            writeOwnerOnly(portFile, "${server.localPort} $token")
             thread(name = "single-instance", isDaemon = true) {
                 while (!server.isClosed) {
                     val socket = try {
@@ -99,8 +109,7 @@ internal class DesktopSingleInstance private constructor(
                     }
                     runCatching {
                         socket.use { client ->
-                            client.soTimeout = ANSWER_TIMEOUT_MS
-                            if (client.getInputStream().bufferedReader().readLine() == SHOW_REQUEST) {
+                            if (readRequest(client) == "$SHOW_REQUEST $token") {
                                 client.getOutputStream().apply {
                                     write("$SHOW_ACKNOWLEDGED\n".toByteArray())
                                     flush()
@@ -114,25 +123,59 @@ internal class DesktopSingleInstance private constructor(
             return server
         }
 
+        /** Only this user reads the token, where the file system can say so. */
+        private fun writeOwnerOnly(file: File, content: String) {
+            file.delete()
+            file.createNewFile()
+            file.setReadable(false, false)
+            file.setReadable(true, true)
+            file.setWritable(false, false)
+            file.setWritable(true, true)
+            file.writeText(content)
+        }
+
+        /**
+         * One line of at most [MAX_REQUEST_BYTES], read within [ANSWER_TIMEOUT_MS] in total. A
+         * connection that never ends its line, or sends it a byte at a time, gets null and is
+         * closed: the listener serves one connection at a time and must stay free for the next.
+         */
+        private fun readRequest(client: Socket): String? {
+            val deadline = System.nanoTime() + ANSWER_TIMEOUT_MS * 1_000_000L
+            val input = client.getInputStream()
+            val line = ByteArrayOutputStream()
+            while (line.size() <= MAX_REQUEST_BYTES) {
+                val remainingMs = (deadline - System.nanoTime()) / 1_000_000L
+                if (remainingMs <= 0) return null
+                client.soTimeout = remainingMs.toInt().coerceAtLeast(1)
+                val next = input.read()
+                if (next < 0 || next == '\n'.code) return line.toString(Charsets.UTF_8).trimEnd('\r')
+                line.write(next)
+            }
+            return null
+        }
+
         /** The holder may still be binding its port, so the request is retried for two seconds. */
         private fun askRunningInstanceToShow(portFile: File): Boolean {
             repeat(20) {
-                val port = runCatching { portFile.readText().trim().toInt() }.getOrNull()
-                if (port != null && requestShow(port)) return true
+                val parts = runCatching { portFile.readText().trim().split(' ') }.getOrNull()
+                val port = parts?.getOrNull(0)?.toIntOrNull()
+                val token = parts?.getOrNull(1)
+                if (port != null && token != null && requestShow(port, token)) return true
                 Thread.sleep(100)
             }
             return false
         }
 
-        private fun requestShow(port: Int): Boolean = runCatching {
+        private fun requestShow(port: Int, token: String): Boolean = runCatching {
             Socket().use { socket ->
                 socket.connect(InetSocketAddress(InetAddress.getLoopbackAddress(), port), 500)
                 socket.soTimeout = ANSWER_TIMEOUT_MS
                 socket.getOutputStream().apply {
-                    write("$SHOW_REQUEST\n".toByteArray())
+                    write("$SHOW_REQUEST $token\n".toByteArray())
                     flush()
                 }
-                socket.getInputStream().bufferedReader().readLine() == SHOW_ACKNOWLEDGED
+                // A stale port file can point at some other program; its answer is bounded too.
+                readRequest(socket) == SHOW_ACKNOWLEDGED
             }
         }.getOrDefault(false)
     }

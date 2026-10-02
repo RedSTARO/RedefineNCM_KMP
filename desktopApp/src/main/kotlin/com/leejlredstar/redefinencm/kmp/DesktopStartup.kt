@@ -94,8 +94,14 @@ private val asideStamp = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
  * Returns the new name of the database file, or null when it could not be renamed.
  */
 internal fun putAside(databaseFile: File, at: LocalDateTime): File? {
-    val suffix = ".${asideStamp.format(at)}.bak"
-    val target = File(databaseFile.parentFile, databaseFile.name + suffix)
+    // A name nothing holds yet. Putting a second file aside within the same second would
+    // otherwise rename it over the first on Linux and macOS, and the first is the only copy of
+    // the old data.
+    val stamp = asideStamp.format(at)
+    val target = generateSequence(0) { it + 1 }
+        .map { attempt -> if (attempt == 0) ".$stamp.bak" else ".$stamp-$attempt.bak" }
+        .map { suffix -> File(databaseFile.parentFile, databaseFile.name + suffix) }
+        .first { !it.exists() }
     if (databaseFile.exists() && !databaseFile.renameTo(target)) return null
     for (journal in listOf("-journal", "-wal", "-shm")) {
         val side = File(databaseFile.parentFile, databaseFile.name + journal)

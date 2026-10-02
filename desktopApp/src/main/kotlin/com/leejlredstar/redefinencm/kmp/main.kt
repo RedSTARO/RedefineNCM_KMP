@@ -115,8 +115,12 @@ fun main() {
             is DesktopSingleInstance.Launch.First -> singleInstance = launch.instance
             is DesktopSingleInstance.Launch.AlreadyRunning -> {
                 // The running app has raised its window. If it did not answer, say why this
-                // launch does nothing instead of leaving a double-click with no effect.
-                if (!launch.shown) showDesktopError("RedefineNCM", strings.desktopAlreadyRunning)
+                // launch does nothing instead of leaving a double-click with no effect, in the
+                // language the user picked: reading the stored choice writes nothing.
+                if (!launch.shown) {
+                    runCatching { I18n.load(PlatformSettings()) }
+                    showDesktopError("RedefineNCM", strings.desktopAlreadyRunning)
+                }
                 exitProcess(0)
             }
         }

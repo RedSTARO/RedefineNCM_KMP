@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp
 
 import com.leejlredstar.redefinencm.kmp.data.db.DatabaseSchemaTooNewException
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import java.io.File
 import java.nio.file.Files
 import java.time.LocalDateTime
@@ -44,7 +45,9 @@ class DesktopStartupTest {
         )
 
         assertFalse(goesOn)
-        assertTrue(database.absolutePath in asked)
+        // The exact text: the other message names the path as well, so "contains the path"
+        // would pass with the newer-version case not recognised at all.
+        assertEquals(strings.desktopDataTooNew(database.absolutePath), asked)
         assertEquals("newer", database.readText())
         database.parentFile.deleteRecursively()
     }
@@ -73,6 +76,20 @@ class DesktopStartupTest {
         val kept = File(database.parentFile, "redefinencm.db.20261002-120000.bak")
         assertEquals("damaged", kept.readText())
         assertEquals("journal", File(database.parentFile, kept.name + "-wal").readText())
+        database.parentFile.deleteRecursively()
+    }
+
+    @Test
+    fun twoFilesPutAsideInOneSecondAreBothKept() {
+        val database = temporaryDatabase().apply { writeText("the old data") }
+
+        val first = putAside(database, noon)
+        database.writeText("what the failed retry left")
+        val second = putAside(database, noon)
+
+        assertEquals("the old data", first?.readText())
+        assertEquals("what the failed retry left", second?.readText())
+        assertEquals("redefinencm.db.20261002-120000-1.bak", second?.name)
         database.parentFile.deleteRecursively()
     }
 }
