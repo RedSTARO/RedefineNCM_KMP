@@ -127,6 +127,7 @@ fun main() {
     }
     // After the lock: two processes appending to and rotating one file would lose lines.
     val logFile = DesktopLog.install(File(dataDirectory, "logs"))
+    showWindowOnReopen()
     // What a bug report needs first: which build, on what.
     System.err.println(
         "RedefineNCM ${BuildInfo.VERSION_NAME} on ${System.getProperty("os.name")} " +

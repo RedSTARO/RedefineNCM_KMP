@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import java.awt.Component
+import java.awt.Desktop
+import java.awt.desktop.AppReopenedListener
 import java.awt.Dimension
 import java.awt.Window
 import java.io.File
@@ -34,6 +36,23 @@ internal object DesktopActivation {
     fun requestShowWindow() {
         requests.tryEmit(Unit)
     }
+}
+
+/**
+ * Brings the window back when macOS asks the running app to reopen.
+ *
+ * macOS never starts a second process for an app that is running: a click on its Dock icon, or
+ * opening it again from Finder, is an event sent to this one. With the window closed to the tray
+ * that click did nothing, because the single-instance handover only hears a second process.
+ * Elsewhere the event is not supported and this does nothing.
+ */
+internal fun showWindowOnReopen() {
+    runCatching {
+        if (!Desktop.isDesktopSupported()) return
+        val desktop = Desktop.getDesktop()
+        if (!desktop.isSupported(Desktop.Action.APP_EVENT_REOPENED)) return
+        desktop.addAppEventListener(AppReopenedListener { DesktopActivation.requestShowWindow() })
+    }.onFailure { System.err.println("Reopen events unavailable: ${it.message}") }
 }
 
 /** What the user chose when the local data could not be opened. */
