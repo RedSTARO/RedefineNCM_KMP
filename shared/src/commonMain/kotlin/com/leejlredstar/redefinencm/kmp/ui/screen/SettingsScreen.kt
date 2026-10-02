@@ -65,7 +65,10 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -932,9 +935,17 @@ private fun <T> SettingsDropdownRow(
             .padding(vertical = ExpressiveLayout.ConnectedItemGap),
     ) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-        // At most four tenths of the row for the value, so a long value is cut short instead of
-        // squeezing the label into a column one character wide on a narrow window.
+        // At most four tenths of the row for the value. One that needs more goes under the label
+        // in full: cut short beside it, the row showed half of what was chosen and squeezed the
+        // label's explanation into a narrow column, which is every long option on a phone.
         val valueMaxWidth = maxWidth * 0.4f
+        val valueStyle = MaterialTheme.typography.bodyMedium
+        val textMeasurer = rememberTextMeasurer()
+        val density = LocalDensity.current
+        val valueFits = remember(valueLabel, valueStyle, valueMaxWidth, density) {
+            val width = textMeasurer.measure(valueLabel, valueStyle, maxLines = 1).size.width
+            with(density) { width.toDp() } <= valueMaxWidth
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -944,6 +955,13 @@ private fun <T> SettingsDropdownRow(
         ) {
             Column(Modifier.weight(1f)) {
                 Text(text = label, style = MaterialTheme.typography.bodyLarge)
+                if (!valueFits) {
+                    Text(
+                        text = valueLabel,
+                        style = valueStyle,
+                        color = accentPalette.onQuietContainer,
+                    )
+                }
                 supportingText.forEach { note ->
                     Text(
                         text = note,
@@ -952,15 +970,17 @@ private fun <T> SettingsDropdownRow(
                     )
                 }
             }
-            Spacer(Modifier.width(16.dp))
-            Text(
-                text = valueLabel,
-                style = MaterialTheme.typography.bodyMedium,
-                color = accentPalette.secondaryOnQuietContainer,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = valueMaxWidth),
-            )
+            if (valueFits) {
+                Spacer(Modifier.width(16.dp))
+                Text(
+                    text = valueLabel,
+                    style = valueStyle,
+                    color = accentPalette.secondaryOnQuietContainer,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = valueMaxWidth),
+                )
+            }
             // Up/down arrows: this row opens a menu in place. A right chevron would promise a
             // new page and then open a menu.
             Icon(

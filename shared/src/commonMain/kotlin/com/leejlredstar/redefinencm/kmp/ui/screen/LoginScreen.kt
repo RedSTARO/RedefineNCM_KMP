@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -105,48 +106,48 @@ fun LoginScreen(
             // Header. No gradient of its own: ExpressivePage already paints one across the whole
             // window, and a second one bounded to the content column would end in a hard vertical
             // edge on wide windows.
-            Box(
+            //
+            // At least as tall as it always was, and taller when the title needs it. At a fixed
+            // height the title sat at the bottom of the box and grew upward: the two-line English
+            // or Japanese title on a phone ran into the back button and "Sign in later".
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(204.dp),
+                    .heightIn(min = 204.dp),
+                verticalArrangement = Arrangement.SpaceBetween,
             ) {
-                IconButton(
-                    onClick = onBack,
+                Row(
                     modifier = Modifier
-                        .align(Alignment.TopStart)
+                        .fillMaxWidth()
                         .statusBarsPadding()
                         .padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = loginPalette.quietContainer.copy(alpha = 0.78f),
-                        contentColor = loginPalette.onQuietContainer,
-                    ) {
-                        Icon(
-                            AppIcons.ArrowBack,
-                            contentDescription = strings.back,
-                            modifier = Modifier.padding(10.dp),
-                        )
+                    IconButton(onClick = onBack) {
+                        Surface(
+                            shape = CircleShape,
+                            color = loginPalette.quietContainer.copy(alpha = 0.78f),
+                            contentColor = loginPalette.onQuietContainer,
+                        ) {
+                            Icon(
+                                AppIcons.ArrowBack,
+                                contentDescription = strings.back,
+                                modifier = Modifier.padding(10.dp),
+                            )
+                        }
                     }
-                }
-                // Say what this is and what signing in is for, and that it can wait: the page
-                // opens by itself on the first launch. Someone already signed in came here to
-                // switch accounts, and for them the back arrow says it.
-                if (!signedIn) {
-                    TextButton(
-                        onClick = onBack,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .statusBarsPadding()
-                            .padding(8.dp),
-                    ) {
-                        Text(strings.signInLater)
+                    Spacer(Modifier.weight(1f))
+                    // Say what this is and what signing in is for, and that it can wait: the page
+                    // opens by itself on the first launch. Someone already signed in came here to
+                    // switch accounts, and for them the back arrow says it.
+                    if (!signedIn) {
+                        TextButton(onClick = onBack) {
+                            Text(strings.signInLater)
+                        }
                     }
                 }
                 Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
                 ) {
                     Text(
                         text = strings.signInToProvider(provider.displayName),

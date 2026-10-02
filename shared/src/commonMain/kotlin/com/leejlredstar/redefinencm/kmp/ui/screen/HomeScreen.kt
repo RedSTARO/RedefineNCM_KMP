@@ -383,7 +383,8 @@ private fun RecognitionToolCard(
                     text = strings.songRecognitionCardHint,
                     style = MaterialTheme.typography.bodyMedium,
                     color = palette.secondaryOnQuietContainer,
-                    maxLines = 1,
+                    // Two lines: the English and Japanese hints do not fit a phone's width in one.
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
