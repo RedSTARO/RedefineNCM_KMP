@@ -87,6 +87,6 @@ suspend fun resolveStreamUrl(
 
 /** The configured online playback quality, falling back when the stored name is unrecognised. */
 fun PlatformSettings.onlinePlaybackQuality(): SoundQuality {
-    val qualityName = getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.EXHIGH.name)
-    return runCatching { SoundQuality.valueOf(qualityName) }.getOrDefault(SoundQuality.EXHIGH)
+    val qualityName = getString(SettingKeys.ONLINE_PLAY_QUALITY, SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT.name)
+    return runCatching { SoundQuality.valueOf(qualityName) }.getOrDefault(SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT)
 }

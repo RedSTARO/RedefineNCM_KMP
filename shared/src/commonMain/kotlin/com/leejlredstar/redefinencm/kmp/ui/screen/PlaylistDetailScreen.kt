@@ -288,8 +288,8 @@ fun PlaylistDetailScreen(
 
     if (confirmDownloadAll) {
         val quality = remember {
-            val saved = settings.getString(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name)
-            SoundQuality.entries.firstOrNull { it.name == saved } ?: SoundQuality.STANDARD
+            val saved = settings.getString(SettingKeys.DOWNLOAD_QUALITY, SettingKeys.DOWNLOAD_QUALITY_DEFAULT.name)
+            SoundQuality.entries.firstOrNull { it.name == saved } ?: SettingKeys.DOWNLOAD_QUALITY_DEFAULT
         }
         AlertDialog(
             onDismissRequest = { confirmDownloadAll = false },

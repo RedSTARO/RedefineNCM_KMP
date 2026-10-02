@@ -140,7 +140,7 @@ class PlaybackReportingCoordinator(
             qualityLevel = normalizePlaybackQuality(
                 settings.getString(
                     SettingKeys.ONLINE_PLAY_QUALITY,
-                    SoundQuality.EXHIGH.name,
+                    SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT.name,
                 ),
             ),
             credentialKey = credential.key,
@@ -853,7 +853,7 @@ internal fun normalizePlaybackQuality(raw: String): String =
         .firstOrNull { quality -> quality.name.equals(raw.trim(), ignoreCase = true) }
         ?.name
         ?.lowercase()
-        ?: SoundQuality.EXHIGH.name.lowercase()
+        ?: SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT.name.lowercase()
 
 internal fun playbackCredentialKey(cookie: String): Long? =
     if (cookie.isBlank()) null else cookieFingerprint(cookie)

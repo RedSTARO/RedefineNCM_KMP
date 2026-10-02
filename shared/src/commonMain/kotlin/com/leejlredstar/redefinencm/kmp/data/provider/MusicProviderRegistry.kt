@@ -62,7 +62,7 @@ class MusicProviderRegistry(
     /** The user's configured playback quality, expressed in provider-neutral terms. */
     suspend fun playbackQuality(): SoundQualityPreference =
         SoundQualityPreference.fromSoundQualityName(
-            settings.getStringAsync(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.EXHIGH.name),
+            settings.getStringAsync(SettingKeys.ONLINE_PLAY_QUALITY, SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT.name),
         )
 
     /** The capabilities of the provider [mediaId] belongs to; none for an id no provider claims. */

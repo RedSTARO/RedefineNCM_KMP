@@ -181,8 +181,8 @@ fun SettingsScreen(
     nowPlayingViewModel: NowPlayingViewModel = koinInject(),
     songTransitions: SongTransitionCoordinator = koinInject(),
 ) {
-    var onlineQuality by remember(settings) { mutableStateOf(SoundQuality.STANDARD.name) }
-    var dlQuality by remember(settings) { mutableStateOf(SoundQuality.STANDARD.name) }
+    var onlineQuality by remember(settings) { mutableStateOf(SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT.name) }
+    var dlQuality by remember(settings) { mutableStateOf(SettingKeys.DOWNLOAD_QUALITY_DEFAULT.name) }
     var replacePlaylist by remember(settings) { mutableStateOf(SettingKeys.REPLACE_PLAYLIST_DEFAULT) }
     var checkUpdate by remember(settings) { mutableStateOf(false) }
     var searchPrediction by remember(settings) { mutableStateOf(true) }
@@ -240,8 +240,8 @@ fun SettingsScreen(
         accountsViewModel.reload()
         // An imported backup can carry another language; show it at once.
         I18n.load(settings)
-        onlineQuality = settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name)
-        dlQuality = settings.getString(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name)
+        onlineQuality = settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT.name)
+        dlQuality = settings.getString(SettingKeys.DOWNLOAD_QUALITY, SettingKeys.DOWNLOAD_QUALITY_DEFAULT.name)
         replacePlaylist = settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT)
         checkUpdate = settings.getBoolean(SettingKeys.CHECK_UPDATE, false)
         searchPrediction = settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true)
@@ -315,8 +315,8 @@ fun SettingsScreen(
         settingsLoaded = false
         settingsLoadError = null
         try {
-            onlineQuality = settings.getStringAsync(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name)
-            dlQuality = settings.getStringAsync(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name)
+            onlineQuality = settings.getStringAsync(SettingKeys.ONLINE_PLAY_QUALITY, SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT.name)
+            dlQuality = settings.getStringAsync(SettingKeys.DOWNLOAD_QUALITY, SettingKeys.DOWNLOAD_QUALITY_DEFAULT.name)
             replacePlaylist = settings.getBooleanAsync(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT)
             checkUpdate = settings.getBooleanAsync(SettingKeys.CHECK_UPDATE, false)
             searchPrediction = settings.getBooleanAsync(SettingKeys.SEARCH_PREDICTION, true)

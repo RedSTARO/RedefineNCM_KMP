@@ -39,8 +39,8 @@ data class SettingsBackupData(
      * too. Null in a backup made before the local library existed.
      */
     val localLibrary: List<LocalPlaylist>? = null,
-    val onlinePlayQuality: String = SoundQuality.STANDARD.name,
-    val downloadQuality: String = SoundQuality.STANDARD.name,
+    val onlinePlayQuality: String = SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT.name,
+    val downloadQuality: String = SettingKeys.DOWNLOAD_QUALITY_DEFAULT.name,
     val replacePlaylist: Boolean = SettingKeys.REPLACE_PLAYLIST_DEFAULT,
     val checkUpdate: Boolean = false,
     val searchPrediction: Boolean = true,
@@ -103,8 +103,8 @@ internal fun encodeSettingsBackup(
         ),
         mergeSameSongs = getBoolean(SettingKeys.MERGE_SAME_SONGS, SettingKeys.MERGE_SAME_SONGS_DEFAULT),
         localLibrary = localLibrary?.playlists,
-        onlinePlayQuality = getString(SettingKeys.ONLINE_PLAY_QUALITY, SoundQuality.STANDARD.name),
-        downloadQuality = getString(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name),
+        onlinePlayQuality = getString(SettingKeys.ONLINE_PLAY_QUALITY, SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT.name),
+        downloadQuality = getString(SettingKeys.DOWNLOAD_QUALITY, SettingKeys.DOWNLOAD_QUALITY_DEFAULT.name),
         replacePlaylist = getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT),
         checkUpdate = getBoolean(SettingKeys.CHECK_UPDATE, false),
         searchPrediction = getBoolean(SettingKeys.SEARCH_PREDICTION, true),

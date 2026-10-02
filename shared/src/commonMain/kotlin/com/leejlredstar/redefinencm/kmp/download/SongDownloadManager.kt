@@ -872,9 +872,9 @@ class SongDownloadManager(
             // An interrupted task must keep the quality that produced its partial file.
             // Retry explicitly clears requestedQuality, allowing a later user choice to apply.
             val quality = task.requestedQuality
-                ?: settings.getStringAsync(SettingKeys.DOWNLOAD_QUALITY, SoundQuality.STANDARD.name)
+                ?: settings.getStringAsync(SettingKeys.DOWNLOAD_QUALITY, SettingKeys.DOWNLOAD_QUALITY_DEFAULT.name)
             val requestedQuality = normalizeQualityLevel(quality)
-                ?: SoundQuality.STANDARD.name.lowercase()
+                ?: SettingKeys.DOWNLOAD_QUALITY_DEFAULT.name.lowercase()
             if (
                 !transitionTask(taskId, generation, DownloadTaskStatus.Resolving) {
                     it.copy(

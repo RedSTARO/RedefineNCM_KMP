@@ -47,6 +47,12 @@ object SettingKeys {
     const val UID_COOKIE_FINGERPRINT = "uidCookieFingerprint"
     const val ONLINE_PLAY_QUALITY = "onlinePlayQuality"
     const val DOWNLOAD_QUALITY = "downloadQuality"
+    // Each default is read through these and nowhere else. Settings showed 标准 for an unset
+    // online quality while playback asked the server for 极高, and a backup of an unset value
+    // wrote 标准, so restoring it lowered the quality on the other device. 极高 is what playback
+    // has always requested.
+    val ONLINE_PLAY_QUALITY_DEFAULT: SoundQuality get() = SoundQuality.EXHIGH
+    val DOWNLOAD_QUALITY_DEFAULT: SoundQuality get() = SoundQuality.STANDARD
     const val REPLACE_PLAYLIST = "replacePlaylist"
     // Every read of these three uses the constant, so a screen cannot disagree with its switch.
     // Tapping a song plays the list from it; with this off, the song alone replaces the queue.

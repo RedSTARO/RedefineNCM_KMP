@@ -27,6 +27,21 @@ class SettingsBackupTest {
     }
 
     @Test
+    fun anUnsetQualityIsBackedUpAsTheQualityThatPlays() {
+        val json = encodeSettingsBackup(
+            getString = { _, default -> default },
+            getBoolean = { _, default -> default },
+        )
+
+        val restored = mutableMapOf<String, String>()
+        assertTrue(applySettingsBackup(json, setString = { key, value -> restored[key] = value }, setBoolean = { _, _ -> }))
+
+        // Restoring this on another device must not lower what plays there.
+        assertEquals(SoundQuality.EXHIGH.name, restored[SettingKeys.ONLINE_PLAY_QUALITY])
+        assertEquals(SoundQuality.STANDARD.name, restored[SettingKeys.DOWNLOAD_QUALITY])
+    }
+
+    @Test
     fun importedBackupDoesNotOverwriteCookieCredential() {
         val writtenStrings = mutableMapOf<String, String>()
         val json = """
