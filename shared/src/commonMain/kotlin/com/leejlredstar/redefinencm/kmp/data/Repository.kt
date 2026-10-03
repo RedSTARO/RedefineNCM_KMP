@@ -65,16 +65,18 @@ internal fun <T> cacheThenNetworkFlow(
         emit(CacheThenNetworkData(cached, CacheThenNetworkSource.CACHE))
     }
     fetchNetwork()?.let { network ->
-        try {
-            writeCache(network)
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (failure: Exception) {
-            // Cached copies are expendable. A disk/quota failure must not hide an otherwise
-            // valid response or make the account page discard its freshly loaded contents.
-            println("Cache write failed: ${failure::class.simpleName}")
-        }
+        writeCacheBestEffort { writeCache(network) }
         emit(CacheThenNetworkData(network, CacheThenNetworkSource.NETWORK))
+    }
+}
+
+private inline fun writeCacheBestEffort(write: () -> Unit) {
+    try {
+        write()
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (failure: Exception) {
+        println("Cache write failed: ${failure::class.simpleName}")
     }
 }
 
@@ -88,7 +90,7 @@ class Repository(
     private val userLevelRequestMutex = Mutex()
     private val lyricCacheMutex = Mutex()
     private var nextUserLevelRequestGeneration = 0L
-    private val latestCommittedUserLevelRequestByUid = mutableMapOf<Long, Long>()
+    private val latestAcceptedUserLevelByUid = mutableMapOf<Long, Pair<Long, UserLevelResponse>>()
 
     private companion object {
         const val API_SUCCESS_CODE = 200
@@ -149,7 +151,7 @@ class Repository(
             } else {
                 userLevelRequestMutex.lock()
                 try {
-                    readCachedUserLevel(uid)?.let { committed ->
+                    (latestAcceptedUserLevelByUid[uid]?.second ?: readCachedUserLevel(uid))?.let { committed ->
                         // A newer network refresh won the generation race. Surface that committed
                         // value instead of ending this account-level flow without any result.
                         emit(CacheThenNetworkData(committed, CacheThenNetworkSource.NETWORK))
@@ -197,10 +199,12 @@ class Repository(
         requestGeneration: Long,
         response: UserLevelResponse,
     ): Boolean = userLevelRequestMutex.withLock {
-        val latestCommitted = latestCommittedUserLevelRequestByUid[uid] ?: Long.MIN_VALUE
+        val latestCommitted = latestAcceptedUserLevelByUid[uid]?.first ?: Long.MIN_VALUE
         if (requestGeneration < latestCommitted) return@withLock false
-        db.cachedUserLevelQueries.upsert(uid, json.encodeToString(response))
-        latestCommittedUserLevelRequestByUid[uid] = requestGeneration
+        writeCacheBestEffort { db.cachedUserLevelQueries.upsert(uid, json.encodeToString(response)) }
+        // A newer network answer wins even when it could not be cached. An older in-flight
+        // request must not then replace it with the stale value still on disk.
+        latestAcceptedUserLevelByUid[uid] = requestGeneration to response
         true
     }
 
@@ -455,7 +459,7 @@ class Repository(
         return try {
             cachedLyric(id)?.takeIf { it.hasPrimaryLyricText() }
                 ?.let { return LyricCacheStatus.Saved }
-            val network = fetchAndCacheLyric(id) ?: return LyricCacheStatus.Failed
+            val network = fetchAndCacheLyric(id, cacheRequired = true) ?: return LyricCacheStatus.Failed
             if (network.hasPrimaryLyricText()) LyricCacheStatus.Saved else LyricCacheStatus.NoLyric
         } catch (e: CancellationException) {
             throw e
@@ -488,18 +492,20 @@ class Repository(
         }
     }
 
-    private suspend fun fetchAndCacheLyric(id: Long): Lyric? {
+    private suspend fun fetchAndCacheLyric(id: Long, cacheRequired: Boolean = false): Lyric? {
         // /lyric/new 返回 yrc (逐字歌词); /lyric 不返回 yrc。优先使用 /lyric/new
         val networkNew = safeApiCall { api.lyricNew(id) }
             ?.takeIf { it.code == API_SUCCESS_CODE }
         if (networkNew != null && networkNew.hasPrimaryLyricText()) {
-            cacheBackendLyric(id, networkNew)
+            if (cacheRequired) cacheBackendLyric(id, networkNew)
+            else writeCacheBestEffort { cacheBackendLyric(id, networkNew) }
             return networkNew
         }
         val fallback = safeApiCall { api.lyric(id) }
             ?.takeIf { it.code == API_SUCCESS_CODE }
             ?: return null
-        cacheBackendLyric(id, fallback)
+        if (cacheRequired) cacheBackendLyric(id, fallback)
+        else writeCacheBestEffort { cacheBackendLyric(id, fallback) }
         return fallback
     }
 
