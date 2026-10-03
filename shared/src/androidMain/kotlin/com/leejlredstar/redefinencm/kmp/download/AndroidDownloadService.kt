@@ -78,6 +78,20 @@ class AndroidDownloadService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        // Android 15+ gives dataSync services only a few seconds to stop after their allowance
+        // expires. Stop observers first: their normal persistence-retry path would otherwise try
+        // to promote this service again after the system has revoked its foreground allowance.
+        serviceScope.cancel()
+        try {
+            downloadManager.pauseAll()
+        } catch (failure: Exception) {
+            System.err.println("Could not pause timed-out downloads: ${failure::class.simpleName}")
+        } finally {
+            removeNotificationAndStop()
+        }
+    }
+
     override fun onDestroy() {
         serviceScope.cancel()
         super.onDestroy()
