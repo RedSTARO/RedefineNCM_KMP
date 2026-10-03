@@ -39,8 +39,11 @@ data class SettingsBackupData(
      * too. Null in a backup made before the local library existed.
      */
     val localLibrary: List<LocalPlaylist>? = null,
-    val onlinePlayQuality: String = SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT.name,
-    val downloadQuality: String = SettingKeys.DOWNLOAD_QUALITY_DEFAULT.name,
+    // Older exporters omitted their defaults. An absent value cannot distinguish an explicit
+    // STANDARD choice from an unset setting, so keep the destination's choice in that case.
+    // New exports always provide both values, including defaults, for older importers as well.
+    val onlinePlayQuality: String? = null,
+    val downloadQuality: String? = null,
     val replacePlaylist: Boolean = SettingKeys.REPLACE_PLAYLIST_DEFAULT,
     val checkUpdate: Boolean = false,
     val searchPrediction: Boolean = true,
@@ -175,8 +178,8 @@ internal fun applySettingsBackup(
     data.localAccountName?.let { setString(SettingKeys.LOCAL_ACCOUNT_NAME, it.trim()) }
     data.localAccountEnabled?.let { setBoolean(SettingKeys.LOCAL_ACCOUNT_ENABLED, it) }
     data.mergeSameSongs?.let { setBoolean(SettingKeys.MERGE_SAME_SONGS, it) }
-    setString(SettingKeys.ONLINE_PLAY_QUALITY, data.onlinePlayQuality)
-    setString(SettingKeys.DOWNLOAD_QUALITY, data.downloadQuality)
+    data.onlinePlayQuality?.let { setString(SettingKeys.ONLINE_PLAY_QUALITY, it) }
+    data.downloadQuality?.let { setString(SettingKeys.DOWNLOAD_QUALITY, it) }
     setBoolean(SettingKeys.REPLACE_PLAYLIST, data.replacePlaylist)
     setBoolean(SettingKeys.CHECK_UPDATE, data.checkUpdate)
     setBoolean(SettingKeys.SEARCH_PREDICTION, data.searchPrediction)

@@ -1,6 +1,9 @@
 package com.leejlredstar.redefinencm.kmp.util
 
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -33,12 +36,36 @@ class SettingsBackupTest {
             getBoolean = { _, default -> default },
         )
 
+        val document = Json.parseToJsonElement(json).jsonObject
+        // Check the file itself: a round trip with the same decoder hid missing fields before.
+        assertEquals("EXHIGH", document.getValue("onlinePlayQuality").jsonPrimitive.content)
+        assertEquals("STANDARD", document.getValue("downloadQuality").jsonPrimitive.content)
         val restored = mutableMapOf<String, String>()
         assertTrue(applySettingsBackup(json, setString = { key, value -> restored[key] = value }, setBoolean = { _, _ -> }))
 
         // Restoring this on another device must not lower what plays there.
         assertEquals(SoundQuality.EXHIGH.name, restored[SettingKeys.ONLINE_PLAY_QUALITY])
         assertEquals(SoundQuality.STANDARD.name, restored[SettingKeys.DOWNLOAD_QUALITY])
+    }
+
+    @Test
+    fun oldBackupsWithoutQualityDoNotChangeTheDestinationsChoice() {
+        val written = mutableMapOf<String, String>()
+        assertTrue(applySettingsBackup("{}", setString = { key, value -> written[key] = value }, setBoolean = { _, _ -> }))
+        assertFalse(SettingKeys.ONLINE_PLAY_QUALITY in written)
+        assertFalse(SettingKeys.DOWNLOAD_QUALITY in written)
+    }
+
+    @Test
+    fun explicitStandardSurvivesExportAndImport() {
+        val json = encodeSettingsBackup(
+            getString = { key, default -> if (key == SettingKeys.ONLINE_PLAY_QUALITY) "STANDARD" else default },
+            getBoolean = { _, default -> default },
+        )
+        assertEquals("STANDARD", Json.parseToJsonElement(json).jsonObject.getValue("onlinePlayQuality").jsonPrimitive.content)
+        val written = mutableMapOf<String, String>()
+        assertTrue(applySettingsBackup(json, setString = { key, value -> written[key] = value }, setBoolean = { _, _ -> }))
+        assertEquals("STANDARD", written[SettingKeys.ONLINE_PLAY_QUALITY])
     }
 
     @Test
