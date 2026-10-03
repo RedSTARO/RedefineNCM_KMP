@@ -1083,4 +1083,5 @@
     <string name="localFavoriteSaveFailed">无法保存“{title}”的本地收藏，请重试</string>
     <string name="settingsExportFailed">无法导出完整备份，请检查本地歌单和存储状态后重试</string>
     <string name="localPlaylistsInvalidData">歌单数据无效，未保存更改</string>
+    <string name="browserDataReadFailed">无法读取本机数据：浏览器存储暂不可用或数据版本不兼容。原数据未更改。</string>
 </resources>

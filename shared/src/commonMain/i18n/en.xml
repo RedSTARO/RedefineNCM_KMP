@@ -1155,4 +1155,5 @@
     <string name="localFavoriteSaveFailed">Couldn't save the local favourite for “{title}”. Try again.</string>
     <string name="settingsExportFailed">Couldn't export a complete backup. Check the local playlists and storage, then try again.</string>
     <string name="localPlaylistsInvalidData">The playlist data is invalid. No changes were saved.</string>
+    <string name="browserDataReadFailed">Couldn't read local data: browser storage is unavailable or its data version is incompatible. Stored data hasn't been changed.</string>
 </resources>

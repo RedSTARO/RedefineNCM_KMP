@@ -41,11 +41,14 @@ internal class BrowserStorageSqlDriver(
 ) : SqlDriver {
     private val listeners = mutableMapOf<String, MutableSet<Query.Listener>>()
     private val volatileStorage = linkedMapOf<String, String>()
-    private val persistenceEnabled = loadPersistentStorage()
+    private var persistenceEnabled = loadPersistentStorage()
     private var transaction: BrowserTransaction? = null
 
     var schemaVersion: Long
-        get() = readStorageValue(SCHEMA_VERSION_KEY)?.toLongOrNull() ?: 0L
+        get() {
+            val stored = readStorageValue(SCHEMA_VERSION_KEY) ?: return 0L
+            return stored.toLongOrNull()?.takeIf { it >= 0L } ?: error(strings.browserDataReadFailed)
+        }
         set(value) = writeStorageValue(SCHEMA_VERSION_KEY, value.toString())
 
     override fun execute(
@@ -76,6 +79,9 @@ internal class BrowserStorageSqlDriver(
                 null -> error("Unsupported browser cache statement: $normalized")
                 else -> {
                     require(parameters == 0) { "DELETE for $deleteTable cannot bind parameters" }
+                    if (deleteTable !in CACHE_TABLES) {
+                        check(recoverPersistentStorage()) { strings.browserDataSaveFailed }
+                    }
                     val keys = keysForTable(deleteTable)
                     keys.forEach(::removeStorageValue)
                     QueryResult.Value(keys.size.toLong())
@@ -120,6 +126,9 @@ internal class BrowserStorageSqlDriver(
         require(parameters == expectedParameters) {
             "Expected $expectedParameters parameters for $table, got $parameters"
         }
+        if (table !in CACHE_TABLES) {
+            check(recoverPersistentStorage()) { strings.browserDataReadFailed }
+        }
         val statement = BrowserPreparedStatement(parameters).also { prepared ->
             binders?.invoke(prepared)
         }
@@ -129,6 +138,9 @@ internal class BrowserStorageSqlDriver(
     }
 
     override fun newTransaction(): QueryResult<Transacter.Transaction> {
+        // Recover before taking the snapshot. Recovering inside a transaction could make
+        // rollback mistake the restored owned rows for newly inserted rows and delete them.
+        recoverPersistentStorage()
         val next = BrowserTransaction(
             enclosing = transaction,
             snapshot = snapshotStorage(),
@@ -252,6 +264,7 @@ internal class BrowserStorageSqlDriver(
      */
     private fun writeStorageValue(key: String, value: String) {
         val mustPersist = key != SCHEMA_VERSION_KEY && !isCacheKey(key)
+        if (mustPersist) check(recoverPersistentStorage()) { strings.browserDataSaveFailed }
         if (!mustPersist) volatileStorage[key] = value
         if (persistenceEnabled) {
             if (persistValue(key, value)) {
@@ -288,8 +301,30 @@ internal class BrowserStorageSqlDriver(
         storage.keys().filter { it.startsWith(STORAGE_PREFIX) }.forEach { key ->
             storage.get(key)?.let { loaded[key] = it }
         }
+        volatileStorage.clear()
         volatileStorage.putAll(loaded)
     }.isSuccess
+
+    /** A failed initial read must not turn owned data into a permanently empty database. */
+    private fun recoverPersistentStorage(): Boolean {
+        if (persistenceEnabled) return true
+        if (transaction != null) return false
+        val previous = volatileStorage.toMap()
+        if (!loadPersistentStorage()) return false
+        return try {
+            persistenceEnabled = true
+            // In particular, never replace a newer schema version with the volatile
+            // version that startup created while the stored one was inaccessible.
+            initializeBrowserDatabase(this)
+            previous.filterKeys(::isCacheKey).forEach { (key, value) -> volatileStorage[key] = value }
+            true
+        } catch (_: Exception) {
+            persistenceEnabled = false
+            volatileStorage.clear()
+            volatileStorage.putAll(previous)
+            false
+        }
+    }
 
     private fun isCacheKey(key: String): Boolean = key.removePrefix(STORAGE_PREFIX)
         .substringBefore(':') in CACHE_TABLES

@@ -216,3 +216,11 @@
 - 追加复审发现：重复歌单/歌曲 key、空身份、多个本地收藏列表可穿过 JSON 解析进入界面，非法导入还会替换已保存的歌单。两项回归在校验前失败，现于读取发布和写入前拒绝非法结构，原数据保持不变。
 - 回归同时覆盖失败后重试、既有订阅恢复、失败重新加载保留上次快照、历史省略字段的默认值，以及未知音乐服务的歌曲保留。原始记录无法读取时不会自动重置或尝试猜测修复。
 - `local-library-final-check-result.json`：shared/build/test-results/jvmTest: 663 tests, 0 failures, 3 skipped; desktopApp/build/test-results/test: 19 tests, 0 failures, 0 skipped; shared/build/test-results/testAndroidHostTest: 475 tests, 0 failures, 0 skipped; shared/build/test-results/wasmJsBrowserTest: 494 tests, 0 failures, 0 skipped。Android/iOS Kotlin 编译通过。
+
+## Web 存储被拒绝后的读取与重试（2026-10-04）
+
+- 浏览器启动时读取存储失败，驱动原先永久退到空内存库；本地歌单重试也会成功返回空列表。五项浏览器回归在旧实现失败，包含已有配额用例新增的读取断言。
+- 歌单、播放队列和下载队列现在区分“空记录”和“读取失败”。再次访问时尝试完整恢复存储快照，继续使用同一套 SQLDelight schema 检查与迁移；更新版本的数据不会被回退写入。
+- 事务开始前恢复快照，事务中途不加载此前缺失的自有数据，避免回滚误删恢复的歌单/队列。不可用期间的新缓存仍可在内存中使用，恢复时保留其较新值。
+- 新增真实 LocalLibraryStore 与浏览器驱动组合测试：存储恢复后重试读回原歌单，随后新增歌单与旧歌单一起保存。另覆盖队列读取、版本保护、两种事务恢复时序；没有使用用户浏览器数据。
+- `web-storage-recovery-check-result.json`：shared/build/test-results/jvmTest: 663 tests, 0 failures, 3 skipped; desktopApp/build/test-results/test: 19 tests, 0 failures, 0 skipped; shared/build/test-results/testAndroidHostTest: 475 tests, 0 failures, 0 skipped; shared/build/test-results/wasmJsBrowserTest: 499 tests, 0 failures, 0 skipped。Android/iOS Kotlin 编译通过。

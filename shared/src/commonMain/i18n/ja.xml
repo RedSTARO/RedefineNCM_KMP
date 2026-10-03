@@ -1083,4 +1083,5 @@
     <string name="localFavoriteSaveFailed">「{title}」のローカルのお気に入りを保存できませんでした。もう一度お試しください。</string>
     <string name="settingsExportFailed">完全なバックアップをエクスポートできませんでした。ローカルのプレイリストと保存先の状態を確認してから、もう一度お試しください。</string>
     <string name="localPlaylistsInvalidData">プレイリストのデータが無効なため、変更は保存されませんでした。</string>
+    <string name="browserDataReadFailed">ブラウザーの保存領域が利用できないか、データのバージョンに互換性がないため、ローカルデータを読み込めません。保存済みのデータは変更されていません。</string>
 </resources>

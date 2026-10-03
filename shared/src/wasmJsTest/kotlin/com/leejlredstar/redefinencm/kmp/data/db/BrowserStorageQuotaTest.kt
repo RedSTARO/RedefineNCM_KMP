@@ -1,5 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.data.db
 
+import com.leejlredstar.redefinencm.kmp.data.local.LocalLibraryStore
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -105,7 +107,7 @@ class BrowserStorageQuotaTest {
 
         val unavailable = AppDatabase(BrowserStorageSqlDriver(storage))
         assertFailsWith<IllegalStateException> { unavailable.localLibraryQueries.upsert("unsaved") }
-        assertNull(unavailable.localLibraryQueries.select().executeAsOneOrNull())
+        assertFailsWith<IllegalStateException> { unavailable.localLibraryQueries.select().executeAsOneOrNull() }
     }
 
     @Test
@@ -123,5 +125,93 @@ class BrowserStorageQuotaTest {
         db.assertUserData()
         AppDatabase(BrowserStorageSqlDriver(storage)).assertUserData()
         assertTrue(storage.removals.all { it.startsWith("redefinencm.db.Cached") })
+    }
+
+    @Test
+    fun aLibraryBlockedAtStartupReportsAnErrorAndRetryRecoversTheSavedPlaylists() = runTest {
+        val storage = LimitedStorage()
+        val saved = LocalLibraryStore(AppDatabase(BrowserStorageSqlDriver(storage)))
+            .createPlaylist("Saved before permission denial").getOrThrow()
+        storage.blocked = true
+        val database = AppDatabase(BrowserStorageSqlDriver(storage))
+        val library = LocalLibraryStore(database)
+
+        assertTrue(library.reload().isFailure)
+        assertTrue(library.readFailed.value)
+        assertTrue(library.createPlaylist("Must not replace saved data").isFailure)
+        database.cachedLyricQueries.upsert(1L, "fresh-in-memory")
+
+        storage.blocked = false
+        library.reload().getOrThrow()
+        assertEquals(listOf(saved), library.snapshot().playlists)
+        assertEquals(false, library.readFailed.value)
+        assertEquals("fresh-in-memory", database.cachedLyricQueries.selectBySongId(1L).executeAsOne())
+        library.createPlaylist("After retry").getOrThrow()
+        val reopened = LocalLibraryStore(AppDatabase(BrowserStorageSqlDriver(storage)))
+        assertEquals(listOf(saved.name, "After retry"), reopened.snapshot().playlists.map { it.name })
+    }
+
+    @Test
+    fun queueReadsAlsoDistinguishUnavailableStorageFromAnEmptyQueue() {
+        val storage = LimitedStorage()
+        AppDatabase(BrowserStorageSqlDriver(storage)).seedUserData()
+        storage.blocked = true
+        val database = AppDatabase(BrowserStorageSqlDriver(storage))
+        assertFailsWith<IllegalStateException> { database.playerStatusQueries.select().executeAsOneOrNull() }
+        assertFailsWith<IllegalStateException> { database.downloadQueueQueries.select().executeAsOneOrNull() }
+        assertFailsWith<IllegalStateException> { database.downloadQueueQueries.clear() }
+        storage.blocked = false
+        database.assertUserData()
+        database.downloadQueueQueries.clear()
+        assertNull(AppDatabase(BrowserStorageSqlDriver(storage)).downloadQueueQueries.select().executeAsOneOrNull())
+    }
+
+    @Test
+    fun recoveryCannotDowngradeANewerStoredSchemaOrOverwriteItsLibrary() {
+        val storage = LimitedStorage()
+        AppDatabase(BrowserStorageSqlDriver(storage)).seedUserData()
+        storage.values["redefinencm.db.schemaVersion"] = (AppDatabase.Schema.version + 1L).toString()
+        val original = storage.values.toMap()
+        storage.blocked = true
+        val driver = BrowserStorageSqlDriver(storage)
+        // Startup can only initialize a volatile schema while browser permissions are denied.
+        driver.schemaVersion = AppDatabase.Schema.version
+        val database = AppDatabase(driver)
+
+        storage.blocked = false
+        assertFailsWith<IllegalStateException> { database.localLibraryQueries.select().executeAsOneOrNull() }
+        assertFailsWith<IllegalStateException> { database.localLibraryQueries.upsert("must-not-overwrite") }
+        assertEquals(original, storage.values)
+    }
+
+    @Test
+    fun aTransactionRecoversBeforeItsSnapshotSoRollbackKeepsOwnedData() {
+        val storage = LimitedStorage()
+        AppDatabase(BrowserStorageSqlDriver(storage)).seedUserData()
+        storage.blocked = true
+        val database = AppDatabase(BrowserStorageSqlDriver(storage))
+        storage.blocked = false
+        database.transaction {
+            database.cachedLyricQueries.upsert(1L, "discard")
+            rollback()
+        }
+        database.assertUserData()
+        AppDatabase(BrowserStorageSqlDriver(storage)).assertUserData()
+    }
+
+    @Test
+    fun permissionReturningInsideACacheTransactionCannotChangeItsOwnedSnapshot() {
+        val storage = LimitedStorage()
+        AppDatabase(BrowserStorageSqlDriver(storage)).seedUserData()
+        storage.blocked = true
+        val database = AppDatabase(BrowserStorageSqlDriver(storage))
+        database.transaction {
+            database.cachedLyricQueries.upsert(1L, "discard")
+            storage.blocked = false
+            assertFailsWith<IllegalStateException> { database.localLibraryQueries.select().executeAsOneOrNull() }
+            rollback()
+        }
+        database.assertUserData()
+        AppDatabase(BrowserStorageSqlDriver(storage)).assertUserData()
     }
 }
