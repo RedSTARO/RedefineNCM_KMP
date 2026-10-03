@@ -3,6 +3,7 @@ package com.leejlredstar.redefinencm.kmp.transition
 import com.leejlredstar.redefinencm.kmp.player.FfmpegAudioSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToLong
 
@@ -21,7 +22,7 @@ internal class FfmpegTrackEndsDecoder : TrackEndsDecoder {
     override suspend fun decode(url: String, sectionMs: Long, knownDurationMs: Long): DecodedTrackEnds? =
         withContext(Dispatchers.IO) {
             try {
-                decodeBlocking(url, sectionMs, knownDurationMs)
+                decodeBlocking(url, sectionMs, knownDurationMs) { ensureActive() }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
@@ -30,22 +31,24 @@ internal class FfmpegTrackEndsDecoder : TrackEndsDecoder {
             }
         }
 
-    private fun decodeBlocking(url: String, sectionMs: Long, knownDurationMs: Long): DecodedTrackEnds {
+    private fun decodeBlocking(url: String, sectionMs: Long, knownDurationMs: Long, checkCancelled: () -> Unit): DecodedTrackEnds {
+        checkCancelled()
         FfmpegAudioSource.open(url, 0L, RATE, 1).use { source ->
             val duration = source.durationMs.takeIf { it > 0L } ?: knownDurationMs.takeIf { it > 0L } ?: -1L
-            val head = AnalysisWindow(0L, readMs(source, sectionMs))
+            val head = AnalysisWindow(0L, readMs(source, sectionMs, checkCancelled))
             if (duration <= 0L) return DecodedTrackEnds(-1L, head, null)
             val tailStart = duration - sectionMs
             if (tailStart <= head.lengthMs) {
                 // Short enough that the head already reaches the end: decode the rest and use the
                 // whole track for both.
-                val rest = readMs(source, duration)
+                val rest = readMs(source, duration, checkCancelled)
                 val whole = AnalysisWindow(0L, head.samples + rest)
                 return DecodedTrackEnds(duration, whole, whole)
             }
-            val seekErrorMs = measureSeekError(source, head.samples) ?: 0.0
+            val seekErrorMs = measureSeekError(source, head.samples, checkCancelled) ?: 0.0
+            checkCancelled()
             source.seekTo(tailStart)
-            val samples = readMs(source, sectionMs + TAIL_MARGIN_MS)
+            val samples = readMs(source, sectionMs + TAIL_MARGIN_MS, checkCancelled)
             val landed = source.landedAtMs ?: tailStart.toDouble()
             return DecodedTrackEnds(duration, head, AnalysisWindow((landed - seekErrorMs).roundToLong(), samples))
         }
@@ -55,20 +58,28 @@ internal class FfmpegTrackEndsDecoder : TrackEndsDecoder {
      * How far this stream's seek timestamps are from its decoded-from-the-start timeline; see
      * [measureSeekErrorMs]. Null when the probe cannot be placed.
      */
-    private fun measureSeekError(source: FfmpegAudioSource, head: FloatArray): Double? {
+    private fun measureSeekError(source: FfmpegAudioSource, head: FloatArray, checkCancelled: () -> Unit): Double? {
         if (head.size < (PROBE_AT_MS + PROBE_SETTLE_MS + PROBE_LENGTH_MS + 200) * RATE / 1000) return null
+        checkCancelled()
         source.seekTo(PROBE_AT_MS)
         // The first frames after a seek can still be warming up the decoder; compare later ones.
-        readMs(source, PROBE_SETTLE_MS)
+        readMs(source, PROBE_SETTLE_MS, checkCancelled)
         val landed = source.landedAtMs ?: return null
-        val probe = readMs(source, PROBE_LENGTH_MS)
+        val probe = readMs(source, PROBE_LENGTH_MS, checkCancelled)
         return measureSeekErrorMs(head, probe, landed + PROBE_SETTLE_MS, RATE)
     }
 
-    private fun readMs(source: FfmpegAudioSource, ms: Long): FloatArray {
+    private fun readMs(source: FfmpegAudioSource, ms: Long, checkCancelled: () -> Unit): FloatArray {
         val frames = (ms * RATE / 1_000L).toInt()
         val buffer = FloatArray(frames)
-        val got = source.read(buffer, 0, frames)
+        var got = 0
+        while (got < frames) {
+            checkCancelled()
+            val count = source.read(buffer, got, minOf(RATE, frames - got))
+            if (count == 0) break
+            got += count
+        }
+        checkCancelled()
         return if (got == frames) buffer else buffer.copyOf(got)
     }
 

@@ -139,16 +139,20 @@ internal class OnnxBeatModelLoader(
         addProvider: (OrtSession.SessionOptions) -> Unit,
     ): OrtSession? {
         val options = OrtSession.SessionOptions()
+        var session: OrtSession? = null
         return try {
             options.addConfigEntry("session.disable_cpu_ep_fallback", "1")
             options.setMemoryPatternOptimization(false)
             options.setExecutionMode(OrtSession.SessionOptions.ExecutionMode.SEQUENTIAL)
             addProvider(options)
-            val session = environment.createSession(model, options)
+            session = environment.createSession(model, options)
             // A session that compiles can still fail its first run on a driver; find out now.
             OnnxBeatActivationModel.runOnce(environment, session, FloatArray(BEAT_MODEL_CHUNK_FRAMES * BeatModelFeatures.MEL_BINS))
             session
         } catch (failure: Throwable) {
+            // A driver may create a session successfully and fail its first inference. No model
+            // owns that native session on the failure path, so release it before trying a GPU.
+            runCatching { session?.close() }
             failures += strings.labelValue(label, failure.message?.lineSequence()?.firstOrNull().orEmpty())
             null
         } finally {

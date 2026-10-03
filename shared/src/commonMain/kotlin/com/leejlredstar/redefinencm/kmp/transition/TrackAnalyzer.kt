@@ -4,14 +4,18 @@ import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.minutes
@@ -61,13 +65,17 @@ class TrackAnalyzer(
     private val computeDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val cacheSize: Int = 48,
 ) {
+    init { require(cacheSize > 0) }
+    private data class Pending(val job: Deferred<TrackAnalysis?>, var waiters: Int = 0)
     private val scope = CoroutineScope(SupervisorJob() + computeDispatcher)
+    // Current and next track can be decoded together, without a skip burst opening more decoders.
+    private val analysisSlots = Semaphore(2)
     private val cacheLock = Mutex()
     private val cache = LinkedHashMap<String, TrackAnalysis>()
-    private val inFlight = HashMap<String, Deferred<TrackAnalysis?>>()
+    private val inFlight = HashMap<String, Pending>()
     // A track that could not be fetched or decoded is not retried on every re-plan: each retry
     // would download it again. It is tried again after RETRY_AFTER.
-    private val failures = HashMap<String, TimeSource.Monotonic.ValueTimeMark>()
+    private val failures = LinkedHashMap<String, TimeSource.Monotonic.ValueTimeMark>()
     private val modelLock = Mutex()
     private var model: BeatActivationModel? = null
     private var unavailableSince: TimeSource.Monotonic.ValueTimeMark? = null
@@ -80,10 +88,10 @@ class TrackAnalyzer(
 
     /**
      * The analysis of [media], decoding it if needed. Null when the track cannot be fetched or
-     * decoded; a cancelled caller does not cancel a decode another caller is waiting for.
+     * decoded; cancellation only stops a shared decode after its last waiter leaves.
      */
     suspend fun analyze(media: MediaInfo): TrackAnalysis? {
-        val job = cacheLock.withLock {
+        val pending = cacheLock.withLock {
             cache[media.id]?.let { hit ->
                 // Refresh its place in the LRU order.
                 cache.remove(media.id)
@@ -95,26 +103,41 @@ class TrackAnalyzer(
                 failures.remove(media.id)
             }
             inFlight.getOrPut(media.id) {
-                scope.async { runAnalysis(media) }
+                Pending(scope.async(start = CoroutineStart.LAZY) {
+                    analysisSlots.withPermit { runAnalysis(media) }
+                })
+            }.also { it.waiters++ }
+        }
+        try {
+            val result = try {
+                pending.job.await()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                null
+            }
+            cacheLock.withLock {
+                if (result != null) {
+                    cache[media.id] = result
+                    while (cache.size > cacheSize) cache.remove(cache.keys.first())
+                } else {
+                    failures[media.id] = TimeSource.Monotonic.markNow()
+                    while (failures.size > cacheSize) failures.remove(failures.keys.first())
+                }
+            }
+            return result
+        } finally {
+            // A cancelled await must still release its reference and remove the deferred.
+            withContext(NonCancellable) {
+                cacheLock.withLock {
+                    pending.waiters--
+                    if (pending.waiters == 0) {
+                        if (inFlight[media.id] === pending) inFlight.remove(media.id)
+                        pending.job.cancel()
+                    }
+                }
             }
         }
-        val result = try {
-            job.await()
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Throwable) {
-            null
-        }
-        cacheLock.withLock {
-            if (inFlight[media.id] === job) inFlight.remove(media.id)
-            if (result != null) {
-                cache[media.id] = result
-                while (cache.size > cacheSize) cache.remove(cache.keys.first())
-            } else {
-                failures[media.id] = TimeSource.Monotonic.markNow()
-            }
-        }
-        return result
     }
 
     /** The model file's download while it runs; see [BeatModelLoader.downloadProgress]. */
