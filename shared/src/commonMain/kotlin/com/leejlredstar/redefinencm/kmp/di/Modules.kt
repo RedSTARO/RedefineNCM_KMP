@@ -278,7 +278,14 @@ val sharedModule = module {
         val settings = get<PlatformSettings>()
         PlayerStatusRestorer(
             awaitSettings = { settings.awaitLoaded() },
-            playerProvider = { koin.get<PlatformPlayer>() },
+            playerProvider = {
+                // This callback runs on Main only after settings.awaitLoaded(). Eager Koin
+                // definitions bypass that gate and freeze Android's unloaded server/volume.
+                val player = koin.get<PlatformPlayer>()
+                koin.get<PlaybackReportingCoordinator>()
+                koin.get<SongTransitionCoordinator>()
+                player
+            },
             statusLoader = { koin.get<Repository>().getPlayerStatus() },
             onReady = { koin.get<NowPlayingViewModel>() },
             playerDispatcher = kotlinx.coroutines.Dispatchers.Main,
@@ -286,9 +293,8 @@ val sharedModule = module {
         )
     }
 
-    // Eager process-wide reporter: playback accounting must not depend on whether a particular
-    // screen or ViewModel has already been composed.
-    single(createdAtStart = true) { PlaybackReportingCoordinator(get(), get(), get()) }
+    // Started by the process-wide restorer after settings load, without waiting for a screen.
+    single { PlaybackReportingCoordinator(get(), get(), get()) }
 
     // Smart song transitions. A platform without an accelerated beat model or an analysis decoder
     // binds neither, and gets crossfades placed without beat grids.
@@ -301,8 +307,8 @@ val sharedModule = module {
                 ?: UnavailableBeatModelLoader(strings.beatModelNoRuntime),
         )
     }
-    // Eager, like the reporter: a transition must be planned whether or not a screen is open.
-    single(createdAtStart = true) { SongTransitionCoordinator(get(), get(), get()) }
+    // The restorer starts this alongside the reporter before publishing the restored queue.
+    single { SongTransitionCoordinator(get(), get(), get()) }
 
     // ViewModels
     // One login page per provider; the provider is the injection parameter.

@@ -439,5 +439,9 @@ class NCMApi(private val client: HttpClient) {
     // ── Version ──
 
     suspend fun innerVersion(url: String): InnerVersion =
-        client.get(url).body()
+        client.get(url) {
+            // The account page checks an address before it is saved. The candidate server
+            // must not receive the session belonging to the currently configured server.
+            attributes.put(NcmCredentialCookieAttribute, "")
+        }.body()
 }
