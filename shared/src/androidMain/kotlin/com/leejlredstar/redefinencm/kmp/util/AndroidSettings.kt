@@ -10,6 +10,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
+import com.leejlredstar.redefinencm.kmp.ui.theme.ThemeMode
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 
@@ -117,6 +121,12 @@ actual class PlatformSettings(private val context: Context) {
     actual suspend fun awaitLoaded() {
         initialPreferences.await().getOrThrow()
     }
+
+    /** System theme overrides follow durable writes, not an optimistic Compose preference.
+     * Otherwise a configuration recreation can cancel the screen before its save starts. */
+    fun themeModeUpdates(): Flow<ThemeMode> = context.dataStore.data
+        .map { ThemeMode.fromWireValue(it[stringPreferencesKey(SettingKeys.THEME_MODE)].orEmpty()) }
+        .distinctUntilChanged()
 
     actual suspend fun flush() {
         val completion = CompletableDeferred<Unit>()

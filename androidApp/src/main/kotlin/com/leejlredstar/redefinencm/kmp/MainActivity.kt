@@ -4,6 +4,11 @@ import android.Manifest
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
+import android.graphics.drawable.ColorDrawable
+import com.leejlredstar.redefinencm.kmp.ui.theme.ThemeMode
+import com.leejlredstar.redefinencm.kmp.ui.theme.androidLaunchBackgroundColor
+import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -58,7 +63,16 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         lifecycleScope.launch {
-            get<PlatformSettings>().awaitLoaded()
+            val settings = get<PlatformSettings>()
+            settings.awaitLoaded()
+            // API 24-30 cannot persist a system-splash override. Match the activity background
+            // as soon as DataStore is ready instead of waiting through queue restoration.
+            val dark = when (ThemeMode.fromWireValue(settings.getString(SettingKeys.THEME_MODE, ""))) {
+                ThemeMode.Light -> false
+                ThemeMode.Dark -> true
+                ThemeMode.System -> resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+            }
+            window.setBackgroundDrawable(ColorDrawable(androidLaunchBackgroundColor(dark)))
             get<PlayerStatusRestorer>().awaitRestored()
 
             // 服务、播放器和 UI 都只能在 DataStore 初始快照就绪后创建；否则同步 getter

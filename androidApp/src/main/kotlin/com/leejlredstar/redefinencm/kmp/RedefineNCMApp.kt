@@ -16,6 +16,7 @@ import com.leejlredstar.redefinencm.kmp.di.initKoin
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.i18n.I18n
 import com.leejlredstar.redefinencm.kmp.notification.AndroidLyricNotification
+import com.leejlredstar.redefinencm.kmp.ui.theme.syncAndroidApplicationTheme
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import kotlinx.coroutines.CoroutineScope
@@ -51,6 +52,9 @@ class RedefineNCMApp : Application(), SingletonImageLoader.Factory {
             AndroidLyricNotification.setEnabled(
                 settings.getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false),
             )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                settings.themeModeUpdates().collect { syncAndroidApplicationTheme(this@RedefineNCMApp, it) }
+            }
         }
         registerDownloadedSongsObserver()
     }
