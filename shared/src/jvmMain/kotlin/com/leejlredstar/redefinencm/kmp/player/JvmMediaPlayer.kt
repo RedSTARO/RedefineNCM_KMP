@@ -671,6 +671,7 @@ class JvmMediaPlayer(
     }
 
     override fun seekTo(positionMs: Long) {
+        markPositionDiscontinuity()
         seekOffsetMs = positionMs.coerceAtLeast(0)
         _position.value = seekOffsetMs
         if (

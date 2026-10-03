@@ -29,8 +29,8 @@
 | W1-19 | data-api | P3 | 缓存写入失败会丢掉已拿到的网络结果，并清空整个账号界面、显示原始异常文本 | 已修复并测试：共用缓存流、用户等级和后端歌词的展示不因缓存写失败而丢弃网络结果；保留等级请求顺序，显式离线歌词缓存失败仍返回 Failed，用户数据写入也仍须成功。 |
 | W1-20 | data-api | P3 | Web 上每个网易云 API 请求前都有一次永远命中不了缓存的 CORS 预检 | 已修复并测试：取消全局 JSON Content-Type；无正文的 GET/POST 不再因此触发预检，真正 JSON 正文仍显式发送正确类型。请求头与 JSON 正文用本地 HTTP 测试验证。 |
 | W1-21 | player-core | P3 | 清空队列或移除到空后再「加入播放队列」，正在播放页仍显示旧的「来自 …」来源 | 已修复并测试：发布空队列时同步清掉 PlaybackSource，之后单曲加入不继承旧来源。 |
-| W1-22 | player-core | P3 | 同一次选择在 ERROR 或 IDLE 之后恢复播放会被当成新会话，重复发送 startplay 并启用新的 relay sessionId | 待复核 |
-| W1-23 | player-core | P3 | 桌面端网络卡顿时位置停滞但状态仍为 PLAYING，随后的前向拖动会被计为收听时间 | 待复核 |
+| W1-22 | player-core | P3 | 同一次选择在 ERROR 或 IDLE 之后恢复播放会被当成新会话，重复发送 startplay 并启用新的 relay sessionId | 已修复并测试：同一 occurrence 的 ERROR/IDLE 保留会话 ID、startplay/scrobble 去重和累计听歌进度；选曲、清空或换账号仍结束旧会话。 |
+| W1-23 | player-core | P3 | 桌面端网络卡顿时位置停滞但状态仍为 PLAYING，随后的前向拖动会被计为收听时间 | 已修复并测试：播放器在显式 seek 前发布独立的进度跳变标记，Android 系统媒体控制也覆盖；上报排除拖动距离，不把停滞期间的墙钟时间算作有效收听。 |
 
 ## 此前提交的回归复审
 
@@ -89,3 +89,7 @@
 | W2-01 | Android dataSync 前台服务未处理系统超时，可能触发进程异常 | 已按源码和 [平台规则](https://developer.android.com/develop/background-work/services/fgs/timeout) 核实；实现 onTimeout，取消服务观察后同步暂停任务并停止服务。编译通过，设备超时注入待补。 |
 
 本次阅读了 AndroidDownloadService、PersistedDownloadQueue 及 SongDownloadManager 的控制/恢复相关路径；下载编排其余部分、各平台文件处理和其余审查分区尚未完成。
+
+## 播放上报边界验证（2026-10-03）
+
+`reporting-check-result.json`：JVM 618、桌面 15、Android Host 455、Web 465 项均通过，Android/iOS Kotlin 编译通过。新增测试覆盖错误重试去重、停滞后 seek、参考播放器 seek 与选曲事件的分离。未向真实账号发送播放上报。

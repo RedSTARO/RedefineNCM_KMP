@@ -145,6 +145,7 @@ class ExoPlayerPlatformPlayer(
             reason: Int,
         ) {
             if (reason != Player.DISCONTINUITY_REASON_SEEK) return
+            if (deck === active) markPositionDiscontinuity()
             // MediaSession commands (the notification, the lock screen, a headset) reach the
             // players directly, not through seekTo(); a seek on either player of a blend ends it
             // the same way, and one on the active player ends a tempo ramp.
@@ -334,6 +335,7 @@ class ExoPlayerPlatformPlayer(
     override fun togglePlayPause() = if (active.isPlaying) pause() else play()
 
     override fun seekTo(positionMs: Long) {
+        markPositionDiscontinuity()
         abandonTransition()
         active.seekTo(positionMs)
         _position.value = positionMs.coerceAtLeast(0L)

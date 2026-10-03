@@ -15,6 +15,20 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class InMemoryPlatformPlayerTest {
+    @Test
+    fun seekingMarksADiscontinuityWithoutSelectingANewOccurrence() {
+        val player = InMemoryPlatformPlayer()
+        try {
+            player.setQueue(listOf(MediaInfo("1", "song", "artist", duration = 180_000)))
+            val selection = player.playbackOccurrence.value
+            val beforeSeek = player.positionDiscontinuity.value
+            player.seekTo(90_000)
+            assertEquals(beforeSeek + 1, player.positionDiscontinuity.value)
+            assertEquals(selection, player.playbackOccurrence.value)
+            assertEquals(90_000L, player.position.value)
+        } finally { player.release() }
+    }
+
     private val tracks = List(5) { index ->
         MediaInfo(id = index.toString(), title = "track-$index", artist = "artist")
     }

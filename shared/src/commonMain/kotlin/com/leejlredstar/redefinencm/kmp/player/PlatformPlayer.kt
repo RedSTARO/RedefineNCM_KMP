@@ -36,6 +36,10 @@ interface PlatformPlayer {
      */
     val playbackOccurrence: StateFlow<Long>
 
+    /** Changes before an explicit position jump, including system media controls. It does not
+     * select a new song; reporting uses it to exclude seek distance even after a long stall. */
+    val positionDiscontinuity: StateFlow<Long>
+
     /** The current play queue. */
     val queue: StateFlow<List<MediaInfo>>
 

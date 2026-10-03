@@ -99,6 +99,7 @@ class PlaybackReportingCoordinator(
         player.state.map { PlaybackReportingSignal.STATE },
         player.isPlaying.map { PlaybackReportingSignal.IS_PLAYING },
         player.position.map { PlaybackReportingSignal.POSITION },
+        player.positionDiscontinuity.map { PlaybackReportingSignal.SEEK },
         player.duration.map { PlaybackReportingSignal.DURATION },
         player.shuffleEnabled.map { PlaybackReportingSignal.SHUFFLE },
     )
@@ -145,6 +146,8 @@ class PlaybackReportingCoordinator(
             ),
             credentialKey = credential.key,
             credentialCookie = credential.cookie.takeIf(String::isNotEmpty),
+            // Read after position: players publish this revision before their seek position.
+            positionDiscontinuity = player.positionDiscontinuity.value,
         )
     }
 
@@ -449,6 +452,7 @@ internal data class PlaybackReportingObservation(
     val qualityLevel: String,
     val credentialKey: Long?,
     val credentialCookie: String?,
+    val positionDiscontinuity: Long = 0L,
 )
 
 private class PlaybackCredential(
@@ -463,6 +467,7 @@ internal enum class PlaybackReportingSignal {
     STATE,
     IS_PLAYING,
     POSITION,
+    SEEK,
     DURATION,
     SHUFFLE,
     TICK,
@@ -619,8 +624,9 @@ internal class PlaybackReportingReducer(
                     session.updateFrom(observation, now)
                     session.scheduleRelay(actions, now)
                     session.scheduleScrobbleIfEligible(actions)
-                    active = null
-                    session = null
+                    // An error/idle decoder can be retried without selecting the song again.
+                    // Keep its one-shot actions and relay id until occurrence, media or account
+                    // changes. Replaying an ended song advances occurrence in every player.
                 }
             }
         }
@@ -670,6 +676,7 @@ internal class PlaybackReportingReducer(
                 accountingPositionMs = initialPosition,
                 accountingObservedAtMs = now,
                 reportingGeneration = ++nextReportingGeneration,
+                positionDiscontinuity = observation.positionDiscontinuity,
             )
             active = session
             pendingOccurrence = null
@@ -778,6 +785,7 @@ private class ActivePlaybackReportingSession(
     var accountingPositionMs: Long,
     var accountingObservedAtMs: Long,
     val reportingGeneration: Long,
+    var positionDiscontinuity: Long,
 ) {
     var listenedMs: Long = 0L
     var scrobbleAttempted: Boolean = false
@@ -789,7 +797,7 @@ private class ActivePlaybackReportingSession(
         val boundedNow = nowMillis.coerceAtLeast(accountingObservedAtMs)
         val observedDuration = effectiveDurationMillis(observation).takeIf { it > 0L } ?: durationMs
         val observedPosition = boundedPositionMillis(observation.positionMs, observedDuration)
-        if (!wasPlaying) {
+        if (!wasPlaying || observation.positionDiscontinuity != positionDiscontinuity) {
             accountingPositionMs = observedPosition
             accountingObservedAtMs = boundedNow
             return
@@ -824,6 +832,7 @@ private class ActivePlaybackReportingSession(
         lastPositionMs = observedPosition
         playMode = playMode(observation.shuffleEnabled)
         wasPlaying = activelyPlaying
+        positionDiscontinuity = observation.positionDiscontinuity
     }
 }
 

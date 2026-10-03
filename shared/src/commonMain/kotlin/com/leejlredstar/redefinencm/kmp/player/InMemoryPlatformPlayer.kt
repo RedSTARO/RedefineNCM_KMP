@@ -64,6 +64,7 @@ class InMemoryPlatformPlayer(
 
     override fun seekTo(positionMs: Long) {
         withStateLock {
+            markPositionDiscontinuity()
             val dur = _duration.value
             _position.value = if (dur > 0) positionMs.coerceIn(0, dur) else positionMs.coerceAtLeast(0)
             if (_state.value == PlayerState.ENDED && (dur <= 0L || _position.value < dur)) {

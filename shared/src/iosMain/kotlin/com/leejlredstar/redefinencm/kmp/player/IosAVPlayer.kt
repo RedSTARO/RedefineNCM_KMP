@@ -222,6 +222,7 @@ class IosAVPlayer(
     }
 
     override fun seekTo(positionMs: Long) {
+        markPositionDiscontinuity()
         val bounded = _duration.value.takeIf { it > 0L }
             ?.let { positionMs.coerceIn(0L, it) }
             ?: positionMs.coerceAtLeast(0L)

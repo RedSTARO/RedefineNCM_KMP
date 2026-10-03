@@ -5,6 +5,7 @@ import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 /**
  * The observable half of [PlatformPlayer], which is the same for every backend.
@@ -37,6 +38,16 @@ abstract class BasePlatformPlayer(
 
     protected val _playbackOccurrence = MutableStateFlow(0L)
     final override val playbackOccurrence: StateFlow<Long> = _playbackOccurrence.asStateFlow()
+
+    private val _positionDiscontinuity = MutableStateFlow(0L)
+    final override val positionDiscontinuity: StateFlow<Long> = _positionDiscontinuity.asStateFlow()
+
+    protected fun markPositionDiscontinuity() {
+        _positionDiscontinuity.update {
+            check(it != Long.MAX_VALUE) { "Position discontinuity counter exhausted" }
+            it + 1L
+        }
+    }
 
     protected val _queue = MutableStateFlow<List<MediaInfo>>(emptyList())
     final override val queue: StateFlow<List<MediaInfo>> = _queue.asStateFlow()

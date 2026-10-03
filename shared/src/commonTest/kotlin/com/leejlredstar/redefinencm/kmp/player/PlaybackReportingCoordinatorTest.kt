@@ -415,6 +415,7 @@ class PlaybackReportingCoordinatorTest {
         state: PlayerState = PlayerState.PLAYING,
         shuffleEnabled: Boolean = false,
         credentialKey: Long? = 123L,
+        positionDiscontinuity: Long = 0L,
     ): PlaybackReportingObservation = PlaybackReportingObservation(
         occurrence = occurrence,
         media = media,
@@ -426,7 +427,47 @@ class PlaybackReportingCoordinatorTest {
         qualityLevel = "EXHIGH",
         credentialKey = credentialKey,
         credentialCookie = credentialKey?.let { "MUSIC_U=test-$it" },
+        positionDiscontinuity = positionDiscontinuity,
     )
+
+    @Test
+    fun retryingTheSameSelectionKeepsItsSessionAndOneShotReports() {
+        for (failureState in listOf(PlayerState.ERROR, PlayerState.IDLE)) {
+            var nextSession = 1
+            val reducer = PlaybackReportingReducer(sessionIdGenerator = { "SESSION${nextSession++.toString().padStart(5, '0')}" })
+            val started = reducer.observe(observation(), 0)
+            reducer.observe(observation(positionMs = 50_000), 50_000)
+            reducer.observe(observation(positionMs = 50_000, state = failureState, isPlaying = false), 50_000)
+            val resumed = reducer.observe(observation(positionMs = 50_000), 60_000)
+            val half = reducer.observe(observation(positionMs = 100_000), 110_000)
+            reducer.observe(observation(positionMs = 100_000, state = failureState, isPlaying = false), 111_000)
+            val retriedAgain = reducer.observe(observation(positionMs = 100_000), 112_000)
+
+            assertEquals(1, started.filterIsInstance<PlaybackReportingAction.StartPlayback>().size)
+            assertTrue(resumed.none { it is PlaybackReportingAction.StartPlayback })
+            assertEquals(100L, half.filterIsInstance<PlaybackReportingAction.Scrobble>().single().playedSeconds)
+            assertTrue(retriedAgain.none { it is PlaybackReportingAction.StartPlayback || it is PlaybackReportingAction.Scrobble })
+            assertEquals(2, nextSession)
+            assertTrue((resumed + half + retriedAgain).filterIsInstance<PlaybackReportingAction.SubmitPlayState>().all { it.sessionId == "SESSION00001" })
+        }
+    }
+
+    @Test
+    fun aSeekAfterALongStallCannotBorrowTheStalledWallTime() {
+        val reducer = reducer()
+        val short = media.copy(duration = 100_000)
+        reducer.observe(observation(media = short), 0)
+        reducer.observe(observation(media = short, positionMs = 20_000), 20_000)
+        reducer.observe(observation(media = short, positionMs = 20_000), 120_000)
+        val seek = reducer.observe(observation(media = short, positionMs = 80_000, positionDiscontinuity = 1), 120_000)
+        val twentyMore = reducer.observe(observation(media = short, positionMs = 100_000, positionDiscontinuity = 1), 140_000)
+        reducer.observe(observation(media = short, positionMs = 0, positionDiscontinuity = 2), 140_000)
+        val fiftyHeard = reducer.observe(observation(media = short, positionMs = 10_000, positionDiscontinuity = 2), 150_000)
+
+        assertTrue(seek.none { it is PlaybackReportingAction.Scrobble })
+        assertTrue(twentyMore.none { it is PlaybackReportingAction.Scrobble })
+        assertEquals(50L, fiftyHeard.filterIsInstance<PlaybackReportingAction.Scrobble>().single().playedSeconds)
+    }
 
     @Test
     fun stalledRelayDoesNotBlockIndependentAccountActions() = runTest {

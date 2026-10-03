@@ -495,6 +495,7 @@ class WebPlatformPlayer(
 
     override fun seekTo(positionMs: Long) {
         if (released || queueModel.currentItem == null) return
+        markPositionDiscontinuity()
         abandonTransition()
         val bounded = boundPosition(positionMs)
         pendingSeekMs = bounded
