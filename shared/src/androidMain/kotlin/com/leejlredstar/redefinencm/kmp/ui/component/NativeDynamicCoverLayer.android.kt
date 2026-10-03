@@ -9,7 +9,7 @@
  */
 package com.leejlredstar.redefinencm.kmp.ui.component
 
-import android.graphics.Color as AndroidColor
+import android.content.Context
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
@@ -69,14 +69,7 @@ internal actual fun NativeDynamicCoverLayer(
         }
     }
     val textureView = remember(context, videoUrl) {
-        TextureView(context).apply {
-            // TextureView is opaque by default, which exposes a black surface while
-            // ExoPlayer swaps or resizes buffers. CSS video stays transparent until
-            // its first decoded frame, so make the native surface follow that rule.
-            isOpaque = false
-            setBackgroundColor(AndroidColor.TRANSPARENT)
-            alpha = 0f
-        }
+        createDynamicCoverTextureView(context)
     }
     var firstFrameRendered by remember(videoUrl) { mutableStateOf(false) }
     val shouldPlay by rememberUpdatedState(play)
@@ -158,3 +151,11 @@ internal actual fun NativeDynamicCoverLayer(
         }
     }
 }
+
+internal fun createDynamicCoverTextureView(context: Context): TextureView =
+    TextureView(context).apply {
+        // Keep the artwork visible while ExoPlayer prepares or replaces its first frame.
+        isOpaque = false
+        // No background drawable: even a transparent ColorDrawable crashes TextureView.
+        alpha = 0f
+    }

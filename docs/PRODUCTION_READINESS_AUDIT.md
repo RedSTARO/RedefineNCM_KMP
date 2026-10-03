@@ -199,3 +199,11 @@
 - 新增六项编排测试，覆盖顺序、部分失败、持久化失败、同步拒绝、空数据和页面取消。`backup-import-final-check-result.json`：JVM 656 项中 **653 通过、3 跳过**；桌面 19、Android Host 473、Web 494 项通过；Android/iOS Kotlin 编译通过。
 - 设置与歌单分属不同存储，这不是跨存储的原子事务；失败结果说明已完成的阶段。
 - 新候选：`LocalLibraryStore.load()` 将 JSON 解码失败转换为空文档，后续修改可能覆盖原记录。已定位源码，下一轮以隔离数据库验证，尚未标记为已修复。
+
+## Android 动态封面进入页面崩溃（2026-10-04）
+
+- 用户报告歌曲 `1501478611` 进入详情或歌词页闪退。两个入口共用 Android `NativeDynamicCoverLayer`；其 `TextureView.setBackgroundColor(TRANSPARENT)` 仍创建 ColorDrawable，触发框架禁止背景 Drawable 的 `UnsupportedOperationException`，在视频解码前就会终止页面。
+- 提取共用视图工厂，去除背景设置，保留 `isOpaque=false` 与首帧前 `alpha=0`。有动态封面的其他歌曲同样受益；未改动账号、歌词来源或 AMLL 子模块。
+- 新增 Robolectric Android 运行时回归，分别在 API 24、36 执行真实工厂。修复前两项均因上述异常失败；修复后两项均通过。CI 测试作业使用 Java 21，以满足 Android 16 测试运行时要求。
+- `dynamic-cover-fix-check.log`：Android Host、JVM、desktop 测试及 Android Release APK 构建通过；验证使用主仓库记录的 AMLL `20b6e7f`。修复前后 XML 保存在忽略目录 `build/audit-review/dynamic-cover-{before,after}.xml`。
+- 公开数据探针通过该歌曲 51 行 LRC、51 行 YRC 及 AMLL 文档构建。未连接 Android 设备；匿名动态封面请求需要登录，因此未使用用户账号进行该歌曲的真机视频播放验证。

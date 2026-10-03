@@ -682,6 +682,11 @@ kotlin {
         jvmTest.dependencies {
             implementation(libs.ktor.client.mock)
         }
+        named("androidHostTest") {
+            dependencies {
+                implementation(libs.robolectric)
+            }
+        }
         wasmJsMain {
             resources.srcDir(generateWebVersionManifest)
             // The browser serves the beat model as a static file of its own; the desktop and
@@ -708,6 +713,12 @@ sqldelight {
 
 dependencies {
     androidRuntimeClasspath(libs.compose.uiTooling)
+}
+
+tasks.withType<Test>().matching { it.name == "testAndroidHostTest" }.configureEach {
+    // Robolectric's Android 16 shared-memory setup reflects into the host JDK.
+    // This belongs to the test worker, never the packaged app's JVM options.
+    jvmArgs("--add-opens=java.base/jdk.internal.access=ALL-UNNAMED")
 }
 
 // On a Windows host the JVM tests can reach the DirectML build; elsewhere the harness skips.
