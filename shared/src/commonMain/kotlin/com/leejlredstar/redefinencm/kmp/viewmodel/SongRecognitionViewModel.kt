@@ -195,12 +195,15 @@ class SongRecognitionViewModel internal constructor(
     }
 
     private fun startRecognition() {
-        if (player.isPlaying.value) {
+        val wasPlaying = player.isPlaying.value
+        player.pause()
+        if (wasPlaying) {
+            // Pause may first catch the queue up with an audible transition. Remember the
+            // occurrence actually paused, rather than the previous polling snapshot.
             pausedForRecognition = player.currentMedia.value?.id?.let {
                 PausedSelection(it, player.playbackOccurrence.value)
             }
         }
-        player.pause()
         recognitionJob?.cancel()
         val generation = recognitionGeneration.updateAndGet { it + 1L }
         val job = scope.launch(start = CoroutineStart.LAZY) {

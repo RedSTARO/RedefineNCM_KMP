@@ -4,6 +4,8 @@ import com.leejlredstar.redefinencm.kmp.transition.TimeStretcher
 import com.leejlredstar.redefinencm.kmp.transition.TransitionPlan
 import kotlin.math.ceil
 import kotlin.math.roundToLong
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Which track the frames leaving the line belong to, and where in it they are.
@@ -14,14 +16,14 @@ import kotlin.math.roundToLong
  * changes; the player asks with the line's own count of frames played.
  */
 internal class PlaybackClock(private val sampleRate: Int) {
-    private class Mark(val outputFrame: Long, val mediaId: String, val sourceMs: Double, val msPerFrame: Double)
+    private class Mark(val outputFrame: Long, val mediaId: String, val sourceMs: Double, val msPerFrame: Double, val deckSequence: Long)
 
     private val marks = ArrayDeque<Mark>()
 
     @Synchronized
-    fun mark(outputFrame: Long, mediaId: String, sourceMs: Double, rate: Double) {
+    fun mark(outputFrame: Long, mediaId: String, sourceMs: Double, rate: Double, deckSequence: Long = 0L) {
         while (marks.isNotEmpty() && marks.last().outputFrame >= outputFrame) marks.removeLast()
-        marks.addLast(Mark(outputFrame, mediaId, sourceMs, rate * 1_000.0 / sampleRate))
+        marks.addLast(Mark(outputFrame, mediaId, sourceMs, rate * 1_000.0 / sampleRate, deckSequence))
     }
 
     /** The track and position [playedFrames] into the output, or null before the first mark. */
@@ -30,11 +32,11 @@ internal class PlaybackClock(private val sampleRate: Int) {
         while (marks.size > 1 && marks[1].outputFrame <= playedFrames) marks.removeFirst()
         val mark = marks.firstOrNull() ?: return null
         val frames = (playedFrames - mark.outputFrame).coerceAtLeast(0L)
-        return ClockReading(mark.mediaId, (mark.sourceMs + frames * mark.msPerFrame).roundToLong())
+        return ClockReading(mark.mediaId, (mark.sourceMs + frames * mark.msPerFrame).roundToLong(), mark.deckSequence)
     }
 }
 
-internal data class ClockReading(val mediaId: String, val positionMs: Long)
+internal data class ClockReading(val mediaId: String, val positionMs: Long, val deckSequence: Long = 0L)
 
 /**
  * Renders the desktop player's output: one track, or two during a song transition.
@@ -58,13 +60,14 @@ internal class DeckMixer(
     val channels: Int = source.channels
     val sampleRate: Int = source.sampleRate
 
-    private class Deck(val source: FfmpegAudioSource, val mediaId: String, startMs: Long, sampleRate: Int) {
+    private class Deck(val source: FfmpegAudioSource, val mediaId: String, startMs: Long, sampleRate: Int, val sequence: Long) {
         /** Nominal position in source frames; fractional while the deck is time-stretched. */
         var sourceFrame: Double = startMs * sampleRate / 1_000.0
         var ended = false
     }
 
-    @Volatile private var primary = Deck(source, mediaId, startMs, sampleRate)
+    @Volatile private var primary = Deck(source, mediaId, startMs, sampleRate, 0L)
+    private var nextDeckSequence = 1L
     private var stretcher: TimeStretcher? = null
     private var outputFrames = 0L
 
@@ -73,12 +76,27 @@ internal class DeckMixer(
     private val history = FloatArray(historyFrames * channels)
     private var historyFilled = 0
 
-    /** Written by the player thread; read at every render. */
-    @Volatile var armedPlan: TransitionPlan? = null
+    private data class Armed(val plan: TransitionPlan, val deckSequence: Long)
+    private data class Prepared(val armed: Armed, val source: FfmpegAudioSource)
+    private val armed = AtomicReference<Armed?>(null)
+    private val offered = AtomicReference<Prepared?>(null)
+    private val abandonKeeping = AtomicReference<Long?>(null)
+    private val closed = AtomicBoolean(false)
 
-    @Volatile private var offered: Pair<TransitionPlan, FfmpegAudioSource>? = null
+    /** Fixture/initial-deck convenience; the player arms against its published deck sequence. */
+    var armedPlan: TransitionPlan?
+        get() = armed.get()?.plan
+        set(value) { if (value == null) armed.set(null) else armTransition(value, audibleDeckSequence) }
 
-    @Volatile private var abandonKeeping: String? = null
+    fun armTransition(plan: TransitionPlan, deckSequence: Long) {
+        if (closed.get()) return
+        // The player supplies the audible occurrence. Rendering may be finishing the previous
+        // fade concurrently; validate the occurrence when consuming the plan, not via two deck
+        // snapshots here that could straddle promotion.
+        val candidate = Armed(plan, deckSequence)
+        armed.set(candidate)
+        if (closed.get()) armed.compareAndSet(candidate, null)
+    }
 
     private class Blend(
         val plan: TransitionPlan,
@@ -99,10 +117,8 @@ internal class DeckMixer(
     class HeardBlend(val plan: TransitionPlan, val elapsedMs: Long)
 
     @Volatile private var blend: Blend? = null
-    private var blendAttempted: TransitionPlan? = null
+    @Volatile private var blendAttempted: Armed? = null
     private var mixBuffer = FloatArray(0)
-
-    val currentMediaId: String get() = primary.mediaId
 
     /** The track a blend in progress is bringing in, or null outside a blend. */
     val blendIncomingMediaId: String? get() = blend?.incoming?.mediaId
@@ -125,6 +141,7 @@ internal class DeckMixer(
 
     /** The media id the output belongs to right now, as far as the user is concerned. */
     val audibleMediaId: String get() = blend?.takeIf { it.swapped }?.incoming?.mediaId ?: primary.mediaId
+    val audibleDeckSequence: Long get() = blend?.takeIf { it.swapped }?.incoming?.sequence ?: primary.sequence
 
     init {
         clock.mark(0L, mediaId, startMs.toDouble(), 1.0)
@@ -133,24 +150,29 @@ internal class DeckMixer(
     /** The plan whose incoming track should be opened now, or null. Polled after each render. */
     fun planNeedingIncoming(leadMs: Long): TransitionPlan? {
         if (blend != null) return null
-        val plan = armedPlan?.takeIf { it.outgoingMediaId == primary.mediaId } ?: return null
-        if (offered?.first == plan || blendAttempted == plan) return null
-        return if (positionMs(primary) >= plan.startMs - leadMs) plan else null
+        val candidate = armedForPrimary() ?: return null
+        if (offered.get()?.armed == candidate || blendAttempted == candidate) return null
+        return if (positionMs(primary) >= candidate.plan.startMs - leadMs) candidate.plan else null
     }
 
     /** Hands over the incoming decoder for [plan]; closed at once if the plan is no longer armed. */
     fun offerIncoming(plan: TransitionPlan, source: FfmpegAudioSource) {
-        if (armedPlan != plan || source.channels != channels || source.sampleRate != sampleRate) {
+        val candidate = armed.get()
+        if (closed.get() || candidate == null || candidate.plan != plan || blendAttempted == candidate ||
+            source.channels != channels || source.sampleRate != sampleRate
+        ) {
             source.close()
             return
         }
-        offered?.second?.close()
-        offered = plan to source
+        val prepared = Prepared(candidate, source)
+        offered.getAndSet(prepared)?.source?.close()
+        // Close/replanning may race this offer; a decoder already taken by render has its owner.
+        if ((closed.get() || armed.get() != candidate) && offered.compareAndSet(prepared, null)) source.close()
     }
 
-    /** Ends a blend in progress, keeping the deck playing [keepMediaId]. */
-    fun abandonBlend(keepMediaId: String) {
-        abandonKeeping = keepMediaId
+    /** Ends a blend in progress, keeping a specific occurrence even when both IDs are equal. */
+    fun abandonBlend(keepDeckSequence: Long) {
+        abandonKeeping.set(keepDeckSequence)
     }
 
     /**
@@ -158,6 +180,9 @@ internal class DeckMixer(
      * the mixer holds has ended.
      */
     fun render(target: FloatArray, frames: Int): Int {
+        if (closed.get()) return 0
+        val prepared = offered.get()
+        if (prepared != null && prepared.armed != armed.get() && offered.compareAndSet(prepared, null)) prepared.source.close()
         applyAbandon()
         var produced = 0
         while (produced < frames) {
@@ -182,6 +207,10 @@ internal class DeckMixer(
 
     private fun positionMs(deck: Deck): Double = deck.sourceFrame * 1_000.0 / sampleRate
 
+    private fun armedForPrimary(): Armed? = armed.get()?.takeIf {
+        it.deckSequence == primary.sequence && it.plan.outgoingMediaId == primary.mediaId
+    }
+
     private fun framesUntilNextEvent(): Int {
         val active = blend
         if (active != null) {
@@ -193,8 +222,8 @@ internal class DeckMixer(
             val next = events.filter { it > outputFrames }.minOrNull() ?: return MAX_CHUNK
             return (next - outputFrames).coerceIn(1L, MAX_CHUNK.toLong()).toInt()
         }
-        val plan = armedPlan?.takeIf { it.outgoingMediaId == primary.mediaId && blendAttempted != it }
-            ?: return MAX_CHUNK
+        val candidate = armedForPrimary()?.takeIf { blendAttempted != it } ?: return MAX_CHUNK
+        val plan = candidate.plan
         val position = positionMs(primary)
         val rate = stretcher?.rate ?: 1.0
         val target = when {
@@ -287,22 +316,23 @@ internal class DeckMixer(
             }
             return
         }
-        val plan = armedPlan?.takeIf { it.outgoingMediaId == primary.mediaId && blendAttempted != it }
+        val candidate = armedForPrimary()?.takeIf { blendAttempted != it }
         val stretch = stretcher
-        if (plan == null) {
+        if (candidate == null) {
             // A plan withdrawn mid-ramp leaves the track at its own tempo again.
             if (stretch != null && stretch.rate != 1.0) {
                 stretch.rate = 1.0
-                clock.mark(outputFrames, primary.mediaId, positionMs(primary), 1.0)
+                clock.mark(outputFrames, primary.mediaId, positionMs(primary), 1.0, primary.sequence)
             }
             return
         }
+        val plan = candidate.plan
         val position = positionMs(primary)
         // A plan is played only by reaching it; a seek that lands past its start skips it, and
         // the track plays out on its own.
         val entry = if (plan.changesTempo) plan.rampStartMs else plan.startMs
         if (stretch == null && position > entry + LATE_TOLERANCE_MS) {
-            blendAttempted = plan
+            blendAttempted = candidate
             return
         }
         if (plan.changesTempo && position >= plan.rampStartMs) {
@@ -310,10 +340,10 @@ internal class DeckMixer(
             val rate = plan.outgoingRateAt(position.toLong())
             if (rate != active2.rate) {
                 active2.rate = rate
-                clock.mark(outputFrames, primary.mediaId, position, rate)
+                clock.mark(outputFrames, primary.mediaId, position, rate, primary.sequence)
             }
         }
-        if (position >= plan.startMs) startBlend(plan)
+        if (position >= plan.startMs) startBlend(candidate)
     }
 
     private fun startStretcher(): TimeStretcher {
@@ -323,10 +353,13 @@ internal class DeckMixer(
         return stretch
     }
 
-    private fun startBlend(plan: TransitionPlan) {
-        blendAttempted = plan
-        val ready = offered?.takeIf { it.first == plan }
-        offered = null
+    private fun startBlend(candidate: Armed) {
+        if (!armed.compareAndSet(candidate, null)) return
+        blendAttempted = candidate
+        val plan = candidate.plan
+        val prepared = offered.getAndSet(null)
+        val ready = prepared?.takeIf { it.armed == candidate }
+        if (prepared != null && ready == null) prepared.source.close()
         if (ready == null) {
             // The next track was not open in time; the outgoing one simply plays out.
             System.err.println("DeckMixer: incoming track not ready at the blend start; skipping the blend")
@@ -335,7 +368,7 @@ internal class DeckMixer(
         val start = outputFrames
         blend = Blend(
             plan = plan,
-            incoming = Deck(ready.second, plan.incomingMediaId, plan.incomingEntryMs, sampleRate),
+            incoming = Deck(ready.source, plan.incomingMediaId, plan.incomingEntryMs, sampleRate, nextDeckSequence++),
             startFrame = start,
             swapFrame = start + plan.swapAfterMs * sampleRate / 1_000L,
             endFrame = start + plan.overlapMs * sampleRate / 1_000L,
@@ -345,51 +378,53 @@ internal class DeckMixer(
     private fun markSwap(active: Blend, frame: Long) {
         active.swapped = true
         val incomingMs = active.plan.incomingEntryMs + (frame - active.startFrame) * 1_000.0 / sampleRate
-        clock.mark(frame, active.incoming.mediaId, incomingMs, 1.0)
+        clock.mark(frame, active.incoming.mediaId, incomingMs, 1.0, active.incoming.sequence)
     }
 
     private fun finishBlend(active: Blend, keepIncoming: Boolean) {
-        blend = null
         if (keepIncoming) {
             if (!active.swapped) markSwap(active, outputFrames)
-            primary.source.close()
+            val old = primary
             primary = active.incoming
+            blend = null
             stretcher = null
             historyFilled = 0
+            old.source.close()
         } else {
+            blend = null
             active.incoming.source.close()
             stretcher?.let { stretch ->
                 if (stretch.rate != 1.0) {
                     stretch.rate = 1.0
-                    clock.mark(outputFrames, primary.mediaId, positionMs(primary), 1.0)
+                    clock.mark(outputFrames, primary.mediaId, positionMs(primary), 1.0, primary.sequence)
                 }
             }
         }
     }
 
     private fun applyAbandon() {
-        val keep = abandonKeeping ?: return
-        abandonKeeping = null
+        val keep = abandonKeeping.getAndSet(null) ?: return
         val active = blend
         if (active == null) {
             // Only a ramp was under way: drop the plan and return to the track's own tempo.
-            if (armedPlan?.outgoingMediaId == primary.mediaId) blendAttempted = armedPlan
+            armedForPrimary()?.let { blendAttempted = it }
             stretcher?.let { stretch ->
                 if (stretch.rate != 1.0) {
                     stretch.rate = 1.0
-                    clock.mark(outputFrames, primary.mediaId, positionMs(primary), 1.0)
+                    clock.mark(outputFrames, primary.mediaId, positionMs(primary), 1.0, primary.sequence)
                 }
             }
             return
         }
         if (active.fadeFrom != null) return
+        if (keep != primary.sequence && keep != active.incoming.sequence) return
         active.fadeFrom = gains(active, outputFrames)
         active.fadeStartFrame = outputFrames
-        active.keepIncoming = keep == active.incoming.mediaId
+        active.keepIncoming = keep == active.incoming.sequence
         if (active.keepIncoming && !active.swapped) markSwap(active, outputFrames)
         if (!active.keepIncoming && active.swapped) {
             // Back to the outgoing track after the swap: the clock follows it again.
-            clock.mark(outputFrames, primary.mediaId, positionMs(primary), stretcher?.rate ?: 1.0)
+            clock.mark(outputFrames, primary.mediaId, positionMs(primary), stretcher?.rate ?: 1.0, primary.sequence)
             active.swapped = false
         }
     }
@@ -413,10 +448,11 @@ internal class DeckMixer(
     }
 
     override fun close() {
+        if (!closed.compareAndSet(false, true)) return
+        armed.set(null)
         blend?.incoming?.source?.close()
         blend = null
-        offered?.second?.close()
-        offered = null
+        offered.getAndSet(null)?.source?.close()
         primary.source.close()
     }
 

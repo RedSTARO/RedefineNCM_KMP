@@ -887,11 +887,20 @@ state to liked immediately. Late checks and actions must be scoped to both media
 
 ### Playback reporting contract
 
-`PlaybackReportingCoordinator` is an eager process-wide common singleton. Platform players do
+`PlaybackReportingCoordinator` is a process-wide common singleton initialized by playback
+restoration after stored settings have loaded. Platform players do
 not call reporting endpoints directly; they publish a monotonic `playbackOccurrence` whenever a
 real item selection occurs. Queue replacement, manual/natural track transitions, and replay after
 `ENDED` advance it exactly once. Pause/resume, seek within the current item, shuffle changes, and
 queue append do not.
+
+Desktop transitions distinguish decoder occurrences even when adjacent entries have the same
+media ID. The frame clock, future plans and prefetch deduplication carry a per-session deck
+sequence; a content ID alone cannot identify a hand-over. The coordinator also includes the
+queue index in its inputs. A plan for the newly audible track can be armed while the previous
+track is still fading out. Prepared decoders transfer ownership atomically. A running playback
+worker closes its own mixer in `finally`; stop/pause callers do not wait on native decoder
+cleanup. Old playback generations cannot open URLs or publish positions for the new session.
 
 For each actually playing selection, the coordinator generates one 12-character uppercase
 alphanumeric relay session ID and calls `/relay/play/state/submit` at start, on changed

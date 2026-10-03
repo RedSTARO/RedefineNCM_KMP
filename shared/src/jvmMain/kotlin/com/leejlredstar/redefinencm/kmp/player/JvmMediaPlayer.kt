@@ -30,6 +30,7 @@ class JvmMediaPlayer(
     private val settings: PlatformSettings,
     private val providers: MusicProviderRegistry,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+    incomingResolver: StreamUrlResolver? = null,
 ) : BasePlatformPlayer(settings.persistedPlayerVolume()) {
 
     // ── URL resolver with offline check ──
@@ -52,7 +53,7 @@ class JvmMediaPlayer(
 
     // The next track of a song transition is prepared before anyone is listening to it; its
     // failure must not reach the "this track cannot play" channel.
-    private val quietResolver = resolverFor(recordFailures = false)
+    private val quietResolver = incomingResolver ?: resolverFor(recordFailures = false)
 
     // ── Queue state ──
 
@@ -74,6 +75,8 @@ class JvmMediaPlayer(
     @Volatile private var line: SourceDataLine? = null
     @Volatile private var mixer: DeckMixer? = null
     @Volatile private var clock: PlaybackClock? = null
+    /** The deck already reflected in the queue, scoped to the current playback session. */
+    @Volatile private var publishedDeckSequence = 0L
     @Volatile private var pauseRequested = false
 
     /** Where playback resumes when no line is open: after a pause that closed it, or a seek. */
@@ -82,7 +85,8 @@ class JvmMediaPlayer(
     // ── Song transitions ──
 
     @Volatile private var armedPlan: TransitionPlan? = null
-    @Volatile private var preparingPlan: TransitionPlan? = null
+    private data class PreparingTransition(val plan: TransitionPlan, val deckSequence: Long)
+    @Volatile private var preparingPlan: PreparingTransition? = null
 
     private var pollJob: Job? = null
 
@@ -138,12 +142,22 @@ class JvmMediaPlayer(
     }
 
     private fun onClockReading(reading: ClockReading, generation: Long) {
-        val current = currentQueueModel().currentItem ?: return
-        if (reading.mediaId == current.id) {
-            _position.value = reading.positionMs
-            return
+        synchronized(queueOperationLock) {
+            synchronized(playbackLock) {
+                if (generation != playbackGeneration) return
+                val current = currentQueueModel().currentItem ?: return
+                if (reading.deckSequence == publishedDeckSequence) {
+                    if (reading.mediaId == current.id) _position.value = reading.positionMs
+                    return
+                }
+                publishTransitionSwap(reading, generation)
+            }
         }
-        publishTransitionSwap(reading, generation)
+    }
+
+    private fun syncAudibleSelection() {
+        val generation = playbackGeneration
+        clockReading()?.let { onClockReading(it, generation) }
     }
 
     /**
@@ -156,14 +170,15 @@ class JvmMediaPlayer(
             if (!isPlaybackCurrent(generation)) return
             val model = currentQueueModel()
             val current = model.currentItem ?: return
-            if (reading.mediaId == current.id) return
+            if (reading.deckSequence <= publishedDeckSequence) return
             val next = model.next(repeat = false)
             if (next.currentIndex == model.currentIndex || next.currentItem?.id != reading.mediaId) {
-                mixer?.abandonBlend(keepMediaId = current.id)
+                mixer?.abandonBlend(keepDeckSequence = publishedDeckSequence)
                 return
             }
-            mutateQueue(invalidatesPlaybackClaim = true) { it.next(repeat = false) }
+            publishedDeckSequence = reading.deckSequence
             armedPlan = null
+            mutateQueue(invalidatesPlaybackClaim = true) { it.next(repeat = false) }
             seekOffsetMs = reading.positionMs
             _position.value = reading.positionMs
             mixer?.audibleDurationMs?.takeIf { it > 0L }?.let { _duration.value = it }
@@ -253,6 +268,7 @@ class JvmMediaPlayer(
         playbackThread = null
         mixer = null
         clock = null
+        publishedDeckSequence = 0L
         line = null
         pauseRequested = false
         preparingPlan = null
@@ -267,7 +283,9 @@ class JvmMediaPlayer(
         } catch (_: Exception) {
         }
         try {
-            mixerToClose?.close()
+            // A running worker closes its local mixer in runPlayback's finally block. Closing
+            // it here races native reads and can park the UI/SMTC caller on decoder cleanup.
+            if (threadToStop == null) mixerToClose?.close()
         } catch (_: Exception) {
         }
     }
@@ -320,6 +338,7 @@ class JvmMediaPlayer(
     }
 
     private fun runPlayback(generation: Long, media: MediaInfo, streamUrl: String, startMs: Long) {
+        if (!isPlaybackCurrent(generation)) return
         var deckMixer: DeckMixer? = null
         var audioLine: SourceDataLine? = null
         var completedNaturally = false
@@ -333,6 +352,10 @@ class JvmMediaPlayer(
             // FFmpeg seeks the decoder itself, so nothing discards PCM bytes at the head of the
             // stream to approximate a seek; that approximation could misalign the channels.
             var decoded = FfmpegAudioSource.open(streamUrl, startMs)
+            if (!isPlaybackCurrent(generation)) {
+                decoded.close()
+                return
+            }
             audioLine = try {
                 openAudioOutputLine(decoded.format, deviceId)
             } catch (rateRefused: Exception) {
@@ -420,6 +443,9 @@ class JvmMediaPlayer(
 
             if (completedNaturally && isPlaybackCurrent(generation)) {
                 audioLine.drain()
+                // A delayed polling coroutine must not lose the final hand-over before the
+                // clock is detached below and natural completion advances the queue again.
+                playbackClock.at(audioLine.longFramePosition)?.let { onClockReading(it, generation) }
             }
         } catch (e: Throwable) {
             // Throwable, not Exception: a decoder SPI that fails to initialise throws
@@ -483,8 +509,14 @@ class JvmMediaPlayer(
      * lets the outgoing track play out when the blend's start arrives with nothing to blend in.
      */
     private fun prepareIncoming(generation: Long, deckMixer: DeckMixer, plan: TransitionPlan) {
-        if (preparingPlan == plan) return
-        preparingPlan = plan
+        synchronized(playbackLock) {
+            if (generation != playbackGeneration || mixer !== deckMixer) return
+            val request = PreparingTransition(plan, publishedDeckSequence)
+            // A failure is tried only once for this occurrence. An equal plan on the next
+            // occurrence (including repeated copies of one song) must still open its decoder.
+            if (preparingPlan == request) return
+            preparingPlan = request
+        }
         scope.launch(Dispatchers.IO) {
             val url = runCatching { quietResolver.resolve(plan.incomingMediaId) }.getOrNull()
             if (url == null || !isPlaybackCurrent(generation)) return@launch
@@ -494,7 +526,12 @@ class JvmMediaPlayer(
                 // lands up to a frame away from it, which is heard as a flam against the other
                 // track.
                 FfmpegAudioSource.open(url, 0L, deckMixer.sampleRate, deckMixer.channels).also { opened ->
-                    opened.skip(plan.incomingEntryMs * deckMixer.sampleRate / 1_000L)
+                    try {
+                        opened.skip(plan.incomingEntryMs * deckMixer.sampleRate / 1_000L)
+                    } catch (failure: Throwable) {
+                        opened.close()
+                        throw failure
+                    }
                 }
             }.onFailure { failure ->
                 System.err.println("JvmMediaPlayer: next track not opened for the blend: ${failure.message}")
@@ -585,12 +622,12 @@ class JvmMediaPlayer(
         val plan = armedPlan
         if (plan != null && (plan.outgoingMediaId != current?.id || plan.incomingMediaId != next?.id)) {
             armedPlan = null
-            mixer?.let { deckMixer -> if (deckMixer.blendIncomingMediaId == null) deckMixer.armedPlan = null }
+            mixer?.armedPlan = null
         }
         val deckMixer = mixer ?: return
         val incoming = deckMixer.blendIncomingMediaId ?: return
         if (current != null && incoming != next?.id && incoming != current.id) {
-            deckMixer.abandonBlend(keepMediaId = current.id)
+            deckMixer.abandonBlend(keepDeckSequence = publishedDeckSequence)
         }
     }
 
@@ -638,17 +675,23 @@ class JvmMediaPlayer(
 
     override fun pause() {
         if (!_isPlaying.value && _state.value != PlayerState.BUFFERING) return
-        val currentId = currentQueueModel().currentItem?.id
-        seekOffsetMs = clockReading()?.takeIf { it.mediaId == currentId }?.positionMs ?: _position.value
-        _position.value = seekOffsetMs
+        syncAudibleSelection()
+        seekOffsetMs = _position.value
+        if (mixer?.blendIncomingMediaId != null) {
+            // The line may already buffer a future swap. Discard that mixed output on pause;
+            // resuming opens only the selection actually heard, from its saved position.
+            cancelPlaybackSession()
+            _isPlaying.value = false
+            _state.value = PlayerState.PAUSED
+            return
+        }
         val pausedActivePlayback = synchronized(playbackLock) {
             val currentLine = line
             val thread = playbackThread
             if (_isPlaying.value && currentLine != null && thread != null && thread.isAlive) {
                 pauseRequested = true
                 currentLine.stop()
-                // A transport action ends a blend; the track the queue calls current stays.
-                currentId?.let { mixer?.abandonBlend(keepMediaId = it) }
+                mixer?.abandonBlend(keepDeckSequence = publishedDeckSequence)
                 _isPlaying.value = false
                 _state.value = PlayerState.PAUSED
                 stopPolling()
@@ -671,6 +714,7 @@ class JvmMediaPlayer(
     }
 
     override fun seekTo(positionMs: Long) {
+        syncAudibleSelection()
         markPositionDiscontinuity()
         seekOffsetMs = positionMs.coerceAtLeast(0)
         _position.value = seekOffsetMs
@@ -816,7 +860,7 @@ class JvmMediaPlayer(
             }
             armedPlan = plan
             mixer?.let { deckMixer ->
-                if (deckMixer.currentMediaId == plan.outgoingMediaId) deckMixer.armedPlan = plan
+                deckMixer.armTransition(plan, publishedDeckSequence)
             }
         }
     }
@@ -825,8 +869,8 @@ class JvmMediaPlayer(
         synchronized(queueOperationLock) {
             armedPlan = null
             mixer?.let { deckMixer ->
-                // A blend already under way finishes; only a plan that has not started is dropped.
-                if (deckMixer.blendIncomingMediaId == null) deckMixer.armedPlan = null
+                // A running blend owns its plan independently; this withdraws only a future one.
+                deckMixer.armedPlan = null
             }
         }
     }

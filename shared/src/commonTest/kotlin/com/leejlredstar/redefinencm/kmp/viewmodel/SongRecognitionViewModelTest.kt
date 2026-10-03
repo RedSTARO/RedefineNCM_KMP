@@ -8,6 +8,7 @@ import com.leejlredstar.redefinencm.kmp.data.api.dto.SongAlbum
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongArtist
 import com.leejlredstar.redefinencm.kmp.player.InMemoryPlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
+import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.recognition.CapturedPcm
 import com.leejlredstar.redefinencm.kmp.recognition.MicrophoneRecorder
 import kotlinx.coroutines.CompletableDeferred
@@ -29,6 +30,29 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SongRecognitionViewModelTest {
+    @Test
+    fun recognitionResumesTheSelectionActuallyPausedAtAnAudibleHandover() = runTest {
+        val base = InMemoryPlatformPlayer(scope = backgroundScope)
+        base.setQueue(listOf(MediaInfo("old", "Old", "Test"), MediaInfo("next", "Next", "Test")))
+        base.play()
+        val player = object : PlatformPlayer by base {
+            override fun pause() {
+                // The native output clock crossed a hand-over since the last UI snapshot.
+                base.skipToIndex(1)
+                base.pause()
+            }
+        }
+        val viewModel = createViewModel(player, { _, _ -> matchedResponse(101L) })
+        viewModel.beginPermissionRequest()
+        viewModel.onPermissionResult(true)
+        runCurrent()
+        assertFalse(base.isPlaying.value)
+        viewModel.cancelRecognition()
+        assertEquals("next", base.currentMedia.value?.id)
+        assertTrue(base.isPlaying.value)
+        base.release()
+    }
+
     @Test
     fun closingRecognitionDoesNotStartANewSelectionEvenWithTheSameMediaId() = runTest {
         for (nextId in listOf("different", "original")) {
@@ -152,7 +176,7 @@ class SongRecognitionViewModelTest {
     }
 
     private fun TestScope.createViewModel(
-        player: InMemoryPlatformPlayer,
+        player: PlatformPlayer,
         matchAudio: suspend (Int, String) -> AudioMatch?,
         modelScope: CoroutineScope = this,
     ): SongRecognitionViewModel = SongRecognitionViewModel(

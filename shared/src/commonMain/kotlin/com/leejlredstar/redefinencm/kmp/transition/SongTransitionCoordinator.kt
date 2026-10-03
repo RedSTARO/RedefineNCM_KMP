@@ -83,6 +83,7 @@ class SongTransitionCoordinator(
                     preferences = prefs,
                     current = current,
                     next = queue.items.getOrNull(queue.currentIndex + 1),
+                    currentIndex = queue.currentIndex,
                     outgoingDurationMs = duration.takeIf { it > 0L } ?: current?.duration ?: 0L,
                 )
             }
@@ -121,6 +122,8 @@ class SongTransitionCoordinator(
         val preferences: SongTransitionPreferences,
         val current: MediaInfo?,
         val next: MediaInfo?,
+        // Equal media IDs can occupy adjacent slots; each slot needs its own hand-over plan.
+        val currentIndex: Int,
         val outgoingDurationMs: Long,
     )
 
