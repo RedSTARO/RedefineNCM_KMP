@@ -12,6 +12,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,7 +44,13 @@ class CredentialTextLoginPresenter : LoginMethodPresenter {
     override fun Content(method: LoginMethod, host: LoginHost, palette: ContentAccentPalette) {
         val textMethod = method as CredentialTextLoginMethod
         val stored by host.storedCredential.collectAsState()
-        var field by remember(stored) { mutableStateOf(stored) }
+        var field by remember(host) { mutableStateOf(stored) }
+        var lastStored by remember(host) { mutableStateOf(stored) }
+        LaunchedEffect(stored) {
+            // A background renewal updates an untouched field, but must not erase a user's edit.
+            if (field == lastStored) field = stored
+            lastStored = stored
+        }
         var reveal by remember { mutableStateOf(false) }
         var notice by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
 
@@ -68,7 +75,8 @@ class CredentialTextLoginPresenter : LoginMethodPresenter {
             FilledTonalButton(
                 onClick = {
                     notice = null
-                    textMethod.normalize(field)
+                    val candidate = if (field == lastStored) host.storedCredential.value else field
+                    textMethod.normalize(candidate)
                         .onSuccess { credential ->
                             host.scope.launch {
                                 host.persist(credential)
@@ -76,7 +84,7 @@ class CredentialTextLoginPresenter : LoginMethodPresenter {
                                         notice = (if (credential.isEmpty()) strings.credentialCleared else strings.credentialSavedInUse(textMethod.fieldLabel)) to false
                                         if (credential.isNotEmpty()) host.onSignedIn()
                                     }
-                                    .onFailure { failure -> notice = (failure.message ?: strings.credentialSaveFailed) to true }
+                                    .onFailure { notice = strings.credentialSaveFailed to true }
                             }
                         }
                         .onFailure { failure -> notice = (failure.message ?: strings.credentialNotRecognized) to true }

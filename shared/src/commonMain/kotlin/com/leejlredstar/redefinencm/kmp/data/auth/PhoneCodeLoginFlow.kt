@@ -6,10 +6,13 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlin.concurrent.Volatile
 
 /**
  * The state machine every SMS-code login shares: take a phone number, ask for a code, hold the
@@ -52,19 +55,28 @@ class PhoneCodeLoginFlow(
     val phoneHint: String get() = method.phoneHint
 
     private var countdown: Job? = null
+    private var request: Job? = null
+    @Volatile private var generation = 0
 
     fun setPhone(value: String) {
+        if (_busy.value || _success.value) return
+        if (value.filter(Char::isDigit) != _phone.value.filter(Char::isDigit)) {
+            _codeSent.value = false
+            _code.value = ""
+            _message.value = ""
+        }
         _phone.value = value
         _error.value = ""
     }
 
     fun setCode(value: String) {
+        if (_busy.value || _success.value) return
         _code.value = value.trim()
         _error.value = ""
     }
 
     val canSendCode: Boolean
-        get() = !_busy.value && _resendInSeconds.value == 0 && normalizedPhone() != null
+        get() = !_busy.value && !_success.value && _resendInSeconds.value == 0 && normalizedPhone() != null
 
     val canVerify: Boolean
         get() = !_busy.value && _codeSent.value && _code.value.isNotBlank() && !_success.value
@@ -77,11 +89,14 @@ class PhoneCodeLoginFlow(
             return
         }
         if (!canSendCode) return
-        host.scope.launch(networkDispatcher) {
-            _busy.value = true
+        _busy.value = true
+        val myGeneration = generation
+        request = host.scope.launch(networkDispatcher) {
             _error.value = ""
             try {
-                when (val answer = method.sendCode(phone)) {
+                val answer = method.sendCode(phone)
+                currentCoroutineContext().ensureActive()
+                when (answer) {
                     PhoneCodeSend.Sent -> {
                         _codeSent.value = true
                         _message.value = strings.verificationCodeSent(phone)
@@ -96,11 +111,12 @@ class PhoneCodeLoginFlow(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: LoginMethodException) {
-                _error.value = e.message ?: strings.unknownError
+                if (myGeneration == generation) _error.value = e.message ?: strings.unknownError
             } catch (e: Exception) {
-                _error.value = strings.networkErrorWithMessage(e.message ?: strings.unknownError)
+                // Request exceptions can include phone numbers, verification codes or cookies.
+                if (myGeneration == generation) _error.value = strings.networkError
             } finally {
-                _busy.value = false
+                if (myGeneration == generation) _busy.value = false
             }
         }
     }
@@ -109,38 +125,48 @@ class PhoneCodeLoginFlow(
     fun verify() {
         val phone = normalizedPhone() ?: return
         if (!canVerify) return
-        host.scope.launch(networkDispatcher) {
-            _busy.value = true
+        val code = _code.value
+        _busy.value = true
+        val myGeneration = generation
+        request = host.scope.launch(networkDispatcher) {
             _error.value = ""
             try {
-                when (val answer = method.verify(phone, _code.value)) {
+                val answer = method.verify(phone, code)
+                currentCoroutineContext().ensureActive()
+                when (answer) {
                     is PhoneCodeVerify.Confirmed -> host.persist(answer.credential)
+                        .also { currentCoroutineContext().ensureActive() }
                         .onSuccess {
                             _message.value = strings.signInSucceeded
                             _success.value = true
                             host.onSignedIn()
                         }
-                        .onFailure { failure ->
-                            _error.value = failure.message ?: strings.credentialSaveFailed
+                        .onFailure {
+                            _error.value = strings.credentialSaveFailed
                         }
                     is PhoneCodeVerify.Failed -> _error.value = answer.message
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: LoginMethodException) {
-                _error.value = e.message ?: strings.unknownError
+                if (myGeneration == generation) _error.value = e.message ?: strings.unknownError
             } catch (e: Exception) {
-                _error.value = strings.networkErrorWithMessage(e.message ?: strings.unknownError)
+                if (myGeneration == generation) _error.value = strings.networkError
             } finally {
-                _busy.value = false
+                if (myGeneration == generation) _busy.value = false
             }
         }
     }
 
     fun cancel() {
+        generation += 1
+        request?.cancel()
+        request = null
         countdown?.cancel()
         countdown = null
         _resendInSeconds.value = 0
+        _busy.value = false
+        _codeSent.value = false
     }
 
     /** Digits only, long enough to be a number; null otherwise. Country codes are the method's. */
@@ -149,6 +175,7 @@ class PhoneCodeLoginFlow(
 
     private fun startCountdown() {
         countdown?.cancel()
+        _resendInSeconds.value = method.resendIntervalSeconds
         countdown = host.scope.launch {
             var remaining = method.resendIntervalSeconds
             while (remaining > 0) {

@@ -9,6 +9,8 @@ import com.leejlredstar.redefinencm.kmp.data.provider.ProviderItemId
 import com.leejlredstar.redefinencm.kmp.data.toPlayerMediaInfo
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
+import io.ktor.http.Url
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -166,6 +168,10 @@ class LocalLibraryViewModel(
                         _message.value = strings.playlistImported(created.name, created.tracks.size)
                     }
                     .onFailure { failure -> _message.value = failure.message ?: strings.playlistImportFailed }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                _message.value = strings.playlistImportFailed
             } finally {
                 _importing.value = false
             }
@@ -180,23 +186,41 @@ class LocalLibraryViewModel(
 internal fun parsePlaylistReference(input: String): ProviderItemId? {
     val text = input.trim()
     if (text.isEmpty()) return null
-    if ("qq.com" in text) {
-        val id = QQPlaylistPath.find(text)?.groupValues?.get(1)
-            ?: IdParameter.find(text)?.groupValues?.get(1)
-            ?: return null
-        return ProviderItemId(MusicProviderId.QQ, id)
+    if (!text.contains("://")) {
+        val parsed = ProviderItemId.parseOrNull(text) ?: return null
+        return numericPlaylistId(parsed.provider, parsed.rawId)
     }
-    if ("163.com" in text || "163cn.tv" in text) {
-        val id = IdParameter.find(text)?.groupValues?.get(1)
-            ?: NeteasePlaylistPath.find(text)?.groupValues?.get(1)
-            ?: return null
-        return ProviderItemId.netease(id.toLong())
+    val url = runCatching { Url(text) }.getOrNull() ?: return null
+    if (url.protocol.name !in setOf("http", "https") || url.user != null || url.password != null) return null
+    val host = url.host.lowercase()
+    val provider = when {
+        host == "music.163.com" || host.endsWith(".music.163.com") -> MusicProviderId.NETEASE
+        host == "y.qq.com" || host.endsWith(".y.qq.com") -> MusicProviderId.QQ
+        else -> return null
     }
-    val parsed = ProviderItemId.parseOrNull(text) ?: return null
-    // A playlist id is a number on both services; anything else is not one.
-    return parsed.takeIf { it.rawId.all(Char::isDigit) }
+    // NetEase's desktop share link puts its route and query inside the fragment.
+    val route = if (url.fragment.startsWith('/')) {
+        runCatching { Url("https://$host${url.fragment}") }.getOrNull() ?: return null
+    } else url
+    val path = route.encodedPath.trimEnd('/')
+    val id = when (provider) {
+        MusicProviderId.NETEASE -> {
+            if (path == "/playlist" || path == "/m/playlist") route.parameters["id"]
+            else NeteasePlaylistPath.matchEntire(path)?.groupValues?.get(1)
+        }
+        MusicProviderId.QQ -> {
+            if (path == "/n2/m/share/details/taoge.html") route.parameters["id"]
+            else QQPlaylistPath.matchEntire(path)?.groupValues?.get(1)
+        }
+    } ?: return null
+    return numericPlaylistId(provider, id)
 }
 
-private val QQPlaylistPath = Regex("""playlist/(\d+)""")
-private val NeteasePlaylistPath = Regex("""playlist/(\d+)""")
-private val IdParameter = Regex("""[?&]id=(\d+)""")
+private fun numericPlaylistId(provider: MusicProviderId, raw: String): ProviderItemId? {
+    if (raw.isEmpty() || raw.any { it !in '0'..'9' }) return null
+    val number = raw.toLongOrNull()?.takeIf { it > 0 } ?: return null
+    return ProviderItemId(provider, number.toString())
+}
+
+private val QQPlaylistPath = Regex("""/(?:n/ryqq/)?playlist/([0-9]+)""")
+private val NeteasePlaylistPath = Regex("""/(?:m/)?playlist/([0-9]+)""")

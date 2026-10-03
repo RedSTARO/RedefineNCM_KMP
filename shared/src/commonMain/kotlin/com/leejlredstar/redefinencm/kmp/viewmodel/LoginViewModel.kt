@@ -64,12 +64,12 @@ class LoginViewModel(
             descriptor.server?.let { setting ->
                 _server.value = settings.getStringAsync(setting.key, setting.default)
             }
-            rememberCredential(slot.read())
+            slot.credentialUpdates().collect(::rememberCredential)
         }
     }
 
     override suspend fun persist(credential: String): Result<Unit> =
-        slot.write(credential).onSuccess { rememberCredential(credential) }
+        slot.write(credential)
 
     override fun onSignedIn() {
         _finished.value = true

@@ -1132,4 +1132,5 @@
     <string name="beatModelChecksumMismatch">the downloaded file doesn't match its checksum</string>
     <!-- BrowserStorageSqlDriver.kt -->
     <string name="browserDataSaveFailed">Couldn't save local data: browser storage is full or writing is blocked. This change wasn't saved.</string>
+    <string name="neteaseCookieInvalid">Invalid Cookie format. Paste a single line of cookie values without line breaks or the “Cookie:” prefix.</string>
 </resources>

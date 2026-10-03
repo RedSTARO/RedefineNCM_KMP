@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.ui.login
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.auth.LoginHost
 import com.leejlredstar.redefinencm.kmp.data.auth.LoginMethod
@@ -56,32 +58,50 @@ class PhoneCodeLoginPresenter : LoginMethodPresenter {
         val success by flow.success.collectAsState()
 
         Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = phone,
-                    onValueChange = flow::setPhone,
-                    label = { Text(strings.phoneNumber) },
-                    supportingText = { Text(flow.phoneHint, color = palette.secondaryOnQuietContainer) },
-                    singleLine = true,
-                    enabled = !success,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    shape = MaterialTheme.shapes.large,
-                    modifier = Modifier.weight(1f),
-                    colors = loginTextFieldColors(palette),
-                )
-                Spacer(Modifier.width(12.dp))
-                OutlinedButton(
-                    onClick = flow::sendCode,
-                    enabled = !busy && resendIn == 0 && !success,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = palette.accent),
-                ) {
-                    Text(
-                        when {
-                            resendIn > 0 -> strings.resendIn(resendIn)
-                            codeSent -> strings.resend
-                            else -> strings.sendVerificationCode
-                        },
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val stack = maxWidth < 480.dp * LocalDensity.current.fontScale
+                val phoneField: @Composable (Modifier) -> Unit = { fieldModifier ->
+                    OutlinedTextField(
+                        value = phone,
+                        onValueChange = flow::setPhone,
+                        label = { Text(strings.phoneNumber) },
+                        supportingText = { Text(flow.phoneHint, color = palette.secondaryOnQuietContainer) },
+                        singleLine = true,
+                        enabled = !busy && !success,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        shape = MaterialTheme.shapes.large,
+                        modifier = fieldModifier,
+                        colors = loginTextFieldColors(palette),
                     )
+                }
+                val sendButton: @Composable (Modifier) -> Unit = { buttonModifier ->
+                    OutlinedButton(
+                        onClick = flow::sendCode,
+                        enabled = !busy && resendIn == 0 && !success,
+                        modifier = buttonModifier,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = palette.accent),
+                    ) {
+                        Text(
+                            when {
+                                resendIn > 0 -> strings.resendIn(resendIn)
+                                codeSent -> strings.resend
+                                else -> strings.sendVerificationCode
+                            },
+                        )
+                    }
+                }
+                if (stack) {
+                    Column {
+                        phoneField(Modifier.fillMaxWidth())
+                        Spacer(Modifier.height(8.dp))
+                        sendButton(Modifier.align(Alignment.End))
+                    }
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        phoneField(Modifier.weight(1f))
+                        Spacer(Modifier.width(12.dp))
+                        sendButton(Modifier)
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -90,7 +110,7 @@ class PhoneCodeLoginPresenter : LoginMethodPresenter {
                 onValueChange = flow::setCode,
                 label = { Text(strings.verificationCode) },
                 singleLine = true,
-                enabled = codeSent && !success,
+                enabled = codeSent && !busy && !success,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                 shape = MaterialTheme.shapes.large,
                 modifier = Modifier.fillMaxWidth(),

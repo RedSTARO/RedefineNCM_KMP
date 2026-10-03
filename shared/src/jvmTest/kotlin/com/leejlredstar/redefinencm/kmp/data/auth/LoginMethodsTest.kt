@@ -18,6 +18,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kotlin.test.assertFalse
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
+import com.leejlredstar.redefinencm.kmp.i18n.LanguageSetting
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 
 /**
  * Each login method maps its backend's answers onto the one [QrLoginPoll] vocabulary the login
@@ -182,8 +186,33 @@ class LoginMethodsTest {
     }
 
     @Test
-    fun neteaseCookieMethodOnlyTrims() {
+    fun neteaseCookieAcceptsSurroundingWhitespaceAndRemovesResponseAttributes() {
         assertEquals("MUSIC_U=x", NeteaseCookieLoginMethod().normalize("  MUSIC_U=x \n").getOrThrow())
+        assertEquals("MUSIC_U=x", NeteaseCookieLoginMethod().normalize("MUSIC_U=x; Path=/; HttpOnly").getOrThrow())
+        assertEquals("", NeteaseCookieLoginMethod().normalize("\n ").getOrThrow())
+    }
+
+    @Test
+    fun neteaseCookieRejectsInvalidHeadersWithoutEchoingTheSecret() {
+        val method = NeteaseCookieLoginMethod()
+        for (input in listOf("MUSIC_U=example-secret\r\nOther: injected", "MUSIC_U=exam\tple-secret", "Cookie: MUSIC_U=example-secret", "no-cookie-pairs")) {
+            val result = method.normalize(input)
+            assertTrue(result.isFailure)
+            assertFalse("example-secret" in result.exceptionOrNull()?.message.orEmpty())
+        }
+    }
+
+    @Test
+    fun qqCredentialHintFollowsLanguageChangesWithoutRecreatingTheMethod() {
+        val method = QQCredentialTextLoginMethod()
+        try {
+            I18n.apply(LanguageSetting.EN)
+            assertEquals(strings.qqCredentialHint, method.supportingText)
+            I18n.apply(LanguageSetting.JA)
+            assertEquals(strings.qqCredentialHint, method.supportingText)
+        } finally {
+            I18n.apply(LanguageSetting.SYSTEM)
+        }
     }
 
     @Test

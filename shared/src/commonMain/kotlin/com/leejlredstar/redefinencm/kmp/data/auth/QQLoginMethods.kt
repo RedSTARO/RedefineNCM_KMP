@@ -124,8 +124,7 @@ class QQCredentialTextLoginMethod : CredentialTextLoginMethod {
     override val provider: MusicProviderId = MusicProviderId.QQ
     override val displayName: String get() = strings.enterManually
     override val fieldLabel: String get() = strings.qqCredentialLabel
-    override val supportingText: String =
-        strings.qqCredentialHint
+    override val supportingText: String get() = strings.qqCredentialHint
 
     override fun normalize(raw: String): Result<String> {
         if (raw.isBlank()) return Result.success("")

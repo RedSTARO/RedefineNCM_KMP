@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -74,6 +75,7 @@ class QrLoginFlow(
                 _imagePng.value = null
 
                 val session = method.start()
+                currentCoroutineContext().ensureActive()
                 _imagePng.value = session.imagePng
                 _status.value = method.scanHint
                 _loading.value = false
@@ -86,6 +88,7 @@ class QrLoginFlow(
                     while (isActive) {
                         delay(method.pollIntervalMillis)
                         val poll = method.poll(session)
+                        currentCoroutineContext().ensureActive()
                         unanswered = if (poll == QrLoginPoll.Unanswered) unanswered + 1 else 0
                         when (poll) {
                             QrLoginPoll.Unanswered -> {
@@ -93,6 +96,7 @@ class QrLoginFlow(
                                     val message = strings.providerServerNoResponse(method.provider.displayName)
                                     _status.value = message
                                     _error.value = message
+                                    _imagePng.value = null
                                     return@withTimeoutOrNull true
                                 }
                                 _status.value = strings.waitingForServer
@@ -101,14 +105,16 @@ class QrLoginFlow(
                             QrLoginPoll.Scanned -> _status.value = strings.confirmLoginOnPhone
                             is QrLoginPoll.Confirmed -> {
                                 host.persist(poll.credential)
+                                    .also { currentCoroutineContext().ensureActive() }
                                     .onSuccess {
                                         _status.value = strings.signInSucceeded
                                         _success.value = true
                                         host.onSignedIn()
                                     }
-                                    .onFailure { failure ->
+                                    .onFailure {
                                         _status.value = strings.loginStateSaveFailed
-                                        _error.value = failure.message ?: strings.credentialSaveFailed
+                                        _error.value = strings.credentialSaveFailed
+                                        _imagePng.value = null
                                     }
                                 return@withTimeoutOrNull true
                             }
@@ -118,12 +124,14 @@ class QrLoginFlow(
                             }
                             QrLoginPoll.Refused -> {
                                 _expired.value = true
+                                _imagePng.value = null
                                 _status.value = strings.loginCanceledOnPhone
                                 return@withTimeoutOrNull true
                             }
                             is QrLoginPoll.Failed -> {
                                 _status.value = poll.message
                                 _error.value = poll.message
+                                _imagePng.value = null
                                 return@withTimeoutOrNull true
                             }
                         }
@@ -137,11 +145,14 @@ class QrLoginFlow(
                 if (myGeneration == generation) {
                     _status.value = strings.qrGenerateFailed
                     _error.value = e.message ?: strings.unknownError
+                    _imagePng.value = null
                 }
             } catch (e: Exception) {
                 if (myGeneration == generation) {
                     _status.value = strings.networkError
-                    _error.value = e.message ?: strings.unknownError
+                    // HTTP exceptions may quote the complete Cookie header or QR request URL.
+                    _error.value = strings.networkError
+                    _imagePng.value = null
                 }
             } finally {
                 if (myGeneration == generation) _loading.value = false
@@ -159,6 +170,7 @@ class QrLoginFlow(
         _expired.value = false
         _loading.value = false
         _error.value = ""
+        _success.value = false
     }
 
     private fun expire() {

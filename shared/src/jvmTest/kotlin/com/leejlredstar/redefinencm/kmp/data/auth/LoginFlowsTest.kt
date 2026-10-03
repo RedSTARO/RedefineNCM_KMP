@@ -6,6 +6,9 @@ import com.leejlredstar.redefinencm.kmp.i18n.LanguageSetting
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -40,7 +43,7 @@ class LoginFlowsTest {
 
     private class FakeHost(
         override val scope: CoroutineScope,
-        private val persistOutcome: (String) -> Result<Unit> = { Result.success(Unit) },
+        private val persistOutcome: suspend (String) -> Result<Unit> = { Result.success(Unit) },
     ) : LoginHost {
         override val provider = MusicProviderId.QQ
         override val storedCredential = MutableStateFlow("")
@@ -66,6 +69,7 @@ class LoginFlowsTest {
     private class ScriptedQr(
         answers: List<QrLoginPoll>,
         private val startFailure: String? = null,
+        private val pollFailure: Exception? = null,
         override val lifetimeMillis: Long = 60_000L,
     ) : QrLoginMethod {
         override val id = "test.qr"
@@ -83,6 +87,7 @@ class LoginFlowsTest {
 
         override suspend fun poll(session: QrLoginSession): QrLoginPoll {
             polls += 1
+            pollFailure?.let { throw it }
             return answers.removeFirstOrNull() ?: QrLoginPoll.Waiting()
         }
     }
@@ -133,6 +138,8 @@ class LoginFlowsTest {
         advanceUntilIdle()
         assertEquals("boom", failed.first.error.value)
         assertFalse(failed.first.success.value)
+        assertNull(failed.first.imagePng.value)
+        assertNull(refused.first.imagePng.value)
 
         assertTrue(expired.second.persisted.isEmpty())
         assertTrue(refused.second.persisted.isEmpty())
@@ -166,6 +173,7 @@ class LoginFlowsTest {
         assertEquals("QQ音乐服务器无响应", flow.error.value)
         assertFalse(flow.success.value)
         assertTrue(host.persisted.isEmpty())
+        assertNull(flow.imagePng.value)
     }
 
     @Test
@@ -197,9 +205,24 @@ class LoginFlowsTest {
         flow.start()
         advanceUntilIdle()
         assertEquals("登录状态保存失败", flow.status.value)
-        assertEquals("disk", flow.error.value)
+        assertEquals(com.leejlredstar.redefinencm.kmp.i18n.strings.credentialSaveFailed, flow.error.value)
         assertEquals(0, host.signedInCalls)
         assertFalse(flow.success.value)
+        assertNull(flow.imagePng.value)
+    }
+
+    @Test
+    fun qrTransportFailureHidesTheDeadCodeAndDoesNotRevealHeaders() = runTest {
+        val (flow, _) = qrFlow(ScriptedQr(emptyList(), pollFailure = IllegalArgumentException("Cookie: MUSIC_U=example-secret")))
+        flow.start()
+        advanceUntilIdle()
+        assertNull(flow.imagePng.value)
+        assertFalse("example-secret" in flow.error.value)
+        assertFalse(flow.loading.value)
+        flow.start()
+        runCurrent()
+        assertContentEquals(byteArrayOf(1, 2, 3), flow.imagePng.value)
+        flow.cancel()
     }
 
     @Test
@@ -221,9 +244,30 @@ class LoginFlowsTest {
         assertTrue(host.persisted.isEmpty())
     }
 
+    @Test
+    fun anOldSaveFailureCannotOverwriteARefreshedQrCode() = runTest {
+        val release = CompletableDeferred<Unit>()
+        val host = FakeHost(this) {
+            withContext(NonCancellable) { release.await() }
+            Result.failure(IllegalStateException("old save failed"))
+        }
+        val (flow, _) = qrFlow(ScriptedQr(listOf(QrLoginPoll.Confirmed("old"))), host)
+        flow.start()
+        advanceTimeBy(1_100)
+        runCurrent()
+        flow.start()
+        runCurrent()
+        release.complete(Unit)
+        runCurrent()
+        assertEquals("scan me", flow.status.value)
+        assertEquals("", flow.error.value)
+        assertContentEquals(byteArrayOf(1, 2, 3), flow.imagePng.value)
+        flow.cancel()
+    }
+
     private class ScriptedPhone(
-        private val onSend: (String) -> PhoneCodeSend,
-        private val onVerify: (String, String) -> PhoneCodeVerify = { _, _ -> PhoneCodeVerify.Confirmed("cred") },
+        private val onSend: suspend (String) -> PhoneCodeSend,
+        private val onVerify: suspend (String, String) -> PhoneCodeVerify = { _, _ -> PhoneCodeVerify.Confirmed("cred") },
     ) : PhoneCodeLoginMethod {
         override val id = "test.phone"
         override val provider = MusicProviderId.QQ
@@ -252,6 +296,55 @@ class LoginFlowsTest {
         advanceUntilIdle()
         assertEquals("请输入正确的手机号", flow.error.value)
         assertTrue(method.sent.isEmpty())
+    }
+
+    @Test
+    fun repeatedClicksBeforeDispatchSendOnlyOneSms() = runTest {
+        val method = ScriptedPhone({ PhoneCodeSend.Sent })
+        val (flow, _) = phoneFlow(method)
+        flow.setPhone("13800138000")
+        flow.sendCode()
+        flow.sendCode()
+        runCurrent()
+        assertEquals(listOf("13800138000"), method.sent)
+        flow.cancel()
+    }
+
+    @Test
+    fun changingTheNumberRequiresANewCode() = runTest {
+        val (flow, host) = phoneFlow(ScriptedPhone({ PhoneCodeSend.Sent }))
+        flow.setPhone("13800138000")
+        flow.sendCode()
+        runCurrent()
+        flow.setCode("123456")
+        flow.setPhone("13900139000")
+        flow.verify()
+        assertFalse(flow.codeSent.value)
+        assertFalse(flow.canVerify)
+        assertTrue(host.persisted.isEmpty())
+        flow.cancel()
+    }
+
+    @Test
+    fun leavingTheSmsMethodIgnoresALateAuthorization() = runTest {
+        val answer = CompletableDeferred<Unit>()
+        val method = ScriptedPhone({ PhoneCodeSend.Sent }, onVerify = { _, _ ->
+            withContext(NonCancellable) { answer.await() }
+            PhoneCodeVerify.Confirmed("late-credential")
+        })
+        val (flow, host) = phoneFlow(method)
+        flow.setPhone("13800138000")
+        flow.sendCode()
+        runCurrent()
+        flow.setCode("123456")
+        flow.verify()
+        runCurrent()
+        flow.cancel()
+        answer.complete(Unit)
+        advanceUntilIdle()
+        assertTrue(host.persisted.isEmpty())
+        assertEquals(0, host.signedInCalls)
+        assertFalse(flow.busy.value)
     }
 
     @Test

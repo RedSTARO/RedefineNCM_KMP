@@ -1060,4 +1060,5 @@
     <string name="beatModelChecksumMismatch">ダウンロードしたファイルがチェックサムと一致しません</string>
     <!-- BrowserStorageSqlDriver.kt -->
     <string name="browserDataSaveFailed">ブラウザーの保存容量が不足しているか、書き込みが許可されていないため、ローカルデータを保存できません。今回の変更は保存されていません。</string>
+    <string name="neteaseCookieInvalid">Cookie の形式が正しくありません。改行や「Cookie:」を含めず、Cookie の内容を1行で貼り付けてください。</string>
 </resources>

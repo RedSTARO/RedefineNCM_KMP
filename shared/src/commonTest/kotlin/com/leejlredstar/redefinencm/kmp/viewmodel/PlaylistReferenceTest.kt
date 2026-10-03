@@ -31,4 +31,27 @@ class PlaylistReferenceTest {
         assertNull(parsePlaylistReference("qq:0039MnYb0qxYhV"))
         assertNull(parsePlaylistReference("晴天"))
     }
+
+    @Test
+    fun aProviderHostAloneDoesNotMakeASongOrAlbumLinkAPlaylist() {
+        for (url in listOf(
+            "https://music.163.com/song?id=123",
+            "https://music.163.com/#/album?id=123",
+            "https://y.qq.com/n/ryqq/songDetail/123?id=123",
+            "https://music.163.com.example.org/playlist?id=123",
+            "https://example.org/playlist/123?next=music.163.com",
+            "https://y.qq.com@example.org/n/ryqq/playlist/123",
+        )) assertNull(parsePlaylistReference(url), url)
+    }
+
+    @Test
+    fun malformedAndOutOfRangeIdsNeverThrowOrImportAPrefix() {
+        for (value in listOf(
+            "https://music.163.com/playlist?id=99999999999999999999999",
+            "https://music.163.com/playlist?id=123abc",
+            "https://music.163.com/playlist/123abc",
+            "https://y.qq.com/n/ryqq/playlist/99999999999999999999999",
+            "qq:99999999999999999999999", "ncm:0", "-1",
+        )) assertNull(parsePlaylistReference(value), value)
+    }
 }

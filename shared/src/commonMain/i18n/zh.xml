@@ -1060,4 +1060,5 @@
     <string name="beatModelChecksumMismatch">下载的文件与校验值不符</string>
     <!-- BrowserStorageSqlDriver.kt -->
     <string name="browserDataSaveFailed">无法保存本机数据：浏览器存储空间不足或不允许写入。本次更改未保存。</string>
+    <string name="neteaseCookieInvalid">Cookie 格式不正确。请粘贴单行 Cookie 内容，不要包含换行或「Cookie:」前缀。</string>
 </resources>

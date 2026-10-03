@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.data.auth
 
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
+import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 
@@ -53,5 +54,23 @@ class NeteaseCookieLoginMethod : CredentialTextLoginMethod {
     override val fieldLabel: String = "Cookie"
     override val supportingText: String get() = strings.neteaseCookieHint
 
-    override fun normalize(raw: String): Result<String> = Result.success(raw.trim())
+    override fun normalize(raw: String): Result<String> {
+        val input = raw.trim()
+        if (input.isEmpty()) return Result.success("")
+        // Reject embedded controls before anything can persist them or quote them in an HTTP
+        // exception. Surrounding clipboard whitespace is harmless and was trimmed above.
+        if (input.any { it.code !in 0x20..0x7e }) return invalidCookie()
+        val cleaned = HttpClientFactory.cleanCookie(input)
+        if (cleaned.isEmpty() || cleaned.split(';').any {
+                !CookieName.matches(it.trim().substringBefore('='))
+            }) return invalidCookie()
+        return Result.success(cleaned)
+    }
+
+    private fun invalidCookie(): Result<String> =
+        Result.failure(LoginMethodException(strings.neteaseCookieInvalid))
+
+    private companion object {
+        val CookieName = Regex("""[!#$%&'*+.^_`|~0-9A-Za-z-]+""")
+    }
 }
