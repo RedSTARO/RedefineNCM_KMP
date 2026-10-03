@@ -855,6 +855,12 @@ back or marking the audio failed. Completed/download-imported rows expose separa
 artwork backfill actions. Queue status is reconciled against actual sidecars rather than the
 SQLDelight lyric cache. Deleting a downloaded song also deletes its sidecars.
 
+The current task must accept `onReadyToPublish` before its final audio becomes visible.
+Cancellation may clean only that task's staging files; it must never remove already published
+audio by song ID or file name. In particular, iOS background-session cancellation callbacks can
+arrive after a later download, so they do not own the final path. A relaunched background transfer
+keeps an existing complete file instead of replacing it with an older transfer's contents.
+
 Platform storage uses Android MediaStore `content:` URIs for public audio/lyrics and restricted
 app `FileProvider` `content:` URIs for artwork, JVM/iOS `file:` URIs, and Web OPFS keys resolved
 to temporary `blob:` URLs. Runtime URIs are never persisted in `PlayerStatus` or the download

@@ -11,8 +11,11 @@ import platform.Foundation.NSUserDomainMask
 
 private const val DOWNLOAD_SUBDIR = "RedefineNCM"
 
-actual suspend fun scanDownloadedSongs(): DownloadScanResult = runCatching {
-    val dir = iosDownloadDirectoryPath()
+actual suspend fun scanDownloadedSongs(): DownloadScanResult = scanIosDownloadedSongs(::iosDownloadDirectoryPath)
+
+/** The directory provider lets native file tests use a private temporary directory. */
+internal fun scanIosDownloadedSongs(directory: () -> String): DownloadScanResult = runCatching {
+    val dir = directory()
     val manager = NSFileManager.defaultManager
     if (!manager.fileExistsAtPath(dir)) return@runCatching emptyList()
     val entries = manager.contentsOfDirectoryAtPath(dir, error = null)
@@ -68,15 +71,15 @@ internal fun ensureIosDownloadDirectory(): String {
 }
 
 private fun String.toDownloadedSongSnapshot(dir: String): DownloadedSongSnapshot? {
+    if (!isValidIosDownloadFileName(this)) return null
     val songId = substringBeforeLast('.', this).toLongOrNull() ?: return null
     val path = "$dir/$this"
-    val manager = NSFileManager.defaultManager
-    if (!manager.fileExistsAtPath(path)) return null
+    val bytes = iosRegularDownloadFileSize(path)?.takeIf { it > 0L } ?: return null
     return DownloadedSongSnapshot(
         id = songId,
         fileName = this,
         uri = NSURL.fileURLWithPath(path).absoluteString,
-        sizeBytes = null,
+        sizeBytes = bytes,
         lastModifiedEpochMillis = null,
     )
 }

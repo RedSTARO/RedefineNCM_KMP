@@ -224,3 +224,11 @@
 - 事务开始前恢复快照，事务中途不加载此前缺失的自有数据，避免回滚误删恢复的歌单/队列。不可用期间的新缓存仍可在内存中使用，恢复时保留其较新值。
 - 新增真实 LocalLibraryStore 与浏览器驱动组合测试：存储恢复后重试读回原歌单，随后新增歌单与旧歌单一起保存。另覆盖队列读取、版本保护、两种事务恢复时序；没有使用用户浏览器数据。
 - `web-storage-recovery-check-result.json`：shared/build/test-results/jvmTest: 663 tests, 0 failures, 3 skipped; desktopApp/build/test-results/test: 19 tests, 0 failures, 0 skipped; shared/build/test-results/testAndroidHostTest: 475 tests, 0 failures, 0 skipped; shared/build/test-results/wasmJsBrowserTest: 499 tests, 0 failures, 0 skipped。Android/iOS Kotlin 编译通过。
+
+## iOS 下载发布与迟到取消回调（2026-10-04）
+
+- 源码与平台契约确认：取消 A 后，Kotlin 任务可以先结束并启动同歌曲的 B；A 的 NSURLSession 完成回调迟到时，旧代码按文件名删除最终文件，能够误删 B。Apple 明确说明 [cancel 会立即返回，取消确认前仍可能发送回调](https://developer.apple.com/documentation/foundation/urlsessiontask/cancel%28%29)。本机没有在 iOS 设备上复现该时序。
+- 当前任务在文件发布前先报告完整字节数并取得 `onReadyToPublish`；拒绝时保留原音频。取消回调不再删除最终路径，已发布音频不因迟到的传输错误回退成失败。重连的后台任务继续支持无原协程的恢复，并保留已存在的完整音频。
+- 暂存文件包含 taskIdentifier，发布函数只清理自己的暂存路径。iOS 扫描现在排除空文件、目录、暂存和多段后缀文件，并记录真实大小；旧空文件可重新下载恢复。
+- 新增 `IosDownloadPublicationTest` 的 8 项实际文件操作测试，使用独立临时目录，不需要账号、网络或用户音频。移除了只检查旧删除决策字段的两项状态测试。
+- `ios-download-publication-validation.json`：`compileKotlinIosSimulatorArm64`、`compileTestKotlinIosSimulatorArm64`、`compileKotlinIosArm64` 三项均实际执行并通过。**原生测试尚未运行**，需 macOS CI；当前本机为 Windows，已探测的现有 SSH 主机为 Linux。原始通用脚本携带的旧 JVM/Web XML 计数不属于本轮验证。

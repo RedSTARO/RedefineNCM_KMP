@@ -4,8 +4,6 @@ package com.leejlredstar.redefinencm.kmp.util
 
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
 import platform.Foundation.NSURL
 
 /** iOS actual：写入应用 Documents/RedefineNCM/，供本地库扫描与离线播放复用。 */
@@ -25,6 +23,7 @@ actual object SongDownloader {
                 ?: IllegalStateException(scan.message)
         }
         existingSnapshots.firstOrNull { it.id == item.id }?.let { existing ->
+            onProgress(existing.sizeBytes ?: 0L, existing.sizeBytes)
             if (!onReadyToPublish()) throw CancellationException(strings.downloadCanceledNotSaved)
             return DownloadedSongFile(fileName = existing.fileName, uri = existing.uri)
         }
@@ -33,13 +32,6 @@ actual object SongDownloader {
         val extension = extensionFromUrl(item.url)
         val fileName = "${item.id}.$extension"
         onProgress(0L, item.expectedBytes)
-        val downloadedFile = IosBackgroundDownloadCoordinator.download(url, fileName, onProgress)
-        if (!onReadyToPublish()) {
-            withContext(NonCancellable) {
-                check(deleteDownloadedSongFile(item.id)) { strings.downloadCanceledDeleteFailed }
-            }
-            throw CancellationException(strings.downloadCanceledNotSaved)
-        }
-        return downloadedFile
+        return IosBackgroundDownloadCoordinator.download(url, fileName, onProgress, onReadyToPublish)
     }
 }
