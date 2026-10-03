@@ -7,8 +7,70 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 
 class WebDownloadStorageTest {
+    @Test
+    fun rejectingANewDownloadLeavesNoPublishedAudio() = runTest {
+        val songId = 7_777_780L
+        WebDownloadStorage.delete(songId)
+        try {
+            val item = DownloadRequestItem(songId, "standard", "standard", "Test", "Test", "", "data:audio/mpeg;base64,AAECAwQF")
+            val result = runCatching { SongDownloader.download(item, { _, _ -> }, { false }) }
+            assertTrue(result.isFailure)
+            assertFalse(assertIs<DownloadScanResult.Success>(WebDownloadStorage.scan()).snapshots.any { it.id == songId })
+        } finally { WebDownloadStorage.delete(songId) }
+    }
+
+    @Test
+    fun aFailedReplacementKeepsThePreviousAudio() = runTest {
+        val songId = 7_777_781L
+        val item = DownloadRequestItem(songId, "standard", "standard", "Test", "Test", "", "data:audio/mpeg;base64,AAECAwQF")
+        WebDownloadStorage.delete(songId)
+        try {
+            WebDownloadStorage.download(item, "$songId.mp3", { _, _ -> })
+            val result = runCatching {
+                WebDownloadStorage.download(
+                    item.copy(url = "data:audio/mpeg;base64,", expectedBytes = 99L), "$songId.mp3", { _, _ -> },
+                )
+            }
+            assertTrue(result.isFailure)
+            val existing = assertIs<DownloadScanResult.Success>(WebDownloadStorage.scan()).snapshots.singleOrNull { it.id == songId }
+            assertEquals(6L, assertNotNull(existing).sizeBytes)
+        } finally { WebDownloadStorage.delete(songId) }
+    }
+
+    @Test
+    fun rejectingAnExistingDownloadDoesNotDeleteTheOwnedAudio() = runTest {
+        val songId = 7_777_779L
+        val item = DownloadRequestItem(songId, "standard", "standard", "Test", "Test", "", "data:audio/mpeg;base64,AAECAwQF")
+        WebDownloadStorage.delete(songId)
+        try {
+            WebDownloadStorage.download(item, "$songId.mp3", { _, _ -> })
+            val result = runCatching { SongDownloader.download(item, { _, _ -> }, { false }) }
+            assertTrue(result.isFailure)
+            val existing = assertIs<DownloadScanResult.Success>(WebDownloadStorage.scan()).snapshots.singleOrNull { it.id == songId }
+            assertEquals(6L, assertNotNull(existing).sizeBytes)
+        } finally { WebDownloadStorage.delete(songId) }
+    }
+
+    @Test
+    fun emptyDownloadNeverAppearsInTheOfflineLibrary() = runTest {
+        val songId = 7_777_778L
+        WebDownloadStorage.delete(songId)
+        try {
+            val result = runCatching {
+                WebDownloadStorage.download(
+                    DownloadRequestItem(songId, "standard", "standard", "Test", "Test", "", "data:audio/mpeg;base64,"),
+                    "$songId.mp3", { _, _ -> },
+                )
+            }
+            assertTrue(result.isFailure)
+            assertEquals(strings.downloadEmptyNotSaved, result.exceptionOrNull()?.message)
+            assertFalse(assertIs<DownloadScanResult.Success>(WebDownloadStorage.scan()).snapshots.any { it.id == songId })
+        } finally { WebDownloadStorage.delete(songId) }
+    }
+
     @Test
     fun opfsDownloadScanPlaybackUrlAndDeleteRoundTrip() = runTest {
         val songId = 7_777_777L

@@ -9,6 +9,9 @@ import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.URI
+import java.net.HttpURLConnection
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import kotlin.coroutines.coroutineContext
 
 /**
@@ -21,38 +24,65 @@ actual object SongDownloader {
         item: DownloadRequestItem,
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
         onReadyToPublish: () -> Boolean,
-    ): DownloadedSongFile = withContext(Dispatchers.IO) {
-        require(item.url.isNotBlank()) { strings.downloadUrlEmpty }
+    ): DownloadedSongFile = downloadSongToDirectory(item, jvmDownloadDirectory(), onProgress, onReadyToPublish)
+}
 
-        val dir = jvmDownloadDirectory()
-        if (!dir.exists() && !dir.mkdirs()) error(strings.downloadFolderCreateFailed)
+/** The directory is explicit so local HTTP tests never need the user's music folder. */
+internal suspend fun downloadSongToDirectory(
+    item: DownloadRequestItem,
+    dir: File,
+    onProgress: (Long, Long?) -> Unit,
+    onReadyToPublish: () -> Boolean,
+): DownloadedSongFile = withContext(Dispatchers.IO) {
+    require(item.url.isNotBlank()) { strings.downloadUrlEmpty }
 
-        val extension = extensionFromUrl(item.url)
-        val target = File(dir, "${item.id}.$extension")
-        if (target.exists()) {
-            if (!onReadyToPublish()) throw CancellationException(strings.downloadCanceledNotSaved)
-            return@withContext DownloadedSongFile(fileName = target.name, uri = target.toURI().toString())
+    if (!dir.exists() && !dir.mkdirs()) error(strings.downloadFolderCreateFailed)
+
+    val extension = extensionFromUrl(item.url)
+    val target = File(dir, "${item.id}.$extension")
+    if (target.isFile && target.length() > 0) {
+        onProgress(target.length(), target.length())
+        if (!onReadyToPublish()) throw CancellationException(strings.downloadCanceledNotSaved)
+        return@withContext DownloadedSongFile(fileName = target.name, uri = target.toURI().toString())
+    }
+
+    val partFile = File(dir, "${target.name}.part")
+    try {
+        val connection = URI(item.url).toURL().openConnection().apply {
+            connectTimeout = 15_000
+            readTimeout = 30_000
         }
-
-        val partFile = File(dir, "${target.name}.part")
         try {
-            val connection = URI(item.url).toURL().openConnection().apply {
-                connectTimeout = 15_000
-                readTimeout = 30_000
-            }
-            val totalBytes = connection.contentLengthLong.takeIf { it > 0L } ?: item.expectedBytes
-            connection.getInputStream().use { input ->
-                partFile.outputStream().use { output ->
-                    copyWithProgress(input, output, totalBytes, onProgress)
+            if (connection is HttpURLConnection) {
+                // No range was requested, so a partial/status-only answer is not a full song.
+                check(connection.responseCode == HttpURLConnection.HTTP_OK) {
+                    strings.downloadHttpFailed(connection.responseCode)
                 }
             }
+            val authoritativeBytes = connection.contentLengthLong.takeIf { it >= 0L }
+            val progressBytes = authoritativeBytes ?: item.expectedBytes
+            connection.getInputStream().use { input ->
+                partFile.outputStream().use { output ->
+                    copyWithProgress(input, output, progressBytes, onProgress)
+                }
+            }
+            val received = partFile.length()
+            check(received > 0) { strings.downloadEmptyNotSaved }
+            check(authoritativeBytes == null || received == authoritativeBytes) {
+                strings.downloadIncomplete(received, authoritativeBytes)
+            }
+            coroutineContext.ensureActive()
+            // The queue accepts byte updates only until the publish claim changes its state.
+            onProgress(received, received)
             if (!onReadyToPublish()) throw CancellationException(strings.downloadCanceledNotSaved)
-            if (!partFile.renameTo(target)) error(strings.downloadFileSaveFailed)
+            Files.move(partFile.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
             DownloadedSongFile(fileName = target.name, uri = target.toURI().toString())
-        } catch (t: Throwable) {
-            partFile.delete()
-            throw t
+        } finally {
+            (connection as? HttpURLConnection)?.disconnect()
         }
+    } catch (t: Throwable) {
+        partFile.delete()
+        throw t
     }
 }
 

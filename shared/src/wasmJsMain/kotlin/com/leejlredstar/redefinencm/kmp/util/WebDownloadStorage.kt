@@ -26,6 +26,7 @@ internal object WebDownloadStorage {
         item: DownloadRequestItem,
         fileName: String,
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
+        onReadyToPublish: () -> Boolean = { true },
     ): DownloadedSongFile = suspendCancellableCoroutine { continuation ->
         val token = newWebDownloadToken()
         continuation.invokeOnCancellation { cancelWebDownload(token) }
@@ -34,6 +35,7 @@ internal object WebDownloadStorage {
             url = item.url,
             fileName = fileName,
             expectedBytes = item.expectedBytes?.toString(),
+            onReadyToPublish = { continuation.isActive && onReadyToPublish() },
             onProgress = progress@{ downloaded, total ->
                 if (!continuation.isActive) return@progress
                 val downloadedBytes = downloaded.toLongOrNull() ?: return@progress
@@ -144,6 +146,7 @@ private fun startWebDownload(
     url: String,
     fileName: String,
     expectedBytes: String?,
+    onReadyToPublish: () -> Boolean,
     onProgress: (String, String?) -> Unit,
     onComplete: (String, String) -> Unit,
     onError: (String) -> Unit,
@@ -160,16 +163,21 @@ private fun startWebDownload(
             const root = await navigator.storage.getDirectory();
             const directory = await root.getDirectoryHandle("RedefineNCM", { create: true });
 
+            let finalFileExisted = false;
             try {
                 const existingHandle = await directory.getFileHandle(fileName);
+                finalFileExisted = true;
                 const existing = await existingHandle.getFile();
                 const expected = expectedBytes && Number(expectedBytes) > 0 ? Number(expectedBytes) : null;
                 if (existing.size > 0 && (expected === null || existing.size === expected)) {
                     onProgress(existing.size.toString(), existing.size.toString());
+                    if (controller.signal.aborted || !onReadyToPublish()) {
+                        throw new Error("redefinencm:download-cancelled");
+                    }
                     onComplete(fileName, "opfs://RedefineNCM/" + encodeURIComponent(fileName));
                     return;
                 }
-                await directory.removeEntry(fileName);
+                // Keep the old audio until a complete replacement commits successfully.
             } catch (error) {
                 if (error?.name !== "NotFoundError") throw error;
             }
@@ -178,9 +186,10 @@ private fun startWebDownload(
             const partialHandle = await directory.getFileHandle(partialName, { create: true });
             let writable = null;
             let finalFileCreated = false;
+            let published = false;
             try {
                 const response = await fetch(url, { signal: controller.signal, credentials: "omit" });
-                if (!response.ok) throw new Error("redefinencm:http:" + response.status);
+                if (response.status !== 200) throw new Error("redefinencm:http:" + response.status);
                 const headerLength = response.headers.get("content-length");
                 const total = headerLength && Number(headerLength) > 0
                     ? headerLength
@@ -203,28 +212,43 @@ private fun startWebDownload(
                     downloaded = bytes.byteLength;
                     onProgress(downloaded.toString(), total);
                 }
+                if (downloaded === 0) throw new Error("redefinencm:download-empty");
+                // Fetch decodes content encodings; only an identity Content-Length counts
+                // the bytes written here. The API size is a progress hint, never proof.
+                const encoding = response.headers.get("content-encoding");
+                const encodingKnown = response.type !== "cors" || encoding !== null;
+                if (encodingKnown && (!encoding || encoding.toLowerCase() === "identity") && headerLength !== null &&
+                    Number(headerLength) >= 0 && downloaded !== Number(headerLength)) {
+                    throw new Error("redefinencm:download-incomplete:" + downloaded + ":" + headerLength);
+                }
                 await writable.close();
                 writable = null;
 
                 const completedPart = await partialHandle.getFile();
+                onProgress(completedPart.size.toString(), completedPart.size.toString());
+                if (controller.signal.aborted || !onReadyToPublish()) {
+                    throw new Error("redefinencm:download-cancelled");
+                }
                 const finalHandle = await directory.getFileHandle(fileName, { create: true });
-                finalFileCreated = true;
+                finalFileCreated = !finalFileExisted;
                 const finalWriter = await finalHandle.createWritable();
                 try {
                     await finalWriter.write(completedPart);
+                    if (controller.signal.aborted) throw new Error("redefinencm:download-cancelled");
                     await finalWriter.close();
+                    published = true;
                 } catch (error) {
                     await finalWriter.abort?.();
                     throw error;
                 }
-                await directory.removeEntry(partialName);
+                await directory.removeEntry(partialName).catch(() => {});
                 const completed = await finalHandle.getFile();
                 onProgress(completed.size.toString(), total || completed.size.toString());
                 onComplete(fileName, "opfs://RedefineNCM/" + encodeURIComponent(fileName));
             } catch (error) {
                 if (writable) await writable.abort?.();
                 await directory.removeEntry(partialName).catch(() => {});
-                if (finalFileCreated) await directory.removeEntry(fileName).catch(() => {});
+                if (finalFileCreated && !published) await directory.removeEntry(fileName).catch(() => {});
                 throw error;
             }
         })().catch(error => {

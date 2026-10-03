@@ -1,9 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.util
 
 import com.leejlredstar.redefinencm.kmp.i18n.strings
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
 
 actual object SongDownloader {
     actual fun discardPartial(songId: Long) = Unit
@@ -21,17 +18,11 @@ actual object SongDownloader {
             .filter { it in 'a'..'z' || it in '0'..'9' }
             .take(12)
             .ifBlank { "mp3" }
-        val downloadedFile = WebDownloadStorage.download(
+        return WebDownloadStorage.download(
             item = item,
             fileName = "${item.id}.$extension",
             onProgress = onProgress,
+            onReadyToPublish = onReadyToPublish,
         )
-        if (!onReadyToPublish()) {
-            withContext(NonCancellable) {
-                check(WebDownloadStorage.delete(item.id)) { strings.downloadCanceledDeleteFailed }
-            }
-            throw CancellationException(strings.downloadCanceledNotSaved)
-        }
-        return downloadedFile
     }
 }

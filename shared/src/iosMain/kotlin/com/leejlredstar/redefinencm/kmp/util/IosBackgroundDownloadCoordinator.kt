@@ -7,6 +7,8 @@ import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.suspendCancellableCoroutine
 import platform.Foundation.NSError
 import platform.Foundation.NSFileManager
+import platform.Foundation.NSFileSize
+import platform.Foundation.NSNumber
 import platform.Foundation.NSHTTPURLResponse
 import platform.Foundation.NSLock
 import platform.Foundation.NSOperationQueue
@@ -247,7 +249,7 @@ internal object IosBackgroundDownloadCoordinator {
         temporaryUrl: NSURL,
     ): IosDownloadOutcome {
         val statusCode = (task.response as? NSHTTPURLResponse)?.statusCode
-        if (statusCode != null && statusCode !in 200L..299L) {
+        if (statusCode != null && statusCode != 200L) {
             return IosDownloadOutcome.Failure(
                 IllegalStateException(strings.downloadHttpFailed(statusCode)),
             )
@@ -258,6 +260,11 @@ internal object IosBackgroundDownloadCoordinator {
         }
 
         return runCatching {
+            val temporaryPath = temporaryUrl.path ?: error(strings.downloadFileSaveFailed)
+            val attributes = NSFileManager.defaultManager.attributesOfItemAtPath(temporaryPath, error = null)
+                ?: error(strings.downloadFileSaveFailed)
+            val bytes = (attributes[NSFileSize] as? NSNumber)?.longLongValue ?: 0L
+            check(bytes > 0L) { strings.downloadEmptyNotSaved }
             val directory = ensureIosDownloadDirectory()
             val targetPath = "$directory/$fileName"
             val partPath = "$targetPath.part"

@@ -17,6 +17,10 @@ internal fun webStorageMessage(raw: String): String {
         code == "download-needs-opfs" -> strings.webDownloadNeedsOpfs
         code.startsWith("http:") -> strings.downloadHttpFailed(code.removePrefix("http:"))
         code == "download-cancelled" -> strings.downloadCancelled
+        code == "download-empty" -> strings.downloadEmptyNotSaved
+        code.startsWith("download-incomplete:") -> code.removePrefix("download-incomplete:").split(':').let {
+            if (it.size == 2) strings.downloadIncomplete(it[0], it[1]) else strings.downloadFailed
+        }
         code == "invalid-download-uri" -> strings.webDownloadUriInvalid
         code == "invalid-file-name" -> strings.downloadFileNameInvalid
         code == "file-missing" -> strings.webDownloadFileMissing

@@ -763,7 +763,9 @@ The desktop app keeps what it stores itself in `~/.redefinencm/`:
 - **The log file is for bug reports**, so it holds less than the console: each line is written
   once complete, with a timestamp, and every URL loses its query (stream tokens, the QQ account
   number, search text, account ids, QR keys). The HTTP client logs one line per request and per
-  answer, never headers or bodies.
+  answer, never headers or bodies. Lines exceeding 16 KiB are replaced by a fixed omission notice;
+  no continuation is logged until the newline. If rotation fails, file output is dropped until
+  rotation succeeds rather than growing beyond the limit; console output is unaffected.
 - **Startup failures are dialogs, not silent exits.** The database is opened before Koin starts.
   A file from a newer schema, or one that cannot be read, gets a dialog that offers to put it
   aside under a `.bak` name and start with empty data, or to quit. Any other startup failure, and

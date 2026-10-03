@@ -90,6 +90,8 @@
 | W2-02 | 超长日志行分段后，URL 查询参数尾部失去前缀而绕过脱敏 | 回归测试在旧实现失败，修复后通过：超过 16 KiB 的整行以固定提示替代，直到换行前持续丢弃文件输出；控制台输出保留。 |
 | W2-03 | 日志轮转失败或直接写入超大块时仍会突破文件上限 | 已修复并测试：超大块不写入，轮转受阻时保留旧文件并丢弃新增文件输出，解除阻塞后可继续轮转。 |
 | W2-04 | 账号页直接显示凭证保存/退出异常，超长 JVM Preferences 值会带出原始 Cookie | 两个回归测试在旧实现失败，修复后通过：使用固定本地化错误，不展示存储异常；原有凭证保留。 |
+| W2-05 | 桌面下载在部分 JDK 上把截断响应当成成功，各平台还可能发布空歌曲 | 已核实并修复：桌面明确检查 HTTP 状态、非空内容和响应声明长度；Web 检查非空内容，身份编码且头可见时校验长度；iOS 检查状态及临时文件大小。JVM 本地 HTTP 和 Web OPFS 测试通过，iOS 仅编译验证。 |
+| W2-06 | Web 拒绝一次下载发布时可能删掉已有音频，替换下载失败也会丢失旧文件 | 浏览器回归在旧实现失败；修复后在 OPFS 发布前取得许可，替换失败保留旧文件，拒绝新下载不留下最终文件。三个浏览器回归通过。 |
 
 本次阅读了 AndroidDownloadService、PersistedDownloadQueue 及 SongDownloadManager 的控制/恢复相关路径；下载编排其余部分、各平台文件处理和其余审查分区尚未完成。
 
@@ -108,3 +110,11 @@
 ## 日志与账号错误隐私验证（2026-10-04）
 
 `privacy-check-result.json`：JVM 627、桌面 18、Android Host 457、Web 472 项均通过，Android/iOS Kotlin 编译通过。`privacy-repro` 和 `privacy-account-repro` 保存了修复前失败结果。凭证测试只使用随机命名的临时 Preferences 节点和模拟密钥。
+
+## 下载完整性与发布验证（2026-10-04）
+
+- 同一本机 HTTP 探针声明 10 字节却只发送 3 字节：JDK 25 抛 Premature EOF，JDK 21 读完返回 3 字节。因此完整性不能依赖运行时恰好拒绝截断。
+- `download-publish-check-result.json`：JVM 632、桌面 18、Android Host 457、Web 476 项通过；Android/iOS Kotlin 编译通过。脚本使用本机 JDK 21。
+- JVM 的实际下载函数使用临时目录和回环 HTTP 服务，覆盖截断、空响应、非请求的部分响应、chunked 响应、旧空文件恢复及拒绝发布。API 的建议大小只用于进度，不作为完整性的权威依据。
+- Web 检查实际 OPFS 文件；旧实现误删已有文件的失败结果在 `web-publish-repro` 中。浏览器可能解压响应，CORS 也可能隐藏 Content-Encoding，因此不能盲目拿 Content-Length 与解码后的大小比较。
+- iOS 的状态和临时文件检查只完成 Kotlin 编译；后台会话和 ActivityKit 的设备行为仍待验证。
