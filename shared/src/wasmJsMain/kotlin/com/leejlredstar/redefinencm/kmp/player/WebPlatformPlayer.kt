@@ -538,18 +538,19 @@ class WebPlatformPlayer(
             clearQueue()
             return
         }
-        queueModel = PlayQueue.of(items, startIndex)
+        queueModel = PlayQueue.of(items, startIndex, shuffle = queueModel.shuffleEnabled)
         selectCurrentTrack(autoplay = true)
     }
 
-    override fun restoreQueue(items: List<MediaInfo>, startIndex: Int, positionMs: Long) {
+    override fun restoreQueue(items: List<MediaInfo>, startIndex: Int, positionMs: Long, shuffle: Boolean, playOrder: List<Int>?) {
         if (released) return
         abandonTransition(dropPlan = true)
         if (items.isEmpty()) {
             clearQueue()
+            setShuffleEnabled(shuffle)
             return
         }
-        queueModel = PlayQueue.of(items, startIndex)
+        queueModel = PlayQueue.restore(items, startIndex, shuffle, playOrder)
         val mediaDuration = queueModel.currentItem?.duration?.takeIf { it > 0L }
         val safePosition = mediaDuration
             ?.let { positionMs.coerceIn(0L, it) }

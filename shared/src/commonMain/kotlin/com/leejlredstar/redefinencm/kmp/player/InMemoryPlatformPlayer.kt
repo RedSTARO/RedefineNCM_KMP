@@ -92,8 +92,19 @@ class InMemoryPlatformPlayer(
 
     override fun setQueue(items: List<MediaInfo>, startIndex: Int) {
         withStateLock {
-            queueModel = PlayQueue.of(items, startIndex)
+            queueModel = PlayQueue.of(items, startIndex, shuffle = queueModel.shuffleEnabled)
             onTrackChangedLocked()
+        }
+    }
+
+    override fun restoreQueue(items: List<MediaInfo>, startIndex: Int, positionMs: Long, shuffle: Boolean, playOrder: List<Int>?) {
+        withStateLock {
+            stopTickerLocked()
+            _isPlaying.value = false
+            queueModel = PlayQueue.restore(items, startIndex, shuffle, playOrder)
+            onTrackChangedLocked()
+            _position.value = positionMs.coerceAtLeast(0L)
+            if (!queueModel.isEmpty) _state.value = PlayerState.PAUSED
         }
     }
 

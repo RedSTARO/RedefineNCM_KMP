@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.data
 
+import com.leejlredstar.redefinencm.kmp.player.PlayerQueueSnapshot
 import kotlinx.serialization.Serializable
 
 /**
@@ -24,4 +25,19 @@ data class PlayerStatus(
     val position: Long = 0,
     val isPlaying: Boolean = false,
     val isShuffling: Boolean = false,
+    /** Null in legacy saves whose playlist is already in visible play order. */
+    val playOrder: List<Int>? = null,
 )
+
+/** Persist original item order and its permutation together; duplicate songs keep their slots. */
+internal fun PlayerQueueSnapshot.toPlayerStatus(position: Long, isPlaying: Boolean): PlayerStatus =
+    PlayerStatus(
+        playlist = originalItems.map {
+            PersistedMediaItem(it.id, it.title, it.artist, it.albumTitle, it.artworkUri, it.duration, it.sourceId)
+        },
+        index = playOrder.getOrNull(currentIndex)?.coerceAtLeast(0) ?: 0,
+        position = position.coerceAtLeast(0),
+        isPlaying = isPlaying,
+        isShuffling = shuffleEnabled,
+        playOrder = playOrder.takeIf { shuffleEnabled },
+    )

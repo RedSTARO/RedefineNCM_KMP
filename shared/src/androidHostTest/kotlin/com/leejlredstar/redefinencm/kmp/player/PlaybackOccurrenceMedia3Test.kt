@@ -12,8 +12,9 @@ class PlaybackOccurrenceMedia3Test {
         assertFalse(
             shouldAdvanceMedia3PlaybackOccurrence(
                 reason = Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED,
-                currentWindowIndex = 1,
-                previousWindowIndex = 0,
+                currentWindowUid = "new-queue-slot",
+                previousWindowUid = "old-queue-slot",
+                explicitSelection = true,
             ),
         )
     }
@@ -23,15 +24,15 @@ class PlaybackOccurrenceMedia3Test {
         assertFalse(
             shouldAdvanceMedia3PlaybackOccurrence(
                 reason = Player.MEDIA_ITEM_TRANSITION_REASON_SEEK,
-                currentWindowIndex = 1,
-                previousWindowIndex = 1,
+                currentWindowUid = "same-slot",
+                previousWindowUid = "same-slot",
             ),
         )
         assertTrue(
             shouldAdvanceMedia3PlaybackOccurrence(
                 reason = Player.MEDIA_ITEM_TRANSITION_REASON_SEEK,
-                currentWindowIndex = 2,
-                previousWindowIndex = 1,
+                currentWindowUid = "next-slot",
+                previousWindowUid = "same-slot",
             ),
         )
     }
@@ -41,16 +42,37 @@ class PlaybackOccurrenceMedia3Test {
         assertTrue(
             shouldAdvanceMedia3PlaybackOccurrence(
                 reason = Player.MEDIA_ITEM_TRANSITION_REASON_AUTO,
-                currentWindowIndex = 1,
-                previousWindowIndex = 1,
+                currentWindowUid = "same-slot",
+                previousWindowUid = "same-slot",
             ),
         )
         assertTrue(
             shouldAdvanceMedia3PlaybackOccurrence(
                 reason = Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT,
-                currentWindowIndex = 1,
-                previousWindowIndex = 1,
+                currentWindowUid = "same-slot",
+                previousWindowUid = "same-slot",
             ),
         )
+    }
+
+    @Test
+    fun movingAnItemDoesNotChangeItsSelectionButRemovingItDoes() {
+        assertFalse(shouldAdvanceMedia3PlaybackOccurrence(
+            Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED, "kept-slot", "kept-slot",
+        ))
+        // The successor occupies the same numeric index after removal; its identity differs.
+        assertTrue(shouldAdvanceMedia3PlaybackOccurrence(
+            Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED, "successor-slot", "removed-slot",
+        ))
+        assertTrue(shouldAdvanceMedia3PlaybackOccurrence(
+            Player.MEDIA_ITEM_TRANSITION_REASON_SEEK, "next-slot", "moved-slot",
+        ))
+    }
+
+    @Test
+    fun anEmptyTimelineNeverStartsAnOccurrence() {
+        assertFalse(shouldAdvanceMedia3PlaybackOccurrence(
+            Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED, null, "removed-slot",
+        ))
     }
 }

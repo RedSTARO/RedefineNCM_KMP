@@ -96,6 +96,8 @@ class JvmMediaPlayer(
                 currentIndex = publication.currentIndex,
                 currentMedia = publication.currentMedia,
                 shuffleEnabled = publication.shuffleEnabled,
+                originalItems = snapshot.items,
+                playOrder = snapshot.playOrder,
             ),
         )
         publishDurationFromMedia(publication.currentMedia)
@@ -720,17 +722,17 @@ class JvmMediaPlayer(
 
     override fun setQueue(items: List<MediaInfo>, startIndex: Int) {
         synchronized(queueOperationLock) {
-            val claim = mutateQueue(invalidatesPlaybackClaim = true) { PlayQueue.of(items, startIndex) }
+            val claim = mutateQueue(invalidatesPlaybackClaim = true) { PlayQueue.of(items, startIndex, shuffle = it.shuffleEnabled) }
             onTrackChanged(claim, autoplay = true)
         }
     }
 
-    override fun restoreQueue(items: List<MediaInfo>, startIndex: Int, positionMs: Long) {
+    override fun restoreQueue(items: List<MediaInfo>, startIndex: Int, positionMs: Long, shuffle: Boolean, playOrder: List<Int>?) {
         // 恢复队列但不自动播放（默认实现的 setQueue→pause 存在异步竞态：
         // resolveAndPlay 解析完成晚于 pause，会照样出声）。play() 时会从
         // seekOffsetMs 起播（openAndPlay 尊重该偏移）。
         synchronized(queueOperationLock) {
-            val claim = mutateQueue(invalidatesPlaybackClaim = true) { PlayQueue.of(items, startIndex) }
+            val claim = mutateQueue(invalidatesPlaybackClaim = true) { PlayQueue.restore(items, startIndex, shuffle, playOrder) }
             onTrackChanged(claim, autoplay = false)
             seekOffsetMs = positionMs.coerceAtLeast(0L)
             _position.value = seekOffsetMs

@@ -177,6 +177,26 @@ class PlayQueue<T> private constructor(
     companion object {
         fun <T> empty(): PlayQueue<T> = PlayQueue(emptyList(), -1, false, emptyList())
 
+        /** Restore the saved permutation without drawing another shuffle order. Legacy saves
+         * have only their visible item order, which is preserved when [playOrder] is absent. */
+        fun <T> restore(
+            items: List<T>,
+            startIndex: Int,
+            shuffle: Boolean,
+            playOrder: List<Int>?,
+        ): PlayQueue<T> {
+            val naturalOrder = items.indices.toList()
+            val order = playOrder?.takeIf {
+                it.size == items.size && it.toSet() == naturalOrder.toSet()
+            } ?: naturalOrder
+            return PlayQueue(
+                items = items,
+                currentIndex = if (items.isEmpty()) -1 else startIndex.coerceIn(0, items.lastIndex),
+                shuffleEnabled = shuffle,
+                playOrder = if (shuffle) order else naturalOrder,
+            )
+        }
+
         /** Build a queue from [items], starting at [startIndex], optionally shuffled. */
         fun <T> of(
             items: List<T>,

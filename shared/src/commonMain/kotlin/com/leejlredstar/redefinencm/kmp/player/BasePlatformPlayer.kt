@@ -64,6 +64,7 @@ abstract class BasePlatformPlayer(
      * [publishDurationFromMedia] alongside this.
      */
     protected fun publishQueueSnapshot(snapshot: PlayerQueueSnapshot) {
+        if (snapshot.items.isEmpty()) PlaybackSource.set(null)
         _queueSnapshot.value = snapshot
         _queue.value = snapshot.items
         _currentIndex.value = snapshot.currentIndex
@@ -85,6 +86,8 @@ abstract class BasePlatformPlayer(
             currentIndex = model.positionInPlayOrder,
             currentMedia = model.currentItem,
             shuffleEnabled = model.shuffleEnabled,
+            originalItems = model.items,
+            playOrder = model.playOrder,
         )
         publishQueueSnapshot(snapshot)
         publishDurationFromMedia(snapshot.currentMedia)

@@ -6,8 +6,8 @@ import com.leejlredstar.redefinencm.kmp.i18n.uiText
 import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import com.leejlredstar.redefinencm.kmp.util.getBooleanAsync
 import com.leejlredstar.redefinencm.kmp.util.getLongAsync
-import com.leejlredstar.redefinencm.kmp.data.PersistedMediaItem
 import com.leejlredstar.redefinencm.kmp.data.PlayerStatus
+import com.leejlredstar.redefinencm.kmp.data.toPlayerStatus
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
 import com.leejlredstar.redefinencm.kmp.data.api.dto.*
@@ -314,23 +314,12 @@ class MainViewModel(
 
     private fun buildPlayerStatus(): PlayerStatus? {
         val queueSnapshot = player.queueSnapshot.value
-        if (queueSnapshot.items.isEmpty()) return null
-        return PlayerStatus(
-            playlist = queueSnapshot.items.map {
-                PersistedMediaItem(
-                    id = it.id,
-                    title = it.title,
-                    artist = it.artist,
-                    albumTitle = it.albumTitle,
-                    artworkUri = it.artworkUri,
-                    duration = it.duration,
-                    sourceId = it.sourceId,
-                )
-            },
-            index = queueSnapshot.currentIndex.coerceAtLeast(0),
+        // Before/after a failed restore an empty player is not evidence that the user cleared it.
+        // After a successful restore, clearing must be saved or the old queue returns on restart.
+        if (queueSnapshot.items.isEmpty() && playerStatusRestorer.state.value !is PlayerStatusRestoreState.Restored) return null
+        return queueSnapshot.toPlayerStatus(
             position = player.position.value,
             isPlaying = player.isPlaying.value,
-            isShuffling = queueSnapshot.shuffleEnabled,
         )
     }
 

@@ -82,13 +82,16 @@ interface PlatformPlayer {
 
     /**
      * 恢复上次的播放状态：装载队列并 seek 到上次位置，但**不**自动开始播放
-     * （与原版 restorePlayerStatus 行为一致）。平台实现可覆写以避免默认的先播再暂停。
+     * （与原版 restorePlayerStatus 行为一致）。所有平台都必须直接恢复暂停状态。
+     * [startIndex] indexes the original [items]; [playOrder] is the saved permutation of them.
      */
-    fun restoreQueue(items: List<MediaInfo>, startIndex: Int, positionMs: Long) {
-        setQueue(items, startIndex)
-        pause()
-        seekTo(positionMs)
-    }
+    fun restoreQueue(
+        items: List<MediaInfo>,
+        startIndex: Int,
+        positionMs: Long,
+        shuffle: Boolean = false,
+        playOrder: List<Int>? = null,
+    )
 
     // ── Shuffle ──
 
@@ -157,6 +160,9 @@ data class PlayerQueueSnapshot(
     val currentIndex: Int = -1,
     val currentMedia: MediaInfo? = null,
     val shuffleEnabled: Boolean = false,
+    /** Original order and its permutation come from the same snapshot as the visible queue. */
+    val originalItems: List<MediaInfo> = items,
+    val playOrder: List<Int> = items.indices.toList(),
 )
 
 /**

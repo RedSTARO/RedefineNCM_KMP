@@ -165,15 +165,17 @@ class ExoPlayerPlatformPlayer(
                 abandonTransition(dropPlan = true)
             }
             val isNewOccurrence = if (mediaItem != null) {
-                val currentWindowIndex = deck.currentMediaItemIndex
+                val currentWindowUid = deck.occurrenceWindowUid()
                 val shouldAdvance = shouldAdvanceMedia3PlaybackOccurrence(
                     reason = reason,
-                    currentWindowIndex = currentWindowIndex,
-                    previousWindowIndex = lastOccurrenceMediaItemIndex,
+                    currentWindowUid = currentWindowUid,
+                    previousWindowUid = lastOccurrenceWindowUid,
+                    explicitSelection = explicitSelectionInProgress,
                 )
-                lastOccurrenceMediaItemIndex = currentWindowIndex
+                lastOccurrenceWindowUid = currentWindowUid
                 shouldAdvance
             } else {
+                lastOccurrenceWindowUid = null
                 false
             }
             // 每次切歌都完整重建列表与高亮：随机模式下 ExoPlayer 可能在不触发
@@ -222,16 +224,27 @@ class ExoPlayerPlatformPlayer(
                 .buildUpon()
                 .setArtworkUri(Uri.parse(localArtworkUri))
                 .build()
-            player.replaceMediaItem(
-                index,
-                current.buildUpon().setMediaMetadata(metadata).build(),
-            )
+            val wasExplicit = explicitSelectionInProgress
+            explicitSelectionInProgress = true
+            try {
+                player.replaceMediaItem(index, current.buildUpon().setMediaMetadata(metadata).build())
+                lastOccurrenceWindowUid = player.occurrenceWindowUid()
+            } finally {
+                explicitSelectionInProgress = wasExplicit
+            }
         }
     }
 
     /** 播放顺序 → ExoPlayer 窗口索引的映射，与 _queue/_currentIndex 同源重建。 */
     private var playOrderWindowIndices: List<Int> = emptyList()
-    private var lastOccurrenceMediaItemIndex: Int = C.INDEX_UNSET
+    private var lastOccurrenceWindowUid: Any? = null
+    private var explicitSelectionInProgress = false
+
+    private fun ExoPlayer.occurrenceWindowUid(): Any? {
+        val timeline = currentTimeline
+        val index = currentMediaItemIndex
+        return if (index in 0 until timeline.windowCount) timeline.getWindow(index, Timeline.Window()).uid else null
+    }
 
     /**
      * 依据当前 timeline（按播放顺序，含随机模式）重建可见队列、窗口顺序索引与当前高亮。
@@ -268,6 +281,8 @@ class ExoPlayerPlatformPlayer(
                 currentIndex = currentIndex,
                 currentMedia = items.getOrNull(currentIndex),
                 shuffleEnabled = shuffle,
+                originalItems = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).info() },
+                playOrder = indices,
             ),
         )
         publishCurrentPositionAndDuration()
@@ -303,7 +318,7 @@ class ExoPlayerPlatformPlayer(
     override fun play() {
         val player = active
         if (player.playbackState == Player.STATE_ENDED && player.currentMediaItem != null) {
-            lastOccurrenceMediaItemIndex = player.currentMediaItemIndex
+            lastOccurrenceWindowUid = player.occurrenceWindowUid()
             player.seekToDefaultPosition()
             _position.value = 0L
             _playbackOccurrence.advancePlaybackOccurrence()
@@ -389,28 +404,45 @@ class ExoPlayerPlatformPlayer(
         val player = active
         val safeIndex = startIndex.coerceIn(0, items.lastIndex)
         publishImmediateQueue(items, safeIndex, 0L)
-        player.setMediaItems(items.map { it.toExoMediaItem() }, safeIndex, 0L)
-        lastOccurrenceMediaItemIndex = safeIndex
+        explicitSelectionInProgress = true
+        try {
+            player.setMediaItems(items.map { it.toExoMediaItem() }, safeIndex, 0L)
+            lastOccurrenceWindowUid = player.occurrenceWindowUid()
+            rebuildQueue()
+        } finally {
+            explicitSelectionInProgress = false
+        }
         _playbackOccurrence.advancePlaybackOccurrence()
         player.prepare()
         player.play()
     }
 
-    override fun restoreQueue(items: List<MediaInfo>, startIndex: Int, positionMs: Long) {
+    override fun restoreQueue(items: List<MediaInfo>, startIndex: Int, positionMs: Long, shuffle: Boolean, playOrder: List<Int>?) {
         abandonTransition(dropPlan = true)
         if (items.isEmpty()) {
             clearQueue()
+            setShuffleEnabled(shuffle)
             return
         }
         val player = active
         val safeIndex = startIndex.coerceIn(0, items.lastIndex)
         val safePosition = positionMs.coerceAtLeast(0L)
+        val restored = PlayQueue.restore(items, safeIndex, shuffle, playOrder)
+        player.playWhenReady = false
         stopPositionSync()
         _isPlaying.value = false
         _state.value = PlayerState.PAUSED
         publishImmediateQueue(items, safeIndex, safePosition)
-        player.setMediaItems(items.map { it.toExoMediaItem() }, safeIndex, safePosition)
-        lastOccurrenceMediaItemIndex = safeIndex
+        explicitSelectionInProgress = true
+        try {
+            player.setMediaItems(items.map { it.toExoMediaItem() }, safeIndex, safePosition)
+            player.setShuffleOrder(ShuffleOrder.DefaultShuffleOrder(restored.playOrder.toIntArray(), System.nanoTime()))
+            player.shuffleModeEnabled = shuffle
+            lastOccurrenceWindowUid = player.occurrenceWindowUid()
+            rebuildQueue()
+        } finally {
+            explicitSelectionInProgress = false
+        }
         _playbackOccurrence.advancePlaybackOccurrence()
         player.prepare() // 只装载不播放（原版恢复时注释掉了 play()）
     }
@@ -443,10 +475,8 @@ class ExoPlayerPlatformPlayer(
         stopPositionSync()
         active.clearMediaItems()
         playOrderWindowIndices = emptyList()
-        lastOccurrenceMediaItemIndex = C.INDEX_UNSET
-        _queue.value = emptyList()
-        _currentIndex.value = -1
-        _currentMedia.value = null
+        lastOccurrenceWindowUid = null
+        publishQueueSnapshot(PlayerQueueSnapshot(shuffleEnabled = active.shuffleModeEnabled))
         _position.value = 0L
         _duration.value = -1L
         _isPlaying.value = false
@@ -675,7 +705,7 @@ class ExoPlayerPlatformPlayer(
         }
         blend.swapped = true
         active = incoming
-        lastOccurrenceMediaItemIndex = incoming.currentMediaItemIndex
+        lastOccurrenceWindowUid = incoming.occurrenceWindowUid()
         rebuildQueue()
         _isPlaying.value = incoming.isPlaying
         updateStateFromExo()
@@ -814,18 +844,17 @@ class ExoPlayerPlatformPlayer(
 }
 
 /**
- * Media3 emits `PLAYLIST_CHANGED` both when a replacement queue is selected and when one is
- * appended. Queue replacement is counted synchronously by [ExoPlayerPlatformPlayer.setQueue],
- * while append must not count, so this callback counts only transport transitions.
+ * Indexes change after removals and moves, but Media3 window identities stay with their items.
+ * A removal selecting the successor counts even at the same index; moving or appending without
+ * changing the selected item does not. Explicit queue replacement is counted by its caller.
  */
 internal fun shouldAdvanceMedia3PlaybackOccurrence(
     reason: Int,
-    currentWindowIndex: Int,
-    previousWindowIndex: Int,
-): Boolean = when (reason) {
+    currentWindowUid: Any?,
+    previousWindowUid: Any?,
+    explicitSelection: Boolean = false,
+): Boolean = if (explicitSelection || currentWindowUid == null) false else when (reason) {
     Player.MEDIA_ITEM_TRANSITION_REASON_AUTO,
     Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT -> true
-    Player.MEDIA_ITEM_TRANSITION_REASON_SEEK -> currentWindowIndex != previousWindowIndex
-    Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED -> false
-    else -> currentWindowIndex != previousWindowIndex
+    else -> currentWindowUid != previousWindowUid
 }

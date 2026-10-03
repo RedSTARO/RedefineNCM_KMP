@@ -262,17 +262,18 @@ class IosAVPlayer(
             clearQueue()
             return
         }
-        queueModel = PlayQueue.of(items, startIndex)
+        queueModel = PlayQueue.of(items, startIndex, shuffle = queueModel.shuffleEnabled)
         playCurrentFromQueue(autoplay = true)
     }
 
-    override fun restoreQueue(items: List<MediaInfo>, startIndex: Int, positionMs: Long) {
+    override fun restoreQueue(items: List<MediaInfo>, startIndex: Int, positionMs: Long, shuffle: Boolean, playOrder: List<Int>?) {
         if (items.isEmpty()) {
             clearQueue()
+            setShuffleEnabled(shuffle)
             return
         }
         beginPlaybackSession(clearItem = true)
-        queueModel = PlayQueue.of(items, startIndex, shuffle = queueModel.shuffleEnabled)
+        queueModel = PlayQueue.restore(items, startIndex, shuffle, playOrder)
         publishQueue()
         _position.value = positionMs.coerceAtLeast(0L)
         _isPlaying.value = false

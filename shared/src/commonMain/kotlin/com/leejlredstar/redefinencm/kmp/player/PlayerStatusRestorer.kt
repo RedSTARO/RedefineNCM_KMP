@@ -58,7 +58,7 @@ class PlayerStatusRestorer internal constructor(
                 }
 
                 val status = result.getOrNull()
-                if (status != null && status.playlist.isNotEmpty()) {
+                if (status != null) {
                     val items = status.playlist.map { persisted ->
                         MediaInfo(
                             id = persisted.id,
@@ -77,10 +77,11 @@ class PlayerStatusRestorer internal constructor(
                         if (player.queueSnapshot.value.items.isEmpty()) {
                             player.restoreQueue(
                                 items = items,
-                                startIndex = status.index.coerceIn(0, items.lastIndex),
+                                startIndex = if (items.isEmpty()) 0 else status.index.coerceIn(0, items.lastIndex),
                                 positionMs = status.position,
+                                shuffle = status.isShuffling,
+                                playOrder = status.playOrder,
                             )
-                            player.setShuffleEnabled(status.isShuffling)
                         }
                     }
                 }
