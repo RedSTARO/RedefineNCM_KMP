@@ -4,6 +4,7 @@ import com.leejlredstar.redefinencm.kmp.i18n.UiText
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import com.leejlredstar.redefinencm.kmp.data.Repository
+import com.leejlredstar.redefinencm.kmp.data.MetadataCache
 import com.leejlredstar.redefinencm.kmp.data.api.AmlldbApi
 import com.leejlredstar.redefinencm.kmp.data.api.ExternalHttpClient
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
@@ -133,7 +134,8 @@ val sharedModule = module {
     single { AppDatabase(get<DatabaseDriverFactory>().createDriver()) }
 
     // Repository
-    single { Repository(get(), get()) }
+    single { MetadataCache(get(), get()) }
+    single { Repository(get(), get(), get()) }
 
     // Credential slots, kept as their own singletons because the QQ renewer writes through its
     // slot directly. NetEase's restarts account work through the main view model, resolved lazily

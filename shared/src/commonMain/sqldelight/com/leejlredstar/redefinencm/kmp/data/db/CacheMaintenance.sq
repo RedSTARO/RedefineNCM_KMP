@@ -1,0 +1,30 @@
+-- Only disposable response caches. Never include LocalLibrary, PlayerStatus or DownloadQueue.
+entries:
+SELECT 'CachedCommentMusic' AS table_name, song_id AS entry_id, length(CAST(json AS BLOB)) AS bytes FROM CachedCommentMusic
+UNION ALL SELECT 'CachedLyric' AS table_name, song_id AS entry_id, length(CAST(json AS BLOB)) AS bytes FROM CachedLyric
+UNION ALL SELECT 'CachedPlaylistDetail' AS table_name, playlist_id AS entry_id, length(CAST(json AS BLOB)) AS bytes FROM CachedPlaylistDetail
+UNION ALL SELECT 'CachedPlaylistTrackAll' AS table_name, playlist_id AS entry_id, length(CAST(json AS BLOB)) AS bytes FROM CachedPlaylistTrackAll
+UNION ALL SELECT 'CachedRecommendResource' AS table_name, singleton AS entry_id, length(CAST(json AS BLOB)) AS bytes FROM CachedRecommendResource
+UNION ALL SELECT 'CachedRecommendSongs' AS table_name, singleton AS entry_id, length(CAST(json AS BLOB)) AS bytes FROM CachedRecommendSongs
+UNION ALL SELECT 'CachedUserDetail' AS table_name, uid AS entry_id, length(CAST(json AS BLOB)) AS bytes FROM CachedUserDetail
+UNION ALL SELECT 'CachedUserLevel' AS table_name, uid AS entry_id, length(CAST(json AS BLOB)) AS bytes FROM CachedUserLevel
+UNION ALL SELECT 'CachedUserPlaylist' AS table_name, uid AS entry_id, length(CAST(json AS BLOB)) AS bytes FROM CachedUserPlaylist;
+
+deleteComment:
+DELETE FROM CachedCommentMusic WHERE song_id = ?;
+deleteLyric:
+DELETE FROM CachedLyric WHERE song_id = ?;
+deletePlaylistDetail:
+DELETE FROM CachedPlaylistDetail WHERE playlist_id = ?;
+deletePlaylistTracks:
+DELETE FROM CachedPlaylistTrackAll WHERE playlist_id = ?;
+deleteRecommendResource:
+DELETE FROM CachedRecommendResource WHERE singleton = ?;
+deleteRecommendSongs:
+DELETE FROM CachedRecommendSongs WHERE singleton = ?;
+deleteUserDetail:
+DELETE FROM CachedUserDetail WHERE uid = ?;
+deleteUserLevel:
+DELETE FROM CachedUserLevel WHERE uid = ?;
+deleteUserPlaylist:
+DELETE FROM CachedUserPlaylist WHERE uid = ?;

@@ -59,10 +59,12 @@ data class CacheThenNetworkData<out T>(
 internal fun <T> cacheThenNetworkFlow(
     readCache: () -> T?,
     fetchNetwork: suspend () -> T?,
-    writeCache: (T) -> Unit,
+    writeCache: suspend (T) -> Unit,
+    onCacheHit: suspend () -> Unit = {},
 ): Flow<CacheThenNetworkData<T>> = flow {
     readCache()?.let { cached ->
         emit(CacheThenNetworkData(cached, CacheThenNetworkSource.CACHE))
+        writeCacheBestEffort { onCacheHit() }
     }
     fetchNetwork()?.let { network ->
         writeCacheBestEffort { writeCache(network) }
@@ -83,6 +85,7 @@ private inline fun writeCacheBestEffort(write: () -> Unit) {
 class Repository(
     private val api: NCMApi,
     private val db: AppDatabase,
+    private val cache: MetadataCache = MetadataCache(db),
 ) {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
     private val relayCapability = MutableStateFlow(EndpointCapability.UNKNOWN)
@@ -128,8 +131,9 @@ class Repository(
                 ?.takeIf { it.code == API_SUCCESS_CODE }
         },
         writeCache = { network ->
-            db.cachedUserDetailQueries.upsert(uid, json.encodeToString(network))
+            cache.write(MetadataCacheTable.CachedUserDetail, uid, json.encodeToString(network))
         },
+        onCacheHit = { cache.touch(MetadataCacheTable.CachedUserDetail, uid) },
     )
 
     fun getUserLevel(uid: Long): Flow<CacheThenNetworkData<UserLevelResponse>> {
@@ -140,6 +144,7 @@ class Repository(
                 readCachedUserLevel(uid)?.let { cached ->
                     // Keep the cache read and emission ordered before a concurrent newer refresh.
                     emit(CacheThenNetworkData(cached, CacheThenNetworkSource.CACHE))
+                    writeCacheBestEffort { cache.touch(MetadataCacheTable.CachedUserLevel, uid) }
                 }
             } finally {
                 userLevelRequestMutex.unlock()
@@ -201,7 +206,7 @@ class Repository(
     ): Boolean = userLevelRequestMutex.withLock {
         val latestCommitted = latestAcceptedUserLevelByUid[uid]?.first ?: Long.MIN_VALUE
         if (requestGeneration < latestCommitted) return@withLock false
-        writeCacheBestEffort { db.cachedUserLevelQueries.upsert(uid, json.encodeToString(response)) }
+        writeCacheBestEffort { cache.write(MetadataCacheTable.CachedUserLevel, uid, json.encodeToString(response)) }
         // A newer network answer wins even when it could not be cached. An older in-flight
         // request must not then replace it with the stale value still on disk.
         latestAcceptedUserLevelByUid[uid] = requestGeneration to response
@@ -255,8 +260,9 @@ class Repository(
         },
         fetchNetwork = { fetchAllUserPlaylists(uid) },
         writeCache = { network ->
-            db.cachedUserPlaylistQueries.upsert(uid, json.encodeToString(network))
+            cache.write(MetadataCacheTable.CachedUserPlaylist, uid, json.encodeToString(network))
         },
+        onCacheHit = { cache.touch(MetadataCacheTable.CachedUserPlaylist, uid) },
     )
 
     private suspend fun fetchAllUserPlaylists(uid: Long): UserPlaylist? = withTimeoutOrNull(60_000) {
@@ -291,8 +297,9 @@ class Repository(
                 ?.takeIf { it.code == API_SUCCESS_CODE }
         },
         writeCache = { network ->
-            db.cachedPlaylistDetailQueries.upsert(id, json.encodeToString(network))
+            cache.write(MetadataCacheTable.CachedPlaylistDetail, id, json.encodeToString(network))
         },
+        onCacheHit = { cache.touch(MetadataCacheTable.CachedPlaylistDetail, id) },
     )
 
     fun getPlaylistTrackAll(id: Long): Flow<CacheThenNetworkData<PlaylistTrackAll>> = cacheThenNetworkFlow(
@@ -307,8 +314,9 @@ class Repository(
                 ?.takeIf { it.code == API_SUCCESS_CODE }
         },
         writeCache = { network ->
-            db.cachedPlaylistTrackAllQueries.upsert(id, json.encodeToString(network))
+            cache.write(MetadataCacheTable.CachedPlaylistTrackAll, id, json.encodeToString(network))
         },
+        onCacheHit = { cache.touch(MetadataCacheTable.CachedPlaylistTrackAll, id) },
     )
 
     /** 一次性网络获取歌单全部曲目（批量下载用，不走缓存流）。 */
@@ -355,10 +363,11 @@ class Repository(
                 ?.takeIf { it.code == API_SUCCESS_CODE }
         },
         writeCache = { network ->
-            db.cachedRecommendSongsQueries.upsert(
+            cache.write(MetadataCacheTable.CachedRecommendSongs, 0L,
                 json.encodeToString(CachedRecommendSongsEntry(uid, network)),
             )
         },
+        onCacheHit = { cache.touch(MetadataCacheTable.CachedRecommendSongs, 0L) },
     )
 
     fun getRecommendResource(
@@ -383,18 +392,16 @@ class Repository(
                 ?.takeIf { it.code == API_SUCCESS_CODE }
         },
         writeCache = { network ->
-            db.cachedRecommendResourceQueries.upsert(
+            cache.write(MetadataCacheTable.CachedRecommendResource, 0L,
                 json.encodeToString(CachedRecommendResourceEntry(uid, network)),
             )
         },
+        onCacheHit = { cache.touch(MetadataCacheTable.CachedRecommendResource, 0L) },
     )
 
     /** Account-scoped singleton caches must not survive a cookie/account switch. */
-    fun clearAccountScopedCaches(): Result<Unit> = runCatching {
-        db.transaction {
-            db.cachedRecommendSongsQueries.deleteAll()
-            db.cachedRecommendResourceQueries.deleteAll()
-        }
+    suspend fun clearAccountScopedCaches(): Result<Unit> = runCatching {
+        cache.clear(setOf(MetadataCacheTable.CachedRecommendSongs, MetadataCacheTable.CachedRecommendResource))
     }
 
     // ── Comment ──
@@ -411,8 +418,9 @@ class Repository(
                 ?.takeIf { it.code == API_SUCCESS_CODE }
         },
         writeCache = { network ->
-            db.cachedCommentMusicQueries.upsert(id, json.encodeToString(network))
+            cache.write(MetadataCacheTable.CachedCommentMusic, id, json.encodeToString(network))
         },
+        onCacheHit = { cache.touch(MetadataCacheTable.CachedCommentMusic, id) },
     )
 
     /**
@@ -451,7 +459,10 @@ class Repository(
     // ── Lyric ──
 
     fun getLyric(id: Long): Flow<Lyric?> = flow {
-        cachedLyric(id)?.let { emit(it) }
+        cachedLyric(id)?.let {
+            emit(it)
+            writeCacheBestEffort { cache.touch(MetadataCacheTable.CachedLyric, id) }
+        }
         fetchAndCacheLyric(id)?.let { emit(it) }
     }
 
@@ -474,14 +485,15 @@ class Repository(
             ?.takeIf { it.code == API_SUCCESS_CODE }
     }.getOrNull()
 
-    internal fun cachedExternalTtml(id: Long): CachedExternalTtml? =
-        runCatching { cachedLyricBundle(id)?.amllTtml }.getOrNull()
+    internal suspend fun cachedExternalTtml(id: Long): CachedExternalTtml? =
+        runCatching { cachedLyricBundle(id)?.amllTtml }.getOrNull()?.also {
+            writeCacheBestEffort { cache.touch(MetadataCacheTable.CachedLyric, id) }
+        }
 
     internal suspend fun cacheExternalTtml(id: Long, ttml: CachedExternalTtml) {
         lyricCacheMutex.withLock {
             val current = cachedLyricBundle(id) ?: CachedLyricBundle(version = LYRIC_CACHE_VERSION)
-            db.cachedLyricQueries.upsert(
-                id,
+            cache.write(MetadataCacheTable.CachedLyric, id,
                 json.encodeToString(
                     current.copy(
                         version = LYRIC_CACHE_VERSION,
@@ -512,8 +524,7 @@ class Repository(
     private suspend fun cacheBackendLyric(id: Long, lyric: Lyric) {
         lyricCacheMutex.withLock {
             val current = cachedLyricBundle(id) ?: CachedLyricBundle(version = LYRIC_CACHE_VERSION)
-            db.cachedLyricQueries.upsert(
-                id,
+            cache.write(MetadataCacheTable.CachedLyric, id,
                 json.encodeToString(
                     current.copy(
                         version = LYRIC_CACHE_VERSION,
@@ -528,8 +539,7 @@ class Repository(
         lyricCacheMutex.withLock {
             val current = cachedLyricBundle(id) ?: return@withLock
             if (current.amllTtml == null) return@withLock
-            db.cachedLyricQueries.upsert(
-                id,
+            cache.write(MetadataCacheTable.CachedLyric, id,
                 json.encodeToString(
                     current.copy(
                         version = LYRIC_CACHE_VERSION,

@@ -355,10 +355,12 @@ internal fun SettingsButton(
     leadingIcon: ImageVector? = null,
     index: Int,
     count: Int,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     FilledTonalButton(
         onClick = onClick,
+        enabled = enabled,
         modifier = Modifier
             .fillMaxWidth()
             .height(56.dp)

@@ -1062,4 +1062,16 @@
     <string name="browserDataSaveFailed">无法保存本机数据：浏览器存储空间不足或不允许写入。本次更改未保存。</string>
     <string name="neteaseCookieInvalid">Cookie 格式不正确。请粘贴单行 Cookie 内容，不要包含换行或「Cookie:」前缀。</string>
     <string name="serverAddressInvalid">请输入以 http:// 或 https:// 开头的服务器地址，可包含路径，但不能包含空格、查询参数或片段。</string>
+    <string name="metadataCache">文本缓存</string>
+    <string name="metadataCacheUsage">已缓存内容</string>
+    <string name="metadataCacheSizeKiB">{size} KiB</string>
+    <string name="metadataCacheSizeMiB">{size} MiB</string>
+    <string name="metadataCacheHint">包括歌曲信息、歌词和评论。清理后，离线时无法读取这些缓存；本地歌单、收藏、队列和已下载的歌曲不受影响。</string>
+    <string name="metadataCacheLimit">容量上限</string>
+    <string name="metadataCacheLimitHint">达到上限后清理旧内容。此处统计文本大小；清理后数据库文件可能保留空间供后续复用。浏览器可用空间可能更小。</string>
+    <string name="metadataCacheClear">清理文本缓存</string>
+    <string name="metadataCacheClearing">正在清理…</string>
+    <string name="metadataCacheCleared">文本缓存已清理</string>
+    <string name="metadataCacheUnavailable">暂时无法读取</string>
+    <string name="metadataCacheFailed">无法读取或清理文本缓存，请重试</string>
 </resources>

@@ -1062,4 +1062,16 @@
     <string name="browserDataSaveFailed">ブラウザーの保存容量が不足しているか、書き込みが許可されていないため、ローカルデータを保存できません。今回の変更は保存されていません。</string>
     <string name="neteaseCookieInvalid">Cookie の形式が正しくありません。改行や「Cookie:」を含めず、Cookie の内容を1行で貼り付けてください。</string>
     <string name="serverAddressInvalid">http:// または https:// で始まるサーバーアドレスを入力してください。パスは指定できますが、空白、クエリパラメーター、フラグメントは指定できません。</string>
+    <string name="metadataCache">テキストキャッシュ</string>
+    <string name="metadataCacheUsage">保存済みの内容</string>
+    <string name="metadataCacheSizeKiB">{size} KiB</string>
+    <string name="metadataCacheSizeMiB">{size} MiB</string>
+    <string name="metadataCacheHint">楽曲情報、歌詞、コメントを含みます。削除するとオフラインで参照できなくなります。ローカルのプレイリスト、お気に入り、キュー、ダウンロード済みの曲は保持されます。</string>
+    <string name="metadataCacheLimit">容量の上限</string>
+    <string name="metadataCacheLimitHint">上限に達すると古い内容を削除します。表示はテキストのサイズです。削除後もデータベースが領域を再利用するために保持する場合があります。ブラウザーの空き容量によっては上限が低くなります。</string>
+    <string name="metadataCacheClear">テキストキャッシュを削除</string>
+    <string name="metadataCacheClearing">削除中…</string>
+    <string name="metadataCacheCleared">テキストキャッシュを削除しました</string>
+    <string name="metadataCacheUnavailable">現在読み込めません</string>
+    <string name="metadataCacheFailed">テキストキャッシュの読み込みまたは削除に失敗しました。もう一度お試しください。</string>
 </resources>

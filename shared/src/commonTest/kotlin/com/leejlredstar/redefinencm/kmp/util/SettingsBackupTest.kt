@@ -377,6 +377,34 @@ class SettingsBackupTest {
     }
 
     @Test
+    fun metadataCacheLimitTravelsWithABackupAndOldFilesKeepTheCurrentLimit() {
+        val json = encodeSettingsBackup(
+            getString = { _, default -> default },
+            getBoolean = { _, default -> default },
+            getLong = { key, default -> if (key == SettingKeys.METADATA_CACHE_LIMIT_MIB) 256L else default },
+        )
+        assertTrue(json.contains("\"metadataCacheLimitMiB\":256"))
+        val written = mutableMapOf<String, Long>()
+        assertTrue(applySettingsBackup(json, { _, _ -> }, { _, _ -> }, { k, v -> written[k] = v }))
+        assertEquals(256L, written[SettingKeys.METADATA_CACHE_LIMIT_MIB])
+        written.clear()
+        assertTrue(applySettingsBackup("{}", { _, _ -> }, { _, _ -> }, { k, v -> written[k] = v }))
+        assertFalse(SettingKeys.METADATA_CACHE_LIMIT_MIB in written)
+    }
+
+    @Test
+    fun invalidCacheLimitsAreRejectedBeforeAnyWrite() {
+        val writes = mutableListOf<String>()
+        for (limit in listOf(-1L, 0L, 1L, Long.MAX_VALUE)) {
+            assertFalse(applySettingsBackup(
+                """{"metadataCacheLimitMiB":$limit}""",
+                { k, _ -> writes += k }, { k, _ -> writes += k }, { k, _ -> writes += k },
+            ))
+        }
+        assertTrue(writes.isEmpty())
+    }
+
+    @Test
     fun songTransitionsTravelWithABackup() {
         val json = encodeSettingsBackup(
             getString = { key, default -> if (key == SettingKeys.SONG_TRANSITION_MODE) "smart" else default },

@@ -58,6 +58,7 @@ object SettingKeys {
     // Tapping a song plays the list from it; with this off, the song alone replaces the queue.
     const val REPLACE_PLAYLIST_DEFAULT = true
     const val CHECK_UPDATE = "checkUpdate"
+    const val METADATA_CACHE_LIMIT_MIB = "metadataCacheLimitMiB"
     const val SHOW_DOWNLOAD_STATUS = "showDownloadStatus"
     const val SHOW_DOWNLOAD_STATUS_DEFAULT = true
     const val SEARCH_PREDICTION = "searchPrediction"

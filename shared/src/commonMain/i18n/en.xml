@@ -1134,4 +1134,16 @@
     <string name="browserDataSaveFailed">Couldn't save local data: browser storage is full or writing is blocked. This change wasn't saved.</string>
     <string name="neteaseCookieInvalid">Invalid Cookie format. Paste a single line of cookie values without line breaks or the “Cookie:” prefix.</string>
     <string name="serverAddressInvalid">Enter a server address starting with http:// or https://. A path is allowed, but spaces, query parameters and fragments are not.</string>
+    <string name="metadataCache">Text cache</string>
+    <string name="metadataCacheUsage">Cached content</string>
+    <string name="metadataCacheSizeKiB">{size} KiB</string>
+    <string name="metadataCacheSizeMiB">{size} MiB</string>
+    <string name="metadataCacheHint">Includes song information, lyrics and comments. Clearing removes their offline copies. Local playlists, favourites, queues and downloaded songs are kept.</string>
+    <string name="metadataCacheLimit">Size limit</string>
+    <string name="metadataCacheLimitHint">Old content is removed at the limit. This counts text data; the database file may keep cleared space for reuse. Browser storage may allow less.</string>
+    <string name="metadataCacheClear">Clear text cache</string>
+    <string name="metadataCacheClearing">Clearing…</string>
+    <string name="metadataCacheCleared">Text cache cleared</string>
+    <string name="metadataCacheUnavailable">Currently unavailable</string>
+    <string name="metadataCacheFailed">Couldn't read or clear the text cache. Try again.</string>
 </resources>

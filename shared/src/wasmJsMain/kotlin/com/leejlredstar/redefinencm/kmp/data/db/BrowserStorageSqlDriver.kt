@@ -63,6 +63,14 @@ internal class BrowserStorageSqlDriver(
         val statement = BrowserPreparedStatement(parameters).also { prepared ->
             binders?.invoke(prepared)
         }
+        CACHE_ROW_DELETES[normalized]?.let { table ->
+            require(parameters == 1)
+            val id = statement.values.single() as? Long ?: error("Missing cache entry id")
+            val key = storageKey(table, id)
+            val existed = readStorageValue(key) != null
+            removeStorageValue(key)
+            return QueryResult.Value(if (existed) 1L else 0L)
+        }
         return when (val table = UPSERT_SQL_TO_TABLE[normalized]) {
             null -> when (val deleteTable = DELETE_SQL_TO_TABLE[normalized]) {
                 null -> error("Unsupported browser cache statement: $normalized")
@@ -95,6 +103,17 @@ internal class BrowserStorageSqlDriver(
         binders: (SqlPreparedStatement.() -> Unit)?,
     ): QueryResult<R> {
         val normalized = sql.normalizedSql()
+        if (normalized == CACHE_ENTRIES_SQL) {
+            require(parameters == 0)
+            val rows = CACHE_COLUMNS.keys.flatMap { table ->
+                keysForTable(table).mapNotNull { key ->
+                    val id = key.substringAfterLast(':').toLongOrNull() ?: return@mapNotNull null
+                    val json = readStorageValue(key) ?: return@mapNotNull null
+                    listOf<Any?>(table, id, json.encodeToByteArray().size.toLong())
+                }
+            }
+            return mapper(BrowserCursor(rows))
+        }
         val table = SELECT_SQL_TO_TABLE[normalized]
             ?: error("Unsupported browser cache query: $normalized")
         val expectedParameters = if (table in KEYED_TABLES) 1 else 0
@@ -176,23 +195,22 @@ internal class BrowserStorageSqlDriver(
         }
     }
 
-    private class BrowserCursor(private val value: String?) : SqlCursor {
-        private var consumed = false
+    private class BrowserCursor(private val rows: List<List<Any?>>) : SqlCursor {
+        constructor(value: String?) : this(value?.let { listOf(listOf(it)) } ?: emptyList())
+        private var rowIndex = -1
 
-        override fun next(): QueryResult<Boolean> = QueryResult.Value(
-            !consumed && value != null,
-        ).also { consumed = true }
+        override fun next(): QueryResult<Boolean> = QueryResult.Value(++rowIndex < rows.size)
 
-        override fun getString(index: Int): String? = valueAt(index)
-        override fun getLong(index: Int): Long? = valueAt(index)?.toLongOrNull()
-        override fun getBytes(index: Int): ByteArray? = valueAt(index)?.encodeToByteArray()
-        override fun getDouble(index: Int): Double? = valueAt(index)?.toDoubleOrNull()
-        override fun getBoolean(index: Int): Boolean? = valueAt(index)?.toBooleanStrictOrNull()
+        override fun getString(index: Int): String? = valueAt(index) as? String
+        override fun getLong(index: Int): Long? = (valueAt(index) as? Long) ?: getString(index)?.toLongOrNull()
+        override fun getBytes(index: Int): ByteArray? = getString(index)?.encodeToByteArray()
+        override fun getDouble(index: Int): Double? = getString(index)?.toDoubleOrNull()
+        override fun getBoolean(index: Int): Boolean? = getString(index)?.toBooleanStrictOrNull()
 
-        private fun valueAt(index: Int): String? {
-            require(index == 0) { "Browser cache queries expose one column" }
-            check(consumed) { "Call next() before reading the cursor" }
-            return value
+        private fun valueAt(index: Int): Any? {
+            check(rowIndex in rows.indices) { "Cursor is not on a row" }
+            require(index in rows[rowIndex].indices) { "Column index is out of bounds" }
+            return rows[rowIndex][index]
         }
     }
 
@@ -258,7 +276,7 @@ internal class BrowserStorageSqlDriver(
 
     private fun removeStorageValue(key: String) {
         val removed = persistenceEnabled && runCatching { storage.remove(key) }.isSuccess
-        check(removed || isCacheKey(key)) { strings.browserDataSaveFailed }
+        check(removed || (!persistenceEnabled && isCacheKey(key))) { strings.browserDataSaveFailed }
         volatileStorage.remove(key)
     }
 
@@ -292,6 +310,18 @@ internal class BrowserStorageSqlDriver(
             "CachedUserPlaylist",
         )
         val CACHE_TABLES = KEYED_TABLES + setOf("CachedRecommendResource", "CachedRecommendSongs")
+        val CACHE_COLUMNS = linkedMapOf(
+            "CachedCommentMusic" to "song_id", "CachedLyric" to "song_id",
+            "CachedPlaylistDetail" to "playlist_id", "CachedPlaylistTrackAll" to "playlist_id",
+            "CachedRecommendResource" to "singleton", "CachedRecommendSongs" to "singleton",
+            "CachedUserDetail" to "uid", "CachedUserLevel" to "uid", "CachedUserPlaylist" to "uid",
+        )
+        val CACHE_ROW_DELETES = CACHE_COLUMNS.map { (table, column) ->
+            "DELETE FROM $table WHERE $column = ?" to table
+        }.toMap()
+        val CACHE_ENTRIES_SQL = CACHE_COLUMNS.map { (table, column) ->
+            "SELECT '$table' AS table_name, $column AS entry_id, length(CAST(json AS BLOB)) AS bytes FROM $table"
+        }.joinToString(" UNION ALL ")
 
         val SUPPORTED_CREATE_SQL = setOf(
             "CREATE TABLE IF NOT EXISTS CachedCommentMusic ( song_id INTEGER NOT NULL PRIMARY KEY, json TEXT NOT NULL )",

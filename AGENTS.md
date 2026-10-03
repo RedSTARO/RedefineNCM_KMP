@@ -112,6 +112,14 @@ The Home/user-playlist profile hero follows the same cache-then-network contract
 detail and level data render immediately in the status surface below the avatar, remain visible
 while the network refresh runs, and are replaced only by a valid network response.
 
+Disposable JSON responses in the nine `Cached*` tables share `MetadataCache`: a default 128 MiB
+UTF-8 payload budget (64/128/256/512 MiB selectable in Settings) and a 4096-entry cap. Access order
+is tracked within the process; legacy rows have no access timestamps. Oversized responses still
+render but are not cached. Settings reports the payload size and can clear those tables, never
+`LocalLibrary`, `PlayerStatus`, `DownloadQueue`, or downloaded audio. Clearing reuses SQLite pages
+without promising that the database file shrinks; the browser's storage quota may be lower.
+All cache writes must pass through this manager. Cache maintenance queries add no schema tables.
+
 ### D4 — The lyric surface is a capability interface; the transport surface is not shared — **(updated 2026-09-08)**
 
 The two surfaces are wired differently, and the old wording here described both as "one common

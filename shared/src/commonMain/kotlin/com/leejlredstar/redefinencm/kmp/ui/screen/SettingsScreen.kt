@@ -152,6 +152,8 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.ThemeMode
 import com.leejlredstar.redefinencm.kmp.ui.theme.ThemePreferences
 import com.leejlredstar.redefinencm.kmp.ui.theme.dynamicColorSupported
 import kotlin.math.roundToInt
+import com.leejlredstar.redefinencm.kmp.data.MetadataCache
+import com.leejlredstar.redefinencm.kmp.util.getLongAsync
 
 /**
  * The lyric surface's capabilities, as this target has them.
@@ -180,7 +182,13 @@ fun SettingsScreen(
     localLibrary: LocalLibraryStore = koinInject(),
     nowPlayingViewModel: NowPlayingViewModel = koinInject(),
     songTransitions: SongTransitionCoordinator = koinInject(),
+    metadataCache: MetadataCache = koinInject(),
 ) {
+    val cacheBytes by metadataCache.bytes.collectAsState()
+    var cacheLimit by remember(settings) { mutableStateOf(MetadataCache.DefaultLimitMib) }
+    var cacheRefreshRequest by remember { mutableIntStateOf(0) }
+    var cacheClearing by remember { mutableStateOf(false) }
+    var cacheReadFailed by remember { mutableStateOf(false) }
     var onlineQuality by remember(settings) { mutableStateOf(SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT.name) }
     var dlQuality by remember(settings) { mutableStateOf(SettingKeys.DOWNLOAD_QUALITY_DEFAULT.name) }
     var replacePlaylist by remember(settings) { mutableStateOf(SettingKeys.REPLACE_PLAYLIST_DEFAULT) }
@@ -242,6 +250,7 @@ fun SettingsScreen(
         I18n.load(settings)
         onlineQuality = settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT.name)
         dlQuality = settings.getString(SettingKeys.DOWNLOAD_QUALITY, SettingKeys.DOWNLOAD_QUALITY_DEFAULT.name)
+        cacheLimit = MetadataCache.normalizeLimit(settings.getLong(SettingKeys.METADATA_CACHE_LIMIT_MIB, MetadataCache.DefaultLimitMib))
         replacePlaylist = settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT)
         checkUpdate = settings.getBoolean(SettingKeys.CHECK_UPDATE, false)
         searchPrediction = settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true)
@@ -317,6 +326,7 @@ fun SettingsScreen(
         try {
             onlineQuality = settings.getStringAsync(SettingKeys.ONLINE_PLAY_QUALITY, SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT.name)
             dlQuality = settings.getStringAsync(SettingKeys.DOWNLOAD_QUALITY, SettingKeys.DOWNLOAD_QUALITY_DEFAULT.name)
+            cacheLimit = MetadataCache.normalizeLimit(settings.getLongAsync(SettingKeys.METADATA_CACHE_LIMIT_MIB, MetadataCache.DefaultLimitMib))
             replacePlaylist = settings.getBooleanAsync(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT)
             checkUpdate = settings.getBooleanAsync(SettingKeys.CHECK_UPDATE, false)
             searchPrediction = settings.getBooleanAsync(SettingKeys.SEARCH_PREDICTION, true)
@@ -358,6 +368,19 @@ fun SettingsScreen(
         }
     }
 
+    LaunchedEffect(metadataCache, settingsLoaded, cacheRefreshRequest) {
+        if (!settingsLoaded) return@LaunchedEffect
+        cacheReadFailed = false
+        try {
+            metadataCache.refresh()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            cacheReadFailed = true
+            settingsMessage = strings.metadataCacheFailed
+        }
+    }
+
     val launchImport = rememberImportFileLauncher { json ->
         scope.launch {
             if (applySettingsBackup(json, settings)) {
@@ -379,6 +402,7 @@ fun SettingsScreen(
                 }
                 reloadSettingsSnapshot()
                 settingsMessage = strings.settingsImported
+                cacheRefreshRequest += 1
             } else {
                 lyricSourceWriteGeneration += 1
                 lyricDisplayWriteGeneration += 1
@@ -786,6 +810,56 @@ fun SettingsScreen(
                     count = generalCount,
                 ) {
                     mainViewModel.checkForUpdatesNow()
+                }
+
+                SettingsSectionLabel(strings.metadataCache, settingsPalette)
+                SettingsValue(
+                    label = strings.metadataCacheUsage,
+                    value = if (cacheReadFailed) strings.metadataCacheUnavailable else cacheBytes?.let {
+                        strings.metadataCacheSizeKiB((it + 1_023) / 1_024)
+                    } ?: strings.loading,
+                    supportingText = strings.metadataCacheHint,
+                    accentPalette = settingsPalette,
+                    index = 0,
+                    count = 3,
+                )
+                SettingsDropdownRow(
+                    label = strings.metadataCacheLimit,
+                    valueLabel = strings.metadataCacheSizeMiB(cacheLimit),
+                    options = MetadataCache.LimitChoicesMib,
+                    optionLabel = { strings.metadataCacheSizeMiB(it) },
+                    accentPalette = settingsPalette,
+                    index = 1,
+                    count = 3,
+                    supportingText = listOf(strings.metadataCacheLimitHint),
+                ) { value ->
+                    cacheLimit = value
+                    persistSettings(
+                        write = { settings.setLong(SettingKeys.METADATA_CACHE_LIMIT_MIB, value) },
+                        onPersisted = { cacheRefreshRequest += 1 },
+                    )
+                }
+                SettingsButton(
+                    if (cacheClearing) strings.metadataCacheClearing else strings.metadataCacheClear,
+                    settingsPalette,
+                    index = 2,
+                    count = 3,
+                    enabled = !cacheClearing,
+                ) {
+                    cacheClearing = true
+                    scope.launch {
+                        try {
+                            metadataCache.clear()
+                            cacheReadFailed = false
+                            settingsMessage = strings.metadataCacheCleared
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            settingsMessage = strings.metadataCacheFailed
+                        } finally {
+                            cacheClearing = false
+                        }
+                    }
                 }
 
                 SettingsSectionLabel(strings.backup, settingsPalette)

@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.util
 
+import com.leejlredstar.redefinencm.kmp.data.MetadataCache
 import com.leejlredstar.redefinencm.kmp.data.local.LocalLibraryDocument
 import com.leejlredstar.redefinencm.kmp.data.auth.normalizeServerAddress
 import com.leejlredstar.redefinencm.kmp.data.local.LocalPlaylist
@@ -45,6 +46,8 @@ data class SettingsBackupData(
     // New exports always provide both values, including defaults, for older importers as well.
     val onlinePlayQuality: String? = null,
     val downloadQuality: String? = null,
+    /** Missing in older files; keep the destination's cache budget in that case. */
+    val metadataCacheLimitMiB: Long? = null,
     val replacePlaylist: Boolean = SettingKeys.REPLACE_PLAYLIST_DEFAULT,
     val checkUpdate: Boolean = false,
     val searchPrediction: Boolean = true,
@@ -109,6 +112,9 @@ internal fun encodeSettingsBackup(
         localLibrary = localLibrary?.playlists,
         onlinePlayQuality = getString(SettingKeys.ONLINE_PLAY_QUALITY, SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT.name),
         downloadQuality = getString(SettingKeys.DOWNLOAD_QUALITY, SettingKeys.DOWNLOAD_QUALITY_DEFAULT.name),
+        metadataCacheLimitMiB = MetadataCache.normalizeLimit(
+            getLong(SettingKeys.METADATA_CACHE_LIMIT_MIB, MetadataCache.DefaultLimitMib),
+        ),
         replacePlaylist = getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT),
         checkUpdate = getBoolean(SettingKeys.CHECK_UPDATE, false),
         searchPrediction = getBoolean(SettingKeys.SEARCH_PREDICTION, true),
@@ -163,6 +169,7 @@ internal fun applySettingsBackup(
     setLong: (key: String, value: Long) -> Unit = { _, _ -> },
 ): Boolean = try {
     val data = backupJson.decodeFromString<SettingsBackupData>(json)
+    if (data.metadataCacheLimitMiB != null && data.metadataCacheLimitMiB !in MetadataCache.LimitChoicesMib) return false
     // Validate before writing anything, while retaining the older file's valid address spelling.
     val server = data.server.takeIf(String::isNotEmpty)?.trim()?.also { normalizeServerAddress(it) }
     val qqServer = data.qqServer.takeIf(String::isNotEmpty)?.trim()?.also { normalizeServerAddress(it) }
@@ -184,6 +191,7 @@ internal fun applySettingsBackup(
     data.mergeSameSongs?.let { setBoolean(SettingKeys.MERGE_SAME_SONGS, it) }
     data.onlinePlayQuality?.let { setString(SettingKeys.ONLINE_PLAY_QUALITY, it) }
     data.downloadQuality?.let { setString(SettingKeys.DOWNLOAD_QUALITY, it) }
+    data.metadataCacheLimitMiB?.let { setLong(SettingKeys.METADATA_CACHE_LIMIT_MIB, it) }
     setBoolean(SettingKeys.REPLACE_PLAYLIST, data.replacePlaylist)
     setBoolean(SettingKeys.CHECK_UPDATE, data.checkUpdate)
     setBoolean(SettingKeys.SEARCH_PREDICTION, data.searchPrediction)
