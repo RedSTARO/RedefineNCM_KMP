@@ -230,8 +230,12 @@ class NCMApi(private val client: HttpClient) {
 
     // ── Playlist ──
 
-    suspend fun userPlaylist(uid: Long): UserPlaylist =
-        client.get("/user/playlist") { parameter("uid", uid) }.body()
+    suspend fun userPlaylist(uid: Long, limit: Int = 100, offset: Int = 0): UserPlaylist =
+        client.get("/user/playlist") {
+            parameter("uid", uid)
+            parameter("limit", limit)
+            parameter("offset", offset)
+        }.body()
 
     suspend fun playlistTrackAll(id: Long): PlaylistTrackAll =
         client.get("/playlist/track/all") { parameter("id", id) }.body()

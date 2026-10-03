@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -64,7 +65,15 @@ internal fun <T> cacheThenNetworkFlow(
         emit(CacheThenNetworkData(cached, CacheThenNetworkSource.CACHE))
     }
     fetchNetwork()?.let { network ->
-        writeCache(network)
+        try {
+            writeCache(network)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            // Cached copies are expendable. A disk/quota failure must not hide an otherwise
+            // valid response or make the account page discard its freshly loaded contents.
+            println("Cache write failed: ${failure::class.simpleName}")
+        }
         emit(CacheThenNetworkData(network, CacheThenNetworkSource.NETWORK))
     }
 }
@@ -240,14 +249,29 @@ class Repository(
                     ?.let { json.decodeFromString<UserPlaylist>(it) }
             }.getOrNull()?.takeIf { it.code == API_SUCCESS_CODE }
         },
-        fetchNetwork = {
-            safeApiCall { api.userPlaylist(uid) }
-                ?.takeIf { it.code == API_SUCCESS_CODE }
-        },
+        fetchNetwork = { fetchAllUserPlaylists(uid) },
         writeCache = { network ->
             db.cachedUserPlaylistQueries.upsert(uid, json.encodeToString(network))
         },
     )
+
+    private suspend fun fetchAllUserPlaylists(uid: Long): UserPlaylist? = withTimeoutOrNull(60_000) {
+        val playlists = linkedMapOf<Long, UserPlaylistEach>()
+        var offset = 0
+        var more = true
+        while (more) {
+            val page = safeApiCall { api.userPlaylist(uid, limit = 100, offset = offset) }
+                ?.takeIf { it.code == API_SUCCESS_CODE } ?: return@withTimeoutOrNull null
+            val previousSize = playlists.size
+            page.playlist.forEach { playlists[it.id] = it }
+            more = page.more
+            // A server ignoring offset or claiming more after an empty page must not loop
+            // forever or replace a complete cache with a partial response.
+            if (more && playlists.size == previousSize) return@withTimeoutOrNull null
+            offset += page.playlist.size
+        }
+        UserPlaylist(code = API_SUCCESS_CODE, more = false, playlist = playlists.values.toList())
+    }
 
     // ── Playlist ──
 

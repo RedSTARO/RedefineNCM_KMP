@@ -1,14 +1,41 @@
 package com.leejlredstar.redefinencm.kmp.data
 
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertFailsWith
 
 class RepositoryCacheThenNetworkTest {
+
+    @Test
+    fun aCacheWriteFailureDoesNotDiscardTheNetworkAnswer() = runTest {
+        val emissions = cacheThenNetworkFlow(
+            readCache = { "cached" },
+            fetchNetwork = { "network" },
+            writeCache = { error("disk full") },
+        ).toList()
+
+        assertEquals(listOf(
+            CacheThenNetworkData("cached", CacheThenNetworkSource.CACHE),
+            CacheThenNetworkData("network", CacheThenNetworkSource.NETWORK),
+        ), emissions)
+    }
+
+    @Test
+    fun cacheCancellationStillCancelsTheRequest() = runTest {
+        assertFailsWith<CancellationException> {
+            cacheThenNetworkFlow(
+                readCache = { null },
+                fetchNetwork = { "network" },
+                writeCache = { throw CancellationException("account switched") },
+            ).toList()
+        }
+    }
 
     @Test
     fun cachedValueIsEmittedBeforeSuspendedNetworkThenReplacedAndCached() = runTest {
