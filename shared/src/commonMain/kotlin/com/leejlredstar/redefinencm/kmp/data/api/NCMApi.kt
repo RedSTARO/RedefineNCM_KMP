@@ -169,19 +169,19 @@ class NCMApi(private val client: HttpClient) {
     // ── Account ──
 
     suspend fun userAccount(): UserAccount =
-        client.get("/user/account").body()
+        client.get("user/account").body()
 
     suspend fun userDetail(uid: Long): UserDetail =
-        client.get("/user/detail") { parameter("uid", uid) }.body()
+        client.get("user/detail") { parameter("uid", uid) }.body()
 
     suspend fun userLevel(credentialCookie: String? = null): UserLevelResponse =
-        client.get("/user/level") { appendCredentialCookie(credentialCookie) }.body()
+        client.get("user/level") { appendCredentialCookie(credentialCookie) }.body()
 
     suspend fun userRecord(
         uid: Long,
         type: Int = 1,
         credentialCookie: String? = null,
-    ): UserRecordResponse = client.get("/user/record") {
+    ): UserRecordResponse = client.get("user/record") {
         require(uid > 0) { "uid must be positive" }
         require(type == 0 || type == 1) { "type must be 0 or 1" }
         parameter("uid", uid)
@@ -192,7 +192,7 @@ class NCMApi(private val client: HttpClient) {
     suspend fun recentSongs(
         limit: Int = 100,
         credentialCookie: String? = null,
-    ): RecentSongsResponse = client.get("/record/recent/song") {
+    ): RecentSongsResponse = client.get("record/recent/song") {
         require(limit > 0) { "limit must be positive" }
         parameter("limit", limit)
         appendCredentialCookie(credentialCookie)
@@ -201,88 +201,88 @@ class NCMApi(private val client: HttpClient) {
     // ── Login ──
 
     suspend fun loginStatus(cookie: String): LoginStatus =
-        client.post("/login/status") {
+        client.post("login/status") {
             parameter("cookie", cookie)
         }.body()
 
     suspend fun loginQrKey(): LoginQrKey =
-        client.post("/login/qr/key").body()
+        client.post("login/qr/key").body()
 
     suspend fun loginQrCreate(key: String, qrimg: Boolean): LoginQrCreate =
-        client.post("/login/qr/create") {
+        client.post("login/qr/create") {
             parameter("key", key)
             parameter("qrimg", qrimg)
         }.body()
 
     suspend fun loginQrCheck(key: String): LoginQrCheck =
-        client.post("/login/qr/check") {
+        client.post("login/qr/check") {
             parameter("key", key)
         }.body()
 
     suspend fun dailysignin(type: Int): Dailysignin =
-        client.get("/daily_signin") { parameter("type", type) }.body()
+        client.get("daily_signin") { parameter("type", type) }.body()
 
     suspend fun vipGrowthPointGetAll(
         credentialCookie: String? = null,
-    ): VipGrowthPointResponse = client.get("/vip/growthpoint/getall") {
+    ): VipGrowthPointResponse = client.get("vip/growthpoint/getall") {
         appendCredentialCookie(credentialCookie)
     }.body()
 
     // ── Playlist ──
 
     suspend fun userPlaylist(uid: Long, limit: Int = 100, offset: Int = 0): UserPlaylist =
-        client.get("/user/playlist") {
+        client.get("user/playlist") {
             parameter("uid", uid)
             parameter("limit", limit)
             parameter("offset", offset)
         }.body()
 
     suspend fun playlistTrackAll(id: Long): PlaylistTrackAll =
-        client.get("/playlist/track/all") { parameter("id", id) }.body()
+        client.get("playlist/track/all") { parameter("id", id) }.body()
 
     suspend fun playlistDetail(id: Long): PlaylistDetail =
-        client.get("/playlist/detail") { parameter("id", id) }.body()
+        client.get("playlist/detail") { parameter("id", id) }.body()
 
     suspend fun playlistUpdatePlaycount(id: Long): PlaylistUpdatePlayCount =
-        client.get("/playlist/update/playcount") { parameter("id", id) }.body()
+        client.get("playlist/update/playcount") { parameter("id", id) }.body()
 
     suspend fun intelligenceList(
         id: Long,
         pid: Long,
         sid: Long? = null,
-    ): IntelligenceListResponse = client.get("/playmode/intelligence/list") {
+    ): IntelligenceListResponse = client.get("playmode/intelligence/list") {
         appendQueryParameters(intelligenceListQueryParameters(id, pid, sid))
     }.body()
 
     // ── Song ──
 
     suspend fun songUrlV1(id: List<Long>, level: String): SongUrlV1 =
-        client.get("/song/url/v1") {
+        client.get("song/url/v1") {
             parameter("id", id.joinToString(","))
             parameter("level", level)
         }.body()
 
     suspend fun songDetail(ids: List<Long>): SongDetail =
-        client.get("/song/detail") {
+        client.get("song/detail") {
             parameter("ids", ids.joinToString(","))
         }.body()
 
     suspend fun songWikiSummary(id: Long): SongWikiSummaryResponse {
         require(id > 0) { "id must be positive" }
-        return client.get("/song/wiki/summary") {
+        return client.get("song/wiki/summary") {
             parameter("id", id)
         }.body()
     }
 
     suspend fun songDynamicCover(id: Long): SongDynamicCoverResponse {
         require(id > 0) { "id must be positive" }
-        return client.get("/song/dynamic/cover") {
+        return client.get("song/dynamic/cover") {
             parameter("id", id)
         }.body()
     }
 
     suspend fun audioMatch(durationSeconds: Int, audioFingerprint: String): AudioMatch =
-        client.post("/audio/match") {
+        client.post("audio/match") {
             parameter("duration", durationSeconds)
             parameter("audioFP", audioFingerprint)
         }.body()
@@ -293,7 +293,7 @@ class NCMApi(private val client: HttpClient) {
         id: Long,
         sourceId: Long,
         credentialCookie: String,
-    ): NcmHttpResponse<WeblogResponse> = client.post("/weblog") {
+    ): NcmHttpResponse<WeblogResponse> = client.post("weblog") {
         appendCredentialCookie(credentialCookie)
         contentType(ContentType.Application.Json)
         setBody(WeblogRequest(WeblogRequestData(startPlaybackWeblogLogs(id, sourceId))))
@@ -310,7 +310,7 @@ class NCMApi(private val client: HttpClient) {
         level: String? = null,
         totalSeconds: Long? = null,
         credentialCookie: String? = null,
-    ): NcmHttpResponse<ScrobbleV1Response> = client.get("/scrobble/v1") {
+    ): NcmHttpResponse<ScrobbleV1Response> = client.get("scrobble/v1") {
         appendQueryParameters(
             scrobbleV1QueryParameters(
                 id = id,
@@ -334,7 +334,7 @@ class NCMApi(private val client: HttpClient) {
         playMode: String,
         type: String = "song",
         credentialCookie: String? = null,
-    ): NcmHttpResponse<PlayStateSubmitResponse> = client.get("/relay/play/state/submit") {
+    ): NcmHttpResponse<PlayStateSubmitResponse> = client.get("relay/play/state/submit") {
         appendQueryParameters(
             submitPlayStateQueryParameters(
                 id = id,
@@ -350,7 +350,7 @@ class NCMApi(private val client: HttpClient) {
     // ── Search ──
 
     suspend fun search(keywords: String, limit: Int = 30, offset: Int = 0): SearchResult =
-        client.get("/cloudsearch") {
+        client.get("cloudsearch") {
             parameter("keywords", keywords)
             parameter("limit", limit)
             if (offset > 0) parameter("offset", offset)
@@ -359,26 +359,26 @@ class NCMApi(private val client: HttpClient) {
     // ── Artist and album ──
 
     suspend fun artistDetail(id: Long): ArtistDetailResponse =
-        client.get("/artist/detail") { parameter("id", id) }.body()
+        client.get("artist/detail") { parameter("id", id) }.body()
 
     suspend fun artistTopSongs(id: Long): ArtistTopSongs =
-        client.get("/artist/top/song") { parameter("id", id) }.body()
+        client.get("artist/top/song") { parameter("id", id) }.body()
 
     suspend fun artistAlbums(id: Long, limit: Int, offset: Int): ArtistAlbums =
-        client.get("/artist/album") {
+        client.get("artist/album") {
             parameter("id", id)
             parameter("limit", limit)
             parameter("offset", offset)
         }.body()
 
     suspend fun album(id: Long): AlbumDetail =
-        client.get("/album") { parameter("id", id) }.body()
+        client.get("album") { parameter("id", id) }.body()
 
     suspend fun searchHotDetail(): SearchHotDetail =
-        client.get("/search/hot/detail").body()
+        client.get("search/hot/detail").body()
 
     suspend fun searchSuggest(keywords: String, type: String = "mobile"): SearchSuggest =
-        client.get("/search/suggest") {
+        client.get("search/suggest") {
             parameter("keywords", keywords)
             parameter("type", type)
         }.body()
@@ -386,31 +386,31 @@ class NCMApi(private val client: HttpClient) {
     // ── Recommend ──
 
     suspend fun recommendSongs(): RecommendSongs =
-        client.get("/recommend/songs").body()
+        client.get("recommend/songs").body()
 
     suspend fun recommendResource(): RecommendResource =
-        client.get("/recommend/resource").body()
+        client.get("recommend/resource").body()
 
     // ── Lyric ──
 
     suspend fun lyric(id: Long): Lyric =
-        client.get("/lyric") { parameter("id", id) }.body()
+        client.get("lyric") { parameter("id", id) }.body()
 
     suspend fun lyricNew(id: Long): Lyric =
-        client.get("/lyric/new") { parameter("id", id) }.body()
+        client.get("lyric/new") { parameter("id", id) }.body()
 
     // ── Like ──
 
     suspend fun like(id: Long?): Like =
-        client.post("/like") { id?.let { parameter("id", it) } }.body()
+        client.post("like") { id?.let { parameter("id", it) } }.body()
 
     suspend fun likelist(uid: Long): LikeList =
-        client.post("/likelist") { parameter("uid", uid) }.body()
+        client.post("likelist") { parameter("uid", uid) }.body()
 
     suspend fun songLikeCheck(ids: List<Long>): SongLikeCheck {
         require(ids.isNotEmpty()) { "ids must not be empty" }
         require(ids.all { it > 0 }) { "ids must contain only positive values" }
-        return client.get("/song/like/check") {
+        return client.get("song/like/check") {
             parameter(
                 "ids",
                 ids.distinct().joinToString(separator = ",", prefix = "[", postfix = "]"),
@@ -421,11 +421,11 @@ class NCMApi(private val client: HttpClient) {
     // ── Comment ──
 
     suspend fun commentMusic(id: Long): CommentMusic =
-        client.get("/comment/music") { parameter("id", id) }.body()
+        client.get("comment/music") { parameter("id", id) }.body()
 
     /** A later page of the latest comments; the first page comes with [commentMusic]. */
     suspend fun commentMusicPage(id: Long, limit: Int, offset: Int): CommentMusic =
-        client.get("/comment/music") {
+        client.get("comment/music") {
             parameter("id", id)
             parameter("limit", limit)
             parameter("offset", offset)
@@ -433,7 +433,7 @@ class NCMApi(private val client: HttpClient) {
 
     /** A page of hot comments; type 0 is a song. */
     suspend fun commentHot(id: Long, limit: Int, offset: Int): CommentHot =
-        client.get("/comment/hot") {
+        client.get("comment/hot") {
             parameter("id", id)
             parameter("type", 0)
             parameter("limit", limit)

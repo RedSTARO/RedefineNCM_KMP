@@ -1133,4 +1133,5 @@
     <!-- BrowserStorageSqlDriver.kt -->
     <string name="browserDataSaveFailed">Couldn't save local data: browser storage is full or writing is blocked. This change wasn't saved.</string>
     <string name="neteaseCookieInvalid">Invalid Cookie format. Paste a single line of cookie values without line breaks or the “Cookie:” prefix.</string>
+    <string name="serverAddressInvalid">Enter a server address starting with http:// or https://. A path is allowed, but spaces, query parameters and fragments are not.</string>
 </resources>

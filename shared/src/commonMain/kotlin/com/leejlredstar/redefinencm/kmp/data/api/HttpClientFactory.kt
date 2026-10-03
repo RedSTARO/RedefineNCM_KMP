@@ -125,7 +125,12 @@ object HttpClientFactory {
             })
             defaultRequest {
                 url(baseUrl)
-                contentType(ContentType.Application.Json)
+                // Treat the configured path as a directory even in legacy saved addresses
+                // without a trailing slash. NCMApi uses relative endpoint paths below it.
+                url.encodedPath = url.encodedPath.trimEnd('/') + "/"
+                // Query-only GET/POST calls do not carry JSON bodies. A default JSON Content-Type
+                // would force a fresh CORS preflight for every timestamped URL. Calls with a
+                // JSON body (startplay) set their Content-Type explicitly in NCMApi.
                 // defaultRequest's receiver is DefaultRequestBuilder, not HttpRequestBuilder,
                 // so default query params are appended via url.parameters (merged into every request).
                 url.parameters.append("realIP", realIP)

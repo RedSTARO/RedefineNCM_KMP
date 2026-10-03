@@ -81,9 +81,12 @@ class LoginViewModel(
      */
     fun saveServer(raw: String) {
         val setting = descriptor.server ?: return
+        val value = runCatching { setting.normalize(raw) }.getOrElse {
+            _serverMessage.value = ServerNotice(UiText { it.serverAddressInvalid }, isError = true)
+            return
+        }
         scope.launch {
             settings.awaitLoaded()
-            val value = setting.normalize(raw)
             val previous = settings.getString(setting.key, setting.default)
             try {
                 settings.setString(setting.key, value)

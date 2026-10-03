@@ -12,6 +12,19 @@ import kotlin.test.assertTrue
 class SettingsBackupTest {
 
     @Test
+    fun invalidServerAddressesRejectTheBackupBeforeAnySettingIsWritten() {
+        var writes = 0
+        val applied = applySettingsBackup(
+            """{"server":"https://valid.example.test/","qqServer":"localhost:8080"}""",
+            setString = { _, _ -> writes++ },
+            setBoolean = { _, _ -> writes++ },
+            setLong = { _, _ -> writes++ },
+        )
+        assertFalse(applied)
+        assertEquals(0, writes)
+    }
+
+    @Test
     fun exportedBackupDoesNotContainCookieCredential() {
         val json = encodeSettingsBackup(
             getString = { key, default ->

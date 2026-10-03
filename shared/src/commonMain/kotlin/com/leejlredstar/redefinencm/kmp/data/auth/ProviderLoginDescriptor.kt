@@ -3,6 +3,10 @@ package com.leejlredstar.redefinencm.kmp.data.auth
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 import com.leejlredstar.redefinencm.kmp.i18n.UiText
 import com.leejlredstar.redefinencm.kmp.i18n.text
+import com.leejlredstar.redefinencm.kmp.i18n.strings
+import io.ktor.http.Url
+import io.ktor.http.URLBuilder
+import io.ktor.http.encodedPath
 
 // The descriptors below are built once, when the DI module starts, but the pages read their words
 // every time they draw. So each takes its copy as UiText and hands out the text in the language
@@ -28,10 +32,20 @@ class ProviderServerSetting(
      * The form an address is stored in: trimmed, with exactly one trailing slash. An empty field
      * means the default, because an empty address would leave every request without a host.
      */
-    fun normalize(raw: String): String {
-        val trimmed = raw.trim()
-        return if (trimmed.isEmpty()) default else "${trimmed.trimEnd('/')}/"
-    }
+    fun normalize(raw: String): String = normalizeServerAddress(raw.trim().ifEmpty { default })
+}
+
+/** Shared by both address editors and backup import; reject invalid input before any write. */
+internal fun normalizeServerAddress(raw: String): String {
+    val address = raw.trim()
+    val hasProtocol = address.startsWith("http://", ignoreCase = true) || address.startsWith("https://", ignoreCase = true)
+    // Ktor accepts "https://" and supplies localhost; a settings field must not invent a host.
+    val authority = address.substringAfter("://", "").substringBefore('/').substringBefore('?').substringBefore('#')
+    val hasHost = authority.substringAfterLast('@').substringBefore(':').isNotBlank()
+    val url = if (hasProtocol && hasHost && address.none(Char::isWhitespace)) runCatching { Url(address) }.getOrNull() else null
+    require(url != null && url.host.isNotBlank() && url.port in 1..65535 &&
+        url.parameters.isEmpty() && url.fragment.isEmpty()) { strings.serverAddressInvalid }
+    return URLBuilder(url).apply { encodedPath = encodedPath.trimEnd('/') + "/" }.buildString()
 }
 
 /** The outcome of [ProviderServerSetting.check]. */

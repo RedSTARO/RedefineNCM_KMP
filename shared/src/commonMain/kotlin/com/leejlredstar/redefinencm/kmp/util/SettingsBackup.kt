@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.util
 
 import com.leejlredstar.redefinencm.kmp.data.local.LocalLibraryDocument
+import com.leejlredstar.redefinencm.kmp.data.auth.normalizeServerAddress
 import com.leejlredstar.redefinencm.kmp.data.local.LocalPlaylist
 import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
 import com.leejlredstar.redefinencm.kmp.i18n.LanguageSetting
@@ -162,6 +163,9 @@ internal fun applySettingsBackup(
     setLong: (key: String, value: Long) -> Unit = { _, _ -> },
 ): Boolean = try {
     val data = backupJson.decodeFromString<SettingsBackupData>(json)
+    // Validate before writing anything, while retaining the older file's valid address spelling.
+    val server = data.server.takeIf(String::isNotEmpty)?.trim()?.also { normalizeServerAddress(it) }
+    val qqServer = data.qqServer.takeIf(String::isNotEmpty)?.trim()?.also { normalizeServerAddress(it) }
     val lyricSourceMode = data.lyricSourceMode?.let { stored ->
         LyricSourceMode.fromWireValueOrNull(stored) ?: return false
     }
@@ -171,9 +175,9 @@ internal fun applySettingsBackup(
     val songTransitionMode = data.songTransitionMode?.let { stored ->
         SongTransitionMode.fromWireValueOrNull(stored) ?: return false
     }
-    if (data.server.isNotEmpty()) setString(SettingKeys.SERVER, data.server)
+    server?.let { setString(SettingKeys.SERVER, it) }
     data.qqEnabled?.let { setBoolean(SettingKeys.QQ_ENABLED, it) }
-    if (data.qqServer.isNotEmpty()) setString(SettingKeys.QQ_SERVER, data.qqServer)
+    qqServer?.let { setString(SettingKeys.QQ_SERVER, it) }
     data.libraryAggregationMode?.let { setString(SettingKeys.LIBRARY_AGGREGATION_MODE, it) }
     data.localAccountName?.let { setString(SettingKeys.LOCAL_ACCOUNT_NAME, it.trim()) }
     data.localAccountEnabled?.let { setBoolean(SettingKeys.LOCAL_ACCOUNT_ENABLED, it) }

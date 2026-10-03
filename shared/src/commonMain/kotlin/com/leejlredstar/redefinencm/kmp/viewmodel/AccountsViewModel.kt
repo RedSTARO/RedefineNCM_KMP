@@ -194,7 +194,10 @@ class AccountsViewModel(
 
     fun saveServer(provider: MusicProviderId, raw: String) {
         val setting = registrations[provider]?.descriptor?.server ?: return
-        val address = setting.normalize(raw)
+        val address = runCatching { setting.normalize(raw) }.getOrElse {
+            _message.value = strings.serverAddressInvalid
+            return
+        }
         persist(
             write = { settings.setString(setting.key, address) },
             onPersisted = {
@@ -209,7 +212,10 @@ class AccountsViewModel(
     fun checkServer(provider: MusicProviderId, raw: String) {
         val setting = registrations[provider]?.descriptor?.server ?: return
         val check = setting.check ?: return
-        val address = setting.normalize(raw)
+        val address = runCatching { setting.normalize(raw) }.getOrElse {
+            checks.update { it + (provider to ServerCheckResult(false, strings.serverAddressInvalid)) }
+            return
+        }
         checking.update { it + provider }
         checks.update { it - provider }
         scope.launch {
