@@ -7,6 +7,24 @@ import app.cash.sqldelight.db.SqlCursor
 import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.db.SqlPreparedStatement
 import kotlinx.browser.localStorage
+import com.leejlredstar.redefinencm.kmp.i18n.strings
+
+/** Small storage boundary so quota and permission failures can be exercised deterministically. */
+internal interface BrowserDatabaseStorage {
+    fun keys(): List<String>
+    fun get(key: String): String?
+    fun set(key: String, value: String)
+    fun remove(key: String)
+}
+
+private object LocalDatabaseStorage : BrowserDatabaseStorage {
+    override fun keys(): List<String> = buildList {
+        repeat(localStorage.length) { index -> localStorage.key(index)?.let(::add) }
+    }
+    override fun get(key: String): String? = localStorage.getItem(key)
+    override fun set(key: String, value: String) = localStorage.setItem(key, value)
+    override fun remove(key: String) = localStorage.removeItem(key)
+}
 
 /**
  * Synchronous SQLDelight driver for the browser cache used by this project.
@@ -18,10 +36,12 @@ import kotlinx.browser.localStorage
  * intact and persists the exact current query model in localStorage. Unsupported SQL fails
  * immediately so future schema changes cannot silently lose data.
  */
-internal class BrowserStorageSqlDriver : SqlDriver {
+internal class BrowserStorageSqlDriver(
+    private val storage: BrowserDatabaseStorage = LocalDatabaseStorage,
+) : SqlDriver {
     private val listeners = mutableMapOf<String, MutableSet<Query.Listener>>()
     private val volatileStorage = linkedMapOf<String, String>()
-    private var persistenceEnabled = loadPersistentStorage()
+    private val persistenceEnabled = loadPersistentStorage()
     private var transaction: BrowserTransaction? = null
 
     var schemaVersion: Long
@@ -132,8 +152,11 @@ internal class BrowserStorageSqlDriver : SqlDriver {
 
         override fun endTransaction(successful: Boolean): QueryResult<Unit> {
             check(transaction === this) { "Transactions must end in LIFO order" }
-            if (!successful) restoreStorage(snapshot)
-            transaction = enclosing
+            try {
+                if (!successful) restoreStorage(snapshot)
+            } finally {
+                transaction = enclosing
+            }
             return QueryResult.Unit
         }
     }
@@ -191,15 +214,12 @@ internal class BrowserStorageSqlDriver : SqlDriver {
     private fun snapshotStorage(): Map<String, String> = volatileStorage.toMap()
 
     private fun restoreStorage(snapshot: Map<String, String>) {
-        val oldKeys = storageKeys()
-        volatileStorage.clear()
-        volatileStorage.putAll(snapshot)
-        if (!persistenceEnabled) return
-        val restored = runCatching {
-            oldKeys.forEach(localStorage::removeItem)
-            snapshot.forEach { (key, value) -> localStorage.setItem(key, value) }
-        }.isSuccess
-        if (!restored) persistenceEnabled = false
+        // Do not erase the whole database to roll back a cache update. Under quota pressure
+        // rewriting that snapshot could fail after deleting unrelated playlists and queues.
+        (storageKeys() - snapshot.keys).forEach(::removeStorageValue)
+        snapshot.forEach { (key, value) ->
+            if (volatileStorage[key] != value) writeStorageValue(key, value)
+        }
     }
 
     private fun storageKeys(): List<String> = volatileStorage.keys.toList()
@@ -207,44 +227,54 @@ internal class BrowserStorageSqlDriver : SqlDriver {
     private fun readStorageValue(key: String): String? = volatileStorage[key]
 
     /**
-     * Cache persistence is best effort: quota/security failures must never discard a successful
-     * network response. Keep the full session cache in memory, evict older persistent cache rows,
-     * and fall back to memory-only storage when even the new row cannot fit.
+     * Only Cached* rows are expendable. A cache too large for localStorage stays in memory;
+     * user data must reach storage before it is published, or its caller receives a failure.
+     * A failed setItem leaves the previous stored value intact. Do not remove it or disable
+     * persistence globally: smaller writes can still succeed after a quota failure.
      */
     private fun writeStorageValue(key: String, value: String) {
-        volatileStorage[key] = value
-        if (!persistenceEnabled || persistValue(key, value)) return
-
-        volatileStorage.entries
-            .asSequence()
-            .filter { (candidate, _) -> candidate != key && candidate != SCHEMA_VERSION_KEY }
-            .sortedByDescending { (_, cachedValue) -> cachedValue.length }
-            .forEach { (candidate, _) ->
-                runCatching { localStorage.removeItem(candidate) }
-                if (persistValue(key, value)) return
+        val mustPersist = key != SCHEMA_VERSION_KEY && !isCacheKey(key)
+        if (!mustPersist) volatileStorage[key] = value
+        if (persistenceEnabled) {
+            if (persistValue(key, value)) {
+                volatileStorage[key] = value
+                return
             }
-
-        runCatching { localStorage.removeItem(key) }
-        persistenceEnabled = false
+            val candidates = volatileStorage.entries
+                .filter { (candidate, _) -> candidate != key && isCacheKey(candidate) }
+                .sortedByDescending { (_, cachedValue) -> cachedValue.length }
+            for ((candidate, _) in candidates) {
+                runCatching { storage.remove(candidate) }
+                if (persistValue(key, value)) {
+                    volatileStorage[key] = value
+                    return
+                }
+            }
+            // An oversized cache may replace an older row; do not reload that stale row later.
+            if (isCacheKey(key)) runCatching { storage.remove(key) }
+        }
+        check(!mustPersist) { strings.browserDataSaveFailed }
     }
 
     private fun removeStorageValue(key: String) {
+        val removed = persistenceEnabled && runCatching { storage.remove(key) }.isSuccess
+        check(removed || isCacheKey(key)) { strings.browserDataSaveFailed }
         volatileStorage.remove(key)
-        if (persistenceEnabled) runCatching { localStorage.removeItem(key) }
     }
 
     private fun persistValue(key: String, value: String): Boolean =
-        runCatching { localStorage.setItem(key, value) }.isSuccess
+        runCatching { storage.set(key, value) }.isSuccess
 
     private fun loadPersistentStorage(): Boolean = runCatching {
         val loaded = linkedMapOf<String, String>()
-        repeat(localStorage.length) { index ->
-            val key = localStorage.key(index)?.takeIf { it.startsWith(STORAGE_PREFIX) }
-                ?: return@repeat
-            localStorage.getItem(key)?.let { loaded[key] = it }
+        storage.keys().filter { it.startsWith(STORAGE_PREFIX) }.forEach { key ->
+            storage.get(key)?.let { loaded[key] = it }
         }
         volatileStorage.putAll(loaded)
     }.isSuccess
+
+    private fun isCacheKey(key: String): Boolean = key.removePrefix(STORAGE_PREFIX)
+        .substringBefore(':') in CACHE_TABLES
 
     private fun String.normalizedSql(): String = trim().replace(SQL_WHITESPACE, " ")
 
@@ -261,6 +291,7 @@ internal class BrowserStorageSqlDriver : SqlDriver {
             "CachedUserLevel",
             "CachedUserPlaylist",
         )
+        val CACHE_TABLES = KEYED_TABLES + setOf("CachedRecommendResource", "CachedRecommendSongs")
 
         val SUPPORTED_CREATE_SQL = setOf(
             "CREATE TABLE IF NOT EXISTS CachedCommentMusic ( song_id INTEGER NOT NULL PRIMARY KEY, json TEXT NOT NULL )",

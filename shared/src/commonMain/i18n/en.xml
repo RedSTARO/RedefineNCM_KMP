@@ -1130,4 +1130,6 @@
 
     <!-- transition/ModelDownload.kt -->
     <string name="beatModelChecksumMismatch">the downloaded file doesn't match its checksum</string>
+    <!-- BrowserStorageSqlDriver.kt -->
+    <string name="browserDataSaveFailed">Couldn't save local data: browser storage is full or writing is blocked. This change wasn't saved.</string>
 </resources>

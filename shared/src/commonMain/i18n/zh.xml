@@ -1058,4 +1058,6 @@
 
     <!-- transition/ModelDownload.kt -->
     <string name="beatModelChecksumMismatch">下载的文件与校验值不符</string>
+    <!-- BrowserStorageSqlDriver.kt -->
+    <string name="browserDataSaveFailed">无法保存本机数据：浏览器存储空间不足或不允许写入。本次更改未保存。</string>
 </resources>
