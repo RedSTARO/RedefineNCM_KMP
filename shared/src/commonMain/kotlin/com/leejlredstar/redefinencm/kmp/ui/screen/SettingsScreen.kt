@@ -432,10 +432,14 @@ fun SettingsScreen(
         // The clearance is padding *inside* the scrolling Column, not on ExpressivePage: padding
         // the container would shrink the viewport and stop rows above the floating toolbar,
         // whereas this lets them scroll underneath it while still being reachable at the end.
+        // Keep the restored content position away from the short loading/error panel: measuring
+        // that panel with it would clamp a saved position near About back to zero on navigation.
+        val contentScrollState = rememberScrollState()
+        val loadingScrollState = rememberScrollState()
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(if (settingsLoaded && settingsLoadError == null) contentScrollState else loadingScrollState)
                 .padding(
                     top = appBarPadding.calculateTopPadding(),
                     bottom = scaffoldPadding.calculateBottomPadding(),

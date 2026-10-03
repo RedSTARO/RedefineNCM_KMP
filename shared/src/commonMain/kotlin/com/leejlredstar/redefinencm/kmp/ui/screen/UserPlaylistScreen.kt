@@ -150,13 +150,12 @@ fun UserPlaylistScreen(
     var rawAccentColor by rememberSaveable(
         userDetail?.profile?.backgroundUrl,
         userDetail?.profile?.avatarUrl,
-        defaultAccentColor,
         stateSaver = AccentColorSaver,
     ) {
-        mutableStateOf(defaultAccentColor)
+        mutableStateOf<Color?>(null)
     }
     val animatedAccentColor by animateColorAsState(
-        targetValue = rawAccentColor,
+        targetValue = rawAccentColor ?: defaultAccentColor,
         animationSpec = spring(),
         label = "userAccent",
     )

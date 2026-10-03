@@ -142,11 +142,11 @@ fun PlaylistDetailScreen(
     }
     val title = playlist?.name ?: strings.playlist
     val defaultAccentColor = MaterialTheme.colorScheme.primaryContainer
-    var rawAccentColor by remember(playlist?.coverImgUrl, defaultAccentColor) {
-        mutableStateOf(defaultAccentColor)
+    var rawAccentColor by remember(playlist?.coverImgUrl) {
+        mutableStateOf<Color?>(null)
     }
     val animatedAccentColor by animateColorAsState(
-        targetValue = rawAccentColor,
+        targetValue = rawAccentColor ?: defaultAccentColor,
         animationSpec = spring(),
         label = "playlistAccent",
     )

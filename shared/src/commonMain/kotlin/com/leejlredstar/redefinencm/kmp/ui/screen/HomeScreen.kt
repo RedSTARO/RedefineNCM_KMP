@@ -120,13 +120,12 @@ fun HomeScreen(
         ?: avatarUrl
     var rawPageAccent by rememberSaveable(
         pageAccentSource,
-        defaultPageAccent,
         stateSaver = AccentColorSaver,
     ) {
-        mutableStateOf(defaultPageAccent)
+        mutableStateOf<Color?>(null)
     }
     val pageAccent by animateColorAsState(
-        targetValue = rawPageAccent,
+        targetValue = rawPageAccent ?: defaultPageAccent,
         animationSpec = spring(),
         label = "homePageAccent",
     )

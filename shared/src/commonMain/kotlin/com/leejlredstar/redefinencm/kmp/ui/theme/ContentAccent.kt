@@ -36,8 +36,8 @@ import kotlinx.coroutines.withContext
  * its colour from (a hero, a first carousel card) can be off screen when it returns and never
  * reload. Without this the page would come back in the default colour.
  */
-val AccentColorSaver: Saver<Color, Long> = Saver(
-    save = { it.value.toLong() },
+val AccentColorSaver: Saver<Color?, Long> = Saver(
+    save = { it?.value?.toLong() },
     restore = { Color(it.toULong()) },
 )
 
@@ -107,7 +107,9 @@ fun rememberArtworkAccent(
     scheme: ColorScheme = MaterialTheme.colorScheme,
     onAccentColor: ((Color) -> Unit)? = null,
 ): ArtworkAccent {
-    var raw by remember(requestKey, fallback) { mutableStateOf(fallback) }
+    // A theme animation changes fallback every frame. Only a different image invalidates an
+    // extraction; until that image loads, follow the current fallback without storing it.
+    var raw by remember(requestKey) { mutableStateOf<Color?>(null) }
     val latestOnAccentColor = rememberUpdatedState(onAccentColor)
     val extract = rememberThemeColorExtractor(requestKey) { extracted ->
         raw = extracted
@@ -115,7 +117,7 @@ fun rememberArtworkAccent(
     }
     val reducedMotion = rememberReducedMotionEnabled()
     val color by animateColorAsState(
-        targetValue = override ?: raw,
+        targetValue = override ?: raw ?: fallback,
         animationSpec = if (reducedMotion) snap() else animationSpec,
         label = label,
     )
