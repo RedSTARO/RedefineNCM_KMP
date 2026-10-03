@@ -2,6 +2,7 @@ package com.leejlredstar.redefinencm.kmp.viewmodel
 
 import com.leejlredstar.redefinencm.kmp.data.auth.AccountIdentity
 import com.leejlredstar.redefinencm.kmp.data.auth.CredentialTextLoginMethod
+import com.leejlredstar.redefinencm.kmp.data.auth.LoginMethodException
 import com.leejlredstar.redefinencm.kmp.data.auth.ProviderLoginDescriptor
 import com.leejlredstar.redefinencm.kmp.data.auth.ServerCheckResult
 import com.leejlredstar.redefinencm.kmp.data.local.LocalAccount
@@ -45,8 +46,8 @@ class AccountsViewModel(
     private val registrations: ProviderRegistrations,
     private val settings: PlatformSettings,
     private val localAccount: LocalAccount,
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     /** One provider's account and configuration, as the accounts page shows it. */
     data class ProviderAccount(
@@ -241,26 +242,37 @@ class AccountsViewModel(
         method.normalize(raw)
             .onSuccess { normalized ->
                 scope.launch {
-                    registration.credentialSlot.write(normalized)
-                        .onSuccess {
-                            _message.value = if (normalized.isEmpty()) {
-                                strings.providerCredentialCleared(provider.displayName)
-                            } else {
-                                strings.credentialSaved(provider.displayName)
-                            }
+                    try {
+                        registration.credentialSlot.write(normalized).getOrThrow()
+                        _message.value = if (normalized.isEmpty()) {
+                            strings.providerCredentialCleared(provider.displayName)
+                        } else {
+                            strings.credentialSaved(provider.displayName)
                         }
-                        .onFailure { failure -> _message.value = failure.message ?: strings.credentialSaveFailed }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        // Preferences and other stores can include the entire value in an error.
+                        _message.value = strings.credentialSaveFailed
+                    }
                 }
             }
-            .onFailure { failure -> _message.value = failure.message ?: strings.credentialNotRecognized }
+            .onFailure { failure ->
+                _message.value = (failure as? LoginMethodException)?.message ?: strings.credentialNotRecognized
+            }
     }
 
     fun signOut(provider: MusicProviderId) {
         val slot = registrations[provider]?.credentialSlot ?: return
         scope.launch {
-            slot.clear()
-                .onSuccess { _message.value = strings.signedOutOfProvider(provider.displayName) }
-                .onFailure { failure -> _message.value = strings.signOutFailed(failure.message ?: strings.unknownError) }
+            try {
+                slot.clear().getOrThrow()
+                _message.value = strings.signedOutOfProvider(provider.displayName)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                _message.value = strings.signOutFailed(strings.credentialSaveFailed)
+            }
         }
     }
 

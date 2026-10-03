@@ -3,6 +3,7 @@ package com.leejlredstar.redefinencm.kmp
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.PrintStream
+import java.io.OutputStream
 import java.nio.file.Files
 import java.time.LocalDateTime
 import kotlin.test.Test
@@ -43,10 +44,26 @@ class DesktopLogTest {
     }
 
     @Test
-    fun oneLineLargerThanTheLimitIsStillWritten() = withLog(maxBytes = 4) { log, file, _ ->
+    fun aWriteLargerThanTheFileLimitIsDropped() = withLog(maxBytes = 4) { log, file, _ ->
         log.write("a long line".toByteArray(), 0, 11)
+        assertEquals(0L, file.length())
+        log.write("okay".toByteArray(), 0, 4)
+        assertEquals("okay", file.readText())
+    }
 
-        assertTrue("a long line" in file.readText())
+    @Test
+    fun failedRotationKeepsThePreviousDataWithoutGrowingTheFile() = withLog(maxBytes = 6) { log, file, previous ->
+        assertTrue(previous.mkdir())
+        val blocker = previous.resolve("blocker").apply { writeText("keep") }
+        log.write("first!".toByteArray(), 0, 6)
+        log.write("second".toByteArray(), 0, 6)
+        assertEquals("first!", file.readText())
+        assertEquals("keep", blocker.readText())
+        assertTrue(blocker.delete())
+        assertTrue(previous.delete())
+        log.write("third!".toByteArray(), 0, 6)
+        assertEquals("third!", file.readText())
+        assertEquals("first!", previous.readText())
     }
 
     @Test
@@ -71,6 +88,34 @@ class DesktopLogTest {
 
         assertEquals("REQUEST: https://ncm.example/cloudsearch?<redacted>", stored)
         assertEquals("RESPONSE: 200 OK", scrubLogLine("RESPONSE: 200 OK"))
+    }
+
+    @Test
+    fun anOversizedUrlNeverLogsItsContinuationAndTheNextLineIsStillWritten() {
+        val console = ByteArrayOutputStream()
+        withLog(maxBytes = DesktopLog.MAX_BYTES) { log, file, _ ->
+            val stream = PrintStream(TeeStream(log, PrintStream(console, true, Charsets.UTF_8)), true, Charsets.UTF_8)
+            val prefix = "GET https://host/audio?token=" + "x".repeat(17_000)
+            stream.print(prefix)
+            stream.print("SECRET_TOKEN_TAIL&uin=PRIVATE_ACCOUNT\n")
+            stream.println("next diagnostic line")
+            val stored = file.readText()
+            assertFalse("SECRET_TOKEN_TAIL" in stored)
+            assertFalse("PRIVATE_ACCOUNT" in stored)
+            assertTrue("next diagnostic line" in stored)
+            assertTrue(file.length() < 17_000)
+            assertTrue(console.toString(Charsets.UTF_8).contains(prefix + "SECRET_TOKEN_TAIL"))
+        }
+    }
+
+    @Test
+    fun aSingleHugeWriteCannotBypassTheLineLimit() = withLog(maxBytes = DesktopLog.MAX_BYTES) { log, file, previous ->
+        val stream = TeeStream(log, PrintStream(OutputStream.nullOutputStream()))
+        val bytes = ("x".repeat(3 * 1024 * 1024) + "\nnext line\n").toByteArray()
+        stream.write(bytes, 0, bytes.size)
+        assertTrue(file.length() < 17_000)
+        assertTrue(previous.length() < 17_000)
+        assertTrue("next line" in file.readText())
     }
 
     @Test

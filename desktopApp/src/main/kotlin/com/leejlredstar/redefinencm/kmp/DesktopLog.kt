@@ -64,12 +64,15 @@ internal class RotatingLogFile(
     private val previous: File,
     private val maxBytes: Long,
 ) : Closeable {
+    init { require(maxBytes > 0) }
     private var output: OutputStream = FileOutputStream(file, true)
     private var written: Long = file.length()
 
     @Synchronized
     fun write(bytes: ByteArray, offset: Int, length: Int) {
-        if (written > 0 && written + length > maxBytes) rotate()
+        // Logging must remain bounded even when a caller skips TeeStream or rotation is blocked.
+        if (length > maxBytes) return
+        if (written + length > maxBytes && !rotate()) return
         output.write(bytes, offset, length)
         output.flush()
         written += length
@@ -80,14 +83,15 @@ internal class RotatingLogFile(
         output.close()
     }
 
-    private fun rotate() {
+    private fun rotate(): Boolean {
         runCatching { output.close() }
         runCatching { previous.delete() }
-        // A rename that fails (another program holds the file) leaves one growing file, which is
-        // still a log; it must not stop the app writing.
+        // Keep the old log when it cannot be moved. Drop file output until rotation succeeds;
+        // the console still receives it and the log cannot consume unbounded disk space.
         val renamed = file.renameTo(previous)
         output = FileOutputStream(file, !renamed)
         written = if (renamed) 0 else file.length()
+        return renamed
     }
 }
 
@@ -110,6 +114,7 @@ internal class TeeStream(
 
     /** The line being assembled for the log; a line is scrubbed whole or not at all. */
     private val pendingLine = ByteArrayOutputStream()
+    private var discardingLine = false
 
     override fun write(byte: Int) = write(byteArrayOf(byte.toByte()), 0, 1)
 
@@ -132,24 +137,31 @@ internal class TeeStream(
         while (start < end) {
             var stop = start
             while (stop < end && bytes[stop] != NEWLINE) stop++
-            pendingLine.write(bytes, start, stop - start)
+            if (!discardingLine) {
+                if (stop - start > MAX_PENDING_BYTES - pendingLine.size()) {
+                    // Never scrub a partial line: a URL query may continue in the next write.
+                    // Discard the entire oversized line, including the already buffered prefix.
+                    pendingLine.reset()
+                    discardingLine = true
+                    writeLogLine("[overlong log line omitted]")
+                } else {
+                    pendingLine.write(bytes, start, stop - start)
+                }
+            }
             if (stop < end) {
-                writeLogLine(terminated = true)
+                if (!discardingLine) writeLogLine(pendingLine.toString(Charsets.UTF_8))
+                pendingLine.reset()
+                discardingLine = false
                 stop++
-            } else if (pendingLine.size() > MAX_PENDING_BYTES) {
-                // Something printing without ever ending its line must not grow without bound.
-                writeLogLine(terminated = false)
             }
             start = stop
         }
     }
 
-    private fun writeLogLine(terminated: Boolean) {
-        val text = pendingLine.toString(Charsets.UTF_8)
-        pendingLine.reset()
+    private fun writeLogLine(text: String) {
         val line = buildString {
             append(now().format(logStamp)).append(' ').append(scrubLogLine(text))
-            if (terminated) append('\n')
+            append('\n')
         }.toByteArray()
         log.write(line, 0, line.size)
     }

@@ -87,6 +87,9 @@
 | 编号 | 问题 | 当前状态 |
 |---|---|---|
 | W2-01 | Android dataSync 前台服务未处理系统超时，可能触发进程异常 | 已按源码和 [平台规则](https://developer.android.com/develop/background-work/services/fgs/timeout) 核实；实现 onTimeout，取消服务观察后同步暂停任务并停止服务。编译通过，设备超时注入待补。 |
+| W2-02 | 超长日志行分段后，URL 查询参数尾部失去前缀而绕过脱敏 | 回归测试在旧实现失败，修复后通过：超过 16 KiB 的整行以固定提示替代，直到换行前持续丢弃文件输出；控制台输出保留。 |
+| W2-03 | 日志轮转失败或直接写入超大块时仍会突破文件上限 | 已修复并测试：超大块不写入，轮转受阻时保留旧文件并丢弃新增文件输出，解除阻塞后可继续轮转。 |
+| W2-04 | 账号页直接显示凭证保存/退出异常，超长 JVM Preferences 值会带出原始 Cookie | 两个回归测试在旧实现失败，修复后通过：使用固定本地化错误，不展示存储异常；原有凭证保留。 |
 
 本次阅读了 AndroidDownloadService、PersistedDownloadQueue 及 SongDownloadManager 的控制/恢复相关路径；下载编排其余部分、各平台文件处理和其余审查分区尚未完成。
 
@@ -101,3 +104,7 @@
 - 驱逐按本进程访问顺序进行，旧缓存没有时间戳，初次从查询顺序开始；超大单条响应不进入缓存，但网络展示继续。
 - 本地歌单/收藏、播放队列、下载队列和音频文件不参与清理。SQLite 与浏览器驱动都验证了这条隔离约束。
 - 新增容量备份字段为 nullable，旧备份不改变当前值；非法上限在写入任何设置之前被拒绝。
+
+## 日志与账号错误隐私验证（2026-10-04）
+
+`privacy-check-result.json`：JVM 627、桌面 18、Android Host 457、Web 472 项均通过，Android/iOS Kotlin 编译通过。`privacy-repro` 和 `privacy-account-repro` 保存了修复前失败结果。凭证测试只使用随机命名的临时 Preferences 节点和模拟密钥。
