@@ -81,13 +81,8 @@ CI 验证 TTML → 公共歌词模型 → Compose 渲染字段链路，并校验
 [`docs/AMLL_NATIVE_TRANSLATION.md`](docs/AMLL_NATIVE_TRANSLATION.md)；歌词引擎的逐符号
 映射与平台 API 边界以子模块 `AMLL_Jetpack_Compose/docs/AMLL_NATIVE_TRANSLATION.md` 为准。
 
-AMLL 包声明为 `AGPL-3.0-only`；完整文本和上游版本、源码位置见
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。仓库目前没有项目级 `LICENSE`，
-所以发布二进制之前，项目权利人还要确定兼容的项目许可和 Corresponding Source 范围；
-集成 AMLL 时没有替权利人做这个许可决定。`LICENSES/` 和各应用资源里有当前直接集成组件的
-许可证文本，但它们不能代替发布前对完整依赖图和二进制组合的许可审计。权利人记录这一决定之前，
-标签 CI 会拒绝创建公开的二进制 Release；权利人完成记录和审计后，才能把仓库变量
-`RELEASE_LICENSE_APPROVED` 明确设为 `true`。
+AMLL 包声明为 `AGPL-3.0-only`，上游版本和源码位置见
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 ## 听歌识曲
 
@@ -156,5 +151,14 @@ Web 目标用 `HTMLAudioElement` 播放，由 Media Session 提供系统媒体�
   用户已授予通知权限时启用。
 - Web 分发包包含完整 Noto Sans SC 字体，用来覆盖动态的中文歌名和歌词；首次访问会先显示
   加载页，等字体下载完成、CanvasKit 解析完毕后再显示 Compose UI。
+
+## 许可证与发布
+
+本项目以 GNU Affero General Public License 第 3 版（仅此版本，`AGPL-3.0-only`）授权，全文见
+[LICENSE](LICENSE)。第三方组件及其许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，
+完整许可证文本在 `LICENSES/`；应用内「设置 → 关于 → 开源许可」也能查看。
+
+推送 `v<major>.<minor>.<patch>` 形式的标签后，CI 构建全部平台并自动创建 GitHub Release。
+每个 Release 的完整源代码就是该标签对应的提交，加上它固定的 `AMLL_Jetpack_Compose` 子模块提交。
 
 详细架构、行为约束和当前差异见 `AGENTS.md`，迁移进度见 `MIGRATION_PROGRESS.md`。

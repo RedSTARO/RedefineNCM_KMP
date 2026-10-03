@@ -87,6 +87,8 @@ jobs:
           do
             test -s "LICENSES/$license"
           done
+          # The project's own license is the same AGPL text the notices point to.
+          cmp LICENSE LICENSES/AGPL-3.0-only.txt
           cmp LICENSES/AGPL-3.0-only.txt \
             shared/src/commonMain/composeResources/files/licenses/AGPL-3.0-only.txt
           cmp LICENSES/Apache-2.0.txt \
@@ -602,15 +604,6 @@ jobs:
       contents: write
 
     steps:
-      - name: Verify release licensing approval
-        env:
-          RELEASE_LICENSE_APPROVED: ${{ vars.RELEASE_LICENSE_APPROVED }}
-        run: |
-          if [ "$RELEASE_LICENSE_APPROVED" != "true" ]; then
-            echo "::error::Public binary release is blocked until the project owner records the project license and Corresponding Source scope, then sets RELEASE_LICENSE_APPROVED=true."
-            exit 1
-          fi
-
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           submodules: recursive
@@ -663,6 +656,8 @@ jobs:
             | Windows | `RedefineNCM_KMP-${{ needs.test.outputs.app_version }}.msi` |
             | macOS | `RedefineNCM_KMP-${{ needs.test.outputs.app_version }}.dmg` |
             | Web | `RedefineNCM_KMP-${{ needs.test.outputs.app_version }}-web.zip` |
+
+            Licensed under AGPL-3.0-only. Complete source: [${{ github.ref_name }}](https://github.com/${{ github.repository }}/tree/${{ github.ref_name }}), with the `AMLL_Jetpack_Compose` submodule at the commit it pins.
           draft: false
           prerelease: false
         env:

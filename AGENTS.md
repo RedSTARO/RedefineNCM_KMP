@@ -584,6 +584,12 @@ Platform mapping:
 - CI resolves the version once in the test job, passes the same tag/hash/build inputs to every
   platform job, and names APK/DEB/MSI/DMG/Web artifacts with the full product version.
 
+**Licensing and releases (decided 2026-10-03).** The project is `AGPL-3.0-only`. `LICENSE` is the
+same text as `LICENSES/AGPL-3.0-only.txt`, and CI fails if they differ. Pushing a
+`v<major>.<minor>.<patch>` tag builds every platform and publishes the GitHub Release; there is no
+approval step. The release notes link the tagged commit as the complete source, so the
+`AMLL_Jetpack_Compose` commit that tag pins must already be pushed to the submodule's repository.
+
 > **Convergence status (goal #4):** Kotlin is now `2.4.0` in BOTH repos (converged + verified).
 > **AGP stays at `9.0.1` here** while the original is `9.2.0`: bumping the KMP repo to AGP 9.2.0
 > requires Gradle ≥ 9.4.1, and after that it fails to resolve `aapt2:9.2.0` and breaks

@@ -29,7 +29,7 @@ actual fun platformModule() = module {
     // SQLDelight driver (file-backed SQLite in ~/.redefinencm/).
     single { DatabaseDriverFactory() }
 
-    // Desktop audio player backed by javax.sound.sampled + mp3spi.
+    // Desktop audio player: FFmpeg decodes, javax.sound.sampled plays.
     // Overrides the InMemoryPlatformPlayer default from sharedModule.
     // Uses JVM-decodable local files before hitting the CDN.
     single<PlatformPlayer> { JvmMediaPlayer(get(), get(), get()) }
