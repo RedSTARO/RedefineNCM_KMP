@@ -175,3 +175,11 @@
 ## Windows 安装包检查（2026-10-04）
 
 `msi-check-result.json`：主仓库 `4fb9446`、AMLL `7db5a66` 构建出 `RedefineNCM-1.0.411.msi`。只读 MSI 数据库核对 ProductVersion、191 个文件条目、应用 JAR 及 OFL 许可均通过；未执行安装。这个安装包早于上节链式过渡修复，最终发布检查仍须覆盖最终提交。
+
+## 修复后的混淆构建与本机加速器探针（2026-10-04）
+
+- `desktop-runtime-check-result.json`：生产代码快照 `a64f15e` 的 `proguardReleaseJars` 通过，产物为 `desktopApp-v0.0.4.a64f15ed.jar`。
+- 单独运行了 `SmartTransitionHarnessTest.beatModelRunsOnAnAccelerator`：1 项通过、0 跳过。本机选中 **AMD Radeon RX 7900 XT / DirectML**，连续 8 次零输入推理的输出形状及数值有限性检查通过。
+- 本次记录的平均值为每个 15 秒模型片段 19 ms；它只衡量推理调用，不含下载、解码、频谱计算或模型首次加载。
+- 此探针通过专用空目录标记开启既有 harness 开关，只执行零张量测试，使用仓库模型；没有读取用户音乐或账号数据。此前默认套件跳过的 GPU 探针现已有独立结果，真实音乐的两项 harness 仍未执行。
+- 后续隐私候选待复核：后端地址允许 URL user-info，而现有日志和备份仅显式排除 Cookie 等字段；需要验证嵌入地址的用户名/密码是否会进入日志或共享备份。

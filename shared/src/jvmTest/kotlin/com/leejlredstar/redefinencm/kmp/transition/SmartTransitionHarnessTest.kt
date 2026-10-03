@@ -50,7 +50,11 @@ class SmartTransitionHarnessTest {
         val model = availability.model
         val started = System.nanoTime()
         try {
-            repeat(8) { model.infer(FloatArray(BEAT_MODEL_CHUNK_FRAMES * BeatModelFeatures.MEL_BINS)) }
+            repeat(8) {
+                val output = model.infer(FloatArray(BEAT_MODEL_CHUNK_FRAMES * BeatModelFeatures.MEL_BINS))
+                assertEquals(BEAT_MODEL_CHUNK_FRAMES * 2, output.size)
+                assertTrue(output.all(Float::isFinite), "The accelerator returned non-finite activations")
+            }
         } finally { model.close() }
         println("beat model on ${model.accelerator} (${model.deviceLabel}): " +
             "${(System.nanoTime() - started) / 8 / 1_000_000} ms per 15 s chunk")
