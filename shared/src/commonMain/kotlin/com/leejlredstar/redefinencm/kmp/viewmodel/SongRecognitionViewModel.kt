@@ -137,7 +137,8 @@ class SongRecognitionViewModel internal constructor(
     private var closed = false
     // Playback this screen paused to hear the room. It is given back when the user leaves or
     // cancels without choosing a result.
-    private var pausedForRecognition = false
+    private data class PausedSelection(val mediaId: String, val occurrence: Long)
+    private var pausedForRecognition: PausedSelection? = null
 
     fun beginPermissionRequest() {
         if (closed) return
@@ -164,7 +165,7 @@ class SongRecognitionViewModel internal constructor(
 
     fun play(match: RecognizedSongMatch) {
         if (closed) return
-        pausedForRecognition = false
+        pausedForRecognition = null
         PlaybackSource.set(UiText { it.songRecognition })
         player.setQueue(listOf(match.song.toPlayerMediaInfo()), 0)
         player.play()
@@ -184,13 +185,21 @@ class SongRecognitionViewModel internal constructor(
     }
 
     private fun resumePausedPlayback() {
-        if (!pausedForRecognition) return
-        pausedForRecognition = false
-        player.play()
+        val paused = pausedForRecognition ?: return
+        pausedForRecognition = null
+        // System media controls and the rest of the app can select another occurrence while
+        // this page is open. Its pause/resume belongs only to the selection it interrupted.
+        if (player.currentMedia.value?.id == paused.mediaId &&
+            player.playbackOccurrence.value == paused.occurrence && !player.isPlaying.value
+        ) player.play()
     }
 
     private fun startRecognition() {
-        if (player.isPlaying.value) pausedForRecognition = true
+        if (player.isPlaying.value) {
+            pausedForRecognition = player.currentMedia.value?.id?.let {
+                PausedSelection(it, player.playbackOccurrence.value)
+            }
+        }
         player.pause()
         recognitionJob?.cancel()
         val generation = recognitionGeneration.updateAndGet { it + 1L }

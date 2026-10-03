@@ -11,6 +11,8 @@ import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.recognition.CapturedPcm
 import com.leejlredstar.redefinencm.kmp.recognition.MicrophoneRecorder
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -27,6 +29,53 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SongRecognitionViewModelTest {
+    @Test
+    fun closingRecognitionDoesNotStartANewSelectionEvenWithTheSameMediaId() = runTest {
+        for (nextId in listOf("different", "original")) {
+            val player = InMemoryPlatformPlayer(scope = backgroundScope)
+            val modelScope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
+            val viewModel = createViewModel(player, { _, _ -> matchedResponse(101L) }, modelScope)
+            try {
+                player.setQueue(listOf(MediaInfo("original", "Original", "Test")))
+                player.play()
+                viewModel.beginPermissionRequest()
+                viewModel.onPermissionResult(true)
+                runCurrent()
+                assertFalse(player.isPlaying.value)
+                // Another control selected an item while the recognition page was open.
+                // Re-selecting the same ID is a new occurrence too.
+                player.setQueue(listOf(MediaInfo(nextId, "Selected elsewhere", "Test")))
+                player.pause()
+                viewModel.close()
+                assertFalse(player.isPlaying.value)
+                assertEquals(nextId, player.currentMedia.value?.id)
+            } finally {
+                viewModel.close()
+                player.release()
+            }
+        }
+    }
+
+    @Test
+    fun cancellingRecognitionOnlyResumesTheUnchangedSelectionItPaused() = runTest {
+        for (initiallyPlaying in listOf(false, true)) {
+            val player = InMemoryPlatformPlayer(scope = backgroundScope)
+            val viewModel = createViewModel(player, { _, _ -> matchedResponse(101L) })
+            player.setQueue(listOf(MediaInfo("original", "Original", "Test")))
+            if (initiallyPlaying) player.play()
+            viewModel.beginPermissionRequest()
+            viewModel.onPermissionResult(true)
+            runCurrent()
+            viewModel.cancelRecognition()
+            assertEquals(initiallyPlaying, player.isPlaying.value)
+            // The resume is consumed once; a later pause stays paused.
+            player.pause()
+            viewModel.cancelRecognition()
+            assertFalse(player.isPlaying.value)
+            player.release()
+        }
+    }
+
     @Test
     fun successfulRecognitionPausesPlaybackAndPublishesPlayableResults() = runTest {
         val player = InMemoryPlatformPlayer(scope = backgroundScope)
@@ -105,6 +154,7 @@ class SongRecognitionViewModelTest {
     private fun TestScope.createViewModel(
         player: InMemoryPlatformPlayer,
         matchAudio: suspend (Int, String) -> AudioMatch?,
+        modelScope: CoroutineScope = this,
     ): SongRecognitionViewModel = SongRecognitionViewModel(
         recorder = object : MicrophoneRecorder {
             override suspend fun capture(
@@ -120,7 +170,7 @@ class SongRecognitionViewModelTest {
         prepareSamples = { captured, _ -> captured.monoSamples },
         generateFingerprint = { "test-fingerprint" },
         processingDispatcher = StandardTestDispatcher(testScheduler),
-        scope = this,
+        scope = modelScope,
     )
 
     private fun matchedResponse(vararg ids: Long): AudioMatch = AudioMatch(
