@@ -15,6 +15,8 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.ThemeMode
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import io.ktor.http.Url
+import io.ktor.http.URLBuilder
 
 /** Serializable snapshot of user-configurable settings used for export / import. */
 @Serializable
@@ -97,9 +99,9 @@ internal fun encodeSettingsBackup(
 ): String = backupJson.encodeToString(
     SettingsBackupData(
         cookie = "",
-        server = getString(SettingKeys.SERVER, ""),
+        server = serverAddressForBackup(getString(SettingKeys.SERVER, "")),
         qqEnabled = getBoolean(SettingKeys.QQ_ENABLED, false),
-        qqServer = getString(SettingKeys.QQ_SERVER, SettingKeys.QQ_SERVER_DEFAULT),
+        qqServer = serverAddressForBackup(getString(SettingKeys.QQ_SERVER, SettingKeys.QQ_SERVER_DEFAULT)),
         libraryAggregationMode = LibraryAggregationMode.fromWireValueOrDefault(
             getString(SettingKeys.LIBRARY_AGGREGATION_MODE, ""),
         ).wireValue,
@@ -145,6 +147,17 @@ internal fun encodeSettingsBackup(
         appLanguage = LanguageSetting.fromWireValue(getString(SettingKeys.APP_LANGUAGE, "")).wireValue,
     )
 )
+
+/** A shared file must not carry credentials embedded in a backend URL. Invalid legacy base
+ * addresses (including query tokens) are omitted, so the export remains importable. */
+private fun serverAddressForBackup(address: String): String {
+    if (address.isBlank()) return ""
+    return runCatching {
+        val url = Url(normalizeServerAddress(address))
+        if (url.user == null && url.password == null) address
+        else URLBuilder(url).apply { user = null; password = null }.buildString()
+    }.getOrDefault("")
+}
 
 /**
  * The local playlists a backup carries, or null when it carries none or cannot be read. Importing

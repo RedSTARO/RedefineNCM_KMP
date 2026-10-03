@@ -12,6 +12,14 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class DesktopLogTest {
+    @Test
+    fun urlUserInfoAndUppercaseUrlQueriesAreRedacted() {
+        val logged = scrubLogLine("GET HTTPS://test-user:SECRET@host/song?token=PRIVATE https://other:PASS@host/status")
+        assertFalse("test-user" in logged || "SECRET" in logged || "PRIVATE" in logged || "PASS" in logged)
+        assertTrue("host/song?<redacted>" in logged)
+        assertTrue("host/status" in logged)
+    }
+
 
     /** Runs [block] against a log in a directory of its own, and removes the directory after. */
     private fun withLog(maxBytes: Long, existing: String? = null, block: (RotatingLogFile, File, File) -> Unit) {

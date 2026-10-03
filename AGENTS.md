@@ -425,6 +425,10 @@ export must never carry a credential — while `qqEnabled`, `qqServer`, the aggr
 same-song merge switch, the local account's name, switch and library travel with a backup. Fields added
 for multiple providers are nullable, so importing an older backup keeps the current choice.
 
+Backend URL user-info is also removed on export; the host, port and base path remain. Invalid
+legacy base addresses, including query-bearing URLs, are omitted rather than copied into an
+unimportable shared file. Export never writes those sanitized values back to live settings.
+
 `MediaInfo.id` keeps NetEase ids bare and prefixes only foreign providers. A bare id still parses
 back to NetEase, so dispatch is unaffected. The sites that reach NetEase-only features no longer
 read the id as a number on their own: they ask for the provider's capabilities, and the NetEase

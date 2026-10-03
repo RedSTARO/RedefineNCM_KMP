@@ -11,6 +11,7 @@ import java.nio.CharBuffer
 import java.nio.charset.CodingErrorAction
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import com.leejlredstar.redefinencm.kmp.util.redactUrlUserInfo
 
 /**
  * Keeps what the app prints.
@@ -41,7 +42,7 @@ internal object DesktopLog {
     }.onFailure { System.err.println("Log file unavailable: ${it.message}") }.getOrNull()
 }
 
-private val urlWithQuery = Regex("""(https?://[^\s"'<>?]+)\?[^\s"'<>]*""")
+private val urlWithQuery = Regex("""(https?://(?:<redacted>@)?[^\s"'<>?]+)\?[^\s"'<>]*""", RegexOption.IGNORE_CASE)
 
 /**
  * A line as the log file stores it: every URL keeps its host and path and loses its query.
@@ -53,7 +54,7 @@ private val urlWithQuery = Regex("""(https?://[^\s"'<>?]+)\?[^\s"'<>]*""")
  * status are what diagnosing a failure needs.
  */
 internal fun scrubLogLine(line: String): String =
-    urlWithQuery.replace(line) { match -> "${match.groupValues[1]}?<redacted>" }
+    urlWithQuery.replace(redactUrlUserInfo(line)) { match -> "${match.groupValues[1]}?<redacted>" }
 
 /**
  * Appends to [file], and starts it again once it would pass [maxBytes], keeping what it held as

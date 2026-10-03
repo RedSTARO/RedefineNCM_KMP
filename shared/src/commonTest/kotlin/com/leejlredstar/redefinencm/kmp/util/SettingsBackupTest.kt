@@ -10,6 +10,34 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class SettingsBackupTest {
+    @Test
+    fun serverUserInfoIsExcludedFromSharedBackupsWithoutLosingTheEndpoint() {
+        val json = encodeSettingsBackup(
+            getString = { key, default -> when (key) {
+                SettingKeys.SERVER -> "https://proxy-user:NCM_SECRET@backend.test/api%20one/"
+                SettingKeys.QQ_SERVER -> "http://qq-user:QQ%40SECRET@[::1]:8080/qq/"
+                else -> default
+            } },
+            getBoolean = { _, default -> default },
+        )
+        assertFalse("proxy-user" in json || "NCM_SECRET" in json)
+        assertFalse("qq-user" in json || "QQ%40SECRET" in json)
+        val data = Json.parseToJsonElement(json).jsonObject
+        assertEquals("https://backend.test/api%20one/", data.getValue("server").jsonPrimitive.content)
+        assertEquals("http://[::1]:8080/qq/", data.getValue("qqServer").jsonPrimitive.content)
+        assertTrue(applySettingsBackup(json, { _, _ -> }, { _, _ -> }))
+    }
+
+    @Test
+    fun legacyNonBaseServerUrlsAreNotExportedWithSensitiveParameters() {
+        val json = encodeSettingsBackup(
+            getString = { key, default -> if (key == SettingKeys.SERVER) "https://backend.test/?cookie=OLD_SECRET" else default },
+            getBoolean = { _, default -> default },
+        )
+        assertFalse("OLD_SECRET" in json)
+        assertTrue(applySettingsBackup(json, { _, _ -> }, { _, _ -> }))
+    }
+
 
     @Test
     fun invalidServerAddressesRejectTheBackupBeforeAnySettingIsWritten() {

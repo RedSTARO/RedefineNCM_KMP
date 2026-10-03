@@ -13,14 +13,15 @@ import io.ktor.util.AttributeKey
 import io.ktor.util.date.getTimeMillis
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
+import com.leejlredstar.redefinencm.kmp.util.redactUrlUserInfo
 
 private val sensitiveQueryParameterPattern =
-    Regex("(?i)([?&](?:audioFP|cookie)=)[^&\\s]*")
+    Regex("(?i)([?&](?:audioFP|cookie|key|qrkey|token|access_token|refresh_token|password|captcha|musickey|refresh_key)=)[^&\\s]*")
 
 internal val NcmCredentialCookieAttribute = AttributeKey<String>("NcmCredentialCookie")
 
 internal fun redactSensitiveQueryParameters(message: String): String =
-    sensitiveQueryParameterPattern.replace(message) { match ->
+    sensitiveQueryParameterPattern.replace(redactUrlUserInfo(message)) { match ->
         "${match.groupValues[1]}<redacted>"
     }
 
@@ -36,7 +37,9 @@ private class SensitiveQueryRedactingLogger(private val sink: Logger) : Logger {
  */
 internal fun isCredentialHeader(name: String): Boolean =
     name.equals(HttpHeaders.Cookie, ignoreCase = true) ||
-        name.equals(HttpHeaders.SetCookie, ignoreCase = true)
+        name.equals(HttpHeaders.SetCookie, ignoreCase = true) ||
+        name.equals(HttpHeaders.Authorization, ignoreCase = true) ||
+        name.equals(HttpHeaders.ProxyAuthorization, ignoreCase = true)
 
 /**
  * Creates and configures a Ktor HttpClient for the NCM API. The engine is provided by each

@@ -182,4 +182,11 @@
 - 单独运行了 `SmartTransitionHarnessTest.beatModelRunsOnAnAccelerator`：1 项通过、0 跳过。本机选中 **AMD Radeon RX 7900 XT / DirectML**，连续 8 次零输入推理的输出形状及数值有限性检查通过。
 - 本次记录的平均值为每个 15 秒模型片段 19 ms；它只衡量推理调用，不含下载、解码、频谱计算或模型首次加载。
 - 此探针通过专用空目录标记开启既有 harness 开关，只执行零张量测试，使用仓库模型；没有读取用户音乐或账号数据。此前默认套件跳过的 GPU 探针现已有独立结果，真实音乐的两项 harness 仍未执行。
-- 后续隐私候选待复核：后端地址允许 URL user-info，而现有日志和备份仅显式排除 Cookie 等字段；需要验证嵌入地址的用户名/密码是否会进入日志或共享备份。
+- URL user-info 隐私候选已通过模拟凭证复现并修复，见下节。
+
+## 地址凭证与日志（2026-10-04）
+
+- 旧实现的回归出现 5 项失败，覆盖实际 HTTP 请求日志、共享备份、桌面大写 HTTPS 查询及凭证头分类；证据在 `url-privacy-repro`。
+- 日志现遮蔽 HTTP(S) 地址的用户名/密码，并遮蔽二维码 key、验证码、口令和常见令牌参数；Cookie、Set-Cookie、Authorization、Proxy-Authorization 均列为凭证头。桌面日志继续隐藏整个查询字符串，兼容大写协议。
+- 新备份移除两个后端地址中的 user-info，保留主机、端口与子路径；旧配置中已经不被导入器接受的非基础地址（含查询令牌等）不再写入共享文件。运行中的配置不被修改，无凭证的合法地址保留原有拼写。
+- `url-privacy-check-result.json`：JVM 650 项中 **647 通过、3 跳过**；桌面 19、Android Host 467、Web 488 项通过。Android/iOS Kotlin 编译通过。
