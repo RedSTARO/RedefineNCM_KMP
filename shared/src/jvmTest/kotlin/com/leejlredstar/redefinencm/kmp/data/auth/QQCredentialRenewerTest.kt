@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
+import kotlin.test.AfterTest
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -46,6 +47,10 @@ class QQCredentialRenewerTest {
     private data class Recorded(val path: String, val cookie: String?)
 
     private val requests = mutableListOf<Recorded>()
+    private val clients = mutableListOf<HttpClient>()
+
+    @AfterTest
+    fun closeClients() { clients.forEach(HttpClient::close) }
 
     /**
      * A gateway that answers [expired] to the expiry check, [renewedJson] to a renewal, and
@@ -56,6 +61,8 @@ class QQCredentialRenewerTest {
         expired: Boolean = true,
         renewedJson: String? = RENEWED,
         refusedCookies: Set<String> = emptySet(),
+        canSendCookie: Boolean = true,
+        expiryStatus: HttpStatusCode = HttpStatusCode.OK,
         onRenew: () -> Unit = {},
     ): Pair<QQMusicApi, QQCredentialRenewer> {
         lateinit var renewer: QQCredentialRenewer
@@ -66,7 +73,12 @@ class QQCredentialRenewerTest {
             val json = headersOf(HttpHeaders.ContentType, "application/json")
             when {
                 path.endsWith("/login/check_expired") ->
-                    respond("""{"code":0,"msg":"ok","data":$expired}""", HttpStatusCode.OK, json)
+                    respond(
+                        if (expired) """{"code":0,"msg":"ok","data":null}"""
+                        else """{"code":-1,"msg":"操作失败","data":null}""",
+                        expiryStatus,
+                        json,
+                    )
                 path.endsWith("/login/refresh_credential") -> {
                     onRenew()
                     if (renewedJson == null) {
@@ -85,9 +97,9 @@ class QQCredentialRenewerTest {
             }
         }
         val api = QQMusicApi(
-            HttpClient(engine),
+            HttpClient(engine).also(clients::add),
             baseUrl = { "http://localhost:8080" },
-            cookie = { slot.value },
+            cookie = { if (canSendCookie) slot.value else "" },
             onRejected = { rejected -> renewer.renewAfterRejection(rejected) },
         )
         renewer = QQCredentialRenewer(api = { api }, slot = slot)
@@ -95,6 +107,36 @@ class QQCredentialRenewerTest {
     }
 
     private fun count(pathSuffix: String) = requests.count { it.path.endsWith(pathSuffix) }
+
+    @Test
+    fun aValidCredentialIsNotRenewed() = runBlocking {
+        val slot = MemorySlot(OLD)
+        val (_, renewer) = gateway(slot, expired = false)
+        renewer.ensureFresh()
+        assertEquals(1, count("/login/check_expired"))
+        assertEquals(0, count("/login/refresh_credential"))
+        assertEquals(OLD, slot.value)
+    }
+
+    @Test
+    fun failedExpiryRequestsAreNotReadAsExpired() = runBlocking {
+        val slot = MemorySlot(OLD)
+        val (_, renewer) = gateway(slot, expiryStatus = HttpStatusCode.InternalServerError)
+        renewer.ensureFresh()
+        assertEquals(0, count("/login/refresh_credential"))
+        assertEquals(OLD, slot.value)
+    }
+
+    @Test
+    fun anonymousTransportNeverInspectsOrCopiesTheGatewaysDefaultAccount() = runBlocking {
+        val slot = MemorySlot(OLD) // a Web install may still hold a credential from an old build
+        val (api, renewer) = gateway(slot, canSendCookie = false)
+        renewer.ensureFresh()
+        assertNull(api.credentialExpired())
+        assertNull(api.refreshCredential())
+        assertTrue(requests.isEmpty())
+        assertEquals(OLD, slot.value)
+    }
 
     @Test
     fun anExpiredCredentialIsRenewedAndWrittenBack() = runBlocking {

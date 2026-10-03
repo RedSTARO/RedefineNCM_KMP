@@ -12,6 +12,13 @@ import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.json.JsonNames
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.intOrNull
 
 /**
  * Client for a self-hosted `L-1124/QQMusicApi` web gateway (the project's `web/` FastAPI app).
@@ -122,13 +129,24 @@ class QQMusicApi(
             parameter("identifier", identifier)
         }
 
-    /** Whether the account sent as the cookie has expired; null without one, or on failure. */
-    suspend fun credentialExpired(): Boolean? =
-        fetchEnvelope<Boolean>("login/check_expired", renewOnRejection = false)?.data
+    /**
+     * The gateway encodes a boolean route as code 0/-1 with null data, not as data:true/false.
+     * Never inspect its default account: an anonymous client has no credential to renew.
+     */
+    suspend fun credentialExpired(): Boolean? {
+        val account = cookie().trim().takeIf(String::isNotEmpty) ?: return null
+        val body = fetchBody("login/check_expired", renewOnRejection = false, block = {}, accountOverride = account)
+            ?: return null
+        return parseQQCredentialExpired(body)
+    }
 
     /** Renews the account sent as the cookie; the answer is the account to store from now on. */
-    suspend fun refreshCredential(): QQGatewayCredential? =
-        fetchData<QQGatewayCredential>("login/refresh_credential", renewOnRejection = false)
+    suspend fun refreshCredential(): QQGatewayCredential? {
+        val account = cookie().trim().takeIf(String::isNotEmpty) ?: return null
+        return fetchEnvelope<QQGatewayCredential>(
+            "login/refresh_credential", renewOnRejection = false, accountOverride = account,
+        )?.data
+    }
 
     /** Asks QQ to text a login code; the answer's `event` is 0 sent, 1 captcha wanted, 2 too frequent. */
     suspend fun phoneSendCode(phone: Long, countryCode: Int = 86): QQPhoneAuthCode? =
@@ -148,7 +166,7 @@ class QQMusicApi(
         path: String,
         renewOnRejection: Boolean = true,
         noinline block: HttpRequestBuilder.() -> Unit = {},
-    ): T? = fetchEnvelope<T>(path, renewOnRejection, block)?.data
+    ): T? = fetchEnvelope<T>(path, renewOnRejection, block = block)?.data
 
     /**
      * The decoded envelope of a successful call, or null for a transport failure, a non-2xx
@@ -159,9 +177,10 @@ class QQMusicApi(
     private suspend inline fun <reified T> fetchEnvelope(
         path: String,
         renewOnRejection: Boolean = true,
+        accountOverride: String? = null,
         noinline block: HttpRequestBuilder.() -> Unit = {},
     ): QQApiResponse<T>? {
-        val body = fetchBody(path, renewOnRejection, block) ?: return null
+        val body = fetchBody(path, renewOnRejection, block, accountOverride) ?: return null
         return try {
             ApiJson.decodeFromString<QQApiResponse<T>>(body).takeIf { it.code == SuccessCode }
         } catch (cancelled: CancellationException) {
@@ -180,11 +199,12 @@ class QQMusicApi(
         path: String,
         renewOnRejection: Boolean,
         block: HttpRequestBuilder.() -> Unit,
+        accountOverride: String? = null,
     ): String? {
         val root = baseUrl().trimEnd('/')
         if (root.isEmpty()) return null
         return try {
-            val account = cookie().trim()
+            val account = accountOverride ?: cookie().trim()
             var response = send("$root/$path", account, block)
             if (
                 response.status == HttpStatusCode.Unauthorized &&
@@ -224,6 +244,19 @@ class QQMusicApi(
         /** The one CDN host that serves the gateway's `purl` paths. */
         const val StreamHost = "https://dl.stream.qqmusic.qq.com/"
     }
+}
+
+/** Parse only the expiry route; -1 on other routes still means a failed operation. */
+internal fun parseQQCredentialExpired(body: String): Boolean? {
+    val envelope = runCatching { ApiJson.parseToJsonElement(body) as? JsonObject }.getOrNull()
+        ?: return null
+    val code = (envelope["code"] as? JsonPrimitive)?.intOrNull ?: return null
+    if (code != 0 && code != -1) return null
+    val data = envelope["data"]
+    if (data != null && data != JsonNull) {
+        return if (code == 0 && data is JsonPrimitive && !data.isString) data.booleanOrNull else null
+    }
+    return code == 0
 }
 
 /** Every route's envelope. */
@@ -365,6 +398,7 @@ data class QQPhoneAuthCode(
 )
 
 /** The gateway's `Credential` model, as it appears in QR-login and renewal answers. */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class QQGatewayCredential(
     val musicid: Long = 0,
@@ -376,8 +410,8 @@ data class QQGatewayCredential(
     val unionid: String = "",
     @SerialName("str_musicid") val strMusicid: String = "",
     @SerialName("refresh_key") val refreshKey: String = "",
-    val encryptUin: String = "",
-    val loginType: Int = 0,
+    @SerialName("encrypt_uin") @JsonNames("encryptUin") val encryptUin: String = "",
+    @SerialName("login_type") @JsonNames("loginType") val loginType: Int = 0,
 )
 
 /**

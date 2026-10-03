@@ -344,6 +344,12 @@ Shape notes for the client: every answer is `{code, msg, data}` with `code == 0`
 `file_type` 7 FLAC / 12 MP3 320 / 13 MP3 128 / 15 AAC 96); search and playlist rows share one
 `Song` shape whose `album.mid` may be empty with the cover under `album.pmid` instead.
 
+The gateway's boolean routes encode true as `code:0, data:null` and false as HTTP 200 with
+`code:-1, data:null`. The expiry check must interpret that route-specific convention and reject
+missing codes or transport failures. Credential responses use `encrypt_uin` and `login_type`
+(`response_model_by_alias=False`); accept camelCase aliases for pasted SDK JSON too. Anonymous
+transports must never check or refresh credentials against the gateway's default account.
+
 **Order of work.** The neutral domain model comes first — it is the keystone, it is useful with
 or without QQ Music, and it removes an existing coupling. Provider abstraction follows, then the
 schema and credential migrations, then aggregation UX, then the QQ Music client itself.

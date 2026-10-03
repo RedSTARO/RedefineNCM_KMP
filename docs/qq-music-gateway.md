@@ -37,10 +37,15 @@ enables `[credential]`, it serves a pooled account to anyone who reaches it.
 | Stream | `GET /song/{mid}/url?file_type=` | 7 FLAC, 12 MP3 320, 13 MP3 128, 15 AAC 96; returns a bare `purl` |
 | QR login | `GET /login/qrcode/{qq\|wx}`, then `GET /login/qrcode/{type}/status?identifier=` | events 0 done, 1 waiting, 2 scanned, 3 timeout, 4 refused; the WeChat status route is a ~15 s long poll |
 | SMS login | `GET /login/phone/authcode?phone=&country_code=86`, then `GET /login/phone/authorize?phone=&auth_code=` | events 0 sent, 1 slider captcha wanted first (cannot be completed in-app), 2 too frequent; authorize answers a `Credential` |
-| Renewal | `GET /login/check_expired`, `GET /login/refresh_credential` | once per process before the first QQ call, when the stored account can be refreshed |
+| Renewal | `GET /login/check_expired`, `GET /login/refresh_credential` | once per stored credential before the first QQ call, when the account can be refreshed; never requested by an anonymous transport |
 
 Every answer is `{code, msg, data}`; `code == 0` is success; a route that needs an account answers
 `401 {"code": -1, "msg": "未授权"}` without one.
+
+Boolean routes have a different payload convention: `check_expired` returns `code:0, data:null`
+for true (expired), and HTTP 200 with `code:-1, data:null` for false. A missing code, malformed
+payload or non-2xx HTTP response is unknown, not a valid account. Credential fields from the web
+gateway use `encrypt_uin` and `login_type`; pasted SDK JSON may use their camelCase aliases.
 
 The stream route returns only the CDN path. The app prefixes `https://dl.stream.qqmusic.qq.com/`,
 the one host that answered such a path with `206 audio/mpeg`; the SDK's `isure.stream` fallback and
