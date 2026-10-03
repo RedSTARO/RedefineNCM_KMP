@@ -47,11 +47,12 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import org.jetbrains.compose.resources.ExperimentalResourceApi
 import redefinencm_kmp.shared.generated.resources.Res
 
-/** The legal texts packaged with the app; the names of the two licenses are their own. */
+/** The legal texts packaged with the app. */
 private enum class LicenseDocument(val path: String) {
     Notices("files/licenses/THIRD_PARTY_NOTICES.md"),
     Agpl("files/licenses/AGPL-3.0-only.txt"),
     Apache("files/licenses/Apache-2.0.txt"),
+    Font("files/licenses/OFL-1.1.txt"),
     ;
 
     val label: String
@@ -59,6 +60,7 @@ private enum class LicenseDocument(val path: String) {
             Notices -> strings.thirdPartyNotices
             Agpl -> "AGPL-3.0"
             Apache -> "Apache-2.0"
+            Font -> strings.fontLicense
         }
 }
 

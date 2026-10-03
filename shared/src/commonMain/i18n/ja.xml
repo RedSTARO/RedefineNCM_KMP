@@ -1074,4 +1074,5 @@
     <string name="metadataCacheCleared">テキストキャッシュを削除しました</string>
     <string name="metadataCacheUnavailable">現在読み込めません</string>
     <string name="metadataCacheFailed">テキストキャッシュの読み込みまたは削除に失敗しました。もう一度お試しください。</string>
+    <string name="fontLicense">フォントのライセンス</string>
 </resources>

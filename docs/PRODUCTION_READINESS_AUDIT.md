@@ -146,5 +146,13 @@
 
 - `analysis-final-check-result.json`：JVM 638、桌面 18、Android Host 463、Web 484 项通过；Android/iOS Kotlin 编译通过。
 - Desktop 分析解码每读取至多一秒 PCM 检查一次取消；正在执行的原生网络读取仍受其传输超时约束，不声称能即时中断阻塞的 FFmpeg 调用。
-- 另发现 `SmartTransitionHarnessTest` 在没有真实音频参数时直接返回，因此上述 JVM 计数不能证明真实音频或 NPU/GPU 路径已测试；待把这种未运行状态改为显式跳过。
+- `SmartTransitionHarnessTest` 曾在没有真实音频参数时直接返回，因此此前的 JVM 计数不能证明真实音频或 NPU/GPU 路径已测试；现已改为显式跳过。显式配置却缺少输入或输出目录时会失败，不再静默通过。
 - 待继续核实：Desktop 过渡时两首相邻队列项具有相同 media ID，时钟交接与队列推进是否混淆了两次播放。当前仅有源码候选，未列为已确认修复。
+
+## 字体许可与测试报告边界（2026-10-04）
+
+- Web 打包了 Noto Sans SC variable 字体。实际字体元数据为 `2.004-H2`，声明 SIL OFL 1.1 及 Adobe 2014–2021 的版权信息；许可全文原先没有随应用提供。
+- 已对照 [Google Fonts 的该字体许可](https://github.com/google/fonts/blob/main/ofl/notosanssc/OFL.txt) 补充完整文本、根声明和应用资源副本，并增加三语的字体许可入口。没有改动字体二进制或应用自身的许可证。
+- 新测试比较应用内声明及三份许可文本与根目录原文，防止维护时仅改一处。
+- `license-harness-check-result.json`：JVM 639 项中 **636 通过、3 明确跳过**；桌面 18、Android Host 463、Web 484 项全部通过。Android/iOS Kotlin 编译通过。跳过的三项都需要主动提供真实音频/加速器测试参数。
+- 远端已重新 fetch：本地主仓库没有落后 `origin/main`，尚未推送。审查与原生设备/安装包验证仍未完成。

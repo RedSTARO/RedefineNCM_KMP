@@ -50,8 +50,21 @@ for TTML 1.0.1.
 
 This root document is the canonical notice manifest. Canonical full license
 texts live under [`LICENSES/`](LICENSES/). Compose application resources ship
-an exact copy of this manifest plus the AGPL-3.0-only and Apache-2.0 texts;
+an exact copy of this manifest plus the AGPL-3.0-only, Apache-2.0 and SIL OFL 1.1 texts;
 Desktop distributions additionally stage the complete `LICENSES/` directory.
+
+## Noto Sans SC (Web font)
+
+The Web build includes `shared/src/wasmJsMain/composeResources/font/noto_sans_sc_variable.ttf`
+so the Compose canvas can render Chinese without depending on installed system fonts.
+Its embedded font metadata identifies version `2.004-H2` and SIL Open Font License 1.1.
+
+Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'.
+
+The copyright notice and complete license are bundled in
+[`LICENSES/OFL-1.1.txt`](LICENSES/OFL-1.1.txt) and the app's font-license page.
+The text is copied from the font's [Google Fonts license file](https://github.com/google/fonts/blob/main/ofl/notosanssc/OFL.txt).
+The font retains its own license.
 
 ## AMLL TTML database
 

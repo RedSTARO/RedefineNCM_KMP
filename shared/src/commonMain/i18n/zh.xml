@@ -1074,4 +1074,5 @@
     <string name="metadataCacheCleared">文本缓存已清理</string>
     <string name="metadataCacheUnavailable">暂时无法读取</string>
     <string name="metadataCacheFailed">无法读取或清理文本缓存，请重试</string>
+    <string name="fontLicense">字体许可</string>
 </resources>

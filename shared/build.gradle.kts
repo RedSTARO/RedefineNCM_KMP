@@ -720,6 +720,9 @@ tasks.withType<Test>().matching { it.name == "jvmTest" }.configureEach {
     inputs.files(
         rootProject.file("LICENSES/Apache-2.0.txt"),
         rootProject.file("LICENSES/AGPL-3.0-only.txt"),
+        rootProject.file("LICENSES/OFL-1.1.txt"),
+        rootProject.file("THIRD_PARTY_NOTICES.md"),
+        rootProject.fileTree("shared/src/commonMain/composeResources/files/licenses"),
     ).withPropertyName("licenseLayoutTexts").withPathSensitivity(PathSensitivity.RELATIVE)
     if (isWindowsBuildHost) {
         dependsOn(prepareOnnxRuntimeDirectML)
