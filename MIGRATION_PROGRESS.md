@@ -11,7 +11,7 @@
 本轮 Windows 验证（2026-10-04）的完整证据和限制见
 [`docs/PRODUCTION_READINESS_AUDIT.md`](docs/PRODUCTION_READINESS_AUDIT.md)：
 
-- JVM 646 项中 643 通过、3 个需要真实音频/加速器参数的测试明确跳过；桌面 18、Android Host 464、Web 485 项通过。
+- JVM 656 项中 653 通过、3 个需要真实音频/加速器参数的测试明确跳过；桌面 19、Android Host 473、Web 494 项通过。
 - Android Kotlin、Android 外壳 Debug Kotlin、iOS Simulator Kotlin 源码编译通过。当前修复尚未经过 iOS framework 链接、模拟器或真机验证。
 - 主仓库 `20926cd` 的 Android unsigned Release APK、Web 发布包已构建；同一快照加缓存容量函数修复后的桌面 ProGuard 构建通过。此后还有代码修改，这些产物不能替代最终提交的发布检查。
 - 隔离 Web 实例完成匿名首页、缓存设置窄屏和许可证返回位置回归；桌面实例创建了启动窗口。用户停止了界面自动化，原生交互检查仍有缺口。

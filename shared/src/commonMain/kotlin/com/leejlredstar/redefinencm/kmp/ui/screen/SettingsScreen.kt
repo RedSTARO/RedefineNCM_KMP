@@ -124,7 +124,12 @@ import com.leejlredstar.redefinencm.kmp.util.sourceCodeUrl
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
 import com.leejlredstar.redefinencm.kmp.util.applySettingsBackup
 import com.leejlredstar.redefinencm.kmp.util.encodeSettingsBackup
-import com.leejlredstar.redefinencm.kmp.util.decodeBackupLocalLibrary
+import com.leejlredstar.redefinencm.kmp.util.importSettingsBackup
+import com.leejlredstar.redefinencm.kmp.util.SettingsBackupImportResult
+import com.leejlredstar.redefinencm.kmp.util.settingsImportCount
+import com.leejlredstar.redefinencm.kmp.util.settingsImportResult
+import com.leejlredstar.redefinencm.kmp.util.consumeSettingsImportResult
+import com.leejlredstar.redefinencm.kmp.util.redactUrlUserInfo
 import com.leejlredstar.redefinencm.kmp.data.local.LocalLibraryStore
 import com.leejlredstar.redefinencm.kmp.util.rememberExportFileLauncher
 import com.leejlredstar.redefinencm.kmp.util.rememberImportFileLauncher
@@ -230,6 +235,9 @@ fun SettingsScreen(
     var lyricSourceWriteGeneration by remember { mutableIntStateOf(0) }
     var lyricDisplayWriteGeneration by remember { mutableIntStateOf(0) }
     var showImportConfirmation by remember { mutableStateOf(false) }
+    val pendingImports by settingsImportCount.collectAsState()
+    val importingBackup = pendingImports > 0
+    val pendingImportResult by settingsImportResult.collectAsState()
     val accountsSummary by accountsViewModel.summary.collectAsState()
     // Results of saving, importing and exporting appear at the bottom, beside the controls that
     // cause them; a banner at the top of the page would be off screen by the time the backup
@@ -381,36 +389,38 @@ fun SettingsScreen(
         }
     }
 
+    LaunchedEffect(pendingImportResult) {
+        val result = pendingImportResult ?: return@LaunchedEffect
+        settingsMessage = when (result) {
+            SettingsBackupImportResult.Imported -> strings.settingsImported
+            SettingsBackupImportResult.Rejected -> strings.settingsImportNotApplied
+            is SettingsBackupImportResult.SettingsSaveFailed -> strings.settingsSaveFailed(
+                redactUrlUserInfo(result.cause.message ?: strings.unknownError),
+            )
+            is SettingsBackupImportResult.LibraryFailed -> strings.settingsImportedLibraryFailed(
+                redactUrlUserInfo(result.cause.message ?: strings.unknownError),
+            )
+        }
+        if (result is SettingsBackupImportResult.Imported || result is SettingsBackupImportResult.LibraryFailed) {
+            cacheRefreshRequest += 1
+        }
+        consumeSettingsImportResult(result)
+    }
+
     val launchImport = rememberImportFileLauncher { json ->
         scope.launch {
-            if (applySettingsBackup(json, settings)) {
-                decodeBackupLocalLibrary(json)?.let { playlists ->
-                    localLibrary.importPlaylists(playlists).onFailure { failure ->
-                        settingsMessage = strings.localPlaylistsImportFailed(failure.message ?: strings.unknownError)
-                    }
-                }
-                lyricSourceWriteGeneration += 1
-                lyricDisplayWriteGeneration += 1
-                // Apply privacy-sensitive source changes from the process snapshot immediately.
-                // Android rolls that snapshot back before flush() reports a failed durable write.
-                reloadSettingsSnapshot()
-                val persisted = runCatching { settings.flush() }
-                if (persisted.isFailure) {
+            importSettingsBackup(
+                json = json,
+                applySettings = { applySettingsBackup(it, settings) },
+                flushSettings = settings::flush,
+                onSettingsApplied = {
+                    lyricSourceWriteGeneration += 1
+                    lyricDisplayWriteGeneration += 1
                     reloadSettingsSnapshot()
-                    settingsMessage = strings.settingsSaveFailed(persisted.exceptionOrNull()?.message ?: strings.unknownError)
-                    return@launch
-                }
-                reloadSettingsSnapshot()
-                settingsMessage = strings.settingsImported
-                cacheRefreshRequest += 1
-            } else {
-                lyricSourceWriteGeneration += 1
-                lyricDisplayWriteGeneration += 1
-                // A platform write can fail after earlier backup fields were already applied.
-                // Re-read the process snapshot so a partial source change is never left latent.
-                reloadSettingsSnapshot()
-                settingsMessage = strings.settingsImportInvalidFile
-            }
+                },
+                reloadSettings = ::reloadSettingsSnapshot,
+                importLibrary = localLibrary::importPlaylists,
+            )
         }
     }
     val launchExport = rememberExportFileLauncher()
@@ -868,13 +878,16 @@ fun SettingsScreen(
                 // here (verified on device with and without an icon, scrolled to the end of the
                 // list), so the group is not usable for two text-labelled actions in this
                 // Compose Multiplatform build.
-                SettingsButton(strings.exportSettings, settingsPalette, index = 0, count = 2) {
+                SettingsButton(strings.exportSettings, settingsPalette, index = 0, count = 2, enabled = !importingBackup) {
                     // The local account's playlists travel with the settings (AGENTS.md D6).
                     scope.launch {
                         launchExport(encodeSettingsBackup(settings, localLibrary.snapshot()))
                     }
                 }
-                SettingsButton(strings.importSettings, settingsPalette, index = 1, count = 2) {
+                SettingsButton(
+                    if (importingBackup) strings.settingsImporting else strings.importSettings,
+                    settingsPalette, index = 1, count = 2, enabled = !importingBackup,
+                ) {
                     showImportConfirmation = true
                 }
 

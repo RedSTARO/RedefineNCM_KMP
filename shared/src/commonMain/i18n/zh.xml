@@ -1075,4 +1075,7 @@
     <string name="metadataCacheUnavailable">暂时无法读取</string>
     <string name="metadataCacheFailed">无法读取或清理文本缓存，请重试</string>
     <string name="fontLicense">字体许可</string>
+    <string name="settingsImporting">正在导入…</string>
+    <string name="settingsImportNotApplied">未能完整导入设置，请检查备份文件及存储状态</string>
+    <string name="settingsImportedLibraryFailed">设置已导入，但本地歌单导入失败：{error}</string>
 </resources>

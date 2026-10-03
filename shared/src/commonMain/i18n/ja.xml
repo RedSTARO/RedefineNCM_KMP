@@ -1075,4 +1075,7 @@
     <string name="metadataCacheUnavailable">現在読み込めません</string>
     <string name="metadataCacheFailed">テキストキャッシュの読み込みまたは削除に失敗しました。もう一度お試しください。</string>
     <string name="fontLicense">フォントのライセンス</string>
+    <string name="settingsImporting">インポート中…</string>
+    <string name="settingsImportNotApplied">設定を完全にインポートできませんでした。バックアップファイルと保存先の状態を確認してください。</string>
+    <string name="settingsImportedLibraryFailed">設定はインポートしましたが、ローカルのプレイリストをインポートできませんでした：{error}</string>
 </resources>

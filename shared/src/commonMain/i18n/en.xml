@@ -1147,4 +1147,7 @@
     <string name="metadataCacheUnavailable">Currently unavailable</string>
     <string name="metadataCacheFailed">Couldn't read or clear the text cache. Try again.</string>
     <string name="fontLicense">Font license</string>
+    <string name="settingsImporting">Importing…</string>
+    <string name="settingsImportNotApplied">Couldn't fully import settings. Check the backup file and available storage.</string>
+    <string name="settingsImportedLibraryFailed">Settings imported, but local playlists couldn't be imported: {error}</string>
 </resources>
