@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.viewmodel.LocalLibraryViewModel
+import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import org.koin.compose.koinInject
 
 /**
@@ -34,6 +35,7 @@ import org.koin.compose.koinInject
 fun AddToLocalPlaylistDialog(viewModel: LocalLibraryViewModel = koinInject()) {
     val pending by viewModel.pendingAddition.collectAsState()
     val library by viewModel.library.collectAsState()
+    val readFailed by viewModel.readFailed.collectAsState()
     val addition = pending ?: return
     var naming by remember(addition) { mutableStateOf(false) }
     var name by remember(addition) { mutableStateOf(addition.suggestedName) }
@@ -47,7 +49,11 @@ fun AddToLocalPlaylistDialog(viewModel: LocalLibraryViewModel = koinInject()) {
         },
         text = {
             Column {
-                if (naming || playlists.isEmpty()) {
+                if (readFailed) {
+                    LocalLibraryReadErrorPanel(viewModel)
+                } else if (library == null) {
+                    ExpressiveLoadingState(label = strings.localPlaylistsLoading)
+                } else if (naming || playlists.isEmpty()) {
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = it },
@@ -78,7 +84,7 @@ fun AddToLocalPlaylistDialog(viewModel: LocalLibraryViewModel = koinInject()) {
             }
         },
         confirmButton = {
-            if (naming || playlists.isEmpty()) {
+            if (!readFailed && library != null && (naming || playlists.isEmpty())) {
                 TextButton(
                     onClick = { viewModel.addPendingToNewPlaylist(name) },
                     enabled = name.isNotBlank(),
@@ -90,3 +96,25 @@ fun AddToLocalPlaylistDialog(viewModel: LocalLibraryViewModel = koinInject()) {
 }
 
 private fun Modifier.clickableListItem(onClick: () -> Unit): Modifier = clickable(onClick = onClick)
+
+@Composable
+internal fun LocalLibraryReadErrorPanel(
+    viewModel: LocalLibraryViewModel,
+    modifier: Modifier = Modifier,
+    accentPalette: ContentAccentPalette? = null,
+) {
+    val reloading by viewModel.reloading.collectAsState()
+    if (reloading) {
+        ExpressiveLoadingState(label = strings.localPlaylistsLoading, modifier = modifier)
+    } else {
+        ExpressiveStatePanel(
+            title = strings.localPlaylistsReadFailed,
+            message = strings.localPlaylistsReadFailedHint,
+            tone = ExpressiveStateTone.Error,
+            accentPalette = accentPalette,
+            modifier = modifier,
+            actionLabel = strings.retry,
+            onAction = viewModel::retryLoad,
+        )
+    }
+}

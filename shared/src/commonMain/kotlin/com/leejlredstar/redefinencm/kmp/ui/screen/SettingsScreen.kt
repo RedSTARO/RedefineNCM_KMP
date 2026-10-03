@@ -881,7 +881,10 @@ fun SettingsScreen(
                 SettingsButton(strings.exportSettings, settingsPalette, index = 0, count = 2, enabled = !importingBackup) {
                     // The local account's playlists travel with the settings (AGENTS.md D6).
                     scope.launch {
-                        launchExport(encodeSettingsBackup(settings, localLibrary.snapshot()))
+                        try {
+                            launchExport(encodeSettingsBackup(settings, localLibrary.snapshot()))
+                        } catch (cancelled: CancellationException) { throw cancelled }
+                        catch (_: Exception) { settingsMessage = strings.settingsExportFailed }
                     }
                 }
                 SettingsButton(

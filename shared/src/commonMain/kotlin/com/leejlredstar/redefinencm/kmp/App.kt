@@ -548,6 +548,15 @@ private fun AppContent(
             }
             AddToLocalPlaylistDialog(localLibraryViewModel)
 
+            val favoriteMessage by nowPlayingViewModel.favoriteMessage.collectAsState()
+            LaunchedEffect(favoriteMessage) {
+                val message = favoriteMessage ?: return@LaunchedEffect
+                desktopSnackbarVisible = true
+                try { snackbarHostState.showSnackbar(message) }
+                finally { desktopSnackbarVisible = false }
+                nowPlayingViewModel.consumeFavoriteMessage()
+            }
+
             // Say why a track resolved to nothing instead of leaving the player silent. The
             // reason comes from the provider that failed, once per failure.
             val playbackFailure by nowPlayingViewModel.playbackFailure.collectAsState()

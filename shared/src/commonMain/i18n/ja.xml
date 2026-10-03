@@ -1078,4 +1078,9 @@
     <string name="settingsImporting">インポート中…</string>
     <string name="settingsImportNotApplied">設定を完全にインポートできませんでした。バックアップファイルと保存先の状態を確認してください。</string>
     <string name="settingsImportedLibraryFailed">設定はインポートしましたが、ローカルのプレイリストをインポートできませんでした：{error}</string>
+    <string name="localPlaylistsReadFailed">ローカルのプレイリストを読み込めませんでした</string>
+    <string name="localPlaylistsReadFailedHint">保存済みのデータは保持されています。読み込めるまでローカルのプレイリストは変更できません。もう一度お試しください。</string>
+    <string name="localFavoriteSaveFailed">「{title}」のローカルのお気に入りを保存できませんでした。もう一度お試しください。</string>
+    <string name="settingsExportFailed">完全なバックアップをエクスポートできませんでした。ローカルのプレイリストと保存先の状態を確認してから、もう一度お試しください。</string>
+    <string name="localPlaylistsInvalidData">プレイリストのデータが無効なため、変更は保存されませんでした。</string>
 </resources>

@@ -183,6 +183,9 @@ class NowPlayingViewModel(
 
     /** The outcome of the last 换源, for the app's snackbar; consumed once shown. */
     val sourceSwitchMessage = MutableStateFlow<String?>(null)
+    val favoriteMessage = MutableStateFlow<String?>(null)
+
+    fun consumeFavoriteMessage() { favoriteMessage.value = null }
 
     fun consumeSourceSwitchMessage() {
         sourceSwitchMessage.value = null
@@ -539,6 +542,7 @@ class NowPlayingViewModel(
                     if (mediaId != null && !supports(mediaId, ProviderCapability.LIKE)) {
                         localAccount.enabledUpdates().collectLatest { enabled ->
                             if (enabled) {
+                                favoriteUiState.value = FavoriteUiState(mediaId = mediaId, local = true)
                                 localLibrary.updates().collect { library ->
                                     favoriteUiState.value = FavoriteUiState(
                                         mediaId = mediaId,
@@ -1164,7 +1168,11 @@ class NowPlayingViewModel(
             // without asking whether the heart is enabled, so the check is here.
             if (!localFavoritesEnabled.value) return
             val liked = favoriteUiState.value.let { it.mediaId == media.id && it.isLiked }
-            scope.launch { localLibrary.setFavorite(media, favorite = !liked) }
+            scope.launch {
+                localLibrary.setFavorite(media, favorite = !liked).onFailure {
+                    favoriteMessage.value = strings.localFavoriteSaveFailed(media.title.ifBlank { strings.thisSong })
+                }
+            }
             return
         }
         val uid = mainViewModel.uid.value.takeIf { it > 0 } ?: return

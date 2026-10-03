@@ -9,8 +9,12 @@ import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flow
@@ -138,14 +142,27 @@ class LocalLibraryStore(
 
     /** Null until the stored document has been read once. */
     private val current = MutableStateFlow<LocalLibraryDocument?>(null)
+    private val _readFailed = MutableStateFlow(false)
+    val readFailed = _readFailed.asStateFlow()
 
     /** The library now, then after every change. */
     fun updates(): Flow<LocalLibraryDocument> = flow {
-        if (current.value == null) writes.withLock { load() }
+        try {
+            writes.withLock { load() }
+        } catch (_: LocalLibraryReadException) {
+            // Keep subscribers alive so a later retry can publish the recovered document.
+            // No empty document is published for unreadable owned data.
+        }
         emitAll(current.filterNotNull())
     }
 
     suspend fun snapshot(): LocalLibraryDocument = writes.withLock { load() }
+
+    suspend fun reload(): Result<Unit> = writes.withLock {
+        try { load(force = true); Result.success(Unit) }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (failure: LocalLibraryReadException) { Result.failure(failure) }
+    }
 
     suspend fun createPlaylist(name: String, tracks: List<MediaInfo> = emptyList()): Result<LocalPlaylist> =
         change { library ->
@@ -237,10 +254,15 @@ class LocalLibraryStore(
     ): Result<T> = writes.withLock {
         try {
             val (updated, answer) = transform(load())
-            withContext(Dispatchers.Default) {
-                database.localLibraryQueries.upsert(LibraryJson.encodeToString(LocalLibraryDocument.serializer(), updated))
+            updated.requireValid()
+            currentCoroutineContext().ensureActive()
+            withContext(NonCancellable) {
+                withContext(Dispatchers.Default) {
+                    database.localLibraryQueries.upsert(LibraryJson.encodeToString(LocalLibraryDocument.serializer(), updated))
+                }
+                // A cancelled page must not leave memory behind the already committed row.
+                current.value = updated
             }
-            current.value = updated
             Result.success(answer)
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -250,15 +272,22 @@ class LocalLibraryStore(
     }
 
     /** The document, read from the table the first time; called under [writes]. */
-    private suspend fun load(): LocalLibraryDocument {
-        current.value?.let { return it }
-        val stored = withContext(Dispatchers.Default) {
-            database.localLibraryQueries.select().executeAsOneOrNull()
+    private suspend fun load(force: Boolean = false): LocalLibraryDocument {
+        if (!force && !_readFailed.value) current.value?.let { return it }
+        val document = try {
+            withContext(Dispatchers.Default) {
+                val stored = database.localLibraryQueries.select().executeAsOneOrNull()
+                if (stored == null) LocalLibraryDocument()
+                else LibraryJson.decodeFromString(LocalLibraryDocument.serializer(), stored).also { it.requireValid() }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            _readFailed.value = true
+            throw LocalLibraryReadException(failure)
         }
-        val document = stored
-            ?.let { runCatching { LibraryJson.decodeFromString(LocalLibraryDocument.serializer(), it) }.getOrNull() }
-            ?: LocalLibraryDocument()
         current.value = document
+        _readFailed.value = false
         return document
     }
 
@@ -270,6 +299,19 @@ class LocalLibraryStore(
         return copy(playlists = playlists.map { if (it.id == id) change(it) else it })
     }
 
+    /** These identities become Compose list keys and player IDs; reject before publishing. */
+    private fun LocalLibraryDocument.requireValid() {
+        require(
+            playlists.map { it.id }.toSet().size == playlists.size &&
+                playlists.count { it.kind == LocalPlaylist.Kind.FAVORITES } <= 1 &&
+                playlists.all { playlist ->
+                    playlist.id.isNotBlank() &&
+                        playlist.tracks.all { it.provider.isNotBlank() && it.rawId.isNotBlank() } &&
+                        playlist.tracks.map { it.key }.toSet().size == playlist.tracks.size
+                },
+        ) { strings.localPlaylistsInvalidData }
+    }
+
     private fun newId(time: Long): String = "local-$time-${Random.nextInt(0, 1_000_000)}"
 
     companion object {
@@ -277,9 +319,12 @@ class LocalLibraryStore(
         val UntitledPlaylistName: String get() = strings.untitledPlaylist
 
         internal val LibraryJson = Json {
-            ignoreUnknownKeys = true
-            coerceInputValues = true
+            // Each edit replaces the owned row. Silently dropping a future field or
+            // coercing an unknown kind would permanently change data we cannot read.
             encodeDefaults = true
         }
     }
 }
+
+/** The cause stays available for diagnosis; user messages never include the stored JSON. */
+class LocalLibraryReadException(cause: Exception) : IllegalStateException(strings.localPlaylistsReadFailed, cause)

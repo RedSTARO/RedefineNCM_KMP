@@ -38,6 +38,17 @@ class LocalLibraryViewModel(
     /** Null until the stored library has been read. */
     val library: StateFlow<LocalLibraryDocument?> = store.updates()
         .stateIn(scope, SharingStarted.Eagerly, null)
+    val readFailed = store.readFailed
+    private val _reloading = MutableStateFlow(false)
+    val reloading = _reloading.asStateFlow()
+
+    fun retryLoad() {
+        if (_reloading.value) return
+        _reloading.value = true
+        scope.launch {
+            try { store.reload() } finally { _reloading.value = false }
+        }
+    }
 
     /**
      * Whether the local account is switched on, for showing the ways into its library. False until
@@ -91,16 +102,16 @@ class LocalLibraryViewModel(
         val pending = _pendingAddition.value ?: return
         _pendingAddition.value = null
         scope.launch {
-            val name = store.snapshot().playlist(playlistId)?.displayName.orEmpty()
-            store.addTracks(playlistId, pending.tracks)
-                .onSuccess { added ->
-                    _message.value = when {
-                        added == 0 -> strings.songsAlreadyInPlaylist(name)
-                        pending.tracks.size == 1 -> strings.addedToPlaylist(name)
-                        else -> strings.addedSongsToPlaylist(added, name)
-                    }
+            try {
+                val name = store.snapshot().playlist(playlistId)?.displayName.orEmpty()
+                val added = store.addTracks(playlistId, pending.tracks).getOrThrow()
+                _message.value = when {
+                    added == 0 -> strings.songsAlreadyInPlaylist(name)
+                    pending.tracks.size == 1 -> strings.addedToPlaylist(name)
+                    else -> strings.addedSongsToPlaylist(added, name)
                 }
-                .onFailure { failure -> _message.value = failure.message ?: strings.addToPlaylistFailed }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { _message.value = failure.message ?: strings.addToPlaylistFailed }
         }
     }
 

@@ -207,3 +207,12 @@
 - 新增 Robolectric Android 运行时回归，分别在 API 24、36 执行真实工厂。修复前两项均因上述异常失败；修复后两项均通过。CI 测试作业使用 Java 21，以满足 Android 16 测试运行时要求。
 - `dynamic-cover-fix-check.log`：Android Host、JVM、desktop 测试及 Android Release APK 构建通过；验证使用主仓库记录的 AMLL `20b6e7f`。修复前后 XML 保存在忽略目录 `build/audit-review/dynamic-cover-{before,after}.xml`。
 - 公开数据探针通过该歌曲 51 行 LRC、51 行 YRC 及 AMLL 文档构建。未连接 Android 设备；匿名动态封面请求需要登录，因此未使用用户账号进行该歌曲的真机视频播放验证。
+
+## 本地歌单读取、保存与恢复（2026-10-04）
+
+- 损坏 JSON 原先被当成空库，后续新建歌单会覆盖原行；未知枚举也被自动转换成普通歌单。现严格读取自有数据，不忽略未知字段或转换未知类型，读取失败保留原行并阻止修改。
+- 读取失败有独立状态和三语重试界面，不展示“空歌单”；已有订阅在重新读取成功后恢复，不需要重新打开页面。导出备份与本地收藏保存也会报告失败，不再遗漏这些入口的错误。
+- 保存进入持久化阶段后完成 SQL 写入与内存发布；取消页面协程不会留下数据库已更新、内存仍为旧快照的状态。
+- 追加复审发现：重复歌单/歌曲 key、空身份、多个本地收藏列表可穿过 JSON 解析进入界面，非法导入还会替换已保存的歌单。两项回归在校验前失败，现于读取发布和写入前拒绝非法结构，原数据保持不变。
+- 回归同时覆盖失败后重试、既有订阅恢复、失败重新加载保留上次快照、历史省略字段的默认值，以及未知音乐服务的歌曲保留。原始记录无法读取时不会自动重置或尝试猜测修复。
+- `local-library-final-check-result.json`：shared/build/test-results/jvmTest: 663 tests, 0 failures, 3 skipped; desktopApp/build/test-results/test: 19 tests, 0 failures, 0 skipped; shared/build/test-results/testAndroidHostTest: 475 tests, 0 failures, 0 skipped; shared/build/test-results/wasmJsBrowserTest: 494 tests, 0 failures, 0 skipped。Android/iOS Kotlin 编译通过。

@@ -46,6 +46,7 @@ import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
+import com.leejlredstar.redefinencm.kmp.ui.component.LocalLibraryReadErrorPanel
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
@@ -66,6 +67,7 @@ fun LocalLibraryScreen(
     viewModel: LocalLibraryViewModel = koinInject(),
 ) {
     val library by viewModel.library.collectAsState()
+    val readFailed by viewModel.readFailed.collectAsState()
     val importing by viewModel.importing.collectAsState()
     val palette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
 
@@ -99,6 +101,7 @@ fun LocalLibraryScreen(
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Button(
                                     onClick = { creating = true },
+                                    enabled = library != null && !readFailed,
                                     shape = CircleShape,
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = palette.accent,
@@ -111,7 +114,7 @@ fun LocalLibraryScreen(
                                 }
                                 FilledTonalButton(
                                     onClick = { importingDialog = true },
-                                    enabled = !importing,
+                                    enabled = !importing && library != null && !readFailed,
                                     shape = CircleShape,
                                     colors = ButtonDefaults.filledTonalButtonColors(
                                         containerColor = palette.container,
@@ -127,6 +130,9 @@ fun LocalLibraryScreen(
                     }
                 }
                 when {
+                    readFailed -> item(key = "local-read-error") {
+                        LocalLibraryReadErrorPanel(viewModel, Modifier.padding(horizontal = 16.dp), palette)
+                    }
                     library == null -> item(key = "local-loading") {
                         ExpressiveLoadingState(
                             label = strings.localPlaylistsLoading,

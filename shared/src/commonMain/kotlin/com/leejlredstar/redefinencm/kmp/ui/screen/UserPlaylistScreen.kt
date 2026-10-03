@@ -123,6 +123,7 @@ fun UserPlaylistScreen(
     localLibraryViewModel: LocalLibraryViewModel = koinInject(),
 ) {
     val localLibrary by localLibraryViewModel.library.collectAsState()
+    val localLibraryReadFailed by localLibraryViewModel.readFailed.collectAsState()
     val localLibraryEnabled by localLibraryViewModel.enabled.collectAsState()
     val userDetail by viewModel.userDetail.collectAsState()
     val userLevel by viewModel.userLevel.collectAsState()
@@ -241,6 +242,7 @@ fun UserPlaylistScreen(
                 LibraryShortcut(
                     title = strings.localPlaylists,
                     subtitle = when {
+                        localLibraryReadFailed -> strings.localPlaylistsReadFailed
                         library == null -> strings.localPlaylistsShortcutSubtitle
                         library.playlists.isEmpty() -> strings.localPlaylistsEmptySubtitle
                         else -> buildString {

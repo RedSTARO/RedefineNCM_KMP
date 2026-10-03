@@ -1150,4 +1150,9 @@
     <string name="settingsImporting">Importing…</string>
     <string name="settingsImportNotApplied">Couldn't fully import settings. Check the backup file and available storage.</string>
     <string name="settingsImportedLibraryFailed">Settings imported, but local playlists couldn't be imported: {error}</string>
+    <string name="localPlaylistsReadFailed">Couldn't read local playlists</string>
+    <string name="localPlaylistsReadFailedHint">The stored data has been kept. Local playlists can't be changed until they can be read. Try again.</string>
+    <string name="localFavoriteSaveFailed">Couldn't save the local favourite for “{title}”. Try again.</string>
+    <string name="settingsExportFailed">Couldn't export a complete backup. Check the local playlists and storage, then try again.</string>
+    <string name="localPlaylistsInvalidData">The playlist data is invalid. No changes were saved.</string>
 </resources>

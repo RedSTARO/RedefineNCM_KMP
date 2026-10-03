@@ -1,12 +1,19 @@
 package com.leejlredstar.redefinencm.kmp.data.local
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import app.cash.sqldelight.db.QueryResult
+import app.cash.sqldelight.db.SqlDriver
+import app.cash.sqldelight.db.SqlPreparedStatement
 import com.leejlredstar.redefinencm.kmp.data.db.AppDatabase
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.util.decodeBackupLocalLibrary
 import com.leejlredstar.redefinencm.kmp.util.encodeSettingsBackup
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.withTimeout
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -38,6 +45,97 @@ class LocalLibraryStoreTest {
 
     @AfterTest
     fun close() = driver.close()
+
+    @Test
+    fun unreadableDocumentsCannotBeOverwrittenByANewPlaylist() = runBlocking {
+        for (stored in listOf(
+            "{broken",
+            """{"playlists":[{"id":"owned","name":"Keep","kind":"FUTURE_KIND"}]}""",
+            """{"playlists":[{"id":"owned","name":"Keep","kind":null}]}""",
+            """{"playlists":[],"futureMetadata":{"owner":"Keep"}}""",
+            """{"playlists":[{"id":"owned","name":"Keep","futureMetadata":42}]}""",
+        )) {
+            database.localLibraryQueries.upsert(stored)
+            val library = store()
+            assertTrue(library.createPlaylist("New").isFailure, stored)
+            assertTrue(library.readFailed.value)
+            assertEquals(stored, database.localLibraryQueries.select().executeAsOne())
+        }
+    }
+
+    @Test
+    fun aReadFailureDoesNotEmitAnEmptyLibraryAndExistingSubscribersRecoverOnRetry() = runBlocking {
+        withTimeout(5_000) {
+            val stored = "{broken"
+            database.localLibraryQueries.upsert(stored)
+            val library = store()
+            val firstDocument = async(start = CoroutineStart.UNDISPATCHED) { library.updates().first() }
+            library.readFailed.first { it }
+            assertFalse(firstDocument.isCompleted)
+            assertTrue(library.reload().isFailure)
+            assertEquals(stored, database.localLibraryQueries.select().executeAsOne())
+
+            database.localLibraryQueries.upsert("""{"playlists":[{"id":"owned","name":"Recovered"}]}""")
+            library.reload().getOrThrow()
+
+            assertEquals(listOf("Recovered"), firstDocument.await().playlists.map { it.name })
+            assertFalse(library.readFailed.value)
+            library.createPlaylist("After recovery").getOrThrow()
+            assertEquals(listOf("Recovered", "After recovery"), store().snapshot().playlists.map { it.name })
+        }
+    }
+
+    @Test
+    fun aFailedReloadPreservesTheLastSnapshotAndBlocksWritesToTheDamagedRow() = runBlocking {
+        val library = store()
+        library.createPlaylist("Saved").getOrThrow()
+        val original = database.localLibraryQueries.select().executeAsOne()
+        database.localLibraryQueries.upsert("{broken")
+
+        assertTrue(library.reload().isFailure)
+        assertTrue(library.readFailed.value)
+        assertEquals(listOf("Saved"), library.updates().first().playlists.map { it.name })
+        assertTrue(library.createPlaylist("Must not write").isFailure)
+        assertEquals("{broken", database.localLibraryQueries.select().executeAsOne())
+
+        database.localLibraryQueries.upsert(original)
+        library.reload().getOrThrow()
+        assertFalse(library.readFailed.value)
+        assertEquals(listOf("Saved"), library.snapshot().playlists.map { it.name })
+    }
+
+    @Test
+    fun historicalDefaultsAndTracksFromUnknownProvidersSurviveAnEdit() = runBlocking {
+        database.localLibraryQueries.upsert("""{"playlists":[{"id":"owned","name":"Old","tracks":[{"provider":"future-service","rawId":"track","title":"Keep"}]}]}""")
+        val library = store()
+        assertEquals(LocalPlaylist.Kind.PLAYLIST, library.snapshot().playlist("owned")!!.kind)
+        library.renamePlaylist("owned", "Renamed").getOrThrow()
+        val restarted = store().snapshot().playlist("owned")!!
+        assertEquals("Renamed", restarted.name)
+        assertEquals("future-service:track", restarted.tracks.single().key)
+        assertEquals("Keep", restarted.tracks.single().title)
+    }
+
+    @Test
+    fun cancellationAfterTheDatabaseWriteStillPublishesTheCommittedDocument() = runBlocking {
+        var afterWrite: () -> Unit = {}
+        val hooked = object : SqlDriver by driver {
+            override fun execute(identifier: Int?, sql: String, parameters: Int, binders: (SqlPreparedStatement.() -> Unit)?): QueryResult<Long> {
+                val result = driver.execute(identifier, sql, parameters, binders)
+                if (sql.contains("INTO LocalLibrary")) afterWrite()
+                return result
+            }
+        }
+        val library = LocalLibraryStore(AppDatabase(hooked)) { clock++ }
+        assertTrue(library.snapshot().playlists.isEmpty())
+        val worker = launch(start = CoroutineStart.LAZY) { library.createPlaylist("Committed") }
+        afterWrite = { worker.cancel() }
+        worker.start()
+        worker.join()
+        assertTrue(worker.isCancelled)
+        assertTrue("Committed" in database.localLibraryQueries.select().executeAsOne())
+        assertEquals(listOf("Committed"), library.snapshot().playlists.map { it.name })
+    }
 
     @Test
     fun aPlaylistHoldsTracksOfEveryProviderOnceAndSurvivesARestart() = runBlocking {

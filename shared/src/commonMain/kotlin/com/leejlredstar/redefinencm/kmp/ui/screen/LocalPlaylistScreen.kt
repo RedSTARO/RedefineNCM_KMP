@@ -51,6 +51,8 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.LocalLibraryViewModel
+import com.leejlredstar.redefinencm.kmp.ui.component.LocalLibraryReadErrorPanel
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
 import org.koin.compose.koinInject
 
 /**
@@ -67,6 +69,7 @@ fun LocalPlaylistScreen(
     settings: PlatformSettings = koinInject(),
 ) {
     val library by viewModel.library.collectAsState()
+    val readFailed by viewModel.readFailed.collectAsState()
     val playlist = library?.playlist(playlistId)
     val tracks = playlist?.tracks.orEmpty()
     val queue = remember(tracks) { tracks.mapNotNull { it.toMediaInfo() } }
@@ -80,8 +83,8 @@ fun LocalPlaylistScreen(
     var renaming by remember { mutableStateOf(false) }
     var confirmingDelete by remember { mutableStateOf(false) }
     // A deleted playlist has nowhere to show; leave its page.
-    LaunchedEffect(library, playlist) {
-        if (library != null && playlist == null) onBack()
+    LaunchedEffect(library, playlist, readFailed) {
+        if (!readFailed && library != null && playlist == null) onBack()
     }
 
     ExpressivePage(accentPalette = palette, contentWindowInsets = WindowInsets.statusBars) {
@@ -95,13 +98,13 @@ fun LocalPlaylistScreen(
                         BackButton(palette, onBack)
                         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                             Text(
-                                text = playlist?.displayName.orEmpty(),
+                                text = playlist?.displayName ?: strings.localPlaylists,
                                 style = MaterialTheme.typography.headlineLarge,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = palette.onPageStart,
                             )
                             Text(
-                                text = strings.localPlaylistSongCount(tracks.size),
+                                text = if (readFailed) strings.localPlaylistsReadFailed else strings.localPlaylistSongCount(tracks.size),
                                 style = MaterialTheme.typography.labelLarge,
                                 color = palette.secondaryOnPageStart,
                             )
@@ -112,7 +115,7 @@ fun LocalPlaylistScreen(
                                         PlaybackSource.set(source)
                                         player.setQueue(queue, 0)
                                     },
-                                    enabled = queue.isNotEmpty(),
+                                    enabled = queue.isNotEmpty() && !readFailed,
                                     shape = CircleShape,
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = palette.accent,
@@ -124,7 +127,7 @@ fun LocalPlaylistScreen(
                                     Text(strings.playAll)
                                 }
                                 // The favourites list is the hearts' own; it is not renamed or deleted.
-                                if (playlist?.kind == LocalPlaylist.Kind.PLAYLIST) {
+                                if (!readFailed && playlist?.kind == LocalPlaylist.Kind.PLAYLIST) {
                                     FilledTonalButton(
                                         onClick = { renaming = true },
                                         shape = CircleShape,
@@ -146,7 +149,15 @@ fun LocalPlaylistScreen(
                         }
                     }
                 }
-                if (tracks.isEmpty()) {
+                if (readFailed) {
+                    item(key = "local-playlist-read-error") {
+                        LocalLibraryReadErrorPanel(viewModel, Modifier.padding(horizontal = 16.dp), palette)
+                    }
+                } else if (library == null) {
+                    item(key = "local-playlist-loading") {
+                        ExpressiveLoadingState(label = strings.localPlaylistsLoading)
+                    }
+                } else if (tracks.isEmpty()) {
                     item(key = "local-playlist-empty") {
                         ExpressiveStatePanel(
                             title = strings.playlistEmpty,

@@ -1078,4 +1078,9 @@
     <string name="settingsImporting">正在导入…</string>
     <string name="settingsImportNotApplied">未能完整导入设置，请检查备份文件及存储状态</string>
     <string name="settingsImportedLibraryFailed">设置已导入，但本地歌单导入失败：{error}</string>
+    <string name="localPlaylistsReadFailed">无法读取本地歌单</string>
+    <string name="localPlaylistsReadFailedHint">原数据已保留，当前无法修改本地歌单。请重试读取。</string>
+    <string name="localFavoriteSaveFailed">无法保存“{title}”的本地收藏，请重试</string>
+    <string name="settingsExportFailed">无法导出完整备份，请检查本地歌单和存储状态后重试</string>
+    <string name="localPlaylistsInvalidData">歌单数据无效，未保存更改</string>
 </resources>
