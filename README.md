@@ -137,8 +137,9 @@ MIT 许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 ## Web 行为与浏览器约束
 
 Web 目标用 `HTMLAudioElement` 播放，由 Media Session 提供系统媒体控制，用 OPFS 保存下载，
-并用浏览器存储持久化设置和 SQLDelight 缓存。页面变为隐藏状态、进入 `pagehide` 或
-触发 `beforeunload` 时会暂停播放，同时取消尚未完成的播放地址解析，避免退出后延迟起播。
+并用浏览器存储持久化设置和 SQLDelight 缓存。进入 `pagehide` 或触发 `beforeunload` 时会暂停
+播放，同时取消尚未完成的播放地址解析，避免退出后延迟起播；只是切换标签页或最小化浏览器时继续
+播放，但移动端浏览器仍可能挂起隐藏的页面。
 
 浏览器带来以下硬性约束：
 

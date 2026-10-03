@@ -640,7 +640,9 @@ RedefineNCM_KMP/
 │       │   ├── i18n/I18n.kt             # Language choice and resolution, UiText, compactCount (D7)
 │       │   ├── player/
 │       │   │   ├── PlatformPlayer.kt    # interface + PlayerState enum + MediaInfo + StreamUrlResolver
-│       │   │   └── LyricBus.kt          # Shared lyric/position event bus (MutableStateFlow)
+│       │   │   ├── BasePlatformPlayer.kt # PlayQueue-backed state shared by the four players
+│       │   │   ├── PlayQueue.kt         # immutable play-order queue (shuffle invariant)
+│       │   │   └── PlaybackReportingCoordinator.kt # NetEase playback reporting
 │       │   ├── notification/
 │       │   │   └── LyricNotificationController.kt   # LyricSurface interfaces + expect val
 │       │   ├── recognition/
@@ -648,9 +650,8 @@ RedefineNCM_KMP/
 │       │   │   ├── MicrophoneRecorder.kt # common capture contract
 │       │   │   └── PcmResampler.kt       # platform PCM → 8 kHz mono
 │       │   ├── smtc/
-│       │   │   └── (MediaControlsIntegrator)        # ⚠ currently in jvmMain, not commonMain — see divergence
+│       │   │   └── MediaControls.kt      # MediaControlsSink + expect val osMediaControls (D4)
 │       │   ├── util/
-│       │   │   ├── LyricParser.kt        # Pure-Kotlin LRC parser
 │       │   │   ├── CoilImageTheme.kt      # expect fun themeColorFromCoilImage — album-art accent
 │       │   │   │                          #   (one skiaMain actual covers JVM/iOS/Web)
 │       │   │   └── Settings.kt           # expect class PlatformSettings + SettingKeys; the
@@ -756,8 +757,9 @@ The desktop app keeps what it stores itself in `~/.redefinencm/`:
 1. A queue is a `List<MediaInfo>` whose `placeholderUri` is
    `redefinencm://playbackPlaceHolder?id=<songId>` — **not** a real audio URL.
 2. Each platform's `PlatformPlayer` resolves the placeholder to a real CDN stream URL at play
-   time via `NCMApi.songUrlV1()` (a `StreamUrlResolver`). Stream URLs are **never persisted**
-   — they expire and are fetched fresh per session.
+   time through its `StreamUrlResolver`, which hands the id to the track's provider
+   (`NCMApi.songUrlV1()` for NetEase, the QQ gateway for QQ Music). Stream URLs are **never
+   persisted** — they expire and are fetched fresh per session.
 3. `NowPlayingViewModel` mirrors `PlatformPlayer`'s `StateFlow`s (state, position, duration,
    currentMedia, queue, currentIndex, shuffleEnabled) to the UI.
 4. Lyric pipeline: `PlatformPlayer.currentMedia` → `LyricResolver` applies the persisted source
@@ -953,10 +955,10 @@ and another from live state — that is the original shuffle-misalignment bug.
 
 The pure, unit-tested model of this now lives in **`player/PlayQueue.kt`** (immutable;
 `currentItem == itemsInPlayOrder[positionInPlayOrder]` holds by construction) with a full
-regression suite in **`commonTest/.../player/PlayQueueTest.kt`**. `PlatformPlayer` actuals
-should delegate ordering to `PlayQueue` rather than re-deriving it. `NowPlayingViewModel`
-still uses the simplified `player.queue` + `player.currentIndex` form and should be migrated
-to drive `PlayQueue` when the real players land.
+regression suite in **`commonTest/.../player/PlayQueueTest.kt`**. Every `PlatformPlayer` actual
+delegates ordering to `PlayQueue` and publishes one `queueSnapshot`; `NowPlayingViewModel`
+rebuilds the visible queue and highlight from that snapshot in `rebuildPlaylistFromTimeline()`
+and must not re-derive the order.
 
 ---
 
@@ -1218,8 +1220,8 @@ feature gap; platform integrations use target-specific actuals:
   redownloading audio, and local playback prefers valid same-source lyrics and local artwork.
 - **Playlist behaviors**: `replacePlaylist` setting honored on song click,
   `playlistUpdatePlaycount` reported, no auto-jump to the full-screen player (original behavior).
-- **Album-art theme color**: `themeColorFromCoilImage()` expect/actual (Android Palette /
-  JVM Skia sampling / iOS stub) wired into MiniNowPlayingBar (with luminance-adaptive content
+- **Album-art theme color**: `themeColorFromCoilImage()` expect/actual (Android Palette; JVM,
+  iOS and Web share the `skiaMain` RGB555 quantizer) wired into MiniNowPlayingBar (with luminance-adaptive content
   color + spring animation), PlaylistDetail hero, and both full-screen AMLL renderers.
 - **Search shared-element transition** (pill → bar) via `SharedTransitionLayout` in HomeScreen.
 - **Responsive nav**: non-Desktop targets use NavigationRail on ≥600dp. Desktop keeps a collapsed
@@ -1327,9 +1329,10 @@ feature gap; platform integrations use target-specific actuals:
       all enabled targets, including Web, compile against the same interface.
 
 ### Misplaced / misnamed
-- [x] **`MediaControlsIntegrator` moved to commonMain** (2026-06-11) — now in
-      `commonMain/smtc/MediaControls.kt`; the misnamed `jvmMain/.../WindowsSmtcIntegration.kt` was
-      deleted and replaced by `jvmMain/smtc/WindowsMediaControls.kt` (the OS binding home).
+- [x] **Media controls split by D4** (2026-09-08) — `commonMain/smtc/MediaControls.kt` holds only
+      `MediaControlsSink` and `expect val osMediaControls`; `MediaControlsIntegrator` is desktop-only
+      in `jvmMain/smtc/MediaControlsIntegrator.kt`, and `jvmMain/smtc/WindowsMediaControls.kt` is the
+      Windows binding. The misnamed `WindowsSmtcIntegration.kt` was deleted on 2026-06-11.
 
 ### Platform integration status
 - [x] **App, DI and real players are wired on all enabled targets.** `initKoin()` runs from every
@@ -1398,13 +1401,14 @@ feature gap; platform integrations use target-specific actuals:
       while JVM/iOS/Web share the RGB555 quantizer.
 
 ### Not started
-- [x] **SQLDelight cache** (D3) — DONE (plugin + 11 tables + drivers + cache-then-network +
+- [x] **SQLDelight cache** (D3) — DONE (plugin + 12 tables + drivers + cache-then-network +
       PlayerStatus playback persistence + DownloadQueue task persistence; build-verified 2026-07-13).
 - [x] **`PlayQueue` + `PlayQueueTest`** (shuffle regression suite) — DONE (2026-06-11), pure
-      Kotlin and build-verified. Android, Desktop and Web publish queue/index/current media from a
+      Kotlin and build-verified. All four players publish queue/index/current media from a
       single rebuilt play-order snapshot; do not reintroduce parallel ordering paths.
-- [ ] Domain model layer (DTO → domain mapping), if desired.
-- [ ] Voyager navigation wiring (confirm whether Voyager is the chosen nav or remove it).
+- [ ] Provider-neutral domain model (DTO → domain mapping) — decided in D6 as the keystone; the
+      library and playlist screens still read NetEase DTOs.
+- [x] Navigation: decided — the hand-rolled tab + push stack in `App.kt`; Voyager is not used.
 - [ ] Goal #4 verified dependency upgrade + cross-repo version convergence.
 - [x] CI pipeline covers common tests, Android, all three Desktop packages, iOS compile/Xcode
       checks, Web browser tests + production distribution, artifacts, tag releases and aggregate

@@ -1,6 +1,6 @@
 # RedefineNCM → KMP 迁移进度
 
-> 最后更新：2026-09-06　｜　状态：四目标均已启用；全屏播放器为单一路由、单一原生 Compose 渲染器。项目内已无任何 WebView；歌词引擎是子模块 `AMLL_Jetpack_Compose/`（独立仓库），以 Gradle composite build 接入。
+> 最后更新：2026-10-03　｜　状态：四目标均已启用；全屏播放器为单一路由、单一原生 Compose 渲染器。项目内已无任何 WebView；歌词引擎是子模块 `AMLL_Jetpack_Compose/`（独立仓库），以 Gradle composite build 接入。
 > 权威细节与"目标规范 vs 现状差异清单"见 `AGENTS.md`（本仓库）与 `../RedefineNCM/AGENTS.md`（原始仓库，已冻结）。
 > 本文件只做"全步骤 / 已完成 / 剩余"的进度总览。
 
@@ -37,8 +37,8 @@ media3 1.10.1 ・ androidx.palette 1.0.0 ・ compileSdk/targetSdk 36 / minSdk 24
 
 | 原版功能 | KMP 状态 |
 |---|---|
-| 三 Tab 导航（推荐/我的/设置）+ 宽屏 NavigationRail | ✅（App.kt，BoxWithConstraints ≥600dp 切 Rail） |
-| Splash 路由：无 cookie → Login | ✅（App 启动时 cookie 为空初始 push Login） |
+| 三 Tab 导航 + 宽屏 NavigationRail | ✅（App.kt：推荐 / 搜索 / 我的，设置改为从「我的」和桌面侧栏打开的页面；≥600dp 切 Rail，桌面端为折叠的 ModalWideNavigationRail） |
+| Splash 路由：未登录 → Login | ✅（没有任何服务商持有已登录账号时，启动打开网易云音乐登录页；见 AGENTS.md D6 决定 3） |
 | 启动更新检查（checkUpdate 设置 + GitHub releases） | ✅（MainViewModel.checkAppUpdate → Snackbar；各端使用 Git 派生 BuildInfo，按基础 tag 比较） |
 | 搜索共享元素动画（药丸→搜索栏 sharedBounds） | ✅（HomeScreen 内嵌 SharedTransitionLayout + AnimatedVisibility） |
 | 搜索联想（设置开关 + 300ms 防抖） | ✅ |
@@ -53,14 +53,14 @@ media3 1.10.1 ・ androidx.palette 1.0.0 ・ compileSdk/targetSdk 36 / minSdk 24
 | 播放状态持久化（队列/索引/进度/shuffle，onPause 存、启动恢复不自动播） | ✅（PlayerStatus.sq + PlatformPlayer.restoreQueue） |
 | 歌单批量下载（5 首/批，跳过已存在） | ✅（common 编排；Android MediaStore/JVM 文件系统/iOS NSURLSession/Web OPFS） |
 | 离线播放（本地已下载文件优先） | ✅（此前已完成） |
-| Room 缓存（cache-then-network） | ✅ SQLDelight 9 表（含 CommentMusic、PlayerStatus） |
+| Room 缓存（cache-then-network） | ✅ SQLDelight 12 表（含 PlayerStatus、DownloadQueue、LocalLibrary） |
 | QR 登录 + Cookie 登录 | ✅（修复了二维码 bitmap 从未赋值导致不显示的 bug） |
 | UID 解析（缓存 → /user/account 兜底） | ✅（修复原 stub 不调 API 的问题；另支持换号后 refreshAccount） |
 | 设置页（server 检查按钮 + 全部开关 + 备份导入导出） | ✅（旧 adaptOriginalAndroidLyric 值现控制 Android 额外 Live Update / Desktop 桌面歌词，默认关闭并即时生效） |
 | 迷你播放条（图取色容器色 + 亮度自适应内容色 + spring 动画 + 跑马灯） | ✅ |
-| 封面取色（Palette muted→vibrant→dominant） | ✅ Android=Palette；JVM/Web=采样量化近似；iOS=stub |
+| 封面取色（Palette muted→vibrant→dominant） | ✅ Android=Palette；JVM / iOS / Web 共用 skiaMain 的 RGB555 量化器 |
 | 实况通知歌词（歌词作标题 + Android 16 Live Update + 媒体按钮） | ✅（Web 始终有页内歌词层和标题；已授权时同步系统通知） |
-| Web 播放与系统媒体控制 | ✅（HTMLAudioElement + Media Session；隐藏/退出页面立即暂停） |
+| Web 播放与系统媒体控制 | ✅（HTMLAudioElement + Media Session；退出页面立即暂停，标签页隐藏时继续播放，见 AGENTS.md D2） |
 | HiddenTestActivity / serverMocker | ⏸ 有意不迁移（开发调试用途） |
 | dailysignin API | 声明未调用（原版同样未调用，保持一致） |
 
@@ -69,7 +69,7 @@ media3 1.10.1 ・ androidx.palette 1.0.0 ・ compileSdk/targetSdk 36 / minSdk 24
 ### A. 本环境可做
 - [x] **JVM 桌面后端完善**（2026-07-04）：JvmMediaPlayer 补 MP3→PCM_SIGNED 解码转换
       （原实现直接把 MPEG 格式喂 SourceDataLine 会开线失败）+ 按 PCM 字节率 skip 实现
-      seek（VBR 近似）；SongDownloader.jvm 真实下载到 ~/Downloads/RedefineNCM/
+      seek（VBR 近似）；SongDownloader.jvm 真实下载到 ~/Music/RedefineNCM/
       （.part 原子改名）；CoilImageTheme.jvm 升级为 Palette 式量化取色
       （RGB555 直方图 + vibrant/muted 目标参数，与 Android Palette 语义一致）。
 - [x] **materialIconsExtended → Material Symbols**（2026-07-04）：全部 22 个图标改为
@@ -78,8 +78,8 @@ media3 1.10.1 ・ androidx.palette 1.0.0 ・ compileSdk/targetSdk 36 / minSdk 24
 - [x] **Web / wasmJs 行为对齐**（2026-07-11）：声明 browser executable target；复用全部
       common Compose 页面、Repository、播放队列和下载编排；补齐真实浏览器播放器、Media
       Session、浏览器历史返回、localStorage 设置/缓存、OPFS 下载与离线播放、封面取色、
-      设置导入导出、歌词页和歌词展示层。页面隐藏、`pagehide`、`beforeunload` 均暂停播放，
-      同时取消待完成的播放地址解析。
+      设置导入导出、歌词页和歌词展示层。`pagehide`、`beforeunload` 暂停播放，同时取消待完成
+      的播放地址解析；隐藏标签页时暂停的做法已于 2026-09-19 取消（AGENTS.md D2）。
 - [x] `Platform.isDesktop/isMobile` 接口与四个平台的 actual 对齐（2026-07-11）
 
 ### B. 需要外部环境
@@ -121,8 +121,9 @@ WebView2 子 HWND 永远压在轻量 Compose 层之上，所有调用点都以 L
 ## 2.6 原生 Compose AMLL 迁移（2026-07-27）
 
 `commonMain/ui/amll/NativeAmllScreen.kt` 是四端唯一的全屏渲染器。
-`MiniNowPlayingBar`、桌面播放条和系统/深链入口统一打开 `AmllPlayerScreen`，该路由直接
-渲染 `NativeAmllScreen`，没有渲染器选项。
+`MiniNowPlayingBar`、桌面播放条和系统/深链入口统一先打开 Now Playing 入口页
+（`NowPlayingScreen`），其工具栏的引号按钮再进入 `AmllPlayerScreen`；该路由直接渲染
+`NativeAmllScreen`，没有渲染器选项。
 
 歌词引擎（解析、优化器、弹簧、时间线、布局、字级遮罩与强调、分词、减少动态效果、封面
 背景）已于 2026-09-06 抽出到独立仓库 `RedSTARO/AMLL_Jetpack_Compose`，坐标
@@ -144,7 +145,7 @@ Kotlin / Compose / AGP 版本和目标集必须保持一致。
 | 本分支验证 | ✅ JVM/Android/WASM 编译、JVM/Wasm 浏览器测试及 Web 生产分发均通过；iOS Kotlin/Native 源码编译通过，framework/Xcode 应用链接和运行仍需 macOS |
 
 ## 3. 已知限制 / 合理偏差
-- HttpClient 为启动时构建的 Koin 单例：改 server/cookie 下次启动生效（与原版 RetrofitInstance 一致）。
+- HttpClient 为启动时构建的 Koin 单例：改服务器地址下次启动生效（账号页会提示）；cookie 每次请求时读取，登录、退出立即生效。
 - 更新检查对比 GitHub `RedSTARO/RedefineNCM_KMP` releases/latest 与当前基础 tag；完整构建版本由 Git tag + commit hash 生成，形如 `v0.0.1.412ae548`。
 - 换号时 KMP 会清缓存 UID 重新解析（原版 UID 永久缓存导致换号数据不刷新，属原版缺陷，已修正）。
 - ~~`materialIconsExtended` 已弃用~~。已于 2026-07-04 迁移到自绘 Material Symbols（`ui/icon/AppIcons.kt`），依赖已移除。
