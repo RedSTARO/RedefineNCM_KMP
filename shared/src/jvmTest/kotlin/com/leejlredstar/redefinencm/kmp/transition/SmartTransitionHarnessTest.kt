@@ -15,6 +15,7 @@ import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import org.junit.Assume.assumeTrue
 
 /**
  * End-to-end check against real music, run by hand on a machine that has some:
@@ -22,7 +23,7 @@ import kotlin.test.assertTrue
  *     gradlew :shared:jvmTest --tests "*SmartTransitionHarnessTest*" \
  *         -Dredefinencm.harness.audio=C:/Users/me/Music/RedefineNCM -Dredefinencm.harness.out=C:/tmp
  *
- * Without `redefinencm.harness.audio` every test returns at once, which is what CI sees. With it,
+ * Without `redefinencm.harness.audio` every test is reported as skipped. With it,
  * the beat model must load on an NPU or GPU, the tail window must start where the decoder says it
  * does, and a planned transition between two tracks is rendered to a WAV file for listening.
  */
@@ -42,20 +43,25 @@ class SmartTransitionHarnessTest {
 
     @Test
     fun beatModelRunsOnAnAccelerator() = runBlocking {
-        if (audioDirectory == null) return@runBlocking
+        assumeTrue("Set redefinencm.harness.audio to run the manual accelerator check", audioDirectory != null)
         val availability = repositoryModelLoader().load()
         println("beat model: $availability")
         assertTrue(availability is BeatModelAvailability.Ready, "beat model unavailable: $availability")
         val model = availability.model
         val started = System.nanoTime()
-        repeat(8) { model.infer(FloatArray(BEAT_MODEL_CHUNK_FRAMES * BeatModelFeatures.MEL_BINS)) }
+        try {
+            repeat(8) { model.infer(FloatArray(BEAT_MODEL_CHUNK_FRAMES * BeatModelFeatures.MEL_BINS)) }
+        } finally { model.close() }
         println("beat model on ${model.accelerator} (${model.deviceLabel}): " +
             "${(System.nanoTime() - started) / 8 / 1_000_000} ms per 15 s chunk")
     }
 
     @Test
     fun tailWindowStartsWhereTheDecoderLanded() = runBlocking {
-        val file = tracks().firstOrNull { it.extension.lowercase() == "mp3" } ?: return@runBlocking
+        assumeTrue("Set redefinencm.harness.audio to run the real-track check", audioDirectory != null)
+        val file = requireNotNull(tracks().firstOrNull { it.extension.lowercase() == "mp3" }) {
+            "The configured harness audio directory must contain an MP3 file"
+        }
         val url = file.toURI().toString()
         val ends = FfmpegTrackEndsDecoder().decode(url, TrackAnalysis.SECTION_MS, -1L)!!
         val tail = ends.tail!!
@@ -85,8 +91,10 @@ class SmartTransitionHarnessTest {
 
     @Test
     fun rendersAPlannedTransitionBetweenTwoRealTracks() = runBlocking {
+        assumeTrue("Set redefinencm.harness.audio to render the manual transition fixture", audioDirectory != null)
         val files = tracks()
-        if (files.size < 2 || outputDirectory == null) return@runBlocking
+        require(files.size >= 2) { "The configured harness audio directory must contain at least two tracks" }
+        requireNotNull(outputDirectory) { "Set redefinencm.harness.out to save the rendered fixture" }
         val loader = repositoryModelLoader()
         val analyzer = TrackAnalyzer(
             decoder = FfmpegTrackEndsDecoder(),
