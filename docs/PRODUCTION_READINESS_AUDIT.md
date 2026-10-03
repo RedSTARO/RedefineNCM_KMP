@@ -92,6 +92,7 @@
 | W2-04 | 账号页直接显示凭证保存/退出异常，超长 JVM Preferences 值会带出原始 Cookie | 两个回归测试在旧实现失败，修复后通过：使用固定本地化错误，不展示存储异常；原有凭证保留。 |
 | W2-05 | 桌面下载在部分 JDK 上把截断响应当成成功，各平台还可能发布空歌曲 | 已核实并修复：桌面明确检查 HTTP 状态、非空内容和响应声明长度；Web 检查非空内容，身份编码且头可见时校验长度；iOS 检查状态及临时文件大小。JVM 本地 HTTP 和 Web OPFS 测试通过，iOS 仅编译验证。 |
 | W2-06 | Web 拒绝一次下载发布时可能删掉已有音频，替换下载失败也会丢失旧文件 | 浏览器回归在旧实现失败；修复后在 OPFS 发布前取得许可，替换失败保留旧文件，拒绝新下载不留下最终文件。三个浏览器回归通过。 |
+| W2-07 | 缓存容量函数的可空挂起调用触发桌面 ProGuard 优化异常，发布构建失败 | 发布构建复现 dup2_x1 栈分析异常；改用等价显式分支后 JVM/桌面测试和 proguardReleaseJars 通过，保留混淆与优化。 |
 
 本次阅读了 AndroidDownloadService、PersistedDownloadQueue 及 SongDownloadManager 的控制/恢复相关路径；下载编排其余部分、各平台文件处理和其余审查分区尚未完成。
 
@@ -118,3 +119,11 @@
 - JVM 的实际下载函数使用临时目录和回环 HTTP 服务，覆盖截断、空响应、非请求的部分响应、chunked 响应、旧空文件恢复及拒绝发布。API 的建议大小只用于进度，不作为完整性的权威依据。
 - Web 检查实际 OPFS 文件；旧实现误删已有文件的失败结果在 `web-publish-repro` 中。浏览器可能解压响应，CORS 也可能隐藏 Content-Encoding，因此不能盲目拿 Content-Length 与解码后的大小比较。
 - iOS 的状态和临时文件检查只完成 Kotlin 编译；后台会话和 ActivityKit 的设备行为仍待验证。
+
+## 发布构建与界面回归（2026-10-04）
+
+- `release-check-result.json` 对应主仓库 `20926cd`、AMLL `7db5a66`：Android unsigned Release APK 和 Web production distribution 构建成功；桌面 ProGuard 在 MetadataCache.budget 失败。失败时遗留的 mapping 文件不能当作成功凭证。
+- 修复容量函数后，`desktop-release-repair-result.json` 的三个实际任务（JVM 测试、桌面测试、ProGuard）通过；该报告列出的 Android/Web 测试计数来自上一轮 XML，本轮没有重新运行这些任务。
+- 未混淆桌面实例使用独立 user.home 和内存 Preferences，静音且不持有账号；已确认能启动。桌面可访问性树只暴露窗格，未用真实鼠标代替控件操作。
+- Web 使用新随机本地端口的独立存储，验证匿名首页、文本缓存设置、390×844 窄屏布局；从许可证页返回后保持原滚动位置（R-6 的 Web 路径已运行验证）。截图保存在 `build/audit-review/cache-narrow.jpg`。
+- 原生平台交互、桌面混淆后运行和各系统安装包仍需继续验证。识曲分区新候选：关闭页面时恢复播放没有绑定原来的选曲；尚未加入已确认问题表。

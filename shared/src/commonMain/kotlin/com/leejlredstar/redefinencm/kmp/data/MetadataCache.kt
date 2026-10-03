@@ -34,8 +34,15 @@ class MetadataCache(
 
     init { require(maxEntries > 0) }
 
-    private suspend fun budget(): Long = budgetBytes?.invoke()?.coerceAtLeast(0)
-        ?: (normalizeLimit(settings?.getLongAsync(SettingKeys.METADATA_CACHE_LIMIT_MIB, DefaultLimitMib) ?: DefaultLimitMib) * Mebibyte)
+    private suspend fun budget(): Long {
+        // Keep suspension and nullable Long fallback in separate branches. A chained safe-call
+        // emits dup2_x1 bytecode that the desktop ProGuard 7.7 optimizer cannot evaluate.
+        val override = budgetBytes
+        if (override != null) return override().coerceAtLeast(0L)
+        val stored = if (settings == null) DefaultLimitMib
+            else settings.getLongAsync(SettingKeys.METADATA_CACHE_LIMIT_MIB, DefaultLimitMib)
+        return normalizeLimit(stored) * Mebibyte
+    }
 
     private fun load(force: Boolean = false): LinkedHashMap<Key, Long> {
         val previous = entries
