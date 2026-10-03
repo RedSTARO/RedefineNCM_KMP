@@ -190,8 +190,8 @@ internal data class LicenseBlock(val text: String, val heading: Boolean = false)
  *
  * The files are hard-wrapped at about 72 columns. Drawn as they are, each of those lines wraps
  * again on a phone and the text turns into a ragged column of half lines. A line break inside a
- * paragraph is therefore joined, unless the next line is indented or starts a list item, a
- * heading, a table row or a quotation, which keep their own line.
+ * paragraph is therefore joined unless the next line starts a list item, heading, table row or
+ * quotation. Indentation alone is not a boundary: Apache and AGPL indent wrapped prose too.
  */
 internal fun licenseBlocks(text: String): List<LicenseBlock> =
     text.replace("\r\n", "\n")
@@ -215,6 +215,6 @@ internal fun licenseBlocks(text: String): List<LicenseBlock> =
             }
         }
 
-private val ownLineStart = Regex("""^(\s|[-*#|>]|\d+[.)]\s|\(?[a-z0-9]{1,3}\)\s)""")
+private val ownLineStart = Regex("""^([-*#|>]|\d+[.)]\s|\(?[a-z0-9]{1,3}\)\s)""")
 
-private fun String.keepsItsOwnLine(): Boolean = isEmpty() || ownLineStart.containsMatchIn(this)
+private fun String.keepsItsOwnLine(): Boolean = isBlank() || ownLineStart.containsMatchIn(trimStart())

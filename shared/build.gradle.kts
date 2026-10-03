@@ -717,6 +717,10 @@ tasks.withType<Test>().matching { it.name == "jvmTest" }.configureEach {
     inputs.files(
         rootProject.fileTree("androidApp/src/main/res") { include("values*/colors.xml") },
     ).withPropertyName("androidLaunchColours").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.files(
+        rootProject.file("LICENSES/Apache-2.0.txt"),
+        rootProject.file("LICENSES/AGPL-3.0-only.txt"),
+    ).withPropertyName("licenseLayoutTexts").withPathSensitivity(PathSensitivity.RELATIVE)
     if (isWindowsBuildHost) {
         dependsOn(prepareOnnxRuntimeDirectML)
         systemProperty(
