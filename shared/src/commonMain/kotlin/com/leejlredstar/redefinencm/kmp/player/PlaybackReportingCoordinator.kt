@@ -13,6 +13,7 @@ import com.leejlredstar.redefinencm.kmp.data.api.HttpClientFactory
 import com.leejlredstar.redefinencm.kmp.data.provider.toProviderItemIdOrNull
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
+import com.leejlredstar.redefinencm.kmp.util.onlinePlaybackQuality
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
 import com.leejlredstar.redefinencm.kmp.util.cookieFingerprint
 import kotlinx.coroutines.CancellationException
@@ -139,10 +140,7 @@ class PlaybackReportingCoordinator(
             durationMs = player.duration.value,
             shuffleEnabled = player.shuffleEnabled.value,
             qualityLevel = normalizePlaybackQuality(
-                settings.getString(
-                    SettingKeys.ONLINE_PLAY_QUALITY,
-                    SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT.name,
-                ),
+                settings.onlinePlaybackQuality().name,
             ),
             credentialKey = credential.key,
             credentialCookie = credential.cookie.takeIf(String::isNotEmpty),
@@ -862,7 +860,7 @@ internal fun normalizePlaybackQuality(raw: String): String =
         .firstOrNull { quality -> quality.name.equals(raw.trim(), ignoreCase = true) }
         ?.name
         ?.lowercase()
-        ?: SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT.name.lowercase()
+        ?: SettingKeys.ONLINE_PLAY_QUALITY_WIFI_DEFAULT.name.lowercase()
 
 internal fun playbackCredentialKey(cookie: String): Long? =
     if (cookie.isBlank()) null else cookieFingerprint(cookie)

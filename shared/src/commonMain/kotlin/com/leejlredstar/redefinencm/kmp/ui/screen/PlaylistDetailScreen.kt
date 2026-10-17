@@ -73,7 +73,7 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
-import com.leejlredstar.redefinencm.kmp.util.SoundQuality
+import com.leejlredstar.redefinencm.kmp.util.downloadQuality
 import com.leejlredstar.redefinencm.kmp.viewmodel.LocalLibraryViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
@@ -288,8 +288,7 @@ fun PlaylistDetailScreen(
 
     if (confirmDownloadAll) {
         val quality = remember {
-            val saved = settings.getString(SettingKeys.DOWNLOAD_QUALITY, SettingKeys.DOWNLOAD_QUALITY_DEFAULT.name)
-            SoundQuality.entries.firstOrNull { it.name == saved } ?: SettingKeys.DOWNLOAD_QUALITY_DEFAULT
+            settings.downloadQuality()
         }
         AlertDialog(
             onDismissRequest = { confirmDownloadAll = false },

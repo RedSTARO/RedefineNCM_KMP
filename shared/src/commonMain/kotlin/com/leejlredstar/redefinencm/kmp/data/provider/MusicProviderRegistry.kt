@@ -4,7 +4,7 @@ import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
-import com.leejlredstar.redefinencm.kmp.util.SoundQuality
+import com.leejlredstar.redefinencm.kmp.util.onlinePlaybackQualityAsync
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -62,7 +62,7 @@ class MusicProviderRegistry(
     /** The user's configured playback quality, expressed in provider-neutral terms. */
     suspend fun playbackQuality(): SoundQualityPreference =
         SoundQualityPreference.fromSoundQualityName(
-            settings.getStringAsync(SettingKeys.ONLINE_PLAY_QUALITY, SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT.name),
+            settings.onlinePlaybackQualityAsync().name,
         )
 
     /** The capabilities of the provider [mediaId] belongs to; none for an id no provider claims. */

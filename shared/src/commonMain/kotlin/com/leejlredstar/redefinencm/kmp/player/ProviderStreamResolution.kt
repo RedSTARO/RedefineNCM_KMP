@@ -7,9 +7,8 @@ import com.leejlredstar.redefinencm.kmp.data.provider.StreamFailureReason
 import com.leejlredstar.redefinencm.kmp.data.provider.StreamResolution
 import kotlinx.coroutines.CancellationException
 import com.leejlredstar.redefinencm.kmp.data.provider.toProviderItemIdOrNull
-import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
-import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
+import com.leejlredstar.redefinencm.kmp.util.onlinePlaybackQuality
 
 /**
  * Resolves a stream URL for ids belonging to a provider other than NetEase, and returns null for
@@ -83,10 +82,4 @@ suspend fun resolveStreamUrl(
         providers.clearStreamFailure(mediaId)
     }
     return url
-}
-
-/** The configured online playback quality, falling back when the stored name is unrecognised. */
-fun PlatformSettings.onlinePlaybackQuality(): SoundQuality {
-    val qualityName = getString(SettingKeys.ONLINE_PLAY_QUALITY, SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT.name)
-    return runCatching { SoundQuality.valueOf(qualityName) }.getOrDefault(SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT)
 }

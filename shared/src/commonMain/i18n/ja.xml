@@ -726,6 +726,8 @@
     <string name="settingsLoading">設定を読み込み中…</string>
     <string name="settingsSectionAccounts">アカウント</string>
     <string name="streamingQuality">ストリーミング音質</string>
+    <string name="streamingQualityWifi">Wi-Fi 再生音質</string>
+    <string name="streamingQualityCellular">モバイルデータ再生音質</string>
     <string name="playWholeListOnTap">リストの曲をタップしたらリスト全体を再生</string>
     <string name="playWholeListOnTapHint">オフにすると、タップした曲だけを再生します</string>
     <string name="useAnimatedCover">再生画面で動くカバーを使用</string>
@@ -734,6 +736,7 @@
     <string name="showRomanization">歌詞のローマ字を表示</string>
     <string name="showRomanizationHint">日本語などの曲の発音表記</string>
     <string name="downloadQuality">ダウンロード音質</string>
+    <string name="downloadQualityHint">Wi-Fi でもモバイルデータでも、ダウンロードは常にこの音質を使います。アカウントに権限がない場合は再生可能な最高音質になります</string>
     <string name="showDownloadStatus">曲リストにダウンロード状態を表示</string>
     <string name="showDownloadStatusHint">ダウンロード済み、ダウンロード中、ダウンロードに失敗した曲に印が付きます</string>
     <string name="settingsSectionGeneral">一般</string>

@@ -726,6 +726,8 @@
     <string name="settingsLoading">正在加载设置…</string>
     <string name="settingsSectionAccounts">账号</string>
     <string name="streamingQuality">在线播放音质</string>
+    <string name="streamingQualityWifi">Wi-Fi 下播放音质</string>
+    <string name="streamingQualityCellular">移动数据下播放音质</string>
     <string name="playWholeListOnTap">点按列表中的歌曲时播放整个列表</string>
     <string name="playWholeListOnTapHint">关闭时只播放点按的那一首</string>
     <string name="useAnimatedCover">播放页使用歌曲动态封面</string>
@@ -734,6 +736,7 @@
     <string name="showRomanization">显示罗马音歌词</string>
     <string name="showRomanizationHint">日语等歌曲的读音标注</string>
     <string name="downloadQuality">下载音质</string>
+    <string name="downloadQualityHint">下载始终使用此音质，与当前使用 Wi-Fi 还是移动数据无关；账号没有对应权限时会取可播放的最高音质</string>
     <string name="showDownloadStatus">在歌曲列表中标出下载状态</string>
     <string name="showDownloadStatusHint">已下载、正在下载和下载失败的歌曲会带标记</string>
     <string name="settingsSectionGeneral">通用</string>

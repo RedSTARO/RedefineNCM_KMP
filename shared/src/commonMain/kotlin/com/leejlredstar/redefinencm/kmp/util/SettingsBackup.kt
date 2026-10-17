@@ -46,7 +46,10 @@ data class SettingsBackupData(
     // Older exporters omitted their defaults. An absent value cannot distinguish an explicit
     // STANDARD choice from an unset setting, so keep the destination's choice in that case.
     // New exports always provide both values, including defaults, for older importers as well.
+    /** The pre-network-aware value. New imports use it for either network class it lacks. */
     val onlinePlayQuality: String? = null,
+    val onlinePlayQualityWifi: String? = null,
+    val onlinePlayQualityCellular: String? = null,
     val downloadQuality: String? = null,
     /** Missing in older files; keep the destination's cache budget in that case. */
     val metadataCacheLimitMiB: Long? = null,
@@ -96,57 +99,76 @@ internal fun encodeSettingsBackup(
     getBoolean: (key: String, default: Boolean) -> Boolean,
     getLong: (key: String, default: Long) -> Long = { _, default -> default },
     localLibrary: LocalLibraryDocument? = null,
-): String = backupJson.encodeToString(
-    SettingsBackupData(
-        cookie = "",
-        server = serverAddressForBackup(getString(SettingKeys.SERVER, "")),
-        qqEnabled = getBoolean(SettingKeys.QQ_ENABLED, false),
-        qqServer = serverAddressForBackup(getString(SettingKeys.QQ_SERVER, SettingKeys.QQ_SERVER_DEFAULT)),
-        libraryAggregationMode = LibraryAggregationMode.fromWireValueOrDefault(
-            getString(SettingKeys.LIBRARY_AGGREGATION_MODE, ""),
-        ).wireValue,
-        localAccountName = getString(SettingKeys.LOCAL_ACCOUNT_NAME, ""),
-        localAccountEnabled = getBoolean(
-            SettingKeys.LOCAL_ACCOUNT_ENABLED,
-            SettingKeys.LOCAL_ACCOUNT_ENABLED_DEFAULT,
+): String {
+    val wifiQuality = getString(
+        SettingKeys.ONLINE_PLAY_QUALITY_WIFI,
+        getString(
+            SettingKeys.ONLINE_PLAY_QUALITY,
+            SettingKeys.ONLINE_PLAY_QUALITY_WIFI_DEFAULT.name,
         ),
-        mergeSameSongs = getBoolean(SettingKeys.MERGE_SAME_SONGS, SettingKeys.MERGE_SAME_SONGS_DEFAULT),
-        localLibrary = localLibrary?.playlists,
-        onlinePlayQuality = getString(SettingKeys.ONLINE_PLAY_QUALITY, SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT.name),
-        downloadQuality = getString(SettingKeys.DOWNLOAD_QUALITY, SettingKeys.DOWNLOAD_QUALITY_DEFAULT.name),
-        metadataCacheLimitMiB = MetadataCache.normalizeLimit(
-            getLong(SettingKeys.METADATA_CACHE_LIMIT_MIB, MetadataCache.DefaultLimitMib),
-        ),
-        replacePlaylist = getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT),
-        checkUpdate = getBoolean(SettingKeys.CHECK_UPDATE, false),
-        searchPrediction = getBoolean(SettingKeys.SEARCH_PREDICTION, true),
-        showDownloadStatus = getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, SettingKeys.SHOW_DOWNLOAD_STATUS_DEFAULT),
-        adaptOriginalAndroidLyric = getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false),
-        desktopLyricLocked = getBoolean(SettingKeys.DESKTOP_LYRIC_LOCKED, false),
-        desktopLyricAlignment = LyricSurfaceAlignment.fromWireValueOrDefault(
-            getString(SettingKeys.DESKTOP_LYRIC_ALIGNMENT, ""),
-        ).wireValue,
-        desktopCloseToTray = getBoolean(
-            SettingKeys.DESKTOP_CLOSE_TO_TRAY,
-            SettingKeys.DESKTOP_CLOSE_TO_TRAY_DEFAULT,
-        ),
-        showTranslatedLyric = getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, SettingKeys.SHOW_TRANSLATED_LYRIC_DEFAULT),
-        showRomanLyric = getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false),
-        lyricSourceMode = LyricSourceMode.fromStoredWireValue(
-            getString(SettingKeys.LYRIC_SOURCE_MODE, LyricSourceMode.DEFAULT.wireValue),
-        ).wireValue,
-        useDynamicCover = getBoolean(SettingKeys.USE_DYNAMIC_COVER, false),
-        themeMode = ThemeMode.fromWireValue(getString(SettingKeys.THEME_MODE, "")).wireValue,
-        dynamicColor = getBoolean(SettingKeys.DYNAMIC_COLOR, false),
-        songTransitionMode = SongTransitionMode.fromWireValue(
-            getString(SettingKeys.SONG_TRANSITION_MODE, SongTransitionMode.DEFAULT.wireValue),
-        ).wireValue,
-        songTransitionCrossfadeSeconds = normalizeCrossfadeSeconds(
-            getLong(SettingKeys.SONG_TRANSITION_CROSSFADE_SECONDS, DEFAULT_CROSSFADE_SECONDS),
-        ),
-        appLanguage = LanguageSetting.fromWireValue(getString(SettingKeys.APP_LANGUAGE, "")).wireValue,
     )
-)
+    val cellularQuality = getString(
+        SettingKeys.ONLINE_PLAY_QUALITY_CELLULAR,
+        getString(
+            SettingKeys.ONLINE_PLAY_QUALITY,
+            SettingKeys.ONLINE_PLAY_QUALITY_CELLULAR_DEFAULT.name,
+        ),
+    )
+    return backupJson.encodeToString(
+        SettingsBackupData(
+            cookie = "",
+            server = serverAddressForBackup(getString(SettingKeys.SERVER, "")),
+            qqEnabled = getBoolean(SettingKeys.QQ_ENABLED, false),
+            qqServer = serverAddressForBackup(getString(SettingKeys.QQ_SERVER, SettingKeys.QQ_SERVER_DEFAULT)),
+            libraryAggregationMode = LibraryAggregationMode.fromWireValueOrDefault(
+                getString(SettingKeys.LIBRARY_AGGREGATION_MODE, ""),
+            ).wireValue,
+            localAccountName = getString(SettingKeys.LOCAL_ACCOUNT_NAME, ""),
+            localAccountEnabled = getBoolean(
+                SettingKeys.LOCAL_ACCOUNT_ENABLED,
+                SettingKeys.LOCAL_ACCOUNT_ENABLED_DEFAULT,
+            ),
+            mergeSameSongs = getBoolean(SettingKeys.MERGE_SAME_SONGS, SettingKeys.MERGE_SAME_SONGS_DEFAULT),
+            localLibrary = localLibrary?.playlists,
+            // Older importers only understand this one. Mirror the Wi-Fi choice for them.
+            onlinePlayQuality = wifiQuality,
+            onlinePlayQualityWifi = wifiQuality,
+            onlinePlayQualityCellular = cellularQuality,
+            downloadQuality = getString(SettingKeys.DOWNLOAD_QUALITY, SettingKeys.DOWNLOAD_QUALITY_DEFAULT.name),
+            metadataCacheLimitMiB = MetadataCache.normalizeLimit(
+                getLong(SettingKeys.METADATA_CACHE_LIMIT_MIB, MetadataCache.DefaultLimitMib),
+            ),
+            replacePlaylist = getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT),
+            checkUpdate = getBoolean(SettingKeys.CHECK_UPDATE, false),
+            searchPrediction = getBoolean(SettingKeys.SEARCH_PREDICTION, true),
+            showDownloadStatus = getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, SettingKeys.SHOW_DOWNLOAD_STATUS_DEFAULT),
+            adaptOriginalAndroidLyric = getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false),
+            desktopLyricLocked = getBoolean(SettingKeys.DESKTOP_LYRIC_LOCKED, false),
+            desktopLyricAlignment = LyricSurfaceAlignment.fromWireValueOrDefault(
+                getString(SettingKeys.DESKTOP_LYRIC_ALIGNMENT, ""),
+            ).wireValue,
+            desktopCloseToTray = getBoolean(
+                SettingKeys.DESKTOP_CLOSE_TO_TRAY,
+                SettingKeys.DESKTOP_CLOSE_TO_TRAY_DEFAULT,
+            ),
+            showTranslatedLyric = getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, SettingKeys.SHOW_TRANSLATED_LYRIC_DEFAULT),
+            showRomanLyric = getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false),
+            lyricSourceMode = LyricSourceMode.fromStoredWireValue(
+                getString(SettingKeys.LYRIC_SOURCE_MODE, LyricSourceMode.DEFAULT.wireValue),
+            ).wireValue,
+            useDynamicCover = getBoolean(SettingKeys.USE_DYNAMIC_COVER, false),
+            themeMode = ThemeMode.fromWireValue(getString(SettingKeys.THEME_MODE, "")).wireValue,
+            dynamicColor = getBoolean(SettingKeys.DYNAMIC_COLOR, false),
+            songTransitionMode = SongTransitionMode.fromWireValue(
+                getString(SettingKeys.SONG_TRANSITION_MODE, SongTransitionMode.DEFAULT.wireValue),
+            ).wireValue,
+            songTransitionCrossfadeSeconds = normalizeCrossfadeSeconds(
+                getLong(SettingKeys.SONG_TRANSITION_CROSSFADE_SECONDS, DEFAULT_CROSSFADE_SECONDS),
+            ),
+            appLanguage = LanguageSetting.fromWireValue(getString(SettingKeys.APP_LANGUAGE, "")).wireValue,
+        ),
+    )
+}
 
 /** A shared file must not carry credentials embedded in a backend URL. Invalid legacy base
  * addresses (including query tokens) are omitted, so the export remains importable. */
@@ -202,6 +224,11 @@ internal fun applySettingsBackup(
     data.localAccountName?.let { setString(SettingKeys.LOCAL_ACCOUNT_NAME, it.trim()) }
     data.localAccountEnabled?.let { setBoolean(SettingKeys.LOCAL_ACCOUNT_ENABLED, it) }
     data.mergeSameSongs?.let { setBoolean(SettingKeys.MERGE_SAME_SONGS, it) }
+    val wifiQuality = data.onlinePlayQualityWifi ?: data.onlinePlayQuality
+    val cellularQuality = data.onlinePlayQualityCellular ?: data.onlinePlayQuality
+    wifiQuality?.let { setString(SettingKeys.ONLINE_PLAY_QUALITY_WIFI, it) }
+    cellularQuality?.let { setString(SettingKeys.ONLINE_PLAY_QUALITY_CELLULAR, it) }
+    // Keep the legacy value in sync for installs that later downgrade or export through an older build.
     data.onlinePlayQuality?.let { setString(SettingKeys.ONLINE_PLAY_QUALITY, it) }
     data.downloadQuality?.let { setString(SettingKeys.DOWNLOAD_QUALITY, it) }
     data.metadataCacheLimitMiB?.let { setLong(SettingKeys.METADATA_CACHE_LIMIT_MIB, it) }

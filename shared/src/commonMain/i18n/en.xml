@@ -768,6 +768,8 @@
     <string name="settingsLoading">Loading settings…</string>
     <string name="settingsSectionAccounts">Accounts</string>
     <string name="streamingQuality">Streaming quality</string>
+    <string name="streamingQualityWifi">Playback quality on Wi-Fi</string>
+    <string name="streamingQualityCellular">Playback quality on mobile data</string>
     <string name="playWholeListOnTap">Play the whole list when you tap a song</string>
     <string name="playWholeListOnTapHint">When off, only the song you tap plays</string>
     <string name="useAnimatedCover">Use animated covers in the player</string>
@@ -776,6 +778,7 @@
     <string name="showRomanization">Show romanization</string>
     <string name="showRomanizationHint">Pronunciation for songs in Japanese and other languages</string>
     <string name="downloadQuality">Download quality</string>
+    <string name="downloadQualityHint">Downloads always use this quality, whether you're on Wi-Fi or mobile data. If your account doesn't have access, the highest playable quality is used.</string>
     <string name="showDownloadStatus">Show download status in song lists</string>
     <string name="showDownloadStatusHint">Downloaded, downloading and failed songs are marked</string>
     <string name="settingsSectionGeneral">General</string>

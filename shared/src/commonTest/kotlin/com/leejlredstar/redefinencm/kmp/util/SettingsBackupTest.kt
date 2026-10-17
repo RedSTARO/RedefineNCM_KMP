@@ -80,12 +80,16 @@ class SettingsBackupTest {
         val document = Json.parseToJsonElement(json).jsonObject
         // Check the file itself: a round trip with the same decoder hid missing fields before.
         assertEquals("EXHIGH", document.getValue("onlinePlayQuality").jsonPrimitive.content)
+        assertEquals("EXHIGH", document.getValue("onlinePlayQualityWifi").jsonPrimitive.content)
+        assertEquals("EXHIGH", document.getValue("onlinePlayQualityCellular").jsonPrimitive.content)
         assertEquals("STANDARD", document.getValue("downloadQuality").jsonPrimitive.content)
         val restored = mutableMapOf<String, String>()
         assertTrue(applySettingsBackup(json, setString = { key, value -> restored[key] = value }, setBoolean = { _, _ -> }))
 
         // Restoring this on another device must not lower what plays there.
         assertEquals(SoundQuality.EXHIGH.name, restored[SettingKeys.ONLINE_PLAY_QUALITY])
+        assertEquals(SoundQuality.EXHIGH.name, restored[SettingKeys.ONLINE_PLAY_QUALITY_WIFI])
+        assertEquals(SoundQuality.EXHIGH.name, restored[SettingKeys.ONLINE_PLAY_QUALITY_CELLULAR])
         assertEquals(SoundQuality.STANDARD.name, restored[SettingKeys.DOWNLOAD_QUALITY])
     }
 
@@ -94,19 +98,61 @@ class SettingsBackupTest {
         val written = mutableMapOf<String, String>()
         assertTrue(applySettingsBackup("{}", setString = { key, value -> written[key] = value }, setBoolean = { _, _ -> }))
         assertFalse(SettingKeys.ONLINE_PLAY_QUALITY in written)
+        assertFalse(SettingKeys.ONLINE_PLAY_QUALITY_WIFI in written)
+        assertFalse(SettingKeys.ONLINE_PLAY_QUALITY_CELLULAR in written)
         assertFalse(SettingKeys.DOWNLOAD_QUALITY in written)
     }
 
     @Test
     fun explicitStandardSurvivesExportAndImport() {
         val json = encodeSettingsBackup(
-            getString = { key, default -> if (key == SettingKeys.ONLINE_PLAY_QUALITY) "STANDARD" else default },
+            getString = { key, default -> if (key == SettingKeys.ONLINE_PLAY_QUALITY_WIFI) "STANDARD" else default },
             getBoolean = { _, default -> default },
         )
         assertEquals("STANDARD", Json.parseToJsonElement(json).jsonObject.getValue("onlinePlayQuality").jsonPrimitive.content)
         val written = mutableMapOf<String, String>()
         assertTrue(applySettingsBackup(json, setString = { key, value -> written[key] = value }, setBoolean = { _, _ -> }))
-        assertEquals("STANDARD", written[SettingKeys.ONLINE_PLAY_QUALITY])
+        assertEquals("STANDARD", written[SettingKeys.ONLINE_PLAY_QUALITY_WIFI])
+    }
+
+    @Test
+    fun legacySingleOnlineQualityBecomesBothNetworkChoicesWhenImported() {
+        val written = mutableMapOf<String, String>()
+        assertTrue(
+            applySettingsBackup(
+                """{"onlinePlayQuality":"LOSSLESS"}""",
+                setString = { key, value -> written[key] = value },
+                setBoolean = { _, _ -> },
+            ),
+        )
+        assertEquals("LOSSLESS", written[SettingKeys.ONLINE_PLAY_QUALITY])
+        assertEquals("LOSSLESS", written[SettingKeys.ONLINE_PLAY_QUALITY_WIFI])
+        assertEquals("LOSSLESS", written[SettingKeys.ONLINE_PLAY_QUALITY_CELLULAR])
+    }
+
+    @Test
+    fun separateNetworkQualitiesAndDownloadQualitySurviveRoundTrip() {
+        val json = encodeSettingsBackup(
+            getString = { key, default ->
+                when (key) {
+                    SettingKeys.ONLINE_PLAY_QUALITY_WIFI -> "LOSSLESS"
+                    SettingKeys.ONLINE_PLAY_QUALITY_CELLULAR -> "STANDARD"
+                    SettingKeys.DOWNLOAD_QUALITY -> "HIRES"
+                    else -> default
+                }
+            },
+            getBoolean = { _, default -> default },
+        )
+        val document = Json.parseToJsonElement(json).jsonObject
+        assertEquals("LOSSLESS", document.getValue("onlinePlayQualityWifi").jsonPrimitive.content)
+        assertEquals("STANDARD", document.getValue("onlinePlayQualityCellular").jsonPrimitive.content)
+        assertEquals("HIRES", document.getValue("downloadQuality").jsonPrimitive.content)
+
+        val written = mutableMapOf<String, String>()
+        assertTrue(applySettingsBackup(json, setString = { key, value -> written[key] = value }, setBoolean = { _, _ -> }))
+        assertEquals("LOSSLESS", written[SettingKeys.ONLINE_PLAY_QUALITY_WIFI])
+        assertEquals("STANDARD", written[SettingKeys.ONLINE_PLAY_QUALITY_CELLULAR])
+        assertEquals("HIRES", written[SettingKeys.DOWNLOAD_QUALITY])
     }
 
     @Test

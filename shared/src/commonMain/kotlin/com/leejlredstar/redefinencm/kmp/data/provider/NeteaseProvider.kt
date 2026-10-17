@@ -1,13 +1,12 @@
 package com.leejlredstar.redefinencm.kmp.data.provider
 
 import com.leejlredstar.redefinencm.kmp.i18n.strings
-import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongAlbum
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongArtist
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
-import com.leejlredstar.redefinencm.kmp.util.SettingKeys
+import com.leejlredstar.redefinencm.kmp.util.onlinePlaybackQualityAsync
 import kotlinx.coroutines.flow.firstOrNull
 
 /**
@@ -88,10 +87,9 @@ class NeteaseProvider(
             ?: return StreamResolution.Failed(StreamFailureReason.NO_SOURCE)
         // The stored setting is the full NetEase ladder, which the backend accepts verbatim.
         // Round-tripping it through SoundQualityPreference would collapse the spatial tiers.
-        val storedQuality = settings.getStringAsync(
-            SettingKeys.ONLINE_PLAY_QUALITY,
-            quality.neteaseQualityName(),
-        )
+        // Reading it here also keeps the NetEase path aligned with the current transport even
+        // when the caller supplied only a provider-neutral preference.
+        val storedQuality = settings.onlinePlaybackQualityAsync().name.lowercase()
         // The repository answers null both when the backend is down and when it has no URL for
         // the track; "returned no address" is true of both.
         return repository.getSongUrl(numericId, storedQuality)
@@ -105,13 +103,6 @@ class NeteaseProvider(
 
 /** The public web page of a NetEase song. */
 internal fun neteaseSongPageUrl(songId: Long): String = "https://music.163.com/song?id=$songId"
-
-private fun SoundQualityPreference.neteaseQualityName(): String = when (this) {
-    SoundQualityPreference.STANDARD -> "standard"
-    SoundQualityPreference.HIGH -> "exhigh"
-    SoundQualityPreference.LOSSLESS -> "lossless"
-    SoundQualityPreference.HIRES -> "hires"
-}
 
 internal fun SongDetailSongs.toProviderTrack(): ProviderTrack = ProviderTrack(
     id = ProviderItemId.netease(id),

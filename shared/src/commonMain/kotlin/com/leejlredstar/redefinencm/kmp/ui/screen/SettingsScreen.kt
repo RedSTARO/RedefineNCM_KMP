@@ -122,6 +122,8 @@ import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.sourceCodeUrl
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
+import com.leejlredstar.redefinencm.kmp.util.cellularPlaybackQuality
+import com.leejlredstar.redefinencm.kmp.util.wifiPlaybackQuality
 import com.leejlredstar.redefinencm.kmp.util.applySettingsBackup
 import com.leejlredstar.redefinencm.kmp.util.encodeSettingsBackup
 import com.leejlredstar.redefinencm.kmp.util.importSettingsBackup
@@ -194,7 +196,10 @@ fun SettingsScreen(
     var cacheRefreshRequest by remember { mutableIntStateOf(0) }
     var cacheClearing by remember { mutableStateOf(false) }
     var cacheReadFailed by remember { mutableStateOf(false) }
-    var onlineQuality by remember(settings) { mutableStateOf(SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT.name) }
+    var wifiQuality by remember(settings) { mutableStateOf(SettingKeys.ONLINE_PLAY_QUALITY_WIFI_DEFAULT.name) }
+    var cellularQuality by remember(settings) {
+        mutableStateOf(SettingKeys.ONLINE_PLAY_QUALITY_CELLULAR_DEFAULT.name)
+    }
     var dlQuality by remember(settings) { mutableStateOf(SettingKeys.DOWNLOAD_QUALITY_DEFAULT.name) }
     var replacePlaylist by remember(settings) { mutableStateOf(SettingKeys.REPLACE_PLAYLIST_DEFAULT) }
     var checkUpdate by remember(settings) { mutableStateOf(false) }
@@ -256,7 +261,8 @@ fun SettingsScreen(
         accountsViewModel.reload()
         // An imported backup can carry another language; show it at once.
         I18n.load(settings)
-        onlineQuality = settings.getString(SettingKeys.ONLINE_PLAY_QUALITY, SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT.name)
+        wifiQuality = settings.wifiPlaybackQuality().name
+        cellularQuality = settings.cellularPlaybackQuality().name
         dlQuality = settings.getString(SettingKeys.DOWNLOAD_QUALITY, SettingKeys.DOWNLOAD_QUALITY_DEFAULT.name)
         cacheLimit = MetadataCache.normalizeLimit(settings.getLong(SettingKeys.METADATA_CACHE_LIMIT_MIB, MetadataCache.DefaultLimitMib))
         replacePlaylist = settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT)
@@ -332,7 +338,9 @@ fun SettingsScreen(
         settingsLoaded = false
         settingsLoadError = null
         try {
-            onlineQuality = settings.getStringAsync(SettingKeys.ONLINE_PLAY_QUALITY, SettingKeys.ONLINE_PLAY_QUALITY_DEFAULT.name)
+            settings.awaitLoaded()
+            wifiQuality = settings.wifiPlaybackQuality().name
+            cellularQuality = settings.cellularPlaybackQuality().name
             dlQuality = settings.getStringAsync(SettingKeys.DOWNLOAD_QUALITY, SettingKeys.DOWNLOAD_QUALITY_DEFAULT.name)
             cacheLimit = MetadataCache.normalizeLimit(settings.getLongAsync(SettingKeys.METADATA_CACHE_LIMIT_MIB, MetadataCache.DefaultLimitMib))
             replacePlaylist = settings.getBooleanAsync(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT)
@@ -516,24 +524,36 @@ fun SettingsScreen(
                 // half of "what comes out of the speakers", not a behaviour toggle.
                 val outputDeviceRows = if (supportsAudioOutputDeviceSelection) 1 else 0
                 val dynamicCoverRows = if (supportsDynamicNowPlayingCover) 1 else 0
-                val playbackSettingCount = 2 + outputDeviceRows + dynamicCoverRows
+                val playbackSettingCount = 3 + outputDeviceRows + dynamicCoverRows
                 SettingsDropdown(
-                    onlineQuality,
-                    strings.streamingQuality,
+                    wifiQuality,
+                    strings.streamingQualityWifi,
                     SoundQuality.entries,
                     settingsPalette,
                     index = 0,
                     count = playbackSettingCount,
                     supportingText = QualityAvailabilityNote,
                 ) { v ->
-                    onlineQuality = v.name
-                    persistSettings({ settings.setString(SettingKeys.ONLINE_PLAY_QUALITY, v.name) })
+                    wifiQuality = v.name
+                    persistSettings({ settings.setString(SettingKeys.ONLINE_PLAY_QUALITY_WIFI, v.name) })
+                }
+                SettingsDropdown(
+                    cellularQuality,
+                    strings.streamingQualityCellular,
+                    SoundQuality.entries,
+                    settingsPalette,
+                    index = 1,
+                    count = playbackSettingCount,
+                    supportingText = QualityAvailabilityNote,
+                ) { v ->
+                    cellularQuality = v.name
+                    persistSettings({ settings.setString(SettingKeys.ONLINE_PLAY_QUALITY_CELLULAR, v.name) })
                 }
                 if (supportsAudioOutputDeviceSelection) {
                     AudioOutputDeviceDropdown(
                         selectedId = audioOutputDeviceId,
                         accentPalette = settingsPalette,
-                        index = 1,
+                        index = 2,
                         count = playbackSettingCount,
                     ) { deviceId ->
                         audioOutputDeviceId = deviceId
@@ -553,7 +573,7 @@ fun SettingsScreen(
                     replacePlaylist,
                     strings.playWholeListOnTap,
                     settingsPalette,
-                    index = 1 + outputDeviceRows,
+                    index = 2 + outputDeviceRows,
                     count = playbackSettingCount,
                     supportingText = strings.playWholeListOnTapHint,
                 ) { v ->
@@ -565,7 +585,7 @@ fun SettingsScreen(
                         useDynamicCover,
                         strings.useAnimatedCover,
                         settingsPalette,
-                        index = 2 + outputDeviceRows,
+                        index = 3 + outputDeviceRows,
                         count = playbackSettingCount,
                     ) { enabled ->
                         useDynamicCover = enabled
@@ -718,7 +738,7 @@ fun SettingsScreen(
                     settingsPalette,
                     index = 0,
                     count = 2,
-                    supportingText = QualityAvailabilityNote,
+                    supportingText = strings.downloadQualityHint,
                 ) { v ->
                     dlQuality = v.name
                     persistSettings({ settings.setString(SettingKeys.DOWNLOAD_QUALITY, v.name) })

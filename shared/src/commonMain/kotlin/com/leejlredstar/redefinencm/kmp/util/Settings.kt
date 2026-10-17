@@ -45,13 +45,19 @@ object SettingKeys {
     const val LOCAL_ACCOUNT_ENABLED_DEFAULT = true
     const val UID = "uid"
     const val UID_COOKIE_FINGERPRINT = "uidCookieFingerprint"
+    /**
+     * The pre-network-aware online quality. It is read as the fallback for both Wi-Fi and mobile
+     * data so an existing install keeps the quality it already played. New writes go to the two
+     * keys below.
+     */
     const val ONLINE_PLAY_QUALITY = "onlinePlayQuality"
+    const val ONLINE_PLAY_QUALITY_WIFI = "onlinePlayQualityWifi"
+    const val ONLINE_PLAY_QUALITY_CELLULAR = "onlinePlayQualityCellular"
     const val DOWNLOAD_QUALITY = "downloadQuality"
-    // Each default is read through these and nowhere else. Settings showed 标准 for an unset
-    // online quality while playback asked the server for 极高, and a backup of an unset value
-    // wrote 标准, so restoring it lowered the quality on the other device. 极高 is what playback
-    // has always requested.
-    val ONLINE_PLAY_QUALITY_DEFAULT: SoundQuality get() = SoundQuality.EXHIGH
+    // Each default is read through these and nowhere else. 极高 is what playback has always
+    // requested. Both network classes use it until the user chooses otherwise.
+    val ONLINE_PLAY_QUALITY_WIFI_DEFAULT: SoundQuality get() = SoundQuality.EXHIGH
+    val ONLINE_PLAY_QUALITY_CELLULAR_DEFAULT: SoundQuality get() = SoundQuality.EXHIGH
     val DOWNLOAD_QUALITY_DEFAULT: SoundQuality get() = SoundQuality.STANDARD
     const val REPLACE_PLAYLIST = "replacePlaylist"
     // Every read of these three uses the constant, so a screen cannot disagree with its switch.
@@ -127,6 +133,69 @@ enum class SoundQuality {
 
     override fun toString(): String = displayName
 }
+
+/** How the device is currently connected, reduced to the two choices the player needs. */
+enum class NetworkType {
+    WIFI,
+    CELLULAR,
+}
+
+/**
+ * The current transport for online playback quality selection. A platform that cannot identify
+ * cellular data reports [NetworkType.WIFI]; that is accurate for desktop, and is also the
+ * fallback where the browser's Network Information API omits the transport.
+ */
+expect fun currentNetworkType(): NetworkType
+
+/** The saved Wi-Fi playback quality, falling back to the pre-network-aware setting. */
+fun PlatformSettings.wifiPlaybackQuality(): SoundQuality = soundQualityOrDefault(
+    getString(
+        SettingKeys.ONLINE_PLAY_QUALITY_WIFI,
+        // An install made before this setting existed has exactly one online quality. Applying
+        // it to both transports preserves what that install played until the user separates them.
+        getString(
+            SettingKeys.ONLINE_PLAY_QUALITY,
+            SettingKeys.ONLINE_PLAY_QUALITY_WIFI_DEFAULT.name,
+        ),
+    ),
+    SettingKeys.ONLINE_PLAY_QUALITY_WIFI_DEFAULT,
+)
+
+/** The saved mobile-data playback quality, falling back to the pre-network-aware setting. */
+fun PlatformSettings.cellularPlaybackQuality(): SoundQuality = soundQualityOrDefault(
+    getString(
+        SettingKeys.ONLINE_PLAY_QUALITY_CELLULAR,
+        getString(
+            SettingKeys.ONLINE_PLAY_QUALITY,
+            SettingKeys.ONLINE_PLAY_QUALITY_CELLULAR_DEFAULT.name,
+        ),
+    ),
+    SettingKeys.ONLINE_PLAY_QUALITY_CELLULAR_DEFAULT,
+)
+
+fun PlatformSettings.onlinePlaybackQuality(
+    networkType: NetworkType = currentNetworkType(),
+): SoundQuality = when (networkType) {
+    NetworkType.WIFI -> wifiPlaybackQuality()
+    NetworkType.CELLULAR -> cellularPlaybackQuality()
+}
+
+/** Use when a synchronous read would happen before the platform's settings snapshot loads. */
+suspend fun PlatformSettings.onlinePlaybackQualityAsync(
+    networkType: NetworkType = currentNetworkType(),
+): SoundQuality {
+    awaitLoaded()
+    return onlinePlaybackQuality(networkType)
+}
+
+/** Download quality is independent of the current transport and of online playback quality. */
+fun PlatformSettings.downloadQuality(): SoundQuality = soundQualityOrDefault(
+    getString(SettingKeys.DOWNLOAD_QUALITY, SettingKeys.DOWNLOAD_QUALITY_DEFAULT.name),
+    SettingKeys.DOWNLOAD_QUALITY_DEFAULT,
+)
+
+internal fun soundQualityOrDefault(value: String, default: SoundQuality): SoundQuality =
+    runCatching { SoundQuality.valueOf(value) }.getOrDefault(default)
 
 /**
  * A platform's persisted key-value store.
