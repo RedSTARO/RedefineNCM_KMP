@@ -116,7 +116,7 @@ jobs:
 
   # ─── Android ────────────────────────────────────────────────────────────────
   build-android:
-    name: Android (APK)
+    name: Android (per-ABI APKs)
     needs: test
     runs-on: ubuntu-latest
     env:
@@ -137,29 +137,43 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Build APK
+      - name: Build and verify per-ABI release APKs
         run: |
           chmod +x gradlew
           ./gradlew :androidApp:assembleRelease
+          metadata=androidApp/build/outputs/apk/release/output-metadata.json
           jq -e \
             --arg version "$APP_VERSION" \
             --argjson code "$REDEFINE_NCM_VERSION_CODE" \
-            'any(.elements[]; .versionName == $version and .versionCode == $code)' \
-            androidApp/build/outputs/apk/release/output-metadata.json
-          source_apk=$(find androidApp/build/outputs/apk/release -name '*-unsigned.apk' -print -quit)
-          test -n "$source_apk"
+            '(.elements | length == 4) and
+             all(.elements[]; .versionName == $version and .versionCode == $code) and
+             ([.elements[].filters | select(length == 1) | .[0] |
+               select(.filterType == "ABI") | .value] | sort) ==
+               ["arm64-v8a", "armeabi-v7a", "x86", "x86_64"]' \
+            "$metadata"
           # The release variant must have gone through R8 and resource shrinking. A fresh CI
           # checkout cannot have stale outputs, so these files prove this build produced the
           # optimized artifact that Telegram and the GitHub Release are allowed to publish.
           test -s androidApp/build/outputs/mapping/release/mapping.txt
           test -s androidApp/build/outputs/mapping/release/resources.txt
-          cp "$source_apk" \
-            "androidApp/build/outputs/apk/release/RedefineNCM_KMP-${APP_VERSION}-release-unsigned.apk"
+          for abi in arm64-v8a armeabi-v7a x86 x86_64; do
+            output_file=$(jq -er --arg abi "$abi" \
+              '.elements[] | select(any(.filters[]; .filterType == "ABI" and .value == $abi)) |
+               .outputFile' "$metadata")
+            source_apk="androidApp/build/outputs/apk/release/$output_file"
+            test -f "$source_apk"
+            # Inspect the actual ZIP contents as well as AGP's metadata: a renamed
+            # universal APK must never pass as a smaller single-architecture package.
+            actual_abis=$(unzip -Z1 "$source_apk" | sed -n 's|^lib/\([^/]*\)/.*\.so$|\1|p' | sort -u)
+            test "$actual_abis" = "$abi"
+            cp "$source_apk" \
+              "androidApp/build/outputs/apk/release/RedefineNCM_KMP-${APP_VERSION}-${abi}-release-unsigned.apk"
+          done
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: android-apk-release-minified
-          path: androidApp/build/outputs/apk/**/RedefineNCM_KMP-${{ needs.test.outputs.app_version }}-release-unsigned.apk
+          path: androidApp/build/outputs/apk/release/RedefineNCM_KMP-${{ needs.test.outputs.app_version }}-*-release-unsigned.apk
           if-no-files-found: error
 
       # R8 renames the app's symbols; a stack trace from this build needs this build's map.
@@ -223,17 +237,22 @@ jobs:
           path: shared/build/distributions/RedefineNCM_KMP-${{ needs.test.outputs.app_version }}-web.zip
           if-no-files-found: error
 
-  # Main and tag pushes publish an installable signed R8-minified release APK; other branches
+  # Main and tag pushes publish installable signed R8-minified APKs for every ABI; other branches
   # and pull requests only verify the unsigned optimized release output.
   sign-android:
-    name: Sign Android release
+    name: Sign Android release (${{ matrix.abi }})
     needs: [ test, build-android ]
     if: >-
       github.event_name == 'push' &&
       (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [ arm64-v8a, armeabi-v7a, x86, x86_64 ]
     env:
       APP_VERSION: ${{ needs.test.outputs.app_version }}
+      APK_ABI: ${{ matrix.abi }}
 
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -243,11 +262,11 @@ jobs:
 
       - name: Prepare release APK for signing
         run: |
-          source_apk=$(find unsigned-apk -name '*release-unsigned.apk' -print -quit)
-          test -n "$source_apk"
+          source_apk="unsigned-apk/RedefineNCM_KMP-${APP_VERSION}-${APK_ABI}-release-unsigned.apk"
+          test -f "$source_apk"
           mkdir -p androidApp/build/outputs/apk/release
           cp "$source_apk" \
-            "androidApp/build/outputs/apk/release/RedefineNCM_KMP-${APP_VERSION}-release-unsigned.apk"
+            "androidApp/build/outputs/apk/release/RedefineNCM_KMP-${APP_VERSION}-${APK_ABI}-release-unsigned.apk"
 
       - name: Sign APK
         id: sign_app
@@ -262,14 +281,16 @@ jobs:
           BUILD_TOOLS_VERSION: "34.0.0"
 
       - name: Rename signed APK
+        env:
+          SIGNED_APK: ${{ steps.sign_app.outputs.signedReleaseFile }}
         run: |
-          mv "${{ steps.sign_app.outputs.signedReleaseFile }}" \
-            "androidApp/build/outputs/apk/release/RedefineNCM_KMP-${APP_VERSION}.apk"
+          mv "$SIGNED_APK" \
+            "androidApp/build/outputs/apk/release/RedefineNCM_KMP-${APP_VERSION}-${APK_ABI}.apk"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: android-apk-release-minified-signed
-          path: androidApp/build/outputs/apk/release/RedefineNCM_KMP-${{ needs.test.outputs.app_version }}.apk
+          name: android-apk-release-minified-signed-${{ matrix.abi }}
+          path: androidApp/build/outputs/apk/release/RedefineNCM_KMP-${{ needs.test.outputs.app_version }}-${{ matrix.abi }}.apk
           if-no-files-found: error
 
   # ─── Desktop · Linux ────────────────────────────────────────────────────────
@@ -545,10 +566,10 @@ jobs:
           echo "commit_msg=$(git log -1 --pretty=%s)" >> "$GITHUB_OUTPUT"
           echo "commit_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Download signed R8-minified APK
+      - name: Download signed R8-minified ARM64 APK
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: android-apk-release-minified-signed
+          name: android-apk-release-minified-signed-arm64-v8a
           path: dist/android
 
       - name: Download other platform packages
@@ -571,7 +592,7 @@ jobs:
           REF: ${{ github.ref_name }}
           VERSION: ${{ needs.test.outputs.app_version }}
         run: |
-          APK=$(find dist/android -maxdepth 1 -type f -name "RedefineNCM_KMP-v*.apk" -print -quit)
+          APK="dist/android/RedefineNCM_KMP-${VERSION}-arm64-v8a.apk"
           DEB=$(find dist/ -name "*.deb" 2>/dev/null | head -1)
           MSI=$(find dist/ -name "*.msi" 2>/dev/null | head -1)
           DMG=$(find dist/ -name "*.dmg" 2>/dev/null | head -1)
@@ -585,7 +606,7 @@ jobs:
 
           MSG=$(printf '%s' "$RAW_MSG" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
 
-          CAPTION=$(printf '<b>RedefineNCM KMP</b>  ·  <code>%s</code>\n\n📝 %s\n🔖 <code>%s</code>  ·  <code>%s</code>  ·  +%s commits\n\n──────────────────\n🤖 Android  %s  APK (signed, R8-minified)\n🐧 Linux    %s  .deb\n🪟 Windows  %s  .msi\n🍎 macOS    %s  .dmg\n🌐 Web      %s  .zip\n\n<i>桌面端与 Web 产物见 CI artifacts。</i>' \
+          CAPTION=$(printf '<b>RedefineNCM KMP</b>  ·  <code>%s</code>\n\n📝 %s\n🔖 <code>%s</code>  ·  <code>%s</code>  ·  +%s commits\n\n──────────────────\n🤖 Android  %s  ARM64 APK (signed, R8-minified)\n🐧 Linux    %s  .deb\n🪟 Windows  %s  .msi\n🍎 macOS    %s  .dmg\n🌐 Web      %s  .zip\n\n<i>其他 Android 架构、桌面端与 Web 产物见 CI artifacts。</i>' \
             "$REF" "$MSG" "$VERSION" "$SHA" "$COUNT" \
             "$(status "$APK")" "$(status "$DEB")" "$(status "$MSI")" "$(status "$DMG")" "$(status "$WEB")")
 
@@ -647,7 +668,7 @@ jobs:
         with:
           # Symbol maps all contain mapping.txt; keep them as separate CI artifacts.
           # Verification APKs and packaging logs are not release packages either.
-          pattern: '{android-apk-release-minified-signed,web-wasm-distribution,desktop-linux-deb,desktop-windows-msi,desktop-macos-dmg}'
+          pattern: '{android-apk-release-minified-signed-*,web-wasm-distribution,desktop-linux-deb,desktop-windows-msi,desktop-macos-dmg}'
           path: dist/
           merge-multiple: true
 
@@ -667,7 +688,10 @@ jobs:
 
             | Platform | File |
             |----------|------|
-            | Android | `RedefineNCM_KMP-${{ needs.test.outputs.app_version }}.apk` (signed, R8-minified) |
+            | Android ARM64 | `RedefineNCM_KMP-${{ needs.test.outputs.app_version }}-arm64-v8a.apk` (signed, R8-minified) |
+            | Android ARM32 | `RedefineNCM_KMP-${{ needs.test.outputs.app_version }}-armeabi-v7a.apk` (signed, R8-minified) |
+            | Android x86 | `RedefineNCM_KMP-${{ needs.test.outputs.app_version }}-x86.apk` (signed, R8-minified) |
+            | Android x86_64 | `RedefineNCM_KMP-${{ needs.test.outputs.app_version }}-x86_64.apk` (signed, R8-minified) |
             | Linux | `RedefineNCM_KMP-${{ needs.test.outputs.app_version }}.deb` |
             | Windows | `RedefineNCM_KMP-${{ needs.test.outputs.app_version }}.msi` |
             | macOS | `RedefineNCM_KMP-${{ needs.test.outputs.app_version }}.dmg` |

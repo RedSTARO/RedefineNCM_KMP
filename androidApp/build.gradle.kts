@@ -1,3 +1,4 @@
+import com.android.build.api.variant.FilterConfiguration.FilterType.ABI
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 val appVersionCode = rootProject.extra["redefineNcmVersionCode"] as Int
@@ -43,6 +44,16 @@ android {
         versionCode = appVersionCode
         versionName = appVersionName
     }
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            // Variant outputs below keep only this universal APK for debug, and only
+            // the per-ABI APKs for release. R8 runs once for all release outputs.
+            isUniversalApk = true
+        }
+    }
     sourceSets {
         getByName("main") {
         }
@@ -73,5 +84,14 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+            val isAbiSplit = output.filters.any { it.filterType == ABI }
+            output.enabled.set(if (variant.buildType == "release") isAbiSplit else !isAbiSplit)
+        }
     }
 }

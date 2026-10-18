@@ -581,6 +581,11 @@ product version.
 Platform mapping:
 
 - Android: `versionName = full app version`, `versionCode = commit count`.
+  Release APKs are split by ABI (`arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`), with the ABI
+  appended to each filename; there is no universal release APK. All share the same Git-derived
+  version code so they can update the previous universal build. Debug keeps one universal APK.
+  Main and tag pushes sign every ABI's R8/resource-shrunk release output. GitHub Releases publish
+  all four APKs; Telegram on ordinary `main` pushes sends only `arm64-v8a`.
 - Shared runtime (Android/iOS/Desktop/Web): generated common `BuildInfo.VERSION_NAME` is the full
   product version. It also exposes the tag components, build number, and native package adapter;
   the standard Web distribution additionally carries the same data in its generated `version.json`.
