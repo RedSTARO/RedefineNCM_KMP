@@ -163,8 +163,12 @@ object AndroidLyricNotification : OptionalLyricSurface {
     /**
      * Creates the channel, or renames it after a language switch: creating a channel that exists
      * only updates its name and description, and keeps the settings the user gave it.
+     *
+     * Channels arrived in Android 8.0. Below it the class does not exist, and init() runs from
+     * Application.onCreate, so building one there would crash every launch on Android 7.x.
      */
     private fun ensureChannel(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val language = I18n.language
         if (channelLanguage == language) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
