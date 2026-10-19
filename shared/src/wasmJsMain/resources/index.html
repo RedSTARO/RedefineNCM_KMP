@@ -11,6 +11,8 @@
     <div id="redefineNcmBoot" role="status" aria-live="polite">
         <div class="boot-spinner" aria-hidden="true"></div>
         <span id="redefineNcmBootLabel"></span>
+        <p id="redefineNcmBootHint" hidden></p>
+        <button id="redefineNcmBootRetry" type="button" hidden></button>
         <div id="redefineNcmBootProgress" class="boot-progress" hidden>
             <progress id="redefineNcmBootBar" max="1"></progress>
             <span id="redefineNcmBootBytes" aria-hidden="true"></span>
@@ -18,88 +20,161 @@
     </div>
     <div id="redefineNcmApp"></div>
     <script>
-        // This page runs before the app's own copy (src/commonMain/i18n) has loaded, so it keeps
-        // its few strings here in the same three languages. It picks one the way the app does:
-        // the stored choice, else the first of the browser's languages it has, else English.
-        const bootText = (() => {
-            const table = {
-                zh: {
-                    loading: "正在加载 Web 应用…",
-                    progress: "字体下载进度",
-                    fontFailed: "字体加载失败：HTTP ",
-                    firstRun: "首次打开需要下载中文字体",
-                    starting: "正在启动…",
-                },
-                en: {
-                    loading: "Loading the web app…",
-                    progress: "Font download progress",
-                    fontFailed: "Couldn't load the font: HTTP ",
-                    firstRun: "Downloading the Chinese font for the first launch",
-                    starting: "Starting…",
-                },
-                ja: {
-                    loading: "Webアプリを読み込んでいます…",
-                    progress: "フォントのダウンロード状況",
-                    fontFailed: "フォントを読み込めません：HTTP ",
-                    firstRun: "初回のみ中国語フォントをダウンロードします",
-                    starting: "起動しています…",
-                },
-            };
-            const known = tag => {
-                const code = String(tag || "").split(/[-_]/)[0].toLowerCase();
-                return code in table ? code : null;
-            };
-            let stored = null;
-            try {
-                stored = localStorage.getItem("appLanguage");
-            } catch (_) {
-                // Storage can be blocked; follow the browser then.
-            }
-            let language = stored && stored !== "system" ? known(stored) : null;
-            if (!language) {
-                const browser = navigator.languages && navigator.languages.length
-                    ? navigator.languages
-                    : [navigator.language];
-                language = browser.map(known).find(Boolean) || "en";
-            }
-            document.documentElement.lang = { zh: "zh-CN", en: "en", ja: "ja" }[language];
-            return table[language];
-        })();
-        document.getElementById("redefineNcmBootLabel").textContent = bootText.loading;
-        document.getElementById("redefineNcmBootBar").setAttribute("aria-label", bootText.progress);
+// The boot surface stays up until the app is ready to draw. It runs before the app's own
+// copy (src/commonMain/i18n) has loaded, so it keeps its few strings here in the same three
+// languages and picks one the way the app does: the stored choice, else the first of the
+// browser's languages it has, else English.
+(function () {
+    globalThis.createRedefineNcmBoot = function (options = {}) {
+        const boot = document.getElementById("redefineNcmBoot");
+        const app = document.getElementById("redefineNcmApp");
+        const label = document.getElementById("redefineNcmBootLabel");
+        const hint = document.getElementById("redefineNcmBootHint");
+        const retry = document.getElementById("redefineNcmBootRetry");
+        const spinner = boot.querySelector(".boot-spinner");
+        const progress = document.getElementById("redefineNcmBootProgress");
+        const bar = document.getElementById("redefineNcmBootBar");
+        const bytes = document.getElementById("redefineNcmBootBytes");
+        const events = options.events || window;
+        const table = {
+            zh: {
+                loading: "正在加载 Web 应用…",
+                progress: "字体下载进度",
+                firstRun: "首次打开需要下载中文字体",
+                starting: "正在启动…",
+                failed: "无法启动应用",
+                help: "请重新加载页面，并检查网络连接，以及浏览器是否允许本站存储数据。如果仍无法启动，请把浏览器更新到最新版本，或反馈问题。",
+                unsupported: "此浏览器无法运行应用",
+                unsupportedHelp: "请用最新版本的 Chrome、Edge、Firefox 或 Safari 打开。",
+                reload: "重新加载",
+            },
+            en: {
+                loading: "Loading the web app…",
+                progress: "Font download progress",
+                firstRun: "Downloading the Chinese font for the first launch",
+                starting: "Starting…",
+                failed: "Couldn't start the app",
+                help: "Reload the page, and check your connection and that the browser lets this site store data. If it still won't start, update the browser to the latest version or report the problem.",
+                unsupported: "This browser can't run the app",
+                unsupportedHelp: "Open it in the latest version of Chrome, Edge, Firefox or Safari.",
+                reload: "Reload",
+            },
+            ja: {
+                loading: "Webアプリを読み込んでいます…",
+                progress: "フォントのダウンロード状況",
+                firstRun: "初回のみ中国語フォントをダウンロードします",
+                starting: "起動しています…",
+                failed: "アプリを起動できませんでした",
+                help: "ページを再読み込みし、ネットワーク接続と、このサイトへのデータ保存がブラウザーで許可されているかを確認してください。それでも起動しない場合は、ブラウザーを最新版に更新するか、問題を報告してください。",
+                unsupported: "このブラウザーではアプリを実行できません",
+                unsupportedHelp: "最新版の Chrome、Edge、Firefox、Safari で開いてください。",
+                reload: "再読み込み",
+            },
+        };
+        const known = tag => {
+            const code = String(tag || "").split(/[-_]/)[0].toLowerCase();
+            return Object.prototype.hasOwnProperty.call(table, code) ? code : null;
+        };
+        let stored = null;
+        try {
+            stored = (options.readLanguage || (() => localStorage.getItem("appLanguage")))();
+        } catch (_) {
+            // Storage can be blocked; follow the browser then.
+        }
+        const browser = navigator.languages && navigator.languages.length
+            ? navigator.languages
+            : [navigator.language];
+        const language = (stored && stored !== "system" ? known(stored) : null)
+            || browser.map(known).find(Boolean)
+            || "en";
+        const text = table[language];
+        document.documentElement.lang = { zh: "zh-CN", en: "en", ja: "ja" }[language];
+        label.textContent = text.loading;
+        bar.setAttribute("aria-label", text.progress);
+        retry.textContent = text.reload;
+        retry.addEventListener("click", options.reload || (() => location.reload()));
 
-        globalThis.__redefineNcmFontReady = (async () => {
-            const response = await fetch(
-                "composeResources/redefinencm_kmp.shared.generated.resources/font/noto_sans_sc_variable.ttf",
-                { cache: "force-cache" }
-            );
-            if (!response.ok) throw new Error(bootText.fontFailed + response.status);
-            // Read the body through so the browser cache is warm, without keeping the 17 MB of it
-            // as the resolved value of the page-lifetime readiness promise.
-            const reader = response.body?.getReader();
-            if (!reader) {
-                await response.arrayBuffer();
-                return;
-            }
-            // Content-Length counts the bytes on the wire; a compressed response decodes to more
-            // than that, so the total is only shown when nothing was compressed.
-            const total = response.headers.get("Content-Encoding")
-                ? 0
-                : Number(response.headers.get("Content-Length")) || 0;
-            const label = document.getElementById("redefineNcmBootLabel");
-            const progress = document.getElementById("redefineNcmBootProgress");
-            const bar = document.getElementById("redefineNcmBootBar");
-            const bytes = document.getElementById("redefineNcmBootBytes");
-            const megabytes = count => (count / 1e6).toFixed(1);
-            // A cached font reads through in a moment; only a real download shows the progress,
-            // so a returning visit does not flash it.
-            const reveal = setTimeout(() => {
-                label.textContent = bootText.firstRun;
-                progress.hidden = false;
-            }, 400);
-            let loaded = 0;
+        // "loading" until the app is shown ("ready") or a failure is ("failed").
+        let state = "loading";
+        let appStarted = false;
+        let stallTimer;
+        let revealTimer;
+        const abort = new AbortController();
+
+        function fail(reason) {
+            if (state !== "loading") return;
+            state = "failed";
+            const unsupported = typeof WebAssembly === "object"
+                && reason instanceof WebAssembly.CompileError;
+            spinner.hidden = true;
+            progress.hidden = true;
+            label.textContent = unsupported ? text.unsupported : text.failed;
+            hint.textContent = unsupported ? text.unsupportedHelp : text.help;
+            hint.hidden = false;
+            retry.hidden = false;
+            boot.setAttribute("role", "alert");
+            boot.setAttribute("aria-live", "assertive");
+            retry.focus();
+        }
+
+        // Before the app's own code starts, any error or unhandled rejection is the bundle or its
+        // WebAssembly failing to load: a missing file, a wrong MIME type, a browser without Wasm GC.
+        // The capture phase also sees a <script> that failed to load. Once the app runs, only an
+        // uncaught exception counts; resource errors and the browser's ResizeObserver notice carry
+        // no error object.
+        const onError = event => {
+            if (!appStarted || event.error != null) fail(event.error);
+        };
+        const onRejection = event => {
+            if (!appStarted) fail(event.reason);
+        };
+        events.addEventListener("error", onError, true);
+        events.addEventListener("unhandledrejection", onRejection);
+        const disarm = () => {
+            events.removeEventListener("error", onError, true);
+            events.removeEventListener("unhandledrejection", onRejection);
+        };
+
+        const armStallTimer = () => {
+            clearTimeout(stallTimer);
+            // Bounds a stall, not the whole transfer: a slow first download continues while bytes
+            // keep arriving.
+            stallTimer = setTimeout(() => abort.abort(), options.stallTimeoutMs || 30000);
+        };
+
+        // Warms the browser cache with the bundled CJK font and shows the download's progress. The
+        // app loads the font itself afterwards, so a failed warm-up is logged and the app starts.
+        const fontReady = (async () => {
+            armStallTimer();
             try {
+                const response = await (options.fetch || globalThis.fetch.bind(globalThis))(
+                    "composeResources/redefinencm_kmp.shared.generated.resources/font/noto_sans_sc_variable.ttf",
+                    { cache: "force-cache", signal: abort.signal },
+                );
+                if (!response.ok) throw new Error("Font preload failed: HTTP " + response.status);
+                // Read the body through without keeping the 17 MB of it as the resolved value of a
+                // page-lifetime promise.
+                const reader = response.body?.getReader();
+                if (!reader) {
+                    await response.arrayBuffer();
+                    return;
+                }
+                // Content-Length counts the bytes on the wire; a compressed response decodes to
+                // more than that, so the total is only shown when nothing was compressed.
+                const total = response.headers.get("Content-Encoding")
+                    ? 0
+                    : Number(response.headers.get("Content-Length")) || 0;
+                const megabytes = count => (count / 1e6).toFixed(1);
+                // A cached font reads through in a moment; only a real download shows the progress,
+                // so a returning visit does not flash it.
+                revealTimer = setTimeout(() => {
+                    if (state !== "loading") return;
+                    label.textContent = text.firstRun;
+                    progress.hidden = false;
+                }, 400);
+                let loaded = 0;
                 for (;;) {
+                    armStallTimer();
                     const { done, value } = await reader.read();
                     if (done) break;
                     loaded += value.byteLength;
@@ -108,12 +183,48 @@
                         ? megabytes(loaded) + " / " + megabytes(total) + " MB"
                         : megabytes(loaded) + " MB";
                 }
+            } catch (error) {
+                console.warn(error?.message || String(error));
             } finally {
-                clearTimeout(reveal);
-                progress.hidden = true;
-                label.textContent = bootText.starting;
+                clearTimeout(stallTimer);
+                clearTimeout(revealTimer);
+                if (state === "loading") {
+                    progress.hidden = true;
+                    label.textContent = text.starting;
+                }
             }
         })();
+
+        return {
+            fontReady,
+            fail,
+            // The app's own code is running.
+            started() {
+                appStarted = true;
+            },
+            // The app has its font and is about to draw. It is shown even after a failure was
+            // reported, so a failure that turned out not to matter cannot keep a working app hidden.
+            ready() {
+                if (state === "ready" || state === "disposed") return;
+                state = "ready";
+                disarm();
+                app.style.visibility = "visible";
+                boot.remove();
+            },
+            dispose() {
+                state = "disposed";
+                disarm();
+                clearTimeout(stallTimer);
+                clearTimeout(revealTimer);
+                abort.abort();
+            },
+        };
+    };
+    if (document.getElementById("redefineNcmBoot")) {
+        globalThis.__redefineNcmBoot = globalThis.createRedefineNcmBoot();
+        globalThis.__redefineNcmFontReady = globalThis.__redefineNcmBoot.fontReady;
+    }
+})();
     </script>
     <script src="redefinencm.js"></script>
 </body>

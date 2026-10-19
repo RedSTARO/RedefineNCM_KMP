@@ -721,6 +721,15 @@ tasks.withType<Test>().matching { it.name == "testAndroidHostTest" }.configureEa
     jvmArgs("--add-opens=java.base/jdk.internal.access=ALL-UNNAMED")
 }
 
+// WebBootPageTest runs the boot script of index.html, which karma.config.d/web-boot.js extracts
+// from the page. Declared here, or a change to the page alone would leave this task up to date.
+tasks.matching { it.name == "wasmJsBrowserTest" }.configureEach {
+    inputs.files(fileTree("src/wasmJsMain/resources") { include("index.html", "styles.css") })
+        .withPropertyName("webBootPage").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.files(fileTree("karma.config.d"))
+        .withPropertyName("karmaConfig").withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
 // On a Windows host the JVM tests can reach the DirectML build; elsewhere the harness skips.
 tasks.withType<Test>().matching { it.name == "jvmTest" }.configureEach {
     // AndroidLaunchBackgroundTest compares the Android app's launch colours with the scheme.

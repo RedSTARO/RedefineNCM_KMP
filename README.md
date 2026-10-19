@@ -150,7 +150,9 @@ Web 目标用 `HTMLAudioElement` 播放，由 Media Session 提供系统媒体�
 - Media Session 和系统通知能力取决于浏览器；歌词始终显示在页面内，系统歌词通知仅在
   用户已授予通知权限时启用。
 - Web 分发包包含完整 Noto Sans SC 字体，用来覆盖动态的中文歌名和歌词；首次访问会先显示
-  加载页，等字体下载完成、CanvasKit 解析完毕后再显示 Compose UI。
+  加载页，等字体下载完成、CanvasKit 解析完毕后再显示 Compose UI。脚本或 WebAssembly 加载失败
+  （例如 `.wasm` 的 MIME 类型不对）时，加载页会提示失败并给出「重新加载」按钮；浏览器不支持
+  所需的 WebAssembly 功能时会直接说明。
 
 ## 许可证与发布
 

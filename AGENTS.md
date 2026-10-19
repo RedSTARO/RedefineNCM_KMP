@@ -88,6 +88,15 @@ offline playback, palette extraction, settings import/export, and a visible lyri
 also bundles Noto Sans SC and preloads it before exposing the Compose canvas, because CanvasKit
 cannot rely on host CJK fonts for dynamic Chinese song titles and lyrics.
 
+The boot page in `wasmJsMain/resources/index.html` owns the time before the app draws. It warms
+the font cache with a 30-second stall limit; a failed warm-up is logged and never blocks the start,
+because the app loads the font again itself. Until the bundle's own code runs, any error or
+unhandled rejection means the bundle or its WebAssembly did not load, and the page shows a reload
+button (a `WebAssembly.CompileError` says the browser cannot run the app). After that only an
+exception thrown by the app's start or an uncaught exception counts. Showing the app always wins
+over a failure already on screen. `WebBootPageTest` runs the page's own script through
+`shared/karma.config.d/web-boot.js`.
+
 Page lifecycle is a locked behavior: `pagehide` and `beforeunload` pause playback, and pausing
 invalidates an in-flight stream-URL lookup, otherwise a late response can start audio after the
 page has been left. A tab that is only hidden keeps playing: pausing on `visibilitychange` stopped

@@ -28,8 +28,8 @@ import kotlin.JsFun
 /** Browser entry point for the shared Compose application. */
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
-    configureWebArtworkImageLoader()
     startAfterWebFontReady {
+        configureWebArtworkImageLoader()
         initKoin()
         onSystemLanguageChange { I18n.refreshSystemLanguage() }
         ComposeViewport(viewportContainerId = "redefineNcmApp") {
@@ -71,16 +71,25 @@ private fun WebAppAfterFontPreload() {
     }
 }
 
+/**
+ * Runs [start] once the boot page's font warm-up has settled. A failure thrown by [start] is shown
+ * on the boot page with a reload button, instead of leaving its spinner up for good.
+ */
 @JsFun(
     """(start) => {
+        const boot = globalThis.__redefineNcmBoot;
+        boot?.started?.();
         Promise.resolve(globalThis.__redefineNcmFontReady)
+            // A page cached from an older release rejected this promise when the font failed.
             .catch(error => console.warn(error?.message || String(error)))
-            .finally(() => {
-                start();
+            .then(() => start())
+            .catch(error => {
+                console.error(error);
+                boot?.fail?.(error);
             });
     }""",
 )
-private external fun startAfterWebFontReady(start: () -> Unit)
+internal external fun startAfterWebFontReady(start: () -> Unit)
 
 /** The browser's languages changed; only matters while the app follows them. */
 @JsFun("(onChange) => { window.addEventListener('languagechange', () => onChange()); }")
@@ -91,9 +100,15 @@ private external fun setDocumentLanguage(tag: String)
 
 @JsFun(
     """() => {
+        const boot = globalThis.__redefineNcmBoot;
+        if (boot) {
+            boot.ready();
+            return;
+        }
+        // A page cached from an older release has no boot controller.
         const app = document.getElementById("redefineNcmApp");
         if (app) app.style.visibility = "visible";
         document.getElementById("redefineNcmBoot")?.remove();
     }""",
 )
-private external fun showWebAppAndRemoveBootSurface()
+internal external fun showWebAppAndRemoveBootSurface()
