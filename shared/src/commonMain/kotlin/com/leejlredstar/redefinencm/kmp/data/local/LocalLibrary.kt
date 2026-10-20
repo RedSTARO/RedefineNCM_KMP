@@ -253,7 +253,9 @@ class LocalLibraryStore(
         transform: (LocalLibraryDocument) -> Pair<LocalLibraryDocument, T>,
     ): Result<T> = writes.withLock {
         try {
-            val (updated, answer) = transform(load())
+            // From the stored document, not this process's copy: a second browser tab may have
+            // changed it since, and a change made from the older copy would write that away.
+            val (updated, answer) = transform(load(force = true))
             updated.requireValid()
             currentCoroutineContext().ensureActive()
             withContext(NonCancellable) {

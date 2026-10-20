@@ -12,6 +12,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.window.ComposeViewport
+import com.leejlredstar.redefinencm.kmp.data.db.BrowserStorageSqlDriver
+import com.leejlredstar.redefinencm.kmp.data.local.LocalLibraryStore
 import com.leejlredstar.redefinencm.kmp.di.initKoin
 import com.leejlredstar.redefinencm.kmp.i18n.AppLanguage
 import com.leejlredstar.redefinencm.kmp.i18n.I18n
@@ -21,7 +23,9 @@ import com.leejlredstar.amll.compose.LocalAmllPlatformEventBridge
 import com.leejlredstar.amll.compose.WebAmllPlatformEventBridge
 import com.leejlredstar.redefinencm.kmp.ui.theme.webBundledFontFamily
 import com.leejlredstar.redefinencm.kmp.ui.theme.LocalPreloadedFontFamily
+import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.koin.mp.KoinPlatform
 import kotlin.JsFun
 
@@ -40,6 +44,12 @@ fun main() {
         }
         // After the viewport, so Compose sees each key first and can claim it.
         installWebKeyboardShortcuts(player)
+        // Another tab changed the local library: the pages here show it, and this tab's next
+        // change starts from it.
+        val libraryScope = MainScope()
+        onStoredValueChanged(BrowserStorageSqlDriver.LOCAL_LIBRARY_KEY) {
+            libraryScope.launch { KoinPlatform.getKoin().get<LocalLibraryStore>().reload() }
+        }
     }
 }
 
@@ -94,6 +104,10 @@ private fun WebAppAfterFontPreload() {
     }""",
 )
 internal external fun startAfterWebFontReady(start: () -> Unit)
+
+/** Another tab of this origin stored [key]; browsers tell every other tab, not the writer. */
+@JsFun("(key, onChange) => { window.addEventListener('storage', event => { if (event.key === key) onChange(); }); }")
+private external fun onStoredValueChanged(key: String, onChange: () -> Unit)
 
 /** The browser's languages changed; only matters while the app follows them. */
 @JsFun("(onChange) => { window.addEventListener('languagechange', () => onChange()); }")

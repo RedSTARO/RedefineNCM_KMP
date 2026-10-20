@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.data.db
 
 import com.leejlredstar.redefinencm.kmp.data.local.LocalLibraryStore
+import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -237,5 +238,24 @@ class BrowserStorageQuotaTest {
         }
         database.assertUserData()
         AppDatabase(BrowserStorageSqlDriver(storage)).assertUserData()
+    }
+
+    /**
+     * Two tabs share one storage. A change made in the tab that loaded first must not write the
+     * other tab's newer playlists away.
+     */
+    @Test
+    fun twoTabsEditingTheLibraryKeepEachOthersChanges() = runTest {
+        val storage = LimitedStorage()
+        val tabA = LocalLibraryStore(AppDatabase(BrowserStorageSqlDriver(storage)))
+        val tabB = LocalLibraryStore(AppDatabase(BrowserStorageSqlDriver(storage)))
+        tabA.snapshot()
+
+        tabB.createPlaylist("Workout").getOrThrow()
+        tabA.setFavorite(MediaInfo(id = "1", title = "Song", artist = "Artist"), favorite = true).getOrThrow()
+
+        val third = LocalLibraryStore(AppDatabase(BrowserStorageSqlDriver(storage))).snapshot()
+        assertTrue(third.userPlaylists.any { it.name == "Workout" }, third.toString())
+        assertEquals(1, third.favorites?.tracks?.size)
     }
 }

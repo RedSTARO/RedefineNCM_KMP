@@ -255,7 +255,20 @@ internal class BrowserStorageSqlDriver(
 
     private fun storageKeys(): List<String> = volatileStorage.keys.toList()
 
-    private fun readStorageValue(key: String): String? = volatileStorage[key]
+    /**
+     * An owned row (the local library, the saved queue, the download list) is read from storage
+     * each time: another tab of the app may have written it since this one loaded, and a change
+     * made from this tab's older copy wrote the other tab's playlists away. Caches stay in memory.
+     * Inside a transaction the snapshot this tab took is the reference, so nothing is refreshed.
+     */
+    private fun readStorageValue(key: String): String? {
+        if (persistenceEnabled && transaction == null && key != SCHEMA_VERSION_KEY && !isCacheKey(key)) {
+            runCatching { storage.get(key) }.onSuccess { stored ->
+                if (stored == null) volatileStorage.remove(key) else volatileStorage[key] = stored
+            }
+        }
+        return volatileStorage[key]
+    }
 
     /**
      * Only Cached* rows are expendable. A cache too large for localStorage stays in memory;
@@ -352,6 +365,9 @@ internal class BrowserStorageSqlDriver(
 
         const val STORAGE_PREFIX = "redefinencm.db."
         const val SCHEMA_VERSION_KEY = "${STORAGE_PREFIX}schemaVersion"
+
+        /** Where the local library's one row is stored; other tabs watch it for changes. */
+        const val LOCAL_LIBRARY_KEY = "${STORAGE_PREFIX}LocalLibrary:0"
         val SQL_WHITESPACE = Regex("\\s+")
         val KEYED_TABLES = setOf(
             "CachedCommentMusic",
