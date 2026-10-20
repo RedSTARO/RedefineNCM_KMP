@@ -1,6 +1,7 @@
 import ActivityKit
 import Foundation
 import Shared
+import UIKit
 
 /// Bridges the shared Kotlin `IosLiveActivity` surface to ActivityKit.
 ///
@@ -122,11 +123,28 @@ final class LiveActivityManager {
         generation expectedGeneration: UInt64
     ) async {
         guard expectedGeneration == generation, !Task.isCancelled else { return }
-        if let activity {
-            await activity.update(ActivityContent(state: state, staleDate: nil))
-            return
+        if let current = activity {
+            switch current.activityState {
+            case .active, .stale:
+                await current.update(ActivityContent(state: state, staleDate: nil))
+                return
+            case .ended:
+                // The system ends an activity after about eight hours, and an ended one takes no
+                // more updates. Start a new one below.
+                activity = nil
+            case .dismissed:
+                // The person removed it from the Lock Screen; it is not brought back for this queue.
+                return
+            @unknown default:
+                return
+            }
         }
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        // Only playback starts an activity: a queue restored at launch is paused, and an activity
+        // for it would stay on the Lock Screen while nothing plays. iOS refuses a request from the
+        // background, so none is made there either.
+        guard state.isPlaying,
+              UIApplication.shared.applicationState != .background,
+              ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         do {
             activity = try Activity.request(
                 attributes: LyricActivityAttributes(),
@@ -141,7 +159,10 @@ final class LiveActivityManager {
     private func recoverExistingActivitiesIfNeeded() async {
         guard !didRecoverActivities else { return }
         let existing = Activity<LyricActivityAttributes>.activities
-        let primary = activity ?? existing.first
+        // An activity left over from the last run is adopted only if it can still be updated.
+        let primary = activity ?? existing.first(where: { candidate in
+            candidate.activityState == .active || candidate.activityState == .stale
+        })
         activity = primary
         for extra in existing where extra.id != primary?.id {
             if Task.isCancelled { return }

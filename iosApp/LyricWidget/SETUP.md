@@ -25,8 +25,11 @@ Windows can compile the Kotlin iOS framework but cannot run Xcode or ActivityKit
 On macOS with Xcode 16+, build the `iosApp` scheme and confirm:
 
 1. `LyricWidget.appex` is embedded under the app's PlugIns directory.
-2. Starting playback creates or updates one `Activity<LyricActivityAttributes>`.
-3. Clearing playback ends the activity.
+2. Starting playback creates or updates one `Activity<LyricActivityAttributes>`. A queue restored
+   paused at launch creates none until play is pressed.
+3. Clearing playback ends the activity. An activity the system ended (after about eight hours) is
+   replaced at the next update while playing in the foreground; one the person swiped away is not
+   brought back for the same queue.
 4. Lock Screen rendering appears on any supported device/simulator; Dynamic Island rendering only
    appears on Dynamic-Island-capable devices.
 

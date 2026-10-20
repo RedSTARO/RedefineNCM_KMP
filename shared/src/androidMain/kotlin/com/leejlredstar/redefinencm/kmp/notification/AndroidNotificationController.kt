@@ -88,21 +88,10 @@ object AndroidLyricNotification : OptionalLyricSurface {
         val trimmedArtist = payload.artist
         val trimmedNext = payload.nextLyric
 
-        val contentText = buildString {
-            if (trimmedArtist.isNotEmpty()) {
-                append(trimmedArtist)
-                append(" · ")
-            }
-            append(payload.currentLyric)
-        }
-
-        val detailText = buildString {
-            append(payload.currentLyric)
-            if (trimmedNext.isNotEmpty()) {
-                appendLine()
-                append(trimmedNext)
-            }
-        }
+        // The line under the lyric names the song. When the title already stands in for a missing
+        // lyric line, the artist does instead; repeating the headline told the user nothing.
+        val contentText = notificationContentText(payload)
+        val detailText = listOf(contentText, trimmedNext).filter(String::isNotEmpty).joinToString("\n")
 
         ensureChannel(context)
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -111,7 +100,7 @@ object AndroidLyricNotification : OptionalLyricSurface {
                 else android.R.drawable.ic_media_play,
             )
             .setContentTitle(displayTitle)
-            .setContentText(contentText)
+            .setContentText(contentText.ifEmpty { null })
             .setSubText(trimmedArtist.ifEmpty { null })
             .setOnlyAlertOnce(true)
             .setSilent(true)
@@ -120,12 +109,14 @@ object AndroidLyricNotification : OptionalLyricSurface {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
             .setShowWhen(false)
-            .setStyle(
+            .setContentIntent(createNowPlayingPendingIntent(context, requestCode = NOTIFICATION_ID))
+        if (trimmedNext.isNotEmpty()) {
+            builder.setStyle(
                 NotificationCompat.BigTextStyle()
                     .bigText(detailText)
                     .setSummaryText(trimmedArtist.ifEmpty { null }),
             )
-            .setContentIntent(createNowPlayingPendingIntent(context, requestCode = NOTIFICATION_ID))
+        }
 
         if (payload.durationMs > 0L) {
             val durationSeconds = (payload.durationMs / 1_000L)
@@ -195,5 +186,12 @@ object AndroidLyricNotification : OptionalLyricSurface {
     }
 
 }
+
+/**
+ * The text under the lyric headline: the song's title, or the artist when the title is already
+ * the headline because the track has no lyric line at this moment.
+ */
+internal fun notificationContentText(payload: LyricPayload): String =
+    if (payload.currentLyric == payload.title) payload.artist else payload.title
 
 actual val lyricSurface: LyricSurface = AndroidLyricNotification

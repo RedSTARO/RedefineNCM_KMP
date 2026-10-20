@@ -38,11 +38,13 @@ struct LyricLiveActivity: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(spacing: 2) {
-                        Text(context.state.currentLyric)
-                            .font(.headline)
-                            .fontWeight(.bold)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
+                        if let lyric = context.state.distinctLyric {
+                            Text(lyric)
+                                .font(.headline)
+                                .fontWeight(.bold)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
                         if !context.state.nextLyric.isEmpty {
                             Text(context.state.nextLyric)
                                 .font(.caption)
@@ -81,6 +83,15 @@ struct LyricLiveActivity: Widget {
 }
 
 @available(iOS 16.2, *)
+private extension LyricActivityAttributes.ContentState {
+    /// The lyric line, or nil when the app sent the title in its place because the track has no
+    /// line at this moment. The title is already shown above it, so it would appear twice.
+    var distinctLyric: String? {
+        currentLyric.isEmpty || currentLyric == title ? nil : currentLyric
+    }
+}
+
+@available(iOS 16.2, *)
 private struct LockScreenLyricView: View {
     let state: LyricActivityAttributes.ContentState
 
@@ -94,11 +105,13 @@ private struct LockScreenLyricView: View {
                     .font(.subheadline)
                     .fontWeight(.bold)
                     .lineLimit(1)
-                Text(state.currentLyric)
-                    .font(.body)
-                    .fontWeight(.semibold)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                if let lyric = state.distinctLyric {
+                    Text(lyric)
+                        .font(.body)
+                        .fontWeight(.semibold)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
                 if !state.nextLyric.isEmpty {
                     Text(state.nextLyric)
                         .font(.caption)

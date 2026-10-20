@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.notification
 
+import android.app.Notification
 import android.app.NotificationManager
 import android.os.Build
 import kotlin.test.Test
@@ -41,7 +42,25 @@ class AndroidLyricNotificationTest {
             }
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
                 // Below 13 posting needs no permission, so the lyric must actually be shown.
-                assertEquals(1, shadowOf(manager).allNotifications.size)
+                val shown = shadowOf(manager).allNotifications.single()
+                assertEquals("First line", shown.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString())
+                assertEquals("Song", shown.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString())
+
+                // Between lines the title stands in as the headline; the text under it must not
+                // repeat it.
+                AndroidLyricNotification.updateLyric(
+                    title = "Song",
+                    artist = "Artist",
+                    currentLyric = null,
+                    nextLyric = null,
+                    artworkUri = null,
+                    isPlaying = true,
+                    positionMs = 2_000L,
+                    durationMs = 180_000L,
+                )
+                val betweenLines = shadowOf(manager).allNotifications.single()
+                assertEquals("Song", betweenLines.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString())
+                assertEquals("Artist", betweenLines.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString())
             }
         } finally {
             AndroidLyricNotification.setEnabled(false)
