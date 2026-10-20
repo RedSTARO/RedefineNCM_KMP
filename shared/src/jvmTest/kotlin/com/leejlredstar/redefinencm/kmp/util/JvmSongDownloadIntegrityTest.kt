@@ -6,12 +6,27 @@ import kotlinx.coroutines.test.runTest
 import java.io.File
 import java.net.InetSocketAddress
 import java.nio.file.Files
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
+import com.leejlredstar.redefinencm.kmp.i18n.LanguageSetting
+import com.leejlredstar.redefinencm.kmp.i18n.strings
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class JvmSongDownloadIntegrityTest {
+    @BeforeTest
+    fun showChinese() {
+        I18n.apply(LanguageSetting.ZH)
+    }
+
+    @AfterTest
+    fun followTheSystemAgain() {
+        I18n.apply(LanguageSetting.SYSTEM)
+    }
+
     private suspend fun response(
         status: Int = 200,
         declared: Long,
@@ -54,9 +69,14 @@ class JvmSongDownloadIntegrityTest {
         for (status in listOf(200, 204, 206)) {
             response(status, declared = -1, bytes = byteArrayOf()) { request, dir ->
                 var published = false
-                assertTrue(runCatching {
+                val failure = runCatching {
                     downloadSongToDirectory(request, dir, { _, _ -> }, { published = true; true })
-                }.isFailure)
+                }.exceptionOrNull()
+                // A reason, not a sentence that already says "download failed": the page adds that.
+                assertEquals(
+                    if (status == 200) strings.downloadEmptyNotSaved else strings.httpStatus(status),
+                    failure?.message,
+                )
                 assertFalse(published)
                 assertTrue(dir.listFiles().orEmpty().isEmpty())
             }

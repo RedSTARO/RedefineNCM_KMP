@@ -969,7 +969,8 @@
 
     <!-- util/IosBackgroundDownloadCoordinator.kt -->
     <string name="downloadFileNameInvalid">ダウンロードのファイル名が無効です</string>
-    <string name="downloadHttpFailed">ダウンロードに失敗しました：HTTP {statusCode}</string>
+    <string name="httpStatus">HTTP {statusCode}</string>
+    <string name="downloadResponseInvalid">サーバーの応答が無効です</string>
     <string name="backgroundDownloadNoFileName">バックグラウンドダウンロードに有効なファイル名がありません</string>
     <string name="backgroundDownloadMoveFailed">バックグラウンドダウンロードの一時ファイルを移動できません</string>
     <string name="backgroundDownloadSaveFailed">バックグラウンドダウンロードのファイルを保存できません</string>

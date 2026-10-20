@@ -56,7 +56,7 @@ internal suspend fun downloadSongToDirectory(
             if (connection is HttpURLConnection) {
                 // No range was requested, so a partial/status-only answer is not a full song.
                 check(connection.responseCode == HttpURLConnection.HTTP_OK) {
-                    strings.downloadHttpFailed(connection.responseCode)
+                    strings.httpStatus(connection.responseCode)
                 }
             }
             val authoritativeBytes = connection.contentLengthLong.takeIf { it >= 0L }

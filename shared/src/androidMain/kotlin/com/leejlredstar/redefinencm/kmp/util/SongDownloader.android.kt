@@ -131,8 +131,9 @@ private suspend fun downloadToPartialFile(
             }
             if (retryReason != null) {
                 resetPartialDownload(partialFile)
-                check(!retriedWithoutRange) {
-                    "$retryReason; mismatch remained after one retry without Range"
+                if (retriedWithoutRange) {
+                    System.err.println("Download stopped: $retryReason; mismatch remained after one retry without Range")
+                    error(strings.downloadResponseInvalid)
                 }
                 retriedWithoutRange = true
                 continue
@@ -149,7 +150,17 @@ private suspend fun downloadToPartialFile(
                         append = false,
                     )
                 }
-                is ResumableDownloadDecision.Reject -> error(decision.reason)
+                is ResumableDownloadDecision.Reject -> {
+                    // The reason is for the log; the screen says what went wrong in its language.
+                    System.err.println("Download rejected: ${decision.reason}")
+                    error(
+                        when {
+                            responseCode != 200 && responseCode != 206 -> strings.httpStatus(responseCode)
+                            responseCode == 200 -> strings.downloadEmptyNotSaved
+                            else -> strings.downloadResponseInvalid
+                        },
+                    )
+                }
                 is ResumableDownloadDecision.RetryWithoutRange -> error("Unreachable retry decision")
             }
 

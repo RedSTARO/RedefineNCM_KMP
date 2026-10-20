@@ -201,7 +201,7 @@ internal object IosBackgroundDownloadCoordinator {
         val statusCode = (task.response as? NSHTTPURLResponse)?.statusCode
         if (statusCode != null && statusCode != 200L) {
             return IosDownloadOutcome.Failure(
-                IllegalStateException(strings.downloadHttpFailed(statusCode)),
+                IllegalStateException(strings.httpStatus(statusCode)),
             )
         }
         val fileName = request?.fileName ?: task.taskDescription

@@ -15,11 +15,11 @@ internal fun webStorageMessage(raw: String): String {
         code == "invalid-lyric-names" -> strings.webLyricNamesInvalid
         code == "invalid-artwork" -> strings.webArtworkInvalid
         code == "download-needs-opfs" -> strings.webDownloadNeedsOpfs
-        code.startsWith("http:") -> strings.downloadHttpFailed(code.removePrefix("http:"))
+        code.startsWith("http:") -> strings.httpStatus(code.removePrefix("http:"))
         code == "download-cancelled" -> strings.downloadCancelled
         code == "download-empty" -> strings.downloadEmptyNotSaved
         code.startsWith("download-incomplete:") -> code.removePrefix("download-incomplete:").split(':').let {
-            if (it.size == 2) strings.downloadIncomplete(it[0], it[1]) else strings.downloadFailed
+            if (it.size == 2) strings.downloadIncomplete(it[0], it[1]) else strings.downloadResponseInvalid
         }
         code == "invalid-download-uri" -> strings.webDownloadUriInvalid
         code == "invalid-file-name" -> strings.downloadFileNameInvalid

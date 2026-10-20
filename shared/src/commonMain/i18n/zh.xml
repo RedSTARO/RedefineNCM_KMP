@@ -969,7 +969,8 @@
 
     <!-- util/IosBackgroundDownloadCoordinator.kt -->
     <string name="downloadFileNameInvalid">下载文件名无效</string>
-    <string name="downloadHttpFailed">下载失败：HTTP {statusCode}</string>
+    <string name="httpStatus">HTTP {statusCode}</string>
+    <string name="downloadResponseInvalid">服务器返回的内容无效</string>
     <string name="backgroundDownloadNoFileName">后台下载任务没有有效的文件名</string>
     <string name="backgroundDownloadMoveFailed">无法移动后台下载的临时文件</string>
     <string name="backgroundDownloadSaveFailed">无法保存后台下载的文件</string>

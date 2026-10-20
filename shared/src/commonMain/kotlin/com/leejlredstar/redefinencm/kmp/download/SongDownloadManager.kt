@@ -1049,7 +1049,9 @@ class SongDownloadManager(
                 } else {
                     it.copy(
                         status = DownloadTaskStatus.Failed,
-                        errorMessage = t.message?.takeIf(String::isNotBlank) ?: strings.downloadFailed,
+                        // Only a reason: the page puts "Download failed" before it, and shows
+                        // that alone when there is none.
+                        errorMessage = t.message?.takeIf(String::isNotBlank),
                     )
                 }
             }
