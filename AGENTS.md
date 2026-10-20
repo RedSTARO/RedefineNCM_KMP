@@ -1206,7 +1206,9 @@ Applies to all platforms, and the original Android repo is kept aligned (goal #3
 
 Prereqs: JDK 17, Android SDK (compileSdk 36 / build-tools / minSdk 24), Xcode 16+ (iOS,
 macOS only), IntelliJ IDEA / Android Studio with the KMP plugin. Web browser tests require a
-locally available Chrome/Chromium-compatible headless browser.
+locally available Chrome/Chromium-compatible headless browser. Edge works as `CHROME_BIN`:
+`shared/karma.config.d/edge-headless.js` stops msedge.exe relaunching itself, which made Karma
+report a failed start, retry, and run the suite in several tabs over the same OPFS at once.
 
 ```sh
 # First clone only: fetch the AMLL renderer submodule
