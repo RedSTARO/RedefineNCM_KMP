@@ -156,20 +156,29 @@ class WebPlatformPlayer(
                 _state.value = PlayerState.PAUSED
                 updateWebMediaSessionPlaybackState("paused")
             }
+            publishPlayingIfResumed()
         }
         listenToAudio("playing") {
-            if (!eventBelongsToCurrentMedia() || !playRequested) return@listenToAudio
-            _isPlaying.value = true
-            _state.value = PlayerState.PLAYING
-            syncPositionFromAudio()
-            startPositionSync()
-            updateWebMediaSessionPlaybackState("playing")
-            publishMediaSessionPosition(force = true)
+            if (!eventBelongsToCurrentMedia() || audio.paused) return@listenToAudio
+            // Playing without a request here: the browser resumed it after an interruption it
+            // made itself (a call, another app's audio). The player follows what is heard.
+            playRequested = true
+            reopenedAfterNetworkError = false
+            publishPlayingFromAudio()
         }
+        // Only 'waiting' means the buffer ran out. 'stalled' says no bytes arrived for a few
+        // seconds while playback may go on from the buffer, and no 'playing' follows it: treating
+        // it as buffering showed a paused player over music still playing.
         listenToAudio("waiting") { publishBufferingIfRequested() }
-        listenToAudio("stalled") { publishBufferingIfRequested() }
         listenToAudio("pause") {
             if (released || !eventBelongsToCurrentMedia()) return@listenToAudio
+            if (playRequested && audio.paused && !audio.ended) {
+                // The browser paused on its own (another app took the audio, a call, a route
+                // change). Followed as a pause; otherwise the player still counted as playing, so
+                // system Play did nothing and the first in-app tap only paused it.
+                pause()
+                return@listenToAudio
+            }
             stopPositionSync()
             syncPositionFromAudio()
             _isPlaying.value = false
@@ -180,15 +189,36 @@ class WebPlatformPlayer(
             publishMediaSessionPosition(force = true)
         }
         listenToAudio("timeupdate") {
-            if (eventBelongsToCurrentMedia()) syncPositionFromAudio()
+            if (!eventBelongsToCurrentMedia()) return@listenToAudio
+            syncPositionFromAudio()
+            publishPlayingIfResumed()
         }
         listenToAudio("ended") {
             if (eventBelongsToCurrentMedia()) handleNaturalEnd()
         }
         listenToAudio("error") {
-            if (!released && eventBelongsToCurrentMedia()) publishPlaybackError()
+            if (released || !eventBelongsToCurrentMedia()) return@listenToAudio
+            val media = queueModel.currentItem
+            // A connection lost mid-song: open the track again where it stopped, with a fresh
+            // link, once. Failing again before it plays stops in ERROR, where play() reopens it.
+            if (media != null && playRequested && audio.error?.code?.toInt() == MEDIA_ERR_NETWORK &&
+                !reopenedAfterNetworkError
+            ) {
+                reopenedAfterNetworkError = true
+                syncPositionFromAudio()
+                val position = _position.value.coerceAtLeast(0L)
+                val generation = invalidatePlayback(clearSource = true)
+                playRequested = true
+                _state.value = PlayerState.BUFFERING
+                resolveAndLoad(media, generation, position)
+                return@listenToAudio
+            }
+            publishPlaybackError()
         }
     }
+
+    /** Set by the one automatic reopen after a network error, cleared when the track plays again. */
+    private var reopenedAfterNetworkError = false
 
     private fun listenToAudio(type: String, listener: (Event) -> Unit) {
         audio.addEventListener(type, listener)
@@ -205,6 +235,24 @@ class WebPlatformPlayer(
 
     private fun eventBelongsToCurrentMedia(): Boolean =
         loadedMediaId != null && loadedMediaId == queueModel.currentItem?.id
+
+    private fun publishPlayingFromAudio() {
+        _isPlaying.value = true
+        _state.value = PlayerState.PLAYING
+        syncPositionFromAudio()
+        startPositionSync()
+        updateWebMediaSessionPlaybackState("playing")
+        publishMediaSessionPosition(force = true)
+    }
+
+    /** A 'playing' event that never came after buffering: the element is plainly playing again. */
+    private fun publishPlayingIfResumed() {
+        if (_state.value == PlayerState.BUFFERING && playRequested && !audio.paused &&
+            audio.readyState >= HAVE_FUTURE_DATA
+        ) {
+            publishPlayingFromAudio()
+        }
+    }
 
     private fun publishBufferingIfRequested() {
         if (!eventBelongsToCurrentMedia() || !playRequested) return
@@ -459,9 +507,18 @@ class WebPlatformPlayer(
             }
         }
 
+        // A source that failed is not played again: the link may have expired while paused, or
+        // the connection dropped. A fresh one is resolved from where it stopped.
+        val reuse = webCanReuseLoadedSource(
+            loadedMediaId = loadedMediaId,
+            currentMediaId = media.id,
+            hasSource = audio.src.isNotBlank(),
+            elementFailed = audio.error != null,
+            state = _state.value,
+        )
         playRequested = true
         _state.value = PlayerState.BUFFERING
-        if (loadedMediaId == media.id && audio.src.isNotBlank()) {
+        if (reuse) {
             requestAudioPlay(playbackGeneration, media)
         } else {
             val generation = invalidatePlayback(clearSource = true)
@@ -1047,3 +1104,22 @@ private external fun updateWebMediaSessionPosition(
     }""",
 )
 private external fun clearWebMediaSession()
+
+/** HTMLMediaElement's error code for a network failure while fetching the media. */
+private const val MEDIA_ERR_NETWORK = 2
+
+/** HTMLMediaElement readyState: enough data to play on for a while. */
+private const val HAVE_FUTURE_DATA = 3
+
+/**
+ * Whether play() may start the element's current source again instead of resolving a new link:
+ * only one that belongs to this track and has not failed. A failed source stays failed, and an
+ * expired link answers the same failure each time.
+ */
+internal fun webCanReuseLoadedSource(
+    loadedMediaId: String?,
+    currentMediaId: String,
+    hasSource: Boolean,
+    elementFailed: Boolean,
+    state: PlayerState,
+): Boolean = loadedMediaId == currentMediaId && hasSource && !elementFailed && state != PlayerState.ERROR
