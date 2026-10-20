@@ -133,9 +133,11 @@ class ExoPlayerPlatformPlayer(
         }
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-            // Another app took audio focus for good, or the headphones came out: the app pauses,
-            // and a blend under way stops with it rather than leaving the other player sounding.
-            if (deck === active && !playWhenReady && stopsForAudioRoute(reason)) {
+            // Another app took audio focus for good, the headphones came out, or the session (the
+            // notification, the lock screen, a headset) paused this player directly during a
+            // blend: the app pauses, and the blend stops rather than leave its other player
+            // sounding.
+            if (deck === active && !playWhenReady && pausesWithApp(reason, blendRunning = blend != null)) {
                 pause()
                 return
             }
@@ -904,10 +906,17 @@ private val MusicAudioAttributes: AudioAttributes = AudioAttributes.Builder()
     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
     .build()
 
-/** Why a player stopped that the whole app follows: focus lost for good, or the audio route gone. */
-internal fun stopsForAudioRoute(reason: Int): Boolean =
-    reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS ||
-        reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY
+/**
+ * Whether the active player stopped in a way the whole app must follow: focus lost for good, the
+ * audio route gone, or a pause that reached the player without going through the app while a
+ * blend has a second player sounding. The app's own pause ends the blend before it pauses.
+ */
+internal fun pausesWithApp(reason: Int, blendRunning: Boolean): Boolean = when (reason) {
+    Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS,
+    Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY -> true
+    Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST -> blendRunning
+    else -> false
+}
 
 /**
  * The idle branch of Media3's play-button handling. A track whose stream could not be resolved

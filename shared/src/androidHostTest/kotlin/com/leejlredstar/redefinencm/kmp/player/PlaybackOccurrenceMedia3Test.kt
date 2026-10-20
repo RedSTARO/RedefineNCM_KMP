@@ -79,6 +79,16 @@ class PlaybackOccurrenceMedia3Test {
         assertFalse(needsPrepareBeforePlay(Player.STATE_ENDED, mediaItemCount = 3))
     }
 
+    /** A pause the app did not make must not leave a blend's second player sounding. */
+    @Test
+    fun theAppFollowsPausesItDidNotMakeOnlyWhenTheyWouldLeaveSoundBehind() {
+        assertTrue(pausesWithApp(Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS, blendRunning = false))
+        assertTrue(pausesWithApp(Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY, blendRunning = false))
+        assertTrue(pausesWithApp(Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST, blendRunning = true))
+        assertFalse(pausesWithApp(Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST, blendRunning = false))
+        assertFalse(pausesWithApp(Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM, blendRunning = true))
+    }
+
     @Test
     fun anEmptyTimelineNeverStartsAnOccurrence() {
         assertFalse(shouldAdvanceMedia3PlaybackOccurrence(
