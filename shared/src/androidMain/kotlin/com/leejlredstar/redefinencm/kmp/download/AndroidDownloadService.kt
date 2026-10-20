@@ -37,6 +37,9 @@ class AndroidDownloadService : Service() {
 
     private var isForeground = false
     private var hasSeenTasks = false
+
+    /** The tasks this run of the service has worked on; see [tasksOfRun]. */
+    private val runTaskIds = mutableSetOf<Long>()
     private var emptyStopJob: Job? = null
 
     override fun onCreate() {
@@ -69,7 +72,7 @@ class AndroidDownloadService : Service() {
         serviceScope.launch {
             KoinPlatform.getKoin().get<PlatformSettings>().awaitLoaded()
             downloadManager.awaitRestored()
-            promoteToForeground(analyzeDownloadTasks(downloadManager.tasks.value))
+            promoteToForeground(analyzeDownloadTasks(tasksOfRun(downloadManager.tasks.value, runTaskIds)))
             when (intent?.action) {
                 ACTION_PAUSE_ALL -> downloadManager.pauseAll()
                 ACTION_RESUME_ALL -> downloadManager.resumeAll()
@@ -105,7 +108,7 @@ class AndroidDownloadService : Service() {
         if (snapshot.hasDestructiveOperations) {
             if (tasks.isNotEmpty()) hasSeenTasks = true
             emptyStopJob?.cancel()
-            promoteToForeground(analyzeDownloadTasks(tasks))
+            promoteToForeground(analyzeDownloadTasks(tasksOfRun(tasks, runTaskIds)))
             return
         }
         if (tasks.isEmpty()) {
@@ -119,7 +122,7 @@ class AndroidDownloadService : Service() {
 
         hasSeenTasks = true
         emptyStopJob?.cancel()
-        val statistics = analyzeDownloadTasks(tasks)
+        val statistics = analyzeDownloadTasks(tasksOfRun(tasks, runTaskIds))
         if (statistics.firstActiveTask != null) {
             promoteToForeground(statistics)
         } else {
@@ -131,7 +134,7 @@ class AndroidDownloadService : Service() {
         observedTasks: List<SongDownloadTask>,
         removeNotification: Boolean,
     ) {
-        val statistics = analyzeDownloadTasks(observedTasks)
+        val statistics = analyzeDownloadTasks(tasksOfRun(observedTasks, runTaskIds))
         while (true) {
             val persisted = downloadManager.flushPersistentDownloadQueue()
 
@@ -153,7 +156,10 @@ class AndroidDownloadService : Service() {
 
         if (statistics.firstActiveTask != null) return
 
-        if (removeNotification) {
+        // Nothing finished or failed in this run: the user cancelled it, and a "finished"
+        // notification would only contradict that.
+        val reportable = statistics.summary.completed + statistics.summary.failed + statistics.summary.paused
+        if (removeNotification || reportable == 0) {
             removeNotificationAndStop()
         } else {
             postRegularNotification(statistics)

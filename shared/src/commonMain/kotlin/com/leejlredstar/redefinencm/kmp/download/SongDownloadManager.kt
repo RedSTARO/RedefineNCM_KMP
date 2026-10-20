@@ -124,6 +124,8 @@ data class DownloadQueueSummary(
     val failed: Int = 0,
     val deleted: Int = 0,
     val paused: Int = 0,
+    /** Cancelled by the user: not a failure, and never reported as one. */
+    val cancelled: Int = 0,
 )
 
 internal data class DownloadTaskStatistics(
@@ -137,6 +139,7 @@ internal fun analyzeDownloadTasks(tasks: List<SongDownloadTask>): DownloadTaskSt
     var failed = 0
     var deleted = 0
     var paused = 0
+    var cancelled = 0
     var firstActiveTask: SongDownloadTask? = null
     tasks.forEach { task ->
         if (task.isActive) {
@@ -145,9 +148,8 @@ internal fun analyzeDownloadTasks(tasks: List<SongDownloadTask>): DownloadTaskSt
         }
         when (task.status) {
             DownloadTaskStatus.Completed -> completed += 1
-            DownloadTaskStatus.Failed,
-            DownloadTaskStatus.Cancelled,
-            -> failed += 1
+            DownloadTaskStatus.Failed -> failed += 1
+            DownloadTaskStatus.Cancelled -> cancelled += 1
             DownloadTaskStatus.Deleted -> deleted += 1
             DownloadTaskStatus.Paused -> paused += 1
             else -> Unit
@@ -161,9 +163,21 @@ internal fun analyzeDownloadTasks(tasks: List<SongDownloadTask>): DownloadTaskSt
             failed = failed,
             deleted = deleted,
             paused = paused,
+            cancelled = cancelled,
         ),
         firstActiveTask = firstActiveTask,
     )
+}
+
+/**
+ * The tasks one run of a download service reports on: every task that was queued, downloading or
+ * paused while it ran, [seen] so far. Rows the list keeps from earlier runs (yesterday's failure, a
+ * song imported from the folder) are not this run's, and counting them made each batch end with
+ * "N failed".
+ */
+internal fun tasksOfRun(tasks: List<SongDownloadTask>, seen: MutableSet<Long>): List<SongDownloadTask> {
+    tasks.forEach { task -> if (task.isActive || task.status == DownloadTaskStatus.Paused) seen += task.id }
+    return tasks.filter { it.id in seen }
 }
 
 sealed interface LocalLibrarySyncState {
