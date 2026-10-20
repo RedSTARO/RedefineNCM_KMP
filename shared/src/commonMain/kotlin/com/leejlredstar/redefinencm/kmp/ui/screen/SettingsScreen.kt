@@ -418,7 +418,9 @@ fun SettingsScreen(
         consumeSettingsImportResult(result)
     }
 
-    val launchImport = rememberImportFileLauncher { json ->
+    val launchImport = rememberImportFileLauncher(
+        onFailed = { settingsMessage = strings.settingsImportReadFailed },
+    ) { json ->
         scope.launch {
             importSettingsBackup(
                 json = json,
@@ -434,7 +436,7 @@ fun SettingsScreen(
             )
         }
     }
-    val launchExport = rememberExportFileLauncher()
+    val launchExport = rememberExportFileLauncher(onFailed = { settingsMessage = strings.settingsExportFailed })
     val settingsPalette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
 
     // The page title is a LargeFlexibleTopAppBar rather than a hand-rolled hero Box. The bar

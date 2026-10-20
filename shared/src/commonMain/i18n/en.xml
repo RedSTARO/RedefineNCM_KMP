@@ -1166,6 +1166,8 @@
     <string name="localPlaylistsReadFailedHint">The stored data has been kept. Local playlists can't be changed until they can be read. Try again.</string>
     <string name="localFavoriteSaveFailed">Couldn't save the local favourite for “{title}”. Try again.</string>
     <string name="settingsExportFailed">Couldn't export a complete backup. Check the local playlists and storage, then try again.</string>
+    <string name="settingsImportReadFailed">Couldn't read the selected file. Nothing was changed.</string>
+    <string name="settingsFileReplaceConfirm">{fileName} already exists. Replace it?</string>
     <string name="localPlaylistsInvalidData">The playlist data is invalid. No changes were saved.</string>
     <string name="browserDataReadFailed">Couldn't read local data: browser storage is unavailable or its data version is incompatible. Stored data hasn't been changed.</string>
 </resources>

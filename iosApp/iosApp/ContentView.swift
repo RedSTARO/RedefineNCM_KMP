@@ -7,6 +7,8 @@ private extension Notification.Name {
     static let requestSettingsImport = Notification.Name("RedefineNCMRequestSettingsImport")
     static let settingsImported = Notification.Name("RedefineNCMSettingsImported")
     static let requestSettingsExport = Notification.Name("RedefineNCMRequestSettingsExport")
+    static let settingsImportFailed = Notification.Name("RedefineNCMSettingsImportFailed")
+    static let settingsExportFailed = Notification.Name("RedefineNCMSettingsExportFailed")
 }
 
 private struct SettingsBackupDocument: FileDocument {
@@ -59,10 +61,24 @@ struct ContentView: View {
                 allowedContentTypes: [.json],
                 allowsMultipleSelection: false
             ) { result in
-                guard case .success(let urls) = result, let url = urls.first else { return }
+                let urls: [URL]
+                switch result {
+                case .success(let chosen):
+                    urls = chosen
+                case .failure(let error):
+                    // Cancelling is not a failure; anything else is reported, not swallowed.
+                    if (error as? CocoaError)?.code != .userCancelled {
+                        NotificationCenter.default.post(name: .settingsImportFailed, object: nil)
+                    }
+                    return
+                }
+                guard let url = urls.first else { return }
                 let accessing = url.startAccessingSecurityScopedResource()
                 defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-                guard let json = try? String(contentsOf: url, encoding: .utf8) else { return }
+                guard let json = try? String(contentsOf: url, encoding: .utf8) else {
+                    NotificationCenter.default.post(name: .settingsImportFailed, object: nil)
+                    return
+                }
                 NotificationCenter.default.post(
                     name: .settingsImported,
                     object: nil,
@@ -79,6 +95,10 @@ struct ContentView: View {
                 document: exportDocument,
                 contentType: .json,
                 defaultFilename: "RedefineNCM_KMP_settings"
-            ) { _ in }
+            ) { result in
+                if case .failure(let error) = result, (error as? CocoaError)?.code != .userCancelled {
+                    NotificationCenter.default.post(name: .settingsExportFailed, object: nil)
+                }
+            }
     }
 }
