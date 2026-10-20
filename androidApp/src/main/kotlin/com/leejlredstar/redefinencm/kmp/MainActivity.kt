@@ -155,7 +155,11 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             runCatching {
                 get<PlatformSettings>().awaitLoaded()
-                get<SongDownloadManager>().syncWithLocalLibrary()
+                val downloads = get<SongDownloadManager>()
+                downloads.syncWithLocalLibrary()
+                // Downloads queued while the app was in the background could not start the
+                // foreground service then; in front again, they can.
+                downloads.resumeQueuedWork()
             }
         }
     }

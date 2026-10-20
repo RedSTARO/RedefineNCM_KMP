@@ -269,8 +269,6 @@
     <string name="downloadQueueRestoreFailed">ダウンロードキューを復元できません</string>
     <string name="downloadQueueSaveFailed">ダウンロードキューを保存できません</string>
     <string name="localLibraryReadFailed">ローカルの音楽ライブラリを読み込めませんでした</string>
-    <string name="downloadServiceStartFailedWithError">バックグラウンドのダウンロードサービスを開始できませんでした：{error}</string>
-    <string name="downloadServiceStartFailed">バックグラウンドのダウンロードサービスを開始できませんでした</string>
     <string name="downloadQueueSaveFailedStopped">ダウンロードキューを保存できなかったため、残りのダウンロードを停止しました</string>
     <string name="downloadQualitySaveFailed">ダウンロードの音質を保存できなかったため、ダウンロードを開始しませんでした</string>
     <string name="downloadUrlUnavailable">曲のダウンロードリンクを取得できませんでした</string>

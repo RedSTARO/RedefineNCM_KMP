@@ -269,8 +269,6 @@
     <string name="downloadQueueRestoreFailed">Couldn't restore the download queue</string>
     <string name="downloadQueueSaveFailed">Couldn't save the download queue</string>
     <string name="localLibraryReadFailed">Couldn't read the local music library</string>
-    <string name="downloadServiceStartFailedWithError">Couldn't start the background download service: {error}</string>
-    <string name="downloadServiceStartFailed">Couldn't start the background download service</string>
     <string name="downloadQueueSaveFailedStopped">Couldn't save the download queue, so the remaining downloads were stopped</string>
     <string name="downloadQualitySaveFailed">Couldn't save the audio quality for this download, so it didn't start</string>
     <string name="downloadUrlUnavailable">Couldn't get the song's download link</string>

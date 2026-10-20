@@ -48,10 +48,13 @@ class AndroidDownloadService : Service() {
             combine(
                 downloadManager.tasks,
                 downloadManager.destructiveTaskIdsInProgress,
-            ) { tasks, destructiveTaskIds ->
+                downloadManager.pendingEnqueues,
+            ) { tasks, destructiveTaskIds, pendingEnqueues ->
                 DownloadServiceSnapshot(
                     tasks = tasks,
-                    hasDestructiveOperations = destructiveTaskIds.isNotEmpty(),
+                    // A request still being prepared keeps the service up like a destructive
+                    // operation: it was started for that work and could not start again later.
+                    hasDestructiveOperations = destructiveTaskIds.isNotEmpty() || pendingEnqueues > 0,
                 )
             }.collectLatest { snapshot ->
                 render(snapshot)
@@ -136,7 +139,8 @@ class AndroidDownloadService : Service() {
             // has arrived. Never detach or stop using stale task/destructive-operation state.
             if (
                 downloadManager.tasks.value !== observedTasks ||
-                downloadManager.destructiveTaskIdsInProgress.value.isNotEmpty()
+                downloadManager.destructiveTaskIdsInProgress.value.isNotEmpty() ||
+                downloadManager.pendingEnqueues.value > 0
             ) return
 
             if (persisted) break

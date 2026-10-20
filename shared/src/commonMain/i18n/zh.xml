@@ -269,8 +269,6 @@
     <string name="downloadQueueRestoreFailed">无法恢复下载队列</string>
     <string name="downloadQueueSaveFailed">无法保存下载队列</string>
     <string name="localLibraryReadFailed">无法读取本地音乐库</string>
-    <string name="downloadServiceStartFailedWithError">无法启动后台下载服务：{error}</string>
-    <string name="downloadServiceStartFailed">无法启动后台下载服务</string>
     <string name="downloadQueueSaveFailedStopped">无法保存下载队列，后续下载已停止</string>
     <string name="downloadQualitySaveFailed">无法保存下载音质，下载未启动</string>
     <string name="downloadUrlUnavailable">无法获取歌曲的下载地址</string>

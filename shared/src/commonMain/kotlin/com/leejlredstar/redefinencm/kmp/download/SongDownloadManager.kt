@@ -183,6 +183,15 @@ class SongDownloadManager(
     private val _localLibrarySyncState = MutableStateFlow<LocalLibrarySyncState>(LocalLibrarySyncState.Idle)
 
     val tasks: StateFlow<List<SongDownloadTask>> = _tasks.asStateFlow()
+
+    private val _pendingEnqueues = MutableStateFlow(0)
+
+    /**
+     * Download requests still being prepared (tracks fetched, the library scanned, the queue
+     * saved). Android's download service stays in the foreground for them, having been started at
+     * the tap, so the work is not refused for having started after the user left the app.
+     */
+    val pendingEnqueues: StateFlow<Int> = _pendingEnqueues.asStateFlow()
     val localLibrarySyncState: StateFlow<LocalLibrarySyncState> = _localLibrarySyncState.asStateFlow()
     val summary: StateFlow<DownloadQueueSummary> = _tasks
         .map { tasks -> analyzeDownloadTasks(tasks).summary }
@@ -232,19 +241,48 @@ class SongDownloadManager(
     }
 
     fun enqueuePlaylist(playlistId: Long) {
+        beginEnqueue()
         scope.launch {
-            restoreCompleted.await()
-            val songs = repo.getPlaylistTrackAllOnce(playlistId)?.songs.orEmpty()
-            enqueueResolvedSongs(songs, playlistId)
+            try {
+                restoreCompleted.await()
+                val songs = repo.getPlaylistTrackAllOnce(playlistId)?.songs.orEmpty()
+                enqueueResolvedSongs(songs, playlistId)
+            } finally {
+                _pendingEnqueues.update { it - 1 }
+            }
         }
     }
 
     fun enqueueSongs(songs: List<SongDetailSongs>, playlistId: Long? = null) {
         if (songs.isEmpty()) return
+        beginEnqueue()
         scope.launch {
-            restoreCompleted.await()
-            enqueueResolvedSongs(songs, playlistId)
+            try {
+                restoreCompleted.await()
+                enqueueResolvedSongs(songs, playlistId)
+            } finally {
+                _pendingEnqueues.update { it - 1 }
+            }
         }
+    }
+
+    /**
+     * Starts the platform's download service now, from the tap, while the app is in front.
+     * Android 12+ allows a foreground service to start only briefly after the app is left, and
+     * preparing a large playlist can take longer; started at the end, it was refused and the whole
+     * batch was marked failed.
+     */
+    private fun beginEnqueue() {
+        _pendingEnqueues.update { it + 1 }
+        runCatching { DownloadServiceController.ensureRunning() }
+    }
+
+    /**
+     * Starts queued work the service could not start for: Android refuses it from the background,
+     * and the tasks wait, queued, until the app is in front again.
+     */
+    fun resumeQueuedWork() {
+        if (nextQueuedDownloadTask(_tasks.value, destructiveTaskIds.value) != null) ensureWorker()
     }
 
     private suspend fun enqueueResolvedSongs(songs: List<SongDetailSongs>, playlistId: Long? = null) {
@@ -802,10 +840,10 @@ class SongDownloadManager(
                     DownloadServiceController.ensureRunning()
                 }.exceptionOrNull()
                 if (serviceStartFailure != null) {
-                    failQueuedTasks(
-                        serviceStartFailure.message?.let { strings.downloadServiceStartFailedWithError(it) }
-                            ?: strings.downloadServiceStartFailed,
-                    )
+                    // Android refuses a foreground service started from the background. Failing
+                    // the batch for that lost it; it stays queued and starts when the app is in
+                    // front again (resumeQueuedWork) or at the next launch.
+                    println("The download service could not start; downloads wait: ${serviceStartFailure::class.simpleName}")
                     return@withLock
                 }
                 val job = scope.launch(start = CoroutineStart.LAZY) {
