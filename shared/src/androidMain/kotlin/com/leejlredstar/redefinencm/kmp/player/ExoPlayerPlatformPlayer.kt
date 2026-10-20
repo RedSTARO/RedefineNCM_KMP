@@ -588,7 +588,7 @@ class ExoPlayerPlatformPlayer(
     private fun ensureTransitionLoop() {
         if (transitionJob?.isActive == true) return
         transitionJob = scope.launch {
-            while (isActive && (armedPlan != null || blend != null)) {
+            while (isActive && transitionLoopShouldRun(armedPlan != null, blend != null, active.isPlaying)) {
                 tickTransition()
                 delay(TRANSITION_TICK_MS)
             }
@@ -903,6 +903,15 @@ private val MusicAudioAttributes: AudioAttributes = AudioAttributes.Builder()
     .setUsage(C.USAGE_MEDIA)
     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
     .build()
+
+/**
+ * Whether the transition loop keeps ticking, 50 times a second on the main thread. A blend runs to
+ * its end whatever the play state, so a pause that reached only one player cannot freeze both
+ * mid-fade. A plan that has not started waits for playback instead: a paused or restored queue
+ * kept the main thread waking for nothing, and playing starts the loop again.
+ */
+internal fun transitionLoopShouldRun(hasPlan: Boolean, blending: Boolean, playing: Boolean): Boolean =
+    blending || (hasPlan && playing)
 
 /**
  * Whether the active player stopped in a way the whole app must follow: focus lost for good, the

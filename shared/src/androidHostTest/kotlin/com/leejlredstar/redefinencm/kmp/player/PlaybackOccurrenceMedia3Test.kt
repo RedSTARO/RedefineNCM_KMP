@@ -90,6 +90,14 @@ class PlaybackOccurrenceMedia3Test {
     }
 
     @Test
+    fun aPlanWaitsForPlaybackButABlendRunsToItsEnd() {
+        assertTrue(transitionLoopShouldRun(hasPlan = false, blending = true, playing = false))
+        assertTrue(transitionLoopShouldRun(hasPlan = true, blending = false, playing = true))
+        assertFalse(transitionLoopShouldRun(hasPlan = true, blending = false, playing = false))
+        assertFalse(transitionLoopShouldRun(hasPlan = false, blending = false, playing = true))
+    }
+
+    @Test
     fun anEmptyTimelineNeverStartsAnOccurrence() {
         assertFalse(shouldAdvanceMedia3PlaybackOccurrence(
             Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED, null, "removed-slot",
