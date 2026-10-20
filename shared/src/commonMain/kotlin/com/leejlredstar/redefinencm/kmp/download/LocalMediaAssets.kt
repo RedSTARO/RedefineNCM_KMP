@@ -11,7 +11,7 @@ import com.leejlredstar.redefinencm.kmp.util.LocalLyricFormat
 import com.leejlredstar.redefinencm.kmp.util.LocalMediaAssetSnapshot
 import com.leejlredstar.redefinencm.kmp.util.LocalMediaAssetStorage
 import com.leejlredstar.redefinencm.kmp.util.LocalTextMediaAsset
-import io.ktor.client.request.get
+import io.ktor.client.request.prepareGet
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.HttpHeaders
@@ -102,21 +102,24 @@ class LocalMediaAssets(
         val uri = remoteUri.trim()
         if (uri.isEmpty()) return null
 
-        val response = externalHttpClient.client.get(uri)
-        check(response.status.isSuccess()) {
-            strings.coverDownloadHttpError(response.status.value)
+        // Streamed, not get(): Ktor's get() reads the whole body into memory before it returns,
+        // so the size limit below would only have measured a body already downloaded.
+        val (bytes, contentType) = externalHttpClient.client.prepareGet(uri).execute { response ->
+            check(response.status.isSuccess()) {
+                strings.coverDownloadHttpError(response.status.value)
+            }
+            val declaredLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
+            check(declaredLength == null || declaredLength in 1..MAX_ARTWORK_BYTES) {
+                strings.coverTooLarge(MAX_ARTWORK_BYTES / (1024 * 1024))
+            }
+            response.readArtworkBytesAtMost(MAX_ARTWORK_BYTES.toInt()) to response.headers[HttpHeaders.ContentType]
         }
-        val declaredLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
-        check(declaredLength == null || declaredLength in 1..MAX_ARTWORK_BYTES) {
-            strings.coverTooLarge(MAX_ARTWORK_BYTES / (1024 * 1024))
-        }
-        val bytes = response.readArtworkBytesAtMost(MAX_ARTWORK_BYTES.toInt())
         check(bytes.isNotEmpty()) { strings.coverDownloadEmpty }
         check(bytes.size.toLong() <= MAX_ARTWORK_BYTES) {
             strings.coverTooLarge(MAX_ARTWORK_BYTES / (1024 * 1024))
         }
 
-        val rawContentType = response.headers[HttpHeaders.ContentType]
+        val rawContentType = contentType
             ?.substringBefore(';')
             ?.trim()
             ?.lowercase()
