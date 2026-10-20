@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.util
 
 import com.leejlredstar.redefinencm.kmp.data.local.LocalPlaylist
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
@@ -78,7 +79,10 @@ private suspend fun performImport(
         return SettingsBackupImportResult.SettingsSaveFailed(failure)
     }
     reloadSettings()
-    val playlists = decodeBackupLocalLibrary(json)
+    val playlists = decodeBackupLocalLibrary(json).getOrElse {
+        // The settings are imported; the stored playlists stay exactly as they were.
+        return SettingsBackupImportResult.LibraryFailed(IllegalArgumentException(strings.localPlaylistsInvalidData))
+    }
     if (!playlists.isNullOrEmpty()) {
         try {
             importLibrary(playlists).getOrThrow()

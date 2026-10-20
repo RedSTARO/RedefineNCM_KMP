@@ -207,7 +207,7 @@ class LocalLibraryStoreTest {
             target.setFavorite(neteaseSong, favorite = true).getOrThrow()
             target.importPlaylists(listOf(shared.copy(name = "旧名字", tracks = emptyList()))).getOrThrow()
 
-            target.importPlaylists(decodeBackupLocalLibrary(json)!!).getOrThrow()
+            target.importPlaylists(decodeBackupLocalLibrary(json).getOrThrow()!!).getOrThrow()
 
             val library = target.snapshot()
             assertEquals(listOf("ncm:347230"), library.playlist(shared.id)!!.tracks.map { it.key })
@@ -222,6 +222,24 @@ class LocalLibraryStoreTest {
 
     @Test
     fun aBackupWithoutALibraryCarriesNone() {
-        assertEquals(null, decodeBackupLocalLibrary("""{"server":"http://server/"}"""))
+        assertEquals(null, decodeBackupLocalLibrary("""{"server":"http://server/"}""").getOrThrow())
+        assertEquals(null, decodeBackupLocalLibrary("""{"localLibrary":null}""").getOrThrow())
+    }
+
+    /**
+     * A hand-edited file or one from a newer build must not empty a playlist or turn an unknown
+     * kind into a plain one: its library section is refused as a whole.
+     */
+    @Test
+    fun aLibrarySectionThisBuildCannotReadExactlyIsRefused() {
+        val playlist = """{"id":"p1","name":"Mine","kind":"PLAYLIST","tracks":[]}"""
+        assertEquals(1, decodeBackupLocalLibrary("""{"localLibrary":[$playlist]}""").getOrThrow()!!.size)
+        for (section in listOf(
+            """[{"id":"p1","name":"Mine","kind":"PLAYLIST","tracks":null}]""",
+            """[{"id":"p1","name":"Mine","kind":"SMART","tracks":[]}]""",
+            """[{"id":"p1","name":"Mine","kind":"PLAYLIST","tracks":[],"futureField":1}]""",
+        )) {
+            assertTrue(decodeBackupLocalLibrary("""{"localLibrary":$section}""").isFailure, section)
+        }
     }
 }

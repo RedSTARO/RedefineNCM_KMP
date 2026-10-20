@@ -2,19 +2,27 @@ package com.leejlredstar.redefinencm.kmp.util
 
 import com.leejlredstar.redefinencm.kmp.data.MetadataCache
 import com.leejlredstar.redefinencm.kmp.data.local.LocalLibraryDocument
+import com.leejlredstar.redefinencm.kmp.data.local.LocalLibraryStore
 import com.leejlredstar.redefinencm.kmp.data.auth.normalizeServerAddress
 import com.leejlredstar.redefinencm.kmp.data.local.LocalPlaylist
 import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
 import com.leejlredstar.redefinencm.kmp.i18n.LanguageSetting
+import com.leejlredstar.redefinencm.kmp.getPlatform
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
 import com.leejlredstar.redefinencm.kmp.notification.LyricSurfaceAlignment
+import com.leejlredstar.redefinencm.kmp.notification.OptionalLyricSurface
+import com.leejlredstar.redefinencm.kmp.notification.lyricSurface
 import com.leejlredstar.redefinencm.kmp.transition.DEFAULT_CROSSFADE_SECONDS
 import com.leejlredstar.redefinencm.kmp.transition.SongTransitionMode
 import com.leejlredstar.redefinencm.kmp.transition.normalizeCrossfadeSeconds
 import com.leejlredstar.redefinencm.kmp.ui.theme.ThemeMode
+import com.leejlredstar.redefinencm.kmp.ui.theme.dynamicColorSupported
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.jsonObject
 import io.ktor.http.Url
 import io.ktor.http.URLBuilder
 
@@ -53,24 +61,31 @@ data class SettingsBackupData(
     val downloadQuality: String? = null,
     /** Missing in older files; keep the destination's cache budget in that case. */
     val metadataCacheLimitMiB: Long? = null,
-    val replacePlaylist: Boolean = SettingKeys.REPLACE_PLAYLIST_DEFAULT,
-    val checkUpdate: Boolean = false,
-    val searchPrediction: Boolean = true,
-    val showDownloadStatus: Boolean = SettingKeys.SHOW_DOWNLOAD_STATUS_DEFAULT,
-    val adaptOriginalAndroidLyric: Boolean = false,
-    /** The desktop lyric window's lock; false where there is no such window to lock. */
-    val desktopLyricLocked: Boolean = false,
+    // The switches below are null in a file that does not carry them: an older exporter omitted
+    // values equal to its defaults, and some of those defaults have changed since, so a missing
+    // value says nothing about the user's choice. A switch only one platform has is written only
+    // from that platform. Either way the destination keeps its own value.
+    val replacePlaylist: Boolean? = null,
+    val checkUpdate: Boolean? = null,
+    val searchPrediction: Boolean? = null,
+    val showDownloadStatus: Boolean? = null,
+    /** The extra lyric surface (Android's notification, the desktop window); null elsewhere. */
+    val adaptOriginalAndroidLyric: Boolean? = null,
+    /** The desktop lyric window's lock; null from a platform without that window. */
+    val desktopLyricLocked: Boolean? = null,
     /** Null keeps the current choice when importing a backup made before the window had one. */
     val desktopLyricAlignment: String? = null,
-    val desktopCloseToTray: Boolean = SettingKeys.DESKTOP_CLOSE_TO_TRAY_DEFAULT,
-    val showTranslatedLyric: Boolean = SettingKeys.SHOW_TRANSLATED_LYRIC_DEFAULT,
-    val showRomanLyric: Boolean = false,
+    /** Desktop only; null from any other platform. */
+    val desktopCloseToTray: Boolean? = null,
+    val showTranslatedLyric: Boolean? = null,
+    val showRomanLyric: Boolean? = null,
     /** Null keeps the current choice when importing a backup made before lyric-source support. */
     val lyricSourceMode: String? = null,
-    val useDynamicCover: Boolean = false,
+    val useDynamicCover: Boolean? = null,
     /** Null keeps the current choice when importing a backup made before the theme setting. */
     val themeMode: String? = null,
-    val dynamicColor: Boolean = false,
+    /** Wallpaper colours; null from a platform that has none. */
+    val dynamicColor: Boolean? = null,
     /** Null keeps the current choice when importing a backup made before song transitions. */
     val songTransitionMode: String? = null,
     val songTransitionCrossfadeSeconds: Long? = null,
@@ -92,13 +107,32 @@ fun encodeSettingsBackup(
     getBoolean = settings::getBoolean,
     getLong = settings::getLong,
     localLibrary = localLibrary,
+    platform = BackupPlatform.current(),
 )
+
+/** Which platform-only switches the exporting platform has, so it exports only those. */
+internal data class BackupPlatform(
+    val desktopWindows: Boolean,
+    val extraLyricSurface: Boolean,
+    val dynamicColor: Boolean,
+) {
+    companion object {
+        val Everything = BackupPlatform(desktopWindows = true, extraLyricSurface = true, dynamicColor = true)
+
+        fun current() = BackupPlatform(
+            desktopWindows = getPlatform().isDesktop,
+            extraLyricSurface = lyricSurface is OptionalLyricSurface,
+            dynamicColor = dynamicColorSupported,
+        )
+    }
+}
 
 internal fun encodeSettingsBackup(
     getString: (key: String, default: String) -> String,
     getBoolean: (key: String, default: Boolean) -> Boolean,
     getLong: (key: String, default: Long) -> Long = { _, default -> default },
     localLibrary: LocalLibraryDocument? = null,
+    platform: BackupPlatform = BackupPlatform.Everything,
 ): String {
     val wifiQuality = getString(
         SettingKeys.ONLINE_PLAY_QUALITY_WIFI,
@@ -142,15 +176,17 @@ internal fun encodeSettingsBackup(
             checkUpdate = getBoolean(SettingKeys.CHECK_UPDATE, false),
             searchPrediction = getBoolean(SettingKeys.SEARCH_PREDICTION, true),
             showDownloadStatus = getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, SettingKeys.SHOW_DOWNLOAD_STATUS_DEFAULT),
-            adaptOriginalAndroidLyric = getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false),
-            desktopLyricLocked = getBoolean(SettingKeys.DESKTOP_LYRIC_LOCKED, false),
+            adaptOriginalAndroidLyric = getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false)
+                .takeIf { platform.extraLyricSurface },
+            desktopLyricLocked = getBoolean(SettingKeys.DESKTOP_LYRIC_LOCKED, false)
+                .takeIf { platform.desktopWindows },
             desktopLyricAlignment = LyricSurfaceAlignment.fromWireValueOrDefault(
                 getString(SettingKeys.DESKTOP_LYRIC_ALIGNMENT, ""),
             ).wireValue,
             desktopCloseToTray = getBoolean(
                 SettingKeys.DESKTOP_CLOSE_TO_TRAY,
                 SettingKeys.DESKTOP_CLOSE_TO_TRAY_DEFAULT,
-            ),
+            ).takeIf { platform.desktopWindows },
             showTranslatedLyric = getBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, SettingKeys.SHOW_TRANSLATED_LYRIC_DEFAULT),
             showRomanLyric = getBoolean(SettingKeys.SHOW_ROMAN_LYRIC, false),
             lyricSourceMode = LyricSourceMode.fromStoredWireValue(
@@ -158,7 +194,7 @@ internal fun encodeSettingsBackup(
             ).wireValue,
             useDynamicCover = getBoolean(SettingKeys.USE_DYNAMIC_COVER, false),
             themeMode = ThemeMode.fromWireValue(getString(SettingKeys.THEME_MODE, "")).wireValue,
-            dynamicColor = getBoolean(SettingKeys.DYNAMIC_COLOR, false),
+            dynamicColor = getBoolean(SettingKeys.DYNAMIC_COLOR, false).takeIf { platform.dynamicColor },
             songTransitionMode = SongTransitionMode.fromWireValue(
                 getString(SettingKeys.SONG_TRANSITION_MODE, SongTransitionMode.DEFAULT.wireValue),
             ).wireValue,
@@ -182,11 +218,20 @@ private fun serverAddressForBackup(address: String): String {
 }
 
 /**
- * The local playlists a backup carries, or null when it carries none or cannot be read. Importing
- * them is the local library store's job: it replaces playlists with the same id and keeps the rest.
+ * The local playlists a backup carries: null when it carries none, a failure when its library
+ * section is not one this build reads exactly. The section is decoded as strictly as the stored
+ * library, so a hand-edited or newer file cannot empty a playlist (tracks: null) or turn an
+ * unknown kind into a plain playlist by being imported. Importing them is the local library
+ * store's job: it replaces playlists with the same id and keeps the rest.
  */
-fun decodeBackupLocalLibrary(json: String): List<LocalPlaylist>? =
-    runCatching { backupJson.decodeFromString<SettingsBackupData>(json).localLibrary }.getOrNull()
+fun decodeBackupLocalLibrary(json: String): Result<List<LocalPlaylist>?> = runCatching {
+    val section = backupJson.parseToJsonElement(json).jsonObject["localLibrary"]
+    if (section == null || section is JsonNull) {
+        null
+    } else {
+        LocalLibraryStore.LibraryJson.decodeFromJsonElement(ListSerializer(LocalPlaylist.serializer()), section)
+    }
+}
 
 /** Parses [json] and writes values into [settings]. Returns false on any parse error. */
 fun applySettingsBackup(json: String, settings: PlatformSettings): Boolean =
@@ -232,20 +277,20 @@ internal fun applySettingsBackup(
     data.onlinePlayQuality?.let { setString(SettingKeys.ONLINE_PLAY_QUALITY, it) }
     data.downloadQuality?.let { setString(SettingKeys.DOWNLOAD_QUALITY, it) }
     data.metadataCacheLimitMiB?.let { setLong(SettingKeys.METADATA_CACHE_LIMIT_MIB, it) }
-    setBoolean(SettingKeys.REPLACE_PLAYLIST, data.replacePlaylist)
-    setBoolean(SettingKeys.CHECK_UPDATE, data.checkUpdate)
-    setBoolean(SettingKeys.SEARCH_PREDICTION, data.searchPrediction)
-    setBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, data.showDownloadStatus)
-    setBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, data.adaptOriginalAndroidLyric)
-    setBoolean(SettingKeys.DESKTOP_LYRIC_LOCKED, data.desktopLyricLocked)
+    data.replacePlaylist?.let { setBoolean(SettingKeys.REPLACE_PLAYLIST, it) }
+    data.checkUpdate?.let { setBoolean(SettingKeys.CHECK_UPDATE, it) }
+    data.searchPrediction?.let { setBoolean(SettingKeys.SEARCH_PREDICTION, it) }
+    data.showDownloadStatus?.let { setBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, it) }
+    data.adaptOriginalAndroidLyric?.let { setBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, it) }
+    data.desktopLyricLocked?.let { setBoolean(SettingKeys.DESKTOP_LYRIC_LOCKED, it) }
     desktopLyricAlignment?.let { setString(SettingKeys.DESKTOP_LYRIC_ALIGNMENT, it.wireValue) }
-    setBoolean(SettingKeys.DESKTOP_CLOSE_TO_TRAY, data.desktopCloseToTray)
-    setBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, data.showTranslatedLyric)
-    setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, data.showRomanLyric)
+    data.desktopCloseToTray?.let { setBoolean(SettingKeys.DESKTOP_CLOSE_TO_TRAY, it) }
+    data.showTranslatedLyric?.let { setBoolean(SettingKeys.SHOW_TRANSLATED_LYRIC, it) }
+    data.showRomanLyric?.let { setBoolean(SettingKeys.SHOW_ROMAN_LYRIC, it) }
     lyricSourceMode?.let { setString(SettingKeys.LYRIC_SOURCE_MODE, it.wireValue) }
-    setBoolean(SettingKeys.USE_DYNAMIC_COVER, data.useDynamicCover)
+    data.useDynamicCover?.let { setBoolean(SettingKeys.USE_DYNAMIC_COVER, it) }
     data.themeMode?.let { setString(SettingKeys.THEME_MODE, ThemeMode.fromWireValue(it).wireValue) }
-    setBoolean(SettingKeys.DYNAMIC_COLOR, data.dynamicColor)
+    data.dynamicColor?.let { setBoolean(SettingKeys.DYNAMIC_COLOR, it) }
     songTransitionMode?.let { setString(SettingKeys.SONG_TRANSITION_MODE, it.wireValue) }
     data.songTransitionCrossfadeSeconds?.let {
         setLong(SettingKeys.SONG_TRANSITION_CROSSFADE_SECONDS, normalizeCrossfadeSeconds(it))

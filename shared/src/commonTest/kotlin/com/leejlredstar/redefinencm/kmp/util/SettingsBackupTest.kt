@@ -318,7 +318,8 @@ class SettingsBackupTest {
                 setBoolean = { key, value -> legacyBooleans[key] = value },
             ),
         )
-        assertFalse(legacyBooleans.getValue(SettingKeys.DESKTOP_LYRIC_LOCKED))
+        // A file without the lock leaves the destination's lock alone.
+        assertFalse(legacyBooleans.containsKey(SettingKeys.DESKTOP_LYRIC_LOCKED))
         assertFalse(legacyStrings.containsKey(SettingKeys.DESKTOP_LYRIC_ALIGNMENT))
 
         val exported = encodeSettingsBackup(
@@ -353,6 +354,39 @@ class SettingsBackupTest {
         )
     }
 
+    /**
+     * Older exporters omitted switches equal to their defaults, and some defaults changed since:
+     * a missing switch says nothing, so the destination keeps its own. New exports write every
+     * switch the exporting platform has, defaults included, and only those.
+     */
+    @Test
+    fun switchesAreWrittenOnlyWhenTheFileCarriesThem() {
+        val writes = mutableMapOf<String, Boolean>()
+        assertTrue(applySettingsBackup(json = "{}", setString = { _, _ -> }, setBoolean = { key, value -> writes[key] = value }))
+        assertTrue(writes.isEmpty(), writes.toString())
+
+        val atDefaults = encodeSettingsBackup(getString = { _, default -> default }, getBoolean = { _, default -> default })
+        assertTrue(atDefaults.contains("\"replacePlaylist\":${SettingKeys.REPLACE_PLAYLIST_DEFAULT}"), atDefaults)
+        assertTrue(atDefaults.contains("\"showDownloadStatus\":${SettingKeys.SHOW_DOWNLOAD_STATUS_DEFAULT}"), atDefaults)
+    }
+
+    @Test
+    fun aPhoneBackupCarriesNoDesktopSwitchesAndLeavesThemAlone() {
+        val phone = BackupPlatform(desktopWindows = false, extraLyricSurface = true, dynamicColor = true)
+        val exported = encodeSettingsBackup(
+            getString = { _, default -> default },
+            getBoolean = { _, default -> default },
+            platform = phone,
+        )
+        assertFalse(exported.contains("desktopCloseToTray"), exported)
+        assertFalse(exported.contains("desktopLyricLocked"), exported)
+
+        val writes = mutableMapOf<String, Boolean>()
+        assertTrue(applySettingsBackup(json = exported, setString = { _, _ -> }, setBoolean = { key, value -> writes[key] = value }))
+        assertFalse(writes.containsKey(SettingKeys.DESKTOP_CLOSE_TO_TRAY))
+        assertFalse(writes.containsKey(SettingKeys.DESKTOP_LYRIC_LOCKED))
+    }
+
     @Test
     fun dynamicCoverPreferenceRoundTripsAndDefaultsToOriginalCover() {
         val defaultWrites = mutableMapOf<String, Boolean>()
@@ -363,7 +397,8 @@ class SettingsBackupTest {
                 setBoolean = { key, value -> defaultWrites[key] = value },
             ),
         )
-        assertFalse(defaultWrites.getValue(SettingKeys.USE_DYNAMIC_COVER))
+        // A file without the switch leaves the destination's choice, original cover by default.
+        assertFalse(defaultWrites.containsKey(SettingKeys.USE_DYNAMIC_COVER))
 
         val exported = encodeSettingsBackup(
             getString = { _, default -> default },

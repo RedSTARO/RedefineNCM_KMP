@@ -32,7 +32,7 @@ class SettingsBackupImportTest {
 
     @Test
     fun libraryFailureIsAPartialResultAndCannotBeReportedAsComplete() = runTest {
-        assertNotNull(decodeBackupLocalLibrary(withLibrary))
+        assertNotNull(decodeBackupLocalLibrary(withLibrary).getOrThrow())
         val failure = IllegalStateException("storage full")
         var settingsSaved = false
         val result = importSettingsBackup(

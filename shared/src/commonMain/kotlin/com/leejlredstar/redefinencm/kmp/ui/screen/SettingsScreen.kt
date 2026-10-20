@@ -259,8 +259,10 @@ fun SettingsScreen(
     fun reloadSettingsSnapshot() {
         // The provider switches and addresses live on the accounts page, which reads its own.
         accountsViewModel.reload()
-        // An imported backup can carry another language; show it at once.
+        // An imported backup can carry another language or theme; show them at once. After a failed
+        // write the stored values are the old ones, so this also takes back what the row showed.
         I18n.load(settings)
+        ThemePreferences.load(settings)
         wifiQuality = settings.wifiPlaybackQuality().name
         cellularQuality = settings.cellularPlaybackQuality().name
         dlQuality = settings.getString(SettingKeys.DOWNLOAD_QUALITY, SettingKeys.DOWNLOAD_QUALITY_DEFAULT.name)
