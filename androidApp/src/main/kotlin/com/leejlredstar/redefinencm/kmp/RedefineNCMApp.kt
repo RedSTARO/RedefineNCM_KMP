@@ -22,6 +22,7 @@ import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.mp.KoinPlatform
@@ -31,8 +32,8 @@ class RedefineNCMApp : Application(), SingletonImageLoader.Factory {
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     private val syncDownloadedSongState = Runnable {
         appScope.launch {
-            KoinPlatform.getKoin().get<PlatformSettings>().awaitLoaded()
             runCatching {
+                KoinPlatform.getKoin().get<PlatformSettings>().awaitLoaded()
                 KoinPlatform.getKoin().get<SongDownloadManager>().syncWithLocalLibrary()
             }
         }
@@ -45,7 +46,9 @@ class RedefineNCMApp : Application(), SingletonImageLoader.Factory {
         val settings = KoinPlatform.getKoin().get<PlatformSettings>()
         AndroidLyricNotification.init(applicationContext)
         appScope.launch {
-            settings.awaitLoaded()
+            // Waits through a failed read rather than giving up: MainActivity offers to read
+            // again, and these follow once a read succeeds.
+            settings.awaitFirstLoad()
             // Before the notifications and the services speak: they can start without the UI,
             // which is where the language is otherwise first read.
             I18n.loadStored(settings)
@@ -53,7 +56,9 @@ class RedefineNCMApp : Application(), SingletonImageLoader.Factory {
                 settings.getBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, false),
             )
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                settings.themeModeUpdates().collect { syncAndroidApplicationTheme(this@RedefineNCMApp, it) }
+                settings.themeModeUpdates()
+                    .catch { System.err.println("Theme mode updates stopped: ${it.message}") }
+                    .collect { syncAndroidApplicationTheme(this@RedefineNCMApp, it) }
             }
         }
         registerDownloadedSongsObserver()

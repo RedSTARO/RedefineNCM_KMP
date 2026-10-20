@@ -26,7 +26,7 @@ actual fun platformModule() = module {
     single { ExternalHttpClientFactory.create(OkHttp) }
 
     // PlatformSettings backed by DataStore (needs the app Context provided via androidContext()).
-    single { PlatformSettings(get()) }
+    single { PlatformSettings(androidContext()) }
 
     // SQLDelight driver (needs Context for the Android SQLite helper).
     single { DatabaseDriverFactory(androidContext()) }

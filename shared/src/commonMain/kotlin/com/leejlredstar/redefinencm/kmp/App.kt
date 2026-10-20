@@ -3,6 +3,7 @@ package com.leejlredstar.redefinencm.kmp
 import com.leejlredstar.redefinencm.kmp.i18n.I18n
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.ui.theme.ArtworkTheme
+import com.leejlredstar.redefinencm.kmp.util.StartupNotices
 import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -591,6 +592,20 @@ private fun AppContent(
                     desktopSnackbarVisible = false
                 }
                 nowPlayingViewModel.consumeSourceSwitchMessage()
+            }
+
+            // What storage did on its own while starting (a damaged settings file reset), once.
+            val startupNotices by StartupNotices.notices.collectAsState()
+            val startupNotice = startupNotices.firstOrNull()
+            LaunchedEffect(startupNotice) {
+                val notice = startupNotice ?: return@LaunchedEffect
+                desktopSnackbarVisible = true
+                try {
+                    snackbarHostState.showSnackbar(notice.message, duration = SnackbarDuration.Long)
+                } finally {
+                    desktopSnackbarVisible = false
+                }
+                StartupNotices.consume(notice)
             }
 
             // The navigation stays on the pages opened from a tab, so changing tabs never means

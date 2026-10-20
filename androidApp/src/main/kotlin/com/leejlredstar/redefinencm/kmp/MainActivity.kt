@@ -27,11 +27,14 @@ import com.leejlredstar.redefinencm.kmp.player.PlayerStatusRestorer
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.requiresLegacyDownloadWritePermission
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlin.coroutines.cancellation.CancellationException
 import org.koin.android.ext.android.get
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.leejlredstar.redefinencm.kmp.ui.component.SettingsLoadFailure
 import com.leejlredstar.redefinencm.kmp.ui.component.StartupPermissionRationale
 
 class MainActivity : ComponentActivity() {
@@ -53,18 +56,35 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestMultiplePermissions(),
     ) {
         lifecycleScope.launch {
-            get<PlatformSettings>().awaitLoaded()
-            runCatching { get<SongDownloadManager>().syncWithLocalLibrary() }
+            runCatching {
+                get<PlatformSettings>().awaitLoaded()
+                get<SongDownloadManager>().syncWithLocalLibrary()
+            }
         }
     }
+
+    private var startupJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        startUp()
+    }
 
-        lifecycleScope.launch {
+    private fun startUp() {
+        if (startupJob?.isActive == true) return
+        startupJob = lifecycleScope.launch {
             val settings = get<PlatformSettings>()
-            settings.awaitLoaded()
+            try {
+                settings.awaitLoaded()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                // Nothing below may start on defaults; the screen offers to read them again.
+                System.err.println("Settings could not be read at startup: ${failure.message}")
+                setContent { SettingsLoadFailure(onRetry = ::startUp) }
+                return@launch
+            }
             // API 24-30 cannot persist a system-splash override. Match the activity background
             // as soon as DataStore is ready instead of waiting through queue restoration.
             val dark = when (ThemeMode.fromWireValue(settings.getString(SettingKeys.THEME_MODE, ""))) {
@@ -115,8 +135,10 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         lifecycleScope.launch {
-            get<PlatformSettings>().awaitLoaded()
-            runCatching { get<SongDownloadManager>().syncWithLocalLibrary() }
+            runCatching {
+                get<PlatformSettings>().awaitLoaded()
+                get<SongDownloadManager>().syncWithLocalLibrary()
+            }
         }
     }
 
@@ -124,8 +146,9 @@ class MainActivity : ComponentActivity() {
         // 与原版 MainActivity.onPause 一致：离开前台时保存播放状态（队列/索引/进度/随机）
         lifecycleScope.launch {
             val settings = get<PlatformSettings>()
-            settings.awaitLoaded()
             runCatching {
+                // Unread settings have nothing to flush, and the player was never restored.
+                settings.awaitLoaded()
                 settings.flush()
                 get<MainViewModel>().savePlayerStatus()
             }.onFailure { error ->

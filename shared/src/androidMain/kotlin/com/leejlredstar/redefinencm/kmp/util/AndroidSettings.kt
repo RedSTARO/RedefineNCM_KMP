@@ -2,6 +2,7 @@ package com.leejlredstar.redefinencm.kmp.util
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.CompletableDeferred
@@ -15,9 +16,26 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import com.leejlredstar.redefinencm.kmp.ui.theme.ThemeMode
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.cancellation.CancellationException
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "redefinencm_settings")
+/**
+ * A settings file DataStore cannot parse would fail every read for good, and the app could not
+ * start again until the user cleared its data. Starting over with defaults signs the user out but
+ * keeps everything stored elsewhere (the database, the downloads), and the app says so once.
+ */
+internal val SettingsCorruptionHandler = ReplaceFileCorruptionHandler { failure ->
+    System.err.println("Android settings were unreadable and are reset: ${failure.message}")
+    StartupNotices.post(StartupNotice.SettingsReset)
+    emptyPreferences()
+}
+
+private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "redefinencm_settings",
+    corruptionHandler = SettingsCorruptionHandler,
+)
 
 private sealed interface SettingsWriteCommand {
     data class Update(
@@ -41,52 +59,54 @@ private sealed interface SettingsWriteCommand {
  * background snapshot load. Writes update the cache before returning and are serialized through
  * a single channel, so an older initial snapshot or an out-of-order coroutine cannot overwrite a
  * newer value.
+ *
+ * A failed read is not kept: the next caller, and the next write, read again. One failure (a full
+ * disk, an I/O error) then lasts until it clears instead of as long as the process.
  */
-actual class PlatformSettings(private val context: Context) {
+actual class PlatformSettings internal constructor(private val dataStore: DataStore<Preferences>) {
+
+    constructor(context: Context) : this(context.dataStore)
 
     private val cache = ConcurrentHashMap<String, Any>()
     private val cacheStateLock = Any()
     private val cacheStates = mutableMapOf<String, AndroidSettingsCacheState>()
     private var nextWriteRevision = 0L
     private val writeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val initialPreferences = CompletableDeferred<Result<Preferences>>()
+    private val loadLock = Mutex()
+    @Volatile
+    private var loadedPreferences: Preferences? = null
+    private val firstLoad = CompletableDeferred<Unit>()
     private val writes = Channel<SettingsWriteCommand>(Channel.UNLIMITED)
 
     init {
+        // Read early, so the first caller rarely waits; a failure here is only logged.
+        writeScope.launch { runCatching { load() } }
         writeScope.launch {
-            val result = runCatching { context.dataStore.data.first() }
-            result.onSuccess { preferences ->
-                preferences.asMap().forEach { (key, value) ->
-                    cache.putIfAbsent(key.name, value)
-                }
-            }.onFailure { error ->
-                System.err.println("Failed to load Android settings: ${error.message}")
-            }
-            initialPreferences.complete(result)
-        }
-        writeScope.launch {
-            val initialResult = initialPreferences.await()
-            val loadFailure = initialResult.exceptionOrNull()
-            val durableValues = initialResult.getOrNull()
-                ?.asMap()
-                ?.mapKeys { (key, _) -> key.name }
-                ?.toMutableMap()
-                ?: mutableMapOf()
+            var durableValues: MutableMap<String, Any>? = null
             var pendingWriteFailure: Throwable? = null
             for (command in writes) {
+                // Nothing is written over a file that has not been read: the write would replace
+                // every value the app could not see.
+                val durable = durableValues ?: try {
+                    load().asMap().mapKeys { (key, _) -> key.name }.toMutableMap().also { durableValues = it }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Throwable) {
+                    pendingWriteFailure = failure
+                    null
+                }
                 when (command) {
                     is SettingsWriteCommand.Update -> {
-                        if (loadFailure != null) {
-                            pendingWriteFailure = loadFailure
+                        if (durable == null) {
                             applyWriteResult(
                                 command = command,
-                                durableValue = durableValues[command.key],
+                                durableValue = null,
                                 succeeded = false,
                             )
                         } else {
                             runCatching {
-                                context.dataStore.edit { preferences -> command.transform(preferences) }
-                                durableValues[command.key] = command.newValue
+                                dataStore.edit { preferences -> command.transform(preferences) }
+                                durable[command.key] = command.newValue
                                 applyWriteResult(
                                     command = command,
                                     durableValue = command.newValue,
@@ -96,7 +116,7 @@ actual class PlatformSettings(private val context: Context) {
                                 pendingWriteFailure = error
                                 applyWriteResult(
                                     command = command,
-                                    durableValue = durableValues[command.key],
+                                    durableValue = durable[command.key],
                                     succeeded = false,
                                 )
                                 System.err.println("Failed to persist Android settings: ${error.message}")
@@ -105,7 +125,7 @@ actual class PlatformSettings(private val context: Context) {
                     }
 
                     is SettingsWriteCommand.Barrier -> {
-                        val failure = pendingWriteFailure ?: loadFailure
+                        val failure = pendingWriteFailure
                         pendingWriteFailure = null
                         if (failure == null) {
                             command.completion.complete(Unit)
@@ -119,12 +139,40 @@ actual class PlatformSettings(private val context: Context) {
     }
 
     actual suspend fun awaitLoaded() {
-        initialPreferences.await().getOrThrow()
+        load()
+    }
+
+    /**
+     * Suspends until the stored settings have been read, however many attempts that takes, and
+     * never fails. For work that may wait for someone else's retry rather than give up.
+     */
+    suspend fun awaitFirstLoad() {
+        firstLoad.await()
+    }
+
+    private suspend fun load(): Preferences {
+        loadedPreferences?.let { return it }
+        return loadLock.withLock {
+            loadedPreferences ?: try {
+                dataStore.data.first().also { preferences ->
+                    preferences.asMap().forEach { (key, value) ->
+                        cache.putIfAbsent(key.name, value)
+                    }
+                    loadedPreferences = preferences
+                    firstLoad.complete(Unit)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                System.err.println("Failed to load Android settings: ${failure.message}")
+                throw failure
+            }
+        }
     }
 
     /** System theme overrides follow durable writes, not an optimistic Compose preference.
      * Otherwise a configuration recreation can cancel the screen before its save starts. */
-    fun themeModeUpdates(): Flow<ThemeMode> = context.dataStore.data
+    fun themeModeUpdates(): Flow<ThemeMode> = dataStore.data
         .map { ThemeMode.fromWireValue(it[stringPreferencesKey(SettingKeys.THEME_MODE)].orEmpty()) }
         .distinctUntilChanged()
 
