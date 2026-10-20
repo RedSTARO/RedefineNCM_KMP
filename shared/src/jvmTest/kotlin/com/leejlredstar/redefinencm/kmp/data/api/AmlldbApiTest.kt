@@ -12,8 +12,16 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.writeFully
+import io.ktor.utils.io.writer
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
@@ -55,6 +63,46 @@ class AmlldbApiTest {
 
             assertIs<AmlldbTtmlResult.Unavailable>(result)
             assertTrue(result.reason.contains("过大"), result.toString())
+        }
+    }
+
+    /**
+     * A host that keeps sending must be cut off at the limit. client.get() would have saved the
+     * whole 64 MiB body in memory before the limit was checked.
+     */
+    @Test
+    fun stopsReadingAnOversizedBodyAtTheLimit() {
+        runBlocking {
+            val written = AtomicLong()
+            val quietScope = CoroutineScope(Dispatchers.IO + SupervisorJob() + CoroutineExceptionHandler { _, _ -> })
+            val api = apiWithEngine { requestUrl ->
+                if (requestUrl.contains("stevexmh.net")) {
+                    val body = quietScope.writer {
+                        val chunk = ByteArray(64 * 1024) { 'x'.code.toByte() }
+                        repeat(1024) {
+                            channel.writeFully(chunk)
+                            written.addAndGet(chunk.size.toLong())
+                        }
+                    }.channel
+                    respond(content = body, status = HttpStatusCode.OK)
+                } else {
+                    respond(
+                        content = "[]",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+                    )
+                }
+            }
+
+            try {
+                val result = api.findByNcmId(1)
+
+                assertIs<AmlldbTtmlResult.Unavailable>(result)
+                assertTrue(result.reason.contains("过大"), result.toString())
+                assertTrue(written.get() < 8L * 1024 * 1024, "read ${written.get()} bytes of an oversized body")
+            } finally {
+                quietScope.cancel()
+            }
         }
     }
 

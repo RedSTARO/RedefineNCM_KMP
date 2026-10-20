@@ -1,8 +1,8 @@
 package com.leejlredstar.redefinencm.kmp.data.api
 
 import com.leejlredstar.redefinencm.kmp.i18n.strings
-import io.ktor.client.request.get
-import io.ktor.client.request.post
+import io.ktor.client.request.prepareGet
+import io.ktor.client.request.preparePost
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsChannel
@@ -81,30 +81,32 @@ class AmlldbApi(
 
         val searchFetch = try {
             withTimeoutOrNull(SEARCH_LOOKUP_TIMEOUT_MILLIS) {
-                val response = client.post(SEARCH_ENDPOINT) {
+                // Streamed, like getTtml: client.post() would read the whole body before the limit.
+                client.preparePost(SEARCH_ENDPOINT) {
                     contentType(ContentType.Application.Json)
                     setBody(AmlldbSearchRequest(query = songId.toString(), type = "id"))
-                }
-                if (!response.status.isSuccess()) {
-                    response.cancelBody("AMLL DB search returned ${response.status.value}")
-                    SearchFetch.Failed(
-                        fallbackFailure ?: AmlldbTtmlResult.Unavailable(
-                            strings.amllDbSearchHttpError(response.status.value),
-                        ),
-                    )
-                } else {
-                    when (val boundedBody = response.readBodyTextAtMost(MAX_SEARCH_RESPONSE_BYTES)) {
-                        BoundedBody.TooLarge ->
-                            SearchFetch.Failed(AmlldbTtmlResult.Malformed(strings.amllDbSearchTooLarge))
-                        is BoundedBody.Text -> {
-                            val items = try {
-                                ApiJson.decodeFromString<List<AmlldbSearchItem>>(boundedBody.value)
-                            } catch (_: Exception) {
-                                return@withTimeoutOrNull SearchFetch.Failed(
-                                    AmlldbTtmlResult.Malformed(strings.amllDbSearchInvalidFormat),
-                                )
+                }.execute { response ->
+                    if (!response.status.isSuccess()) {
+                        response.cancelBody("AMLL DB search returned ${response.status.value}")
+                        SearchFetch.Failed(
+                            fallbackFailure ?: AmlldbTtmlResult.Unavailable(
+                                strings.amllDbSearchHttpError(response.status.value),
+                            ),
+                        )
+                    } else {
+                        when (val boundedBody = response.readBodyTextAtMost(MAX_SEARCH_RESPONSE_BYTES)) {
+                            BoundedBody.TooLarge ->
+                                SearchFetch.Failed(AmlldbTtmlResult.Malformed(strings.amllDbSearchTooLarge))
+                            is BoundedBody.Text -> {
+                                val items = try {
+                                    ApiJson.decodeFromString<List<AmlldbSearchItem>>(boundedBody.value)
+                                } catch (_: Exception) {
+                                    return@execute SearchFetch.Failed(
+                                        AmlldbTtmlResult.Malformed(strings.amllDbSearchInvalidFormat),
+                                    )
+                                }
+                                SearchFetch.Items(items.take(MAX_SEARCH_RESULTS))
                             }
-                            SearchFetch.Items(items.take(MAX_SEARCH_RESULTS))
                         }
                     }
                 }
@@ -164,21 +166,26 @@ class AmlldbApi(
         return failure ?: AmlldbTtmlResult.NoMatch
     }
 
+    /**
+     * Streams the body: client.get() would save the whole response in memory first, so the size
+     * limit below would only apply to bytes already received from a third-party host.
+     */
     private suspend fun getTtml(url: String): TextFetch = try {
-        val response = client.get(url)
-        when {
-            response.status == HttpStatusCode.NotFound -> {
-                response.cancelBody("AMLL DB returned 404")
-                TextFetch.NotFound
-            }
-            !response.status.isSuccess() -> {
-                response.cancelBody("AMLL DB returned ${response.status.value}")
-                TextFetch.Failed(strings.amllDbHttpError(response.status.value))
-            }
-            else -> {
-                when (val boundedBody = response.readBodyTextAtMost(MAX_TTML_BYTES)) {
-                    BoundedBody.TooLarge -> TextFetch.Failed(strings.amllDbLyricsTooLarge)
-                    is BoundedBody.Text -> TextFetch.Found(boundedBody.value)
+        client.prepareGet(url).execute { response ->
+            when {
+                response.status == HttpStatusCode.NotFound -> {
+                    response.cancelBody("AMLL DB returned 404")
+                    TextFetch.NotFound
+                }
+                !response.status.isSuccess() -> {
+                    response.cancelBody("AMLL DB returned ${response.status.value}")
+                    TextFetch.Failed(strings.amllDbHttpError(response.status.value))
+                }
+                else -> {
+                    when (val boundedBody = response.readBodyTextAtMost(MAX_TTML_BYTES)) {
+                        BoundedBody.TooLarge -> TextFetch.Failed(strings.amllDbLyricsTooLarge)
+                        is BoundedBody.Text -> TextFetch.Found(boundedBody.value)
+                    }
                 }
             }
         }
