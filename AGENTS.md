@@ -217,9 +217,8 @@ an `AmllDynamicCoverLayer` slot instead of importing the app's video leaf, and t
 the library's own `amllComposeWheelDeltaMode` expect/actual instead of the app's `getPlatform()`.
 Do not re-couple them.
 
-The renderer consumes media-ID-scoped `NowPlayingViewModel` state, lyric source policy, favorite
-state, and the song-details request contract. Late state and song-details results must stay
-scoped to the current media ID.
+The renderer consumes media-ID-scoped `NowPlayingViewModel` state, lyric source policy and
+favorite state. Late state must stay scoped to the current media ID.
 
 The playback control island (`AutoHideMiniPlayerController`) is one common Compose surface on all
 four targets, and the Android presentation is the baseline: the same 3.6-second auto-hide on
@@ -897,8 +896,9 @@ between each other (`isPlayerSurface` in `App.kt`). There is no renderer prefere
 Do not add lyric rendering to the Now Playing page, and do not route any entry point straight
 to the lyric page.
 
-The renderer exposes the top-right song-details affordance and requests `/song/wiki/summary`
-through `Repository` for the current song. They render only the
+Song details open from the Info button at the top right of the Now Playing page into
+`SongWikiDetailsSheet` (the lyric page has had no details button since 8c7ec2e). They request
+`/song/wiki/summary` through `Repository` for the current song and render only the
 `SONG_PLAY_ABOUT_TAB_SONG_BASIC` display fields; recommendation and playlist blocks are
 excluded. Requests and rendered state are media-ID scoped, and changing tracks must close the
 surface and prevent a late response from replacing the new track's state.
@@ -1109,7 +1109,8 @@ This is its own task and **must not be done from memory**:
   (they don't exist off-Android). Use expect/actual wrappers.
 - **State down via `StateFlow`/`collectAsState`, events up via lambdas.** No two-way binding.
 - **DI: Koin.** Platform singletons (Ktor engine, `PlatformPlayer`, `PlatformSettings`) come
-  from `platformModule()` actuals; load platform module before `sharedModule`.
+  from `platformModule()` actuals. `initKoin` loads `platformModule()` after `sharedModule`, so
+  its bindings override the shared defaults (the in-memory player among them); keep that order.
 - **HTTP: wrap every call in `safeApiCall { }`** (returns `T?`, swallows exceptions → `null`).
 - **Serialization: kotlinx.serialization** with `ignoreUnknownKeys = true`, `isLenient = true`,
   `coerceInputValues = true`; `@SerialName` for divergent JSON keys (`ar`, `al`, …).
@@ -1172,10 +1173,14 @@ Applies to all platforms, and the original Android repo is kept aligned (goal #3
   progress rows, pause/resume/cancel/retry controls); Settings (gradient hero, tonal rows, pill
   actions); Mini-player FAB (image-derived color w/ adaptive content luminance via
   `contrastingTextColor()`, oversized rounded shape).
-- **Desktop floating window:** frameless/translucent, blur-behind, current lyric + mini art +
-  compact controls, always-on-top toggle (part of `DesktopLyricWindow`).
-- **iOS Live Activity:** Lock Screen + Dynamic Island — artwork thumbnail, title, artist,
-  current lyric, synced to position.
+- **Desktop floating window** (`DesktopLyricWindow`, since e82ebc0): frameless, transparent
+  and always on top, with no toggle. It shows the current and next line in white with a shadow,
+  left, centred or right; a hover toolbar has previous, next, text size, lock and close. Locked,
+  it cannot be dragged or resized and lets clicks through on Windows. Bounds, alignment and text
+  size persist.
+- **iOS Live Activity:** Lock Screen + Dynamic Island — title, current and next line, progress
+  and a play/pause glyph, synced to position. Artwork (which needs an App Group to reach the
+  extension) and the artist are not shown yet.
 
 ---
 
@@ -1446,9 +1451,10 @@ feature gap; platform integrations use target-specific actuals:
       unverified:** ActivityKit behaviour at runtime — the Live Activity is only observable on a
       device by hand, and the Dynamic Island layout needs Dynamic-Island-capable hardware.
 - [x] **Desktop floating window is wired and Expressive** (updated 2026-07-12) —
-      `desktopApp/main.kt` opens a frameless / translucent Compose window, derives its palette
-      from the visible artwork, exposes transport controls and a user-toggleable always-on-top
-      state, and renders `DesktopFloatingWindowController`'s `floatingLyricData`.
+      `desktopApp/main.kt` opens a frameless, transparent, always-on-top Compose window that
+      renders `DesktopFloatingWindowController`'s `floatingLyricData` (see the UI requirements
+      above for its toolbar, lock and alignment; the artwork palette and the always-on-top toggle
+      went with e82ebc0).
 - [x] **The shared UI uses real Material 3 Expressive** (updated 2026-07-12) —
       `MaterialExpressiveTheme`, `MotionScheme.expressive()`, the complete typography scale,
       shared page/state/motion primitives, and visible-image-driven local palettes are applied

@@ -108,7 +108,6 @@ fun NativeAmllScreen(
     val dynamicCoverState by viewModel.dynamicCoverUiState.collectAsState()
     val localArtworkActive by viewModel.localArtworkActive.collectAsState()
     val remoteArtworkUri by viewModel.remoteArtworkUri.collectAsState()
-    val songWikiState by viewModel.songWikiUiState.collectAsState()
     val untimedLyricLines by viewModel.untimedLyricLines.collectAsState()
 
     var controllerRevealRequest by remember { mutableIntStateOf(0) }
