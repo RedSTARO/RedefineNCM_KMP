@@ -102,4 +102,21 @@ class ProviderSearchFailureTest {
         )
         assertTrue(registry.searchAll("   ").isEmpty())
     }
+
+    /** 换源 is offered only when another provider is switched on to search. */
+    @Test
+    fun anotherProviderCountsOnlyWhenItIsSwitchedOn() = runTest {
+        val qqOff = registryOf(
+            FakeProvider(MusicProviderId.NETEASE) { emptyList() },
+            FakeProvider(MusicProviderId.QQ, available = false) { emptyList() },
+        )
+        val qqOn = registryOf(
+            FakeProvider(MusicProviderId.NETEASE) { emptyList() },
+            FakeProvider(MusicProviderId.QQ) { emptyList() },
+        )
+
+        assertFalse(qqOff.hasAvailableOtherThan(MusicProviderId.NETEASE))
+        assertTrue(qqOn.hasAvailableOtherThan(MusicProviderId.NETEASE))
+        assertTrue(qqOn.hasAvailableOtherThan(MusicProviderId.QQ))
+    }
 }

@@ -930,6 +930,10 @@
     <string name="sourceSwitchNoAlternate">他のサービスで同じ曲が見つかりませんでした</string>
     <string name="sourceSwitched">{provider}に切り替えて「{title}」を再生しています</string>
     <string name="songIdInvalid">曲IDが無効です</string>
+    <string name="sourceSwitchNoOtherProvider">切り替え先のサービスがオンになっていません</string>
+    <string name="sourceSwitchSearchFailed">他のサービスのサーバーが応答しませんでした。後でもう一度お試しください。</string>
+    <string name="likeNeedsSignIn">お気に入りに追加するには{provider}にログインしてください</string>
+    <string name="likeFailed">「{title}」をお気に入りに追加できませんでした。もう一度お試しください。</string>
     <string name="providerLyricsUnsupported">{provider}の歌詞はまだアプリ内で表示できません</string>
     <string name="lyricsTtmlOnlyForeignProvider">歌詞のソースが「AMLL歌詞データベースのみ」に設定されています。このデータベースにはNetEaseの曲しか収録されていません。{provider}の曲の歌詞を表示するには、設定で別の歌詞のソースを選んでください。</string>
     <string name="lyricsRequestFailed">歌詞を取得できませんでした</string>

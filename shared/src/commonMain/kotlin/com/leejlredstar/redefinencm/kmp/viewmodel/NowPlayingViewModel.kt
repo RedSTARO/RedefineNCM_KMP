@@ -13,6 +13,7 @@ import com.leejlredstar.redefinencm.kmp.data.local.LocalAccount
 import com.leejlredstar.redefinencm.kmp.data.local.LocalLibraryStore
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderArtist
+import com.leejlredstar.redefinencm.kmp.data.provider.ProviderItemId
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderTrack
 import com.leejlredstar.redefinencm.kmp.data.provider.isSameSongAs
 import com.leejlredstar.redefinencm.kmp.data.toPlayerMediaInfo
@@ -84,10 +85,62 @@ sealed interface SongWikiUiState {
  * NetEase's lists, "A / B" from the provider-neutral ones.
  */
 internal fun firstArtistOf(artistLine: String): String =
-    artistLine.split(", ", " / ", "/", "、").first().trim()
+    artistLine.split(*ArtistJoiners).first().trim()
+
+private val ArtistJoiners = arrayOf(", ", " / ", "/", "、")
+
+private val ArtistJoiner = Regex(ArtistJoiners.joinToString("|") { Regex.escape(it) })
+
+/**
+ * Every reading of an artist line's first artist: each prefix that ends at a joiner, then the whole
+ * line. A queue item keeps only the joined line, so "AC/DC" cannot be told from "AC" and "DC";
+ * offering each cut lets a match find the one the other provider spells out. Cuts are taken only at
+ * joiners, so "Bey" is never offered for "Beyond".
+ */
+internal fun artistLineHeads(artistLine: String): List<String> {
+    val heads = ArtistJoiner.findAll(artistLine).map { artistLine.substring(0, it.range.first) } + artistLine
+    return heads.map(String::trim).filter(String::isNotEmpty).distinct().toList()
+}
+
+/**
+ * The first of [candidates] that is the same song as a queue item, whichever reading of the item's
+ * artist line matches. The match itself is the strict one the merged search rows use.
+ */
+internal fun sameSongIn(
+    id: ProviderItemId,
+    title: String,
+    artistLine: String,
+    durationMillis: Long,
+    candidates: List<ProviderTrack>,
+): ProviderTrack? {
+    val originals = artistLineHeads(artistLine).ifEmpty { listOf(artistLine) }.map { artist ->
+        ProviderTrack(
+            id = id,
+            title = title,
+            artists = listOf(ProviderArtist(id = null, name = artist)),
+            durationMillis = durationMillis,
+        )
+    }
+    return candidates.firstOrNull { candidate -> originals.any { it.isSameSongAs(candidate) } }
+}
 
 /** How many hits of each other provider a source switch looks through for the same song. */
 private const val SourceSwitchSearchLimit = 10
+
+/**
+ * What a heart tapped without a signed-in account says: nothing while the account is still being
+ * looked up, a plain failure when the server could not be reached, otherwise a pointer to sign-in.
+ */
+internal fun favoriteNotSignedInMessage(
+    accountLoading: Boolean,
+    accountUnreachable: Boolean,
+    provider: String,
+    title: String,
+): String? = when {
+    accountLoading -> null
+    accountUnreachable -> strings.likeFailed(title)
+    else -> strings.likeNeedsSignIn(provider)
+}
 
 data class FavoriteUiState(
     val mediaId: String? = null,
@@ -194,11 +247,12 @@ class NowPlayingViewModel(
     /**
      * Whether a failed track can be offered in another provider's copy. Not under shuffle: the
      * players re-shuffle a queue that is set again, so replacing one item would reorder the rest,
-     * and the queue order is the one thing a switch must not change.
+     * and the queue order is the one thing a switch must not change. Not when no other provider
+     * is switched on either: the search would have nowhere to look.
      */
-    fun canOfferSourceSwitch(failure: StreamFailure): Boolean =
+    suspend fun canOfferSourceSwitch(failure: StreamFailure): Boolean =
         !player.queueSnapshot.value.shuffleEnabled &&
-            providers.all.any { it.id != failure.provider }
+            providers.hasAvailableOtherThan(failure.provider)
 
     /**
      * Plays the same song from another provider in place of the current track, which just failed.
@@ -211,17 +265,28 @@ class NowPlayingViewModel(
     fun switchSourceForCurrent() {
         val media = player.currentMedia.value ?: return
         val failure = playbackFailure.value?.takeIf { it.mediaId == media.id } ?: return
-        if (!canOfferSourceSwitch(failure)) {
+        if (player.queueSnapshot.value.shuffleEnabled) {
             sourceSwitchMessage.value = strings.sourceSwitchShuffleBlocked
             return
         }
         scope.launch {
-            val alternate = withContext(Dispatchers.Default) {
+            val search = withContext(Dispatchers.Default) {
                 findSameSongElsewhere(media, excluding = failure.provider)
             }
-            if (alternate == null) {
-                sourceSwitchMessage.value = strings.sourceSwitchNoAlternate
-                return@launch
+            val alternate = when (search) {
+                is SameSongSearch.Found -> search.track
+                SameSongSearch.NoOtherProvider -> {
+                    sourceSwitchMessage.value = strings.sourceSwitchNoOtherProvider
+                    return@launch
+                }
+                SameSongSearch.SearchFailed -> {
+                    sourceSwitchMessage.value = strings.sourceSwitchSearchFailed
+                    return@launch
+                }
+                SameSongSearch.NotFound -> {
+                    sourceSwitchMessage.value = strings.sourceSwitchNoAlternate
+                    return@launch
+                }
             }
             val snapshot = player.queueSnapshot.value
             val index = snapshot.currentIndex
@@ -233,19 +298,36 @@ class NowPlayingViewModel(
         }
     }
 
-    private suspend fun findSameSongElsewhere(media: MediaInfo, excluding: MusicProviderId): ProviderTrack? {
-        val original = ProviderTrack(
-            id = media.id.toProviderItemIdOrNull() ?: return null,
-            title = media.title,
-            artists = listOf(ProviderArtist(id = null, name = firstArtistOf(media.artist))),
-            durationMillis = media.duration,
-        )
+    private suspend fun findSameSongElsewhere(media: MediaInfo, excluding: MusicProviderId): SameSongSearch {
+        val id = media.id.toProviderItemIdOrNull() ?: return SameSongSearch.NotFound
         val others = providers.available().filter { it.id != excluding }.associate { it.id to 0 }
-        if (others.isEmpty()) return null
-        return providers.searchPages("${media.title} ${firstArtistOf(media.artist)}", others, SourceSwitchSearchLimit)
-            .filterNot { it.failed }
-            .flatMap { it.tracks }
-            .firstOrNull { original.isSameSongAs(it) }
+        if (others.isEmpty()) return SameSongSearch.NoOtherProvider
+        val pages = providers.searchPages(
+            "${media.title} ${firstArtistOf(media.artist)}",
+            others,
+            SourceSwitchSearchLimit,
+        )
+        val found = sameSongIn(
+            id = id,
+            title = media.title,
+            artistLine = media.artist,
+            durationMillis = media.duration,
+            candidates = pages.filterNot { it.failed }.flatMap { it.tracks },
+        )
+        return when {
+            found != null -> SameSongSearch.Found(found)
+            pages.any { it.failed } -> SameSongSearch.SearchFailed
+            else -> SameSongSearch.NotFound
+        }
+    }
+
+    private sealed interface SameSongSearch {
+        data class Found(val track: ProviderTrack) : SameSongSearch
+        /** No other provider is switched on, so nothing was searched. */
+        data object NoOtherProvider : SameSongSearch
+        /** Nothing matched, and at least one provider's search failed rather than came back empty. */
+        data object SearchFailed : SameSongSearch
+        data object NotFound : SameSongSearch
     }
 
     private fun supports(mediaId: String?, capability: ProviderCapability): Boolean =
@@ -958,17 +1040,24 @@ class NowPlayingViewModel(
         lyricUiState.value = LyricUiState.Error(message)
     }
 
-    private inline fun applyLyricsForMedia(
+    /**
+     * Applies [block] while [mediaId] is still the current lyric request. The lyric job runs on
+     * Default, track changes run on Main, so the check and the writes run together on Main: a result
+     * cannot pass the check, then land after a track change has switched the request.
+     */
+    private suspend inline fun applyLyricsForMedia(
         mediaId: String,
         requestGeneration: Long,
-        block: () -> Unit,
+        crossinline block: () -> Unit,
     ) {
-        if (
-            requestGeneration == lyricRequestGeneration.value &&
-            lyricMediaId.value == mediaId &&
-            currentMedia.value?.id == mediaId
-        ) {
-            block()
+        withContext(Dispatchers.Main) {
+            if (
+                requestGeneration == lyricRequestGeneration.value &&
+                lyricMediaId.value == mediaId &&
+                currentMedia.value?.id == mediaId
+            ) {
+                block()
+            }
         }
     }
 
@@ -1175,7 +1264,18 @@ class NowPlayingViewModel(
             }
             return
         }
-        val uid = mainViewModel.uid.value.takeIf { it > 0 } ?: return
+        val uid = mainViewModel.uid.value
+        if (uid <= 0) {
+            // The heart is enabled for any provider with account likes, signed in or not; say why
+            // the tap did nothing. While the startup account lookup runs, uid is 0 for a moment.
+            favoriteNotSignedInMessage(
+                accountLoading = mainViewModel.accountLoading.value,
+                accountUnreachable = mainViewModel.accountLoadError.value != null,
+                provider = providerName(media.id),
+                title = media.title.ifBlank { strings.thisSong },
+            )?.let { favoriteMessage.value = it }
+            return
+        }
         val mediaId = media.id
         val songId = neteaseSongId(mediaId)?.takeIf { supports(mediaId, ProviderCapability.LIKE) } ?: return
         if (favoriteUiState.value.let { it.mediaId == mediaId && it.isLiked }) return
@@ -1183,16 +1283,15 @@ class NowPlayingViewModel(
 
         favoriteActionJob = scope.launch {
             val liked = withContext(Dispatchers.Default) { repo.like(songId) } != null
-            if (
-                liked &&
-                player.currentMedia.value?.id == mediaId &&
-                mainViewModel.uid.value == uid
-            ) {
+            val stillCurrent = player.currentMedia.value?.id == mediaId && mainViewModel.uid.value == uid
+            if (liked && stillCurrent) {
                 favoriteStatusGeneration += 1
                 favoriteUiState.value = FavoriteUiState(
                     mediaId = mediaId,
                     isLiked = true,
                 )
+            } else if (!liked && stillCurrent) {
+                favoriteMessage.value = strings.likeFailed(media.title.ifBlank { strings.thisSong })
             }
         }
     }

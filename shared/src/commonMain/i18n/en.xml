@@ -1002,6 +1002,10 @@
     <string name="sourceSwitchNoAlternate">Couldn't find the same song on another service</string>
     <string name="sourceSwitched">Playing “{title}” from {provider} instead</string>
     <string name="songIdInvalid">Invalid song ID</string>
+    <string name="sourceSwitchNoOtherProvider">No other service is turned on to switch to</string>
+    <string name="sourceSwitchSearchFailed">The other service's server didn't respond. Try again later.</string>
+    <string name="likeNeedsSignIn">Sign in to {provider} to like songs</string>
+    <string name="likeFailed">Couldn't like “{title}”. Try again.</string>
     <string name="providerLyricsUnsupported">Lyrics from {provider} can't be shown in the app yet</string>
     <string name="lyricsTtmlOnlyForeignProvider">The lyrics source is set to “AMLL lyrics database only”, which only has NetEase songs. To see lyrics for {provider} songs, choose another lyrics source in Settings.</string>
     <string name="lyricsRequestFailed">Couldn't fetch the lyrics</string>

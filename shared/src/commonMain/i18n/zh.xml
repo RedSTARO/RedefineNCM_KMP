@@ -930,6 +930,10 @@
     <string name="sourceSwitchNoAlternate">没有在其他平台找到同一首歌</string>
     <string name="sourceSwitched">已改用{provider}播放「{title}」</string>
     <string name="songIdInvalid">歌曲 ID 无效</string>
+    <string name="sourceSwitchNoOtherProvider">没有开启其他平台，无法换源</string>
+    <string name="sourceSwitchSearchFailed">其他平台的服务器没有响应，请稍后再试</string>
+    <string name="likeNeedsSignIn">登录{provider}后才能喜欢歌曲</string>
+    <string name="likeFailed">未能喜欢「{title}」，请重试</string>
     <string name="providerLyricsUnsupported">{provider}的歌词暂不支持在应用内显示</string>
     <string name="lyricsTtmlOnlyForeignProvider">当前歌词来源为「只用 AMLL 歌词库」，该歌词库只收录网易云歌曲；可在设置中改用其他歌词来源查看{provider}的歌词</string>
     <string name="lyricsRequestFailed">歌词请求失败</string>

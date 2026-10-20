@@ -54,6 +54,9 @@ class MusicProviderRegistry(
         providerCall { it.isAvailable() }.getOrDefault(false)
     }
 
+    /** Whether a provider other than [id] can be called right now, e.g. to find the same song. */
+    suspend fun hasAvailableOtherThan(id: MusicProviderId): Boolean = available().any { it.id != id }
+
     suspend fun aggregationMode(): LibraryAggregationMode =
         LibraryAggregationMode.fromWireValueOrDefault(
             settings.getStringAsync(SettingKeys.LIBRARY_AGGREGATION_MODE, ""),
