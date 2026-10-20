@@ -139,6 +139,12 @@ internal class DeckMixer(
     val audibleDurationMs: Long
         get() = blend?.takeIf { it.swapped }?.incoming?.source?.durationMs ?: primary.source.durationMs
 
+    /**
+     * Whether the track the mixer played last stopped on a failed read rather than at its end;
+     * read once [render] has returned 0.
+     */
+    val endedOnReadFailure: Boolean get() = primary.source.interrupted
+
     /** The media id the output belongs to right now, as far as the user is concerned. */
     val audibleMediaId: String get() = blend?.takeIf { it.swapped }?.incoming?.mediaId ?: primary.mediaId
     val audibleDeckSequence: Long get() = blend?.takeIf { it.swapped }?.incoming?.sequence ?: primary.sequence

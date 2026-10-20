@@ -82,6 +82,7 @@ class JvmMediaPlayer(
 
     /** Where playback resumes when no line is open: after a pause that closed it, or a seek. */
     @Volatile private var seekOffsetMs = 0L
+    private val streamReopens = StreamReopenBudget()
 
     // ── Song transitions ──
 
@@ -343,6 +344,7 @@ class JvmMediaPlayer(
         var deckMixer: DeckMixer? = null
         var audioLine: SourceDataLine? = null
         var completedNaturally = false
+        var streamInterrupted = false
 
         try {
             // 每次开流都重新读设置：换设备后当前这首也要跟着走，而不是等下一首。
@@ -432,7 +434,7 @@ class JvmMediaPlayer(
                 if (shouldStop) break
                 val frames = deckMixer.render(block, BLOCK_FRAMES)
                 if (frames == 0) {
-                    completedNaturally = true
+                    if (deckMixer.endedOnReadFailure) streamInterrupted = true else completedNaturally = true
                     break
                 }
                 if (!isPlaybackCurrent(generation)) break
@@ -442,7 +444,7 @@ class JvmMediaPlayer(
                 }
             }
 
-            if (completedNaturally && isPlaybackCurrent(generation)) {
+            if ((completedNaturally || streamInterrupted) && isPlaybackCurrent(generation)) {
                 audioLine.drain()
                 // A delayed polling coroutine must not lose the final hand-over before the
                 // clock is detached below and natural completion advances the queue again.
@@ -482,6 +484,12 @@ class JvmMediaPlayer(
             }
         }
 
+        if (streamInterrupted && isPlaybackCurrent(generation)) {
+            stopPollingIfCurrent(generation)
+            reopenAfterInterruption(generation)
+            return
+        }
+
         if (completedNaturally && isPlaybackCurrent(generation)) {
             stopPollingIfCurrent(generation)
             synchronized(queueOperationLock) {
@@ -500,6 +508,31 @@ class JvmMediaPlayer(
                     _position.value = _duration.value.coerceAtLeast(0L)
                     _state.value = PlayerState.ENDED
                 }
+            }
+        }
+    }
+
+    /**
+     * The stream stopped before its track did: a dropped connection, a read that timed out, or a
+     * link that expired while paused. Ending the track there played the next one early, or ended
+     * the queue at what looked like the track's end. The track opens again where it stopped, with
+     * a fresh link, as the same selection; one that keeps failing without getting further stops in
+     * ERROR at that point, where play() takes it up again.
+     */
+    private fun reopenAfterInterruption(generation: Long) {
+        synchronized(queueOperationLock) {
+            if (!isPlaybackCurrent(generation)) return
+            val claim = currentQueueClaim()
+            val current = claim.model.currentItem ?: return
+            val position = _position.value.coerceAtLeast(0L)
+            seekOffsetMs = position
+            if (streamReopens.allow(claim.selectionRevision, position)) {
+                System.err.println("JvmMediaPlayer: the stream stopped at $position ms; opening it again")
+                resolveAndPlay(current, position, claim.selectionRevision)
+            } else {
+                System.err.println("JvmMediaPlayer: the stream keeps stopping at $position ms")
+                _isPlaying.value = false
+                _state.value = PlayerState.ERROR
             }
         }
     }
@@ -941,4 +974,29 @@ internal class JvmQueueState<T>(initial: PlayQueue<T> = PlayQueue.empty()) {
         synchronized(lock) {
             selectionRevision == expectedSelectionRevision && model.currentItem == expectedMedia
         }
+}
+
+/**
+ * How often one selection may open its stream again after it stopped short: a few times in a row,
+ * and again once it has played on for a while, so a flaky connection recovers and a dead one does
+ * not loop.
+ */
+internal class StreamReopenBudget(
+    private val limit: Int = 3,
+    private val progressMs: Long = 10_000L,
+) {
+    private var selectionRevision: Long? = null
+    private var lastPositionMs = 0L
+    private var used = 0
+
+    @Synchronized
+    fun allow(selectionRevision: Long, positionMs: Long): Boolean {
+        if (selectionRevision != this.selectionRevision || positionMs >= lastPositionMs + progressMs) {
+            this.selectionRevision = selectionRevision
+            used = 0
+        }
+        lastPositionMs = positionMs
+        used += 1
+        return used <= limit
+    }
 }

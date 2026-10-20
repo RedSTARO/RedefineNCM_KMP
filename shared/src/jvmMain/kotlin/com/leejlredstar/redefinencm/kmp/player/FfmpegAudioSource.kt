@@ -46,6 +46,17 @@ internal class FfmpegAudioSource private constructor(
         private set
 
     /**
+     * Whether decoding stopped because the stream failed (a dropped connection, a read that timed
+     * out, a link that expired while paused) rather than because the track ended. FFmpeg's grab
+     * returns null for both; the input keeps the transport's error and leaves it clear at a real
+     * end, so a gap between position and duration, which is only an estimate for VBR MP3, is not
+     * needed to tell them apart.
+     */
+    @Volatile
+    var interrupted: Boolean = false
+        private set
+
+    /**
      * Fills [target] from frame [offset] with up to [frames] interleaved frames; returns how many
      * were written, fewer only once the track is decoded to its end.
      */
@@ -78,7 +89,10 @@ internal class FfmpegAudioSource private constructor(
      */
     private fun nextBlock(): FloatArray? {
         while (true) {
-            val frame = grabber.grabSamples() ?: return null
+            val frame = grabber.grabSamples() ?: run {
+                interrupted = inputFailed()
+                return null
+            }
             val samples = frame.samples ?: continue
             if (samples.isEmpty()) continue
             // AV_SAMPLE_FMT_FLT is a packed format, so swresample always emits exactly one
@@ -102,6 +116,9 @@ internal class FfmpegAudioSource private constructor(
             return block
         }
     }
+
+    private fun inputFailed(): Boolean =
+        runCatching { (grabber.formatContext?.pb()?.error() ?: 0) < 0 }.getOrDefault(false)
 
     /**
      * Decodes and drops [frames] frames. Slower than [seekTo] but exact: a position reached by
@@ -184,12 +201,15 @@ internal class FfmpegAudioSource private constructor(
                         false,
                     ),
                     durationMs = grabber.lengthInTime.takeIf { it > 0L }?.div(1_000L) ?: -1L,
-                )
+                ).also { source ->
+                    // Inside the guard: a seek FFmpeg refuses must not leave the opened decoder,
+                    // and its connection, to the garbage collector.
+                    if (startMs > 0L) source.seekTo(startMs)
+                }
             }.getOrElse { failure ->
                 runCatching { grabber.release() }
                 throw failure
             }
-            if (startMs > 0L) opened.seekTo(startMs)
             return opened
         }
     }
