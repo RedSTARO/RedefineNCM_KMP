@@ -292,6 +292,9 @@ private fun scanWebDownloads(
                 const match = /^(\d+)\.[^.]+$/.exec(name);
                 if (!match) continue;
                 const file = await handle.getFile();
+                // An empty file is not a song: the final file is created before it is written,
+                // so a tab closed in between leaves one, and a later download must replace it.
+                if (file.size === 0) continue;
                 files.push({
                     id: match[1],
                     fileName: name,

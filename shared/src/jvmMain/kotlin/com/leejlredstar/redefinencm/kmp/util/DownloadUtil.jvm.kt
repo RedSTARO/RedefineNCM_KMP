@@ -4,12 +4,23 @@ import com.leejlredstar.redefinencm.kmp.i18n.strings
 import java.io.File
 
 actual suspend fun scanDownloadedSongs(): DownloadScanResult = runCatching {
-    val dir = jvmDownloadDirectory()
-    if (!dir.exists()) return@runCatching emptyList()
+    scanJvmDownloadedSongs(jvmDownloadDirectory())
+}.fold(
+    onSuccess = DownloadScanResult::Success,
+    onFailure = { error -> DownloadScanResult.Failure(strings.desktopDownloadFolderScanFailed, error) },
+)
+
+/**
+ * The downloaded songs in [dir]. An empty file is not a song: one left by a crash or a full disk
+ * would otherwise count as downloaded, play as an error, and never be fetched again, because a
+ * download skips a song that is already there.
+ */
+internal fun scanJvmDownloadedSongs(dir: File): List<DownloadedSongSnapshot> {
+    if (!dir.exists()) return emptyList()
     check(dir.isDirectory) { strings.downloadFolderNotFolder(dir) }
     val files = dir.listFiles() ?: error(strings.downloadFolderUnreadable(dir))
-    files.asSequence()
-        .filter(File::isFile)
+    return files.asSequence()
+        .filter { it.isFile && it.length() > 0L }
         .mapNotNull { file ->
             val songId = file.nameWithoutExtension.toLongOrNull() ?: return@mapNotNull null
             DownloadedSongSnapshot(
@@ -25,10 +36,7 @@ actual suspend fun scanDownloadedSongs(): DownloadScanResult = runCatching {
                 .thenBy { it.id }
         )
         .toList()
-}.fold(
-    onSuccess = DownloadScanResult::Success,
-    onFailure = { error -> DownloadScanResult.Failure(strings.desktopDownloadFolderScanFailed, error) },
-)
+}
 
 actual suspend fun deleteDownloadedSongFile(songId: Long): Boolean {
     val dir = jvmDownloadDirectory()

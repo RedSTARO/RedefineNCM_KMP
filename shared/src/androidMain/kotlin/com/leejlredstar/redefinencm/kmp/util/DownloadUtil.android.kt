@@ -191,7 +191,8 @@ private fun scanLegacyDownloadDir(targetSongId: Long?): Map<Long, DownloadedSong
     } else {
         val files = dir.listFiles() ?: error(strings.legacyDownloadFolderUnreadable(dir))
         return files.asSequence()
-            .filter(File::isFile)
+            // An empty file left by a crash or a full disk is not a downloaded song.
+            .filter { it.isFile && it.length() > 0L }
             .mapNotNull { file ->
                 val songId = songIdFromFileName(file.name, targetSongId) ?: return@mapNotNull null
                 songId to DownloadedSongSnapshot(

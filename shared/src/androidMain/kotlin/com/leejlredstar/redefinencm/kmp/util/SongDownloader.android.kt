@@ -362,7 +362,8 @@ private suspend fun publishLegacyFile(
     if (!dir.exists() && !dir.mkdirs()) error(strings.downloadFolderCreateFailed)
 
     val target = File(dir, fileName)
-    if (target.exists()) {
+    // An empty file under the song's name is a failed earlier write, not the song: replace it.
+    if (target.exists() && target.length() > 0L) {
         deletePartialArtifacts(partialFile)
         return DownloadedSongFile(fileName = fileName, uri = target.toURI().toString())
     }
@@ -372,6 +373,7 @@ private suspend fun publishLegacyFile(
     try {
         FileOutputStream(publishingFile, false).use { output ->
             partialFile.inputStream().use { input -> copyStream(input, output) }
+            output.fd.sync()
         }
         if (!publishingFile.renameTo(target)) error(strings.downloadFileSaveFailed)
         targetCommitted = true

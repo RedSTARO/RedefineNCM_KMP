@@ -64,6 +64,9 @@ internal suspend fun downloadSongToDirectory(
             connection.getInputStream().use { input ->
                 partFile.outputStream().use { output ->
                     copyWithProgress(input, output, progressBytes, onProgress)
+                    // On disk before the rename names it as the song: after a crash or a power
+                    // cut the song's own name must not hold an empty or partial file.
+                    output.fd.sync()
                 }
             }
             val received = partFile.length()

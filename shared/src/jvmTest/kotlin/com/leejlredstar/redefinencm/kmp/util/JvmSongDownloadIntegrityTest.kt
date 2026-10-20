@@ -90,6 +90,22 @@ class JvmSongDownloadIntegrityTest {
         }
     }
 
+    /** An empty file is not a song: listed as one, it would never be downloaded again. */
+    @Test
+    fun aScanSkipsEmptyFilesAndSidecars() {
+        val directory = Files.createTempDirectory("song-scan-test").toFile()
+        try {
+            directory.resolve("123.mp3").writeBytes(ByteArray(0))
+            directory.resolve("456.mp3").writeBytes(byteArrayOf(1, 2, 3))
+            directory.resolve("456.lyric.lrc").writeText("[00:00.00]x")
+            directory.resolve("789.flac.part").writeBytes(byteArrayOf(1))
+
+            assertEquals(listOf(456L), scanJvmDownloadedSongs(directory).map { it.id })
+        } finally {
+            assertTrue(directory.deleteRecursively())
+        }
+    }
+
     @Test
     fun aRejectedPublishLeavesNoNewFile() = runTest {
         response(declared = 3, bytes = byteArrayOf(1, 2, 3)) { request, dir ->
