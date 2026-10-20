@@ -766,6 +766,8 @@
     <string name="settingsLoadFailed">Couldn't load settings</string>
     <string name="settingsLoadFailedAtStartup">The app can't read its settings, so it can't start yet. Try again. If this keeps happening, check the device's free storage.</string>
     <string name="settingsResetAfterDamage">The settings file was damaged, so settings were reset to their defaults. Sign in again to any account you used.</string>
+    <string name="databaseSetAsideAfterDamage">The local database was damaged, so it was set aside as a backup and a new one is used. The play queue is empty. If something stops working, reopen the app.</string>
+    <string name="localLibraryRestoredAfterDamage">Your local playlists were recovered from the damaged database.</string>
     <string name="localPlaylistsImportFailed">Couldn't import local playlists: {error}</string>
     <string name="settingsImported">Settings imported</string>
     <string name="settingsImportInvalidFile">Import failed: the file isn't a valid settings backup</string>

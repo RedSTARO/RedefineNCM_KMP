@@ -724,6 +724,8 @@
     <string name="settingsLoadFailed">设置读取失败</string>
     <string name="settingsLoadFailedAtStartup">应用读取不了自己的设置，暂时无法启动。请重试；如果一直失败，请检查设备的剩余存储空间。</string>
     <string name="settingsResetAfterDamage">设置文件已损坏，已恢复为默认设置。之前登录的账号需要重新登录。</string>
+    <string name="databaseSetAsideAfterDamage">本地数据库已损坏，已另存为备份并换用新的数据库，播放队列已清空。如有功能异常，请重新打开应用。</string>
+    <string name="localLibraryRestoredAfterDamage">本地歌单已从损坏的数据库中恢复。</string>
     <string name="localPlaylistsImportFailed">本地歌单导入失败：{error}</string>
     <string name="settingsImported">设置已导入</string>
     <string name="settingsImportInvalidFile">导入失败：文件不是有效的设置备份</string>

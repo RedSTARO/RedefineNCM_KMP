@@ -6,15 +6,23 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-/** Something the app did on its own while starting that the user should hear about once. */
+/** Something storage did on its own, at startup or later, that the user should hear about once. */
 enum class StartupNotice {
     /** The settings file could not be read and was replaced with defaults. */
-    SettingsReset;
+    SettingsReset,
+
+    /** Android: SQLite reported the database corrupt, and it was put aside under a `.bak` name. */
+    DatabaseSetAside,
+
+    /** Android: the local library was copied from a database put aside into the new one. */
+    LocalLibraryRestored;
 
     /** Worded when shown, in the language current then. */
     val message: String
         get() = when (this) {
             SettingsReset -> strings.settingsResetAfterDamage
+            DatabaseSetAside -> strings.databaseSetAsideAfterDamage
+            LocalLibraryRestored -> strings.localLibraryRestoredAfterDamage
         }
 }
 

@@ -724,6 +724,8 @@
     <string name="settingsLoadFailed">設定を読み込めませんでした</string>
     <string name="settingsLoadFailedAtStartup">アプリの設定を読み込めないため、起動できません。もう一度お試しください。繰り返し失敗する場合は、端末の空き容量を確認してください。</string>
     <string name="settingsResetAfterDamage">設定ファイルが破損していたため、設定を初期状態に戻しました。使っていたアカウントにもう一度ログインしてください。</string>
+    <string name="databaseSetAsideAfterDamage">ローカルデータベースが破損していたため、バックアップとして保存し、新しいデータベースに切り替えました。再生キューは空です。動作がおかしい場合は、アプリを開き直してください。</string>
+    <string name="localLibraryRestoredAfterDamage">ローカルプレイリストを破損したデータベースから復元しました。</string>
     <string name="localPlaylistsImportFailed">ローカルプレイリストをインポートできませんでした：{error}</string>
     <string name="settingsImported">設定をインポートしました</string>
     <string name="settingsImportInvalidFile">インポートに失敗しました：有効な設定のバックアップではありません</string>

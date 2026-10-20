@@ -4,6 +4,7 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.WindowExceptionHandler
 import androidx.compose.ui.window.WindowExceptionHandlerFactory
 import com.leejlredstar.redefinencm.kmp.data.db.DatabaseSchemaTooNewException
+import com.leejlredstar.redefinencm.kmp.data.db.putDatabaseAside
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -108,29 +109,9 @@ internal fun startFailureMessage(failure: Throwable, logFile: File?): String = b
 
 private val asideStamp = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
 
-/**
- * Renames the database, and SQLite's journal files beside it, so the next open starts empty.
- * Returns the new name of the database file, or null when it could not be renamed.
- */
-internal fun putAside(databaseFile: File, at: LocalDateTime): File? {
-    // A name nothing holds yet. Putting a second file aside within the same second would
-    // otherwise rename it over the first on Linux and macOS, and the first is the only copy of
-    // the old data.
-    val stamp = asideStamp.format(at)
-    val target = generateSequence(0) { it + 1 }
-        .map { attempt -> if (attempt == 0) ".$stamp.bak" else ".$stamp-$attempt.bak" }
-        .map { suffix -> File(databaseFile.parentFile, databaseFile.name + suffix) }
-        .first { !it.exists() }
-    if (databaseFile.exists() && !databaseFile.renameTo(target)) return null
-    for (journal in listOf("-journal", "-wal", "-shm")) {
-        val side = File(databaseFile.parentFile, databaseFile.name + journal)
-        if (side.exists() && !side.renameTo(File(side.parentFile, target.name + journal))) {
-            // A journal left beside a new, empty database would be replayed into it.
-            if (!side.delete()) return null
-        }
-    }
-    return target
-}
+/** Puts the database aside under a `.bak` name stamped with [at]; see [putDatabaseAside]. */
+internal fun putAside(databaseFile: File, at: LocalDateTime): File? =
+    putDatabaseAside(databaseFile, asideStamp.format(at))
 
 private fun askAboutLocalData(title: String, message: String): LocalDataChoice {
     val options = arrayOf(strings.desktopDataStartOver, strings.quit)

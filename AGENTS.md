@@ -117,6 +117,13 @@ tables; platform drivers must use `AppDatabase.Schema` migrations rather than ad
 creation. The browser driver accepts only single-key JSON tables and lists every statement it
 supports, so a new table must be registered there as well.
 
+Android differs from the platform defaults in two ways. A database SQLite reports corrupt is not
+deleted: `SetAsideOnCorruption` renames it the way the desktop's start-over does
+(`<name>.<yyyyMMdd-HHmmss>[-n].bak`, `putDatabaseAside` in `javaIoMain`) and copies the local
+library into the next database when it can still be read from the old file. Rows are read through
+32 MiB cursor windows instead of 2 MiB, because the local library and the saved queue are one row
+each; below API 28, which ignores the driver's window size, the process-wide size is set instead.
+
 The Home/user-playlist profile hero follows the same cache-then-network contract: cached user
 detail and level data render immediately in the status surface below the avatar, remain visible
 while the network refresh runs, and are replaced only by a valid network response.

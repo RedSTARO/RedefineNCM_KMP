@@ -13,6 +13,7 @@ actual class DatabaseDriverFactory(private val context: Context) {
             schema = AppDatabase.Schema,
             context = context,
             name = "redefinencm.db",
+            callback = SetAsideOnCorruption(),
             windowSizeBytes = CursorWindowBytes,
         )
     }
