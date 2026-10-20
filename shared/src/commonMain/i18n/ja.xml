@@ -970,6 +970,8 @@
     <!-- util/IosBackgroundDownloadCoordinator.kt -->
     <string name="downloadFileNameInvalid">ダウンロードのファイル名が無効です</string>
     <string name="httpStatus">HTTP {statusCode}</string>
+    <string name="downloadNameTaken">ダウンロードフォルダに「{fileName}」が既にあります。以前のインストールで保存されたものかもしれません。音楽へのアクセスを許可するとそのまま使えます。または削除してからもう一度お試しください。</string>
+    <string name="lyricsNameTaken">ダウンロードフォルダに「{fileName}」が既にあります。以前のインストールで保存されたものかもしれません。削除してからもう一度お試しください。</string>
     <string name="downloadResponseInvalid">サーバーの応答が無効です</string>
     <string name="backgroundDownloadNoFileName">バックグラウンドダウンロードに有効なファイル名がありません</string>
     <string name="backgroundDownloadMoveFailed">バックグラウンドダウンロードの一時ファイルを移動できません</string>

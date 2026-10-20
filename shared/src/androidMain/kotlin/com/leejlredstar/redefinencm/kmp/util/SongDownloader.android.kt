@@ -1,5 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.util
 
+import android.content.ContentResolver
+import android.os.Bundle
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
@@ -340,6 +342,10 @@ private suspend fun publishViaMediaStore(
         ?: error(strings.downloadFileCreateFailed)
 
     try {
+        // MediaStore gives the row another name ("123 (1).mp3") when a file it does not show this
+        // app (one saved by an earlier install) already holds the name. Under that name the song
+        // would never be found again: scans, lookups and deletes all go by <songId>.<extension>.
+        check(mediaStoreDisplayName(context, uri) == fileName) { strings.downloadNameTaken(fileName) }
         resolver.openOutputStream(uri, "w")?.use { output ->
             partialFile.inputStream().use { input -> copyStream(input, output) }
         } ?: error(strings.downloadFileWriteFailed)
@@ -405,15 +411,33 @@ private suspend fun publishLegacyFile(
 private fun deleteStalePendingMediaRows(context: Context, songId: Long) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
     val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
-    val cursor = context.contentResolver.query(
-        collection,
-        arrayOf(MediaStore.MediaColumns._ID),
-        "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ? AND " +
-            "${MediaStore.MediaColumns.RELATIVE_PATH} = ? AND " +
-            "${MediaStore.MediaColumns.IS_PENDING} = 1",
-        arrayOf("$songId.%", DOWNLOAD_RELATIVE_PATH),
-        null,
-    ) ?: error("MediaStore pending query returned no cursor")
+    val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ? AND " +
+        "${MediaStore.MediaColumns.RELATIVE_PATH} = ? AND " +
+        "${MediaStore.MediaColumns.IS_PENDING} = 1"
+    val selectionArgs = arrayOf("$songId.%", DOWNLOAD_RELATIVE_PATH)
+    // MediaStore leaves pending rows out of every query unless asked to include them, even for
+    // the app that owns them, so without this the stale rows were never found.
+    val cursor = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        context.contentResolver.query(
+            collection,
+            arrayOf(MediaStore.MediaColumns._ID),
+            Bundle().apply {
+                putString(ContentResolver.QUERY_ARG_SQL_SELECTION, selection)
+                putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, selectionArgs)
+                putInt(MediaStore.QUERY_ARG_MATCH_PENDING, MediaStore.MATCH_INCLUDE)
+            },
+            null,
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        context.contentResolver.query(
+            MediaStore.setIncludePending(collection),
+            arrayOf(MediaStore.MediaColumns._ID),
+            selection,
+            selectionArgs,
+            null,
+        )
+    } ?: error("MediaStore pending query returned no cursor")
     val pendingUris = cursor.use {
         val idIndex = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
         buildList<Uri> {
@@ -517,8 +541,15 @@ private fun mimeTypeFromFileName(fileName: String): String = when (fileName.subs
     "m4a" -> "audio/mp4"
     "aac" -> "audio/aac"
     "wav" -> "audio/wav"
+    "ogg" -> "audio/ogg"
+    "opus" -> "audio/opus"
     else -> "audio/mpeg"
 }
+
+/** The name MediaStore actually gave [uri]'s row, which can differ from the one asked for. */
+internal fun mediaStoreDisplayName(context: Context, uri: Uri): String? =
+    context.contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)
+        ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
 
 private const val PARTIAL_DOWNLOAD_DIRECTORY = "song-download-parts"
 private const val RESUME_METADATA_SUFFIX = ".validator"

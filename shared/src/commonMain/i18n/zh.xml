@@ -970,6 +970,8 @@
     <!-- util/IosBackgroundDownloadCoordinator.kt -->
     <string name="downloadFileNameInvalid">下载文件名无效</string>
     <string name="httpStatus">HTTP {statusCode}</string>
+    <string name="downloadNameTaken">下载文件夹中已有「{fileName}」，可能来自之前安装的版本。允许本应用访问音乐即可使用它，或删除该文件后重试。</string>
+    <string name="lyricsNameTaken">下载文件夹中已有「{fileName}」，可能来自之前安装的版本。删除该文件后重试。</string>
     <string name="downloadResponseInvalid">服务器返回的内容无效</string>
     <string name="backgroundDownloadNoFileName">后台下载任务没有有效的文件名</string>
     <string name="backgroundDownloadMoveFailed">无法移动后台下载的临时文件</string>

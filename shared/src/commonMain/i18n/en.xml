@@ -1042,6 +1042,8 @@
     <!-- util/IosBackgroundDownloadCoordinator.kt -->
     <string name="downloadFileNameInvalid">Invalid download file name</string>
     <string name="httpStatus">HTTP {statusCode}</string>
+    <string name="downloadNameTaken">The Downloads/RedefineNCM folder already has {fileName}, probably from an earlier install. Allow music access to use it, or delete it and try again.</string>
+    <string name="lyricsNameTaken">The Downloads/RedefineNCM folder already has {fileName}, probably from an earlier install. Delete it and try again.</string>
     <string name="downloadResponseInvalid">The server's response was invalid</string>
     <string name="backgroundDownloadNoFileName">The background download has no valid file name</string>
     <string name="backgroundDownloadMoveFailed">Couldn't move the background download's temporary file</string>

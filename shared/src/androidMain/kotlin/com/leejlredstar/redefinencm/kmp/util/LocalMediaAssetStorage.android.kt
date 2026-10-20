@@ -576,6 +576,9 @@ private fun publishMediaStoreAsset(
     check(context.contentResolver.update(uri, values, null, null) == 1) {
         strings.lyricsFileFinishSaveFailed
     }
+    // A file this app cannot see may already hold the name; MediaStore then picks another one,
+    // under which the sidecar would never be found.
+    check(mediaStoreDisplayName(context, uri) == fileName) { strings.lyricsNameTaken(fileName) }
 }
 
 private fun temporaryMediaStoreAssetName(targetName: String): String =
