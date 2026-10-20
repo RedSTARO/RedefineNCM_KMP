@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -58,6 +59,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.amll.compose.rememberReducedMotionEnabled
+import com.leejlredstar.redefinencm.kmp.ui.theme.DeclareSystemBarBackground
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.i18n.text
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
@@ -177,6 +179,8 @@ fun NowPlayingScreen(
     var showSongWiki by remember { mutableStateOf(false) }
     LaunchedEffect(media?.id) { showSongWiki = false }
 
+    // The bars sit on the top of the cover-tinted gradient, which can be light in a dark theme.
+    DeclareSystemBarBackground(dark = palette.pageStart.luminance() < 0.5f)
     Box(
         modifier = Modifier
             .fillMaxSize()

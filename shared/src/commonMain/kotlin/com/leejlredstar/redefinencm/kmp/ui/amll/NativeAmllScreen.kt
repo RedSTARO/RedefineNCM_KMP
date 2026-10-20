@@ -52,6 +52,7 @@ import com.leejlredstar.amll.compose.AmllLyricViewport
 import com.leejlredstar.amll.compose.buildAmllLyricDocument
 import com.leejlredstar.amll.compose.calculateAmllLyricVisualParameters
 import com.leejlredstar.amll.compose.rememberReducedMotionEnabled
+import com.leejlredstar.redefinencm.kmp.ui.theme.DeclareSystemBarBackground
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.lyric.LyricStateOverlay
 import com.leejlredstar.redefinencm.kmp.player.PlayerState
@@ -153,6 +154,8 @@ fun NativeAmllScreen(
     val dynamicCoverUrl = dynamicCoverState
         .urlFor(metadata?.id)
         .takeUnless { localArtworkActive }
+    // Near-black under the bars whatever the theme: light icons.
+    DeclareSystemBarBackground(dark = true)
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()

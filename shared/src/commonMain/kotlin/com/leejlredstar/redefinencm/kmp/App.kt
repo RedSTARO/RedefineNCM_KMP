@@ -5,6 +5,8 @@ import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.ui.theme.ArtworkTheme
 import com.leejlredstar.redefinencm.kmp.util.StartupNotices
 import com.leejlredstar.redefinencm.kmp.util.getStringAsync
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ContentTransform
@@ -131,7 +133,10 @@ import com.leejlredstar.redefinencm.kmp.ui.screen.SettingsScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.SongRecognitionScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.UserPlaylistScreen
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.theme.LocalSystemBarBackgrounds
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
+import com.leejlredstar.redefinencm.kmp.ui.theme.SystemBarBackgrounds
+import com.leejlredstar.redefinencm.kmp.ui.theme.SystemBarIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.ThemePreferences
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
@@ -329,9 +334,15 @@ fun App() {
     }
 
     RedefineNCMTheme {
-        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-            startsSignedIn?.let { signedIn ->
-                AppContent(settings = settings, startsSignedIn = signedIn)
+        val barBackgrounds = remember { SystemBarBackgrounds() }
+        SystemBarIcons(
+            darkBackground = barBackgrounds.darkest ?: (MaterialTheme.colorScheme.surface.luminance() < 0.5f),
+        )
+        CompositionLocalProvider(LocalSystemBarBackgrounds provides barBackgrounds) {
+            Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+                startsSignedIn?.let { signedIn ->
+                    AppContent(settings = settings, startsSignedIn = signedIn)
+                }
             }
         }
     }

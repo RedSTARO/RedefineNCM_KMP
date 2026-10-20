@@ -10,10 +10,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
+import com.leejlredstar.redefinencm.kmp.ui.theme.SystemBarIcons
 
 /**
  * What a platform shows instead of the app when its settings cannot be read at startup.
@@ -25,6 +27,7 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
 @Composable
 fun SettingsLoadFailure(onRetry: () -> Unit) {
     RedefineNCMTheme {
+        SystemBarIcons(darkBackground = MaterialTheme.colorScheme.surface.luminance() < 0.5f)
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
             Box(
                 modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp),
