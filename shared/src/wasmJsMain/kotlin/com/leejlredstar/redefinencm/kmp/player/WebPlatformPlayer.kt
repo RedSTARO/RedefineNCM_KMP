@@ -571,7 +571,7 @@ class WebPlatformPlayer(
         if (released) return
         abandonTransition(dropPlan = true)
         invalidatePlayback(clearSource = true)
-        queueModel = PlayQueue.empty()
+        queueModel = queueModel.clear()
         pendingSeekMs = 0L
         publishQueue()
         _position.value = 0L

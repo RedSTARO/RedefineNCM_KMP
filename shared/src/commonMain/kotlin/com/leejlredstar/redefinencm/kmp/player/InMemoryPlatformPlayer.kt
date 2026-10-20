@@ -118,7 +118,7 @@ class InMemoryPlatformPlayer(
 
     override fun clearQueue() {
         withStateLock {
-            queueModel = PlayQueue.empty()
+            queueModel = queueModel.clear()
             stopTickerLocked()
             _isPlaying.value = false
             _state.value = PlayerState.IDLE

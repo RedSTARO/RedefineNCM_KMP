@@ -258,4 +258,16 @@ class PlayQueueTest {
         assertEquals(shuffled.itemsInPlayOrder, moved.itemsInPlayOrder)
         assertEquals(shuffled.currentItem, moved.currentItem)
     }
+
+    /** Clearing the queue keeps the shuffle toggle as shown, so the next list plays that way. */
+    @Test
+    fun clearingAndEmptyQueuesKeepShuffle() {
+        val shuffled = PlayQueue.of(listOf("a", "b", "c"), shuffle = true, rng = Random(1))
+        val cleared = shuffled.clear()
+        assertTrue(cleared.isEmpty)
+        assertTrue(cleared.shuffleEnabled)
+        assertTrue(cleared.addItem("d").shuffleEnabled)
+        assertTrue(PlayQueue.of(emptyList<String>(), shuffle = true).shuffleEnabled)
+        assertEquals(false, PlayQueue.of(listOf("a")).clear().shuffleEnabled)
+    }
 }

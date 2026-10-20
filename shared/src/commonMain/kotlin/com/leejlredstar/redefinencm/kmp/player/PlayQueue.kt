@@ -172,7 +172,8 @@ class PlayQueue<T> private constructor(
         return copy(items = movedItems, currentIndex = newCurrent)
     }
 
-    fun clear(): PlayQueue<T> = empty()
+    /** No items, and shuffle as it was: the next list plays the way the toggle shows. */
+    fun clear(): PlayQueue<T> = empty<T>().setShuffle(shuffleEnabled)
 
     companion object {
         fun <T> empty(): PlayQueue<T> = PlayQueue(emptyList(), -1, false, emptyList())
@@ -204,7 +205,7 @@ class PlayQueue<T> private constructor(
             shuffle: Boolean = false,
             rng: Random = Random.Default,
         ): PlayQueue<T> {
-            if (items.isEmpty()) return empty()
+            if (items.isEmpty()) return empty<T>().setShuffle(shuffle)
             val start = startIndex.coerceIn(0, items.lastIndex)
             val natural = PlayQueue(items, start, false, items.indices.toList())
             return if (shuffle) natural.setShuffle(true, rng) else natural

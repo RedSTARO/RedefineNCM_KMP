@@ -145,4 +145,12 @@ class JvmPlaybackSessionLifecycleTest {
         assertNull(stopFailure.get())
         assertEquals(owner.name, closedBy.get())
     }
+
+    @Test
+    fun clearingTheQueueKeepsShuffleOn() = withPlayer { player ->
+        player.restoreQueue(List(3) { MediaInfo("$it", "Song $it", "Test") }, 0, 0L)
+        player.setShuffleEnabled(true)
+        player.clearQueue()
+        assertTrue(player.queueSnapshot.value.shuffleEnabled)
+    }
 }

@@ -237,6 +237,23 @@ class JvmMediaPlayer(
     private fun isPlaybackCurrent(generation: Long): Boolean =
         synchronized(playbackLock) { generation == playbackGeneration }
 
+    /** Waits while paused; false once the session has ended or the thread was interrupted. */
+    private fun awaitPauseRelease(generation: Long): Boolean {
+        pauseLock.lock()
+        try {
+            while (pauseRequested && generation == playbackGeneration && !Thread.currentThread().isInterrupted) {
+                try {
+                    pauseCondition.await(100, TimeUnit.MILLISECONDS)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                }
+            }
+        } finally {
+            pauseLock.unlock()
+        }
+        return generation == playbackGeneration && !Thread.currentThread().isInterrupted
+    }
+
     private fun signalPauseStateChanged() {
         pauseLock.lock()
         try {
@@ -410,46 +427,46 @@ class JvmMediaPlayer(
                 clock = playbackClock
             }
 
-            decoded.durationMs.takeIf { it > 0L }?.let { _duration.value = it }
-
-            if (!isPlaybackCurrent(generation)) return
-
             val channels = deckMixer.channels
             val block = FloatArray(BLOCK_FRAMES * channels)
             val bytes = ByteArray(BLOCK_FRAMES * channels * 2)
             audioLine.start()
-            seekOffsetMs = startMs
-            _position.value = startMs
-            _isPlaying.value = true
-            _state.value = PlayerState.PLAYING
+            // Published only while this session is still the current one. A pause, seek or skip
+            // that came while the stream opened has published its own state and ended this
+            // session; writing PLAYING over it left a player that showed playing with nothing
+            // behind it, and a play button that did nothing.
+            val published = synchronized(queueOperationLock) {
+                synchronized(playbackLock) {
+                    if (generation != playbackGeneration) return@synchronized false
+                    decoded.durationMs.takeIf { it > 0L }?.let { _duration.value = it }
+                    seekOffsetMs = startMs
+                    _position.value = startMs
+                    _isPlaying.value = true
+                    _state.value = PlayerState.PLAYING
+                    true
+                }
+            }
+            if (!published) return
 
             while (!Thread.currentThread().isInterrupted && isPlaybackCurrent(generation)) {
-                var shouldStop = false
-                pauseLock.lock()
-                try {
-                    while (pauseRequested && generation == playbackGeneration && !Thread.currentThread().isInterrupted) {
-                        try {
-                            pauseCondition.await(100, TimeUnit.MILLISECONDS)
-                        } catch (_: InterruptedException) {
-                            Thread.currentThread().interrupt()
-                        }
-                    }
-                } finally {
-                    pauseLock.unlock()
-                }
-                if (generation != playbackGeneration || Thread.currentThread().isInterrupted) {
-                    shouldStop = true
-                } else if (!audioLine.isRunning) {
-                    audioLine.start()
-                }
-                if (shouldStop) break
+                if (!awaitPauseRelease(generation)) break
+                if (!audioLine.isRunning) audioLine.start()
                 val frames = deckMixer.render(block, BLOCK_FRAMES)
                 if (frames == 0) {
                     if (deckMixer.endedOnReadFailure) streamInterrupted = true else completedNaturally = true
                     break
                 }
                 if (!isPlaybackCurrent(generation)) break
-                audioLine.write(bytes, 0, floatToPcm16(block, frames, channels, bytes))
+                val written = writeFully(
+                    line = audioLine,
+                    bytes = bytes,
+                    length = floatToPcm16(block, frames, channels, bytes),
+                    paused = { pauseRequested },
+                    awaitResume = {
+                        awaitPauseRelease(generation).also { resumed -> if (resumed && !audioLine.isRunning) audioLine.start() }
+                    },
+                )
+                if (!written) break
                 deckMixer.planNeedingIncoming(PREPARE_LEAD_MS)?.let { plan ->
                     prepareIncoming(generation, deckMixer, plan)
                 }
@@ -467,11 +484,13 @@ class JvmMediaPlayer(
             // past this handler, the playback thread would die with the state flows still
             // reading PLAYING, and the UI would keep advancing its progress bar over silence
             // instead of reporting a failure.
-            if (isPlaybackCurrent(generation)) {
-                System.err.println("JvmMediaPlayer failed to play audio stream: ${e.javaClass.name}: ${e.message}")
-                _state.value = PlayerState.ERROR
-                _isPlaying.value = false
-                stopPollingIfCurrent(generation)
+            synchronized(playbackLock) {
+                if (generation == playbackGeneration) {
+                    System.err.println("JvmMediaPlayer failed to play audio stream: ${e.javaClass.name}: ${e.message}")
+                    _state.value = PlayerState.ERROR
+                    _isPlaying.value = false
+                    stopPolling()
+                }
             }
         } finally {
             try {
@@ -505,6 +524,10 @@ class JvmMediaPlayer(
             stopPollingIfCurrent(generation)
             synchronized(queueOperationLock) {
                 if (!isPlaybackCurrent(generation)) return@synchronized
+                // Paused while the last half second drained: the track stays current and paused
+                // where it stopped, and play() plays that tail before the queue moves on, rather
+                // than the next track starting over the pause.
+                if (pauseRequested) return@synchronized
                 _isPlaying.value = false
                 seekOffsetMs = 0L
                 val previous = currentQueueModel()
@@ -537,6 +560,8 @@ class JvmMediaPlayer(
             val current = claim.model.currentItem ?: return
             val position = _position.value.coerceAtLeast(0L)
             seekOffsetMs = position
+            // Paused meanwhile: play() opens the stream again from here.
+            if (pauseRequested) return
             if (streamReopens.allow(claim.selectionRevision, position)) {
                 System.err.println("JvmMediaPlayer: the stream stopped at $position ms; opening it again")
                 resolveAndPlay(current, position, claim.selectionRevision)
@@ -838,7 +863,7 @@ class JvmMediaPlayer(
 
     override fun clearQueue() {
         synchronized(queueOperationLock) {
-            val claim = mutateQueue(invalidatesPlaybackClaim = true) { PlayQueue.empty() }
+            val claim = mutateQueue(invalidatesPlaybackClaim = true) { it.clear() }
             onTrackChanged(claim, autoplay = false)
         }
     }
@@ -1018,3 +1043,27 @@ internal class StreamReopenBudget(
  * play at all; FFmpeg downmixes it instead, and mono plays on both sides as before.
  */
 private const val OutputChannels = 2
+
+/**
+ * Writes [length] bytes to [line]. A pause stops the line, and the write in progress returns short:
+ * the rest is written once [awaitResume] says playback goes on, so a pause neither drops up to a
+ * block of audio nor leaves the clock ahead of what was heard. A short write with no pause pending
+ * (the session being stopped, or a device fault) is left to the caller's own checks, as before.
+ * False when the session ended while paused.
+ */
+internal fun writeFully(
+    line: SourceDataLine,
+    bytes: ByteArray,
+    length: Int,
+    paused: () -> Boolean,
+    awaitResume: () -> Boolean,
+): Boolean {
+    var offset = 0
+    while (offset < length) {
+        offset += line.write(bytes, offset, length - offset).coerceAtLeast(0)
+        if (offset >= length) return true
+        if (!paused()) return true
+        if (!awaitResume()) return false
+    }
+    return true
+}

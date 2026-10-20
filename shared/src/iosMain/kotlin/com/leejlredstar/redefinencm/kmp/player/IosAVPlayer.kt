@@ -291,7 +291,7 @@ class IosAVPlayer(
 
     override fun clearQueue() {
         beginPlaybackSession(clearItem = true)
-        queueModel = PlayQueue.empty()
+        queueModel = queueModel.clear()
         publishQueue()
         _state.value = PlayerState.IDLE
         _isPlaying.value = false
