@@ -94,7 +94,10 @@ class JvmMediaPlayer(
 
     // ── Internal helpers ──
 
-    private fun publishQueueLocked(snapshot: PlayQueue<MediaInfo>) {
+    /** The item the published duration belongs to; written inside the queue state's lock. */
+    private var durationPublishedFor: MediaInfo? = null
+
+    private fun publishQueueLocked(snapshot: PlayQueue<MediaInfo>, selectionChanged: Boolean) {
         val publication = snapshot.asJvmQueuePublication()
         publishQueueSnapshot(
             PlayerQueueSnapshot(
@@ -106,7 +109,14 @@ class JvmMediaPlayer(
                 playOrder = snapshot.playOrder,
             ),
         )
-        publishDurationFromMedia(publication.currentMedia)
+        // The decoder's duration belongs to the item it was read from. Edits that keep that item
+        // current (adding, moving, shuffling, removing another one) leave it alone: the queue's
+        // own value is 0 for an item from the downloads page, which disabled the seek bar.
+        val current = publication.currentMedia
+        if (selectionChanged || current !== durationPublishedFor) {
+            durationPublishedFor = current
+            publishDurationFromMedia(current)
+        }
     }
 
     private fun mutateQueue(
@@ -115,7 +125,7 @@ class JvmMediaPlayer(
     ): JvmQueueClaim<MediaInfo> = queueState.mutateAndPublish(
         invalidatesPlaybackClaim = invalidatesPlaybackClaim,
         block = block,
-        publish = ::publishQueueLocked,
+        publish = { publishQueueLocked(it, selectionChanged = invalidatesPlaybackClaim) },
     )
 
     private fun currentQueueClaim(): JvmQueueClaim<MediaInfo> = queueState.current()
@@ -354,7 +364,7 @@ class JvmMediaPlayer(
             )
             // FFmpeg seeks the decoder itself, so nothing discards PCM bytes at the head of the
             // stream to approximate a seek; that approximation could misalign the channels.
-            var decoded = FfmpegAudioSource.open(streamUrl, startMs)
+            var decoded = FfmpegAudioSource.open(streamUrl, startMs, forcedChannels = OutputChannels)
             if (!isPlaybackCurrent(generation)) {
                 decoded.close()
                 return
@@ -379,6 +389,7 @@ class JvmMediaPlayer(
                     streamUrl,
                     startMs,
                     FfmpegAudioSource.FallbackSampleRate,
+                    OutputChannels,
                 )
                 try {
                     openAudioOutputLine(decoded.format, deviceId)
@@ -1000,3 +1011,10 @@ internal class StreamReopenBudget(
         return used <= limit
     }
 }
+
+/**
+ * The channel count every track is decoded to. Java Sound's Windows backend offers lines of one
+ * or two channels only and refuses more, so a 5.1 master (NetEase's surround tiers) failed to
+ * play at all; FFmpeg downmixes it instead, and mono plays on both sides as before.
+ */
+private const val OutputChannels = 2

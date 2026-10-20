@@ -144,6 +144,75 @@ class DeckMixerTest {
         assertTrue(left.all { it < 1e-3f }, "outgoing still audible after the blend")
     }
 
+    /** Renders until [until] frames, offering the incoming track whenever the mixer asks. */
+    private fun DeckMixer.renderTo(until: Long, block: FloatArray, incoming: File?): Long {
+        var frames = 0L
+        while (frames < until) {
+            val got = render(block, minOf(2_048L, until - frames).toInt())
+            if (got == 0) break
+            frames += got
+            planNeedingIncoming(12_000L)?.let { wanted ->
+                if (incoming != null) {
+                    offerIncoming(wanted, FfmpegAudioSource.open(incoming.toURI().toString(), wanted.incomingEntryMs, 44_100, 2))
+                }
+            }
+        }
+        return frames
+    }
+
+    /** A pause abandons any blend; one before the plan starts must not cancel the plan. */
+    @Test
+    fun aPauseBeforeThePlanStartsKeepsIt() {
+        val outgoingFile = clickTrack("out.wav", 44_100, 20, periodMs = 480, channel = 0)
+        val incomingFile = clickTrack("in.wav", 44_100, 20, periodMs = 500, channel = 1)
+        val plan = TransitionPlan("out", "in", TransitionKind.CROSSFADE, 10_000L, 10_000L, 0L, 4_000L, 1.0, 2_000L)
+        val mixer = DeckMixer(FfmpegAudioSource.open(outgoingFile.toURI().toString()), "out", 0L, PlaybackClock(44_100))
+        mixer.armedPlan = plan
+        val block = FloatArray(2_048 * 2)
+        try {
+            mixer.renderTo(2L * 44_100, block, incomingFile)
+            mixer.abandonBlend(keepDeckSequence = 0L)
+            mixer.renderTo(10L * 44_100, block, incomingFile)
+            assertEquals("in", mixer.blendIncomingMediaId)
+        } finally {
+            mixer.close()
+        }
+    }
+
+    /** One that comes during a tempo ramp drops it, and the track returns to its own tempo. */
+    @Test
+    fun aPauseDuringTheRampDropsThePlan() {
+        val outgoingFile = clickTrack("out.wav", 44_100, 20, periodMs = 480, channel = 0)
+        val plan = TransitionPlan(
+            outgoingMediaId = "out",
+            incomingMediaId = "in",
+            kind = TransitionKind.BEAT_MATCHED,
+            rampStartMs = 4_000L,
+            startMs = 9_000L,
+            incomingEntryMs = 0L,
+            overlapMs = 4_000L,
+            outgoingRate = 0.96,
+            swapAfterMs = 2_000L,
+        )
+        val clock = PlaybackClock(44_100)
+        val mixer = DeckMixer(FfmpegAudioSource.open(outgoingFile.toURI().toString()), "out", 0L, clock)
+        mixer.armedPlan = plan
+        val block = FloatArray(2_048 * 2)
+        try {
+            val atPause = mixer.renderTo(6L * 44_100, block, incoming = null)
+            mixer.abandonBlend(keepDeckSequence = 0L)
+            mixer.renderTo(44_100L, block, incoming = null)
+            assertEquals(null, mixer.planNeedingIncoming(12_000L))
+            val before = clock.at(atPause + 44_100L)!!.positionMs
+            val after = clock.at(atPause + 2L * 44_100)!!.positionMs
+            assertTrue(abs((after - before) - 1_000L) <= 5L, "a second of output played ${after - before} ms of the track")
+            mixer.renderTo(8L * 44_100, block, incoming = null)
+            assertEquals(null, mixer.blendIncomingMediaId)
+        } finally {
+            mixer.close()
+        }
+    }
+
     @Test
     fun aSeekPastTheStartSkipsThePlan() {
         val outgoingFile = clickTrack("out.wav", 44_100, 20, periodMs = 480, channel = 0)

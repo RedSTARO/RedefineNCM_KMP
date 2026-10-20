@@ -412,8 +412,12 @@ internal class DeckMixer(
         val keep = abandonKeeping.getAndSet(null) ?: return
         val active = blend
         if (active == null) {
-            // Only a ramp was under way: drop the plan and return to the track's own tempo.
-            armedForPrimary()?.let { blendAttempted = it }
+            // No blend yet. A tempo ramp already under way is dropped, and the track returns to
+            // its own tempo; a plan whose ramp has not started stays armed. Dropping that too
+            // meant a pause and resume, which abandons, skipped the transition for good.
+            armedForPrimary()
+                ?.takeIf { it.plan.changesTempo && positionMs(primary) >= it.plan.rampStartMs }
+                ?.let { blendAttempted = it }
             stretcher?.let { stretch ->
                 if (stretch.rate != 1.0) {
                     stretch.rate = 1.0

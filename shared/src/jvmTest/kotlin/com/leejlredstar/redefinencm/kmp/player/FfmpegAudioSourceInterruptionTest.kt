@@ -100,6 +100,35 @@ class FfmpegAudioSourceInterruptionTest {
         }
     }
 
+    /** Java Sound's Windows lines take one or two channels: a surround master is downmixed. */
+    @Test
+    fun aSixChannelTrackIsDecodedToStereo() {
+        val frames = Rate * 2
+        val pcm = ByteArray(frames * 6 * 2)
+        for (frame in 0 until frames) {
+            val sample = if (frame % 40 < 20) 8_000 else -8_000
+            // Front left only: what reaches the stereo pair must come from the downmix.
+            pcm[frame * 12] = sample.toByte()
+            pcm[frame * 12 + 1] = (sample shr 8).toByte()
+        }
+        val file = Files.createTempFile("surround", ".wav").toFile()
+        try {
+            val format = AudioFormat(Rate.toFloat(), 16, 6, true, false)
+            AudioInputStream(ByteArrayInputStream(pcm), format, frames.toLong()).use {
+                AudioSystem.write(it, AudioFileFormat.Type.WAVE, file)
+            }
+            FfmpegAudioSource.open(file.toURI().toString(), forcedChannels = 2).use { source ->
+                assertEquals(2, source.channels)
+                val buffer = FloatArray(4_096 * 2)
+                val got = source.read(buffer, 0, 4_096)
+                assertTrue(got > 0)
+                assertTrue((0 until got * 2).any { kotlin.math.abs(buffer[it]) > 0.05f }, "the downmix is silent")
+            }
+        } finally {
+            file.delete()
+        }
+    }
+
     @Test
     fun aSelectionReopensAFewTimesInARowAndAgainAfterPlayingOn() {
         val budget = StreamReopenBudget(limit = 2, progressMs = 10_000L)

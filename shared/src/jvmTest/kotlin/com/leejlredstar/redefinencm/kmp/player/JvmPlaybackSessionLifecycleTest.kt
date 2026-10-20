@@ -45,6 +45,33 @@ class JvmPlaybackSessionLifecycleTest {
         }
     }
 
+    /**
+     * The decoder's duration belongs to the item it was read from; a queue edit that keeps that
+     * item current must not swap in the queue's own value, which is 0 for a downloads-page item.
+     */
+    @Test
+    fun queueEditsThatKeepTheCurrentItemKeepItsDuration() = withPlayer { player ->
+        val items = List(4) { MediaInfo("$it", "Song $it", "Test", duration = 0L) }
+        player.restoreQueue(items.take(3), 0, 0L)
+        assertEquals(-1L, player.duration.value)
+        @Suppress("UNCHECKED_CAST")
+        val decoderDuration = BasePlatformPlayer::class.java.getDeclaredField("_duration")
+            .apply { isAccessible = true }.get(player) as kotlinx.coroutines.flow.MutableStateFlow<Long>
+        decoderDuration.value = 240_000L
+
+        player.moveInQueue(1, 2)
+        assertEquals(240_000L, player.duration.value, "after a move")
+        player.addToQueue(items[3])
+        assertEquals(240_000L, player.duration.value, "after an append")
+        player.removeFromQueue(3)
+        assertEquals(240_000L, player.duration.value, "after removing another item")
+        player.setShuffleEnabled(true)
+        assertEquals(240_000L, player.duration.value, "after shuffling")
+
+        player.seekToNext()
+        assertEquals(-1L, player.duration.value, "another item carries its own")
+    }
+
     @Test
     fun aCancelledPlaybackSessionNeverOpensItsUrl() = withPlayer { player ->
         val requests = AtomicInteger()
