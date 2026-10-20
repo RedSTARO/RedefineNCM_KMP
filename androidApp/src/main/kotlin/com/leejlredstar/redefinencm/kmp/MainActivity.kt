@@ -65,10 +65,25 @@ class MainActivity : ComponentActivity() {
 
     private var startupJob: Job? = null
 
+    /**
+     * Whether this activity's launch intent was acted on. Kept across process death: Android gives
+     * a recreated activity its original intent again (clearing it here changes only this process's
+     * copy), and a notification tap would reopen the player over the restored pages each time.
+     */
+    private var launchNavigationHandled = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        launchNavigationHandled = savedInstanceState?.getBoolean(KEY_LAUNCH_NAVIGATION_HANDLED) == true ||
+            // Reopened from Recents after Back finished it, which leaves no saved state.
+            intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0
         startUp()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(KEY_LAUNCH_NAVIGATION_HANDLED, launchNavigationHandled)
     }
 
     private fun startUp() {
@@ -109,7 +124,10 @@ class MainActivity : ComponentActivity() {
             ).buildAsync()
 
             requestRuntimePermissions()
-            handleNavigationIntent(intent)
+            if (!launchNavigationHandled) {
+                handleNavigationIntent(intent)
+                launchNavigationHandled = true
+            }
             setContent {
                 App()
                 val pending = pendingPermissions
@@ -212,6 +230,7 @@ class MainActivity : ComponentActivity() {
     private companion object {
         const val STARTUP_PREFERENCES = "startup"
         const val KEY_PERMISSION_RATIONALE_ANSWERED = "permissionRationaleAnswered"
+        const val KEY_LAUNCH_NAVIGATION_HANDLED = "launchNavigationHandled"
     }
 
     private fun hasPermission(permission: String): Boolean =
@@ -237,7 +256,8 @@ class MainActivity : ComponentActivity() {
         }
         if (consumed) {
             // Navigation intents are one-shot. Leaving them on the Activity would reopen the
-            // full-screen player/downloads after a configuration change or process recreation.
+            // full-screen player/downloads after a configuration change; after process death the
+            // system's own copy comes back, which launchNavigationHandled covers.
             intent.action = null
             intent.removeExtra(DownloadNotificationIntents.EXTRA_OPEN_DOWNLOADS)
             intent.removeExtra(NowPlayingNotificationIntents.EXTRA_OPEN_NOW_PLAYING)
