@@ -117,6 +117,12 @@ class WebBootPageTest {
             afterPendingTasks()
             assertEquals("Couldn't start the app", bootLabel())
             assertTrue(retryVisible())
+
+            // A viewport created before the failure may still report ready; the broken app must
+            // stay hidden behind the failure.
+            markReady()
+            assertTrue(bootPresent())
+            assertEquals("", appVisibility())
         }
     }
 

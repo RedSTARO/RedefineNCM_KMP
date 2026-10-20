@@ -97,6 +97,8 @@
         // "loading" until the app is shown ("ready") or a failure is ("failed").
         let state = "loading";
         let appStarted = false;
+        // The app's own start threw: it is broken, so nothing may show it afterwards.
+        let startFailedFinally = false;
         let stallTimer;
         let revealTimer;
         const abort = new AbortController();
@@ -198,14 +200,20 @@
         return {
             fontReady,
             fail,
+            // The app's start threw. Unlike an error seen on the page, this one is final.
+            startFailed(reason) {
+                startFailedFinally = true;
+                fail(reason);
+            },
             // The app's own code is running.
             started() {
                 appStarted = true;
             },
-            // The app has its font and is about to draw. It is shown even after a failure was
-            // reported, so a failure that turned out not to matter cannot keep a working app hidden.
+            // The app has its font and is about to draw. It is shown even after an error seen on the
+            // page, so one that turned out not to matter cannot keep a working app hidden; never
+            // after its own start failed.
             ready() {
-                if (state === "ready" || state === "disposed") return;
+                if (state === "ready" || state === "disposed" || startFailedFinally) return;
                 state = "ready";
                 disarm();
                 app.style.visibility = "visible";

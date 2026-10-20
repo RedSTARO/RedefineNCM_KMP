@@ -32,11 +32,14 @@ fun main() {
         configureWebArtworkImageLoader()
         initKoin()
         onSystemLanguageChange { I18n.refreshSystemLanguage() }
+        // Built before the viewport: the player pulls in the settings, the database and the HTTP
+        // client, and a failure there must stop the start before a viewport exists to show.
+        val player = KoinPlatform.getKoin().get<PlatformPlayer>()
         ComposeViewport(viewportContainerId = "redefineNcmApp") {
             WebAppAfterFontPreload()
         }
         // After the viewport, so Compose sees each key first and can claim it.
-        installWebKeyboardShortcuts(KoinPlatform.getKoin().get<PlatformPlayer>())
+        installWebKeyboardShortcuts(player)
     }
 }
 
@@ -85,7 +88,8 @@ private fun WebAppAfterFontPreload() {
             .then(() => start())
             .catch(error => {
                 console.error(error);
-                boot?.fail?.(error);
+                if (boot?.startFailed) boot.startFailed(error);
+                else boot?.fail?.(error);
             });
     }""",
 )

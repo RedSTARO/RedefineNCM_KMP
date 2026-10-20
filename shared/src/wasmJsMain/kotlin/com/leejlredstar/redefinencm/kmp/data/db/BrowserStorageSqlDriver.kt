@@ -17,7 +17,8 @@ internal interface BrowserDatabaseStorage {
     fun remove(key: String)
 }
 
-private object LocalDatabaseStorage : BrowserDatabaseStorage {
+/** localStorage itself. Settings use it too, so they can make room by dropping cache rows. */
+internal object LocalDatabaseStorage : BrowserDatabaseStorage {
     override fun keys(): List<String> = buildList {
         repeat(localStorage.length) { index -> localStorage.key(index)?.let(::add) }
     }
@@ -326,12 +327,29 @@ internal class BrowserStorageSqlDriver(
         }
     }
 
-    private fun isCacheKey(key: String): Boolean = key.removePrefix(STORAGE_PREFIX)
-        .substringBefore(':') in CACHE_TABLES
+    private fun isCacheKey(key: String): Boolean = isCacheStorageKey(key)
+
+    /**
+     * Stops reading and writing localStorage for this session and drops what was loaded from it,
+     * so a stored database the app cannot open (a newer schema, an unreadable version) stays
+     * exactly as it is. Owned-table reads and writes keep failing through
+     * [recoverPersistentStorage], which checks the stored version again.
+     */
+    internal fun detachFromStorage() {
+        persistenceEnabled = false
+        volatileStorage.clear()
+    }
 
     private fun String.normalizedSql(): String = trim().replace(SQL_WHITESPACE, " ")
 
-    private companion object {
+    internal companion object {
+        /**
+         * Whether [key] is a stored row of a cache table. The driver also keeps every such row in
+         * memory, so the stored copy can be dropped to make room for something that must persist.
+         */
+        fun isCacheStorageKey(key: String): Boolean =
+            key.startsWith(STORAGE_PREFIX) && key.removePrefix(STORAGE_PREFIX).substringBefore(':') in CACHE_TABLES
+
         const val STORAGE_PREFIX = "redefinencm.db."
         const val SCHEMA_VERSION_KEY = "${STORAGE_PREFIX}schemaVersion"
         val SQL_WHITESPACE = Regex("\\s+")

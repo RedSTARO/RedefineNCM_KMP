@@ -184,6 +184,30 @@ class BrowserStorageQuotaTest {
         assertEquals(original, storage.values)
     }
 
+    /**
+     * A later release served from this origin may have written a newer schema. The app must still
+     * start, on an in-memory database, and leave every stored row as it was.
+     */
+    @Test
+    fun aStoredDatabaseTheAppCannotOpenStartsInMemoryAndStaysUntouched() {
+        for (storedVersion in listOf((AppDatabase.Schema.version + 1L).toString(), "not-a-number")) {
+            val storage = LimitedStorage()
+            AppDatabase(BrowserStorageSqlDriver(storage).also(::initializeBrowserDatabase)).seedUserData()
+            storage.values["redefinencm.db.schemaVersion"] = storedVersion
+            val original = storage.values.toMap()
+
+            val driver = BrowserStorageSqlDriver(storage)
+            openBrowserDatabase(driver)
+            val database = AppDatabase(driver)
+
+            database.cachedLyricQueries.upsert(1L, "in-memory")
+            assertEquals("in-memory", database.cachedLyricQueries.selectBySongId(1L).executeAsOne())
+            assertFailsWith<IllegalStateException> { database.localLibraryQueries.select().executeAsOneOrNull() }
+            assertFailsWith<IllegalStateException> { database.localLibraryQueries.upsert("must-not-overwrite") }
+            assertEquals(original, storage.values, storedVersion)
+        }
+    }
+
     @Test
     fun aTransactionRecoversBeforeItsSnapshotSoRollbackKeepsOwnedData() {
         val storage = LimitedStorage()
