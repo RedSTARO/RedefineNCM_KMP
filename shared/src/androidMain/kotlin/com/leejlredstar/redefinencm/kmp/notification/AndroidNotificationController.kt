@@ -24,7 +24,7 @@ import com.leejlredstar.redefinencm.kmp.util.canPostNotifications
  * stays either way.
  */
 object AndroidLyricNotification : OptionalLyricSurface {
-    private const val CHANNEL_ID = "live_update_lyric"
+    internal const val CHANNEL_ID = "live_update_lyric"
     private const val NOTIFICATION_ID = 0x4C595243 // "LYRC"
 
     override val settingLabel: String get() = strings.enableLiveUpdateLyrics

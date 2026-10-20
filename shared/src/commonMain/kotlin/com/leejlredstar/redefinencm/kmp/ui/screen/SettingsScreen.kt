@@ -3,6 +3,7 @@ package com.leejlredstar.redefinencm.kmp.ui.screen
 import com.leejlredstar.redefinencm.kmp.i18n.I18n
 import com.leejlredstar.redefinencm.kmp.i18n.LanguageSetting
 import com.leejlredstar.redefinencm.kmp.i18n.strings
+import com.leejlredstar.redefinencm.kmp.util.rememberNotificationAccess
 import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import com.leejlredstar.redefinencm.kmp.util.getBooleanAsync
 import androidx.compose.foundation.background
@@ -633,14 +634,20 @@ fun SettingsScreen(
                     )
                 }
                 if (optionalLyricSurface != null) {
+                    val notificationAccess = rememberNotificationAccess()
                     SettingsSwitch(
                         extraLyricSurfaceEnabled,
                         optionalLyricSurface.settingLabel,
                         settingsPalette,
                         index = 1,
                         count = lyricSettingCount,
+                        // The switch stays as chosen; this says why nothing appears.
+                        supportingText = strings.lyricNotificationBlocked
+                            .takeIf { extraLyricSurfaceEnabled && !notificationAccess.allowed },
                     ) { enabled ->
                         extraLyricSurfaceEnabled = enabled
+                        // Asked here, where the reason is plain, rather than at every launch.
+                        if (enabled) notificationAccess.request()
                         persistSettings(
                             write = { settings.setBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, enabled) },
                             onWritten = {

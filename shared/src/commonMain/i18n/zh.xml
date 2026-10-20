@@ -57,6 +57,7 @@
 
     <!-- notification/AndroidNotificationController.kt -->
     <string name="enableLiveUpdateLyrics">启用额外 Live Update 歌词</string>
+    <string name="lyricNotificationBlocked">通知已关闭，Live Update 歌词不会显示。请在系统设置中允许本应用发送通知。</string>
 
     <!-- recognition/AndroidMicrophoneRecorder.kt -->
     <string name="micMonoPcmUnsupported">设备不支持单声道 PCM 录音</string>

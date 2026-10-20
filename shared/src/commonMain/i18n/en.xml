@@ -57,6 +57,7 @@
 
     <!-- notification/AndroidNotificationController.kt -->
     <string name="enableLiveUpdateLyrics">Enable extra Live Update lyrics</string>
+    <string name="lyricNotificationBlocked">Notifications are off, so Live Update lyrics won't appear. Allow notifications for this app in system settings.</string>
 
     <!-- recognition/AndroidMicrophoneRecorder.kt -->
     <string name="micMonoPcmUnsupported">This device doesn't support mono PCM recording</string>

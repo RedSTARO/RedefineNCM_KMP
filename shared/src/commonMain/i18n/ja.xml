@@ -57,6 +57,7 @@
 
     <!-- notification/AndroidNotificationController.kt -->
     <string name="enableLiveUpdateLyrics">追加のLive Update歌詞を有効にする</string>
+    <string name="lyricNotificationBlocked">通知がオフのため、Live Update歌詞は表示されません。システム設定でこのアプリの通知を許可してください。</string>
 
     <!-- recognition/AndroidMicrophoneRecorder.kt -->
     <string name="micMonoPcmUnsupported">この端末はモノラルのPCM録音に対応していません</string>
