@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import platform.AVFAudio.AVAudioEngine
+import platform.AVFAudio.AVAudioInputNode
 import platform.AVFAudio.AVAudioSession
 import platform.AVFAudio.AVAudioSessionCategoryPlayback
 import platform.AVFAudio.AVAudioSessionCategoryRecord
@@ -16,6 +17,7 @@ import platform.AVFAudio.AVAudioSessionModeDefault
 import platform.AVFAudio.AVAudioSessionModeMeasurement
 import platform.AVFAudio.AVAudioSessionRecordPermissionDenied
 import platform.AVFAudio.AVAudioSessionRecordPermissionGranted
+import platform.AVFAudio.AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
 import platform.AVFAudio.setActive
 import kotlin.coroutines.resume
 import kotlin.math.ceil
@@ -37,8 +39,8 @@ class IosMicrophoneRecorder : ExclusiveMicrophoneRecorder() {
         if (!awaitIosMicrophonePermission()) throw MicrophonePermissionDeniedException()
 
         val session = AVAudioSession.sharedInstance()
-        val engine = AVAudioEngine()
-        val inputNode = engine.inputNode
+        var engine: AVAudioEngine? = null
+        var inputNode: AVAudioInputNode? = null
         var tapInstalled = false
         var recordingSessionAttempted = false
 
@@ -57,7 +59,12 @@ class IosMicrophoneRecorder : ExclusiveMicrophoneRecorder() {
                 strings.iosAudioSessionActivateFailed,
             )
 
-            val format = inputNode.outputFormatForBus(0uL)
+            // The engine and its input node are made only now: the input node takes the hardware
+            // format of the session at the time it is first read, and under the playback category
+            // there is no input to read.
+            val recordingEngine = AVAudioEngine().also { engine = it }
+            val input = recordingEngine.inputNode.also { inputNode = it }
+            val format = input.outputFormatForBus(0uL)
             val sampleRateHz = format.sampleRate.toInt()
             if (sampleRateHz <= 0 || format.channelCount == 0u) {
                 throw MicrophoneUnavailableException(strings.iosMicNoInputFormat)
@@ -67,7 +74,7 @@ class IosMicrophoneRecorder : ExclusiveMicrophoneRecorder() {
             val completion = CompletableDeferred<CapturedPcm>()
             var written = 0
 
-            inputNode.installTapOnBus(
+            input.installTapOnBus(
                 bus = 0uL,
                 bufferSize = 1_024u,
                 format = format,
@@ -100,14 +107,14 @@ class IosMicrophoneRecorder : ExclusiveMicrophoneRecorder() {
                 },
             )
             tapInstalled = true
-            engine.prepare()
-            if (!engine.startAndReturnError(null)) {
+            recordingEngine.prepare()
+            if (!recordingEngine.startAndReturnError(null)) {
                 throw MicrophoneUnavailableException(strings.iosRecordingEngineStartFailed)
             }
             return completion.await()
         } finally {
-            engine.stop()
-            if (tapInstalled) runCatching { inputNode.removeTapOnBus(0uL) }
+            engine?.stop()
+            if (tapInstalled) runCatching { inputNode?.removeTapOnBus(0uL) }
             if (recordingSessionAttempted) restorePlaybackSession(session)
         }
     }
@@ -137,14 +144,16 @@ private fun restorePlaybackSession(session: AVAudioSession) {
     // Restoration runs from finally, including coroutine cancellation. A restoration failure
     // must not replace the original capture error or cancellation with a second exception.
     runCatching {
+        // Nothing of this app plays now (recognition paused it): the session is given back so
+        // other apps may resume, and the player activates it again when it plays.
+        if (!session.setActive(false, withOptions = AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation, error = null)) {
+            println("AVAudioSession: could not deactivate the recording session")
+        }
         if (!session.setCategory(AVAudioSessionCategoryPlayback, error = null)) {
             println("AVAudioSession: could not restore the playback category")
         }
         if (!session.setMode(AVAudioSessionModeDefault, error = null)) {
             println("AVAudioSession: could not restore the default mode")
-        }
-        if (!session.setActive(true, error = null)) {
-            println("AVAudioSession: could not reactivate the playback session")
         }
     }.onFailure { error ->
         println("AVAudioSession restore failed: ${error.message}")
