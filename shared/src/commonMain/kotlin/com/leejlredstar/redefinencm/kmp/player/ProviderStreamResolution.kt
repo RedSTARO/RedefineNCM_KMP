@@ -3,6 +3,7 @@ package com.leejlredstar.redefinencm.kmp.player
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderItemId
+import com.leejlredstar.redefinencm.kmp.data.provider.SoundQualityPreference
 import com.leejlredstar.redefinencm.kmp.data.provider.StreamFailureReason
 import com.leejlredstar.redefinencm.kmp.data.provider.StreamResolution
 import kotlinx.coroutines.CancellationException
@@ -26,13 +27,15 @@ import com.leejlredstar.redefinencm.kmp.util.onlinePlaybackQuality
 suspend fun MusicProviderRegistry.streamUrlForForeignProvider(
     itemId: ProviderItemId,
     recordFailures: Boolean = true,
+    // A quality already chosen for this playback; null reads the current one.
+    quality: SoundQualityPreference? = null,
 ): String? = when {
     itemId.provider == MusicProviderId.NETEASE -> null
-    recordFailures -> streamUrl(itemId, playbackQuality())
+    recordFailures -> streamUrl(itemId, quality ?: playbackQuality())
     else -> {
         val provider = this[itemId.provider]
         val resolution = try {
-            provider?.resolveStream(itemId, playbackQuality())
+            provider?.resolveStream(itemId, quality ?: playbackQuality())
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Throwable) {
@@ -65,11 +68,17 @@ suspend fun resolveStreamUrl(
     // transition: it is not playing, so its failure is not the "this track cannot play" the
     // now-playing screen reports. It is resolved again, recording, if it is ever played.
     recordFailures: Boolean = true,
+    // Pins another provider's quality to [quality] as well, rather than to the current setting.
+    pinForeignQuality: Boolean = false,
 ): String? {
     val itemId = mediaId.toProviderItemIdOrNull() ?: return null
     // Other providers carry their own quality ladders and have no local-download support yet.
     val neteaseId = itemId.neteaseIdOrNull
-        ?: return providers.streamUrlForForeignProvider(itemId, recordFailures)
+        ?: return providers.streamUrlForForeignProvider(
+            itemId,
+            recordFailures,
+            quality = if (pinForeignQuality) SoundQualityPreference.fromSoundQualityName(quality().name) else null,
+        )
     localAudioUri(neteaseId)?.let { local ->
         if (recordFailures) providers.clearStreamFailure(mediaId)
         return local

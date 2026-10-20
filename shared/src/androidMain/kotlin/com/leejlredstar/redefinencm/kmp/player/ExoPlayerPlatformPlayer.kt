@@ -94,22 +94,20 @@ class ExoPlayerPlatformPlayer(
      */
     private fun buildDeck(ownsAudioFocus: Boolean): ExoPlayer {
         lateinit var deck: ExoPlayer
-        val resolver = StreamUrlResolver { mediaId ->
-            resolveStreamUrl(
-                mediaId = mediaId,
-                providers = providers,
-                localAudioUri = { id ->
-                    findDownloadedSongUri(id)?.also { publishLocalMediaSessionArtwork(mediaId) }
-                },
-                onlineUrl = { id, quality -> repo.getSongUrl(id, quality.name.lowercase()) },
-                quality = { settings.onlinePlaybackQuality() },
-                recordFailures = deck === active,
-            )
-        }
         deck = ExoPlayer.Builder(appContext)
             .setMediaSourceFactory(
                 DefaultMediaSourceFactory(
-                    RedirectingDataSourceFactory(DefaultDataSource.Factory(appContext), resolver),
+                    RedirectingDataSourceFactory(DefaultDataSource.Factory(appContext)) {
+                        PeriodStreamResolver(
+                            providers = providers,
+                            currentQuality = { settings.onlinePlaybackQuality() },
+                            localAudioUri = { mediaId, id ->
+                                findDownloadedSongUri(id)?.also { publishLocalMediaSessionArtwork(mediaId) }
+                            },
+                            onlineUrl = { id, quality -> repo.getSongUrl(id, quality.name.lowercase()) },
+                            isActive = { deck === active },
+                        )
+                    },
                 ),
             )
             .setAudioAttributes(MusicAudioAttributes, ownsAudioFocus)

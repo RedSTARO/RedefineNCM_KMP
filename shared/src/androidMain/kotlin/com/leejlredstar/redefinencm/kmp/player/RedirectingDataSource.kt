@@ -13,14 +13,17 @@ import java.io.IOException
  * Media3 DataSource.Factory that intercepts `redefinencm://playbackPlaceHolder?id=xxx` URIs
  * and resolves them to real CDN stream URLs via [StreamUrlResolver] before delegating to the
  * wrapped factory. All other URIs are passed through unchanged.
+ *
+ * Media3 creates one data source per media period and opens it again for every retry and every
+ * seek, so [resolverForPeriod] gives each its own resolver, which can keep one period on one file.
  */
 @OptIn(UnstableApi::class)
 class RedirectingDataSourceFactory(
     private val defaultFactory: DataSource.Factory,
-    private val resolver: StreamUrlResolver,
+    private val resolverForPeriod: () -> StreamUrlResolver,
 ) : DataSource.Factory {
     override fun createDataSource(): DataSource =
-        RedirectingDataSource(defaultFactory.createDataSource(), resolver)
+        RedirectingDataSource(defaultFactory.createDataSource(), resolverForPeriod())
 }
 
 @OptIn(UnstableApi::class)
