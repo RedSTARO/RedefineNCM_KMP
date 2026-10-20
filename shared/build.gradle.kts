@@ -731,6 +731,18 @@ tasks.matching { it.name == "wasmJsBrowserTest" }.configureEach {
 }
 
 // On a Windows host the JVM tests can reach the DirectML build; elsewhere the harness skips.
+// The entry script keeps one name across releases while the WebAssembly files it loads are
+// hashed. A browser that kept an older entry script asked for files a new deployment had removed,
+// and the page's own Reload ran the same script again; the commit in its URL makes each release's
+// entry a different file.
+tasks.named<ProcessResources>("wasmJsProcessResources") {
+    val entryVersion = resolvedAppCommitHash
+    inputs.property("webEntryVersion", entryVersion)
+    filesMatching("index.html") {
+        filter { line -> line.replace("src=\"redefinencm.js\"", "src=\"redefinencm.js?v=$entryVersion\"") }
+    }
+}
+
 tasks.withType<Test>().matching { it.name == "jvmTest" }.configureEach {
     // AndroidLaunchBackgroundTest compares the Android app's launch colours with the scheme.
     // Declared here, or a change to those files alone would leave this task up to date.

@@ -207,14 +207,15 @@ private fun stopWebMicrophoneStream(stream: MediaStream) {
 
 private fun mapWebMicrophoneError(error: Throwable): MicrophoneCaptureException {
     if (error is MicrophoneCaptureException) return error
+    // The app's own words: the browser's message is English whatever the page's language, so it
+    // stays in the cause, for the log.
     val jsError = (error as? JsException)?.thrownValue?.unsafeCast<WebDomError>()
-    val detail = jsError?.message?.takeIf { it.isNotBlank() }
     return when (jsError?.name) {
-        "NotAllowedError" -> MicrophonePermissionDeniedException(detail ?: strings.browserMicPermissionDenied, error)
-        "NotFoundError" -> MicrophoneUnavailableException(detail ?: strings.browserMicNotFound, error)
-        "NotReadableError", "AbortError" -> MicrophoneBusyException(detail ?: strings.browserMicUnreadable, error)
-        "SecurityError" -> InsecureMicrophoneContextException(detail ?: strings.browserMicInsecureContext, error)
-        else -> MicrophoneUnavailableException(detail ?: strings.browserMicRecordingFailed, error)
+        "NotAllowedError" -> MicrophonePermissionDeniedException(strings.browserMicPermissionDenied, error)
+        "NotFoundError" -> MicrophoneUnavailableException(strings.browserMicNotFound, error)
+        "NotReadableError", "AbortError" -> MicrophoneBusyException(strings.browserMicUnreadable, error)
+        "SecurityError" -> InsecureMicrophoneContextException(strings.browserMicInsecureContext, error)
+        else -> MicrophoneUnavailableException(strings.browserMicRecordingFailed, error)
     }
 }
 

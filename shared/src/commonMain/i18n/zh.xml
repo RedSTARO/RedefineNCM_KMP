@@ -1028,6 +1028,9 @@
     <!-- util/WebDownloadStorage.kt -->
     <string name="browserDownloadsUnreadable">无法读取浏览器里的下载记录</string>
     <string name="webDownloadNeedsOpfs">在浏览器里下载需要 HTTPS 或 localhost 页面，且浏览器要支持 OPFS</string>
+    <string name="webStorageFull">浏览器存储空间已满</string>
+    <string name="webStorageDenied">浏览器不允许本页面保存文件</string>
+    <string name="webDownloadNetworkFailed">无法连接到下载地址</string>
     <string name="downloadCancelled">下载已取消</string>
     <string name="webDownloadUriInvalid">浏览器下载地址无效</string>
     <string name="webDownloadFileMissing">浏览器里已经没有这首歌的文件</string>

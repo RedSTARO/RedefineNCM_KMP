@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.download
 
 import com.leejlredstar.redefinencm.kmp.data.api.ExternalHttpClient
+import com.leejlredstar.redefinencm.kmp.data.api.secureNeteaseCdnUrl
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.lyric.LyricDocument
 import com.leejlredstar.redefinencm.kmp.lyric.LyricQuery
@@ -99,7 +100,7 @@ class LocalMediaAssets(
         remoteUri: String,
     ): String? {
         require(songId > 0L) { "songId must be positive" }
-        val uri = remoteUri.trim()
+        val uri = secureNeteaseCdnUrl(remoteUri.trim())
         if (uri.isEmpty()) return null
 
         // Streamed, not get(): Ktor's get() reads the whole body into memory before it returns,

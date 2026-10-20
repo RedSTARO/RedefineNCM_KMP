@@ -24,6 +24,9 @@ internal fun webStorageMessage(raw: String): String {
         code == "invalid-download-uri" -> strings.webDownloadUriInvalid
         code == "invalid-file-name" -> strings.downloadFileNameInvalid
         code == "file-missing" -> strings.webDownloadFileMissing
+        code == "storage-full" -> strings.webStorageFull
+        code == "storage-denied" -> strings.webStorageDenied
+        code == "network-failed" -> strings.webDownloadNetworkFailed
         else -> raw
     }
 }

@@ -2,6 +2,7 @@
 
 package com.leejlredstar.redefinencm.kmp.player
 
+import com.leejlredstar.redefinencm.kmp.data.api.secureNeteaseCdnUrl
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
 import com.leejlredstar.redefinencm.kmp.data.provider.toProviderItemIdOrNull
@@ -283,7 +284,7 @@ class WebPlatformPlayer(
                 title = snapshot.currentMedia.title,
                 artist = snapshot.currentMedia.artist,
                 album = snapshot.currentMedia.albumTitle,
-                artworkUri = snapshot.currentMedia.artworkUri,
+                artworkUri = secureNeteaseCdnUrl(snapshot.currentMedia.artworkUri),
             )
             publishMediaSessionPosition(force = true)
         }
@@ -437,7 +438,7 @@ class WebPlatformPlayer(
                     title = media.title,
                     artist = media.artist,
                     album = media.albumTitle,
-                    artworkUri = createdArtworkUrl ?: media.artworkUri,
+                    artworkUri = createdArtworkUrl ?: secureNeteaseCdnUrl(media.artworkUri),
                 )
                 if (!isPlaybackCurrent(generation, media)) return@launch
                 if (playRequested) requestAudioPlay(generation, media)

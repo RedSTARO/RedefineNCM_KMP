@@ -31,6 +31,7 @@ RedefineNCM 的 Kotlin Multiplatform 版本。Android、iOS、Desktop/JVM 与 We
 
 Web 生产文件输出到 `shared/build/dist/wasmJs/productionExecutable/`，可以按纯静态站点部署。
 部署时必须保留目录结构，`.wasm` 文件也要使用正确的 MIME 类型。
+`index.html` 应以 `Cache-Control: no-cache` 提供，这样新版本发布后浏览器会重新取入口页；入口脚本的地址带有版本号，`.wasm` 文件名本身带内容哈希。
 
 ## 测试
 

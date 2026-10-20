@@ -2,6 +2,7 @@
 
 package com.leejlredstar.redefinencm.kmp.transition
 
+import com.leejlredstar.redefinencm.kmp.data.api.secureNeteaseCdnUrl
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.await
@@ -24,7 +25,7 @@ import kotlin.js.JsAny
 internal class WebTrackEndsDecoder : TrackEndsDecoder {
     override suspend fun decode(url: String, sectionMs: Long, knownDurationMs: Long): DecodedTrackEnds? {
         val rate = BeatModelFeatures.SAMPLE_RATE_HZ
-        val operation = fetchAndDecodeEnds(url, rate, (sectionMs * rate / 1_000L).toInt())
+        val operation = fetchAndDecodeEnds(secureNeteaseCdnUrl(url), rate, (sectionMs * rate / 1_000L).toInt())
         val decoded = try {
             operation.result.await()
         } catch (cancelled: CancellationException) {

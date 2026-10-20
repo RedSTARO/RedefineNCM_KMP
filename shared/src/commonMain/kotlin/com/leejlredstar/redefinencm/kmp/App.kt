@@ -1,5 +1,7 @@
 package com.leejlredstar.redefinencm.kmp
 
+import com.leejlredstar.redefinencm.kmp.notification.PageOverlayLyricSurface
+import com.leejlredstar.redefinencm.kmp.notification.lyricSurface
 import com.leejlredstar.redefinencm.kmp.i18n.I18n
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.ui.theme.ArtworkTheme
@@ -651,6 +653,10 @@ private fun AppContent(
                     val rootDest = pushedStack.lastOrNull()
                         ?.let { RootDest.Pushed(it, pushedStack.size) }
                         ?: RootDest.Tab(currentTab)
+                    val onPlayerPage = isPlayerSurface(pushedStack.lastOrNull())
+                    LaunchedEffect(onPlayerPage) {
+                        (lyricSurface as? PageOverlayLyricSurface)?.setPlayerPageShown(onPlayerPage)
+                    }
                     val desktopRailExpanded = platform.isDesktop &&
                         showDesktopRail &&
                         desktopRailState.targetValue == WideNavigationRailValue.Expanded

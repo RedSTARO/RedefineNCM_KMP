@@ -1100,6 +1100,9 @@
     <!-- util/WebDownloadStorage.kt -->
     <string name="browserDownloadsUnreadable">Couldn't read the downloads stored in the browser</string>
     <string name="webDownloadNeedsOpfs">Downloading in the browser needs an HTTPS or localhost page and a browser that supports OPFS</string>
+    <string name="webStorageFull">The browser's storage is full</string>
+    <string name="webStorageDenied">The browser doesn't let this page store files</string>
+    <string name="webDownloadNetworkFailed">Couldn't reach the download address</string>
     <string name="downloadCancelled">Download cancelled</string>
     <string name="webDownloadUriInvalid">The browser download address is invalid</string>
     <string name="webDownloadFileMissing">This song's file is no longer in the browser</string>

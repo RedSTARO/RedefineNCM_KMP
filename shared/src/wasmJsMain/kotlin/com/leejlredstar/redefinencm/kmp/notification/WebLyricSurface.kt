@@ -3,13 +3,20 @@
 package com.leejlredstar.redefinencm.kmp.notification
 
 /**
- * The browser's lyric surface: a live DOM pill fixed in the page, the tab title, and a
- * notification once the user has granted that permission.
+ * The browser's lyric surface: a DOM pill fixed in the page, the tab title, and a notification
+ * once the user has granted that permission.
  *
- * Plain [LyricSurface]. It is part of playback rather than something to switch on, so it carries
- * no stub members for capabilities it does not have.
+ * It is part of playback rather than something to switch on. The pill stays off the Now Playing
+ * and lyric pages, which show the same thing full size; at phone width it sits at the bottom,
+ * above the navigation and the mini player, instead of over the pages' top bars. Screen readers do
+ * not read it: the page and the tab title already carry the track, and announcing every line
+ * talked over everything else.
  */
-object WebLyricSurface : LyricSurface {
+object WebLyricSurface : PageOverlayLyricSurface {
+    override fun setPlayerPageShown(shown: Boolean) {
+        setBrowserLyricSurfaceHidden(shown)
+    }
+
     override fun updateLyric(
         title: String?,
         artist: String?,
@@ -72,11 +79,9 @@ private fun updateBrowserLyricSurface(
         if (!surface) {
             surface = document.createElement("section");
             surface.id = surfaceId;
-            surface.setAttribute("role", "status");
-            surface.setAttribute("aria-live", "polite");
+            surface.setAttribute("aria-hidden", "true");
             Object.assign(surface.style, {
                 position: "fixed",
-                top: "12px",
                 left: "50%",
                 transform: "translateX(-50%)",
                 zIndex: "2147483647",
@@ -141,6 +146,12 @@ private fun updateBrowserLyricSurface(
             document.body.appendChild(surface);
         }
 
+        // Over the player pages, nothing; at phone width, at the bottom above the floating
+        // navigation (96px) and the mini player (88px).
+        surface.style.display = globalThis.__redefineNcmLyricSurfaceHidden ? "none" : "grid";
+        const narrow = window.innerWidth < 600;
+        surface.style.top = narrow ? "" : "12px";
+        surface.style.bottom = narrow ? "calc(env(safe-area-inset-bottom, 0px) + 192px)" : "";
         const trimmedCurrentLyric = currentLyric.trim();
         const currentText = trimmedCurrentLyric || title.trim() || "RedefineNCM";
         const detailText = nextLyric.trim() || [title, artist].filter(Boolean).join(" · ");
@@ -183,6 +194,14 @@ private fun updateBrowserLyricSurface(
             }
             globalThis.__redefineNcmLyricNotificationSignature = notificationSignature;
         }
+    }""",
+)
+
+private fun setBrowserLyricSurfaceHidden(hidden: Boolean): Unit = js(
+    """{
+        globalThis.__redefineNcmLyricSurfaceHidden = hidden;
+        const surface = document.getElementById("redefinencm-web-lyric");
+        if (surface) surface.style.display = hidden ? "none" : "grid";
     }""",
 )
 

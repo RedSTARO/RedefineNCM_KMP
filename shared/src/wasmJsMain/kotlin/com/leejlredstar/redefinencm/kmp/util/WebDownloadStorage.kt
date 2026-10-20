@@ -2,6 +2,7 @@
 
 package com.leejlredstar.redefinencm.kmp.util
 
+import com.leejlredstar.redefinencm.kmp.data.api.secureNeteaseCdnUrl
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.Serializable
@@ -32,7 +33,7 @@ internal object WebDownloadStorage {
         continuation.invokeOnCancellation { cancelWebDownload(token) }
         startWebDownload(
             token = token,
-            url = item.url,
+            url = secureNeteaseCdnUrl(item.url),
             fileName = fileName,
             expectedBytes = item.expectedBytes?.toString(),
             onReadyToPublish = { continuation.isActive && onReadyToPublish() },
@@ -254,7 +255,7 @@ private fun startWebDownload(
         })().catch(error => {
             const message = error?.name === "AbortError"
                 ? "redefinencm:download-cancelled"
-                : (error?.message || String(error));
+                : ((error instanceof TypeError && /createWritable/.test(error?.message || "")) ? "redefinencm:download-needs-opfs" : error?.name === "QuotaExceededError" ? "redefinencm:storage-full" : (error?.name === "SecurityError" || error?.name === "NotAllowedError") ? "redefinencm:storage-denied" : (error instanceof TypeError && /fetch|network|load failed/i.test(error?.message || "")) ? "redefinencm:network-failed" : (error?.message || String(error)));
             onError(message);
         }).finally(() => controllers.delete(token));
     }""",
@@ -291,7 +292,13 @@ private fun scanWebDownloads(
                 // second name segment and must never become fake downloaded-song rows.
                 const match = /^(\d+)\.[^.]+$/.exec(name);
                 if (!match) continue;
-                const file = await handle.getFile();
+                let file;
+                try {
+                    file = await handle.getFile();
+                } catch (error) {
+                    if (error?.name === "NotFoundError") continue;
+                    throw error;
+                }
                 // An empty file is not a song: the final file is created before it is written,
                 // so a tab closed in between leaves one, and a later download must replace it.
                 if (file.size === 0) continue;
@@ -305,7 +312,7 @@ private fun scanWebDownloads(
             }
             files.sort((left, right) => Number(left.id) - Number(right.id));
             onSuccess(JSON.stringify(files));
-        })().catch(error => onError(error?.message || String(error)));
+        })().catch(error => onError(((error instanceof TypeError && /createWritable/.test(error?.message || "")) ? "redefinencm:download-needs-opfs" : error?.name === "QuotaExceededError" ? "redefinencm:storage-full" : (error?.name === "SecurityError" || error?.name === "NotAllowedError") ? "redefinencm:storage-denied" : (error instanceof TypeError && /fetch|network|load failed/i.test(error?.message || "")) ? "redefinencm:network-failed" : (error?.message || String(error)))));
     }""",
 )
 
@@ -333,12 +340,13 @@ private fun deleteWebDownloads(
             let deleted = false;
             for await (const name of directory.keys()) {
                 if (name.startsWith(songId + ".")) {
-                    await directory.removeEntry(name);
+                    // Removed meanwhile by another tab or an earlier operation: already gone.
+                    await directory.removeEntry(name).catch(error => { if (error?.name !== "NotFoundError") throw error; });
                     deleted = true;
                 }
             }
             onSuccess(deleted);
-        })().catch(error => onError(error?.message || String(error)));
+        })().catch(error => onError(((error instanceof TypeError && /createWritable/.test(error?.message || "")) ? "redefinencm:download-needs-opfs" : error?.name === "QuotaExceededError" ? "redefinencm:storage-full" : (error?.name === "SecurityError" || error?.name === "NotAllowedError") ? "redefinencm:storage-denied" : (error instanceof TypeError && /fetch|network|load failed/i.test(error?.message || "")) ? "redefinencm:network-failed" : (error?.message || String(error)))));
     }""",
 )
 
@@ -362,7 +370,7 @@ private fun createWebDownloadObjectUrl(
             const directory = await root.getDirectoryHandle("RedefineNCM");
             const handle = await directory.getFileHandle(fileName);
             onSuccess(URL.createObjectURL(await handle.getFile()));
-        })().catch(error => onError(error?.message || String(error)));
+        })().catch(error => onError(((error instanceof TypeError && /createWritable/.test(error?.message || "")) ? "redefinencm:download-needs-opfs" : error?.name === "QuotaExceededError" ? "redefinencm:storage-full" : (error?.name === "SecurityError" || error?.name === "NotAllowedError") ? "redefinencm:storage-denied" : (error instanceof TypeError && /fetch|network|load failed/i.test(error?.message || "")) ? "redefinencm:network-failed" : (error?.message || String(error)))));
     }""",
 )
 

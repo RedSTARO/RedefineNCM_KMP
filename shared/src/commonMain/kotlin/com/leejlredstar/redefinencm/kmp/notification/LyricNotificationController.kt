@@ -86,6 +86,14 @@ interface WindowedLyricSurface : OptionalLyricSurface {
  * Test it with `as?` for the capability you need rather than asking a boolean first: a target
  * that cannot lock its surface does not implement [WindowedLyricSurface] at all.
  */
+/**
+ * A surface drawn over the app's own pages (the browser's lyric pill), which has nothing to add on
+ * the Now Playing and lyric pages: those show the same track and lyrics full size.
+ */
+interface PageOverlayLyricSurface : LyricSurface {
+    fun setPlayerPageShown(shown: Boolean)
+}
+
 expect val lyricSurface: LyricSurface
 
 /** Horizontal placement of a windowed lyric surface's lines, persisted by its wire value. */

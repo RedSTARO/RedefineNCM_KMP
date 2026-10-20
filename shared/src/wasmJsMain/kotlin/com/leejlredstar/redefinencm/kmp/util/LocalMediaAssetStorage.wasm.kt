@@ -285,7 +285,7 @@ private fun replaceWebLyrics(
                     const backupName = "." + name + "." + token + ".asset-backup";
                     await copyFile(name, backupName);
                     backups.push([backupName, name]);
-                    await directory.removeEntry(name);
+                    await directory.removeEntry(name).catch(error => { if (error?.name !== "NotFoundError") throw error; });
                 }
                 for (const [temporaryName, targetName] of staged) {
                     await copyFile(temporaryName, targetName);
@@ -320,7 +320,7 @@ private fun replaceWebLyrics(
                 }
                 throw error;
             }
-        })().catch(error => onError(error?.message || String(error)));
+        })().catch(error => onError(((error instanceof TypeError && /createWritable/.test(error?.message || "")) ? "redefinencm:assets-need-opfs" : error?.name === "QuotaExceededError" ? "redefinencm:storage-full" : (error?.name === "SecurityError" || error?.name === "NotAllowedError") ? "redefinencm:storage-denied" : (error instanceof TypeError && /fetch|network|load failed/i.test(error?.message || "")) ? "redefinencm:network-failed" : (error?.message || String(error)))));
     }""",
 )
 
@@ -358,14 +358,22 @@ private fun readWebLyrics(
             for (const name of requestedNames) {
                 try {
                     const handle = await directory.getFileHandle(name);
-                    result.push({ fileName: name, content: await (await handle.getFile()).text() });
+                    let file;
+                    try {
+                        file = await handle.getFile();
+                    } catch (error) {
+                        // Removed meanwhile: there is nothing of it to read.
+                        if (error?.name === "NotFoundError") continue;
+                        throw error;
+                    }
+                    result.push({ fileName: name, content: await file.text() });
                 } catch (error) {
                     if (error?.name !== "NotFoundError") throw error;
                 }
             }
             result.sort((left, right) => left.fileName.localeCompare(right.fileName));
             onSuccess(JSON.stringify(result));
-        })().catch(error => onError(error?.message || String(error)));
+        })().catch(error => onError(((error instanceof TypeError && /createWritable/.test(error?.message || "")) ? "redefinencm:assets-need-opfs" : error?.name === "QuotaExceededError" ? "redefinencm:storage-full" : (error?.name === "SecurityError" || error?.name === "NotAllowedError") ? "redefinencm:storage-denied" : (error instanceof TypeError && /fetch|network|load failed/i.test(error?.message || "")) ? "redefinencm:network-failed" : (error?.message || String(error)))));
     }""",
 )
 
@@ -422,7 +430,7 @@ private fun replaceWebArtwork(
                     const backupName = "." + name + "." + token + ".asset-backup";
                     await copyFile(name, backupName);
                     backups.push([backupName, name]);
-                    await directory.removeEntry(name);
+                    await directory.removeEntry(name).catch(error => { if (error?.name !== "NotFoundError") throw error; });
                 }
                 await copyFile(temporaryName, fileName);
                 published = true;
@@ -453,7 +461,7 @@ private fun replaceWebArtwork(
                 }
                 throw error;
             }
-        })().catch(error => onError(error?.message || String(error)));
+        })().catch(error => onError(((error instanceof TypeError && /createWritable/.test(error?.message || "")) ? "redefinencm:assets-need-opfs" : error?.name === "QuotaExceededError" ? "redefinencm:storage-full" : (error?.name === "SecurityError" || error?.name === "NotAllowedError") ? "redefinencm:storage-denied" : (error instanceof TypeError && /fetch|network|load failed/i.test(error?.message || "")) ? "redefinencm:network-failed" : (error?.message || String(error)))));
     }""",
 )
 
@@ -488,7 +496,7 @@ private fun inspectWebAssets(
             }
             names.sort();
             onSuccess(JSON.stringify(names));
-        })().catch(error => onError(error?.message || String(error)));
+        })().catch(error => onError(((error instanceof TypeError && /createWritable/.test(error?.message || "")) ? "redefinencm:assets-need-opfs" : error?.name === "QuotaExceededError" ? "redefinencm:storage-full" : (error?.name === "SecurityError" || error?.name === "NotAllowedError") ? "redefinencm:storage-denied" : (error instanceof TypeError && /fetch|network|load failed/i.test(error?.message || "")) ? "redefinencm:network-failed" : (error?.message || String(error)))));
     }""",
 )
 
@@ -525,7 +533,7 @@ private fun resolveWebArtworkUri(
             }
             const file = await (await directory.getFileHandle(names[0])).getFile();
             onSuccess(URL.createObjectURL(file));
-        })().catch(error => onError(error?.message || String(error)));
+        })().catch(error => onError(((error instanceof TypeError && /createWritable/.test(error?.message || "")) ? "redefinencm:assets-need-opfs" : error?.name === "QuotaExceededError" ? "redefinencm:storage-full" : (error?.name === "SecurityError" || error?.name === "NotAllowedError") ? "redefinencm:storage-denied" : (error instanceof TypeError && /fetch|network|load failed/i.test(error?.message || "")) ? "redefinencm:network-failed" : (error?.message || String(error)))));
     }""",
 )
 
@@ -567,10 +575,10 @@ private fun deleteWebAssets(
                 ) {
                     continue;
                 }
-                await directory.removeEntry(name);
+                await directory.removeEntry(name).catch(error => { if (error?.name !== "NotFoundError") throw error; });
                 deleted = true;
             }
             onSuccess(deleted);
-        })().catch(error => onError(error?.message || String(error)));
+        })().catch(error => onError(((error instanceof TypeError && /createWritable/.test(error?.message || "")) ? "redefinencm:assets-need-opfs" : error?.name === "QuotaExceededError" ? "redefinencm:storage-full" : (error?.name === "SecurityError" || error?.name === "NotAllowedError") ? "redefinencm:storage-denied" : (error instanceof TypeError && /fetch|network|load failed/i.test(error?.message || "")) ? "redefinencm:network-failed" : (error?.message || String(error)))));
     }""",
 )

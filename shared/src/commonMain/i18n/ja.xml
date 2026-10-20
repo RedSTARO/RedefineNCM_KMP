@@ -1028,6 +1028,9 @@
     <!-- util/WebDownloadStorage.kt -->
     <string name="browserDownloadsUnreadable">ブラウザに保存されたダウンロードを読み込めません</string>
     <string name="webDownloadNeedsOpfs">ブラウザでダウンロードするには、HTTPSまたはlocalhostのページと、OPFSに対応したブラウザが必要です</string>
+    <string name="webStorageFull">ブラウザの保存領域がいっぱいです</string>
+    <string name="webStorageDenied">このページはブラウザにファイルの保存を許可されていません</string>
+    <string name="webDownloadNetworkFailed">ダウンロード先に接続できませんでした</string>
     <string name="downloadCancelled">ダウンロードをキャンセルしました</string>
     <string name="webDownloadUriInvalid">ブラウザのダウンロードアドレスが無効です</string>
     <string name="webDownloadFileMissing">この曲のファイルはブラウザにもうありません</string>

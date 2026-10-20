@@ -93,9 +93,17 @@ the font cache with a 30-second stall limit; a failed warm-up is logged and neve
 because the app loads the font again itself. Until the bundle's own code runs, any error or
 unhandled rejection means the bundle or its WebAssembly did not load, and the page shows a reload
 button (a `WebAssembly.CompileError` says the browser cannot run the app). After that only an
-exception thrown by the app's start or an uncaught exception counts. Showing the app always wins
-over a failure already on screen. `WebBootPageTest` runs the page's own script through
-`shared/karma.config.d/web-boot.js`.
+exception thrown by the app's start or an uncaught exception counts. Showing the app wins over a
+failure already on screen, except an exception thrown by the app's own start, which is final: the
+app behind it would be half built. The processed `index.html` loads `redefinencm.js?v=<commit>`,
+so a browser holding an older entry script cannot ask for WebAssembly files a new deployment
+removed; `index.html` itself should still be served with `Cache-Control: no-cache`.
+`WebBootPageTest` runs the page's own script through `shared/karma.config.d/web-boot.js`.
+
+The in-page lyric pill (`WebLyricSurface`) stays off the Now Playing and lyric pages, which show
+the same thing full size, sits at the bottom above the navigation and the mini player below 600
+px, and is hidden from screen readers (decided 2026-10-21): the page and the tab title already
+carry the track, and announcing every line talked over everything else.
 
 Page lifecycle is a locked behavior: `pagehide` and `beforeunload` pause playback, and pausing
 invalidates an in-flight stream-URL lookup, otherwise a late response can start audio after the

@@ -14,6 +14,7 @@ import coil3.key.Keyer
 import coil3.map.Mapper
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import coil3.request.Options
+import com.leejlredstar.redefinencm.kmp.data.api.secureNeteaseCdnUrl
 import com.leejlredstar.redefinencm.kmp.download.LocalMediaAssets
 import kotlin.JsFun
 import kotlin.coroutines.resume
@@ -36,6 +37,7 @@ internal fun configureWebArtworkImageLoader() {
 internal fun createWebArtworkImageLoader(context: PlatformContext): ImageLoader =
     ImageLoader.Builder(context)
         .components {
+            add(NeteaseCdnHttpsMapper)
             add(WebBlobArtworkMapper)
             add(WebBlobArtworkKeyer)
             add(WebBlobArtworkFetcher.Factory())
@@ -51,6 +53,12 @@ internal data class WebBlobArtwork(
     val bytes: ByteArray,
     val mimeType: String?,
 )
+
+/** Covers on NetEase's CDN come as http:// often, which an https page cannot fetch. */
+private object NeteaseCdnHttpsMapper : Mapper<String, String> {
+    override fun map(data: String, options: Options): String? =
+        secureNeteaseCdnUrl(data).takeIf { it != data }
+}
 
 private object WebBlobArtworkMapper : Mapper<String, WebBlobArtworkUri> {
     override fun map(data: String, options: Options): WebBlobArtworkUri? =
