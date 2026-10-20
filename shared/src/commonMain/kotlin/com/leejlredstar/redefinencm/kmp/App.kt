@@ -1,5 +1,12 @@
 package com.leejlredstar.redefinencm.kmp
 
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import com.leejlredstar.redefinencm.kmp.notification.PageOverlayLyricSurface
 import com.leejlredstar.redefinencm.kmp.notification.lyricSurface
 import com.leejlredstar.redefinencm.kmp.i18n.I18n
@@ -112,6 +119,7 @@ import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
 import com.leejlredstar.redefinencm.kmp.ui.component.TransportSheets
 import com.leejlredstar.redefinencm.kmp.ui.component.TransportSheetsState
 import com.leejlredstar.redefinencm.kmp.ui.component.DesktopPlayerBar
+import com.leejlredstar.redefinencm.kmp.ui.component.DesktopPlayerBarHeight
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberTransportSheetsState
 import com.leejlredstar.redefinencm.kmp.ui.screen.AlbumScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.ArtistScreen
@@ -367,20 +375,35 @@ private fun ExpressiveNavToggle(
     palette: ContentAccentPalette,
     onSelect: () -> Unit,
 ) {
-    ToggleButton(
-        checked = selected,
-        onCheckedChange = { onSelect() },
-        shapes = ToggleButtonDefaults.shapes(),
-        colors = ToggleButtonDefaults.toggleButtonColors(
-            containerColor = Color.Transparent,
-            contentColor = palette.secondaryOnQuietContainer,
-            checkedContainerColor = palette.container,
-            checkedContentColor = palette.onContainer,
-        ),
+    // A ToggleButton says "checkbox, not checked" to a screen reader, and picking the current
+    // tab sounded like unchecking it. The button keeps its look and morph; what is announced is
+    // a tab, selected or not, named by its label.
+    Box(
+        Modifier.clearAndSetSemantics {
+            role = Role.Tab
+            this.selected = selected
+            contentDescription = label
+            onClick {
+                onSelect()
+                true
+            }
+        },
     ) {
-        Icon(icon, contentDescription = if (selected) null else label)
-        AnimatedVisibility(visible = selected) {
-            Text(text = label, modifier = Modifier.padding(start = 8.dp))
+        ToggleButton(
+            checked = selected,
+            onCheckedChange = { onSelect() },
+            shapes = ToggleButtonDefaults.shapes(),
+            colors = ToggleButtonDefaults.toggleButtonColors(
+                containerColor = Color.Transparent,
+                contentColor = palette.secondaryOnQuietContainer,
+                checkedContainerColor = palette.container,
+                checkedContentColor = palette.onContainer,
+            ),
+        ) {
+            Icon(icon, contentDescription = null)
+            AnimatedVisibility(visible = selected) {
+                Text(text = label, modifier = Modifier.padding(start = 8.dp))
+            }
         }
     }
 }
@@ -436,7 +459,11 @@ private fun AppContent(
                     saveableStateHolder.removeState(pushedStateKey(pushedStack[depth - 1], depth))
                 }
             }
-            fun push(dest: PushedDest) = pushedStack.add(dest)
+            // A second tap that lands while the first page is still sliding in would stack the
+            // same page twice, and Back would have to be pressed twice to leave it.
+            fun push(dest: PushedDest) {
+                if (pushedStack.lastOrNull() != dest) pushedStack.add(dest)
+            }
             // Null until the local account's stored switch has been read. Only a value read from
             // settings may drop pages; the default would empty a restored stack at every launch.
             val localAccount: LocalAccount = koinInject()
@@ -479,6 +506,12 @@ private fun AppContent(
             }
             fun openFullLyric() {
                 focusOrPushTracked(PushedDest.FullLyric)
+            }
+            // The lyric page stands on Now Playing wherever it is opened from, so back from it
+            // returns to Now Playing, as from every other way in.
+            fun openFullLyricOverNowPlaying() {
+                openNowPlaying()
+                openFullLyric()
             }
 
             BackHandler(enabled = pushedStack.isNotEmpty()) { back() }
@@ -695,13 +728,26 @@ private fun AppContent(
                         toolbarScrollBehavior.state.offset = 0f
                     }
 
+                    // Scaffold lifts a snackbar over the mini player, but nothing else along the
+                    // bottom is a Scaffold bar: without the mini player a snackbar sat on the
+                    // window's edge, over the tab bar, the desktop player bar, the player page's
+                    // toolbar or the system navigation bar.
+                    val miniPlayerShown = showMiniPlayer && !desktopRailExpanded
+                    val snackbarClearance = when {
+                        miniPlayerShown -> 0.dp
+                        showDesktopBar -> systemNavInset + DesktopPlayerBarHeight
+                        onPlayerPage -> systemNavInset + PlayerPageToolbarClearance
+                        else -> contentBottomInset
+                    }
                     Scaffold(
                         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-                        snackbarHost = { SnackbarHost(snackbarHostState) },
+                        snackbarHost = {
+                            SnackbarHost(snackbarHostState, Modifier.padding(bottom = snackbarClearance))
+                        },
                         floatingActionButtonPosition = FabPosition.End,
                         floatingActionButton = {
                             AnimatedVisibility(
-                                visible = showMiniPlayer && !desktopRailExpanded,
+                                visible = miniPlayerShown,
                                 enter = miniPlayerEnterTransition(),
                                 exit = miniPlayerExitTransition(),
                             ) {
@@ -919,7 +965,7 @@ private fun AppContent(
                                         sheets = desktopSheets,
                                         onAccentColor = { rawChromeAccent = it },
                                         onOpenNowPlaying = ::openNowPlaying,
-                                        onOpenLyrics = ::openFullLyric,
+                                        onOpenLyrics = ::openFullLyricOverNowPlaying,
                                     )
                                 }
                             }
@@ -944,6 +990,8 @@ private fun AppContent(
                             ) {
                                 HorizontalFloatingToolbar(
                                     expanded = true,
+                                    // One group of tabs: "tab, 2 of 3" rather than loose buttons.
+                                    modifier = Modifier.selectableGroup(),
                                     scrollBehavior = toolbarScrollBehavior,
                                     colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
                                         toolbarContainerColor = chromePalette.quietContainer,
@@ -1387,5 +1435,8 @@ private fun pushedStateKey(dest: PushedDest, depth: Int): String =
 
 /** FAB-slot mini player (60dp + its 2dp inset) plus the Scaffold's 16dp FAB margin and air. */
 private val MiniPlayerClearance = 88.dp
+
+/** The player pages' own bottom controls: Now Playing's toolbar and the lyric page's island. */
+private val PlayerPageToolbarClearance = 96.dp
 
 private const val PageTransitionMillis = ExpressiveMotion.LongMillis

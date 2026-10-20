@@ -64,6 +64,7 @@ import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
+import com.leejlredstar.redefinencm.kmp.ui.theme.legibleAccentFor
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberArtworkAccent
 import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
@@ -244,6 +245,27 @@ fun SongRow(
     )
     val extractAccent = artworkAccent.extract
     val accentPalette = artworkAccent.palette
+    // The playing row sits on the stronger container, where the quiet container's text roles
+    // fall below AA: it takes the container's own roles, and an accent title moved as far toward
+    // the container's foreground as legibility needs.
+    val surface = MaterialTheme.colorScheme.surface
+    val rowColors = remember(accentPalette, isCurrent, surface) {
+        if (isCurrent) {
+            SongRowColors(
+                container = accentPalette.container,
+                content = accentPalette.onContainer,
+                secondary = accentPalette.secondaryOnContainer,
+                title = legibleAccentFor(accentPalette.accent, accentPalette.container, surface),
+            )
+        } else {
+            SongRowColors(
+                container = accentPalette.quietContainer,
+                content = accentPalette.onQuietContainer,
+                secondary = accentPalette.secondaryOnQuietContainer,
+                title = accentPalette.onQuietContainer,
+            )
+        }
+    }
     var menuOpen by remember { mutableStateOf(false) }
     // Shared with the cover below so a row press morphs the artwork silhouette.
     val interactionSource = remember { MutableInteractionSource() }
@@ -256,8 +278,8 @@ fun SongRow(
         val wide = maxWidth >= WideRowMinWidth
         Surface(
             shape = rowShape,
-            color = if (isCurrent) accentPalette.container else accentPalette.quietContainer,
-            contentColor = accentPalette.onQuietContainer,
+            color = rowColors.container,
+            contentColor = rowColors.content,
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(rowShape)
@@ -286,7 +308,7 @@ fun SongRow(
                         Icon(
                             imageVector = if (isPlaying) AppIcons.GraphicEq else AppIcons.Pause,
                             contentDescription = if (isPlaying) strings.playing else strings.paused,
-                            tint = accentPalette.accent,
+                            tint = rowColors.title,
                             modifier = Modifier.size(20.dp),
                         )
                     } else {
@@ -295,7 +317,7 @@ fun SongRow(
                             style = MaterialTheme.typography.labelLarge.copy(
                                 fontFeatureSettings = "tnum",
                             ),
-                            color = accentPalette.secondaryOnQuietContainer,
+                            color = rowColors.secondary,
                             maxLines = 1,
                         )
                     }
@@ -324,14 +346,14 @@ fun SongRow(
                         fontWeight = if (isCurrent) FontWeight.Bold else null,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        color = if (isCurrent) accentPalette.accent else accentPalette.onQuietContainer,
+                        color = rowColors.title,
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         (listOfNotNull(badge) + badges).forEach { label ->
                             ProviderBadge(
                                 label = label,
-                                contentColor = accentPalette.secondaryOnQuietContainer,
-                                containerColor = accentPalette.onQuietContainer.copy(alpha = 0.10f),
+                                contentColor = rowColors.secondary,
+                                containerColor = rowColors.content.copy(alpha = 0.10f),
                                 modifier = Modifier.padding(end = 6.dp),
                             )
                         }
@@ -340,7 +362,7 @@ fun SongRow(
                             style = MaterialTheme.typography.bodyMedium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            color = accentPalette.secondaryOnQuietContainer,
+                            color = rowColors.secondary,
                         )
                     }
                 }
@@ -351,7 +373,7 @@ fun SongRow(
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        color = accentPalette.secondaryOnQuietContainer,
+                        color = rowColors.secondary,
                         modifier = Modifier.weight(0.7f),
                     )
                 }
@@ -374,7 +396,7 @@ fun SongRow(
                     Text(
                         text = formatPlaybackDuration(durationMs),
                         style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
-                        color = accentPalette.secondaryOnQuietContainer,
+                        color = rowColors.secondary,
                         maxLines = 1,
                         modifier = Modifier.widthIn(min = 40.dp),
                     )
@@ -385,7 +407,7 @@ fun SongRow(
                             Icon(
                                 imageVector = AppIcons.MoreVert,
                                 contentDescription = strings.moreActions,
-                                tint = accentPalette.secondaryOnQuietContainer,
+                                tint = rowColors.secondary,
                             )
                         }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
@@ -411,6 +433,14 @@ fun SongRow(
 
 /** Rows switch to the desktop column layout (album, duration) from this width. */
 private val WideRowMinWidth = 640.dp
+
+/** A song row's colours: the quiet ones, or the playing row's on the stronger container. */
+private data class SongRowColors(
+    val container: Color,
+    val content: Color,
+    val secondary: Color,
+    val title: Color,
+)
 
 /** Right click opens the same menu a long press does. */
 private fun Modifier.secondaryClick(enabled: Boolean, onSecondaryClick: () -> Unit): Modifier =
@@ -790,115 +820,136 @@ fun PlaylistCard(
         color = accentPalette.quietContainer,
         contentColor = accentPalette.onQuietContainer,
     ) {
-        Row(
-            modifier = Modifier
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // shapes.small, not large: 40dp corners on a 60dp cover would cut it into a circle and
-            // crop whatever the cover has in its corners.
-            ExpressiveArtwork(
-                model = userPlaylistEach.coverImgUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.size(60.dp),
-                shape = MaterialTheme.shapes.small,
-                containerColor = accentPalette.container,
-                contentColor = accentPalette.onContainer,
-                onImageLoaded = { image ->
-                    if (accentColor == null) {
-                        extractAccent(image)
-                    }
-                },
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = userPlaylistEach.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = accentPalette.onQuietContainer,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+        BoxWithConstraints {
+            // On a phone the heartbeat button's label took the width of the playlist's name, which
+            // kept one to three characters of it in Japanese; there the button is the heart alone.
+            val heartbeatLabelled = maxWidth >= HeartbeatLabelMinWidth
+            Row(
+                modifier = Modifier
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // shapes.small, not large: 40dp corners on a 60dp cover would cut it into a circle and
+                // crop whatever the cover has in its corners.
+                ExpressiveArtwork(
+                    model = userPlaylistEach.coverImgUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(60.dp),
+                    shape = MaterialTheme.shapes.small,
+                    containerColor = accentPalette.container,
+                    contentColor = accentPalette.onContainer,
+                    onImageLoaded = { image ->
+                        if (accentColor == null) {
+                            extractAccent(image)
+                        }
+                    },
                 )
-                if (showCreator) {
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = userPlaylistEach.creator.nickname,
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = userPlaylistEach.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = accentPalette.onQuietContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (showCreator) {
+                        Text(
+                            text = userPlaylistEach.creator.nickname,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = accentPalette.secondaryOnQuietContainer,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Text(
+                        text = strings.playlistCardStats(userPlaylistEach.trackCount, compactCount(userPlaylistEach.playCount)),
+                        style = MaterialTheme.typography.labelMedium,
                         color = accentPalette.secondaryOnQuietContainer,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Text(
-                    text = strings.playlistCardStats(userPlaylistEach.trackCount, compactCount(userPlaylistEach.playCount)),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = accentPalette.secondaryOnQuietContainer,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (specialCard != "no") {
-                Spacer(modifier = Modifier.width(12.dp))
-                if (specialCard == "fav" && onSpecialClick != null) {
-                    // Named, and a full touch target: a bare heart here reads as "like", and at
-                    // 34dp it would be smaller than a finger.
-                    Surface(
-                        onClick = {
-                            if (!specialActionLoading) onSpecialClick()
-                        },
-                        shape = CircleShape,
-                        color = accentPalette.container,
-                        contentColor = accentPalette.onContainer,
-                        modifier = Modifier.heightIn(min = 48.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            if (specialActionLoading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier
-                                        .size(18.dp)
-                                        .semantics { contentDescription = strings.heartbeatModeStarting },
-                                    color = accentPalette.onContainer,
-                                    strokeWidth = 2.dp,
-                                )
+                if (specialCard != "no") {
+                    Spacer(modifier = Modifier.width(12.dp))
+                    if (specialCard == "fav" && onSpecialClick != null) {
+                        // Named, and a full touch target: a bare heart here reads as "like", and at
+                        // 34dp it would be smaller than a finger.
+                        Surface(
+                            onClick = {
+                                if (!specialActionLoading) onSpecialClick()
+                            },
+                            shape = CircleShape,
+                            color = accentPalette.container,
+                            contentColor = accentPalette.onContainer,
+                            modifier = if (heartbeatLabelled) {
+                                Modifier.heightIn(min = 48.dp)
                             } else {
-                                Icon(
-                                    imageVector = AppIcons.Favorite,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
-                                )
+                                Modifier
+                                    .size(48.dp)
+                                    .semantics { contentDescription = strings.heartbeatMode }
+                            },
+                        ) {
+                            Row(
+                                modifier = if (heartbeatLabelled) {
+                                    Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                                } else {
+                                    Modifier.fillMaxSize()
+                                },
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                if (specialActionLoading) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier
+                                            .size(18.dp)
+                                            .semantics { contentDescription = strings.heartbeatModeStarting },
+                                        color = accentPalette.onContainer,
+                                        strokeWidth = 2.dp,
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = AppIcons.Favorite,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                                if (heartbeatLabelled) {
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = strings.heartbeatMode,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        maxLines = 1,
+                                    )
+                                }
                             }
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                text = strings.heartbeatMode,
-                                style = MaterialTheme.typography.labelLarge,
-                                maxLines = 1,
+                        }
+                    } else {
+                        Surface(
+                            shape = CircleShape,
+                            color = accentPalette.container,
+                            contentColor = accentPalette.onContainer,
+                        ) {
+                            Icon(
+                                imageVector = if (specialCard == "fav") AppIcons.Favorite
+                                else AppIcons.GraphicEq,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .padding(8.dp)
+                                    .size(18.dp),
                             )
                         }
-                    }
-                } else {
-                    Surface(
-                        shape = CircleShape,
-                        color = accentPalette.container,
-                        contentColor = accentPalette.onContainer,
-                    ) {
-                        Icon(
-                            imageVector = if (specialCard == "fav") AppIcons.Favorite
-                            else AppIcons.GraphicEq,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .padding(8.dp)
-                                .size(18.dp),
-                        )
                     }
                 }
             }
         }
     }
 }
+
+/** Below this card width the heartbeat button drops its label and keeps the heart. */
+private val HeartbeatLabelMinWidth = 480.dp
 
 private const val MaxArtistActions = 3

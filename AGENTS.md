@@ -928,7 +928,9 @@ lyric page returns to Now Playing; back from Now Playing returns to the app. Bot
 `focusOrPush` destinations, hide the mini player, rise as one sheet over the tabs and cross-fade
 between each other (`isPlayerSurface` in `App.kt`). There is no renderer preference to resolve.
 Do not add lyric rendering to the Now Playing page, and do not route any entry point straight
-to the lyric page.
+to the lyric page. The desktop player bar's quotation-mark button is a shortcut through Now
+Playing, not around it: it opens Now Playing and the lyric page over it in one step, so Back
+returns to Now Playing (decided 2026-10-21).
 
 Song details open from the Info button at the top right of the Now Playing page into
 `SongWikiDetailsSheet` (the lyric page has had no details button since 8c7ec2e). They request

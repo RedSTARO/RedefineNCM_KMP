@@ -7,6 +7,9 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -19,6 +22,51 @@ internal sealed interface CatalogLoad<out T> {
     data object Loading : CatalogLoad<Nothing>
     data object Failed : CatalogLoad<Nothing>
     data class Loaded<T>(val value: T) : CatalogLoad<T>
+}
+
+/**
+ * The artist and album pages loaded lately, for this process. A page left for the player or
+ * another page is composed again when it is returned to, and loading it again showed the
+ * loading card, opened it at the top, and offline turned a page being read into an error.
+ * Touched only from composition, on the main thread.
+ */
+private object CatalogMemory {
+    private const val CAPACITY = 16
+    private val pages = LinkedHashMap<String, Any>()
+
+    fun get(key: String): Any? = pages.remove(key)?.also { pages[key] = it }
+
+    fun put(key: String, value: Any) {
+        pages.remove(key)
+        pages[key] = value
+        while (pages.size > CAPACITY) pages.remove(pages.keys.first())
+    }
+}
+
+/**
+ * Loads a catalog page by [key], from [CatalogMemory] when it holds the page. Raising [reload]
+ * (the retry button) always loads it again.
+ */
+@Composable
+internal fun <T : Any> rememberCatalogLoad(
+    key: String,
+    reload: Int,
+    fetch: suspend () -> T?,
+): State<CatalogLoad<T>> {
+    @Suppress("UNCHECKED_CAST")
+    val held = remember(key) { CatalogMemory.get(key) as T? }
+    return produceState(held?.let { CatalogLoad.Loaded(it) } ?: CatalogLoad.Loading, key, reload) {
+        @Suppress("UNCHECKED_CAST")
+        val cached = if (reload == 0) CatalogMemory.get(key) as T? else null
+        if (cached != null) {
+            value = CatalogLoad.Loaded(cached)
+            return@produceState
+        }
+        value = CatalogLoad.Loading
+        val loaded = fetch()
+        if (loaded != null) CatalogMemory.put(key, loaded)
+        value = loaded?.let { CatalogLoad.Loaded(it) } ?: CatalogLoad.Failed
+    }
 }
 
 /** The row with the back button at the top of an artist or album page. */

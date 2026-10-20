@@ -30,7 +30,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,7 +41,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.data.Repository
-import com.leejlredstar.redefinencm.kmp.data.api.dto.AlbumDetail
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongArtist
 import com.leejlredstar.redefinencm.kmp.i18n.UiText
 import com.leejlredstar.redefinencm.kmp.i18n.strings
@@ -72,10 +70,7 @@ fun AlbumScreen(
     settings: PlatformSettings = koinInject(),
 ) {
     var reload by remember { mutableIntStateOf(0) }
-    val load by produceState<CatalogLoad<AlbumDetail>>(CatalogLoad.Loading, albumId, reload) {
-        value = CatalogLoad.Loading
-        value = repository.getAlbum(albumId)?.let { CatalogLoad.Loaded(it) } ?: CatalogLoad.Failed
-    }
+    val load by rememberCatalogLoad("album:$albumId", reload) { repository.getAlbum(albumId) }
     val detail = (load as? CatalogLoad.Loaded)?.value
     val accent = rememberArtworkAccent(
         requestKey = detail?.album?.picUrl,
@@ -144,22 +139,20 @@ fun AlbumScreen(
                 }
                 itemsIndexed(songs, key = { _, song -> "song-${song.id}" }) { index, song ->
                     val media = queue.getOrNull(index)
-                    Box(Modifier.padding(horizontal = 16.dp)) {
-                        SongRow(
-                            index = index,
-                            title = song.name,
-                            artist = song.ar.joinToString(" / ") { it.name },
-                            artworkUri = song.al.picUrl,
-                            shape = connectedListItemShape(index, songs.size),
-                            onClick = { playFromList(player, queue, index, playWholeList, source = source) },
-                            songId = song.id,
-                            accentColor = accent.color,
-                            mediaId = media?.id,
-                            durationMs = song.dt,
-                            badge = songFeeBadge(song.fee),
-                            actions = media?.let { rememberSongRowActions(media = it, neteaseSong = song) }.orEmpty(),
-                        )
-                    }
+                    SongRow(
+                        index = index,
+                        title = song.name,
+                        artist = song.ar.joinToString(" / ") { it.name },
+                        artworkUri = song.al.picUrl,
+                        shape = connectedListItemShape(index, songs.size),
+                        onClick = { playFromList(player, queue, index, playWholeList, source = source) },
+                        songId = song.id,
+                        accentColor = accent.color,
+                        mediaId = media?.id,
+                        durationMs = song.dt,
+                        badge = songFeeBadge(song.fee),
+                        actions = media?.let { rememberSongRowActions(media = it, neteaseSong = song) }.orEmpty(),
+                    )
                 }
             }
         }

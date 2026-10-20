@@ -28,7 +28,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -77,10 +76,7 @@ fun ArtistScreen(
     settings: PlatformSettings = koinInject(),
 ) {
     var reload by remember { mutableIntStateOf(0) }
-    val load by produceState<CatalogLoad<ArtistPage>>(CatalogLoad.Loading, artistId, reload) {
-        value = CatalogLoad.Loading
-        value = repository.getArtistPage(artistId)?.let { CatalogLoad.Loaded(it) } ?: CatalogLoad.Failed
-    }
+    val load by rememberCatalogLoad("artist:$artistId", reload) { repository.getArtistPage(artistId) }
     val page = (load as? CatalogLoad.Loaded)?.value
     val picture = page?.profile?.avatar?.ifBlank { null } ?: page?.profile?.cover
     val accent = rememberArtworkAccent(
@@ -162,25 +158,23 @@ fun ArtistScreen(
                     }
                     itemsIndexed(songs, key = { _, song -> "song-${song.id}" }) { index, song ->
                         val media = queue.getOrNull(index)
-                        Box(Modifier.padding(horizontal = 16.dp)) {
-                            SongRow(
-                                index = index,
-                                title = song.name,
-                                artist = song.ar.joinToString(" / ") { it.name },
-                                artworkUri = song.al.picUrl,
-                                shape = connectedListItemShape(index, songs.size),
-                                onClick = {
-                                    playFromList(player, queue, index, playWholeList, source = source)
-                                },
-                                songId = song.id,
-                                accentColor = accent.color,
-                                mediaId = media?.id,
-                                durationMs = song.dt,
-                                album = song.al.name,
-                                badge = songFeeBadge(song.fee),
-                                actions = media?.let { rememberSongRowActions(media = it, neteaseSong = song) }.orEmpty(),
-                            )
-                        }
+                        SongRow(
+                            index = index,
+                            title = song.name,
+                            artist = song.ar.joinToString(" / ") { it.name },
+                            artworkUri = song.al.picUrl,
+                            shape = connectedListItemShape(index, songs.size),
+                            onClick = {
+                                playFromList(player, queue, index, playWholeList, source = source)
+                            },
+                            songId = song.id,
+                            accentColor = accent.color,
+                            mediaId = media?.id,
+                            durationMs = song.dt,
+                            album = song.al.name,
+                            badge = songFeeBadge(song.fee),
+                            actions = media?.let { rememberSongRowActions(media = it, neteaseSong = song) }.orEmpty(),
+                        )
                     }
                 }
                 if (albums.isNotEmpty()) {

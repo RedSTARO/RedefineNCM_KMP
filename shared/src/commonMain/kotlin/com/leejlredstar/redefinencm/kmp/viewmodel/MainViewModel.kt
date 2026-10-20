@@ -726,6 +726,17 @@ class MainViewModel(
         intelligenceError.value = null
     }
 
+    /**
+     * Shows [songlistID]'s page, loading it unless this playlist is already held or loading. A
+     * page returned to (from the player, an artist page, a configuration change) keeps its rows
+     * and so its scroll position, where loading again emptied the list and opened it at the top.
+     */
+    fun openPlaylist(songlistID: Long) {
+        val held = activePlaylistId.value == songlistID &&
+            (playlistLoading.value || (playlistDetail.value != null && playlistSongs.value != null))
+        if (!held) fetchPlaylistDetail(songlistID)
+    }
+
     fun fetchPlaylistDetail(songlistID: Long) {
         val generation = playlistGeneration.updateAndGet { it + 1L }
         playlistJob?.cancel()

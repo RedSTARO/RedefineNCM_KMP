@@ -134,4 +134,40 @@ class ContentAccentPaletteTest {
             }
         }
     }
+
+    /**
+     * The playing row in a song list sits on [ContentAccentPalette.container]. Its text takes the
+     * container's own roles and its title the accent made legible there: the quiet container's
+     * roles and the raw accent measured 2.8 to 3.6:1 on it.
+     */
+    @Test
+    fun thePlayingRowsTextStaysLegibleOnTheContainer() {
+        labelSources.forEach { source ->
+            listOf("light" to LightColors, "dark" to DarkColors).forEach { (name, scheme) ->
+                val palette = buildContentAccentPalette(Color(source), scheme)
+                val title = legibleAccentFor(palette.accent, palette.container, scheme.surface)
+                listOf(
+                    "title" to title,
+                    "onContainer" to palette.onContainer,
+                    "secondaryOnContainer" to palette.secondaryOnContainer,
+                ).forEach { (role, color) ->
+                    val ratio = contrastRatio(color, palette.container, scheme.surface)
+                    assertTrue(ratio >= 4.5f, "$role on container in $name for ${source.toString(16)} is $ratio")
+                }
+            }
+        }
+    }
+
+    /** Search's top three hot ranks are the accent on the quiet container. */
+    @Test
+    fun theHotRanksStayLegibleOnTheQuietContainer() {
+        labelSources.forEach { source ->
+            listOf("light" to LightColors, "dark" to DarkColors).forEach { (name, scheme) ->
+                val palette = buildContentAccentPalette(Color(source), scheme)
+                val rank = legibleAccentFor(palette.accent, palette.quietContainer, scheme.surface)
+                val ratio = contrastRatio(rank, palette.quietContainer, scheme.surface)
+                assertTrue(ratio >= 4.5f, "rank on quietContainer in $name for ${source.toString(16)} is $ratio")
+            }
+        }
+    }
 }

@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -110,7 +112,7 @@ fun PlaylistDetailScreen(
     var confirmDownloadAll by remember { mutableStateOf(false) }
 
     LaunchedEffect(playlistId) {
-        viewModel.fetchPlaylistDetail(playlistId)
+        viewModel.openPlaylist(playlistId)
     }
 
     val queueItems = remember(songs, playlistId) {
@@ -136,10 +138,9 @@ fun PlaylistDetailScreen(
         viewModel.updatePlaylistPlaycount(playlistId)
     }
 
-    val trackCountText = when {
-        (playlist?.trackCount ?: 0L) == 0L -> strings.playlistSongCount(songs.size)
-        else -> playlist?.trackCount?.let { strings.playlistSongCount(it) } ?: "…"
-    }
+    // While the songs load, their count is not known yet; it is not 0.
+    val trackCountText = playlist?.trackCount?.takeIf { it > 0L }?.let { strings.playlistSongCount(it) }
+        ?: if (tracks != null) strings.playlistSongCount(songs.size) else "…"
     val title = playlist?.name ?: strings.playlist
     val defaultAccentColor = MaterialTheme.colorScheme.primaryContainer
     var rawAccentColor by remember(playlist?.coverImgUrl) {
@@ -372,6 +373,7 @@ private fun PlaylistCompactBar(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PlaylistHeader(
     coverUrl: String?,
@@ -421,10 +423,13 @@ private fun PlaylistHeader(
             )
             Spacer(Modifier.height(20.dp))
             // Two plain buttons. The download is not the trailing half of a split button: Material
-            // reserves that slot for opening a menu of the leading action's variants.
-            Row(
+            // reserves that slot for opening a menu of the leading action's variants. They wrap
+            // onto a second line rather than squeezing the last one away: in Japanese, and at a
+            // larger font, they do not fit side by side on a phone.
+            FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
             ) {
                 Button(
                     onClick = onPlayAll,
@@ -438,7 +443,7 @@ private fun PlaylistHeader(
                 ) {
                     Icon(AppIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(strings.playAll, style = MaterialTheme.typography.titleMedium)
+                    Text(strings.playAll, style = MaterialTheme.typography.titleMedium, maxLines = 1)
                 }
                 FilledTonalButton(
                     onClick = onDownloadAll,
@@ -452,7 +457,7 @@ private fun PlaylistHeader(
                 ) {
                     Icon(AppIcons.Download, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(strings.downloadAll)
+                    Text(strings.downloadAll, maxLines = 1)
                 }
                 if (onSaveLocal != null) {
                     FilledTonalIconButton(

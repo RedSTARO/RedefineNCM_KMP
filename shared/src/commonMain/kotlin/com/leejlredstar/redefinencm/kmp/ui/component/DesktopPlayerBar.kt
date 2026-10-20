@@ -30,6 +30,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -75,8 +77,18 @@ internal fun DesktopPlayerBar(
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val roomy = maxWidth >= 760.dp
+            // The right-hand controls keep their own width and the transport never goes below
+            // what its buttons need; the song takes what is left. Shared out by weight, the
+            // right group was clipped in windows about 600 to 760dp and 856 to 1155dp wide.
+            val rightGroupWidth = BarIconButtonWidth * 3 + VolumeIconWidth +
+                if (roomy) VolumeSliderWidth else 0.dp
+            val flexibleWidth = (maxWidth - BarHorizontalPadding * 2 - BarIconButtonWidth - rightGroupWidth)
+                .coerceAtLeast(0.dp)
+            val transportWidth = (flexibleWidth * TransportShare)
+                .coerceAtLeast(if (roomy) TransportMinWidthRoomy else TransportMinWidth)
+                .coerceAtMost(flexibleWidth)
             Row(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                modifier = Modifier.fillMaxSize().padding(horizontal = BarHorizontalPadding),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // The song: tapping it opens the player.
@@ -153,7 +165,7 @@ internal fun DesktopPlayerBar(
 
                 // The transport and the progress, in the middle.
                 Column(
-                    modifier = Modifier.weight(1.4f).padding(horizontal = 12.dp),
+                    modifier = Modifier.width(transportWidth).padding(horizontal = 12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Row(
@@ -219,7 +231,6 @@ internal fun DesktopPlayerBar(
 
                 // The rest of the player, on the right.
                 Row(
-                    modifier = Modifier.weight(1f),
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -254,7 +265,14 @@ internal fun DesktopPlayerBar(
                             value = volume.coerceIn(0f, 1f),
                             onValueChange = player::setVolume,
                             valueRange = 0f..1f,
-                            modifier = Modifier.width(112.dp).padding(start = 4.dp),
+                            // Named like the lyric page's volume slider; the icon beside it is a
+                            // separate node a screen reader reaches first.
+                            modifier = Modifier
+                                .width(VolumeSliderWidth)
+                                .padding(start = 4.dp)
+                                .semantics {
+                                    contentDescription = strings.outputVolumePercent(formatOutputVolumePercent(volume))
+                                },
                             colors = SliderDefaults.colors(
                                 thumbColor = accentPalette.accent,
                                 activeTrackColor = accentPalette.accent,
@@ -270,3 +288,23 @@ internal fun DesktopPlayerBar(
 
 /** The height the bar takes from the content above it. */
 internal val DesktopPlayerBarHeight = 80.dp
+
+private val BarHorizontalPadding = 16.dp
+
+/** An IconButton's width: its minimum touch target. */
+private val BarIconButtonWidth = 48.dp
+
+/** The volume icon with its leading space. */
+private val VolumeIconWidth = 28.dp
+
+/** The volume slider with its leading space, shown when the bar is roomy. */
+private val VolumeSliderWidth = 116.dp
+
+/** Previous, play and next with their spacing, plus the column's own padding. */
+private val TransportMinWidth = 172.dp
+
+/** The same with shuffle in front. */
+private val TransportMinWidthRoomy = 224.dp
+
+/** The transport's share of the width the song and the transport split. */
+private const val TransportShare = 1.4f / 2.4f

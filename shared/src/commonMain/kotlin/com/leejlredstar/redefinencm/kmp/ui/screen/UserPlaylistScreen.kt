@@ -5,7 +5,9 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -449,11 +451,9 @@ private fun UserPlaylistHero(
         // gradient closes at the bottom.
         val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
         val heroHeight = topInset + HeroTitleRowHeight + (maxWidth / 3.4f).coerceIn(164.dp, 232.dp)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(heroHeight),
-        ) {
+        // At least that tall, and taller when the text needs it: at a larger font the profile
+        // block grew upward over the page title inside a fixed height.
+        Box(modifier = Modifier.fillMaxWidth()) {
             AsyncImage(
                 model = backgroundUrl,
                 contentDescription = null,
@@ -500,97 +500,101 @@ private fun UserPlaylistHero(
                 onSuccess = { state -> extractBackgroundAccent(state.result.image) },
             )
 
-            Row(
+            Column(
                 modifier = Modifier
-                    .align(Alignment.TopStart)
                     .fillMaxWidth()
-                    .statusBarsPadding()
-                    .height(HeroTitleRowHeight)
-                    .padding(start = 20.dp, end = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .heightIn(min = heroHeight),
+                verticalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text(
-                    text = strings.me,
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = accentPalette.onPageStart,
-                    modifier = Modifier.weight(1f),
-                )
-                IconButton(onClick = onOpenSettings) {
-                    Icon(
-                        imageVector = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Settings,
-                        contentDescription = strings.settings,
-                        tint = accentPalette.onPageStart,
-                    )
-                }
-            }
-
-            Row(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(horizontal = 20.dp, vertical = 20.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AsyncImage(
-                    model = avatarUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
+                Row(
                     modifier = Modifier
-                        .size(80.dp)
-                        .clip(CircleShape)
-                        .border(3.dp, accentPalette.container, CircleShape),
-                    onSuccess = { state -> extractAvatarAccent(state.result.image) },
-                )
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) {
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .height(HeroTitleRowHeight)
+                        .padding(start = 20.dp, end = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Text(
-                        text = nickname,
-                        style = MaterialTheme.typography.headlineSmall,
+                        text = strings.me,
+                        style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.ExtraBold,
                         color = accentPalette.onPageStart,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
                     )
-                    Text(
-                        text = levelDisplay?.summary ?: if (levelLoading) {
-                            strings.userLevelLoading
-                        } else {
-                            strings.userLevelUnavailable
-                        },
-                        style = MaterialTheme.typography.labelLarge,
-                        color = accentPalette.secondaryOnPageStart,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (levelLoadFailed) {
-                        TextButton(onClick = onRetryLevel) {
-                            Text(strings.retry)
-                        }
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(
+                            imageVector = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Settings,
+                            contentDescription = strings.settings,
+                            tint = accentPalette.onPageStart,
+                        )
                     }
-                    levelDisplay?.let { display ->
-                        Spacer(Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            ExpressiveWavyProgress(
-                                progress = { display.progress },
-                                modifier = Modifier.weight(1f),
-                                color = accentPalette.accent,
-                                trackColor = accentPalette.onPageStart.copy(alpha = 0.14f),
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = display.progressLabel,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = accentPalette.secondaryOnPageStart,
-                                maxLines = 1,
-                            )
+                }
+
+                Row(
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AsyncImage(
+                        model = avatarUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                            .border(3.dp, accentPalette.container, CircleShape),
+                        onSuccess = { state -> extractAvatarAccent(state.result.image) },
+                    )
+                    Spacer(Modifier.width(16.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = nickname,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = accentPalette.onPageStart,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = levelDisplay?.summary ?: if (levelLoading) {
+                                strings.userLevelLoading
+                            } else {
+                                strings.userLevelUnavailable
+                            },
+                            style = MaterialTheme.typography.labelLarge,
+                            color = accentPalette.secondaryOnPageStart,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (levelLoadFailed) {
+                            TextButton(onClick = onRetryLevel) {
+                                Text(strings.retry)
+                            }
                         }
-                        display.nextLevelLabel?.let { label ->
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = accentPalette.secondaryOnPageStart,
-                                maxLines = 2,
-                            )
+                        levelDisplay?.let { display ->
+                            Spacer(Modifier.height(8.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                ExpressiveWavyProgress(
+                                    progress = { display.progress },
+                                    modifier = Modifier.weight(1f),
+                                    color = accentPalette.accent,
+                                    trackColor = accentPalette.onPageStart.copy(alpha = 0.14f),
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = display.progressLabel,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = accentPalette.secondaryOnPageStart,
+                                    maxLines = 1,
+                                )
+                            }
+                            display.nextLevelLabel?.let { label ->
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = accentPalette.secondaryOnPageStart,
+                                    maxLines = 2,
+                                )
+                            }
                         }
                     }
                 }

@@ -58,6 +58,7 @@ import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberConnectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.theme.legibleAccentFor
 import com.leejlredstar.redefinencm.kmp.ui.theme.pageLinkColor
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
@@ -146,8 +147,10 @@ fun SearchScreen(
         accentPalette = searchPalette,
         maxContentWidth = com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout.ReadingContentMaxWidth,
         contentWindowInsets = WindowInsets.statusBars,
-        contentPadding = PaddingValues(horizontal = 16.dp),
     ) {
+        // The page's side padding is applied per element rather than around the whole page: the
+        // result rows carry their own 16dp inset, as on every other page, and inside a padded
+        // page they were inset twice.
         Column(modifier = Modifier.fillMaxSize()) {
         Text(
             text = strings.search,
@@ -155,13 +158,13 @@ fun SearchScreen(
             fontWeight = FontWeight.ExtraBold,
             color = searchPalette.onPageStart,
             modifier = Modifier.padding(
-                start = SearchSpacing.Inset,
+                start = SearchSpacing.Page + SearchSpacing.Inset,
                 top = SearchSpacing.SectionGap,
                 bottom = SearchSpacing.TitleGap,
             ),
         )
         Row(
-            modifier = Modifier.padding(bottom = 4.dp),
+            modifier = Modifier.padding(start = SearchSpacing.Page, end = SearchSpacing.Page, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TextField(
@@ -215,7 +218,7 @@ fun SearchScreen(
                 ExpressiveLoadingState(
                     label = strings.searchingFor(submittedQuery ?: query),
                     accentColor = searchPalette.accent,
-                    modifier = Modifier.padding(top = SearchSpacing.SectionGap),
+                    modifier = Modifier.padding(horizontal = SearchSpacing.Page).padding(top = SearchSpacing.SectionGap),
                 )
             }
             // Only a total failure replaces the results. With two providers configured, one being
@@ -230,7 +233,7 @@ fun SearchScreen(
                     accentPalette = searchPalette,
                     actionLabel = strings.retry,
                     onAction = { submit(submittedQuery ?: query) },
-                    modifier = Modifier.padding(top = SearchSpacing.SectionGap),
+                    modifier = Modifier.padding(horizontal = SearchSpacing.Page).padding(top = SearchSpacing.SectionGap),
                 )
             }
             results.isNotEmpty() && submittedMatchesQuery -> {
@@ -331,13 +334,17 @@ fun SearchScreen(
                     message = strings.noSongsMatchQuery(submittedQuery),
                     icon = AppIcons.Search,
                     accentPalette = searchPalette,
-                    modifier = Modifier.padding(top = SearchSpacing.SectionGap),
+                    modifier = Modifier.padding(horizontal = SearchSpacing.Page).padding(top = SearchSpacing.SectionGap),
                 )
             }
             query.isNotBlank() && searchPrediction && suggestions.isNotEmpty() -> {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = bottomPadding),
+                    contentPadding = PaddingValues(
+                        start = SearchSpacing.Page,
+                        end = SearchSpacing.Page,
+                        bottom = bottomPadding,
+                    ),
                 ) {
                     itemsIndexed(
                         items = suggestions,
@@ -380,6 +387,7 @@ fun SearchScreen(
                     message = strings.searchPromptWithQuery(query),
                     icon = AppIcons.Search,
                     accentPalette = searchPalette,
+                    modifier = Modifier.padding(horizontal = SearchSpacing.Page),
                 )
             }
             else -> SearchStart(
@@ -414,14 +422,24 @@ private fun SearchStart(
             message = strings.searchEmptyHint,
             icon = AppIcons.Search,
             accentPalette = accentPalette,
-            modifier = Modifier.padding(top = SearchSpacing.SectionGap),
+            modifier = Modifier.padding(horizontal = SearchSpacing.Page).padding(top = SearchSpacing.SectionGap),
         )
         return
     }
     val hot = hotSearches.take(HotSearchCount)
+    // The top three ranks are drawn in the accent, moved toward the row's text colour as far as
+    // AA needs: the raw accent on the quiet container was 3.4 to 4.1:1 in light mode.
+    val surface = MaterialTheme.colorScheme.surface
+    val rankAccent = remember(accentPalette, surface) {
+        legibleAccentFor(accentPalette.accent, accentPalette.quietContainer, surface)
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = bottomPadding),
+        contentPadding = PaddingValues(
+            start = SearchSpacing.Page,
+            end = SearchSpacing.Page,
+            bottom = bottomPadding,
+        ),
     ) {
         if (history.isNotEmpty()) {
             item(key = "history-title") {
@@ -494,7 +512,7 @@ private fun SearchStart(
                             text = "${index + 1}",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = if (index < 3) accentPalette.accent else accentPalette.secondaryOnQuietContainer,
+                            color = if (index < 3) rankAccent else accentPalette.secondaryOnQuietContainer,
                             modifier = Modifier.width(32.dp),
                         )
                         Column(Modifier.weight(1f)) {
@@ -574,7 +592,8 @@ private fun SearchProviderHeader(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(
-            start = SearchSpacing.Inset,
+            start = SearchSpacing.Page + SearchSpacing.Inset,
+            end = SearchSpacing.Page,
             top = SearchSpacing.SectionGap,
             bottom = SearchSpacing.TitleGap,
         ),
@@ -674,6 +693,9 @@ internal fun ProviderTrack.toNeteaseSongOrNull(): com.leejlredstar.redefinencm.k
  * per section, the page reads as drifting rather than as a set of sections.
  */
 private object SearchSpacing {
+    /** The page's side padding, the inset a song row also gives itself. */
+    val Page = 16.dp
+
     /** Anything that is not a full-width row lines up with the page title, 4dp in. */
     val Inset = 4.dp
 
