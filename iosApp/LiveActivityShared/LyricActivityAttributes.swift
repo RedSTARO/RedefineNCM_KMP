@@ -21,6 +21,13 @@ struct LyricActivityAttributes: ActivityAttributes {
         var isPlaying: Bool
         var positionMs: Int64
         var durationMs: Int64
+        /// The current line is the title, sent because the track has no line at this moment.
+        /// Optional, like every field added later: an activity started by an older build keeps
+        /// decoding after an update.
+        var lyricIsTitle: Bool?
+        /// When the track was at its start, by this update's clock. While playing, the widget
+        /// moves the progress bar from here.
+        var progressStart: Date?
     }
 
     var appName: String = "RedefineNCM"

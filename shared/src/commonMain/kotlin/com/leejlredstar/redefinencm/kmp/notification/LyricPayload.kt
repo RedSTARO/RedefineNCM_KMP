@@ -67,3 +67,26 @@ internal fun lyricPayloadOf(
  */
 internal fun LyricPayload.asSingleLineSurface(): LyricPayload? =
     headline.takeIf { it.isNotEmpty() }?.let { copy(currentLyric = it) }
+
+/** While playing, a surface that moves its own progress bar still gets an update this often. */
+internal const val TIMED_SURFACE_KEEP_ALIVE_MS = 60_000L
+
+/** How far the position may be from where the bar has moved before it is sent again. */
+internal const val TIMED_SURFACE_DRIFT_MS = 2_000L
+
+/**
+ * Whether [next] adds nothing for a surface that moves its own progress bar from the last update
+ * it was sent, [last], [elapsedMs] ago: the same track, line and play state, and a position where
+ * the bar already is. A seek, a new line, a pause or another track is sent, and so is one update
+ * per [TIMED_SURFACE_KEEP_ALIVE_MS] while playing, which tells the surface the app still runs.
+ *
+ * The iOS Live Activity is that surface. Sending every whole-second position re-rendered its
+ * widget once a second for the whole time the music played.
+ */
+internal fun isRedundantTimedUpdate(last: LyricPayload, next: LyricPayload, elapsedMs: Long): Boolean {
+    if (last.copy(positionMs = 0L) != next.copy(positionMs = 0L)) return false
+    if (!next.isPlaying) return next.positionMs == last.positionMs
+    if (elapsedMs >= TIMED_SURFACE_KEEP_ALIVE_MS) return false
+    val expectedMs = last.positionMs + elapsedMs
+    return next.positionMs in (expectedMs - TIMED_SURFACE_DRIFT_MS)..(expectedMs + TIMED_SURFACE_DRIFT_MS)
+}

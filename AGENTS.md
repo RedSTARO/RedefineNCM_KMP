@@ -195,6 +195,16 @@ a synchronized folder in **both** Xcode targets — the app and the extension mu
 require an App Group. An App Group is only needed if artwork is later shared with the extension
 through a file cache.
 
+**Live Activity lifetime (decided 2026-10-21).** One the person swipes away is not started again
+until another track plays. One the system ended (its eight-hour limit) is replaced at the next
+update while playing in the foreground, or when the app comes back to the foreground. Updates go
+out when the line, the play state or the track changes, after a seek, and once a minute while
+playing: the widget moves the progress bar itself from the update's start time. An update sent
+while playing goes stale after 90 seconds, and the widget shows a stale activity as paused, so
+one left behind by an app that died does not claim to play; the app ends its activities when it
+is closed while it runs. `ContentState` fields added later are optional, so an activity started
+by an older build keeps decoding after an update.
+
 ### D5 — Full-screen AMLL is one route with one native Compose renderer — **DONE (updated 2026-09-06)**
 
 `AmllPlayerScreen` is the only full-screen navigation route and it renders `NativeAmllScreen` on

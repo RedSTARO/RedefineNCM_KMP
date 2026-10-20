@@ -2,7 +2,9 @@ package com.leejlredstar.redefinencm.kmp.notification
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class LyricPayloadTest {
 
@@ -90,5 +92,38 @@ class LyricPayloadTest {
     fun aSingleLineSurfaceHasNothingToShowWithoutALyricOrATitle() {
         assertNull(payload(title = null, currentLyric = null).asSingleLineSurface())
         assertNull(payload(title = "  ", currentLyric = "  ").asSingleLineSurface())
+    }
+
+    @Test
+    fun aPositionMovingAsTheBarDoesIsNotSentAgain() {
+        val last = payload(positionMs = 10_000L)
+        assertTrue(isRedundantTimedUpdate(last, payload(positionMs = 15_000L), elapsedMs = 5_000L))
+        // Whole-second rounding and timer jitter stay inside the tolerance.
+        assertTrue(isRedundantTimedUpdate(last, payload(positionMs = 16_000L), elapsedMs = 5_400L))
+    }
+
+    @Test
+    fun aSeekANewLineAPauseOrAnotherTrackIsSent() {
+        val last = payload(positionMs = 10_000L)
+        assertFalse(isRedundantTimedUpdate(last, payload(positionMs = 60_000L), elapsedMs = 5_000L))
+        assertFalse(isRedundantTimedUpdate(last, payload(positionMs = 1_000L), elapsedMs = 5_000L))
+        assertFalse(isRedundantTimedUpdate(last, payload(positionMs = 15_000L, currentLyric = "Other"), elapsedMs = 5_000L))
+        assertFalse(isRedundantTimedUpdate(last, payload(positionMs = 15_000L, isPlaying = false), elapsedMs = 5_000L))
+        assertFalse(isRedundantTimedUpdate(last, payload(positionMs = 15_000L, title = "Next song"), elapsedMs = 5_000L))
+        assertFalse(isRedundantTimedUpdate(last, payload(positionMs = 15_000L, durationMs = 180_000L), elapsedMs = 5_000L))
+    }
+
+    @Test
+    fun playbackSendsAKeepAliveEveryMinute() {
+        val last = payload(positionMs = 0L)
+        assertTrue(isRedundantTimedUpdate(last, payload(positionMs = 59_000L), elapsedMs = 59_000L))
+        assertFalse(isRedundantTimedUpdate(last, payload(positionMs = 60_000L), elapsedMs = TIMED_SURFACE_KEEP_ALIVE_MS))
+    }
+
+    @Test
+    fun aPausedSurfaceIsSentOnlyWhenThePositionChanges() {
+        val last = payload(positionMs = 30_000L, isPlaying = false)
+        assertTrue(isRedundantTimedUpdate(last, payload(positionMs = 30_000L, isPlaying = false), elapsedMs = 600_000L))
+        assertFalse(isRedundantTimedUpdate(last, payload(positionMs = 90_000L, isPlaying = false), elapsedMs = 1_000L))
     }
 }

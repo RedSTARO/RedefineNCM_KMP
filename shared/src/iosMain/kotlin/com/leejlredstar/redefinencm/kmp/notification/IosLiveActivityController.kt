@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import platform.posix.time
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 /**
  * iOS lyric surface.
@@ -34,6 +36,8 @@ object IosLiveActivity : LyricSurface {
 
     private var observerJob: Job? = null
     private var lastPayload: LyricPayload? = null
+    private var lastLyricIsTitle = false
+    private var lastSentMark: TimeMark? = null
 
     /**
      * Swift bridge: the Swift `LiveActivityManager` calls this once at startup. [onChange] fires
@@ -63,7 +67,7 @@ object IosLiveActivity : LyricSurface {
         positionMs: Long,
         durationMs: Long,
     ) {
-        val payload = lyricPayloadOf(
+        val received = lyricPayloadOf(
             title = title,
             artist = artist,
             currentLyric = currentLyric,
@@ -72,9 +76,21 @@ object IosLiveActivity : LyricSurface {
             isPlaying = isPlaying,
             positionMs = positionMs,
             durationMs = durationMs,
-        ).asSingleLineSurface() ?: return
-        if (payload == lastPayload) return
+        )
+        val payload = received.asSingleLineSurface() ?: return
+        // The single line is the title when the track has no line now, and also when the line
+        // is the title: the flag tells the widget which, so a sung title is not hidden.
+        val lyricIsTitle = received.currentLyric.isEmpty()
+        val last = lastPayload
+        val sinceLastMs = lastSentMark?.elapsedNow()?.inWholeMilliseconds
+        // The widget moves the progress bar itself: a position it already shows is not sent.
+        if (
+            last != null && sinceLastMs != null && lyricIsTitle == lastLyricIsTitle &&
+            isRedundantTimedUpdate(last, payload, sinceLastMs)
+        ) return
         lastPayload = payload
+        lastLyricIsTitle = lyricIsTitle
+        lastSentMark = TimeSource.Monotonic.markNow()
 
         _liveActivityData.value = LiveActivityData(
             title = payload.title,
@@ -85,17 +101,20 @@ object IosLiveActivity : LyricSurface {
             isPlaying = payload.isPlaying,
             positionMs = payload.positionMs,
             durationMs = payload.durationMs,
+            lyricIsTitle = lyricIsTitle,
             timestamp = currentTimeMillis(),
         )
     }
 
     override fun clearFocus() {
         lastPayload = null
+        lastSentMark = null
         _liveActivityData.value = null
     }
 
     override fun reset() {
         lastPayload = null
+        lastSentMark = null
         _liveActivityData.value = null
     }
 
@@ -118,6 +137,8 @@ data class LiveActivityData(
     val isPlaying: Boolean,
     val positionMs: Long,
     val durationMs: Long,
+    /** [currentLyric] is the title, standing in because the track has no line at this moment. */
+    val lyricIsTitle: Boolean,
     val timestamp: Long,
 )
 
