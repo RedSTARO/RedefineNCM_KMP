@@ -78,6 +78,13 @@ internal fun classifyAccountLookup(cookie: String, response: UserAccount?): Acco
     }
 }
 
+/**
+ * Whether the answer about a UID stored at sign-in ends that session. Only the service saying the
+ * credential belongs to nobody does: offline, or with the service failing, the stored account
+ * stays usable.
+ */
+internal fun endsStoredSession(lookup: AccountLookup): Boolean = lookup == AccountLookup.Expired
+
 private const val ACCOUNT_LOOKUP_OK = 200
 
 /** NeteaseCloudMusicApi's answer for a request that needs an account it was not given. */
@@ -374,15 +381,18 @@ class MainViewModel(
         }
     }
 
-    private suspend fun resolveUid(ignorePersistedUid: Boolean, cookie: String): Long {
+    /** The account's UID, and whether it was read from settings rather than from the service. */
+    private data class ResolvedUid(val uid: Long, val fromSettings: Boolean)
+
+    private suspend fun resolveUid(ignorePersistedUid: Boolean, cookie: String): ResolvedUid {
         if (!ignorePersistedUid) {
             val cachedUid = settings.getLongAsync(SettingKeys.UID, 0L)
             val cachedFingerprint = settings.getLongAsync(SettingKeys.UID_COOKIE_FINGERPRINT, 0L)
             if (isCachedAccountIdentityValid(cookie, cachedUid, cachedFingerprint)) {
-                return cachedUid
+                return ResolvedUid(cachedUid, fromSettings = true)
             }
         }
-        return when (val lookup = classifyAccountLookup(cookie, repo.getUserAccount())) {
+        val uid = when (val lookup = classifyAccountLookup(cookie, repo.getUserAccount())) {
             is AccountLookup.SignedIn -> lookup.uid
             AccountLookup.SignedOut -> 0L
             AccountLookup.Expired -> {
@@ -392,6 +402,27 @@ class MainViewModel(
             // Caught by loadAccount, which shows the account-data failure with a retry.
             AccountLookup.Unreachable -> throw AccountLookupUnreachableException()
         }
+        return ResolvedUid(uid, fromSettings = false)
+    }
+
+    /**
+     * A UID read from settings was stored when the user signed in, and the session behind it may
+     * have ended since (a password change, signing out on every device). Only the account
+     * service says so, and it was asked only at sign-in: endpoints that need an account answer
+     * 301, which the caches swallow, so old recommendations stayed and retrying never helped.
+     * It is asked here, in the background; only an answer that the credential belongs to nobody
+     * any more signs out. Offline, the stored account stays usable.
+     */
+    private suspend fun verifyStoredSession(generation: Long, cookie: String, storedUid: Long) {
+        if (!endsStoredSession(classifyAccountLookup(cookie, repo.getUserAccount()))) return
+        if (accountGeneration.value != generation || _uid.value != storedUid) return
+        settings.setLong(SettingKeys.UID, 0L)
+        settings.setLong(SettingKeys.UID_COOKIE_FINGERPRINT, 0L)
+        settings.flush()
+        if (accountGeneration.value != generation || _uid.value != storedUid) return
+        accountCredentialKey.value = null
+        _uid.value = 0L
+        sessionExpired.value = true
     }
 
     /** Login/account changes invalidate all work started for the previous credential. */
@@ -444,10 +475,11 @@ class MainViewModel(
                     repo.clearAccountScopedCaches().getOrThrow()
                 }
 
-                val resolvedUid = resolveUid(
+                val resolved = resolveUid(
                     ignorePersistedUid = clearPersistedAccount,
                     cookie = cookie,
                 )
+                val resolvedUid = resolved.uid
                 ensureActive()
                 if (accountGeneration.value != generation) return@launch
                 if (resolvedUid == 0L) {
@@ -471,6 +503,9 @@ class MainViewModel(
                 }
 
                 coroutineScope {
+                    if (resolved.fromSettings) {
+                        launch { verifyStoredSession(generation, cookie, resolvedUid) }
+                    }
                     launch {
                         var emitted = false
                         repo.getUserDetail(resolvedUid).collect { emission ->

@@ -4,6 +4,8 @@ import com.leejlredstar.redefinencm.kmp.data.api.dto.UserAccount
 import com.leejlredstar.redefinencm.kmp.data.api.dto.UserAccountDetail
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class AccountLookupTest {
     private val cookie = "MUSIC_U=session"
@@ -32,6 +34,15 @@ class AccountLookupTest {
         // What the server this app defaults to answers for a cookie it does not accept.
         assertEquals(AccountLookup.Expired, classifyAccountLookup(cookie, UserAccount(code = 200)))
         assertEquals(AccountLookup.Expired, classifyAccountLookup(cookie, UserAccount(code = 301)))
+    }
+
+    @Test
+    fun onlyAnExpiredCredentialEndsAStoredSession() {
+        // A UID stored at sign-in is checked in the background; offline it must stay signed in.
+        assertTrue(endsStoredSession(AccountLookup.Expired))
+        assertFalse(endsStoredSession(AccountLookup.Unreachable))
+        assertFalse(endsStoredSession(AccountLookup.SignedIn(42)))
+        assertFalse(endsStoredSession(AccountLookup.SignedOut))
     }
 
     @Test
