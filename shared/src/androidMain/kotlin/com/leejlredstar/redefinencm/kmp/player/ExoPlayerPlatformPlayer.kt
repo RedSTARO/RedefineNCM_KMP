@@ -7,6 +7,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
@@ -187,6 +188,14 @@ class ExoPlayerPlatformPlayer(
             if (isNewOccurrence) _playbackOccurrence.advancePlaybackOccurrence()
         }
 
+        override fun onPlayerError(error: PlaybackException) {
+            if (deck !== active) return
+            // A stream that could not be resolved stops the player idle; the app shows ERROR
+            // until play, next, previous or a queue row prepares it again.
+            stopPositionSync()
+            updateStateFromExo()
+        }
+
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
             if (deck !== active) return
             // 切换随机模式改变播放顺序，必须整体重建列表与高亮
@@ -206,6 +215,7 @@ class ExoPlayerPlatformPlayer(
             player.playbackState == Player.STATE_BUFFERING -> PlayerState.BUFFERING
             player.playbackState == Player.STATE_ENDED -> PlayerState.ENDED
             player.playbackState == Player.STATE_READY -> PlayerState.PAUSED
+            player.playerError != null -> PlayerState.ERROR
             else -> PlayerState.IDLE
         }
     }
@@ -325,6 +335,8 @@ class ExoPlayerPlatformPlayer(
             _position.value = 0L
             _playbackOccurrence.advancePlaybackOccurrence()
         }
+        // As the session's play button does: a player an error stopped is loaded again.
+        player.prepareIfIdle()
         player.play()
     }
 
@@ -345,11 +357,13 @@ class ExoPlayerPlatformPlayer(
     override fun seekToPrevious() {
         abandonTransition(dropPlan = true)
         active.seekToPreviousMediaItem()
+        active.prepareIfIdle()
     }
 
     override fun seekToNext() {
         abandonTransition(dropPlan = true)
         active.seekToNextMediaItem()
+        active.prepareIfIdle()
     }
 
     override fun skipToIndex(index: Int) {
@@ -357,6 +371,7 @@ class ExoPlayerPlatformPlayer(
         // index 是播放顺序位置，需映射回 ExoPlayer 窗口索引（随机模式下二者不同）
         val windowIndex = playOrderWindowIndices.getOrNull(index) ?: index
         active.seekToDefaultPosition(windowIndex)
+        active.prepareIfIdle()
     }
 
     override fun removeFromQueue(position: Int) {
@@ -844,6 +859,17 @@ class ExoPlayerPlatformPlayer(
         const val LATE_BEAT_MATCHED_MS = 40L
         const val LATE_CROSSFADE_MS = 1_000L
     }
+}
+
+/**
+ * The idle branch of Media3's play-button handling. A track whose stream could not be resolved
+ * leaves the player idle with an error, and only prepare() loads anything again.
+ */
+internal fun needsPrepareBeforePlay(playbackState: Int, mediaItemCount: Int): Boolean =
+    playbackState == Player.STATE_IDLE && mediaItemCount > 0
+
+private fun Player.prepareIfIdle() {
+    if (needsPrepareBeforePlay(playbackState, mediaItemCount)) prepare()
 }
 
 /**

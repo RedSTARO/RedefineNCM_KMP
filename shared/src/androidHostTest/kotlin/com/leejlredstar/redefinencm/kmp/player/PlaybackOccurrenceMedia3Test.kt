@@ -69,6 +69,16 @@ class PlaybackOccurrenceMedia3Test {
         ))
     }
 
+    /** Play, next, previous and a queue row must recover a player a failed stream stopped. */
+    @Test
+    fun onlyAnIdlePlayerWithItemsIsPreparedAgain() {
+        assertTrue(needsPrepareBeforePlay(Player.STATE_IDLE, mediaItemCount = 3))
+        assertFalse(needsPrepareBeforePlay(Player.STATE_IDLE, mediaItemCount = 0))
+        assertFalse(needsPrepareBeforePlay(Player.STATE_READY, mediaItemCount = 3))
+        assertFalse(needsPrepareBeforePlay(Player.STATE_BUFFERING, mediaItemCount = 3))
+        assertFalse(needsPrepareBeforePlay(Player.STATE_ENDED, mediaItemCount = 3))
+    }
+
     @Test
     fun anEmptyTimelineNeverStartsAnOccurrence() {
         assertFalse(shouldAdvanceMedia3PlaybackOccurrence(
