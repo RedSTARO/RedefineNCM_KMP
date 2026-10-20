@@ -1010,8 +1010,11 @@ and another from live state — that is the original shuffle-misalignment bug.
 
 The pure, unit-tested model of this now lives in **`player/PlayQueue.kt`** (immutable;
 `currentItem == itemsInPlayOrder[positionInPlayOrder]` holds by construction) with a full
-regression suite in **`commonTest/.../player/PlayQueueTest.kt`**. Every `PlatformPlayer` actual
-delegates ordering to `PlayQueue` and publishes one `queueSnapshot`; `NowPlayingViewModel`
+regression suite in **`commonTest/.../player/PlayQueueTest.kt`**. The iOS, desktop and Web players
+delegate ordering to `PlayQueue`. ExoPlayer keeps its own timeline, so Android installs
+`CurrentFirstShuffleOrder`, which applies the same rules: the current or chosen item first, added
+items last, removals and moves keeping the rest in order. Every player publishes one
+`queueSnapshot`; `NowPlayingViewModel`
 rebuilds the visible queue and highlight from that snapshot in `rebuildPlaylistFromTimeline()`
 and must not re-derive the order.
 

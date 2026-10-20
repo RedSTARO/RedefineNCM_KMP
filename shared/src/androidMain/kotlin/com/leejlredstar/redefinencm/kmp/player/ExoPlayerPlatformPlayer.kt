@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.SystemClock
 import androidx.annotation.OptIn
+import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -14,7 +15,6 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.exoplayer.source.ShuffleOrder
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
 import com.leejlredstar.redefinencm.kmp.download.LocalMediaAssets
@@ -67,7 +67,7 @@ class ExoPlayerPlatformPlayer(
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    private val primary = buildDeck()
+    private val primary = buildDeck(ownsAudioFocus = true)
     private var secondary: ExoPlayer? = null
 
     /** The player that holds the queue. Read by resolvers on ExoPlayer's loading threads. */
@@ -87,8 +87,12 @@ class ExoPlayerPlatformPlayer(
      * Builds one player. Its resolver records a failed track in the provider registry only while
      * this player is the active one: the other player prepares the next track before anyone is
      * listening to it, and that failure is not the "this track cannot play" the screen reports.
+     *
+     * Only the active player holds audio focus, so a call, another player or a navigation prompt
+     * pauses or ducks the music; a second holder would take focus from the first, in this app,
+     * mid-blend. Both pause when headphones are unplugged.
      */
-    private fun buildDeck(): ExoPlayer {
+    private fun buildDeck(ownsAudioFocus: Boolean): ExoPlayer {
         lateinit var deck: ExoPlayer
         val resolver = StreamUrlResolver { mediaId ->
             resolveStreamUrl(
@@ -108,7 +112,11 @@ class ExoPlayerPlatformPlayer(
                     RedirectingDataSourceFactory(DefaultDataSource.Factory(appContext), resolver),
                 ),
             )
+            .setAudioAttributes(MusicAudioAttributes, ownsAudioFocus)
+            .setHandleAudioBecomingNoisy(true)
             .build()
+        // Set before any list, whose length the order must match: an empty list, an empty order.
+        deck.setShuffleOrder(CurrentFirstShuffleOrder.startingWith(C.INDEX_UNSET, 0))
         deck.volume = _volume.value
         deck.addListener(DeckListener(deck))
         return deck
@@ -125,6 +133,12 @@ class ExoPlayerPlatformPlayer(
         }
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            // Another app took audio focus for good, or the headphones came out: the app pauses,
+            // and a blend under way stops with it rather than leaving the other player sounding.
+            if (deck === active && !playWhenReady && stopsForAudioRoute(reason)) {
+                pause()
+                return
+            }
             // The outgoing player of a blend reached the end of its track before the plan's end
             // (the container's duration was a little long): the blend is over, and the incoming
             // player takes over before this player's pause could be published as the app's.
@@ -194,6 +208,16 @@ class ExoPlayerPlatformPlayer(
             // until play, next, previous or a queue row prepares it again.
             stopPositionSync()
             updateStateFromExo()
+        }
+
+        override fun onPlaybackSuppressionReasonChanged(playbackSuppressionReason: Int) {
+            // A call or a navigation prompt holds focus for a while; the active player waits for
+            // it, and the other player of a blend, which has no focus to lose, must not play on.
+            if (deck === active && blend != null &&
+                playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS
+            ) {
+                abandonTransition()
+            }
         }
 
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
@@ -403,7 +427,15 @@ class ExoPlayerPlatformPlayer(
         // The two players would each draw their own random order; the plan is made again for
         // whatever comes next under the new order.
         abandonTransition(dropPlan = true)
-        active.shuffleModeEnabled = enabled
+        val player = active
+        if (enabled && !player.shuffleModeEnabled) {
+            // The song playing stays where it is and the rest are shuffled after it, as PlayQueue
+            // does; Media3 keeps whatever order the list was given.
+            player.setShuffleOrder(
+                CurrentFirstShuffleOrder.startingWith(player.currentMediaItemIndex, player.mediaItemCount),
+            )
+        }
+        player.shuffleModeEnabled = enabled
     }
 
     override fun setVolume(volume: Float) {
@@ -454,7 +486,7 @@ class ExoPlayerPlatformPlayer(
         explicitSelectionInProgress = true
         try {
             player.setMediaItems(items.map { it.toExoMediaItem() }, safeIndex, safePosition)
-            player.setShuffleOrder(ShuffleOrder.DefaultShuffleOrder(restored.playOrder.toIntArray(), System.nanoTime()))
+            player.setShuffleOrder(CurrentFirstShuffleOrder.of(restored.playOrder))
             player.shuffleModeEnabled = shuffle
             lastOccurrenceWindowUid = player.occurrenceWindowUid()
             rebuildQueue()
@@ -611,7 +643,11 @@ class ExoPlayerPlatformPlayer(
         val player = active
         val next = nextWindowIndex(player)
         if (next == C.INDEX_UNSET || player.getMediaItemAt(next).mediaId != plan.incomingMediaId) return
-        val other = if (player === primary) secondary ?: buildDeck().also { secondary = it } else primary
+        val other = if (player === primary) {
+            secondary ?: buildDeck(ownsAudioFocus = false).also { secondary = it }
+        } else {
+            primary
+        }
         val items = (0 until player.mediaItemCount).map { player.getMediaItemAt(it) }
         other.volume = 0f
         other.playWhenReady = false
@@ -619,9 +655,7 @@ class ExoPlayerPlatformPlayer(
         other.setMediaItems(items, next, 0L)
         other.shuffleModeEnabled = player.shuffleModeEnabled
         if (player.shuffleModeEnabled && playOrderWindowIndices.size == items.size) {
-            other.setShuffleOrder(
-                ShuffleOrder.DefaultShuffleOrder(playOrderWindowIndices.toIntArray(), System.nanoTime()),
-            )
+            other.setShuffleOrder(CurrentFirstShuffleOrder.of(playOrderWindowIndices))
         }
         other.prepare()
         preparedPlan = plan
@@ -722,6 +756,10 @@ class ExoPlayerPlatformPlayer(
             return
         }
         blend.swapped = true
+        // Focus moves with the queue. The fading player gives it up first: asked the other way
+        // round, the system would take it from the fading player, which would stop mid-fade.
+        blend.outgoing.setAudioAttributes(MusicAudioAttributes, false)
+        incoming.setAudioAttributes(MusicAudioAttributes, true)
         active = incoming
         lastOccurrenceWindowUid = incoming.occurrenceWindowUid()
         rebuildQueue()
@@ -860,6 +898,16 @@ class ExoPlayerPlatformPlayer(
         const val LATE_CROSSFADE_MS = 1_000L
     }
 }
+
+private val MusicAudioAttributes: AudioAttributes = AudioAttributes.Builder()
+    .setUsage(C.USAGE_MEDIA)
+    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+    .build()
+
+/** Why a player stopped that the whole app follows: focus lost for good, or the audio route gone. */
+internal fun stopsForAudioRoute(reason: Int): Boolean =
+    reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS ||
+        reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY
 
 /**
  * The idle branch of Media3's play-button handling. A track whose stream could not be resolved
