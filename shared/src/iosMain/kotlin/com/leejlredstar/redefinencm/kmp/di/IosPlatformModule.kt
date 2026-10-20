@@ -20,7 +20,8 @@ actual fun platformModule() = module {
     // PlatformSettings backed by NSUserDefaults
     single { PlatformSettings() }
 
-    // SQLDelight driver (Documents-directory SQLite via NativeSqliteDriver).
+    // SQLDelight driver: NativeSqliteDriver keeps the file in Library/Application Support/databases,
+    // out of Documents, which the Files app shows.
     single { DatabaseDriverFactory() }
 
     // Real AVPlayer-backed audio playback, overriding the shared InMemoryPlatformPlayer.

@@ -27,6 +27,7 @@ import androidx.compose.ui.viewinterop.UIKitInteropProperties
 import androidx.compose.ui.viewinterop.UIKitView
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import platform.AVFoundation.preventsDisplaySleepDuringVideoPlayback
 import platform.AVFoundation.AVLayerVideoGravityResizeAspectFill
 import platform.AVFoundation.AVPlayer
 import platform.AVFoundation.AVPlayerItem
@@ -165,6 +166,9 @@ private class IosDynamicCoverView(
     }
     private val player = AVPlayer(playerItem = playerItem).apply {
         volume = 0f
+        // A muted decorative loop: it must not keep the screen on, which a playing video does
+        // by default, while the music is paused on the lyric page.
+        preventsDisplaySleepDuringVideoPlayback = false
     }
     private val playerLayer = AVPlayerLayer().apply {
         this.player = this@IosDynamicCoverView.player

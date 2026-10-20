@@ -1,7 +1,11 @@
+// Signing. TEAM_ID is the Apple developer team that signs the app and the widget. It is set in
+// Local.xcconfig beside this file, which is not committed, and so is APP_BUNDLE_ID when that team
+// cannot register the default. The widget's identifier is the app's plus ".LyricWidget".
 TEAM_ID=
+APP_BUNDLE_ID=com.leejlredstar.redefinencm.kmp.RedefineNCM-KMP-test
+DEVELOPMENT_TEAM=$(TEAM_ID)
 
 PRODUCT_NAME=RedefineNCM_KMP
-PRODUCT_BUNDLE_IDENTIFIER=com.leejlredstar.redefinencm.kmp.RedefineNCM_KMP$(TEAM_ID)
 
 // Fallbacks for a tree where Scripts/stamp-version.sh has not run yet. The optional include
 // below overrides them with the Git-derived values; ProcessInfoPlistFile substitutes whichever
@@ -11,3 +15,4 @@ CURRENT_PROJECT_VERSION=1
 MARKETING_VERSION=0.0.0
 
 #include? "Version.xcconfig"
+#include? "Local.xcconfig"

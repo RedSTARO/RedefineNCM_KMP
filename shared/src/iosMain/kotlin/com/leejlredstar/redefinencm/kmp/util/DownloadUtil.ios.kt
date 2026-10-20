@@ -84,7 +84,8 @@ private fun String.toDownloadedSongSnapshot(dir: String): DownloadedSongSnapshot
     )
 }
 
-// Downloads already land in a folder the user can open.
+// Downloads land in Documents/RedefineNCM, which the Files app shows under the app's name
+// (UIFileSharingEnabled and LSSupportsOpeningDocumentsInPlace in Info.plist).
 actual val downloadsNeedExport: Boolean = false
 
 actual suspend fun exportDownloadedSong(fileName: String, displayName: String) = Unit

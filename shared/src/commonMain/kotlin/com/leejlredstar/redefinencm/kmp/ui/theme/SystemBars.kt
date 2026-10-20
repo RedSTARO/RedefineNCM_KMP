@@ -12,7 +12,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
  * Draws the status and navigation bar icons light on a dark background and dark on a light one.
  * The app draws edge to edge, and Android otherwise picks the icons from the system's own light or
  * dark setting, which neither the app's theme choice nor a dark full-screen page follows: in light
- * mode the lyric page's clock and battery were dark on near-black. Elsewhere this does nothing.
+ * mode the lyric page's clock and battery were dark on near-black. iOS sets the status bar's
+ * style for the same reason; the desktop and the browser have no bars, and do nothing.
  */
 @Composable
 expect fun SystemBarIcons(darkBackground: Boolean)

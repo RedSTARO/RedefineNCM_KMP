@@ -909,6 +909,15 @@ or cross-directory `file:` paths.
 Pending/backup files stay hidden and are excluded from scans. Web audio discovery accepts only
 the single-extension audio shape and explicitly excludes `.lyric.*` and `.cover.*`.
 
+On iOS the download folder, `Documents/RedefineNCM`, is visible in the Files app under the app's
+name (`UIFileSharingEnabled` and `LSSupportsOpeningDocumentsInPlace`, decided 2026-10-21), so a
+download can be copied out; the database is in `Library/Application Support/databases` and is not.
+
+**Device backups carry everything (decided 2026-10-21).** An Android or iOS device backup and a
+transfer to a new device take all of the app's data: settings including the NetEase and QQ
+credentials, the database with its caches, and downloads. Nothing is excluded from backup, and
+the credentials stay in the settings store rather than moving to the Keychain.
+
 Playback has two stacked full-screen surfaces and one lyric renderer. `MiniNowPlayingBar`, the
 Desktop rail's now-playing action, and OS/deep-link now-playing requests open
 `PushedDest.NowPlaying` → `ui/screen/NowPlayingScreen.kt`: the Apple-Music-shaped entry page
@@ -1232,6 +1241,9 @@ git submodule update --init
 ./gradlew :shared:iosSimulatorArm64Test
 # iOS device build: generate the version xcconfig first, and keep DerivedData off any
 # iCloud-synced folder (iCloud stamps com.apple.FinderInfo, which codesign rejects).
+# Signing comes from iosApp/Configuration/Local.xcconfig (git-ignored): TEAM_ID=<your team>,
+# and APP_BUNDLE_ID=<id> when that team cannot register the default. The widget is
+# $(APP_BUNDLE_ID).LyricWidget; the project file names no team.
 sh iosApp/Scripts/stamp-version.sh
 xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug \
   -sdk iphoneos -destination 'generic/platform=iOS' \

@@ -33,3 +33,5 @@ replay_pid*.log
 
 # Generated from Git by iosApp/Scripts/stamp-version.sh.
 /iosApp/Configuration/Version.xcconfig
+# Each developer's signing team (TEAM_ID), and bundle id if theirs differs (APP_BUNDLE_ID).
+/iosApp/Configuration/Local.xcconfig
