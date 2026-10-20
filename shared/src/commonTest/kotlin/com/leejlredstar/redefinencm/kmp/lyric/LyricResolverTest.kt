@@ -434,6 +434,33 @@ class LyricResolverTest {
         assertNull(supplementOnly)
     }
 
+    /**
+     * A source counts as found only with a primary timed line (AGENTS.md). Background-only lines
+     * stay visible as untimed text, which does not stop the resolver trying a later source.
+     */
+    @Test
+    fun backgroundOnlyBackendLyricsAreNotTimedLyrics() {
+        val query = LyricQuery(songId = 1, durationMs = 5_000)
+        val backgroundOnly = backendLyricDocument(
+            query = query,
+            lrcText = "[00:00.00](instrumental)",
+            yrcText = "",
+            translatedText = "",
+            romanText = "",
+        )
+        val blankWordsWithLines = backendLyricDocument(
+            query = query,
+            lrcText = "[00:00.00]line text",
+            yrcText = "[0,1000](0,500,0) ",
+            translatedText = "",
+            romanText = "",
+        )
+
+        assertEquals(LyricCapabilityLevel.UNSYNCED, backgroundOnly?.capabilityLevel)
+        assertEquals(listOf("(instrumental)"), backgroundOnly?.untimedLines)
+        assertEquals(LyricCapabilityLevel.LINE_SYNCED, blankWordsWithLines?.capabilityLevel)
+    }
+
     @Test
     fun untimedCandidateDoesNotBlockALaterTimedSource() = runTest {
         val calls = mutableListOf<LyricSource>()

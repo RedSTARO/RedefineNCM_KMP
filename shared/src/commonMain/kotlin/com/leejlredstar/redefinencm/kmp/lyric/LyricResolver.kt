@@ -549,10 +549,14 @@ internal fun backendLyricDocument(
         ?.let { runCatching { LyricParser.parseLrcLines(it) }.getOrDefault(emptyList()) }
         .orEmpty()
         .withBoundedFinalLrcLine(query.durationMs)
-    val baseLines = if (wordLines.isNotEmpty()) {
-        wordLines
-    } else {
-        parsedLrcLines
+    // A timed representation counts only with a primary timed line, as for TTML: lines that are
+    // all background vocals, such as "[00:00.00](伴奏)", would otherwise stop the search for a
+    // better source. They are still kept below as untimed text.
+    val usesWordLines = wordLines.hasPrimaryTimedLine()
+    val baseLines = when {
+        usesWordLines -> wordLines
+        parsedLrcLines.hasPrimaryTimedLine() -> parsedLrcLines
+        else -> emptyList()
     }
     if (baseLines.isEmpty()) {
         val untimedLines = normalizedLrcText
@@ -579,7 +583,7 @@ internal fun backendLyricDocument(
     )
     return LyricDocument(
         source = LyricSource.NCM_BACKEND,
-        capabilityLevel = if (wordLines.isNotEmpty()) {
+        capabilityLevel = if (usesWordLines) {
             LyricCapabilityLevel.NCM_YRC
         } else {
             LyricCapabilityLevel.LINE_SYNCED

@@ -47,6 +47,18 @@ class LyricCapabilityBadgeTest {
     }
 
     @Test
+    fun anotherProvidersWordTimingIsNotCalledNetEaseYrc() {
+        val qq = lyricCapabilityBadgeSpec(LyricCapabilityLevel.NCM_YRC, endpoint = "provider:qq")
+        val netease = lyricCapabilityBadgeSpec(LyricCapabilityLevel.NCM_YRC, endpoint = "configured-ncm-backend")
+        val sidecar = lyricCapabilityBadgeSpec(LyricCapabilityLevel.NCM_YRC, endpoint = "local-sidecar")
+
+        assertEquals("逐字", qq.levelLabel)
+        assertEquals("歌词等级：逐字", qq.contentDescription)
+        assertEquals("NCM YRC 逐字", netease.levelLabel)
+        assertEquals("NCM YRC 逐字", sidecar.levelLabel)
+    }
+
+    @Test
     fun sourceLabelDistinguishesProviderAndLocalSidecar() {
         assertEquals(
             "AMLL TTML",

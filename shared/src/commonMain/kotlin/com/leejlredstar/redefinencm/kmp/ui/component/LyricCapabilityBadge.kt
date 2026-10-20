@@ -59,8 +59,13 @@ internal data class LyricCapabilityBadgeSpec(
     val shape: () -> RoundedPolygon,
 )
 
+/**
+ * [endpoint] names where the lyrics came from. Another provider's word timing (QQ's QRC, converted)
+ * shares NetEase's YRC level but is not NetEase's format, so it is labelled plainly as word by word.
+ */
 internal fun lyricCapabilityBadgeSpec(
     level: LyricCapabilityLevel,
+    endpoint: String = "",
 ): LyricCapabilityBadgeSpec = when (level) {
     LyricCapabilityLevel.UNSYNCED -> LyricCapabilityBadgeSpec(
         visibleText = strings.lyricsBadgeGlyph,
@@ -76,13 +81,20 @@ internal fun lyricCapabilityBadgeSpec(
         tone = LyricCapabilityBadgeTone.PRIMARY,
         shape = { MaterialShapes.Circle },
     )
-    LyricCapabilityLevel.NCM_YRC -> LyricCapabilityBadgeSpec(
-        visibleText = strings.lyricsBadgeGlyph,
-        levelLabel = strings.lyricLevelNcmYrc,
-        contentDescription = strings.lyricLevelNcmYrcDescription,
-        tone = LyricCapabilityBadgeTone.SECONDARY,
-        shape = { MaterialShapes.Cookie6Sided },
-    )
+    LyricCapabilityLevel.NCM_YRC -> {
+        val otherProvider = endpoint.startsWith("provider:")
+        LyricCapabilityBadgeSpec(
+            visibleText = strings.lyricsBadgeGlyph,
+            levelLabel = if (otherProvider) strings.lyricLevelWordSynced else strings.lyricLevelNcmYrc,
+            contentDescription = if (otherProvider) {
+                strings.lyricLevelWordSyncedDescription
+            } else {
+                strings.lyricLevelNcmYrcDescription
+            },
+            tone = LyricCapabilityBadgeTone.SECONDARY,
+            shape = { MaterialShapes.Cookie6Sided },
+        )
+    }
     LyricCapabilityLevel.TTML_FULL -> LyricCapabilityBadgeSpec(
         visibleText = strings.lyricsBadgeGlyph,
         levelLabel = strings.lyricLevelTtmlFull,
@@ -118,7 +130,7 @@ internal fun LyricCapabilityBadge(
     onDetailsExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val spec = lyricCapabilityBadgeSpec(level)
+    val spec = lyricCapabilityBadgeSpec(level, endpoint)
     val sourceLabel = lyricSourceDisplayName(source, endpoint)
     val (containerColor, contentColor) = lyricCapabilityBadgeColors(spec.tone)
     val interactionSource = remember { MutableInteractionSource() }

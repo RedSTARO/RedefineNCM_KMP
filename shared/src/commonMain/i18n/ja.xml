@@ -387,6 +387,8 @@
     <string name="lyricLevelLineSyncedDescription">歌詞のレベル：行ごと（標準）</string>
     <string name="lyricLevelNcmYrc">単語ごと（NCM YRC）</string>
     <string name="lyricLevelNcmYrcDescription">歌詞のレベル：NCM YRC</string>
+    <string name="lyricLevelWordSynced">単語ごと</string>
+    <string name="lyricLevelWordSyncedDescription">歌詞のレベル：単語ごと</string>
     <string name="lyricLevelTtmlFull">TTML完全対応</string>
     <string name="lyricLevelTtmlFullDescription">歌詞のレベル：TTML完全対応</string>
     <string name="providerLyricsSource">{provider}の歌詞</string>
@@ -928,12 +930,12 @@
     <!-- viewmodel/NowPlayingViewModel.kt -->
     <string name="sourceSwitchShuffleBlocked">シャッフル中はソースを切り替えられません</string>
     <string name="sourceSwitchNoAlternate">他のサービスで同じ曲が見つかりませんでした</string>
-    <string name="sourceSwitched">{provider}に切り替えて「{title}」を再生しています</string>
-    <string name="songIdInvalid">曲IDが無効です</string>
     <string name="sourceSwitchNoOtherProvider">切り替え先のサービスがオンになっていません</string>
     <string name="sourceSwitchSearchFailed">他のサービスのサーバーが応答しませんでした。後でもう一度お試しください。</string>
     <string name="likeNeedsSignIn">お気に入りに追加するには{provider}にログインしてください</string>
     <string name="likeFailed">「{title}」をお気に入りに追加できませんでした。もう一度お試しください。</string>
+    <string name="sourceSwitched">{provider}に切り替えて「{title}」を再生しています</string>
+    <string name="songIdInvalid">曲IDが無効です</string>
     <string name="providerLyricsUnsupported">{provider}の歌詞はまだアプリ内で表示できません</string>
     <string name="lyricsTtmlOnlyForeignProvider">歌詞のソースが「AMLL歌詞データベースのみ」に設定されています。このデータベースにはNetEaseの曲しか収録されていません。{provider}の曲の歌詞を表示するには、設定で別の歌詞のソースを選んでください。</string>
     <string name="lyricsRequestFailed">歌詞を取得できませんでした</string>
