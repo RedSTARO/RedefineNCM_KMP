@@ -18,7 +18,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.window.WindowDraggableArea
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -37,7 +40,9 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -46,7 +51,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowScope
 import com.leejlredstar.redefinencm.kmp.i18n.strings
+import java.awt.Frame
+import java.awt.MouseInfo
+import java.awt.Point
 import java.awt.Toolkit
+import java.awt.Window
+import kotlin.math.roundToInt
 
 private enum class CaptionButtonKind {
     Minimize,
@@ -91,7 +101,7 @@ internal fun WindowScope.Win10WindowChrome(
             modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.Top,
         ) {
-            WindowDraggableArea(
+            WindowDragStrip(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
@@ -154,6 +164,88 @@ internal fun WindowScope.Win10WindowChrome(
                 )
             }
         }
+    }
+}
+
+/**
+ * Moves the window by its strip, as a native title bar does. A maximized window is restored to
+ * its floating size under the pointer first. Compose's draggable area moved the maximized frame
+ * as it was: Windows dropped the maximized state but kept the screen's size, and that size was
+ * then saved as the floating one, so the next launch opened as large as the screen.
+ */
+@Composable
+private fun WindowScope.WindowDragStrip(modifier: Modifier, content: @Composable () -> Unit) {
+    val windowDrag = remember(window) { WindowDrag(window) }
+    Box(
+        modifier = modifier.pointerInput(windowDrag) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                if (down.type != PointerType.Mouse) return@awaitEachGesture
+                windowDrag.press()
+                val dragging = awaitTouchSlopOrCancellation(down.id) { change, _ -> change.consume() }
+                    ?: return@awaitEachGesture
+                windowDrag.start()
+                drag(dragging.id) { change ->
+                    windowDrag.move()
+                    change.consume()
+                }
+            }
+        },
+    ) {
+        content()
+    }
+}
+
+private const val MaxRestoreWaitMoves = 10
+
+/** One drag of a window, in screen coordinates, which do not move with the window. */
+private class WindowDrag(private val window: Window) {
+    private var pressPointer: Point? = null
+    private var pressWindow: Point? = null
+
+    /** Set while a window restored from maximized waits for its floating size. */
+    private var restore: PendingRestore? = null
+
+    private class PendingRestore(val fraction: Double, val offsetY: Int, val maximizedWidth: Int) {
+        var movesWaited = 0
+    }
+
+    fun press() {
+        pressPointer = MouseInfo.getPointerInfo()?.location
+        pressWindow = window.location
+        restore = null
+    }
+
+    fun start() {
+        val frame = window as? Frame ?: return
+        val pointer = pressPointer ?: return
+        if (frame.extendedState and Frame.MAXIMIZED_BOTH != Frame.MAXIMIZED_BOTH) return
+        val bounds = window.bounds
+        restore = PendingRestore(
+            fraction = ((pointer.x - bounds.x).toDouble() / bounds.width).coerceIn(0.0, 1.0),
+            offsetY = pointer.y - bounds.y,
+            maximizedWidth = bounds.width,
+        )
+        frame.extendedState = Frame.NORMAL
+    }
+
+    fun move() {
+        val current = MouseInfo.getPointerInfo()?.location ?: return
+        restore?.let { pending ->
+            // The restore is applied by the system; until the window has its floating size the
+            // pointer's place on it cannot be worked out. A floating size as wide as the screen
+            // never shrinks, so the wait is bounded.
+            if (window.width >= pending.maximizedWidth && pending.movesWaited++ < MaxRestoreWaitMoves) return
+            restore = null
+            pressPointer = current
+            pressWindow = Point(
+                current.x - (pending.fraction * window.width).roundToInt(),
+                current.y - pending.offsetY,
+            )
+        }
+        val start = pressPointer ?: return
+        val origin = pressWindow ?: return
+        window.setLocation(origin.x + current.x - start.x, origin.y + current.y - start.y)
     }
 }
 

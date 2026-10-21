@@ -60,6 +60,29 @@ class DesktopLogTest {
     }
 
     @Test
+    fun aLogThatCannotBeMovedKeepsTheOlderRotation() {
+        val directory = Files.createTempDirectory("redefinencm-log").toFile()
+        val file = directory.resolve("app.log")
+        val previous = directory.resolve("app.previous.log").apply { writeText("older!") }
+        try {
+            // On Windows a viewer holding the log open refuses the move.
+            RotatingLogFile(
+                file = file,
+                previous = previous,
+                maxBytes = 6,
+                move = { from, to -> from != file && from.renameTo(to) },
+            ).use { log ->
+                log.write("first!".toByteArray(), 0, 6)
+                log.write("second".toByteArray(), 0, 6)
+                assertEquals("older!", previous.readText())
+                assertEquals("first!", file.readText())
+            }
+        } finally {
+            assertTrue(directory.deleteRecursively(), "the log's directory was left behind")
+        }
+    }
+
+    @Test
     fun failedRotationKeepsThePreviousDataWithoutGrowingTheFile() = withLog(maxBytes = 6) { log, file, previous ->
         assertTrue(previous.mkdir())
         val blocker = previous.resolve("blocker").apply { writeText("keep") }

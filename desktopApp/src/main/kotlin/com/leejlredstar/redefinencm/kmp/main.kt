@@ -71,6 +71,7 @@ import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
+import androidx.compose.ui.window.isTraySupported
 import androidx.compose.ui.window.rememberTrayState
 import androidx.compose.ui.window.rememberWindowState
 import com.leejlredstar.redefinencm.kmp.data.db.desktopDataDirectory
@@ -100,6 +101,7 @@ import org.koin.core.context.GlobalContext
 import java.awt.Dimension
 import java.awt.GraphicsEnvironment
 import java.awt.Rectangle
+import java.awt.Toolkit
 import java.io.File
 import kotlin.system.exitProcess
 
@@ -233,19 +235,63 @@ internal data class SavedWindowBounds(
 }
 
 /**
- * Whether a saved window would still land on a screen. A monitor unplugged since the last run
- * would otherwise reopen the window somewhere nobody can see it.
+ * The saved place fitted to the usable area (the screen less its taskbar or menu bar) of the
+ * screen its title bar lands on, or null when it lands on none: a monitor unplugged since the
+ * last run would otherwise reopen the window where nobody can see it, and a window last sized on
+ * a larger monitor reopened with its bottom off a laptop's screen.
  */
-private fun SavedWindowBounds.isOnAScreen(): Boolean = runCatching {
-    val screens = GraphicsEnvironment.getLocalGraphicsEnvironment().screenDevices
+internal fun SavedWindowBounds.fittedTo(usableAreas: List<Rectangle>): SavedWindowBounds? {
     val titleBar = Rectangle(x.toInt(), y.toInt(), width.toInt().coerceAtLeast(1), 32)
-    screens.any { it.defaultConfiguration.bounds.intersects(titleBar) }
-}.getOrDefault(false)
+    val area = usableAreas.firstOrNull { it.intersects(titleBar) } ?: return null
+    if (area.width <= 0 || area.height <= 0) return this
+    val fittedWidth = width.coerceAtMost(area.width.toFloat())
+    val fittedHeight = height.coerceAtMost(area.height.toFloat())
+    return copy(
+        x = x.coerceIn(area.x.toFloat(), area.x + area.width - fittedWidth),
+        y = y.coerceIn(area.y.toFloat(), area.y + area.height - fittedHeight),
+        width = fittedWidth,
+        height = fittedHeight,
+    )
+}
+
+/**
+ * Whether [bounds] is not a place to reopen at: a minimized window on Windows sits at about
+ * (-32000, -32000), and a window in macOS full screen covers a whole screen while its placement
+ * still says floating.
+ */
+internal fun isTransientWindowPlace(bounds: SavedWindowBounds, screens: List<Rectangle>): Boolean =
+    bounds.x <= MinimizedWindowCoordinate || bounds.y <= MinimizedWindowCoordinate ||
+        (!bounds.maximized && screens.any { screen ->
+            screen.x.toFloat() == bounds.x && screen.y.toFloat() == bounds.y &&
+                screen.width.toFloat() == bounds.width && screen.height.toFloat() == bounds.height
+        })
+
+private const val MinimizedWindowCoordinate = -30_000f
+
+private fun screenBounds(): List<Rectangle> = runCatching {
+    GraphicsEnvironment.getLocalGraphicsEnvironment().screenDevices.map { it.defaultConfiguration.bounds }
+}.getOrDefault(emptyList())
+
+private fun usableScreenAreas(): List<Rectangle> = runCatching {
+    val toolkit = Toolkit.getDefaultToolkit()
+    GraphicsEnvironment.getLocalGraphicsEnvironment().screenDevices.map { device ->
+        val configuration = device.defaultConfiguration
+        val bounds = configuration.bounds
+        val insets = toolkit.getScreenInsets(configuration)
+        Rectangle(
+            bounds.x + insets.left,
+            bounds.y + insets.top,
+            bounds.width - insets.left - insets.right,
+            bounds.height - insets.top - insets.bottom,
+        )
+    }
+}.getOrDefault(emptyList())
 
 private fun PlatformSettings.savedBounds(key: String): SavedWindowBounds? =
-    SavedWindowBounds.decode(getString(key, ""))?.takeIf { it.isOnAScreen() }
+    SavedWindowBounds.decode(getString(key, ""))?.fittedTo(usableScreenAreas())
 
 private fun WindowState.currentBounds(): SavedWindowBounds? {
+    if (isMinimized || placement == WindowPlacement.Fullscreen) return null
     val position = position
     if (!position.isSpecified) return null
     return SavedWindowBounds(
@@ -254,7 +300,7 @@ private fun WindowState.currentBounds(): SavedWindowBounds? {
         width = size.width.value,
         height = size.height.value,
         maximized = placement == WindowPlacement.Maximized,
-    )
+    ).takeUnless { isTransientWindowPlace(it, screenBounds()) }
 }
 
 /** Saves a window's place whenever it settles after a move or resize. */
@@ -313,9 +359,11 @@ private fun ApplicationScope.DesktopWindows(settings: PlatformSettings) {
     val trayState = rememberTrayState()
     var trayNoticeShown by remember { mutableStateOf(false) }
     // With the setting on (the default), closing the window keeps the app and its music
-    // running in the tray; the tray menu's quit item is what quits. With it off, closing quits.
+    // running in the tray; the tray menu's quit item is what quits. With it off, closing quits,
+    // and so it does where the desktop has no tray: hiding the window there left the music
+    // playing behind no window, no icon and no way to quit.
     val closeMainWindow: () -> Unit = {
-        val toTray = settings.getBoolean(
+        val toTray = isTraySupported && settings.getBoolean(
             SettingKeys.DESKTOP_CLOSE_TO_TRAY,
             SettingKeys.DESKTOP_CLOSE_TO_TRAY_DEFAULT,
         )
@@ -416,13 +464,15 @@ private fun ApplicationScope.DesktopWindows(settings: PlatformSettings) {
         }
     }
 
-    AppTray(
-        player = player,
-        settings = settings,
-        state = trayState,
-        onShowWindow = showMainWindow,
-        onExit = ::exitApplication,
-    )
+    if (isTraySupported) {
+        AppTray(
+            player = player,
+            settings = settings,
+            state = trayState,
+            onShowWindow = showMainWindow,
+            onExit = ::exitApplication,
+        )
+    }
 
     // Desktop floating-lyrics window (goal #2: the desktop equivalent of the Android
     // notification / iOS Live Activity). It is a second, frameless, always-on-top window
@@ -551,14 +601,26 @@ private fun ApplicationScope.FloatingLyricWindow(settings: PlatformSettings, pla
     val textScale by DesktopLyricWindow.textScale.collectAsState()
 
     Window(
-        onCloseRequest = { DesktopLyricWindow.hide() },
+        // Closed from the taskbar or with Alt+F4: the same as its own close button. Hiding it
+        // left the tray offering to close lyrics that were no longer shown.
+        onCloseRequest = { setDesktopLyricEnabled(settings, false) },
         state = windowState,
         title = strings.desktopLyrics,
         undecorated = true,   // frameless
         transparent = true,   // translucent (requires undecorated)
         alwaysOnTop = true,
         resizable = !locked,
+        // It must not take the keyboard from the main window when it appears, which it does
+        // moments after launch when the restored queue publishes its first line.
+        focusable = false,
     ) {
+        // On Windows a utility window has no taskbar button and no Alt+Tab entry. AWT accepts the
+        // type only before the window is first shown; a window already on screen stays as it is.
+        remember(window) {
+            if (DesktopHost.isWindows && !window.isDisplayable) {
+                runCatching { window.type = java.awt.Window.Type.UTILITY }
+            }
+        }
         // A locked window is parked: no drag area, no resize, and on Windows no pointer at all,
         // so clicks fall through to what is underneath. The tray menu and settings unlock it.
         DisposableEffect(window, locked) {

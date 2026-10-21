@@ -48,7 +48,7 @@ internal class DesktopSingleInstance private constructor(
     sealed interface Launch {
         class First(val instance: DesktopSingleInstance) : Launch
 
-        /** [shown] is whether the running app answered the request to show its window. */
+        /** [shown] is whether the running app's window took the request to show itself. */
         class AlreadyRunning(val shown: Boolean) : Launch
     }
 
@@ -57,6 +57,9 @@ internal class DesktopSingleInstance private constructor(
         private const val PORT_FILE = "instance.port"
         private const val SHOW_REQUEST = "show"
         private const val SHOW_ACKNOWLEDGED = "ok"
+
+        /** The app runs but has no window to show yet: it is starting, perhaps behind a dialog. */
+        private const val SHOW_REFUSED = "busy"
         private const val ANSWER_TIMEOUT_MS = 1_500
 
         /** Longer than any request this protocol has; a connection that sends more is dropped. */
@@ -64,12 +67,13 @@ internal class DesktopSingleInstance private constructor(
 
         /**
          * Takes the instance lock in [directory], or asks the process holding it to show its
-         * window. [onActivate] runs on a background thread each time a later launch asks.
+         * window. [onActivate] runs on a background thread each time a later launch asks, and says
+         * whether a window took the request: only then is the later launch told it worked.
          *
          * A directory that cannot hold a lock at all (a read-only or network home) starts the app
          * unguarded: refusing to start would be worse than the duplicate this exists to prevent.
          */
-        fun launch(directory: File, onActivate: () -> Unit): Launch {
+        fun launch(directory: File, onActivate: () -> Boolean): Launch {
             val portFile = File(directory, PORT_FILE)
             val lockFile: RandomAccessFile
             val lock: FileLock?
@@ -96,7 +100,7 @@ internal class DesktopSingleInstance private constructor(
             return Launch.First(DesktopSingleInstance(lockFile, lock, server, portFile))
         }
 
-        private fun listen(portFile: File, onActivate: () -> Unit): ServerSocket {
+        private fun listen(portFile: File, onActivate: () -> Boolean): ServerSocket {
             val server = ServerSocket(0, 16, InetAddress.getLoopbackAddress())
             val token = UUID.randomUUID().toString()
             writeOwnerOnly(portFile, "${server.localPort} $token")
@@ -110,11 +114,13 @@ internal class DesktopSingleInstance private constructor(
                     runCatching {
                         socket.use { client ->
                             if (readRequest(client) == "$SHOW_REQUEST $token") {
+                                // Acknowledged before the window had it, a launch during startup
+                                // was told it worked and exited with nothing on screen.
+                                val answer = if (onActivate()) SHOW_ACKNOWLEDGED else SHOW_REFUSED
                                 client.getOutputStream().apply {
-                                    write("$SHOW_ACKNOWLEDGED\n".toByteArray())
+                                    write("$answer\n".toByteArray())
                                     flush()
                                 }
-                                onActivate()
                             }
                         }
                     }
@@ -154,19 +160,26 @@ internal class DesktopSingleInstance private constructor(
             return null
         }
 
-        /** The holder may still be binding its port, so the request is retried for two seconds. */
+        /**
+         * The holder may still be binding its port, so an unanswered request is retried for two
+         * seconds. An answer, either way, is final.
+         */
         private fun askRunningInstanceToShow(portFile: File): Boolean {
             repeat(20) {
                 val parts = runCatching { portFile.readText().trim().split(' ') }.getOrNull()
                 val port = parts?.getOrNull(0)?.toIntOrNull()
                 val token = parts?.getOrNull(1)
-                if (port != null && token != null && requestShow(port, token)) return true
-                Thread.sleep(100)
+                when (if (port != null && token != null) requestShow(port, token) else null) {
+                    SHOW_ACKNOWLEDGED -> return true
+                    SHOW_REFUSED -> return false
+                    else -> Thread.sleep(100)
+                }
             }
             return false
         }
 
-        private fun requestShow(port: Int, token: String): Boolean = runCatching {
+        /** The running app's answer, or null when nothing answered. */
+        private fun requestShow(port: Int, token: String): String? = runCatching {
             Socket().use { socket ->
                 socket.connect(InetSocketAddress(InetAddress.getLoopbackAddress(), port), 500)
                 socket.soTimeout = ANSWER_TIMEOUT_MS
@@ -175,8 +188,8 @@ internal class DesktopSingleInstance private constructor(
                     flush()
                 }
                 // A stale port file can point at some other program; its answer is bounded too.
-                readRequest(socket) == SHOW_ACKNOWLEDGED
+                readRequest(socket)?.takeIf { it == SHOW_ACKNOWLEDGED || it == SHOW_REFUSED }
             }
-        }.getOrDefault(false)
+        }.getOrNull()
     }
 }

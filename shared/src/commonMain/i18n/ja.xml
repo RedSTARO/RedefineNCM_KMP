@@ -10,7 +10,7 @@
 
     <!-- main.kt -->
     <string name="trayStillRunningTitle">RedefineNCMはまだ実行中です</string>
-    <string name="trayStillRunningMessage">システムトレイのアイコンをクリックするとウィンドウが開きます。アプリを終了するには、システムトレイのメニューで「終了」を選んでください。</string>
+    <string name="trayStillRunningMessage">システムトレイのアイコンのメニューで「メインウィンドウを表示」を選ぶとウィンドウが開きます。Windows ではアイコンのダブルクリックでも開けます（タスクバーの ^ の中にある場合があります）。アプリを終了するには「終了」を選んでください。</string>
     <string name="trayShowMainWindow">メインウィンドウを表示</string>
     <string name="pause">一時停止</string>
     <string name="play">再生</string>
@@ -35,6 +35,7 @@
     <string name="desktopDataUnreadable">{path} を読み込めませんでした：{reason}\n\nファイル名を変えて保存し、空の状態から始めることができます。再生キュー、ローカルプレイリスト、「ローカルのお気に入り」は名前を変えたファイルに残り、ダウンロード済みの曲のファイルには影響しません。</string>
     <string name="desktopDataStartOver">名前を変えてやり直す</string>
     <string name="desktopDataRenameFailed">{path} の名前を変更できません。別のプログラムが使用している可能性があります。そのプログラムを閉じるか、ファイルを手動で移動してから、RedefineNCMをもう一度開いてください。</string>
+    <string name="desktopDataCannotOpen">{path} を開けませんでした：{reason}\n\nファイルの内容の問題ではないため、名前を変えてやり直しても解決しません。フォルダーに書き込めるか、ディスクがいっぱいでないか、ほかのプログラムがファイルを使用していないかを確認してから、RedefineNCMをもう一度開いてください。</string>
     <string name="desktopCrashTitle">RedefineNCMで問題が発生しました</string>
     <string name="desktopCrashMessage">画面でエラーが発生したため、アプリを終了します。もう一度開くと引き続き使えます。</string>
     <string name="desktopLogHint">経過は {path} に記録されています。問題を報告するときに添付してください。</string>
@@ -751,7 +752,7 @@
     <string name="searchSuggestions">検索候補</string>
     <string name="searchSuggestionsHint">入力中に検索候補を表示</string>
     <string name="closeToTray">メインウィンドウを閉じてもシステムトレイに残る</string>
-    <string name="closeToTrayHint">再生は止まりません。システムトレイのアイコンをクリックするとウィンドウをもう一度開けます。終了するには、そのメニューから「終了」を選んでください。</string>
+    <string name="closeToTrayHint">再生は止まりません。システムトレイのアイコンのメニューで「メインウィンドウを表示」を選ぶとウィンドウをもう一度開けます（Windows ではアイコンのダブルクリックでも開けます）。終了するには「終了」を選んでください。</string>
     <string name="checkUpdatesOnStartup">起動時にアップデートを確認</string>
     <string name="checkUpdatesNow">今すぐアップデートを確認</string>
     <string name="backup">バックアップ</string>
@@ -1002,6 +1003,8 @@
 
     <!-- recognition/JvmMicrophoneRecorder.kt -->
     <string name="jvmMicNoPcmInput">PCM入力に対応したマイクが見つかりません</string>
+    <string name="desktopMicSilent">マイクから無音しか録音できませんでした。システムがRedefineNCMのマイク使用を許可していないか、マイクがミュートされている可能性があります。システム設定のプライバシーとマイクの項目で許可してから、もう一度お試しください。</string>
+    <string name="desktopMicNoData">マイクから音がまったく届きませんでした。システム設定の入力デバイスとマイクの許可を確認してから、もう一度お試しください。</string>
 
     <!-- util/DownloadUtil.jvm.kt -->
     <string name="downloadFolderNotFolder">ダウンロードフォルダのパスがフォルダではありません：{path}</string>

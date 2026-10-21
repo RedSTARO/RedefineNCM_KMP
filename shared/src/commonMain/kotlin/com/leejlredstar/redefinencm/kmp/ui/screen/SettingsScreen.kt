@@ -211,6 +211,8 @@ fun SettingsScreen(
     val languageSetting by I18n.setting.collectAsState()
     val dynamicColor by ThemePreferences.dynamicColor.collectAsState()
     val isDesktop = remember { getPlatform().isDesktop }
+    // Close to the tray only where there is a tray to close to.
+    val hasSystemTray = remember { getPlatform().hasSystemTray }
     var extraLyricSurfaceEnabled by remember(settings) { mutableStateOf(false) }
     var desktopLyricLocked by remember(settings) { mutableStateOf(false) }
     // The lyric window's own toolbar and the tray menu also close and lock it; the switches
@@ -529,10 +531,13 @@ fun SettingsScreen(
                 // half of "what comes out of the speakers", not a behaviour toggle.
                 val outputDeviceRows = if (supportsAudioOutputDeviceSelection) 1 else 0
                 val dynamicCoverRows = if (supportsDynamicNowPlayingCover) 1 else 0
-                val playbackSettingCount = 3 + outputDeviceRows + dynamicCoverRows
+                // The desktop always counts as Wi-Fi, so a mobile-data quality could never apply
+                // there; it has one quality, stored as the Wi-Fi one.
+                val cellularRows = if (isDesktop) 0 else 1
+                val playbackSettingCount = 2 + cellularRows + outputDeviceRows + dynamicCoverRows
                 SettingsDropdown(
                     wifiQuality,
-                    strings.streamingQualityWifi,
+                    if (isDesktop) strings.streamingQuality else strings.streamingQualityWifi,
                     SoundQuality.entries,
                     settingsPalette,
                     index = 0,
@@ -542,23 +547,25 @@ fun SettingsScreen(
                     wifiQuality = v.name
                     persistSettings({ settings.setString(SettingKeys.ONLINE_PLAY_QUALITY_WIFI, v.name) })
                 }
-                SettingsDropdown(
-                    cellularQuality,
-                    strings.streamingQualityCellular,
-                    SoundQuality.entries,
-                    settingsPalette,
-                    index = 1,
-                    count = playbackSettingCount,
-                    supportingText = QualityAvailabilityNote,
-                ) { v ->
-                    cellularQuality = v.name
-                    persistSettings({ settings.setString(SettingKeys.ONLINE_PLAY_QUALITY_CELLULAR, v.name) })
+                if (cellularRows > 0) {
+                    SettingsDropdown(
+                        cellularQuality,
+                        strings.streamingQualityCellular,
+                        SoundQuality.entries,
+                        settingsPalette,
+                        index = 1,
+                        count = playbackSettingCount,
+                        supportingText = QualityAvailabilityNote,
+                    ) { v ->
+                        cellularQuality = v.name
+                        persistSettings({ settings.setString(SettingKeys.ONLINE_PLAY_QUALITY_CELLULAR, v.name) })
+                    }
                 }
                 if (supportsAudioOutputDeviceSelection) {
                     AudioOutputDeviceDropdown(
                         selectedId = audioOutputDeviceId,
                         accentPalette = settingsPalette,
-                        index = 2,
+                        index = 1 + cellularRows,
                         count = playbackSettingCount,
                     ) { deviceId ->
                         audioOutputDeviceId = deviceId
@@ -578,7 +585,7 @@ fun SettingsScreen(
                     replacePlaylist,
                     strings.playWholeListOnTap,
                     settingsPalette,
-                    index = 2 + outputDeviceRows,
+                    index = 1 + cellularRows + outputDeviceRows,
                     count = playbackSettingCount,
                     supportingText = strings.playWholeListOnTapHint,
                 ) { v ->
@@ -590,7 +597,7 @@ fun SettingsScreen(
                         useDynamicCover,
                         strings.useAnimatedCover,
                         settingsPalette,
-                        index = 3 + outputDeviceRows,
+                        index = 2 + cellularRows + outputDeviceRows,
                         count = playbackSettingCount,
                     ) { enabled ->
                         useDynamicCover = enabled
@@ -767,7 +774,7 @@ fun SettingsScreen(
                 }
 
                 SettingsSectionLabel(strings.settingsSectionGeneral, settingsPalette)
-                val trayRows = if (isDesktop) 1 else 0
+                val trayRows = if (hasSystemTray) 1 else 0
                 val languageRows = 1
                 val themeRows = languageRows + if (dynamicColorSupported) 2 else 1
                 val generalCount = 3 + trayRows + themeRows
@@ -821,7 +828,7 @@ fun SettingsScreen(
                     searchPrediction = v
                     persistSettings({ settings.setBoolean(SettingKeys.SEARCH_PREDICTION, v) })
                 }
-                if (isDesktop) {
+                if (hasSystemTray) {
                     SettingsSwitch(
                         closeToTray,
                         strings.closeToTray,

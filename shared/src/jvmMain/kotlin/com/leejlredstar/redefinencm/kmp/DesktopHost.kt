@@ -4,4 +4,7 @@ package com.leejlredstar.redefinencm.kmp
 object DesktopHost {
     /** macOS draws its own title bar and traffic lights; the app's Windows-style chrome is not for it. */
     val usesSystemWindowChrome: Boolean get() = DesktopOs.current == DesktopOs.MacOs
+
+    /** Windows, where a window of its own type keeps a floating strip off the taskbar. */
+    val isWindows: Boolean get() = DesktopOs.current == DesktopOs.Windows
 }

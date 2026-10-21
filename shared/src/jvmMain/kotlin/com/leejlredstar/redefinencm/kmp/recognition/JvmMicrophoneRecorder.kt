@@ -49,6 +49,7 @@ class JvmMicrophoneRecorder : ExclusiveMicrophoneRecorder() {
 
         try {
             line.start()
+            var lastDataAt = System.nanoTime()
             while (capturedBytes.size() < targetBytes) {
                 coroutineContext.ensureActive()
                 // TargetDataLine.read may otherwise block indefinitely waiting for the entire
@@ -60,11 +61,16 @@ class JvmMicrophoneRecorder : ExclusiveMicrophoneRecorder() {
                     availableBytes,
                 ).let { it - (it % format.frameSize) }
                 if (requested <= 0) {
+                    // A line that delivers nothing would otherwise be waited on for ever.
+                    if (System.nanoTime() - lastDataAt > NO_DATA_TIMEOUT_NANOS) {
+                        throw MicrophoneUnavailableException(strings.desktopMicNoData)
+                    }
                     delay(10L)
                     continue
                 }
                 val read = line.read(buffer, 0, requested)
                 if (read <= 0) continue
+                lastDataAt = System.nanoTime()
                 capturedBytes.write(buffer, 0, read)
 
                 var energy = 0.0
@@ -90,6 +96,10 @@ class JvmMicrophoneRecorder : ExclusiveMicrophoneRecorder() {
         }
 
         val bytes = capturedBytes.toByteArray()
+        // A microphone the system blocks (macOS privacy settings, Windows' "let desktop apps use
+        // the microphone") still opens, and delivers exact zeros: a real microphone always
+        // records some noise. Fingerprinting the silence ended in "no match" three times over.
+        if (isDigitalSilence(bytes)) throw MicrophoneUnavailableException(strings.desktopMicSilent)
         val samples = FloatArray(targetSamples)
         for (sampleIndex in samples.indices) {
             samples[sampleIndex] = pcmSampleAt(bytes, sampleIndex * 2)
@@ -97,6 +107,12 @@ class JvmMicrophoneRecorder : ExclusiveMicrophoneRecorder() {
         CapturedPcm(samples, sampleRateHz)
     }
 }
+
+/** How long a started line may deliver nothing before it counts as giving no sound at all. */
+private const val NO_DATA_TIMEOUT_NANOS = 2_000_000_000L
+
+/** Whether every 16-bit sample in [pcm] is exactly zero. */
+internal fun isDigitalSilence(pcm: ByteArray): Boolean = pcm.isNotEmpty() && pcm.all { it == 0.toByte() }
 
 private fun pcmFormat(sampleRateHz: Int): AudioFormat = AudioFormat(
     AudioFormat.Encoding.PCM_SIGNED,

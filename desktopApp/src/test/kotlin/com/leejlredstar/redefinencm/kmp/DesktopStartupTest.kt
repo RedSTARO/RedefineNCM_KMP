@@ -92,4 +92,47 @@ class DesktopStartupTest {
         assertEquals("redefinencm.db.20261002-120000-1.bak", second?.name)
         database.parentFile.deleteRecursively()
     }
+
+    @Test
+    fun aFailureAFreshFileCannotFixIsExplainedWithoutStartingOver() {
+        val database = temporaryDatabase().apply { writeText("healthy") }
+        var told = ""
+
+        val goesOn = openLocalDataOrExplain(
+            databaseFile = database,
+            // SQLite's native library did not load: an empty file would fail the same way.
+            open = { throw IllegalStateException("driver failed", UnsatisfiedLinkError("no sqlitejdbc in java.library.path")) },
+            ask = { _, _ -> error("starting over cannot help here") },
+            tell = { _, message -> told = message },
+        )
+
+        assertFalse(goesOn)
+        assertEquals(
+            strings.desktopDataCannotOpen(database.absolutePath, "no sqlitejdbc in java.library.path"),
+            told,
+        )
+        assertEquals("healthy", database.readText())
+        database.parentFile.deleteRecursively()
+    }
+
+    @Test
+    fun startingOverWithNoFileToPutAsideStopsInsteadOfAskingAgain() {
+        val database = temporaryDatabase()
+        var asked = 0
+        var told = ""
+
+        val goesOn = openLocalDataOrExplain(
+            databaseFile = database,
+            open = { error("cannot create the file") },
+            ask = { _, _ -> asked++; LocalDataChoice.StartOver },
+            tell = { _, message -> told = message },
+            now = { noon },
+        )
+
+        assertFalse(goesOn)
+        assertEquals(1, asked)
+        assertEquals(strings.desktopDataRenameFailed(database.absolutePath), told)
+        assertEquals(null, putAside(database, noon))
+        database.parentFile.deleteRecursively()
+    }
 }

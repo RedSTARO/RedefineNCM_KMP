@@ -10,7 +10,7 @@
 
     <!-- main.kt -->
     <string name="trayStillRunningTitle">RedefineNCM 仍在运行</string>
-    <string name="trayStillRunningMessage">点按托盘图标打开窗口；在托盘菜单里选「退出」才会退出。</string>
+    <string name="trayStillRunningMessage">在托盘图标的菜单里选「显示主窗口」打开窗口，Windows 上也可以双击图标（它可能收在任务栏的 ^ 里）；选「退出」才会退出。</string>
     <string name="trayShowMainWindow">显示主窗口</string>
     <string name="pause">暂停</string>
     <string name="play">播放</string>
@@ -35,6 +35,7 @@
     <string name="desktopDataUnreadable">读取 {path} 时出错：{reason}\n\n可以把它改名保存，从空白开始：播放队列、本地歌单和「本地喜欢」会留在改名后的文件里，已下载的歌曲文件不受影响。</string>
     <string name="desktopDataStartOver">改名保存并重新开始</string>
     <string name="desktopDataRenameFailed">无法给 {path} 改名，可能有别的程序正在使用它。请关闭那个程序，或者自己移走这个文件，然后重新打开 RedefineNCM。</string>
+    <string name="desktopDataCannotOpen">打不开 {path}：{reason}\n\n问题不在文件内容，改名重新开始也无济于事。请检查这个文件夹能否写入、磁盘是否已满、是否有别的程序正在使用这个文件，然后重新打开 RedefineNCM。</string>
     <string name="desktopCrashTitle">RedefineNCM 遇到了问题</string>
     <string name="desktopCrashMessage">界面出错，应用需要退出。重新打开就能继续使用。</string>
     <string name="desktopLogHint">出错经过记录在 {path}，反馈问题时可以附上。</string>
@@ -751,7 +752,7 @@
     <string name="searchSuggestions">搜索联想</string>
     <string name="searchSuggestionsHint">输入时显示搜索建议</string>
     <string name="closeToTray">关闭主窗口时留在托盘</string>
-    <string name="closeToTrayHint">播放不会中断；点按托盘图标重新打开窗口，在托盘菜单里选「退出」才会退出</string>
+    <string name="closeToTrayHint">播放不会中断；在托盘图标的菜单里选「显示主窗口」重新打开窗口（Windows 上也可以双击图标），选「退出」才会退出</string>
     <string name="checkUpdatesOnStartup">启动时检查更新</string>
     <string name="checkUpdatesNow">立即检查更新</string>
     <string name="backup">备份</string>
@@ -1002,6 +1003,8 @@
 
     <!-- recognition/JvmMicrophoneRecorder.kt -->
     <string name="jvmMicNoPcmInput">未找到支持 PCM 输入的麦克风</string>
+    <string name="desktopMicSilent">麦克风只录到了静音。可能是系统不允许 RedefineNCM 使用麦克风，或者麦克风被静音了：请在系统设置的隐私与麦克风选项里允许它，然后再试。</string>
+    <string name="desktopMicNoData">麦克风没有送来任何声音。请检查系统设置里的输入设备和麦克风权限，然后再试。</string>
 
     <!-- util/DownloadUtil.jvm.kt -->
     <string name="downloadFolderNotFolder">下载目录不是文件夹：{path}</string>

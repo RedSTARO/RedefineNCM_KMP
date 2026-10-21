@@ -799,7 +799,10 @@ The desktop app keeps what it stores itself in `~/.redefinencm/`:
 - **One instance per user.** The first process holds an exclusive lock on `instance.lock` and
   listens on a loopback port written to `instance.port` with a random token; the file is readable
   by its owner only. A later launch sends `show <token>`, the running app raises its window, and
-  the later process exits. A request is at most 96 bytes read within 1.5 s. macOS never starts a
+  the later process exits. The answer is `ok` only once a window took the request; a running app
+  with no window yet (still starting, perhaps behind its local-data dialog, which it brings to the
+  front) answers `busy`, and the later launch says the app is running but not answering. A request
+  is at most 96 bytes read within 1.5 s. macOS never starts a
   second process: a Dock click is an app-reopen event, which the app answers the same way. A
   development run beside an installed app passes `-Dredefinencm.allowMultipleInstances=true`.
 - **The log file is for bug reports**, so it holds less than the console: each line is written
@@ -810,9 +813,22 @@ The desktop app keeps what it stores itself in `~/.redefinencm/`:
   rotation succeeds rather than growing beyond the limit; console output is unaffected.
 - **Startup failures are dialogs, not silent exits.** The database is opened before Koin starts.
   A file from a newer schema, or one that cannot be read, gets a dialog that offers to put it
-  aside under a `.bak` name and start with empty data, or to quit. Any other startup failure, and
+  aside under a `.bak` name and start with empty data, or to quit. A failure an empty file cannot
+  fix (SQLite's native library not loading; no permission, read-only, locked, disk full, I/O) is
+  explained with Quit only, and a database file that does not exist is never reported as kept.
+  Any other startup failure, and
   any exception a window throws while composing or drawing, is logged and shown, and the app quits
   rather than leaving a window that can no longer draw in the tray.
+- **Closing the window keeps the app in the tray only where there is a tray.** GNOME without an
+  AppIndicator extension has none (`isTraySupported` is false): closing quits there, and Settings
+  does not offer the switch.
+- **Window places.** The main and lyric windows reopen where they were left, fitted to the usable
+  area of the screen they land on; a minimized or full-screen place is never saved. Dragging the
+  custom title strip of a maximized window restores it to its floating size under the pointer.
+- **Packages** bundle `jdk.accessibility` (the Java Access Bridge for Windows screen readers), and
+  the `.deb` registers an application-menu entry. They carry no icon of their own yet: the app has
+  none (Android and iOS still show their templates' icons), and the owner will provide one
+  (2026-10-21).
 
 ---
 
@@ -1216,7 +1232,9 @@ Applies to all platforms, and the original Android repo is kept aligned (goal #3
   and always on top, with no toggle. It shows the current and next line in white with a shadow,
   left, centred or right; a hover toolbar has previous, next, text size, lock and close. Locked,
   it cannot be dragged or resized and lets clicks through on Windows. Bounds, alignment and text
-  size persist.
+  size persist. It never takes the keyboard from the main window, and on Windows it has no taskbar
+  button or Alt+Tab entry; closing it from the system (taskbar, Alt+F4) switches it off like its own
+  close button.
 - **iOS Live Activity:** Lock Screen + Dynamic Island — title, current and next line, progress
   and a play/pause glyph, synced to position. Artwork (which needs an App Group to reach the
   extension) and the artist are not shown yet.

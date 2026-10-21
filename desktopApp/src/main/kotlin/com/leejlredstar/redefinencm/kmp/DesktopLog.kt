@@ -64,6 +64,8 @@ internal class RotatingLogFile(
     private val file: File,
     private val previous: File,
     private val maxBytes: Long,
+    /** Renames a file; a test stands in for a viewer that holds the log open. */
+    private val move: (from: File, to: File) -> Boolean = { from, to -> from.renameTo(to) },
 ) : Closeable {
     init { require(maxBytes > 0) }
     private var output: OutputStream = FileOutputStream(file, true)
@@ -86,13 +88,23 @@ internal class RotatingLogFile(
 
     private fun rotate(): Boolean {
         runCatching { output.close() }
-        runCatching { previous.delete() }
+        // The current file is moved aside first, and the older rotation replaced only once that
+        // worked. Deleting the older one first lost it whenever the move then failed (on
+        // Windows, while a viewer holds the log open), leaving neither.
+        val moving = File(file.parentFile, file.name + ".rotating")
+        runCatching { moving.delete() }
+        val moved = move(file, moving)
+        val rotated = moved && run {
+            runCatching { previous.delete() }
+            move(moving, previous)
+        }
+        // The older rotation could not be replaced: the current file goes back where it was.
+        if (moved && !rotated) move(moving, file)
         // Keep the old log when it cannot be moved. Drop file output until rotation succeeds;
         // the console still receives it and the log cannot consume unbounded disk space.
-        val renamed = file.renameTo(previous)
-        output = FileOutputStream(file, !renamed)
-        written = if (renamed) 0 else file.length()
-        return renamed
+        output = FileOutputStream(file, !rotated)
+        written = if (rotated) 0 else file.length()
+        return rotated
     }
 }
 

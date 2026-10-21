@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import java.awt.Component
 import java.awt.Desktop
+import java.awt.Dialog
 import java.awt.desktop.AppReopenedListener
 import java.awt.Dimension
 import java.awt.Window
@@ -34,8 +35,18 @@ internal object DesktopActivation {
     )
     val showWindowRequests: SharedFlow<Unit> = requests.asSharedFlow()
 
-    fun requestShowWindow() {
-        requests.tryEmit(Unit)
+    /**
+     * Asks the main window to show itself, and says whether one took the request. Before the
+     * window exists (the app still starting, perhaps waiting on a dialog that opened behind other
+     * windows) nothing collects the request: the dialogs are brought to the front instead, and
+     * the answer is no.
+     */
+    fun requestShowWindow(): Boolean {
+        if (requests.subscriptionCount.value > 0) return requests.tryEmit(Unit)
+        SwingUtilities.invokeLater {
+            Window.getWindows().filter { it.isShowing && it is Dialog }.forEach { it.toFront() }
+        }
+        return false
     }
 }
 
@@ -80,6 +91,15 @@ internal fun openLocalDataOrExplain(
         val failure = runCatching(open).exceptionOrNull() ?: return true
         System.err.println("Local data could not be opened: ${databaseFile.absolutePath}")
         failure.printStackTrace()
+        // A fresh file cannot fix where the file lives, its lock, the disk or SQLite itself, and
+        // offering one put a healthy database aside and asked the same question again.
+        if (startingOverCannotHelp(failure)) {
+            tell(
+                strings.desktopDataOpenFailedTitle,
+                strings.desktopDataCannotOpen(databaseFile.absolutePath, failure.rootReason()),
+            )
+            return false
+        }
         val message = if (failure.causes().any { it is DatabaseSchemaTooNewException }) {
             strings.desktopDataTooNew(databaseFile.absolutePath)
         } else {
@@ -96,6 +116,31 @@ internal fun openLocalDataOrExplain(
 }
 
 private fun Throwable.causes(): List<Throwable> = generateSequence(this) { it.cause }.take(16).toList()
+
+/**
+ * Whether [failure] is about something other than the file's contents: SQLite's native library
+ * not loading, or SQLite refusing the file's place (no permission, read-only, locked, disk full,
+ * an I/O error). Starting over with an empty file meets the same failure.
+ */
+internal fun startingOverCannotHelp(failure: Throwable): Boolean = failure.causes().any { cause ->
+    cause is LinkageError ||
+        cause is SecurityException ||
+        cause is java.nio.file.AccessDeniedException ||
+        (cause.javaClass.name == "org.sqlite.SQLiteException" &&
+            NonContentSqliteErrors.any { code -> cause.message.orEmpty().contains("[$code") })
+}
+
+/** sqlite-jdbc puts the result code in brackets at the start of its message. */
+private val NonContentSqliteErrors = listOf(
+    "SQLITE_CANTOPEN",
+    "SQLITE_READONLY",
+    "SQLITE_PERM",
+    "SQLITE_BUSY",
+    "SQLITE_LOCKED",
+    "SQLITE_FULL",
+    "SQLITE_IOERR",
+    "SQLITE_NOMEM",
+)
 
 /** The innermost cause in its own words: wrappers only say which definition or call failed. */
 private fun Throwable.rootReason(): String =

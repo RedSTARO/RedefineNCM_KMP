@@ -10,7 +10,7 @@
 
     <!-- main.kt -->
     <string name="trayStillRunningTitle">RedefineNCM is still running</string>
-    <string name="trayStillRunningMessage">Click the system tray icon to open the window. The app only quits when you choose “Quit” from the system tray menu.</string>
+    <string name="trayStillRunningMessage">Choose “Show main window” from the system tray icon's menu to open the window; on Windows you can also double-click the icon (it may be under the ^ on the taskbar). The app only quits when you choose “Quit”.</string>
     <string name="trayShowMainWindow">Show main window</string>
     <string name="pause">Pause</string>
     <string name="play">Play</string>
@@ -35,6 +35,7 @@
     <string name="desktopDataUnreadable">Couldn't read {path}: {reason}\n\nYou can rename the file and start from scratch: the queue, local playlists and “Local likes” stay in the renamed file, and downloaded song files aren't affected.</string>
     <string name="desktopDataStartOver">Rename and start over</string>
     <string name="desktopDataRenameFailed">Couldn't rename {path}; another program may be using it. Close that program, or move the file yourself, then open RedefineNCM again.</string>
+    <string name="desktopDataCannotOpen">Couldn't open {path}: {reason}\n\nThe file's contents aren't the problem, so renaming it and starting over won't help. Check that its folder can be written to, that the disk isn't full and that no other program is using the file, then open RedefineNCM again.</string>
     <string name="desktopCrashTitle">RedefineNCM ran into a problem</string>
     <string name="desktopCrashMessage">The window failed and the app has to quit. Open it again to keep going.</string>
     <string name="desktopLogHint">What happened is recorded in {path}; attach it if you report the problem.</string>
@@ -793,7 +794,7 @@
     <string name="searchSuggestions">Search suggestions</string>
     <string name="searchSuggestionsHint">Show suggestions as you type</string>
     <string name="closeToTray">Stay in the system tray when the main window is closed</string>
-    <string name="closeToTrayHint">Playback doesn't stop. Click the system tray icon to reopen the window; to quit, choose “Quit” from its menu.</string>
+    <string name="closeToTrayHint">Playback doesn't stop. To reopen the window, choose “Show main window” from the system tray icon's menu (on Windows you can also double-click the icon); to quit, choose “Quit”.</string>
     <string name="checkUpdatesOnStartup">Check for updates at startup</string>
     <string name="checkUpdatesNow">Check for updates now</string>
     <string name="backup">Backup</string>
@@ -1074,6 +1075,8 @@
 
     <!-- recognition/JvmMicrophoneRecorder.kt -->
     <string name="jvmMicNoPcmInput">No microphone with PCM input found</string>
+    <string name="desktopMicSilent">The microphone recorded only silence. The system may not let RedefineNCM use the microphone, or the microphone is muted: allow it in the system's privacy and microphone settings, then try again.</string>
+    <string name="desktopMicNoData">The microphone sent no sound at all. Check the input device and the microphone permission in the system settings, then try again.</string>
 
     <!-- util/DownloadUtil.jvm.kt -->
     <string name="downloadFolderNotFolder">The download folder path isn't a folder: {path}</string>
