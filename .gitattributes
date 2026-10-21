@@ -1,2 +1,6 @@
 # Preserve the canonical GNU Library GPL v2 body byte-for-byte.
 LICENSES/GNU-Library-GPL-2.0-or-later.txt whitespace=-blank-at-eol,-space-before-tab
+
+# Shell scripts run under bash on every CI runner, Windows included, where a CRLF checkout
+# breaks them.
+*.sh text eol=lf
