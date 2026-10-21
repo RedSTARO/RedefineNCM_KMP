@@ -49,9 +49,18 @@ internal class MacOsMediaControls(
             newBridge.start()
             bridge = newBridge
             collectJob = scope.launch {
+                var pushed: MediaControlMetadata? = null
+                var pushedAtMs = 0L
                 MediaControlsIntegrator.metadata.collect { metadata ->
+                    // The position moves ten times a second; the system extrapolates it from the
+                    // rate on its own. Rebuilding Now Playing for each step cost Objective-C and
+                    // XPC work, and a cover-file read, on this thread every 100 ms.
+                    val nowMs = System.nanoTime() / 1_000_000L
+                    if (!macNowPlayingNeedsUpdate(pushed, pushedAtMs, metadata, nowMs)) return@collect
                     try {
                         newBridge.update(metadata)
+                        pushed = metadata
+                        pushedAtMs = nowMs
                         _lastError.value = null
                         _status.value = DesktopMediaControlsStatus.Forwarding
                     } catch (error: Throwable) {
@@ -84,6 +93,26 @@ internal class MacOsMediaControls(
         System.err.println(message)
     }
 }
+
+/**
+ * Whether Now Playing needs [next], given what was pushed last ([last], at [lastAtMs]): anything
+ * but the position (the track, its artwork, the play state, the duration) is pushed, and so is a
+ * position away from where the system's own extrapolation has it, which is a seek.
+ */
+internal fun macNowPlayingNeedsUpdate(
+    last: MediaControlMetadata?,
+    lastAtMs: Long,
+    next: MediaControlMetadata,
+    nowMs: Long,
+): Boolean {
+    if (last == null) return true
+    if (last.copy(position = 0L) != next.copy(position = 0L)) return true
+    val expectedMs = if (next.isPlaying) last.position + (nowMs - lastAtMs) else last.position
+    return kotlin.math.abs(next.position - expectedMs) > MAC_POSITION_DRIFT_MS
+}
+
+/** How far the position may drift from the system's extrapolation before it is pushed again. */
+private const val MAC_POSITION_DRIFT_MS = 1_500L
 
 private class MacNowPlayingBridge(
     private val player: PlatformPlayer,

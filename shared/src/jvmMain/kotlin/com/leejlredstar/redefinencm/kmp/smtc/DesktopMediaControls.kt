@@ -16,6 +16,8 @@ import kotlinx.coroutines.launch
 class DesktopMediaControls(
     private val player: PlatformPlayer,
     private val osName: String = DesktopOs.currentName,
+    /** Shows the main window the way the app does, for a system control that asks for it. */
+    private val onRaise: (() -> Unit)? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _status = MutableStateFlow(DesktopMediaControlsStatus.NotStarted)
@@ -36,7 +38,7 @@ class DesktopMediaControls(
         stop()
         val selected = when (DesktopOs.of(osName)) {
             DesktopOs.Windows -> WindowsMediaControlsBackend(player)
-            DesktopOs.Linux -> LinuxMprisMediaControls(player)
+            DesktopOs.Linux -> LinuxMprisMediaControls(player, onRaise = onRaise)
             DesktopOs.MacOs -> MacOsMediaControls(player)
             DesktopOs.Other -> UnsupportedMediaControlsBackend(osName)
         }

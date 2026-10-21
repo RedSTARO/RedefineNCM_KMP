@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import javax.sound.sampled.*
 import kotlin.math.log10
+import kotlin.concurrent.thread
 
 /**
  * Desktop (JVM) [PlatformPlayer]: FFmpeg decodes, [DeckMixer] renders, and a Java Sound
@@ -80,6 +81,13 @@ class JvmMediaPlayer(
     @Volatile private var publishedDeckSequence = 0L
     @Volatile private var pauseRequested = false
 
+    /**
+     * When the render loop's current write to the line began (System.nanoTime), or 0 between
+     * writes. A healthy line takes a block within its buffer's length; one still blocked after
+     * [LOST_LINE_NANOS] lost its device.
+     */
+    @Volatile private var writeStartedAt = 0L
+
     /** Where playback resumes when no line is open: after a pause that closed it, or a seek. */
     @Volatile private var seekOffsetMs = 0L
     private val streamReopens = StreamReopenBudget()
@@ -146,9 +154,30 @@ class JvmMediaPlayer(
             while (isActive) {
                 if (_isPlaying.value) {
                     clockReading()?.let { reading -> onClockReading(reading, generation) }
+                    releaseStuckWrite()
                 }
                 publishTransitionBlend()
                 delay(100)
+            }
+        }
+    }
+
+    /**
+     * A write that has not returned for [LOST_LINE_NANOS] while nothing paused it is held by a line
+     * whose device is gone: playback would hang, showing PLAYING, until the user seeks or skips.
+     * Stopping the line returns the write short, which the render loop takes as the device lost.
+     * Done on a thread of its own: a dead device may hold the stop as well.
+     */
+    private fun releaseStuckWrite() {
+        val startedAt = writeStartedAt
+        if (startedAt == 0L || pauseRequested) return
+        if (System.nanoTime() - startedAt < LOST_LINE_NANOS) return
+        val stuck = line ?: return
+        writeStartedAt = 0L
+        thread(name = "release-stuck-audio-line", isDaemon = true) {
+            runCatching {
+                stuck.stop()
+                stuck.flush()
             }
         }
     }
@@ -371,6 +400,7 @@ class JvmMediaPlayer(
         var deckMixer: DeckMixer? = null
         var audioLine: SourceDataLine? = null
         var completedNaturally = false
+        var outputLost = false
         var streamInterrupted = false
 
         try {
@@ -457,16 +487,32 @@ class JvmMediaPlayer(
                     break
                 }
                 if (!isPlaybackCurrent(generation)) break
-                val written = writeFully(
-                    line = audioLine,
-                    bytes = bytes,
-                    length = floatToPcm16(block, frames, channels, bytes),
-                    paused = { pauseRequested },
-                    awaitResume = {
-                        awaitPauseRelease(generation).also { resumed -> if (resumed && !audioLine.isRunning) audioLine.start() }
-                    },
-                )
-                if (!written) break
+                writeStartedAt = System.nanoTime()
+                val written = try {
+                    writeFully(
+                        line = audioLine,
+                        bytes = bytes,
+                        length = floatToPcm16(block, frames, channels, bytes),
+                        paused = { pauseRequested },
+                        awaitResume = {
+                            writeStartedAt = 0L
+                            awaitPauseRelease(generation).also { resumed ->
+                                if (resumed && !audioLine.isRunning) audioLine.start()
+                                writeStartedAt = System.nanoTime()
+                            }
+                        },
+                    )
+                } finally {
+                    writeStartedAt = 0L
+                }
+                if (written == WriteOutcome.Ended) break
+                if (written == WriteOutcome.Short) {
+                    // Cut short with nothing to explain it (no pause, the session still current):
+                    // the device went away. Decoding on would run the rest of the track at CPU
+                    // speed into a dead line and call it finished.
+                    if (isPlaybackCurrent(generation) && !pauseRequested) outputLost = true
+                    break
+                }
                 deckMixer.planNeedingIncoming(PREPARE_LEAD_MS)?.let { plan ->
                     prepareIncoming(generation, deckMixer, plan)
                 }
@@ -514,8 +560,11 @@ class JvmMediaPlayer(
             }
         }
 
-        if (streamInterrupted && isPlaybackCurrent(generation)) {
+        if ((streamInterrupted || outputLost) && isPlaybackCurrent(generation)) {
+            if (outputLost) System.err.println("JvmMediaPlayer: the audio output stopped taking audio")
             stopPollingIfCurrent(generation)
+            // The same reopen as a dropped stream, on a fresh line: on the chosen device if it is
+            // back, otherwise on the system default.
             reopenAfterInterruption(generation)
             return
         }
@@ -1044,12 +1093,23 @@ internal class StreamReopenBudget(
  */
 private const val OutputChannels = 2
 
+/** How one [writeFully] went. */
+internal enum class WriteOutcome {
+    /** All of it reached the line. */
+    Written,
+
+    /** Cut short with no pause pending: the session was stopped, or the device went away. */
+    Short,
+
+    /** The session ended while paused. */
+    Ended,
+}
+
 /**
  * Writes [length] bytes to [line]. A pause stops the line, and the write in progress returns short:
  * the rest is written once [awaitResume] says playback goes on, so a pause neither drops up to a
  * block of audio nor leaves the clock ahead of what was heard. A short write with no pause pending
- * (the session being stopped, or a device fault) is left to the caller's own checks, as before.
- * False when the session ended while paused.
+ * is reported as such: the caller tells a stopped session from a lost device.
  */
 internal fun writeFully(
     line: SourceDataLine,
@@ -1057,13 +1117,16 @@ internal fun writeFully(
     length: Int,
     paused: () -> Boolean,
     awaitResume: () -> Boolean,
-): Boolean {
+): WriteOutcome {
     var offset = 0
     while (offset < length) {
         offset += line.write(bytes, offset, length - offset).coerceAtLeast(0)
-        if (offset >= length) return true
-        if (!paused()) return true
-        if (!awaitResume()) return false
+        if (offset >= length) return WriteOutcome.Written
+        if (!paused()) return WriteOutcome.Short
+        if (!awaitResume()) return WriteOutcome.Ended
     }
-    return true
+    return WriteOutcome.Written
 }
+
+/** How long one write may block before its line counts as lost: several times any line's buffer. */
+private const val LOST_LINE_NANOS = 2_000_000_000L

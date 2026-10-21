@@ -33,7 +33,10 @@ class WriteFullyTest {
         val received = mutableListOf<Byte>()
         val bytes = ByteArray(16) { it.toByte() }
         var waited = 0
-        assertTrue(writeFully(line(received, shortFirst = 6), bytes, 16, paused = { true }, awaitResume = { waited++; true }))
+        assertEquals(
+            WriteOutcome.Written,
+            writeFully(line(received, shortFirst = 6), bytes, 16, paused = { true }, awaitResume = { waited++; true }),
+        )
         assertEquals(bytes.toList(), received)
         assertEquals(1, waited)
     }
@@ -41,15 +44,22 @@ class WriteFullyTest {
     @Test
     fun aSessionEndedDuringThePauseWritesNothingMore() {
         val received = mutableListOf<Byte>()
-        assertFalse(writeFully(line(received, shortFirst = 6), ByteArray(16), 16, paused = { true }, awaitResume = { false }))
+        assertEquals(
+            WriteOutcome.Ended,
+            writeFully(line(received, shortFirst = 6), ByteArray(16), 16, paused = { true }, awaitResume = { false }),
+        )
         assertEquals(6, received.size)
     }
 
     @Test
-    fun aShortWriteWithoutAPauseIsLeftToTheCaller() {
+    fun aShortWriteWithoutAPauseIsReportedForTheCallerToJudge() {
+        // A stopped session, or an output device that went away mid-song.
         val received = mutableListOf<Byte>()
         var waited = false
-        assertTrue(writeFully(line(received, shortFirst = 6), ByteArray(16), 16, paused = { false }, awaitResume = { waited = true; true }))
+        assertEquals(
+            WriteOutcome.Short,
+            writeFully(line(received, shortFirst = 6), ByteArray(16), 16, paused = { false }, awaitResume = { waited = true; true }),
+        )
         assertFalse(waited)
         assertEquals(6, received.size)
     }

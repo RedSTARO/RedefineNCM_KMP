@@ -28,6 +28,8 @@ import org.freedesktop.dbus.types.Variant
 internal class LinuxMprisMediaControls(
     private val player: PlatformPlayer,
     private val processId: Long = ProcessHandle.current().pid(),
+    /** How the app shows its main window; see [Raise]. */
+    private val onRaise: (() -> Unit)? = null,
 ) : DesktopMediaControlsBackend {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _status = MutableStateFlow(DesktopMediaControlsStatus.NotStarted)
@@ -53,7 +55,7 @@ internal class LinuxMprisMediaControls(
             val newConnection = DBusConnectionBuilder.forSessionBus().build()
             try {
                 newConnection.requestBusName(busName)
-                val service = MprisService(player, window)
+                val service = MprisService(player, window, onRaise)
                 service.attach(newConnection)
                 newConnection.exportObject(MPRIS_OBJECT_PATH, service)
                 connection = newConnection
@@ -62,8 +64,9 @@ internal class LinuxMprisMediaControls(
                         MediaControlsIntegrator.metadata,
                         player.queueSnapshot,
                         player.volume,
-                    ) { metadata, queue, volume ->
-                        MprisState(metadata, queue, volume.toDouble().coerceIn(0.0, 1.0))
+                        player.positionDiscontinuity,
+                    ) { metadata, queue, volume, discontinuity ->
+                        MprisState(metadata, queue, volume.toDouble().coerceIn(0.0, 1.0), discontinuity)
                     }.collect(service::update)
                 }
                 _lastError.value = null
@@ -120,6 +123,8 @@ private data class MprisState(
     val metadata: MediaControlMetadata = MediaControlMetadata(),
     val queue: PlayerQueueSnapshot = PlayerQueueSnapshot(),
     val volume: Double = 1.0,
+    /** Counts the player's jumps in position: seeks from anywhere, not only through D-Bus. */
+    val discontinuity: Long = 0L,
 ) {
     val hasTrack: Boolean get() = queue.currentMedia != null || metadata.title.isNotBlank()
     val playbackStatus: String get() = when {
@@ -135,6 +140,7 @@ private data class MprisState(
 private class MprisService(
     private val player: PlatformPlayer,
     private val window: Window?,
+    private val onRaise: (() -> Unit)?,
 ) : MprisMediaPlayer2, MprisPlayer, Properties {
     @Volatile
     private var state = MprisState()
@@ -161,12 +167,11 @@ private class MprisService(
         if (previous.queue.shuffleEnabled != next.queue.shuffleEnabled) {
             changed["Shuffle"] = Variant(next.queue.shuffleEnabled)
         }
-        if (previous.queue != next.queue) {
-            changed["CanGoNext"] = Variant(canGoNext(next))
-            changed["CanGoPrevious"] = Variant(canGoPrevious(next))
-            changed["CanPlay"] = Variant(next.hasTrack)
-            changed["CanPause"] = Variant(next.hasTrack)
-            changed["CanSeek"] = Variant(next.hasTrack && next.metadata.duration > 0L)
+        // Each from all of its inputs: CanSeek follows the duration, which usually arrives after
+        // the queue does, so tying them all to queue changes left the slider disabled.
+        val previousAbilities = abilitiesOf(previous)
+        abilitiesOf(next).forEach { (name, able) ->
+            if (previousAbilities[name] != able) changed[name] = Variant(able)
         }
         if (changed.isNotEmpty()) {
             connection?.sendMessage(
@@ -178,9 +183,44 @@ private class MprisService(
                 ),
             )
         }
+        seekedSignalFor(previous, next)?.let { positionMs ->
+            connection?.sendMessage(
+                MprisPlayer.Seeked(MPRIS_OBJECT_PATH, positionMs * MICROSECONDS_PER_MILLISECOND),
+            )
+        }
     }
 
+    /**
+     * The position a client extrapolates from is corrected only by Seeked. It was sent for seeks
+     * through D-Bus alone, so a seek in the app, a lyric tap or a track restored part-way left the
+     * system widget showing the old time.
+     */
+    private fun seekedSignalFor(previous: MprisState, next: MprisState): Long? {
+        if (!next.hasTrack) return null
+        val position = player.position.value.coerceAtLeast(0L)
+        return when {
+            next.discontinuity != previous.discontinuity -> position
+            next.trackPath != previous.trackPath && position > 0L -> position
+            else -> null
+        }
+    }
+
+    private fun abilitiesOf(state: MprisState): Map<String, Boolean> = mapOf(
+        "CanGoNext" to canGoNext(state),
+        "CanGoPrevious" to canGoPrevious(state),
+        "CanPlay" to state.hasTrack,
+        "CanPause" to state.hasTrack,
+        "CanSeek" to (state.hasTrack && state.metadata.duration > 0L),
+    )
+
     override fun Raise() {
+        // The main window's visibility is the app's own state. Set behind its back, a window
+        // closed to the tray came up with a close button that did nothing, or vanished again at
+        // the next recomposition; the app's own path keeps the two in step.
+        onRaise?.let {
+            it()
+            return
+        }
         val targetWindow = window ?: return
         EventQueue.invokeLater {
             targetWindow.isVisible = true
@@ -223,11 +263,9 @@ private class MprisService(
 
     override fun OpenUri(uri: String) = Unit
 
+    /** The player marks the jump, and [update] sends Seeked for it, as for a seek from anywhere. */
     private fun seekTo(targetMs: Long) {
         player.seekTo(targetMs)
-        connection?.sendMessage(
-            MprisPlayer.Seeked(MPRIS_OBJECT_PATH, targetMs * MICROSECONDS_PER_MILLISECOND),
-        )
     }
 
     @Suppress("UNCHECKED_CAST")

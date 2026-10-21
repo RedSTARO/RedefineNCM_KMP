@@ -415,7 +415,9 @@ private fun ApplicationScope.DesktopWindows(settings: PlatformSettings) {
                 window.isAlwaysOnTop = false
             }
         }
-        val mediaControls = remember(player) { DesktopMediaControls(player) }
+        val mediaControls = remember(player) {
+            DesktopMediaControls(player, onRaise = { DesktopActivation.requestShowWindow() })
+        }
         DisposableEffect(window, mediaControls) {
             // Below this the layout has nowhere to go, so the window stops shrinking here.
             window.minimumSize = Dimension(360, 480)

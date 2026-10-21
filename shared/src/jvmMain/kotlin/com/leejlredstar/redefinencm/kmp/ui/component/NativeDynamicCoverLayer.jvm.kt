@@ -33,6 +33,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.bytedeco.javacv.FFmpegFrameGrabber
@@ -128,8 +129,10 @@ private class JvmDynamicCoverDecoder(
     private val _frames = MutableStateFlow<androidx.compose.ui.graphics.ImageBitmap?>(null)
     val frames = _frames.asStateFlow()
 
-    @Volatile
-    private var playing = initiallyPlaying
+    // A flow rather than a polled flag: paused, or with the window hidden, the decoder waited on
+    // a 16 ms timer for as long as the app ran, keeping the CPU out of idle.
+    private val playingState = MutableStateFlow(initiallyPlaying)
+    private val playing: Boolean get() = playingState.value
 
     @Volatile
     private var released = false
@@ -139,13 +142,13 @@ private class JvmDynamicCoverDecoder(
     }
 
     fun setPlaying(value: Boolean) {
-        if (!released) playing = value
+        if (!released) playingState.value = value
     }
 
     fun release() {
         if (released) return
         released = true
-        playing = false
+        playingState.value = false
         decodeJob.cancel()
         scope.cancel()
     }
@@ -220,10 +223,10 @@ private class JvmDynamicCoverDecoder(
         }
     }
 
+    /** Suspends until playback resumes; [release] cancels the decode job, which ends the wait. */
     private suspend fun awaitPlayback() {
-        while (currentCoroutineContext().isActive && !released && !playing) {
-            delay(PAUSE_POLL_MILLIS)
-        }
+        if (released || playing) return
+        playingState.first { it }
     }
 
     /**
@@ -261,7 +264,6 @@ private class JvmDynamicCoverDecoder(
 
     private companion object {
         const val NETWORK_TIMEOUT_MICROS = 5_000_000L
-        const val PAUSE_POLL_MILLIS = 16L
         const val FRAME_DELAY_SLICE_MILLIS = 16L
         const val MICROS_PER_SECOND = 1_000_000.0
         const val NANOS_PER_MICRO = 1_000L
