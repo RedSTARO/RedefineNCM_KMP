@@ -140,13 +140,17 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "com.leejlredstar.redefinencm.kmp.MainKt"
+        // The runtime the packages bundle. By default it is the Gradle daemon's own JDK, which
+        // gradle-daemon-jvm.properties pins to one Corretto build, so the installers shipped a
+        // JRE that missed every later security update. CI hands in the JDK it has just set up.
+        System.getenv("DESKTOP_RUNTIME_JAVA_HOME")?.takeIf { it.isNotBlank() }?.let { javaHome = it }
         // The lyric page animates on every display refresh, 200 Hz on a fast monitor, so a
         // stop-the-world collection of even 10 ms drops frames. Measured with G1 during
         // playback: young pauses of 5 to 45 ms every few seconds, plus 20 to 50 ms full
         // collections from the `System.gc()` Skiko issues every 30 s of rendering. ZGC keeps
         // every pause under a millisecond and runs that explicit collection concurrently. The
-        // generational mode exists on JDK 21+; the unrecognised-option flag makes it a no-op,
-        // not a startup failure, on the JDK 17 that CI still packages with.
+        // generational mode exists on JDK 21+, which the packages bundle; the
+        // unrecognised-option flag keeps an older runtime starting rather than failing.
         jvmArgs += listOf(
             "-XX:+IgnoreUnrecognizedVMOptions",
             "-XX:+UseZGC",
@@ -175,6 +179,9 @@ compose.desktop {
                 "java.management",
                 "java.prefs",
                 "java.sql",
+                // The Java Access Bridge, Compose's only way to Windows screen readers; without
+                // it NVDA and JAWS find nothing in the window. Harmless on the other systems.
+                "jdk.accessibility",
                 "jdk.security.auth",
                 "jdk.unsupported",
             )
@@ -189,6 +196,14 @@ compose.desktop {
                 menuGroup = "RedSTAR"
                 shortcut = true
                 upgradeUuid = "44a6cc76-8441-4e27-9ce0-c6d582a78513"
+            }
+
+            linux {
+                // jpackage writes and registers a .desktop file only when asked for a shortcut,
+                // so the .deb installed the app with no application-menu entry at all.
+                shortcut = true
+                menuGroup = "AudioVideo;Audio;Player;"
+                appCategory = "sound"
             }
 
             macOS {

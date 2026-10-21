@@ -100,9 +100,11 @@ jobs:
       - name: Run native AMLL parser tests and compile checks
         run: |
           chmod +x gradlew
-          # The JVM suite covers the common native TTML/LRC/YRC parser, AMLL lyric
-          # engine, and a real Linux MPRIS client/server smoke test.
+          # The JVM suite covers the app's lyric pipeline and a real Linux MPRIS client/server
+          # smoke test. The lyric parsers and the AMLL engine live in the included build, whose
+          # own suite :shared:jvmTest only compiles against; it runs here by its build path.
           dbus-run-session -- ./gradlew --no-daemon :shared:jvmTest
+          ./gradlew :AMLL_Jetpack_Compose:amll-compose:jvmTest
           # :desktopApp:test covers the instance lock, the log file and the start-up checks.
           ./gradlew \
             :shared:testAndroidHostTest \
@@ -312,12 +314,17 @@ jobs:
           submodules: recursive
           fetch-depth: 0
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        id: jdk
         with:
-          java-version: '17'
+          # Also the runtime the package bundles: see DESKTOP_RUNTIME_JAVA_HOME below.
+          java-version: '21'
           distribution: 'temurin'
           cache: gradle
 
       - name: Build .deb package
+        env:
+          DESKTOP_RUNTIME_JAVA_HOME: ${{ steps.jdk.outputs.path }}
+          DESKTOP_RUNTIME_JAVA_VERSION: ${{ steps.jdk.outputs.version }}
         run: |
           chmod +x gradlew
           # packageReleaseDeb is the ProGuard-shrunk/optimized/obfuscated distribution — the
@@ -326,7 +333,11 @@ jobs:
           package=$(find desktopApp/build/compose/binaries/main-release/deb -name '*.deb' -print -quit)
           test -n "$package"
           test "$(dpkg-deb -f "$package" Version)" = "$NATIVE_PACKAGE_VERSION"
-          mv "$package" "$(dirname "$package")/RedefineNCM_KMP-${APP_VERSION}.deb"
+          # jpackage registers an application-menu entry only when asked for a shortcut.
+          dpkg-deb -c "$package" | grep -q '\.desktop$'
+          runtime=desktopApp/build/compose/binaries/main-release/app/RedefineNCM/lib/runtime/release
+          bash scripts/check_packaged_runtime.sh "$runtime" "$DESKTOP_RUNTIME_JAVA_VERSION"
+          mv "$package" "$(dirname "$package")/RedefineNCM_KMP-${APP_VERSION}-linux-amd64.deb"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -337,7 +348,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: desktop-linux-deb
-          path: desktopApp/build/compose/binaries/main-release/deb/RedefineNCM_KMP-${{ needs.test.outputs.app_version }}.deb
+          path: desktopApp/build/compose/binaries/main-release/deb/RedefineNCM_KMP-${{ needs.test.outputs.app_version }}-linux-amd64.deb
           if-no-files-found: error
 
   # ─── Desktop · Windows ──────────────────────────────────────────────────────
@@ -359,14 +370,24 @@ jobs:
           submodules: recursive
           fetch-depth: 0
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        id: jdk
         with:
-          java-version: '17'
+          # Also the runtime the package bundles: see DESKTOP_RUNTIME_JAVA_HOME below.
+          java-version: '21'
           distribution: 'temurin'
           cache: gradle
 
       - name: Build .msi installer
+        env:
+          DESKTOP_RUNTIME_JAVA_HOME: ${{ steps.jdk.outputs.path }}
+          DESKTOP_RUNTIME_JAVA_VERSION: ${{ steps.jdk.outputs.version }}
         run: |
           ./gradlew :shared:jvmTest :desktopApp:test :desktopApp:packageReleaseMsi
+          # The daemon holds lock files under ~/.gradle/caches, and the post-job cache save
+          # then fails to archive them, so this job never kept its cache.
+          ./gradlew --stop
+          bash scripts/check_packaged_runtime.sh desktopApp/build/compose/binaries/main-release/app/RedefineNCM/runtime/release "$env:DESKTOP_RUNTIME_JAVA_VERSION"
+          if ($LASTEXITCODE -ne 0) { throw "The packaged runtime is not the one set up for this job." }
           $package = Get-ChildItem -Path desktopApp/build/compose/binaries/main-release/msi -Filter *.msi | Select-Object -First 1
           if (-not $package) { throw "MSI package was not produced." }
           $installer = $null
@@ -394,7 +415,7 @@ jobs:
           if ($actualVersion -ne $env:NATIVE_PACKAGE_VERSION) {
             throw "MSI ProductVersion '$actualVersion' does not match '$env:NATIVE_PACKAGE_VERSION'."
           }
-          $target = Join-Path $package.DirectoryName "RedefineNCM_KMP-$env:APP_VERSION.msi"
+          $target = Join-Path $package.DirectoryName "RedefineNCM_KMP-$env:APP_VERSION-windows-x64.msi"
           Move-Item -LiteralPath $package.FullName -Destination $target
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -406,14 +427,24 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: desktop-windows-msi
-          path: desktopApp/build/compose/binaries/main-release/msi/RedefineNCM_KMP-${{ needs.test.outputs.app_version }}.msi
+          path: desktopApp/build/compose/binaries/main-release/msi/RedefineNCM_KMP-${{ needs.test.outputs.app_version }}-windows-x64.msi
           if-no-files-found: error
 
   # ─── Desktop · macOS ────────────────────────────────────────────────────────
   build-desktop-macos:
-    name: Desktop · macOS (.dmg)
+    name: Desktop · macOS ${{ matrix.arch }} (.dmg)
     needs: test
-    runs-on: macos-latest
+    # Each package bundles its host's runtime, Skiko and FFmpeg natives, so an Intel Mac needs a
+    # package built on an Intel runner (decided 2026-10-21).
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-latest
+          - arch: x64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
     env:
       APP_VERSION: ${{ needs.test.outputs.app_version }}
       REDEFINE_NCM_BASE_TAG: ${{ needs.test.outputs.base_tag }}
@@ -428,12 +459,18 @@ jobs:
           submodules: recursive
           fetch-depth: 0
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        id: jdk
         with:
-          java-version: '17'
+          # Also the runtime the package bundles: see DESKTOP_RUNTIME_JAVA_HOME below.
+          java-version: '21'
           distribution: 'temurin'
           cache: gradle
 
       - name: Build .dmg image
+        env:
+          DESKTOP_RUNTIME_JAVA_HOME: ${{ steps.jdk.outputs.path }}
+          DESKTOP_RUNTIME_JAVA_VERSION: ${{ steps.jdk.outputs.version }}
+          MAC_ARCH: ${{ matrix.arch }}
         run: |
           chmod +x gradlew
           # jvmTest executes the native MPNowPlayingInfoCenter/remote-command smoke on macOS.
@@ -444,28 +481,30 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")" = "$NATIVE_PACKAGE_VERSION"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist")" = "$NATIVE_PACKAGE_VERSION"
           test "$(/usr/libexec/PlistBuddy -c 'Print :RedefineNCMVersionName' "$plist")" = "$APP_VERSION"
+          runtime=$(find desktopApp/build/compose/binaries/main-release/app -path '*/RedefineNCM.app/Contents/runtime/Contents/Home/release' -print -quit)
+          bash scripts/check_packaged_runtime.sh "$runtime" "$DESKTOP_RUNTIME_JAVA_VERSION"
           package=$(find desktopApp/build/compose/binaries/main-release/dmg -name '*.dmg' -print -quit)
           test -n "$package"
-          mv "$package" "$(dirname "$package")/RedefineNCM_KMP-${APP_VERSION}.dmg"
+          mv "$package" "$(dirname "$package")/RedefineNCM_KMP-${APP_VERSION}-macos-${MAC_ARCH}.dmg"
 
       - name: Upload jpackage diagnostics
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: desktop-macos-jpackage-logs
+          name: desktop-macos-${{ matrix.arch }}-jpackage-logs
           path: desktopApp/build/compose/logs/**
           if-no-files-found: ignore
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: symbol-map-desktop-macos
+          name: symbol-map-desktop-macos-${{ matrix.arch }}
           path: desktopApp/build/proguard/mapping.txt
           if-no-files-found: error
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: desktop-macos-dmg
-          path: desktopApp/build/compose/binaries/main-release/dmg/RedefineNCM_KMP-${{ needs.test.outputs.app_version }}.dmg
+          name: desktop-macos-${{ matrix.arch }}-dmg
+          path: desktopApp/build/compose/binaries/main-release/dmg/RedefineNCM_KMP-${{ needs.test.outputs.app_version }}-macos-${{ matrix.arch }}.dmg
           if-no-files-found: error
 
   # ─── iOS ────────────────────────────────────────────────────────────────────
@@ -567,16 +606,12 @@ jobs:
           echo "commit_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Download signed R8-minified ARM64 APK
+        # A pattern that matches nothing is not an error, unlike a name: a failed build still
+        # gets its message, without the APK.
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: android-apk-release-minified-signed-arm64-v8a
+          pattern: android-apk-release-minified-signed-arm64-v8a
           path: dist/android
-
-      - name: Download other platform packages
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          pattern: '{web-wasm-distribution,desktop-linux-deb,desktop-windows-msi,desktop-macos-dmg}'
-          path: dist/
           merge-multiple: true
 
       - name: Send artifacts to Telegram
@@ -591,24 +626,34 @@ jobs:
           COUNT: ${{ steps.commitcount.outputs.count }}
           REF: ${{ github.ref_name }}
           VERSION: ${{ needs.test.outputs.app_version }}
+          # Each row is its job's own result, so a failure is reported, not inferred from a file.
+          TEST_RESULT: ${{ needs.test.result }}
+          ANDROID_RESULT: ${{ needs.build-android.result }}
+          SIGN_RESULT: ${{ needs.sign-android.result }}
+          LINUX_RESULT: ${{ needs.build-desktop-linux.result }}
+          WINDOWS_RESULT: ${{ needs.build-desktop-windows.result }}
+          MACOS_RESULT: ${{ needs.build-desktop-macos.result }}
+          IOS_RESULT: ${{ needs.build-ios.result }}
+          WEB_RESULT: ${{ needs.build-web.result }}
         run: |
-          APK="dist/android/RedefineNCM_KMP-${VERSION}-arm64-v8a.apk"
-          DEB=$(find dist/ -name "*.deb" 2>/dev/null | head -1)
-          MSI=$(find dist/ -name "*.msi" 2>/dev/null | head -1)
-          DMG=$(find dist/ -name "*.dmg" 2>/dev/null | head -1)
-          WEB=$(find dist/ -name "RedefineNCM_KMP-v*-web.zip" 2>/dev/null | head -1)
+          APK=$(find dist/android -name "RedefineNCM_KMP-${VERSION}-arm64-v8a.apk" 2>/dev/null | head -1)
 
-          test -n "$APK"
-          test -f "$APK"
-
-          # Returns ✅ if the file exists, ❌ otherwise
-          status() { [ -n "$1" ] && [ -f "$1" ] && printf '✅' || printf '❌'; }
+          # ✅ success, ⏭️ skipped (an earlier job failed), ❌ failed or cancelled.
+          status() {
+            case "$1" in
+              success) printf '✅' ;;
+              skipped) printf '⏭️' ;;
+              *) printf '❌' ;;
+            esac
+          }
 
           MSG=$(printf '%s' "$RAW_MSG" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
 
-          CAPTION=$(printf '<b>RedefineNCM KMP</b>  ·  <code>%s</code>\n\n📝 %s\n🔖 <code>%s</code>  ·  <code>%s</code>  ·  +%s commits\n\n──────────────────\n🤖 Android  %s  ARM64 APK (signed, R8-minified)\n🐧 Linux    %s  .deb\n🪟 Windows  %s  .msi\n🍎 macOS    %s  .dmg\n🌐 Web      %s  .zip\n\n<i>其他 Android 架构、桌面端与 Web 产物见 CI artifacts。</i>' \
+          CAPTION=$(printf '<b>RedefineNCM KMP</b>  ·  <code>%s</code>\n\n📝 %s\n🔖 <code>%s</code>  ·  <code>%s</code>  ·  +%s commits\n\n──────────────────\n🧪 Tests    %s\n🤖 Android  %s  build  %s  signed APKs (4 ABIs)\n🐧 Linux    %s  .deb (amd64)\n🪟 Windows  %s  .msi (x64)\n🍎 macOS    %s  .dmg (arm64 + x64)\n📱 iOS      %s  framework + app\n🌐 Web      %s  .zip\n\n<i>其他 Android 架构、桌面端与 Web 产物见 CI artifacts。</i>' \
             "$REF" "$MSG" "$VERSION" "$SHA" "$COUNT" \
-            "$(status "$APK")" "$(status "$DEB")" "$(status "$MSI")" "$(status "$DMG")" "$(status "$WEB")")
+            "$(status "$TEST_RESULT")" "$(status "$ANDROID_RESULT")" "$(status "$SIGN_RESULT")" \
+            "$(status "$LINUX_RESULT")" "$(status "$WINDOWS_RESULT")" "$(status "$MACOS_RESULT")" \
+            "$(status "$IOS_RESULT")" "$(status "$WEB_RESULT")")
 
           API="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}"
 
@@ -668,9 +713,32 @@ jobs:
         with:
           # Symbol maps all contain mapping.txt; keep them as separate CI artifacts.
           # Verification APKs and packaging logs are not release packages either.
-          pattern: '{android-apk-release-minified-signed-*,web-wasm-distribution,desktop-linux-deb,desktop-windows-msi,desktop-macos-dmg}'
+          pattern: '{android-apk-release-minified-signed-*,web-wasm-distribution,desktop-linux-deb,desktop-windows-msi,desktop-macos-*-dmg}'
           path: dist/
           merge-multiple: true
+
+      - name: Download symbol maps
+        # Every map is called mapping.txt, so each goes to its own directory. They are kept with
+        # the release: as workflow artifacts they expired after 90 days while the obfuscated
+        # packages stayed downloadable, and a stack trace from those could no longer be read.
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: symbol-map-*
+          path: symbol-maps/
+
+      - name: Name symbol maps for the release
+        env:
+          VERSION: ${{ needs.test.outputs.app_version }}
+        run: |
+          set -euo pipefail
+          count=0
+          for map in symbol-maps/*/mapping.txt; do
+            platform=$(basename "$(dirname "$map")")
+            platform=${platform#symbol-map-}
+            cp "$map" "dist/RedefineNCM_KMP-${VERSION}-${platform}-mapping.txt"
+            count=$((count + 1))
+          done
+          test "$count" -gt 0
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
@@ -692,10 +760,18 @@ jobs:
             | Android ARM32 | `RedefineNCM_KMP-${{ needs.test.outputs.app_version }}-armeabi-v7a.apk` (signed, R8-minified) |
             | Android x86 | `RedefineNCM_KMP-${{ needs.test.outputs.app_version }}-x86.apk` (signed, R8-minified) |
             | Android x86_64 | `RedefineNCM_KMP-${{ needs.test.outputs.app_version }}-x86_64.apk` (signed, R8-minified) |
-            | Linux | `RedefineNCM_KMP-${{ needs.test.outputs.app_version }}.deb` |
-            | Windows | `RedefineNCM_KMP-${{ needs.test.outputs.app_version }}.msi` |
-            | macOS | `RedefineNCM_KMP-${{ needs.test.outputs.app_version }}.dmg` |
+            | Linux (x86_64 / amd64) | `RedefineNCM_KMP-${{ needs.test.outputs.app_version }}-linux-amd64.deb` |
+            | Windows (x64) | `RedefineNCM_KMP-${{ needs.test.outputs.app_version }}-windows-x64.msi` |
+            | macOS (Apple silicon) | `RedefineNCM_KMP-${{ needs.test.outputs.app_version }}-macos-arm64.dmg` |
+            | macOS (Intel) | `RedefineNCM_KMP-${{ needs.test.outputs.app_version }}-macos-x64.dmg` |
             | Web | `RedefineNCM_KMP-${{ needs.test.outputs.app_version }}-web.zip` |
+
+            The desktop packages are not signed or notarized. macOS: open the app once, then
+            System Settings → Privacy & Security → Open Anyway. Windows: on the SmartScreen
+            prompt choose More info → Run anyway.
+
+            The `*-mapping.txt` files map the renamed classes in a release build's stack trace
+            (from the Android app or a desktop log) back to the source.
 
             Licensed under AGPL-3.0-only. Complete source: [${{ github.ref_name }}](https://github.com/${{ github.repository }}/tree/${{ github.ref_name }}), with the `AMLL_Jetpack_Compose` submodule at the commit it pins.
           draft: false

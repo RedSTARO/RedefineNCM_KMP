@@ -622,7 +622,14 @@ Platform mapping:
 - Shared runtime (Android/iOS/Desktop/Web): generated common `BuildInfo.VERSION_NAME` is the full
   product version. It also exposes the tag components, build number, and native package adapter;
   the standard Web distribution additionally carries the same data in its generated `version.json`.
-- Desktop DMG/MSI/DEB: CI artifact filenames use the full product version. Their internal
+- Desktop DMG/MSI/DEB: CI artifact filenames use the full product version and name the
+  architecture each package runs on, because each bundles its build host's runtime, Skiko and
+  FFmpeg natives: `-macos-arm64.dmg` (macos-latest), `-macos-x64.dmg` (macos-15-intel, added
+  2026-10-21), `-windows-x64.msi` and `-linux-amd64.deb`. The packages bundle the JDK 21 that CI's
+  setup-java installs (`DESKTOP_RUNTIME_JAVA_HOME`), not the Gradle daemon's pinned Corretto, and
+  CI checks the packaged runtime's version and modules (`scripts/check_packaged_runtime.sh`). The
+  `.deb` installs an application-menu entry. They are not signed or notarized; the release notes
+  say how to open them. Their internal
   `packageVersion` / `msiPackageVersion` use
   `<base major + 1>.<base minor>.<commit count + base patch>`. The positive major fixes the macOS
   `CFBundleVersion` constraint and reserves package major 1 above the historical `1.0.0` installer;
@@ -1281,8 +1288,10 @@ xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug 
 
 Release builds rename their symbols. R8 writes `androidApp/build/outputs/mapping/release/mapping.txt`
 and the desktop ProGuard pass writes `desktopApp/build/proguard/mapping.txt` (it keeps line numbers);
-CI uploads both as `symbol-map-*` artifacts beside the packages. A stack trace from an installed
-build is readable only with the map of that exact build.
+CI uploads both as `symbol-map-*` artifacts beside the packages, and a tag's release attaches them
+as `RedefineNCM_KMP-<version>-<platform>-mapping.txt` (decided 2026-10-21): workflow artifacts
+expire after 90 days while the packages stay downloadable. A stack trace from an installed build is
+readable only with the map of that exact build.
 
 The Web production distribution is emitted at
 `shared/build/dist/wasmJs/productionExecutable/`. Deploy it as a static site with the correct

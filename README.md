@@ -77,8 +77,8 @@ cd AMLL_Jetpack_Compose && ./gradlew :amll-compose:jvmTest
 ./gradlew :shared:wasmJsBrowserTest
 ```
 
-CI 验证 TTML → 公共歌词模型 → Compose 渲染字段链路，并校验应用内许可证资源与仓库
-声明一致。宿主侧映射见
+CI 运行子模块自己的解析器与引擎测试（`:AMLL_Jetpack_Compose:amll-compose:jvmTest`），验证
+TTML → 公共歌词模型 → Compose 渲染字段链路，并校验应用内许可证资源与仓库声明一致。宿主侧映射见
 [`docs/AMLL_NATIVE_TRANSLATION.md`](docs/AMLL_NATIVE_TRANSLATION.md)；歌词引擎的逐符号
 映射与平台 API 边界以子模块 `AMLL_Jetpack_Compose/docs/AMLL_NATIVE_TRANSLATION.md` 为准。
 
@@ -163,5 +163,13 @@ Web 目标用 `HTMLAudioElement` 播放，由 Media Session 提供系统媒体�
 
 推送 `v<major>.<minor>.<patch>` 形式的标签后，CI 构建全部平台并自动创建 GitHub Release。
 每个 Release 的完整源代码就是该标签对应的提交，加上它固定的 `AMLL_Jetpack_Compose` 子模块提交。
+
+桌面安装包各自带着构建机的 Java 运行时与原生库，只能在对应的系统与架构上运行：
+`-macos-arm64.dmg`（Apple 芯片）、`-macos-x64.dmg`（Intel Mac）、`-windows-x64.msi`、
+`-linux-amd64.deb`。安装包没有签名或公证：macOS 第一次打开被拦下后，到「系统设置 → 隐私与安全性」
+点「仍要打开」；Windows 的 SmartScreen 提示里选「更多信息 → 仍要运行」。
+
+Release 还附带各平台的 `*-mapping.txt`：发布版的类名经过混淆，Android 崩溃或桌面日志里的调用栈
+要用同一版本的映射文件才能还原。
 
 详细架构、行为约束和当前差异见 `AGENTS.md`，迁移进度见 `MIGRATION_PROGRESS.md`。
