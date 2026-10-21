@@ -462,6 +462,7 @@ private suspend fun copyWithProgress(
 ) {
     val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
     var downloadedBytes = initialBytes
+    var reportedBytes = initialBytes
     onProgress(downloadedBytes, totalBytes)
     while (true) {
         coroutineContext.ensureActive()
@@ -469,10 +470,19 @@ private suspend fun copyWithProgress(
         if (read < 0) break
         output.write(buffer, 0, read)
         downloadedBytes += read
-        onProgress(downloadedBytes, totalBytes)
+        // Every 8 KiB read replaced the task list, and each replacement redrew the Downloads page
+        // and the service's notification: hundreds of times a second on a fast connection.
+        if (downloadedBytes - reportedBytes >= PROGRESS_REPORT_BYTES) {
+            onProgress(downloadedBytes, totalBytes)
+            reportedBytes = downloadedBytes
+        }
     }
+    if (downloadedBytes != reportedBytes) onProgress(downloadedBytes, totalBytes)
     output.flush()
 }
+
+/** How much is read between two progress reports. */
+private const val PROGRESS_REPORT_BYTES = 256L * 1024L
 
 private suspend fun copyStream(input: InputStream, output: OutputStream) {
     val buffer = ByteArray(DEFAULT_BUFFER_SIZE)

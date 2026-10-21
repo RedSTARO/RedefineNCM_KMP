@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.SystemClock
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -41,6 +42,10 @@ class AndroidDownloadService : Service() {
     /** The tasks this run of the service has worked on; see [tasksOfRun]. */
     private val runTaskIds = mutableSetOf<Long>()
     private var emptyStopJob: Job? = null
+
+    /** What the foreground notification last showed, less the progress, and when; see [promoteThrottled]. */
+    private var postedShape: Any? = null
+    private var postedAtMs = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -124,7 +129,7 @@ class AndroidDownloadService : Service() {
         emptyStopJob?.cancel()
         val statistics = analyzeDownloadTasks(tasksOfRun(tasks, runTaskIds))
         if (statistics.firstActiveTask != null) {
-            promoteToForeground(statistics)
+            promoteThrottled(statistics)
         } else {
             stopAfterPersisting(tasks, removeNotification = false)
         }
@@ -162,10 +167,33 @@ class AndroidDownloadService : Service() {
         if (removeNotification || reportable == 0) {
             removeNotificationAndStop()
         } else {
+            // The ongoing notification goes first and the summary is a new, dismissible one.
+            // Posted over the ongoing one and then detached, a dropped update left "Downloading"
+            // with Pause and Cancel on screen, which before Android 14 cannot be swiped away.
+            if (isForeground) {
+                stopForegroundRemovingNotification()
+                isForeground = false
+            }
             postRegularNotification(statistics)
-            detachForeground()
             stopSelf()
         }
+    }
+
+    /**
+     * The notification follows a status change at once, and progress at most once a second.
+     * Rebuilding and re-posting it for every progress step made binder calls on the main thread
+     * many times a second, and the system drops updates beyond about five a second, which could
+     * drop the last one.
+     */
+    private fun promoteThrottled(statistics: DownloadTaskStatistics) {
+        val shape = statistics.copy(
+            firstActiveTask = statistics.firstActiveTask?.copy(progressBytes = 0L),
+        )
+        val nowMs = SystemClock.elapsedRealtime()
+        if (shape == postedShape && nowMs - postedAtMs < PROGRESS_NOTIFICATION_INTERVAL_MS) return
+        postedShape = shape
+        postedAtMs = nowMs
+        promoteToForeground(statistics)
     }
 
     private fun promoteToForeground(statistics: DownloadTaskStatistics) {
@@ -312,17 +340,6 @@ class AndroidDownloadService : Service() {
         stopSelf()
     }
 
-    private fun detachForeground() {
-        if (!isForeground) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_DETACH)
-        } else {
-            @Suppress("DEPRECATION")
-            stopForeground(false)
-        }
-        isForeground = false
-    }
-
     private fun stopForegroundRemovingNotification() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)
@@ -379,3 +396,6 @@ class AndroidDownloadService : Service() {
         private const val PERSISTENCE_RETRY_DELAY_MS = 2_000L
     }
 }
+
+/** The least time between two progress updates of the download notification. */
+private const val PROGRESS_NOTIFICATION_INTERVAL_MS = 1_000L

@@ -1,7 +1,9 @@
 package com.leejlredstar.redefinencm.kmp.util
 
+import android.app.RecoverableSecurityException
 import android.content.ContentUris
 import android.content.Context
+import android.content.IntentSender
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -211,12 +213,14 @@ actual suspend fun deleteDownloadedSongFile(songId: Long): Boolean {
     var deleted = false
     val context = runCatching { KoinPlatform.getKoin().get<Context>() }.getOrNull()
     if (context != null) {
+        val refused = RefusedDeletions()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             deleted = deleteFromMediaCollection(
                 context = context,
                 collectionUri = MediaStore.Downloads.EXTERNAL_CONTENT_URI,
                 songId = songId,
                 canFilterRelativePath = true,
+                refused = refused,
             ) || deleted
         }
         deleted = deleteFromMediaCollection(
@@ -224,9 +228,33 @@ actual suspend fun deleteDownloadedSongFile(songId: Long): Boolean {
             collectionUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
             songId = songId,
             canFilterRelativePath = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q,
+            refused = refused,
         ) || deleted
+        refused.consentRequest(context)?.let { sender ->
+            MediaDeletionConsentRequests.add(MediaDeletionRequest(songId, sender))
+        }
     }
     return deleteLegacyDownloadedSong(songId) || deleted
+}
+
+/**
+ * Files the system would not delete for this install: ones an earlier install of the app saved
+ * (after an uninstall, or on another profile) belong to no app, and Android 10 and later let the
+ * user alone remove them. Everything else failed to delete for its own reasons.
+ */
+private class RefusedDeletions {
+    val uris = mutableListOf<Uri>()
+
+    /** Android 10 hands the confirmation over with the refusal, one file at a time. */
+    var recoverable: IntentSender? = null
+
+    /** The system's confirmation for all of them, or null when there is nothing to confirm. */
+    fun consentRequest(context: Context): IntentSender? = when {
+        uris.isEmpty() -> null
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ->
+            runCatching { MediaStore.createDeleteRequest(context.contentResolver, uris).intentSender }.getOrNull()
+        else -> recoverable
+    }
 }
 
 private fun deleteFromMediaCollection(
@@ -234,13 +262,26 @@ private fun deleteFromMediaCollection(
     collectionUri: Uri,
     songId: Long,
     canFilterRelativePath: Boolean,
+    refused: RefusedDeletions,
 ): Boolean = runCatching {
     var deleted = false
     queryMediaCollection(context, collectionUri, songId, canFilterRelativePath, validateRows = false)
         .values
         .mapNotNull { it.uri }
-        .forEach { uri ->
-            deleted = context.contentResolver.delete(Uri.parse(uri), null, null) > 0 || deleted
+        .forEach { uriString ->
+            val uri = Uri.parse(uriString)
+            try {
+                deleted = context.contentResolver.delete(uri, null, null) > 0 || deleted
+            } catch (refusal: SecurityException) {
+                refused.uris += uri
+                if (
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                    refusal is RecoverableSecurityException &&
+                    refused.recoverable == null
+                ) {
+                    refused.recoverable = refusal.userAction.actionIntent.intentSender
+                }
+            }
         }
     deleted
 }.getOrDefault(false)

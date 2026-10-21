@@ -34,6 +34,13 @@ expect suspend fun scanDownloadedSongs(): DownloadScanResult
 expect suspend fun deleteDownloadedSongFile(songId: Long): Boolean
 
 /**
+ * Where a platform asks the user to confirm deleting downloads it holds for another install of
+ * the app; [onConfirmed] runs for each song the user let go. Placed on the Downloads page.
+ */
+@androidx.compose.runtime.Composable
+expect fun MediaDeletionConsentHost(onConfirmed: (songId: Long) -> Unit)
+
+/**
  * Whether downloads are kept where the user cannot open them (the browser's private storage),
  * so the download page offers [exportDownloadedSong] to save a copy out.
  */

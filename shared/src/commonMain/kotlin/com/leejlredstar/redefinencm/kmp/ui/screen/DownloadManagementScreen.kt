@@ -80,6 +80,7 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
+import com.leejlredstar.redefinencm.kmp.util.MediaDeletionConsentHost
 import com.leejlredstar.redefinencm.kmp.util.downloadsNeedExport
 import com.leejlredstar.redefinencm.kmp.util.exportDownloadedSong
 import kotlinx.coroutines.launch
@@ -158,6 +159,9 @@ fun DownloadManagementScreen(
     LaunchedEffect(downloadManager) {
         downloadManager.syncWithLocalLibrary()
     }
+    // Files an earlier install saved are deleted by the system once the user confirms; the row
+    // then goes the ordinary way, finding the file gone.
+    MediaDeletionConsentHost { songId -> downloadManager.deleteDownloadedSong(songId) }
 
     val counts = remember(tasks) {
         DownloadFilter.entries.associateWith { f -> tasks.count { f.matches(it) } }
