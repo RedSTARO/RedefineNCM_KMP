@@ -12,8 +12,8 @@ import io.ktor.client.engine.darwin.Darwin
 import org.koin.dsl.module
 
 actual fun platformModule() = module {
-    // Ktor HttpClient (Darwin engine). Cookie is read fresh per request, so QR login takes
-    // effect without relaunch; only a server (base URL) change still needs a relaunch.
+    // Native NetEase protocol over Darwin/NSURLSession. No JS engine or server address;
+    // the request credential snapshot still follows login/account changes without relaunch.
     single<HttpClient> { createNcmHttpClient(get(), Darwin) }
     single { ExternalHttpClientFactory.create(Darwin) }
 

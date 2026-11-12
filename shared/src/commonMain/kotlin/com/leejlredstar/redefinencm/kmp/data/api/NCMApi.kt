@@ -161,8 +161,8 @@ private fun HttpRequestBuilder.appendCredentialCookie(credentialCookie: String?)
 }
 
 /**
- * NeteaseCloudMusicApi service interface implemented via Ktor.
- * Ported from the original Retrofit NCMApi with the same endpoint structure.
+ * Stable NetEase API facade, preserving the original service DTOs and method structure.
+ * Native targets dispatch in process to the Kotlin protocol client; Web uses an HTTP API server.
  */
 class NCMApi(private val client: HttpClient) {
 

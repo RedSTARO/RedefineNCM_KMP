@@ -5,6 +5,47 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Sync
 import org.gradle.api.tasks.TaskAction
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import org.jetbrains.compose.desktop.application.tasks.AbstractProguardTask
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipOutputStream
+
+/** Shading changes every signed digest: never publish upstream signatures on the merged JAR. */
+object MergedJarSignatures {
+    fun removeStaleMetadata(directory: File) {
+        directory.listFiles { file -> file.extension.equals("jar", ignoreCase = true) }.orEmpty().forEach { jar ->
+            ZipFile(jar).use { source ->
+                fun isSignature(name: String): Boolean {
+                    val upper = name.uppercase()
+                    if (!upper.startsWith("META-INF/")) return false
+                    val leaf = upper.removePrefix("META-INF/")
+                    return '/' !in leaf && (leaf.endsWith(".SF") || leaf.endsWith(".RSA") ||
+                        leaf.endsWith(".DSA") || leaf.endsWith(".EC") || leaf.startsWith("SIG-"))
+                }
+                if (source.entries().asSequence().none { isSignature(it.name) }) return@forEach
+                val temporary = Files.createTempFile(directory.toPath(), "unsigned-", ".tmp")
+                try {
+                    ZipOutputStream(Files.newOutputStream(temporary)).use { output ->
+                        source.entries().asSequence().filterNot { isSignature(it.name) }.forEach { entry ->
+                            val copy = ZipEntry(entry.name).apply { time = entry.time }
+                            output.putNextEntry(copy)
+                            if (!entry.isDirectory) source.getInputStream(entry).use { it.copyTo(output) }
+                            output.closeEntry()
+                        }
+                    }
+                    // Windows cannot replace a still-open ZIP. Close it before replacing the output.
+                    source.close()
+                    Files.move(temporary, jar.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                } finally {
+                    Files.deleteIfExists(temporary)
+                }
+            }
+        }
+    }
+}
 
 abstract class VerifyDesktopNativePackagingHost : DefaultTask() {
     @get:Input
@@ -114,6 +155,8 @@ tasks.configureEach {
     }
     if (name == "proguardReleaseJars") {
         dependsOn(writeDesktopProguardMappingConfig)
+        val output = (this as AbstractProguardTask).destinationDir
+        doLast { MergedJarSignatures.removeStaleMetadata(output.get().asFile) }
     }
     if (name.startsWith("package") || name.contains("Distributable")) {
         dependsOn(verifyDesktopNativePackagingHost)

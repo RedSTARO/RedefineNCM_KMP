@@ -75,6 +75,11 @@
 -keep class org.sqlite.BusyHandler { *; }
 -keep enum org.sqlite.** { *; }
 
+# Bouncy Castle's explicit JCA provider still resolves algorithm classes by their mapping names.
+# Preserve that reflection boundary for native NetEase crypto in the optimized release JAR too.
+-keep class org.bouncycastle.jcajce.provider.** { *; }
+-keep class org.bouncycastle.jce.provider.** { *; }
+
 # Providers are constructed by ServiceLoader and therefore have no direct bytecode call sites.
 -keep class coil3.util.FetcherServiceLoaderTarget { *; }
 -keep class coil3.network.ktor3.internal.KtorNetworkFetcherServiceLoaderTarget { *; }

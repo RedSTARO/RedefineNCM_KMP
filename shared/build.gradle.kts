@@ -585,6 +585,8 @@ kotlin {
             implementation(libs.androidx.core.ktx)
             // Android Ktor engine + DataStore-backed PlatformSettings actual
             implementation(libs.ktor.client.okhttp)
+            implementation(libs.cryptography.provider.jdk)
+            implementation(libs.bouncycastle)
             implementation(libs.androidx.datastore.preferences)
             // rememberLauncherForActivityResult + LocalContext for file import/export
             implementation(libs.androidx.activity.compose)
@@ -618,6 +620,8 @@ kotlin {
             implementation(libs.ktor.client.logging)
             implementation(libs.ktor.serialization.kotlinx.json)
             implementation(libs.kotlinx.serialization.json)
+            implementation(libs.cryptography.core)
+            implementation(libs.qrcode)
             // Coroutines (used directly across viewmodels, player, repository)
             implementation(libs.kotlinx.coroutines.core)
             // DI
@@ -641,6 +645,7 @@ kotlin {
             implementation(libs.kotlinx.coroutines.test)
         }
         iosMain.dependencies {
+            implementation(libs.cryptography.provider.openssl)
             implementation(libs.ktor.client.darwin)
             implementation(libs.sqldelight.native.driver)
             // Back navigation from the system edge-swipe gesture; see BackHandler.ios.kt.
@@ -651,6 +656,8 @@ kotlin {
                 // OkHttp 而非 CIO：目标服务器 DNS 有黑洞 A 记录，CIO 不做多地址回退会连环
                 // ConnectTimeout；OkHttp 的 RouteSelector 会自动换下一个 IP（与 Android 端一致）
                 implementation(libs.ktor.client.okhttp)
+                implementation(libs.cryptography.provider.jdk)
+                implementation(libs.bouncycastle)
                 // Dispatchers.Main for JVM (needed by DesktopFloatingWindowController + jvmTest)
                 implementation(libs.kotlinx.coroutinesSwing)
                 // Back navigation from Esc and the mouse back button; see BackHandler.jvm.kt.

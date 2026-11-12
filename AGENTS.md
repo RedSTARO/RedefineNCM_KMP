@@ -41,10 +41,18 @@ Targets, in priority order:
 | **Desktop / JVM** | P0 | **Floating always-on-top desktop-lyrics window** + **Windows SMTC** (System Media Transport Controls); MPRIS on Linux, MPNowPlayingInfoCenter on macOS |
 | **Web / WASM** | P3 (enabled) | Browser audio + Media Session, OPFS offline downloads, in-page/system lyric surface |
 
-The app talks to a self-hosted
-[NeteaseCloudMusicApi](https://github.com/Binaryify/NeteaseCloudMusicApi)-style backend
-(base URL is user-configurable in Settings). All API communication is JSON over HTTP,
-typically against a server on the same LAN or localhost (so cleartext HTTP must be allowed).
+**NetEase transport decision (2026-11-13, supersedes the older server assumptions below):**
+Android, iOS and Desktop/JVM use a Kotlin/KMP protocol port of
+[NeteaseCloudMusicApiEnhanced/api-enhanced](https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced)
+at `4a7d557326d16d2f1e5172ee69c9471eb3a50173`, through the existing Ktor platform engines. No Node,
+JavaScript engine, WebView, HTTP listener or separate NetEase API server is used on native targets.
+`NativeNcmEngine` is an in-process adapter preserving `NCMApi`'s methods/DTOs; its
+`native-ncm.invalid` address is a routing label and is never resolved over the network. Native
+accounts have no server editor and ignore (but do not delete) the legacy `server` preference.
+Web/WASM alone retains the configurable NetEase HTTP API server because of browser CORS and
+forbidden-header restrictions. QQ Music still uses its separate gateway, including cleartext
+LAN/localhost access. The native scope is the app's endpoint allowlist, not every upstream route.
+Implementation, security boundaries and verification instructions: [docs/NATIVE_NETEASE_API.md](docs/NATIVE_NETEASE_API.md).
 
 ### Active goals driving current work
 

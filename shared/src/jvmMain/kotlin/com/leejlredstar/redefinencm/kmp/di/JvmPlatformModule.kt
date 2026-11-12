@@ -15,12 +15,17 @@ import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.engine.config
 import org.koin.dsl.module
 
 actual fun platformModule() = module {
-    // Ktor HttpClient (OkHttp engine) configured with base URL + realIP + cookie from settings.
-    // OkHttp（而非 CIO）：服务器 DNS 含黑洞 A 记录时自动回退下一个 IP。
-    single<HttpClient> { createNcmHttpClient(get(), OkHttp) }
+    // Native NetEase protocol over Ktor/OkHttp; no separate API server or JS runtime.
+    // Disable transparent connection retries: an ambiguous PLV/PLD write must not be replayed.
+    single<HttpClient> {
+        createNcmHttpClient(get(), OkHttp.config {
+            config { retryOnConnectionFailure(false) }
+        })
+    }
     single { ExternalHttpClientFactory.create(OkHttp) }
 
     // PlatformSettings backed by java.util.prefs

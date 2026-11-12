@@ -228,6 +228,7 @@
 
     <!-- di/Modules.kt -->
     <string name="neteaseLoginIntro">RedefineNCMはサードパーティ製のNetEase Cloud Musicクライアントです。ログインすると、プレイリスト、毎日のおすすめ、お気に入りの曲を利用できます。ログインしなくても検索と再生はできます。</string>
+    <string name="neteaseNativeLoginIntro">RedefineNCMはNetEase Cloud Musicに直接接続するサードパーティ製クライアントです。サーバーの設置は不要です。ログインすると、プレイリスト、毎日のおすすめ、お気に入りの曲を利用できます。ログインしなくても検索と再生はできます。</string>
     <string name="neteaseAccount">NetEase Cloud Musicアカウント</string>
     <string name="neteaseSignedOutHint">ログインすると、プレイリスト、毎日のおすすめ、お気に入りの曲を表示できます</string>
     <string name="neteaseSignOutWarning">ログアウトすると、「マイページ」、毎日のおすすめ、お気に入りなどの機能は使えなくなります。ダウンロード済みの曲は残ります。</string>

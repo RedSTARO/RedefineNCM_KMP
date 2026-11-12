@@ -228,6 +228,7 @@
 
     <!-- di/Modules.kt -->
     <string name="neteaseLoginIntro">RedefineNCM 是第三方网易云音乐客户端。登录后可以使用你的歌单、每日推荐和喜欢的音乐；不登录也可以搜索和播放。</string>
+    <string name="neteaseNativeLoginIntro">RedefineNCM 是第三方网易云音乐客户端，直接连接网易云，无需部署服务器。登录后可以使用你的歌单、每日推荐和喜欢的音乐；不登录也可以搜索和播放。</string>
     <string name="neteaseAccount">网易云音乐账号</string>
     <string name="neteaseSignedOutHint">登录后可以查看歌单、每日推荐和喜欢的音乐</string>
     <string name="neteaseSignOutWarning">退出后「我的」、每日推荐和喜欢等功能将不可用，已下载的歌曲会保留。</string>

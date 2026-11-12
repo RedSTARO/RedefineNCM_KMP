@@ -9,6 +9,17 @@ RedefineNCM 的 Kotlin Multiplatform 版本。Android、iOS、Desktop/JVM 与 We
 - `androidApp`、`desktopApp`、`iosApp`：平台入口与原生外壳。Web 入口和静态资源位于
   `shared/src/wasmJsMain`。
 
+## 网易云无需单独部署服务器
+
+Android、iOS 和 Desktop/JVM 使用 Kotlin/KMP 原生协议层直接连接网易云。无需安装 Node.js、
+配置服务器或在应用内启动本地 HTTP 服务；原有账号 Cookie、缓存、歌单与下载数据保留。
+Web/WASM 仍需兼容的 API 服务器，因为浏览器限制跨域及 Cookie 等请求头；QQ Music 的
+服务器依赖不在此次迁移范围内。
+
+实现按 [api-enhanced 的固定提交](https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced/tree/4a7d557326d16d2f1e5172ee69c9471eb3a50173)
+移植，只覆盖本应用使用的接口。协议、密码库、账号隔离及测试边界见
+[原生协议说明](docs/NATIVE_NETEASE_API.md)。网易云协议变更后，需要更新应用才能获得修复。
+
 ## 构建与运行
 
 ```sh
@@ -89,13 +100,14 @@ AMLL 包声明为 `AGPL-3.0-only`，上游版本和源码位置见
 
 首页「音乐工具」里有听歌识曲入口。Android、iOS、Desktop/JVM 和 Web 的录音链路都用
 Kotlin 源码实现；共用代码把每次三秒的录音转换为 8 kHz 单声道 PCM，生成音频指纹后调用
-当前服务器的 `POST /audio/match?duration=3&audioFP=...`。Web 端通过 Kotlin/Wasm typed
+原生网易云识曲接口；Web 使用当前服务器的 `POST /audio/match?duration=3&audioFP=...`。Web 端通过 Kotlin/Wasm typed
 `external` 声明调用 `MediaRecorder` 和 Web Audio，识曲部分没有 JS/TS 实现。指纹算法的来源和
 MIT 许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 ## 播放上报
 
-登录后真正开始播放时，共用协调器会为每次选曲建立独立会话：
+登录后真正开始播放时，共用协调器会为每次选曲建立独立会话。以下路径是应用内保留的
+API 契约：原生端由进程内协议层转换为网易云请求，Web 才发送到 API 服务器。上报规则不变：
 
 - 稳定进入 `PLAYING` 后立即通过 `POST /weblog` 发送一次 `startplay`，让该曲进入账号的
   「最近播放」；暂停/恢复、拖动和 shuffle 不会重复发送；

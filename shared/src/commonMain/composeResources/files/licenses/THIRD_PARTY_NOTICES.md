@@ -259,3 +259,196 @@ file for them is reproduced as
 [`LICENSES/LiteRT-2.2.0-THIRD_PARTY_NOTICE.txt`](LICENSES/LiteRT-2.2.0-THIRD_PARTY_NOTICE.txt).
 
 Copyright 2025 Google LLC.
+
+## Native NetEase protocol adaptation
+
+The Android, iOS and Desktop/JVM NetEase client adapts endpoint mappings, parameter
+encoding, response shaping, login bootstrap and encrypted request envelopes from
+[NeteaseCloudMusicApiEnhanced/api-enhanced, revision
+`4a7d557326d16d2f1e5172ee69c9471eb3a50173`](https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced/tree/4a7d557326d16d2f1e5172ee69c9471eb3a50173).
+The source references are its `module/` route files and `util/request.js`,
+`util/option.js`, `util/crypto.js`, `util/xeapiKey.js` and `util/config.json`.
+These parts were adapted to Kotlin/KMP on 2026-11-13. Native targets do not ship
+or execute the upstream Node/JavaScript server or its npm dependencies.
+
+The upstream root license is MIT (`MIT`). Its complete text follows and is also
+preserved at
+[`LICENSES/NeteaseCloudMusicApiEnhanced-4a7d557-MIT.txt`](LICENSES/NeteaseCloudMusicApiEnhanced-4a7d557-MIT.txt),
+from the [pinned original](https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced/blob/4a7d557326d16d2f1e5172ee69c9471eb3a50173/LICENSE).
+The NCBL reporting code has an additional provenance described separately below.
+
+The MIT License (MIT)
+
+Copyright (c) 2013-2022 Binaryify
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+### NCBL playback reporting provenance
+
+The pinned upstream `util/ncbl.js` and `module/scrobble_v1.js` identify their
+source as [folltoshe/netease-report-listen-song](https://github.com/folltoshe/netease-report-listen-song).
+That project's author is folltoshe; its
+[`LICENSE` at revision `02ea43d7ffd4deb05eb4a48e824e9458b792ed0b`](https://github.com/folltoshe/netease-report-listen-song/blob/02ea43d7ffd4deb05eb4a48e824e9458b792ed0b/LICENSE)
+is the GNU Affero General Public License, version 3. The NCBL record layout,
+PLV/PLD payload construction and upload orchestration are adapted through the
+pinned api-enhanced source, not relicensed as MIT. They were modified for
+Kotlin/KMP on 2026-11-13 and are distributed here under AGPL version 3, consistent
+with the application's `AGPL-3.0-only` license. The full license is
+[`LICENSES/AGPL-3.0-only.txt`](LICENSES/AGPL-3.0-only.txt), also available in the app's
+license page. Cryptographic primitives are supplied by the libraries below,
+not by the upstream's handwritten JavaScript implementations.
+
+## QRCode-Kotlin
+
+Local NetEase login QR generation uses
+[`io.github.g0dkar:qrcode-kotlin` 4.5.0](https://github.com/g0dkar/qrcode-kotlin/tree/v4.5.0),
+under the MIT License (`MIT`). The complete
+[upstream license](https://github.com/g0dkar/qrcode-kotlin/blob/v4.5.0/LICENSE)
+is reproduced here and in
+[`LICENSES/QRCode-Kotlin-4.5.0-MIT.txt`](LICENSES/QRCode-Kotlin-4.5.0-MIT.txt).
+
+MIT License
+
+Copyright (c) 2021 Rafael Madureira Lins de Araújo
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+### QR Code Generator reference implementation
+
+QRCode-Kotlin identifies its encoder as a Kotlin adaptation of
+[Kazuhiko Arase's QR Code Generator](https://github.com/kazuhikoarase/qrcode-generator).
+The reference implementation's
+[MIT notice](https://github.com/kazuhikoarase/qrcode-generator/blob/83b7e8fe3fddd3b0368dbafd6ce56995bd25e3c8/LICENSE)
+is retained here and in
+[`LICENSES/QRCode-Generator-MIT.txt`](LICENSES/QRCode-Generator-MIT.txt).
+
+MIT License
+
+Copyright (c) 2009 Kazuhiko Arase
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## cryptography-kotlin
+
+Native protocol cryptography uses
+[whyoleg/cryptography-kotlin 0.6.0](https://github.com/whyoleg/cryptography-kotlin/tree/0.6.0):
+`dev.whyoleg.cryptography:cryptography-core`, the JDK provider on Android/Desktop,
+and `cryptography-provider-openssl3-prebuilt` on iOS, together with their
+supporting library modules. These Kotlin components are licensed under the
+Apache License 2.0 (`Apache-2.0`).
+
+Copyright (c) 2023-2026 Oleg Yukhnevich.
+
+The [upstream license](https://github.com/whyoleg/cryptography-kotlin/blob/0.6.0/LICENSE)
+is the full Apache License 2.0, already bundled at
+[`LICENSES/Apache-2.0.txt`](LICENSES/Apache-2.0.txt) and as an application resource.
+The separately bundled OpenSSL native library retains its own notice below.
+
+## Bouncy Castle
+
+Android and Desktop/JVM protocol primitives also use
+[`org.bouncycastle:bcprov-jdk18on` 1.87](https://github.com/bcgit/bc-java/tree/r1rv87),
+under the MIT License (`MIT`). The
+[release's original license](https://github.com/bcgit/bc-java/blob/r1rv87/LICENSE.html)
+is preserved verbatim at
+[`LICENSES/Bouncy-Castle-1.87-LICENSE.html`](LICENSES/Bouncy-Castle-1.87-LICENSE.html).
+Its complete text is reproduced below without the HTML markup so it is readable
+in the application's license page.
+
+MIT License
+
+Copyright (c) 2000-2026 The Legion of the Bouncy Castle Inc. (https://www.bouncycastle.org)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+and associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+## OpenSSL bundled by the iOS cryptography provider
+
+The iOS `cryptography-provider-openssl3-prebuilt` **0.6.0** artifact includes
+OpenSSL **3.6.0**, licensed under the Apache License 2.0 (`Apache-2.0`). This is
+not Apple's system TLS library, and it is not the separate
+`cryptography-provider-openssl3-prebuilt-nativebuilds` artifact.
+
+The [0.6.0 prebuilt-provider build](https://github.com/whyoleg/cryptography-kotlin/blob/0.6.0/cryptography-providers/openssl3/prebuilt/build.gradle.kts)
+selects `openssl.v3_6`; its
+[pinned build configuration](https://github.com/whyoleg/cryptography-kotlin/blob/0.6.0/build-logic/src/main/kotlin/ckbuild.use-openssl.gradle.kts)
+resolves the [whyoleg/openssl-builds 3.6.0 release](https://github.com/whyoleg/openssl-builds/releases/tag/3.6.0).
+The published iOS ARM64 cinterop archive contains `libcrypto.a` identifying itself
+as `OpenSSL 3.6.0 1 Oct 2025`; its SHA-256 is
+`28c4f52c65932c1a11ef0436a247e4e5a1699ce36feaa2034f69ce09167b4fd7`, matching the
+[published module metadata](https://repo.maven.apache.org/maven2/dev/whyoleg/cryptography/cryptography-provider-openssl3-prebuilt-iosarm64/0.6.0/cryptography-provider-openssl3-prebuilt-iosarm64-0.6.0.module).
+
+The [OpenSSL 3.6.0 source](https://github.com/openssl/openssl/tree/openssl-3.6.0)
+and the prebuilt release above provide its source and build recipe. The release's
+[original Apache-2.0 text](https://github.com/openssl/openssl/blob/openssl-3.6.0/LICENSE.txt)
+is preserved at [`LICENSES/OpenSSL-3.6.0-LICENSE.txt`](LICENSES/OpenSSL-3.6.0-LICENSE.txt);
+the complete Apache License 2.0 is also available in the app's license page.
+The [upstream README](https://github.com/openssl/openssl/blob/openssl-3.6.0/README.md)
+retains these copyright notices:
+
+Copyright (c) 1998-2025 The OpenSSL Project Authors
+
+Copyright (c) 1995-1998 Eric A. Young, Tim J. Hudson
+
+All rights reserved.

@@ -31,6 +31,10 @@ ffmpeg = "8.0.1-1.5.13"
 onnxruntimeJava = "1.24.3"
 onnxruntimeDirectml = "1.24.4"
 onnxruntimeWeb = "1.30.0"
+# Native NetEase protocol: audited primitives, not a JavaScript/Node runtime.
+cryptography = "0.6.0"
+bouncycastle = "1.87"
+qrcode = "4.5.0"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -80,6 +84,12 @@ ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "kto
 ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
 ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
 ktor-client-js = { module = "io.ktor:ktor-client-js", version.ref = "ktor" }
+# Native protocol primitives: explicit providers avoid mutating the global security provider list.
+cryptography-core = { module = "dev.whyoleg.cryptography:cryptography-core", version.ref = "cryptography" }
+cryptography-provider-jdk = { module = "dev.whyoleg.cryptography:cryptography-provider-jdk", version.ref = "cryptography" }
+cryptography-provider-openssl = { module = "dev.whyoleg.cryptography:cryptography-provider-openssl3-prebuilt", version.ref = "cryptography" }
+bouncycastle = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
+qrcode = { module = "io.github.g0dkar:qrcode-kotlin", version.ref = "qrcode" }
 # Koin (DI)
 koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
 koin-compose = { module = "io.insert-koin:koin-compose", version.ref = "koin" }

@@ -228,6 +228,7 @@
 
     <!-- di/Modules.kt -->
     <string name="neteaseLoginIntro">RedefineNCM is a third-party NetEase Cloud Music client. Sign in to use your playlists, Daily picks and liked songs. You can also search and play without signing in.</string>
+    <string name="neteaseNativeLoginIntro">RedefineNCM is a third-party client that connects directly to NetEase Cloud Music. No server setup is needed. Sign in to use your playlists, Daily picks and liked songs, or search and play without signing in.</string>
     <string name="neteaseAccount">NetEase Cloud Music account</string>
     <string name="neteaseSignedOutHint">Sign in to see your playlists, Daily picks and liked songs</string>
     <string name="neteaseSignOutWarning">After you sign out, “Me”, Daily picks, likes and similar features won't be available. Downloaded songs are kept.</string>

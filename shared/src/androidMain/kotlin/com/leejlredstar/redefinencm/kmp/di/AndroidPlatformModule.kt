@@ -15,14 +15,19 @@ import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.findDownloadedSongUri
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.engine.config
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 
 actual fun platformModule() = module {
-    // Ktor HttpClient (OkHttp engine) configured with base URL + realIP + cookie from settings.
-    single<HttpClient> { createNcmHttpClient(get(), OkHttp) }
+    // Native NetEase protocol over Ktor/OkHttp; no separate API server or JS runtime.
+    single<HttpClient> {
+        createNcmHttpClient(get(), OkHttp.config {
+            config { retryOnConnectionFailure(false) }
+        })
+    }
     single { ExternalHttpClientFactory.create(OkHttp) }
 
     // PlatformSettings backed by DataStore (needs the app Context provided via androidContext()).

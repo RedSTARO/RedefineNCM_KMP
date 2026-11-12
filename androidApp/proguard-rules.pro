@@ -49,6 +49,12 @@
 -dontwarn com.google.ai.edge.litert.**
 -dontwarn com.google.android.play.**
 
+# Bouncy Castle's JCA provider resolves algorithms by class-name strings from its mapping tables.
+# It is an app-owned provider instance (never installed globally); keep the reflection boundary so
+# release shrinking cannot silently remove X25519/AES/RSA implementations that debug tests exercise.
+-keep class org.bouncycastle.jcajce.provider.** { *; }
+-keep class org.bouncycastle.jce.provider.** { *; }
+
 # Preserve stack traces
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
