@@ -333,9 +333,15 @@ jobs:
           package=$(find desktopApp/build/compose/binaries/main-release/deb -name '*.deb' -print -quit)
           test -n "$package"
           test "$(dpkg-deb -f "$package" Version)" = "$NATIVE_PACKAGE_VERSION"
-          # jpackage registers an application-menu entry only when asked for a shortcut.
-          dpkg-deb -c "$package" | grep -q '\.desktop$'
-          runtime=desktopApp/build/compose/binaries/main-release/app/RedefineNCM/lib/runtime/release
+          # jpackage registers an application-menu entry only when asked for a shortcut. The
+          # listing goes to a file first: grep -q exits at the match, and with the pipe the
+          # still-writing tar dies of SIGPIPE and dpkg-deb reports it as a failed extraction.
+          dpkg-deb -c "$package" > "$RUNNER_TEMP/deb-contents.txt"
+          grep -q '\.desktop$' "$RUNNER_TEMP/deb-contents.txt"
+          # The deb is built straight from the jlink runtime image createRuntimeImage makes — only
+          # packageReleaseDmg also builds an app image under binaries/main-release/app, so that is
+          # not where to look here. This image is what jpackage copies into the package.
+          runtime=desktopApp/build/compose/tmp/main/runtime/release
           bash scripts/check_packaged_runtime.sh "$runtime" "$DESKTOP_RUNTIME_JAVA_VERSION"
           mv "$package" "$(dirname "$package")/RedefineNCM_KMP-${APP_VERSION}-linux-amd64.deb"
 
@@ -386,7 +392,10 @@ jobs:
           # The daemon holds lock files under ~/.gradle/caches, and the post-job cache save
           # then fails to archive them, so this job never kept its cache.
           ./gradlew --stop
-          bash scripts/check_packaged_runtime.sh desktopApp/build/compose/binaries/main-release/app/RedefineNCM/runtime/release "$env:DESKTOP_RUNTIME_JAVA_VERSION"
+          # The .msi is built straight from the jlink runtime image createRuntimeImage makes — only
+          # packageReleaseDmg also builds an app image under binaries/main-release/app, so that is
+          # not where to look here. This image is what jpackage copies into the package.
+          bash scripts/check_packaged_runtime.sh desktopApp/build/compose/tmp/main/runtime/release "$env:DESKTOP_RUNTIME_JAVA_VERSION"
           if ($LASTEXITCODE -ne 0) { throw "The packaged runtime is not the one set up for this job." }
           $package = Get-ChildItem -Path desktopApp/build/compose/binaries/main-release/msi -Filter *.msi | Select-Object -First 1
           if (-not $package) { throw "MSI package was not produced." }

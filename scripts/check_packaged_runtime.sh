@@ -15,16 +15,24 @@ if [ ! -f "$release_file" ]; then
 fi
 
 value_of() {
-    sed -n "s/^$1=\"\(.*\)\"\$/\1/p" "$release_file" | tr -d '\r'
+    # jlink writes <key>="<value>" per line, and on Windows the lines end CRLF; the \r has to go
+    # before the closing quote is matched, or every value reads as empty.
+    tr -d '\r' < "$release_file" | sed -n "s/^$1=\"\(.*\)\"\$/\1/p"
 }
 
 version=$(value_of JAVA_VERSION)
 modules=$(value_of MODULES)
 
-if [ "$version" != "$expected_version" ]; then
-    echo "The package bundles Java $version, not the $expected_version set up for this job" >&2
-    exit 1
-fi
+# A vendor's out-of-band patch release keeps a fourth component in the image's release file while
+# setup-java names the JDK without it (the macOS x64 Temurin there reads 21.0.12.1 for 21.0.12+101.0),
+# so the feature.interim.update triple is what has to match; another update still fails.
+case "$version" in
+    "$expected_version" | "$expected_version".*) ;;
+    *)
+        echo "The package bundles Java $version, not the $expected_version set up for this job" >&2
+        exit 1
+        ;;
+esac
 
 # jdk.accessibility is the Java Access Bridge: without it Windows screen readers find nothing.
 for module in java.desktop jdk.accessibility; do
