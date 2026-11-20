@@ -260,6 +260,8 @@ a slider dedicated to volume between the playback card and the action pill: phon
 volume to the hardware keys and the system panel, while the full-screen lyric page covers the
 desktop main window's volume strip. Clicking a lyric line seeks and nothing else; the island
 expands on a click or tap between lines, on keyboard input, and from its own collapsed bar.
+On Android, the lyrics and controls stay above the bottom system gesture and navigation insets,
+while the artwork remains edge to edge. A system-cancelled touch never seeks to a lyric line.
 Desktop's former 30-second timeout belonged to the in-page `#desktop-console`,
 which existed only because Compose could not draw above the WebView2 child HWND; it went with
 the page. `DesktopOverlayWindow` was that same workaround and is removed — desktop uses normal

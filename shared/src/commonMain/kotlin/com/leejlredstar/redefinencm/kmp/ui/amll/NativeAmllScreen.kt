@@ -14,11 +14,16 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeGestures
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,7 +44,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
@@ -156,20 +161,12 @@ fun NativeAmllScreen(
         .takeUnless { localArtworkActive }
     // Near-black under the bars whatever the theme: light icons.
     DeclareSystemBarBackground(dark = true)
-    BoxWithConstraints(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF0A0A0A))
             .semantics { contentDescription = strings.nowPlayingLyrics },
     ) {
-        val visualParameters = remember(maxWidth, maxHeight, reducedMotion) {
-            calculateAmllLyricVisualParameters(
-                viewportWidthDp = maxWidth.value,
-                viewportHeightDp = maxHeight.value,
-                reducedMotion = reducedMotion,
-            )
-        }
-
         AmllBackground(
             artworkUri = primaryArtworkUri,
             fallbackArtworkUri = fallbackArtworkUri,
@@ -193,63 +190,81 @@ fun NativeAmllScreen(
             },
         )
 
-        // Only a completed tap on unused background space reveals the controller. A raw press
-        // may become a lyric drag or trackpad gesture and must not expand the island.
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onTap = {
-                            controllerRevealRequest += 1
-                        },
-                    )
-                },
-        )
-
-        val untimedLyrics = lyricsBelongToCurrentMedia &&
-            lyricUiState.lyricCapabilityLevel == LyricCapabilityLevel.UNSYNCED &&
-            untimedLyricLines.isNotEmpty()
-        if (untimedLyrics) {
-            // Lyrics without timestamps have nothing to sync, so the synced viewport would draw
-            // nothing. The text itself is still worth reading.
-            UntimedLyrics(
-                lines = untimedLyricLines,
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else if (document.lines.isNotEmpty() && metadata != null) {
-            AmllLyricViewport(
-                document = document,
-                mediaId = metadata!!.id,
-                sampledPositionMs = currentPosition,
-                positionState = presentationPosition,
-                isPlaying = isPlaying,
-                parameters = visualParameters,
-                androidPresentation = platform.isAndroid,
-                onSeek = viewModel::onLyricLineClick,
-                onInteraction = { controllerRevealRequest += 1 },
-                modifier = Modifier.fillMaxSize(),
-            )
+        // The bottom gesture area can be taller than the visible navigation bar, especially
+        // with wide-screen taskbars. Keep the artwork edge to edge but leave that strip for Android.
+        val interactionInsets = if (platform.isAndroid) {
+            Modifier.windowInsetsPadding(
+                WindowInsets.navigationBars.union(WindowInsets.safeGestures).only(WindowInsetsSides.Bottom),
+            ).clipToBounds()
         } else {
-            LyricStateOverlay(
-                state = lyricUiState,
-                hasMedia = metadata != null,
-                isPlayerRestoring = playerStatusRestoreState is PlayerStatusRestoreState.Loading,
-                onRetry = viewModel::retryLyrics,
+            Modifier
+        }
+        BoxWithConstraints(Modifier.fillMaxSize().then(interactionInsets)) {
+            // Only a completed tap on unused background space reveals the controller. A raw press
+            // may become a lyric drag or trackpad gesture and must not expand the island.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = {
+                                controllerRevealRequest += 1
+                            },
+                        )
+                    },
+            )
+
+            val untimedLyrics = lyricsBelongToCurrentMedia &&
+                lyricUiState.lyricCapabilityLevel == LyricCapabilityLevel.UNSYNCED &&
+                untimedLyricLines.isNotEmpty()
+            if (untimedLyrics) {
+                // Lyrics without timestamps have nothing to sync, so the synced viewport would draw
+                // nothing. The text itself is still worth reading.
+                UntimedLyrics(
+                    lines = untimedLyricLines,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else if (document.lines.isNotEmpty() && metadata != null) {
+                val visualParameters = remember(maxWidth, maxHeight, reducedMotion) {
+                    calculateAmllLyricVisualParameters(
+                        viewportWidthDp = maxWidth.value,
+                        viewportHeightDp = maxHeight.value,
+                        reducedMotion = reducedMotion,
+                    )
+                }
+                AmllLyricViewport(
+                    document = document,
+                    mediaId = metadata!!.id,
+                    sampledPositionMs = currentPosition,
+                    positionState = presentationPosition,
+                    isPlaying = isPlaying,
+                    parameters = visualParameters,
+                    androidPresentation = platform.isAndroid,
+                    onSeek = viewModel::onLyricLineClick,
+                    onInteraction = { controllerRevealRequest += 1 },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                LyricStateOverlay(
+                    state = lyricUiState,
+                    hasMedia = metadata != null,
+                    isPlayerRestoring = playerStatusRestoreState is PlayerStatusRestoreState.Loading,
+                    onRetry = viewModel::retryLyrics,
+                )
+            }
+
+            AmllTopActions(
+                onBack = onBack,
+                modifier = Modifier.align(Alignment.TopStart),
+            )
+
+            AutoHideMiniPlayerController(
+                modifier = Modifier.fillMaxSize(),
+                autoHideDelayMillis = AmllControllerAutoHideMillis,
+                reducedMotion = reducedMotion,
+                externalRevealRequest = controllerRevealRequest,
             )
         }
-
-        AmllTopActions(
-            onBack = onBack,
-            modifier = Modifier.align(Alignment.TopStart),
-        )
-
-        AutoHideMiniPlayerController(
-            modifier = Modifier.fillMaxSize(),
-            autoHideDelayMillis = AmllControllerAutoHideMillis,
-            reducedMotion = reducedMotion,
-            externalRevealRequest = controllerRevealRequest,
-        )
     }
 
 }
