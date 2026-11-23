@@ -102,6 +102,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -130,7 +131,9 @@ import com.leejlredstar.redefinencm.kmp.ui.adaptive.CompactAppBarHeightThreshold
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.FoldSafeBrowseContent
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.LocalCompactAppBar
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.LocalSoftKeyboardVisible
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.androidMiniPlayerFabSlot
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.androidNavigationLayout
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.rememberAndroidNavigationFade
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberNowPlayingUiState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
@@ -715,9 +718,11 @@ private fun AppContent(
                     val dockPlayerLabel = currentMedia?.takeIf { compactDockVisible }?.let { strings.openPlayerFor(it.title) }
                     // The compact dock owns the player entry; only roomier layouts get a FAB.
                     val showDesktopBar = showDesktopRail && currentMedia != null && !onPlayerPage
-                    val showMiniPlayer = !showDesktopBar && !compactDockVisible && !keyboardVisible &&
-                        maxWidth >= 160.dp && maxHeight >= 200.dp && currentMedia != null &&
-                        !onPlayerPage && (!platform.isAndroid || showTabs)
+                    val miniPlayerFits = maxWidth >= 160.dp && maxHeight >= 200.dp
+                    val androidFabSlot = androidNav?.let { androidMiniPlayerFabSlot(it, keyboardVisible, miniPlayerFits) }
+                    val showMiniPlayer = !showDesktopBar && currentMedia != null && !onPlayerPage &&
+                        if (platform.isAndroid) showTabs && androidFabSlot != null else !keyboardVisible && miniPlayerFits
+                    val navigationFade = rememberAndroidNavigationFade(androidNav, showTabs)
                     val rootDest = pushedStack.lastOrNull()
                         ?.let { RootDest.Pushed(it, pushedStack.size) }
                         ?: RootDest.Tab(currentTab)
@@ -786,6 +791,7 @@ private fun AppContent(
                                     height = 56.dp + systemNavInset,
                                     playerLabel = dockPlayerLabel,
                                     onOpenPlayer = ::openNowPlaying,
+                                    modifier = navigationFade,
                                 )
                             }
                         },
@@ -794,36 +800,42 @@ private fun AppContent(
                         },
                         floatingActionButtonPosition = FabPosition.End,
                         floatingActionButton = {
-                            AnimatedVisibility(
-                                visible = miniPlayerShown,
-                                enter = miniPlayerEnterTransition(),
-                                exit = miniPlayerExitTransition(),
-                            ) {
-                                // Scaffold does not reserve the toolbar's height, so the FAB
-                                // has to step over the floating pill itself.
-                                Box(
-                                    Modifier
-                                        .padding(bottom = contentBottomInset)
-                                        .graphicsLayer {
-                                            // Follow the toolbar down as it scrolls away, so no
-                                            // empty band is left where it was.
-                                            if (bottomNavVisible) {
-                                                val state = toolbarScrollBehavior.state
-                                                val limit = state.offsetLimit
-                                                val hidden = if (limit != 0f) {
-                                                    (state.offset / limit).coerceIn(0f, 1f)
-                                                } else {
-                                                    0f
-                                                }
-                                                translationY =
-                                                    hidden * ExpressiveLayout.FloatingNavClearance.toPx()
-                                            }
-                                        },
+                            // Drop an outgoing FAB as soon as its Android geometry changes. In
+                            // particular, an exit must not leave a second player entry over the dock.
+                            // With the same slot, route/media changes still use AnimatedVisibility.
+                            key(androidFabSlot) {
+                                AnimatedVisibility(
+                                    visible = miniPlayerShown,
+                                    enter = miniPlayerEnterTransition(),
+                                    exit = miniPlayerExitTransition(),
                                 ) {
-                                    MiniNowPlayingBar(
-                                        onExpand = ::openNowPlaying,
-                                        onAccentColor = { rawChromeAccent = it },
-                                    )
+                                    // Scaffold does not reserve the toolbar's height, so the FAB
+                                    // has to step over the floating pill itself.
+                                    Box(
+                                        Modifier
+                                            .padding(bottom = contentBottomInset)
+                                            .graphicsLayer {
+                                                // Follow the toolbar down as it scrolls away, so no
+                                                // empty band is left where it was.
+                                                if (bottomNavVisible) {
+                                                    val state = toolbarScrollBehavior.state
+                                                    val limit = state.offsetLimit
+                                                    val hidden = if (limit != 0f) {
+                                                        (state.offset / limit).coerceIn(0f, 1f)
+                                                    } else {
+                                                        0f
+                                                    }
+                                                    translationY =
+                                                        hidden * ExpressiveLayout.FloatingNavClearance.toPx()
+                                                }
+                                            }
+                                            .then(navigationFade),
+                                    ) {
+                                        MiniNowPlayingBar(
+                                            onExpand = ::openNowPlaying,
+                                            onAccentColor = { rawChromeAccent = it },
+                                        )
+                                    }
                                 }
                             }
                         },
@@ -878,6 +890,7 @@ private fun AppContent(
                                             NavigationRailDefaults.windowInsets
                                         },
                                         scrollable = platform.isAndroid,
+                                        modifier = navigationFade,
                                     )
                                 }
                             }
@@ -1042,7 +1055,7 @@ private fun AppContent(
                                 HorizontalFloatingToolbar(
                                     expanded = true,
                                     // One group of tabs: "tab, 2 of 3" rather than loose buttons.
-                                    modifier = Modifier.selectableGroup(),
+                                    modifier = navigationFade.selectableGroup(),
                                     scrollBehavior = toolbarScrollBehavior,
                                     colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
                                         toolbarContainerColor = chromePalette.quietContainer,
@@ -1088,6 +1101,7 @@ private fun CompactNavigationDock(
     height: Dp,
     playerLabel: String?,
     onOpenPlayer: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val itemColors = NavigationBarItemDefaults.colors(
         indicatorColor = palette.container,
@@ -1095,7 +1109,7 @@ private fun CompactNavigationDock(
         unselectedIconColor = palette.onQuietContainer,
     )
     NavigationBar(
-        modifier = Modifier.height(height),
+        modifier = modifier.height(height),
         containerColor = palette.quietContainer,
         windowInsets = insets,
     ) {
@@ -1126,6 +1140,7 @@ private fun MobileNavigationRail(
     palette: ContentAccentPalette,
     insets: WindowInsets,
     scrollable: Boolean,
+    modifier: Modifier = Modifier,
 ) {
     val itemColors = NavigationRailItemDefaults.colors(
         indicatorColor = palette.container,
@@ -1134,7 +1149,7 @@ private fun MobileNavigationRail(
         unselectedIconColor = palette.secondaryOnQuietContainer,
         unselectedTextColor = palette.secondaryOnQuietContainer,
     )
-    NavigationRail(containerColor = palette.quietContainer, windowInsets = insets) {
+    NavigationRail(modifier = modifier, containerColor = palette.quietContainer, windowInsets = insets) {
         val items: @Composable () -> Unit = {
             tabs.forEach { item ->
                 NavigationRailItem(

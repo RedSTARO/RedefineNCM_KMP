@@ -60,28 +60,53 @@ internal fun <Layout : Any> playbackReflowAction(
     motionScale: Float,
     keyboardVisible: Boolean,
     fading: Boolean,
-): PlaybackReflowAction = when {
-    reducedMotion || motionScale <= 0f || keyboardVisible || previous == null || current == null ->
-        PlaybackReflowAction.Snap
-    fading || previous.layout == current.layout -> PlaybackReflowAction.Keep
+): PlaybackReflowAction = reflowFadeAction(
+    previous, current, reducedMotion, motionScale, keyboardVisible, fading, ::playbackLayoutChanged,
+)
+
+private fun <Layout : Any> playbackLayoutChanged(
+    previous: PlaybackReflowTarget<Layout>,
+    current: PlaybackReflowTarget<Layout>,
+): Boolean = previous.layout != current.layout &&
     // A content change (e.g. the new song loading its lyrics) isn't a window reflow.
-    previous.viewport == current.viewport && previous.fold == current.fold -> PlaybackReflowAction.Keep
-    else -> PlaybackReflowAction.Fade
-}
+    (previous.viewport != current.viewport || previous.fold != current.fold)
 
-private const val PlaybackReflowStartAlpha = 0.78f
-
-/**
- * A single brief reveal at the new geometry. Use inside the current pane's clip; neither pointer
- * bounds nor composition travel. An in-flight fade already covers a second bounds/hinge update:
- * don't restart it or wait to flash the page once a stream of resize events settles.
- */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun <Layout : Any> rememberPlaybackReflow(
     enabled: Boolean,
     target: PlaybackReflowTarget<Layout>?,
     reducedMotion: Boolean,
+): Modifier = rememberReflowFade(enabled, target, reducedMotion, ::playbackLayoutChanged)
+
+internal fun <Target : Any> reflowFadeAction(
+    previous: Target?,
+    current: Target?,
+    reducedMotion: Boolean,
+    motionScale: Float,
+    keyboardVisible: Boolean,
+    fading: Boolean,
+    layoutChanged: (Target, Target) -> Boolean = { before, after -> before != after },
+): PlaybackReflowAction = when {
+    reducedMotion || motionScale <= 0f || keyboardVisible || previous == null || current == null ->
+        PlaybackReflowAction.Snap
+    fading || !layoutChanged(previous, current) -> PlaybackReflowAction.Keep
+    else -> PlaybackReflowAction.Fade
+}
+
+private const val ReflowFadeStartAlpha = 0.78f
+
+/**
+ * A single brief reveal at the new geometry. Use inside the current pane's clip; neither pointer
+ * bounds nor composition travel. An in-flight fade already covers a second bounds/hinge update:
+ * don't restart it or wait to flash once a stream of resize events settles.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+internal fun <Target : Any> rememberReflowFade(
+    enabled: Boolean,
+    target: Target?,
+    reducedMotion: Boolean,
+    layoutChanged: (Target, Target) -> Boolean = { before, after -> before != after },
 ): Modifier {
     if (!enabled) return Modifier
     val scope = rememberCoroutineScope()
@@ -90,15 +115,16 @@ internal fun <Layout : Any> rememberPlaybackReflow(
     val ime = WindowInsets.ime
     val keyboardVisible = LocalSoftKeyboardVisible.current || ime.getBottom(LocalDensity.current) > 0
     val effects = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
-    val motion = remember { PlaybackReflowMotion<Layout>() }
+    val motion = remember { ReflowFadeMotion<Target>() }
     SideEffect {
-        val action = playbackReflowAction(
+        val action = reflowFadeAction(
             motion.previous,
             target,
             reducedMotion,
             scaleFactor,
             keyboardVisible || motion.keyboardWasVisible,
             motion.fade?.isActive == true,
+            layoutChanged,
         )
         motion.previous = target
         motion.keyboardWasVisible = keyboardVisible
@@ -109,10 +135,10 @@ internal fun <Layout : Any> rememberPlaybackReflow(
             }
             PlaybackReflowAction.Keep -> Unit
             PlaybackReflowAction.Fade -> {
-                motion.alpha.floatValue = PlaybackReflowStartAlpha
+                motion.alpha.floatValue = ReflowFadeStartAlpha
                 motion.fade = scope.launch {
-                    animate(PlaybackReflowStartAlpha, 1f, animationSpec = effects) { value, _ ->
-                        motion.alpha.floatValue = value.coerceIn(PlaybackReflowStartAlpha, 1f)
+                    animate(ReflowFadeStartAlpha, 1f, animationSpec = effects) { value, _ ->
+                        motion.alpha.floatValue = value.coerceIn(ReflowFadeStartAlpha, 1f)
                     }
                 }
             }
@@ -124,8 +150,8 @@ internal fun <Layout : Any> rememberPlaybackReflow(
     }
 }
 
-private class PlaybackReflowMotion<Layout : Any> {
-    var previous: PlaybackReflowTarget<Layout>? = null
+private class ReflowFadeMotion<Target : Any> {
+    var previous: Target? = null
     var keyboardWasVisible = false
     var fade: Job? = null
     val alpha = mutableFloatStateOf(1f)
