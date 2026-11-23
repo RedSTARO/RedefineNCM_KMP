@@ -1,9 +1,30 @@
 package com.leejlredstar.redefinencm.kmp
 
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.saveable.SaverScope
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 
 class AppNavigationStackTest {
+    @Test
+    fun dismissedLaunchLoginLeavesAnExplicitEmptyStackToRestore() {
+        val stack = mutableStateListOf<PushedDest>(PushedDest.Login())
+        stack.clear()
+
+        val saved = assertNotNull(with(pushedStackSaver) { SaverScope { true }.save(stack) })
+        assertEquals(emptyList(), saved)
+        assertEquals(emptyList(), pushedStackSaver.restore(saved)?.toList())
+    }
+
+    @Test
+    fun existingNonemptyStackEncodingStillRestores() {
+        val saved = arrayListOf("login:qq", "downloads")
+        val stack = assertNotNull(pushedStackSaver.restore(saved))
+
+        assertEquals(saved, with(pushedStackSaver) { SaverScope { true }.save(stack) })
+    }
+
     @Test
     fun notificationDestinationIsAddedWithoutClearingCurrentStack() {
         val stack = mutableListOf("playlist", "details")

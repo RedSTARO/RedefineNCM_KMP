@@ -107,7 +107,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.Saver
-import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.snapshots.SnapshotStateList
@@ -237,8 +236,9 @@ private val tabDestSaver = Saver<TabDest, String>(
     },
 )
 
-private val pushedStackSaver = listSaver<SnapshotStateList<PushedDest>, String>(
-    save = { stack -> stack.map(::encodePushedDestination) },
+// listSaver omits an empty list, but an empty restored stack must not run the startup login again.
+internal val pushedStackSaver = Saver<SnapshotStateList<PushedDest>, ArrayList<String>>(
+    save = { stack -> stack.mapTo(ArrayList(stack.size), ::encodePushedDestination) },
     restore = { saved ->
         mutableStateListOf<PushedDest>().apply {
             saved.mapNotNull(::decodePushedDestination).forEach { destination ->
