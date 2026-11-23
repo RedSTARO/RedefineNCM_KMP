@@ -11,6 +11,26 @@ internal data class WindowFold(
     val isVertical: Boolean,
     val isOccluding: Boolean = false,
 ) {
+    /** Largest usable rectangle in a browsing viewport, even if the hinge clips an edge. */
+    fun browsePaneIn(origin: IntOffset, size: IntSize): IntRect {
+        val viewport = IntRect(0, 0, size.width, size.height)
+        if (!isOccluding) return viewport
+        val left = (bounds.left - origin.x).coerceIn(0, size.width)
+        val top = (bounds.top - origin.y).coerceIn(0, size.height)
+        val right = (bounds.right - origin.x).coerceIn(0, size.width)
+        val bottom = (bounds.bottom - origin.y).coerceIn(0, size.height)
+        if (left >= right || top >= bottom) return viewport
+        // Every unoccluded rectangle fits in at least one of these strips. Compare physical
+        // areas without mirroring in RTL, preserving the first pane when the two sides tie.
+        val largest = listOf(
+            IntRect(0, 0, left, size.height),
+            IntRect(right, 0, size.width, size.height),
+            IntRect(0, 0, size.width, top),
+            IntRect(0, bottom, size.width, size.height),
+        ).maxBy { it.width.toLong() * it.height }
+        return if (largest.width == 0 || largest.height == 0) IntRect(0, 0, 0, 0) else largest
+    }
+
     /** Two usable rectangles in the measured viewport's coordinates, not display coordinates. */
     fun panesIn(origin: IntOffset, size: IntSize, clearancePx: Int = 0): FoldPanes? {
         if (size.width <= 0 || size.height <= 0) return null

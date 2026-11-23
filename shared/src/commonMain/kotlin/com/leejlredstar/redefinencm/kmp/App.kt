@@ -52,7 +52,7 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -691,39 +691,31 @@ private fun AppContent(
                 // Pages handle the status bar themselves, often drawing art under it. Also
                 // protect sides, the display cutout and the desktop-window caption. Descendant
                 // inset modifiers only apply what is left after these have been consumed.
-                val topObstructions = WindowInsets.captionBar.union(WindowInsets.displayCutout).only(WindowInsetsSides.Top)
-                Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal).union(topObstructions))
+                val cutout = WindowInsets.displayCutout
+                val topObstructions = WindowInsets.captionBar.union(cutout).only(WindowInsetsSides.Top)
+                val sideObstructions = WindowInsets.systemBars.union(cutout).only(WindowInsetsSides.Horizontal)
+                Modifier.windowInsetsPadding(sideObstructions.union(topObstructions))
             } else {
                 Modifier
             }
-            val windowModifier = Modifier.fillMaxSize().then(safeBrowseInsets)
-                .then(if (platform.isAndroid) Modifier.imePadding() else Modifier)
             FoldSafeBrowseContent(
-                modifier = windowModifier,
+                modifier = Modifier.fillMaxSize().then(safeBrowseInsets),
                 enabled = !onPlayerPage,
-            ) {
+                contentModifier = if (platform.isAndroid) Modifier.imePadding() else Modifier,
+            ) { windowWidth, windowHeight ->
                 BoxWithConstraints(Modifier.fillMaxSize()) {
-                    val compactAppBar = platform.isAndroid && maxHeight < CompactAppBarHeightThreshold
+                    val compactAppBar = platform.isAndroid && windowHeight < CompactAppBarHeightThreshold
                     val desktopMode = desktopLayoutMode(maxWidth, maxHeight)
                     val desktopCompact = platform.isDesktop && desktopMode == DesktopLayoutMode.Compact
                     val showDesktopRail = platform.isDesktop && !desktopCompact
-                    // imePadding shrinks the content, not the window's navigation size class.
-                    // Keep the rail from appearing/disappearing just because a field is edited.
-                    val windowHeight = if (platform.isAndroid) {
-                        maxHeight + WindowInsets.ime.asPaddingValues().calculateBottomPadding()
-                    } else {
-                        maxHeight
-                    }
-                    val androidNav = if (platform.isAndroid) androidNavigationLayout(maxWidth, windowHeight) else null
+                    val androidNav = if (platform.isAndroid) androidNavigationLayout(windowWidth, windowHeight) else null
                     val showMobileRail = !platform.isDesktop &&
                         (androidNav == AndroidNavigationLayout.Rail || (androidNav == null && maxWidth >= 600.dp))
-                    val dockPlayer = platform.isAndroid && showTabs && !keyboardVisible &&
-                        windowHeight < 480.dp && currentMedia != null
-                    val dockPlayerLabel = currentMedia?.takeIf { dockPlayer }?.let { strings.openPlayerFor(it.title) }
-                    // A short split window uses an entry in the dock instead of stacking two
-                    // overlays. Neither overlay takes space from an active editor or full player.
+                    val compactDockVisible = showTabs && !keyboardVisible && androidNav == AndroidNavigationLayout.Compact
+                    val dockPlayerLabel = currentMedia?.takeIf { compactDockVisible }?.let { strings.openPlayerFor(it.title) }
+                    // The compact dock owns the player entry; only roomier layouts get a FAB.
                     val showDesktopBar = showDesktopRail && currentMedia != null && !onPlayerPage
-                    val showMiniPlayer = !showDesktopBar && !dockPlayer && !keyboardVisible &&
+                    val showMiniPlayer = !showDesktopBar && !compactDockVisible && !keyboardVisible &&
                         maxWidth >= 160.dp && maxHeight >= 200.dp && currentMedia != null &&
                         !onPlayerPage && (!platform.isAndroid || showTabs)
                     val rootDest = pushedStack.lastOrNull()
@@ -743,7 +735,6 @@ private fun AppContent(
                         platform.isDesktop -> desktopCompact
                         else -> !showMobileRail && androidNav != AndroidNavigationLayout.Compact
                     }
-                    val compactDockVisible = showTabs && !keyboardVisible && androidNav == AndroidNavigationLayout.Compact
                     // A floating toolbar needs explicit clearance; a compact dock is measured
                     // by Scaffold and taken out of the viewport instead. Don't add nav-bar
                     // clearance on top of an IME inset that already covers the same edge.
@@ -887,8 +878,6 @@ private fun AppContent(
                                             NavigationRailDefaults.windowInsets
                                         },
                                         scrollable = platform.isAndroid,
-                                        playerLabel = dockPlayerLabel,
-                                        onOpenPlayer = ::openNowPlaying,
                                     )
                                 }
                             }
@@ -1137,8 +1126,6 @@ private fun MobileNavigationRail(
     palette: ContentAccentPalette,
     insets: WindowInsets,
     scrollable: Boolean,
-    playerLabel: String?,
-    onOpenPlayer: () -> Unit,
 ) {
     val itemColors = NavigationRailItemDefaults.colors(
         indicatorColor = palette.container,
@@ -1155,14 +1142,6 @@ private fun MobileNavigationRail(
                     onClick = { onSelect(item.dest) },
                     icon = { Icon(item.icon, contentDescription = null) },
                     label = { Text(item.label) },
-                    colors = itemColors,
-                )
-            }
-            if (playerLabel != null) {
-                NavigationRailItem(
-                    selected = false,
-                    onClick = onOpenPlayer,
-                    icon = { Icon(AppIcons.MusicNote, contentDescription = playerLabel) },
                     colors = itemColors,
                 )
             }
