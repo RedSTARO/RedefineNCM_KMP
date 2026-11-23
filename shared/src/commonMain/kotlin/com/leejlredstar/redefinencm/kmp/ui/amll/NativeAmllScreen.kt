@@ -50,10 +50,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.amll.compose.AmllBackground
 import com.leejlredstar.amll.compose.AmllLyricDocument
 import com.leejlredstar.amll.compose.AmllLyricViewport
+import com.leejlredstar.amll.compose.AmllLyricVisualParameters
 import com.leejlredstar.amll.compose.buildAmllLyricDocument
 import com.leejlredstar.amll.compose.calculateAmllLyricVisualParameters
 import com.leejlredstar.amll.compose.rememberReducedMotionEnabled
@@ -84,6 +86,7 @@ import com.leejlredstar.redefinencm.kmp.viewmodel.lyricCapabilityLevel
  * Desktop shows the same island as Android and follows the same timing.
  */
 private const val AmllControllerAutoHideMillis = 3_600L
+private const val AndroidPortraitLyricFontSizeLimitDp = 36f
 
 /**
  * One native AMLL-style full-screen player shared by Android, iOS, Desktop, and Web.
@@ -161,12 +164,13 @@ fun NativeAmllScreen(
         .takeUnless { localArtworkActive }
     // Near-black under the bars whatever the theme: light icons.
     DeclareSystemBarBackground(dark = true)
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF0A0A0A))
             .semantics { contentDescription = strings.nowPlayingLyrics },
     ) {
+        val windowHeight = maxHeight
         AmllBackground(
             artworkUri = primaryArtworkUri,
             fallbackArtworkUri = fallbackArtworkUri,
@@ -225,10 +229,12 @@ fun NativeAmllScreen(
                     modifier = Modifier.fillMaxSize(),
                 )
             } else if (document.lines.isNotEmpty() && metadata != null) {
-                val visualParameters = remember(maxWidth, maxHeight, reducedMotion) {
-                    calculateAmllLyricVisualParameters(
-                        viewportWidthDp = maxWidth.value,
-                        viewportHeightDp = maxHeight.value,
+                val visualParameters = remember(maxWidth, maxHeight, windowHeight, platform.isAndroid, reducedMotion) {
+                    calculateNativeAmllVisualParameters(
+                        viewportWidth = maxWidth,
+                        viewportHeight = maxHeight,
+                        windowHeight = windowHeight,
+                        androidPresentation = platform.isAndroid,
                         reducedMotion = reducedMotion,
                     )
                 }
@@ -266,7 +272,28 @@ fun NativeAmllScreen(
             )
         }
     }
+}
 
+internal fun calculateNativeAmllVisualParameters(
+    viewportWidth: Dp,
+    viewportHeight: Dp,
+    windowHeight: Dp,
+    androidPresentation: Boolean,
+    reducedMotion: Boolean,
+): AmllLyricVisualParameters {
+    // The gesture area can make a nearly square portrait viewport wider than it is tall.
+    // Classify using the full window, but keep AMLL's layout based on the usable viewport.
+    val fontSizeLimitDp = if (androidPresentation && viewportWidth <= windowHeight) {
+        AndroidPortraitLyricFontSizeLimitDp
+    } else {
+        Float.POSITIVE_INFINITY
+    }
+    return calculateAmllLyricVisualParameters(
+        viewportWidthDp = viewportWidth.value,
+        viewportHeightDp = viewportHeight.value,
+        reducedMotion = reducedMotion,
+        maxBaseFontSizeDp = fontSizeLimitDp,
+    )
 }
 
 @Composable
