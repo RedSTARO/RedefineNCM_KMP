@@ -66,10 +66,15 @@ import com.leejlredstar.redefinencm.kmp.getPlatform
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeDynamicCoverLayer
 import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackFold
+import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackPaneArrangement
+import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackReflowTarget
 import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackViewport
+import com.leejlredstar.redefinencm.kmp.ui.component.hasExpandedPlaybackWidth
 import com.leejlredstar.redefinencm.kmp.ui.component.inPlaybackPane
 import com.leejlredstar.redefinencm.kmp.ui.component.isWidePlaybackViewport
+import com.leejlredstar.redefinencm.kmp.ui.component.playbackPaneArrangement
 import com.leejlredstar.redefinencm.kmp.ui.component.playbackSafeContent
+import com.leejlredstar.redefinencm.kmp.ui.component.rememberPlaybackReflow
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
@@ -210,7 +215,7 @@ fun NativeAmllScreen(
             if (platform.isAndroid) Modifier.windowInsetsPadding(WindowInsets.playbackSafeContent).clipToBounds()
             else Modifier,
         )
-        PlaybackViewport(viewport) { fold ->
+        PlaybackViewport(viewport, trackFold = platform.isAndroid) { fold, positioned ->
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val density = LocalDensity.current
                 val full = IntRect(0, 0, constraints.maxWidth, constraints.maxHeight)
@@ -224,17 +229,30 @@ fun NativeAmllScreen(
                 } else {
                     full to full
                 }
-                if (controlsPane.width == 0 || controlsPane.height == 0) return@BoxWithConstraints
                 val sharedPane = lyricPane == controlsPane
-                Box(Modifier.inPlaybackPane(lyricPane)) {
+                val lyricWidth = with(density) { lyricPane.width.toDp() }
+                val lyricHeight = with(density) { lyricPane.height.toDp() }
+                val controlHeight = with(density) { controlsPane.height.toDp() }
+                val layout = nativeAmllReflowLayout(
+                    full, lyricPane, controlsPane, density, hasExpandedPlaybackWidth(windowWidth),
+                )
+                val shortLyrics = platform.isAndroid && layout.shortLyrics
+                val limitIslandHeight = platform.isAndroid && sharedPane && controlHeight < 420.dp
+                val hasSpace = controlsPane.width > 0 && controlsPane.height > 0
+                val reflow = rememberPlaybackReflow(
+                    enabled = platform.isAndroid,
+                    target = if (hasSpace && positioned) PlaybackReflowTarget(
+                        full, fold.takeUnless { lyricPane == full && controlsPane == full }, layout,
+                    ) else null,
+                    reducedMotion = reducedMotion,
+                )
+                if (!hasSpace) return@BoxWithConstraints
+                Box(Modifier.inPlaybackPane(lyricPane).then(reflow)) {
                     // Only a completed tap on unused background space reveals the controller.
                     // A press may become a lyric drag or trackpad gesture and must not reveal it.
                     Box(Modifier.fillMaxSize().pointerInput(Unit) {
                         detectTapGestures(onTap = { controllerRevealRequest += 1 })
                     })
-                    val lyricWidth = with(density) { lyricPane.width.toDp() }
-                    val lyricHeight = with(density) { lyricPane.height.toDp() }
-                    val shortLyrics = platform.isAndroid && (lyricHeight < 420.dp || !sharedPane)
                     if (untimedLyrics) {
                         // The list's media key preserves its saveable scroll but cannot reuse the
                         // old song's offset for another song.
@@ -298,8 +316,7 @@ fun NativeAmllScreen(
                     )
                 }
                 Box(Modifier.inPlaybackPane(controlsPane)) {
-                    val controlHeight = with(density) { controlsPane.height.toDp() }
-                    val controlModifier = if (platform.isAndroid && sharedPane && controlHeight < 420.dp) {
+                    val controlModifier = if (limitIslandHeight) {
                         // On a narrow split, keep space for the lyrics/close action even when the
                         // expanded island needs to scroll all of its controls into view.
                         Modifier.align(Alignment.BottomCenter)
@@ -308,7 +325,7 @@ fun NativeAmllScreen(
                         Modifier
                     }
                     AutoHideMiniPlayerController(
-                        modifier = controlModifier.fillMaxSize(),
+                        modifier = controlModifier.fillMaxSize().then(reflow),
                         autoHideDelayMillis = AmllControllerAutoHideMillis,
                         reducedMotion = reducedMotion,
                         externalRevealRequest = controllerRevealRequest,
@@ -317,6 +334,30 @@ fun NativeAmllScreen(
             }
         }
     }
+}
+
+internal data class AmllReflowLayout(
+    val arrangement: PlaybackPaneArrangement,
+    // Cover and unfolded inner screens can both be shared panes. Treat going between their
+    // width classes as a reflow without animating width changes within a class.
+    val expandedWidth: Boolean,
+    val shortLyrics: Boolean,
+    val compactIsland: Boolean,
+)
+
+internal fun nativeAmllReflowLayout(
+    full: IntRect,
+    lyricPane: IntRect,
+    controlsPane: IntRect,
+    density: Density,
+    expandedWidth: Boolean,
+): AmllReflowLayout = with(density) {
+    AmllReflowLayout(
+        arrangement = playbackPaneArrangement(full, lyricPane, controlsPane),
+        expandedWidth = expandedWidth,
+        shortLyrics = lyricPane.height.toDp() < 420.dp || lyricPane != controlsPane,
+        compactIsland = controlsPane.height.toDp() < 420.dp || controlsPane.width.toDp() < 360.dp,
+    )
 }
 
 internal fun nativeAmllPanes(

@@ -34,11 +34,13 @@ internal val WindowInsets.Companion.playbackSafeContent: WindowInsets
 @Composable
 internal fun PlaybackViewport(
     modifier: Modifier,
-    content: @Composable (PlaybackFold?) -> Unit,
+    trackFold: Boolean = true,
+    content: @Composable (fold: PlaybackFold?, positioned: Boolean) -> Unit,
 ) {
-    val fold = LocalWindowFold.current
+    val fold = if (trackFold) LocalWindowFold.current else null
     var localOrigin by remember { mutableStateOf<IntOffset?>(null) }
-    val observePosition = if (fold != null) {
+    // Know the origin before the first hinge update, including when initially folded.
+    val observePosition = if (trackFold) {
         Modifier.onGloballyPositioned { coordinates ->
             val p = coordinates.positionInWindow()
             if (p.x.isFinite() && p.y.isFinite()) localOrigin = IntOffset(p.x.roundToInt(), p.y.roundToInt())
@@ -47,7 +49,8 @@ internal fun PlaybackViewport(
         Modifier
     }
     Box(modifier.then(observePosition)) {
-        content(fold?.let { feature -> localOrigin?.let { PlaybackFold(feature, it) } })
+        val origin = localOrigin
+        content(if (fold != null && origin != null) PlaybackFold(fold, origin) else null, origin != null)
     }
 }
 
