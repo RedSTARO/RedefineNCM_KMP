@@ -16,9 +16,12 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.FoldPanes
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.LocalWindowFold
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.WindowFold
 import kotlin.math.roundToInt
@@ -57,8 +60,26 @@ internal fun Modifier.inPlaybackPane(pane: IntRect): Modifier = layout { measura
 }.clipToBounds()
 
 internal data class PlaybackFold(private val fold: WindowFold, private val origin: IntOffset) {
-    val isVertical: Boolean get() = fold.isVertical
+    /** A partial or edge-clipped feature is not enough to arrange separate content around it. */
+    fun spanningPanes(viewport: IntRect): FoldPanes? {
+        val bounds = fold.bounds
+        val spans = if (fold.isVertical) {
+            bounds.top <= origin.y && bounds.bottom >= origin.y + viewport.height
+        } else {
+            bounds.left <= origin.x && bounds.right >= origin.x + viewport.width
+        }
+        return if (spans) fold.panesIn(origin, IntSize(viewport.width, viewport.height)) else null
+    }
 
-    fun panes(width: Int, height: Int): Pair<IntRect, IntRect>? =
-        fold.panesIn(origin, IntSize(width, height))?.let { it.first to it.second }
+    fun singlePane(viewport: IntRect, panes: FoldPanes?): IntRect = when {
+        panes != null -> if (panes.first.width.toLong() * panes.first.height >=
+            panes.second.width.toLong() * panes.second.height
+        ) panes.first else panes.second
+        // Even when it cannot divide the viewport in two, an opaque hinge must not cover controls.
+        else -> fold.browsePaneIn(origin, IntSize(viewport.width, viewport.height))
+    }
 }
+
+/** Insets alone should not flip a nearly square window into a side-by-side layout. */
+internal fun isWidePlaybackViewport(width: Dp, height: Dp): Boolean =
+    width >= height * 1.25f

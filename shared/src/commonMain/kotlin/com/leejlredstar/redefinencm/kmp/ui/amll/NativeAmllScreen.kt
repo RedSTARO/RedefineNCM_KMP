@@ -14,17 +14,13 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeGestures
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
@@ -52,6 +48,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.amll.compose.AmllBackground
@@ -68,8 +65,10 @@ import com.leejlredstar.redefinencm.kmp.player.PlayerState
 import com.leejlredstar.redefinencm.kmp.getPlatform
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeDynamicCoverLayer
+import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackFold
 import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackViewport
 import com.leejlredstar.redefinencm.kmp.ui.component.inPlaybackPane
+import com.leejlredstar.redefinencm.kmp.ui.component.isWidePlaybackViewport
 import com.leejlredstar.redefinencm.kmp.ui.component.playbackSafeContent
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
@@ -215,23 +214,17 @@ fun NativeAmllScreen(
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val density = LocalDensity.current
                 val full = IntRect(0, 0, constraints.maxWidth, constraints.maxHeight)
-                val folded = fold?.panes(full.width, full.height)
-                val minPaneWidth = with(density) { 220.dp.roundToPx() }
-                val minPaneHeight = with(density) { 156.dp.roundToPx() }
-                val verticalFold = fold?.isVertical == true
-                val splitForHeight = platform.isAndroid && maxWidth >= 500.dp && maxHeight < 420.dp && maxWidth > maxHeight
-                val (lyricPane, controlsPane) = when {
-                    folded != null && verticalFold &&
-                        folded.first.width >= minPaneWidth && folded.second.width >= minPaneWidth -> folded
-                    folded != null && !verticalFold &&
-                        folded.first.height >= minPaneHeight && folded.second.height >= minPaneHeight -> folded
-                    folded != null -> folded.toList().maxBy { if (verticalFold) it.width else it.height }.let { it to it }
-                    splitForHeight -> {
-                        val split = (full.width * 0.53f).toInt()
-                        IntRect(0, 0, split, full.height) to IntRect(split, 0, full.width, full.height)
-                    }
-                    else -> full to full
+                val untimedLyrics = lyricsBelongToCurrentMedia &&
+                    lyricUiState.lyricCapabilityLevel == LyricCapabilityLevel.UNSYNCED &&
+                    untimedLyricLines.isNotEmpty()
+                // Use lyric groups, not translations/background vocals, to judge the amount of text.
+                val lyricCount = if (untimedLyrics) untimedLyricLines.size else document.groups.size
+                val (lyricPane, controlsPane) = if (platform.isAndroid) {
+                    nativeAmllPanes(full, density, fold, isWidePlaybackViewport(windowWidth, windowHeight), lyricCount)
+                } else {
+                    full to full
                 }
+                if (controlsPane.width == 0 || controlsPane.height == 0) return@BoxWithConstraints
                 val sharedPane = lyricPane == controlsPane
                 Box(Modifier.inPlaybackPane(lyricPane)) {
                     // Only a completed tap on unused background space reveals the controller.
@@ -242,9 +235,6 @@ fun NativeAmllScreen(
                     val lyricWidth = with(density) { lyricPane.width.toDp() }
                     val lyricHeight = with(density) { lyricPane.height.toDp() }
                     val shortLyrics = platform.isAndroid && (lyricHeight < 420.dp || !sharedPane)
-                    val untimedLyrics = lyricsBelongToCurrentMedia &&
-                        lyricUiState.lyricCapabilityLevel == LyricCapabilityLevel.UNSYNCED &&
-                        untimedLyricLines.isNotEmpty()
                     if (untimedLyrics) {
                         // The list's media key preserves its saveable scroll but cannot reuse the
                         // old song's offset for another song.
@@ -285,12 +275,14 @@ fun NativeAmllScreen(
                         // Error/empty panels can be taller than a letterboxed or split viewport.
                         // Keep their action above the island and scroll to it instead of clipping it.
                         val overlay = if (shortLyrics) {
-                            Modifier.fillMaxWidth().heightIn(max = if (sharedPane) lyricHeight * 0.55f else lyricHeight)
-                                .align(Alignment.TopCenter).padding(top = 48.dp).verticalScroll(rememberScrollState())
+                            Modifier.align(Alignment.TopCenter).padding(top = 48.dp)
+                                .heightIn(max = (lyricHeight - sharedControllerHeight(lyricHeight) - 48.dp)
+                                    .coerceAtLeast(0.dp))
+                                .verticalScroll(rememberScrollState())
                         } else {
                             Modifier.align(Alignment.Center)
                         }
-                        Box(overlay) {
+                        Box(overlay.widthIn(max = 560.dp).fillMaxWidth()) {
                             LyricStateOverlay(
                                 state = lyricUiState,
                                 hasMedia = metadata != null,
@@ -311,7 +303,7 @@ fun NativeAmllScreen(
                         // On a narrow split, keep space for the lyrics/close action even when the
                         // expanded island needs to scroll all of its controls into view.
                         Modifier.align(Alignment.BottomCenter)
-                            .heightIn(max = minOf(controlHeight, maxOf(96.dp, controlHeight * 0.58f)))
+                            .heightIn(max = sharedControllerHeight(controlHeight))
                     } else {
                         Modifier
                     }
@@ -326,6 +318,36 @@ fun NativeAmllScreen(
         }
     }
 }
+
+internal fun nativeAmllPanes(
+    full: IntRect,
+    density: Density,
+    fold: PlaybackFold?,
+    wideWindow: Boolean,
+    lyricCount: Int,
+): Pair<IntRect, IntRect> = with(density) {
+    val folded = fold?.spanningPanes(full)
+    // A pane should have room for a verse. A status panel or isolated line doesn't warrant one.
+    val usefulLyrics = lyricCount >= 4
+    if (fold != null) {
+        if (usefulLyrics && folded != null &&
+            folded.first.width.toDp() >= 320.dp && folded.first.height.toDp() >= 420.dp &&
+            folded.second.width.toDp() >= 340.dp && folded.second.height.toDp() >= 420.dp
+        ) {
+            return folded.first to folded.second
+        }
+        val safe = fold.singlePane(full, folded)
+        return safe to safe
+    }
+    if (usefulLyrics && wideWindow && full.width.toDp() >= 720.dp && full.height.toDp() in 224.dp..<420.dp) {
+        val split = (full.width * 0.53f).toInt()
+        IntRect(0, 0, split, full.height) to IntRect(split, 0, full.width, full.height)
+    } else {
+        full to full
+    }
+}
+
+private fun sharedControllerHeight(height: Dp): Dp = minOf(height, maxOf(96.dp, height * 0.58f))
 
 internal fun calculateNativeAmllVisualParameters(
     viewportWidth: Dp,

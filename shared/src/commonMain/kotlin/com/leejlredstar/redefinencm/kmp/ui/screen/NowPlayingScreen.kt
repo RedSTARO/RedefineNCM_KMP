@@ -120,12 +120,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntRect
 import com.leejlredstar.redefinencm.kmp.getPlatform
 import com.leejlredstar.redefinencm.kmp.player.PlayerStatusRestoreState
 import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackFold
 import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackViewport
 import com.leejlredstar.redefinencm.kmp.ui.component.inPlaybackPane
+import com.leejlredstar.redefinencm.kmp.ui.component.isWidePlaybackViewport
 import com.leejlredstar.redefinencm.kmp.ui.component.playbackSafeContent
 
 /**
@@ -208,7 +212,7 @@ fun NowPlayingScreen(
 
     // The bars sit on the top of the cover-tinted gradient, which can be light in a dark theme.
     DeclareSystemBarBackground(dark = palette.pageStart.luminance() < 0.5f)
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .drawBehind {
@@ -304,8 +308,9 @@ fun NowPlayingScreen(
         val viewport = Modifier.fillMaxSize()
             .windowInsetsPadding(if (android) WindowInsets.playbackSafeContent else WindowInsets.safeDrawing)
         if (android) {
+            val wideWindow = isWidePlaybackViewport(maxWidth, maxHeight)
             PlaybackViewport(viewport) { fold ->
-                AdaptiveNowPlayingLayout(fold, controlsScroll, artwork, header, controls, toolbar)
+                AdaptiveNowPlayingLayout(fold, wideWindow, controlsScroll, artwork, header, controls, toolbar)
             }
         } else {
             BoxWithConstraints(viewport.padding(horizontal = ExpressiveLayout.PageHorizontalPadding)) {
@@ -413,6 +418,7 @@ fun NowPlayingScreen(
 @Composable
 private fun AdaptiveNowPlayingLayout(
     fold: PlaybackFold?,
+    wideWindow: Boolean,
     scroll: ScrollState,
     artwork: @Composable (Modifier) -> Unit,
     header: @Composable (Modifier, Boolean) -> Unit,
@@ -421,30 +427,9 @@ private fun AdaptiveNowPlayingLayout(
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val density = LocalDensity.current
-        val paneWidth = constraints.maxWidth
-        val paneHeight = constraints.maxHeight
-        val full = IntRect(0, 0, paneWidth, paneHeight)
-        val foldedPanes = fold?.panes(paneWidth, paneHeight)
-        val verticalFold = fold?.isVertical == true
-        val padding = with(density) { ExpressiveLayout.PageHorizontalPadding.roundToPx() }
-        val minControlsWidth = with(density) { 240.dp.roundToPx() } + padding * 2
-        val minArtwork = with(density) { 96.dp.roundToPx() }
-        val minControlsHeight = with(density) { 180.dp.roundToPx() }
-        val wideAndShort = maxWidth >= 420.dp && maxWidth > maxHeight
-        val (artPane, controlPane) = when {
-            foldedPanes != null && verticalFold &&
-                foldedPanes.first.width >= minArtwork && foldedPanes.second.width >= minControlsWidth -> foldedPanes
-            foldedPanes != null && !verticalFold &&
-                foldedPanes.first.height >= minArtwork && foldedPanes.second.height >= minControlsHeight -> foldedPanes
-            foldedPanes != null -> null to foldedPanes.toList().maxBy {
-                if (verticalFold) it.width else it.height
-            }
-            wideAndShort -> {
-                val split = (paneWidth * 0.42f).toInt().coerceIn(minArtwork, paneWidth - minControlsWidth)
-                IntRect(0, 0, split, paneHeight) to IntRect(split, 0, paneWidth, paneHeight)
-            }
-            else -> null to full
-        }
+        val full = IntRect(0, 0, constraints.maxWidth, constraints.maxHeight)
+        val (artPane, controlPane) = nowPlayingPanes(full, density, fold, wideWindow)
+        if (controlPane.width == 0 || controlPane.height == 0) return@BoxWithConstraints
         if (artPane != null) {
             Box(
                 Modifier.inPlaybackPane(artPane).padding(horizontal = 12.dp, vertical = 8.dp),
@@ -483,6 +468,31 @@ private fun AdaptiveNowPlayingLayout(
                 }
             }
         }
+    }
+}
+
+internal fun nowPlayingPanes(
+    full: IntRect,
+    density: Density,
+    fold: PlaybackFold?,
+    wideWindow: Boolean,
+): Pair<IntRect?, IntRect> = with(density) {
+    val folded = fold?.spanningPanes(full)
+    if (fold != null) {
+        // Give the artwork its own pane only when the control pane can show a complete player.
+        if (folded != null && folded.first.width.toDp() >= 192.dp && folded.first.height.toDp() >= 192.dp &&
+            folded.second.width.toDp() >= 320.dp && folded.second.height.toDp() >= 420.dp
+        ) {
+            return folded.first to folded.second
+        }
+        return null to fold.singlePane(full, folded)
+    }
+    val short = full.height.toDp() < 420.dp
+    if (wideWindow && full.height.toDp() >= 192.dp && full.width.toDp() >= (if (short) 560.dp else 840.dp)) {
+        val split = (full.width * 0.42f).toInt()
+        IntRect(0, 0, split, full.height) to IntRect(split, 0, full.width, full.height)
+    } else {
+        null to full
     }
 }
 
@@ -938,80 +948,108 @@ private fun NowPlayingTransport(
         disabledContainerColor = palette.container.copy(alpha = 0.32f),
         disabledContentColor = palette.onContainer.copy(alpha = 0.38f),
     )
-    FlowRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(if (tight) 4.dp else 16.dp, Alignment.CenterHorizontally),
-        itemVerticalAlignment = Alignment.CenterVertically,
-    ) {
-        val skipSize = if (compact) {
-            IconButtonDefaults.mediumContainerSize()
+    BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        val density = LocalDensity.current
+        val metrics = nowPlayingTransportMetrics(constraints.maxWidth, density, compact, tight)
+        val fits = metrics.fits(constraints.maxWidth, density)
+        val buttons: @Composable () -> Unit = {
+            FilledTonalIconButton(
+                onClick = onPrevious,
+                shapes = IconButtonDefaults.shapes(),
+                modifier = Modifier.size(metrics.skip),
+                enabled = hasMedia,
+                colors = tonalColors,
+            ) {
+                Icon(
+                    imageVector = AppIcons.SkipPrevious,
+                    contentDescription = strings.previous,
+                    modifier = Modifier.size(metrics.skipIcon),
+                )
+            }
+            // The wide extra-large toggle: round while paused, squarer while playing, and it morphs
+            // through the press. This is the M3 Expressive media play/pause affordance.
+            FilledIconToggleButton(
+                checked = isPlaying,
+                onCheckedChange = { onPlayPause() },
+                shapes = IconButtonDefaults.toggleableShapes(),
+                modifier = Modifier.size(metrics.play),
+                enabled = hasMedia,
+                colors = IconButtonDefaults.filledIconToggleButtonColors(
+                    containerColor = palette.accent,
+                    contentColor = palette.onAccent,
+                    checkedContainerColor = palette.accent,
+                    checkedContentColor = palette.onAccent,
+                    disabledContainerColor = palette.accent.copy(alpha = 0.32f),
+                    disabledContentColor = palette.onAccent.copy(alpha = 0.38f),
+                ),
+            ) {
+                Icon(
+                    imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
+                    contentDescription = if (isPlaying) strings.pause else strings.play,
+                    modifier = Modifier.size(metrics.playIcon),
+                )
+            }
+            FilledTonalIconButton(
+                onClick = onNext,
+                shapes = IconButtonDefaults.shapes(),
+                modifier = Modifier.size(metrics.skip),
+                enabled = hasMedia,
+                colors = tonalColors,
+            ) {
+                Icon(
+                    imageVector = AppIcons.SkipNext,
+                    contentDescription = strings.next,
+                    modifier = Modifier.size(metrics.skipIcon),
+                )
+            }
+        }
+        if (fits) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(metrics.gap),
+                verticalAlignment = Alignment.CenterVertically,
+            ) { buttons() }
         } else {
-            IconButtonDefaults.largeContainerSize()
+            // Truly tiny windows stack the whole group instead of orphaning one button.
+            Column(
+                verticalArrangement = Arrangement.spacedBy(metrics.gap),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) { buttons() }
         }
-        val skipIconSize = if (compact) {
-            IconButtonDefaults.mediumIconSize
-        } else {
-            IconButtonDefaults.largeIconSize
-        }
-        val playSize = if (compact) {
-            IconButtonDefaults.largeContainerSize(IconButtonDefaults.IconButtonWidthOption.Wide)
-        } else {
-            IconButtonDefaults.extraLargeContainerSize(IconButtonDefaults.IconButtonWidthOption.Wide)
-        }
-        val playIconSize = if (compact) {
-            IconButtonDefaults.largeIconSize
-        } else {
-            IconButtonDefaults.extraLargeIconSize
-        }
-        FilledTonalIconButton(
-            onClick = onPrevious,
-            shapes = IconButtonDefaults.shapes(),
-            modifier = if (tight) Modifier.size(48.dp) else Modifier.size(skipSize),
-            enabled = hasMedia,
-            colors = tonalColors,
-        ) {
-            Icon(
-                imageVector = AppIcons.SkipPrevious,
-                contentDescription = strings.previous,
-                modifier = Modifier.size(if (tight) 24.dp else skipIconSize),
-            )
-        }
-        // The wide extra-large toggle: round while paused, squarer while playing, and it morphs
-        // through the press. This is the M3 Expressive media play/pause affordance.
-        FilledIconToggleButton(
-            checked = isPlaying,
-            onCheckedChange = { onPlayPause() },
-            shapes = IconButtonDefaults.toggleableShapes(),
-            modifier = if (tight) Modifier.size(width = 60.dp, height = 48.dp) else Modifier.size(playSize),
-            enabled = hasMedia,
-            colors = IconButtonDefaults.filledIconToggleButtonColors(
-                containerColor = palette.accent,
-                contentColor = palette.onAccent,
-                checkedContainerColor = palette.accent,
-                checkedContentColor = palette.onAccent,
-                disabledContainerColor = palette.accent.copy(alpha = 0.32f),
-                disabledContentColor = palette.onAccent.copy(alpha = 0.38f),
-            ),
-        ) {
-            Icon(
-                imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
-                contentDescription = if (isPlaying) strings.pause else strings.play,
-                modifier = Modifier.size(if (tight) 32.dp else playIconSize),
-            )
-        }
-        FilledTonalIconButton(
-            onClick = onNext,
-            shapes = IconButtonDefaults.shapes(),
-            modifier = if (tight) Modifier.size(48.dp) else Modifier.size(skipSize),
-            enabled = hasMedia,
-            colors = tonalColors,
-        ) {
-            Icon(
-                imageVector = AppIcons.SkipNext,
-                contentDescription = strings.next,
-                modifier = Modifier.size(if (tight) 24.dp else skipIconSize),
-            )
-        }
+    }
+}
+
+internal data class NowPlayingTransportMetrics(
+    val skip: DpSize,
+    val play: DpSize,
+    val skipIcon: Dp,
+    val playIcon: Dp,
+    val gap: Dp,
+) {
+    fun fits(widthPx: Int, density: Density): Boolean = with(density) {
+        skip.width.roundToPx() * 2 + play.width.roundToPx() + gap.roundToPx() * 2 <= widthPx
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+internal fun nowPlayingTransportMetrics(
+    widthPx: Int,
+    density: Density,
+    compact: Boolean,
+    tight: Boolean,
+): NowPlayingTransportMetrics {
+    val wide = IconButtonDefaults.IconButtonWidthOption.Wide
+    val roomy = NowPlayingTransportMetrics(
+        IconButtonDefaults.largeContainerSize(), IconButtonDefaults.extraLargeContainerSize(wide),
+        IconButtonDefaults.largeIconSize, IconButtonDefaults.extraLargeIconSize, 16.dp,
+    )
+    val standard = NowPlayingTransportMetrics(
+        IconButtonDefaults.mediumContainerSize(), IconButtonDefaults.largeContainerSize(wide),
+        IconButtonDefaults.mediumIconSize, IconButtonDefaults.largeIconSize, 16.dp,
+    )
+    return when {
+        !compact && !tight && roomy.fits(widthPx, density) -> roomy
+        !tight && standard.fits(widthPx, density) -> standard
+        else -> NowPlayingTransportMetrics(DpSize(48.dp, 48.dp), DpSize(60.dp, 48.dp), 24.dp, 32.dp, 4.dp)
     }
 }
 
