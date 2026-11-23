@@ -1227,10 +1227,10 @@ Applies to all platforms, and the original Android repo is kept aligned (goal #3
   user level, desktop mini strip). Do **not** make thin decorative bars wavy — anything under
   roughly 4dp has no room for wave amplitude and renders as a smudge.
 - **Navigation chrome:** tall phone windows use a `HorizontalFloatingToolbar` of `ToggleButton`
-  items. Android's short/narrow multi-window layouts use a compact dock or a scrollable rail
-  (with a direct player entry so a second overlay does not crowd the page). Wide windows keep
-  the navigation rail. Android uses the measured app window, not device type or orientation,
-  and the dock/mini player do not cover a soft keyboard.
+  items. On Android, short/narrow windows use one measured compact dock with a direct player
+  entry, not a second floating player. Wide, tall windows keep the navigation rail. Choose chrome
+  from the usable window before IME padding; the dock and mini player stay out of the keyboard.
+  A non-occluding fold does not split browsing. See [Android adaptive QA](docs/ANDROID_ADAPTIVE_QA.md).
 - **Use the real Expressive APIs** (`MaterialExpressiveTheme`, motion scheme) provided by the
   pinned `material3` version; custom shapes and page palettes extend that theme rather than
   replacing it.
@@ -1239,9 +1239,11 @@ Applies to all platforms, and the original Android repo is kept aligned (goal #3
   marquee, a `Slider` whose track is `LinearWavyProgressIndicator` with amplitude tied to
   playback, a wide extra-large `FilledIconToggleButton` play/pause with `toggleableShapes()`,
   large tonal skip buttons with `IconButtonDefaults.shapes()`, and a `HorizontalFloatingToolbar`
-  whose vibrant FAB is the quotation-mark lyrics button; two columns at ≥840dp landscape);
-  Full-screen lyric player (`AmllPlayerScreen` → `NativeAmllScreen`, native Compose
-  on every target, with the auto-hiding control island);
+  whose vibrant FAB is the quotation-mark lyrics button. On Android the transport picks one size
+  for all three buttons; use two panes only when the measured window or usable space on both sides
+  of the crease warrants it. Full-screen lyric player (`AmllPlayerScreen` → `NativeAmllScreen`,
+  native Compose on every target, with the auto-hiding control island; keep sparse/empty lyrics and
+  controls together rather than forcing two panes);
   Playlist detail (album-color gradient header, play-all/download-all as one
   `SplitButtonLayout`, connected rows with download indicators); User page (blurred hero +
   avatar, badged playlists);
