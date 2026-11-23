@@ -1371,13 +1371,16 @@ feature gap; platform integrations use target-specific actuals:
   iOS and Web share the `skiaMain` RGB555 quantizer) wired into MiniNowPlayingBar (with luminance-adaptive content
   color + spring animation), PlaylistDetail hero, and both full-screen AMLL renderers.
 - **Search shared-element transition** (pill → bar) via `SharedTransitionLayout` in HomeScreen.
-- **Responsive nav**: iOS and Web use NavigationRail on ≥600dp. Android also uses a compact
-  dock or scrollable rail in short windows, and its player pages avoid separating folds reported
-  by AndroidX WindowManager; see [Android adaptive QA](docs/ANDROID_ADAPTIVE_QA.md). Desktop uses a
-  collapsed modal wide navigation rail when there is room; expansion overlays content instead of
-  resizing it. Full-screen lyrics remain one `AmllPlayerScreen` destination regardless of window
-  size or dynamic-cover capability. Startup routes to NetEase login only when no switched-on
-  provider holds an account.
+- **Responsive nav**: iOS and Web use NavigationRail on ≥600dp. Android uses one compact dock
+  in short/narrow windows, and its player pages avoid separating folds reported by AndroidX
+  WindowManager. When the effective playback layout or navigation mode changes, place the affected
+  controls in the safe target panes immediately and fade them in briefly. Do not animate targets
+  across the hinge, keep old controls over the new dock, fade the background or editor, or replay
+  a fade with system animations disabled. See
+  [Android adaptive QA](docs/ANDROID_ADAPTIVE_QA.md). Desktop uses a collapsed modal wide navigation
+  rail when there is room; expansion overlays content instead of resizing it. Full-screen lyrics
+  remain one `AmllPlayerScreen` destination regardless of window size or dynamic-cover capability.
+  Startup routes to NetEase login only when no switched-on provider holds an account.
 - **Settings**: server availability check (`/inner/version/`, now on the accounts page beside the
   QQ gateway's check); the legacy-persisted
   `adaptOriginalAndroidLyric` value now controls the optional Android Live Update notification
