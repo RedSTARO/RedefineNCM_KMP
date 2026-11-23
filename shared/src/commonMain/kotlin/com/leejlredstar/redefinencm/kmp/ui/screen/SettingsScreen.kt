@@ -41,6 +41,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -103,6 +104,7 @@ import com.leejlredstar.redefinencm.kmp.player.supportsAudioOutputDeviceSelectio
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.LocalCompactAppBar
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
@@ -451,31 +453,35 @@ fun SettingsScreen(
         accentPalette = settingsPalette,
         maxContentWidth = ExpressiveLayout.ReadingContentMaxWidth,
     ) {
+        val compactBar = LocalCompactAppBar.current
         Scaffold(
-            modifier = Modifier.nestedScroll(appBarScrollBehavior.nestedScrollConnection),
+            modifier = if (compactBar) Modifier else Modifier.nestedScroll(appBarScrollBehavior.nestedScrollConnection),
             containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
-                LargeFlexibleTopAppBar(
-                    title = { Text(strings.settings) },
-                    subtitle = { Text(strings.settingsSubtitle) },
-                    navigationIcon = {
-                        onBack?.let {
-                            IconButton(onClick = it) {
-                                Icon(AppIcons.ArrowBack, contentDescription = strings.back)
-                            }
+                val navigationIcon: @Composable () -> Unit = {
+                    onBack?.let { back ->
+                        IconButton(onClick = back) {
+                            Icon(AppIcons.ArrowBack, contentDescription = strings.back)
                         }
-                    },
-                    scrollBehavior = appBarScrollBehavior,
-                    colors = TopAppBarDefaults.largeTopAppBarColors(
-                        // Transparent while expanded so ExpressivePage's gradient reads through,
-                        // but the collapsed bar stays pinned over the scrolling list and has to
-                        // be opaque or the title sits on top of the rows passing beneath it.
-                        containerColor = Color.Transparent,
-                        scrolledContainerColor = settingsPalette.pageStart,
-                        titleContentColor = settingsPalette.onPageStart,
-                    ),
+                    }
+                }
+                val colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = settingsPalette.pageStart,
+                    titleContentColor = settingsPalette.onPageStart,
                 )
+                if (compactBar) {
+                    TopAppBar(title = { Text(strings.settings) }, navigationIcon = navigationIcon, colors = colors)
+                } else {
+                    LargeFlexibleTopAppBar(
+                        title = { Text(strings.settings) },
+                        subtitle = { Text(strings.settingsSubtitle) },
+                        navigationIcon = navigationIcon,
+                        scrollBehavior = appBarScrollBehavior,
+                        colors = colors,
+                    )
+                }
             },
         ) { appBarPadding ->
         // The clearance is padding *inside* the scrolling Column, not on ExpressivePage: padding
@@ -488,9 +494,10 @@ fun SettingsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(top = if (compactBar) appBarPadding.calculateTopPadding() else 0.dp)
                 .verticalScroll(if (settingsLoaded && settingsLoadError == null) contentScrollState else loadingScrollState)
                 .padding(
-                    top = appBarPadding.calculateTopPadding(),
+                    top = if (compactBar) 0.dp else appBarPadding.calculateTopPadding(),
                     bottom = scaffoldPadding.calculateBottomPadding(),
                 ),
         ) {

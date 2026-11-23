@@ -28,6 +28,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -135,25 +136,55 @@ class SongRecognitionViewModel internal constructor(
     private val recognitionGeneration = MutableStateFlow(0L)
     private var recognitionJob: Job? = null
     private var closed = false
+    private var microphoneWindowActive = true
+    private var permissionGrantedWhileInactive = false
     // Playback this screen paused to hear the room. It is given back when the user leaves or
     // cancels without choosing a result.
     private data class PausedSelection(val mediaId: String, val occurrence: Long)
     private var pausedForRecognition: PausedSelection? = null
 
-    fun beginPermissionRequest() {
-        if (closed) return
+    fun beginPermissionRequest(): Boolean {
+        if (closed || !microphoneWindowActive) return false
         invalidateActiveRecognition()
         _uiState.value = SongRecognitionUiState.RequestingPermission
+        return true
     }
 
     fun onPermissionResult(granted: Boolean) {
-        if (closed) return
-        if (_uiState.value !is SongRecognitionUiState.RequestingPermission) return
+        if (closed || _uiState.value !is SongRecognitionUiState.RequestingPermission) return
         if (!granted) {
             _uiState.value = SongRecognitionUiState.PermissionDenied
-            return
+        } else if (microphoneWindowActive) {
+            startRecognition()
+        } else {
+            // The system permission dialog can briefly own the top-resumed position. Do not open
+            // the recorder until the result AND foreground ownership have both returned.
+            permissionGrantedWhileInactive = true
         }
-        startRecognition()
+    }
+
+    fun setMicrophoneWindowActive(active: Boolean) {
+        if (closed) return
+        microphoneWindowActive = active
+        if (active) {
+            if (permissionGrantedWhileInactive && _uiState.value is SongRecognitionUiState.RequestingPermission) {
+                permissionGrantedWhileInactive = false
+                startRecognition()
+            }
+        } else if (_uiState.value is SongRecognitionUiState.Listening) {
+            // Processing a completed capture doesn't need the microphone. Interrupt only live
+            // capture, and never start recording again without the user's retry.
+            invalidateActiveRecognition()
+            reportMicrophoneWindowLost()
+        }
+    }
+
+    private fun reportMicrophoneWindowLost() {
+        _uiState.value = SongRecognitionUiState.MicrophoneUnavailable(
+            message = strings.recognitionMicrophoneWindowLost,
+            canRetry = true,
+        )
+        resumePausedPlayback()
     }
 
     fun cancelRecognition() {
@@ -214,20 +245,30 @@ class SongRecognitionViewModel internal constructor(
                 var attempt = 1
                 var outcome: AudioMatchOutcome
                 while (true) {
+                    // Ownership can change before this coroutine starts or while a match for
+                    // the previous capture is in flight. Never reacquire input in that case.
+                    if (!microphoneWindowActive) {
+                        reportMicrophoneWindowLost()
+                        return@launch
+                    }
                     _uiState.value = SongRecognitionUiState.Listening(0L, 0f, attempt)
                     val currentAttempt = attempt
                     val captured = recorder.capture(
                         durationMillis = AudioFingerprint.DURATION_MILLIS,
                         onProgress = { elapsedMillis, level ->
-                            if (recognitionGeneration.value == generation) {
-                                _uiState.value = SongRecognitionUiState.Listening(
-                                    elapsedMillis = elapsedMillis.coerceIn(
-                                        minimumValue = 0L,
-                                        maximumValue = AudioFingerprint.DURATION_MILLIS,
-                                    ),
-                                    level = level.coerceIn(0f, 1f),
-                                    attempt = currentAttempt,
-                                )
+                            // Android reports progress from its IO thread. Do not let an in-flight
+                            // tick replace the interrupted state already published on the UI thread.
+                            _uiState.update { current ->
+                                if (recognitionGeneration.value == generation &&
+                                    current is SongRecognitionUiState.Listening && current.attempt == currentAttempt
+                                ) {
+                                    current.copy(
+                                        elapsedMillis = elapsedMillis.coerceIn(0L, AudioFingerprint.DURATION_MILLIS),
+                                        level = level.coerceIn(0f, 1f),
+                                    )
+                                } else {
+                                    current
+                                }
                             }
                         },
                     )
@@ -302,6 +343,7 @@ class SongRecognitionViewModel internal constructor(
     }
 
     private fun invalidateActiveRecognition() {
+        permissionGrantedWhileInactive = false
         recognitionGeneration.updateAndGet { it + 1L }
         recognitionJob?.cancel()
         recognitionJob = null

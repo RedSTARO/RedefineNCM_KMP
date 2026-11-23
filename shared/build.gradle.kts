@@ -590,6 +590,7 @@ kotlin {
             implementation(libs.androidx.datastore.preferences)
             // rememberLauncherForActivityResult + LocalContext for file import/export
             implementation(libs.androidx.activity.compose)
+            implementation(libs.androidx.window)
             // ExoPlayer + MediaSession for Android audio playback
             implementation(libs.androidx.media3.exoplayer)
             implementation(libs.androidx.media3.session)

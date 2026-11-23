@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -22,21 +24,22 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,6 +83,7 @@ fun AccountsScreen(
     scaffoldPadding: PaddingValues,
     onBack: () -> Unit,
     onOpenLogin: (MusicProviderId) -> Unit,
+    isActive: Boolean = true,
     viewModel: AccountsViewModel = koinInject(),
 ) {
     val palette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
@@ -102,161 +106,176 @@ fun AccountsScreen(
     }
 
     var logoutConfirmationFor by remember { mutableStateOf<MusicProviderId?>(null) }
-    var renamingLocal by remember { mutableStateOf(false) }
-    val expandedCredentialFields = remember { mutableStateMapOf<MusicProviderId, Boolean>() }
-    val credentialDrafts = remember { mutableStateMapOf<MusicProviderId, String>() }
-    val serverDrafts = remember { mutableStateMapOf<MusicProviderId, String>() }
+    var renamingLocal by rememberSaveable { mutableStateOf(false) }
+    var expandedCredentialFields by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
 
     val appBarScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     ExpressivePage(
         accentPalette = palette,
         maxContentWidth = ExpressiveLayout.ReadingContentMaxWidth,
     ) {
-        Box(Modifier.fillMaxSize()) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val compactHeight = maxHeight < 380.dp
             Scaffold(
-                modifier = Modifier.nestedScroll(appBarScrollBehavior.nestedScrollConnection),
+                modifier = if (compactHeight) Modifier else Modifier.nestedScroll(appBarScrollBehavior.nestedScrollConnection),
                 containerColor = Color.Transparent,
                 contentWindowInsets = WindowInsets(0, 0, 0, 0),
                 topBar = {
-                    LargeFlexibleTopAppBar(
-                        title = { Text(strings.accountsAndServices) },
-                        subtitle = { Text(strings.accountsSubtitle) },
-                        navigationIcon = {
-                            IconButton(onClick = onBack) {
-                                Icon(AppIcons.ArrowBack, contentDescription = strings.back)
-                            }
-                        },
-                        scrollBehavior = appBarScrollBehavior,
-                        colors = TopAppBarDefaults.largeTopAppBarColors(
-                            containerColor = Color.Transparent,
-                            scrolledContainerColor = palette.pageStart,
-                            titleContentColor = palette.onPageStart,
-                        ),
-                    )
+                    val backButton: @Composable () -> Unit = {
+                        IconButton(onClick = onBack) {
+                            Icon(AppIcons.ArrowBack, contentDescription = strings.back)
+                        }
+                    }
+                    if (compactHeight) {
+                        TopAppBar(
+                            title = { Text(strings.accountsAndServices, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            navigationIcon = backButton,
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = Color.Transparent,
+                                titleContentColor = palette.onPageStart,
+                            ),
+                        )
+                    } else {
+                        LargeFlexibleTopAppBar(
+                            title = { Text(strings.accountsAndServices) },
+                            subtitle = { Text(strings.accountsSubtitle) },
+                            navigationIcon = backButton,
+                            scrollBehavior = appBarScrollBehavior,
+                            colors = TopAppBarDefaults.largeTopAppBarColors(
+                                containerColor = Color.Transparent,
+                                scrolledContainerColor = palette.pageStart,
+                                titleContentColor = palette.onPageStart,
+                            ),
+                        )
+                    }
                 },
             ) { appBarPadding ->
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        .padding(top = if (compactHeight) appBarPadding.calculateTopPadding() else 0.dp)
                         .verticalScroll(rememberScrollState())
                         .padding(
-                            top = appBarPadding.calculateTopPadding(),
+                            top = if (compactHeight) 0.dp else appBarPadding.calculateTopPadding(),
                             bottom = scaffoldPadding.calculateBottomPadding(),
                         ),
                 ) {
                     Column(modifier = Modifier.padding(horizontal = 20.dp)) {
                         accounts.forEach { account ->
                             val provider = account.provider
-                            val descriptor = account.descriptor
-                            val switch = descriptor.enabledSetting
-                            val server = descriptor.server
-                            val textMethod = account.textMethod
-                            val credentialExpanded = expandedCredentialFields[provider] == true
+                            key(provider.key) {
+                                val descriptor = account.descriptor
+                                val switch = descriptor.enabledSetting
+                                val server = descriptor.server
+                                val textMethod = account.textMethod
+                                val credentialExpanded = provider.key in expandedCredentialFields
 
-                            // The rows of this provider's group, so each takes its place in the
-                            // connected shape whatever is shown.
-                            val rows = buildList {
-                                if (switch != null) add(AccountRow.Switch)
-                                if (account.enabled) {
-                                    add(AccountRow.Account)
-                                    if (server != null) add(AccountRow.Server)
-                                    if (server?.check != null) add(AccountRow.ServerCheck)
-                                    if (textMethod != null) {
-                                        add(AccountRow.CredentialExpander)
-                                        if (credentialExpanded) add(AccountRow.Credential)
-                                    }
-                                }
-                            }
-
-                            SettingsSectionLabel(provider.displayName, palette)
-                            if (switch != null) {
-                                SettingsSwitch(
-                                    checked = account.enabled,
-                                    label = switch.label,
-                                    accentPalette = palette,
-                                    index = rows.indexOf(AccountRow.Switch),
-                                    count = rows.size,
-                                    supportingText = switch.supportingText,
-                                ) { enabled -> viewModel.setEnabled(provider, enabled) }
-                            }
-                            if (account.enabled) {
-                                AccountCard(
-                                    loggedIn = account.signedIn,
-                                    nickname = account.identity?.name,
-                                    avatarUrl = account.identity?.avatarUrl,
-                                    providerLabel = descriptor.accountLabel,
-                                    signedOutHint = descriptor.signInUnavailableReason ?: descriptor.signedOutHint,
-                                    accentPalette = palette,
-                                    onLogin = if (account.registration.canSignIn) {
-                                        { onOpenLogin(provider) }
-                                    } else {
-                                        null
-                                    },
-                                    onLogout = { logoutConfirmationFor = provider },
-                                    index = rows.indexOf(AccountRow.Account),
-                                    count = rows.size,
-                                )
-                                if (server != null) {
-                                    SettingsTextField(
-                                        value = serverDrafts[provider] ?: account.server.orEmpty(),
-                                        label = server.label,
-                                        accentPalette = palette,
-                                        index = rows.indexOf(AccountRow.Server),
-                                        count = rows.size,
-                                        supportingText = strings.serverAddressHint(server.appliesWhen),
-                                        onDraftChange = { serverDrafts[provider] = it },
-                                        onCommit = { raw ->
-                                            serverDrafts.remove(provider)
-                                            viewModel.saveServer(provider, raw)
-                                        },
-                                    )
-                                    if (server.check != null) {
-                                        SettingsButton(
-                                            label = if (account.checkingServer) strings.checking else strings.checkAddress,
-                                            accentPalette = palette,
-                                            index = rows.indexOf(AccountRow.ServerCheck),
-                                            count = rows.size,
-                                        ) {
-                                            viewModel.checkServer(
-                                                provider,
-                                                serverDrafts[provider] ?: account.server.orEmpty(),
-                                            )
+                                // The rows of this provider's group, so each takes its place in the
+                                // connected shape whatever is shown.
+                                val rows = buildList {
+                                    if (switch != null) add(AccountRow.Switch)
+                                    if (account.enabled) {
+                                        add(AccountRow.Account)
+                                        if (server != null) add(AccountRow.Server)
+                                        if (server?.check != null) add(AccountRow.ServerCheck)
+                                        if (textMethod != null) {
+                                            add(AccountRow.CredentialExpander)
+                                            if (credentialExpanded) add(AccountRow.Credential)
                                         }
                                     }
                                 }
-                                if (textMethod != null) {
-                                    SettingsExpanderRow(
-                                        label = strings.enterFieldManually(textMethod.fieldLabel),
-                                        supportingText = strings.advancedHint(textMethod.supportingText),
-                                        expanded = credentialExpanded,
+
+                                SettingsSectionLabel(provider.displayName, palette)
+                                if (switch != null) {
+                                    SettingsSwitch(
+                                        checked = account.enabled,
+                                        label = switch.label,
                                         accentPalette = palette,
-                                        index = rows.indexOf(AccountRow.CredentialExpander),
+                                        index = rows.indexOf(AccountRow.Switch),
                                         count = rows.size,
-                                        onToggle = { expandedCredentialFields[provider] = !credentialExpanded },
+                                        supportingText = switch.supportingText,
+                                    ) { enabled -> viewModel.setEnabled(provider, enabled) }
+                                }
+                                if (account.enabled) {
+                                    AccountCard(
+                                        loggedIn = account.signedIn,
+                                        nickname = account.identity?.name,
+                                        avatarUrl = account.identity?.avatarUrl,
+                                        providerLabel = descriptor.accountLabel,
+                                        signedOutHint = descriptor.signInUnavailableReason ?: descriptor.signedOutHint,
+                                        accentPalette = palette,
+                                        onLogin = if (account.registration.canSignIn) {
+                                            { onOpenLogin(provider) }
+                                        } else {
+                                            null
+                                        },
+                                        onLogout = { logoutConfirmationFor = provider },
+                                        index = rows.indexOf(AccountRow.Account),
+                                        count = rows.size,
                                     )
-                                    if (credentialExpanded) {
-                                        // Obscured, and never part of the settings backup.
+                                    if (server != null) {
+                                        var addressEditor by remember { mutableStateOf<TextFieldState?>(null) }
                                         SettingsTextField(
-                                            value = credentialDrafts[provider] ?: account.credential,
-                                            label = textMethod.fieldLabel,
-                                            obscureText = true,
+                                            value = account.server.orEmpty(),
+                                            label = server.label,
                                             accentPalette = palette,
-                                            index = rows.indexOf(AccountRow.Credential),
+                                            index = rows.indexOf(AccountRow.Server),
                                             count = rows.size,
-                                            onDraftChange = { credentialDrafts[provider] = it },
-                                            onCommit = { raw ->
-                                                credentialDrafts.remove(provider)
-                                                viewModel.saveCredential(provider, raw)
+                                            supportingText = strings.serverAddressHint(server.appliesWhen),
+                                            isActive = isActive,
+                                            onCommit = { viewModel.saveServer(provider, it) },
+                                            onEditorReady = { addressEditor = it },
+                                        )
+                                        if (server.check != null) {
+                                            SettingsButton(
+                                                label = if (account.checkingServer) strings.checking else strings.checkAddress,
+                                                accentPalette = palette,
+                                                index = rows.indexOf(AccountRow.ServerCheck),
+                                                count = rows.size,
+                                            ) {
+                                                viewModel.checkServer(
+                                                    provider,
+                                                    addressEditor?.text?.toString() ?: account.server.orEmpty(),
+                                                )
+                                            }
+                                        }
+                                    }
+                                    if (textMethod != null) {
+                                        SettingsExpanderRow(
+                                            label = strings.enterFieldManually(textMethod.fieldLabel),
+                                            supportingText = strings.advancedHint(textMethod.supportingText),
+                                            expanded = credentialExpanded,
+                                            accentPalette = palette,
+                                            index = rows.indexOf(AccountRow.CredentialExpander),
+                                            count = rows.size,
+                                            onToggle = {
+                                                expandedCredentialFields = ArrayList(
+                                                    if (credentialExpanded) expandedCredentialFields - provider.key
+                                                    else expandedCredentialFields + provider.key,
+                                                )
                                             },
                                         )
+                                        if (credentialExpanded) {
+                                            // Obscured, and never part of the settings backup.
+                                            SettingsTextField(
+                                                value = account.credential,
+                                                label = textMethod.fieldLabel,
+                                                obscureText = true,
+                                                accentPalette = palette,
+                                                index = rows.indexOf(AccountRow.Credential),
+                                                count = rows.size,
+                                                isActive = isActive,
+                                                onCommit = { viewModel.saveCredential(provider, it) },
+                                            )
+                                        }
                                     }
-                                }
-                                account.serverCheck?.let { check ->
-                                    ServerCheckLine(
-                                        message = check.message,
-                                        reachable = check.reachable,
-                                        palette = palette,
-                                    )
+                                    account.serverCheck?.let { check ->
+                                        ServerCheckLine(
+                                            message = check.message,
+                                            reachable = check.reachable,
+                                            palette = palette,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -337,7 +356,7 @@ fun AccountsScreen(
                 TextButton(
                     onClick = {
                         logoutConfirmationFor = null
-                        credentialDrafts.remove(provider)
+                        expandedCredentialFields = ArrayList(expandedCredentialFields - provider.key)
                         viewModel.signOut(provider)
                     },
                 ) { Text(strings.signOutConfirm) }
@@ -349,29 +368,16 @@ fun AccountsScreen(
     }
 
     if (renamingLocal) {
-        var draft by remember(localName) { mutableStateOf(localName) }
-        AlertDialog(
-            onDismissRequest = { renamingLocal = false },
-            title = { Text(strings.localAccountName) },
-            text = {
-                OutlinedTextField(
-                    value = draft,
-                    onValueChange = { draft = it },
-                    label = { Text(strings.name) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        renamingLocal = false
-                        viewModel.renameLocal(draft)
-                    },
-                ) { Text(strings.save) }
-            },
-            dismissButton = {
-                TextButton(onClick = { renamingLocal = false }) { Text(strings.cancel) }
+        TextEntryDialog(
+            title = strings.localAccountName,
+            label = strings.name,
+            confirmLabel = strings.save,
+            initialValue = localName,
+            allowBlank = true,
+            onDismiss = { renamingLocal = false },
+            onConfirm = { name ->
+                renamingLocal = false
+                viewModel.renameLocal(name)
             },
         )
     }

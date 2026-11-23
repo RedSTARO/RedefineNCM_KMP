@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -21,11 +22,13 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -41,12 +44,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -60,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusicComments
+import com.leejlredstar.redefinencm.kmp.getPlatform
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
@@ -95,6 +102,31 @@ internal class CommentPaging(
     val onLoadMore: () -> Unit,
 )
 
+/** Keep Material's dialog behavior, but give a short Android window a usable list viewport. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun PlaybackModalSheet(
+    accentPalette: ContentAccentPalette,
+    onDismiss: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val android = remember { getPlatform().isAndroid }
+    val windowHeight = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
+    // Latch the initial presentation. Resizing an already open sheet must not replace its
+    // SheetState (or dispose the list); in a short window Material also drops its partial anchor.
+    val skipPartial = rememberSaveable { android && windowHeight < 480.dp }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = skipPartial)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = accentPalette.pageEnd,
+        contentColor = accentPalette.onQuietContainer,
+        contentWindowInsets = {
+            if (android) WindowInsets.playbackSafeContent else BottomSheetDefaults.modalWindowInsets
+        },
+    ) { content() }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun QueueBottomSheet(
@@ -105,11 +137,7 @@ internal fun QueueBottomSheet(
     actions: QueueActions,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = accentPalette.pageEnd,
-        contentColor = accentPalette.onQuietContainer,
-    ) {
+    PlaybackModalSheet(accentPalette, onDismiss) {
         QueuePanelContent(
             playlist = playlist,
             currentIndex = currentIndex,
@@ -138,6 +166,7 @@ internal fun QueuePanelContent(
     onSkipped: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val android = remember { getPlatform().isAndroid }
     val listState = rememberLazyListState()
     val queueEntries = remember(playlist) {
         val occurrences = mutableMapOf<String, Int>()
@@ -163,15 +192,19 @@ internal fun QueuePanelContent(
     val currentShown by rememberUpdatedState(shown)
     val currentKey = queueEntries.getOrNull(currentIndex)?.key
     val canReorder = !shuffleEnabled && queueEntries.size > 1
-    var confirmClear by remember { mutableStateOf(false) }
+    var confirmClear by rememberSaveable { mutableStateOf(false) }
+    var lastFollowedIndex by rememberSaveable { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(currentIndex, playlist.size) {
+        if (android && currentIndex == lastFollowedIndex) return@LaunchedEffect
         if (currentIndex >= 0 && currentIndex < playlist.size && reorder.working == null) {
-            listState.scrollToItem(currentIndex)
+            // At the start of the queue, retain the title and clear button before the first song.
+            listState.scrollToItem(currentIndex + if (android && currentIndex > 0) 1 else 0)
+            lastFollowedIndex = currentIndex
         }
     }
 
-    Column(modifier) {
+    val header: @Composable () -> Unit = {
         ExpressiveSectionTitle(
             text = strings.queue,
             supportingText = when {
@@ -188,11 +221,15 @@ internal fun QueuePanelContent(
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
         )
         Spacer(Modifier.height(12.dp))
+    }
+    Column(modifier) {
+        if (!android) header()
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(bottom = 24.dp),
         ) {
+            if (android) item(key = "queue-header") { header() }
             if (shown.isEmpty()) {
                 item(key = "empty-queue") {
                     ExpressiveStatePanel(
@@ -478,11 +515,7 @@ internal fun CommentBottomSheet(
     totalCount: Long = 0L,
     unsupported: Boolean = false,
 ) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = accentPalette.pageEnd,
-        contentColor = accentPalette.onQuietContainer,
-    ) {
+    PlaybackModalSheet(accentPalette, onDismiss) {
         CommentPanelContent(
             comments = comments,
             hasLoadedData = hasLoadedData,
@@ -519,6 +552,7 @@ internal fun CommentPanelContent(
     /** The track's provider has no comments; the sheet says so instead of "no comments yet". */
     unsupported: Boolean = false,
 ) {
+    val android = remember { getPlatform().isAndroid }
     if (unsupported) {
         Column(modifier) {
             ExpressiveSectionTitle(
@@ -554,7 +588,7 @@ internal fun CommentPanelContent(
         }
     }
 
-    Column(modifier) {
+    val header: @Composable () -> Unit = {
         ExpressiveSectionTitle(
             text = strings.songComments,
             supportingText = when {
@@ -602,10 +636,14 @@ internal fun CommentPanelContent(
             }
         }
         Spacer(Modifier.height(12.dp))
+    }
+    Column(modifier) {
+        if (!android) header()
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(bottom = 24.dp),
         ) {
+            if (android) item(key = "comments-header") { header() }
             if (isFromCache) {
                 item(key = "comments-cache-hint") {
                     ExpressiveCacheHint(

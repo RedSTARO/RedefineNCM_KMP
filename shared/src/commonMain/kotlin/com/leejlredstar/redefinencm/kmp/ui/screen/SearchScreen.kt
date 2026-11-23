@@ -1,6 +1,7 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,10 +14,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.InputTransformation
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.maxLength
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ButtonDefaults
 import com.leejlredstar.redefinencm.kmp.i18n.I18n
 import com.leejlredstar.redefinencm.kmp.i18n.UiText
@@ -41,11 +48,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.provider.LibraryAggregationMode
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderTrack
@@ -54,16 +61,19 @@ import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
+import com.leejlredstar.redefinencm.kmp.ui.component.MaxSavedEditorLength
+import com.leejlredstar.redefinencm.kmp.ui.component.boundedSavedEditorText
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberConnectedListItemShape
+import com.leejlredstar.redefinencm.kmp.ui.component.rememberEditorFocus
+import com.leejlredstar.redefinencm.kmp.ui.component.rememberSaveableEditorText
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.legibleAccentFor
 import com.leejlredstar.redefinencm.kmp.ui.theme.pageLinkColor
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
-import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
@@ -84,11 +94,13 @@ import androidx.compose.foundation.layout.Arrangement
  * @param focusRequest raised by the home page's search pill and Ctrl/⌘+F: put the cursor in the
  *   field and bring up the keyboard. Switching to the tab by itself does not.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
-    bottomPadding: androidx.compose.ui.unit.Dp,
+    bottomPadding: Dp,
     focusRequest: Int = 0,
     onFocusRequestHandled: () -> Unit = {},
+    isActive: Boolean = true,
     viewModel: MainViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
     settings: PlatformSettings = koinInject(),
@@ -98,7 +110,7 @@ fun SearchScreen(
     val failedProviders by viewModel.searchFailedProviders.collectAsState()
     val groups by viewModel.searchGroups.collectAsState()
     val aggregationMode by viewModel.searchAggregationMode.collectAsState()
-    val suggestions by viewModel.searchSuggestions.collectAsState()
+    val suggested by viewModel.searchSuggestions.collectAsState()
     val loading by viewModel.searchLoading.collectAsState()
     val submittedQuery by viewModel.searchSubmittedQuery.collectAsState()
     val searchError by viewModel.searchError.collectAsState()
@@ -108,297 +120,326 @@ fun SearchScreen(
     val history by viewModel.searchHistory.collectAsState()
     val hotSearches by viewModel.hotSearches.collectAsState()
     val keyboard = LocalSoftwareKeyboardController.current
-    val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val editor = rememberEditorFocus(isActive, openRequest = focusRequest, onOpenRequestHandled = onFocusRequestHandled)
     val searchPrediction = remember { settings.getBoolean(SettingKeys.SEARCH_PREDICTION, true) }
     val searchPalette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
 
-    var query by rememberSaveable { mutableStateOf("") }
-    LaunchedEffect(Unit) { viewModel.loadHotSearches() }
-    val onQueryChange: (String) -> Unit = { query = it }
+    val queryField = rememberSaveableEditorText()
+    val query = queryField.text.toString()
+    // The draft may differ from the last submitted search. Keep only that query and list
+    // offsets in saved state; live results and provider cursors stay in the process.
+    var lastSubmission by rememberSaveable { mutableStateOf<String?>(null) }
+    val resultsState = rememberLazyListState()
+    val suggestionsState = rememberLazyListState()
+    val startState = rememberLazyListState()
+    val panelState = rememberLazyListState()
+    val suggestions = suggested?.takeIf { it.query == query.trim() }?.items.orEmpty()
 
-    LaunchedEffect(focusRequest) {
-        if (focusRequest <= 0) return@LaunchedEffect
-        delay(220)
-        if (runCatching { focusRequester.requestFocus() }.isSuccess) {
-            keyboard?.show()
-        }
-        onFocusRequestHandled()
+    LaunchedEffect(isActive, viewModel) {
+        if (!isActive) return@LaunchedEffect
+        viewModel.loadHotSearches()
+        lastSubmission?.let(viewModel::restoreSearch)
     }
-
-    LaunchedEffect(query) {
-        if (query.isBlank()) {
-            viewModel.clearSearch()
-        } else if (searchPrediction) {
-            delay(300)
-            viewModel.fetchSearchSuggestions(query)
+    LaunchedEffect(isActive, query, submittedQuery, searchPrediction) {
+        if (!isActive) return@LaunchedEffect
+        when {
+            query.isBlank() && lastSubmission != null -> {
+                lastSubmission = null
+                resultsState.requestScrollToItem(0)
+                viewModel.clearSearch()
+            }
+            query.isNotBlank() && query.trim() != submittedQuery && searchPrediction -> {
+                // A recreated screen may already have suggestions (and their scroll position).
+                if (viewModel.requestSearchSuggestions(query)) suggestionsState.requestScrollToItem(0)
+            }
+            else -> viewModel.clearSearchSuggestions()
         }
     }
 
     fun submit(text: String) {
-        if (text.isBlank()) return
-        onQueryChange(text)
+        val draft = boundedSavedEditorText(text)
+        val term = draft.trim()
+        if (term.isEmpty()) return
+        if (term != lastSubmission) resultsState.requestScrollToItem(0)
+        lastSubmission = term
+        if (queryField.text.toString() != draft) queryField.setTextAndPlaceCursorAtEnd(draft)
+        focusManager.clearFocus(force = true)
         keyboard?.hide()
-        viewModel.search(text)
+        viewModel.search(term)
     }
     val playWholeList = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT) }
     val submittedMatchesQuery = submittedQuery != null && submittedQuery == query.trim()
+    val perProvider = aggregationMode == LibraryAggregationMode.PER_PROVIDER && groups.size > 1
+    val showingResults = submittedMatchesQuery && !loading && results.isNotEmpty() &&
+        (if (perProvider) groups.isNotEmpty() else entries.isNotEmpty())
+    val showingSuggestions = !submittedMatchesQuery && query.isNotBlank() && searchPrediction && suggestions.isNotEmpty()
+    val showingStart = query.isBlank() && (history.isNotEmpty() || hotSearches.isNotEmpty())
+    // A loading/error/prompt item has a different geometry from a list. Never measure a restored
+    // list anchor against a placeholder or Compose will clamp its index before the rows arrive.
+    val bodyState = when {
+        showingResults -> resultsState
+        showingSuggestions -> suggestionsState
+        showingStart -> startState
+        else -> panelState
+    }
+    val horizontalPadding = if (showingSuggestions || query.isBlank()) SearchSpacing.Page else 0.dp
 
     ExpressivePage(
         accentPalette = searchPalette,
-        maxContentWidth = com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout.ReadingContentMaxWidth,
+        maxContentWidth = ExpressiveLayout.ReadingContentMaxWidth,
         contentWindowInsets = WindowInsets.statusBars,
     ) {
         // The page's side padding is applied per element rather than around the whole page: the
         // result rows carry their own 16dp inset, as on every other page, and inside a padded
         // page they were inset twice.
-        Column(modifier = Modifier.fillMaxSize()) {
-        Text(
-            text = strings.search,
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.ExtraBold,
-            color = searchPalette.onPageStart,
-            modifier = Modifier.padding(
-                start = SearchSpacing.Page + SearchSpacing.Inset,
-                top = SearchSpacing.SectionGap,
-                bottom = SearchSpacing.TitleGap,
-            ),
-        )
-        Row(
-            modifier = Modifier.padding(start = SearchSpacing.Page, end = SearchSpacing.Page, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextField(
-                value = query,
-                onValueChange = onQueryChange,
-                placeholder = { Text(SearchPlaceholder) },
-                singleLine = true,
-                leadingIcon = { Icon(AppIcons.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (query.isNotEmpty()) {
-                        Row {
-                            IconButton(onClick = { onQueryChange(""); viewModel.clearSearch() }) {
-                                Icon(AppIcons.Clear, contentDescription = strings.clearSearch)
-                            }
-                            // The keyboard's search key is not the only way to run a search.
-                            IconButton(onClick = { submit(query) }) {
-                                Icon(
-                                    AppIcons.Search,
-                                    contentDescription = strings.search,
-                                    tint = searchPalette.accent,
-                                )
-                            }
-                        }
-                    }
-                },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { submit(query) }),
-                shape = CircleShape,
-                modifier = Modifier
-                    .focusRequester(focusRequester)
-                    .fillMaxWidth(),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = searchPalette.quietContainer,
-                    unfocusedContainerColor = searchPalette.quietContainer,
-                    focusedTextColor = searchPalette.onQuietContainer,
-                    unfocusedTextColor = searchPalette.onQuietContainer,
-                    focusedLeadingIconColor = searchPalette.accent,
-                    unfocusedLeadingIconColor = searchPalette.secondaryOnQuietContainer,
-                    focusedTrailingIconColor = searchPalette.onQuietContainer,
-                    unfocusedTrailingIconColor = searchPalette.onQuietContainer,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                ),
-            )
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        when {
-            loading && submittedMatchesQuery -> {
-                ExpressiveLoadingState(
-                    label = strings.searchingFor(submittedQuery ?: query),
-                    accentColor = searchPalette.accent,
-                    modifier = Modifier.padding(horizontal = SearchSpacing.Page).padding(top = SearchSpacing.SectionGap),
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val compactHeight = maxHeight < 320.dp
+            Column(Modifier.fillMaxSize()) {
+                if (!compactHeight) Text(
+                    text = strings.search,
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = searchPalette.onPageStart,
+                    modifier = Modifier.padding(
+                        start = SearchSpacing.Page + SearchSpacing.Inset,
+                        top = SearchSpacing.SectionGap,
+                        bottom = SearchSpacing.TitleGap,
+                    ),
                 )
-            }
-            // Only a total failure replaces the results. With two providers configured, one being
-            // down still leaves the other's hits worth showing; the notice inside the list reports
-            // that case instead.
-            searchError != null && results.isEmpty() && submittedMatchesQuery -> {
-                ExpressiveStatePanel(
-                    title = strings.searchFailed,
-                    message = searchError?.text.orEmpty(),
-                    icon = AppIcons.Refresh,
-                    tone = ExpressiveStateTone.Error,
-                    accentPalette = searchPalette,
-                    actionLabel = strings.retry,
-                    onAction = { submit(submittedQuery ?: query) },
-                    modifier = Modifier.padding(horizontal = SearchSpacing.Page).padding(top = SearchSpacing.SectionGap),
-                )
-            }
-            results.isNotEmpty() && submittedMatchesQuery -> {
-                // Both aggregation views ship. Merged interleaves providers into one list; the
-                // per-provider view keeps them under their own headers. The setting picks.
-                val perProvider = aggregationMode == LibraryAggregationMode.PER_PROVIDER &&
-                    groups.size > 1
-                val showProviderBadge = groups.size > 1 && !perProvider
-
-                // Playing keeps the results on screen: the next result is one tap away.
-                fun play(list: List<ProviderTrack>, index: Int) {
-                    playFromList(
-                        player,
-                        list.map { it.toMediaInfo() },
-                        index,
-                        playWholeList,
-                        source = (submittedQuery ?: query).let { searched -> UiText { it.playbackSourceSearch(searched) } },
+                Row(
+                    modifier = Modifier.padding(
+                        start = SearchSpacing.Page,
+                        top = if (compactHeight) 4.dp else 0.dp,
+                        end = SearchSpacing.Page,
+                        bottom = 4.dp,
+                    ),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextField(
+                        state = queryField,
+                        placeholder = { Text(SearchPlaceholder) },
+                        lineLimits = TextFieldLineLimits.SingleLine,
+                        inputTransformation = InputTransformation.maxLength(MaxSavedEditorLength),
+                        leadingIcon = { Icon(AppIcons.Search, contentDescription = null) },
+                        trailingIcon = {
+                            if (query.isNotEmpty()) {
+                                Row {
+                                    IconButton(onClick = {
+                                        queryField.setTextAndPlaceCursorAtEnd("")
+                                        lastSubmission = null
+                                        resultsState.requestScrollToItem(0)
+                                        viewModel.clearSearch()
+                                    }) {
+                                        Icon(AppIcons.Clear, contentDescription = strings.clearSearch)
+                                    }
+                                    // The keyboard's search key is not the only way to run a search.
+                                    IconButton(onClick = { submit(queryField.text.toString()) }) {
+                                        Icon(
+                                            AppIcons.Search,
+                                            contentDescription = strings.search,
+                                            tint = searchPalette.accent,
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search, showKeyboardOnFocus = editor.showKeyboardOnFocus),
+                        onKeyboardAction = { submit(queryField.text.toString()) },
+                        shape = CircleShape,
+                        modifier = editor.modifier.fillMaxWidth(),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = searchPalette.quietContainer,
+                            unfocusedContainerColor = searchPalette.quietContainer,
+                            focusedTextColor = searchPalette.onQuietContainer,
+                            unfocusedTextColor = searchPalette.onQuietContainer,
+                            focusedLeadingIconColor = searchPalette.accent,
+                            unfocusedLeadingIconColor = searchPalette.secondaryOnQuietContainer,
+                            focusedTrailingIconColor = searchPalette.onQuietContainer,
+                            unfocusedTrailingIconColor = searchPalette.onQuietContainer,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                        ),
                     )
-                    player.play()
                 }
 
-                // Bottom clearance so the last results can be scrolled clear of the floating
-                // navigation and the mini player.
                 LazyColumn(
+                    state = bodyState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = bottomPadding),
+                    contentPadding = PaddingValues(
+                        start = horizontalPadding,
+                        top = if (compactHeight) 4.dp else 8.dp,
+                        end = horizontalPadding,
+                        bottom = bottomPadding,
+                    ),
                 ) {
-                    searchError?.let { partialFailure ->
-                        item(key = "partial-failure") {
-                            SearchProviderHeader(
-                                label = partialFailure.text,
-                                accent = MaterialTheme.colorScheme.error,
-                                // The failed providers are asked for the page they missed; the
-                                // results already shown stay where they are.
-                                actionLabel = if (failedProviders.isNotEmpty() && !loadingMore) strings.retry else null,
-                                onAction = viewModel::retryFailedSearchProviders,
+                    when {
+                        loading && submittedMatchesQuery -> item(key = "loading") {
+                            ExpressiveLoadingState(
+                                label = strings.searchingFor(submittedQuery ?: query),
+                                accentColor = searchPalette.accent,
+                                modifier = Modifier.padding(horizontal = SearchSpacing.Page).padding(top = SearchSpacing.SectionGap),
                             )
                         }
-                    }
-                    if (perProvider) {
-                        groups.forEach { group ->
-                            item(key = "header-${group.provider.key}") {
-                                SearchProviderHeader(
-                                    label = group.provider.displayName,
-                                    accent = searchPalette.accent,
+                        // Only a total failure replaces the results. With two providers configured, one being
+                        // down still leaves the other's hits worth showing; the notice inside the list reports
+                        // that case instead.
+                        searchError != null && results.isEmpty() && submittedMatchesQuery -> item(key = "error") {
+                            ExpressiveStatePanel(
+                                title = strings.searchFailed,
+                                message = searchError?.text.orEmpty(),
+                                icon = AppIcons.Refresh,
+                                tone = ExpressiveStateTone.Error,
+                                accentPalette = searchPalette,
+                                actionLabel = strings.retry,
+                                onAction = { submit(submittedQuery ?: query) },
+                                modifier = Modifier.padding(horizontal = SearchSpacing.Page).padding(top = SearchSpacing.SectionGap),
+                            )
+                        }
+                        showingResults -> {
+                            val showProviderBadge = groups.size > 1 && !perProvider
+
+                            // Playing keeps the results on screen: the next result is one tap away.
+                            fun play(list: List<ProviderTrack>, index: Int) {
+                                playFromList(
+                                    player,
+                                    list.map { it.toMediaInfo() },
+                                    index,
+                                    playWholeList,
+                                    source = (submittedQuery ?: query).let { searched -> UiText { it.playbackSourceSearch(searched) } },
+                                )
+                                player.play()
+                            }
+
+                            searchError?.let { partialFailure ->
+                                item(key = "partial-failure") {
+                                    SearchProviderHeader(
+                                        label = partialFailure.text,
+                                        accent = MaterialTheme.colorScheme.error,
+                                        // The failed providers are asked for the page they missed; the
+                                        // results already shown stay where they are.
+                                        actionLabel = if (failedProviders.isNotEmpty() && !loadingMore) strings.retry else null,
+                                        onAction = viewModel::retryFailedSearchProviders,
+                                    )
+                                }
+                            }
+                            if (perProvider) {
+                                groups.forEach { group ->
+                                    item(key = "header-${group.provider.key}") {
+                                        SearchProviderHeader(
+                                            label = group.provider.displayName,
+                                            accent = searchPalette.accent,
+                                        )
+                                    }
+                                    itemsIndexed(
+                                        items = group.tracks,
+                                        key = { _, track -> "${group.provider.key}-${track.id}" },
+                                    ) { index, track ->
+                                        SearchTrackRow(
+                                            index = index,
+                                            track = track,
+                                            count = group.tracks.size,
+                                            showProviderBadge = false,
+                                            onClick = { play(group.tracks, index) },
+                                        )
+                                    }
+                                }
+                            } else {
+                                // One row per song: the same song from several providers is folded into
+                                // one row that names them all, and the others can be played from its menu.
+                                val played = entries.map { it.track }
+                                itemsIndexed(
+                                    items = entries,
+                                    key = { _, entry -> entry.track.id.toString() },
+                                ) { index, entry ->
+                                    SearchTrackRow(
+                                        index = index,
+                                        track = entry.track,
+                                        count = entries.size,
+                                        showProviderBadge = showProviderBadge,
+                                        alsoFrom = entry.alternates,
+                                        onClick = { play(played, index) },
+                                        onPlayAlternate = { alternate ->
+                                            play(played.toMutableList().also { it[index] = alternate }, index)
+                                        },
+                                    )
+                                }
+                            }
+                            item(key = "results-footer") {
+                                SearchResultsFooter(
+                                    hasMore = hasMore,
+                                    loadingMore = loadingMore,
+                                    moreError = moreError?.text,
+                                    shownCount = results.size,
+                                    accent = searchPalette.secondaryOnQuietContainer,
+                                    linkColor = searchPalette.pageLinkColor(),
+                                    onLoadMore = { if (isActive) viewModel.loadMoreSearchResults() },
                                 )
                             }
+                        }
+                        submittedMatchesQuery && results.isEmpty() -> item(key = "no-results") {
+                            ExpressiveStatePanel(
+                                title = strings.noResultsFound,
+                                message = strings.noSongsMatchQuery(submittedQuery),
+                                icon = AppIcons.Search,
+                                accentPalette = searchPalette,
+                                modifier = Modifier.padding(horizontal = SearchSpacing.Page).padding(top = SearchSpacing.SectionGap),
+                            )
+                        }
+                        showingSuggestions -> {
                             itemsIndexed(
-                                items = group.tracks,
-                                key = { _, track -> "${group.provider.key}-${track.id}" },
-                            ) { index, track ->
-                                SearchTrackRow(
-                                    index = index,
-                                    track = track,
-                                    count = group.tracks.size,
-                                    showProviderBadge = false,
-                                    onClick = { play(group.tracks, index) },
-                                )
+                                items = suggestions,
+                                key = { _, keyword -> keyword },
+                            ) { index, keyword ->
+                                val interactionSource = remember { MutableInteractionSource() }
+                                Surface(
+                                    onClick = { submit(keyword) },
+                                    shape = rememberConnectedListItemShape(
+                                        index = index,
+                                        count = suggestions.size,
+                                        interactionSource = interactionSource,
+                                    ),
+                                    color = searchPalette.quietContainer,
+                                    contentColor = searchPalette.onQuietContainer,
+                                    interactionSource = interactionSource,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = ExpressiveLayout.ConnectedItemGap),
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Icon(
+                                            AppIcons.Search,
+                                            contentDescription = null,
+                                            tint = searchPalette.accent,
+                                        )
+                                        Spacer(Modifier.size(12.dp))
+                                        Text(text = keyword, style = MaterialTheme.typography.bodyLarge)
+                                    }
+                                }
                             }
                         }
-                    } else {
-                        // One row per song: the same song from several providers is folded into
-                        // one row that names them all, and the others can be played from its menu.
-                        val played = entries.map { it.track }
-                        itemsIndexed(
-                            items = entries,
-                            key = { _, entry -> entry.track.id.toString() },
-                        ) { index, entry ->
-                            SearchTrackRow(
-                                index = index,
-                                track = entry.track,
-                                count = entries.size,
-                                showProviderBadge = showProviderBadge,
-                                alsoFrom = entry.alternates,
-                                onClick = { play(played, index) },
-                                onPlayAlternate = { alternate ->
-                                    play(played.toMutableList().also { it[index] = alternate }, index)
-                                },
+                        !submittedMatchesQuery && query.isNotBlank() -> item(key = "search-prompt") {
+                            ExpressiveStatePanel(
+                                title = strings.readyToSearch,
+                                message = strings.searchPromptWithQuery(query),
+                                icon = AppIcons.Search,
+                                accentPalette = searchPalette,
+                                modifier = Modifier.padding(horizontal = SearchSpacing.Page),
                             )
                         }
-                    }
-                    item(key = "results-footer") {
-                        SearchResultsFooter(
-                            hasMore = hasMore,
-                            loadingMore = loadingMore,
-                            moreError = moreError?.text,
-                            shownCount = results.size,
-                            accent = searchPalette.secondaryOnQuietContainer,
-                            linkColor = searchPalette.pageLinkColor(),
-                            onLoadMore = viewModel::loadMoreSearchResults,
+                        query.isBlank() -> searchStart(
+                            history = history,
+                            hotSearches = hotSearches,
+                            accentPalette = searchPalette,
+                            onPick = ::submit,
+                            onClearHistory = viewModel::clearSearchHistory,
                         )
                     }
                 }
             }
-            submittedMatchesQuery -> {
-                ExpressiveStatePanel(
-                    title = strings.noResultsFound,
-                    message = strings.noSongsMatchQuery(submittedQuery),
-                    icon = AppIcons.Search,
-                    accentPalette = searchPalette,
-                    modifier = Modifier.padding(horizontal = SearchSpacing.Page).padding(top = SearchSpacing.SectionGap),
-                )
-            }
-            query.isNotBlank() && searchPrediction && suggestions.isNotEmpty() -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        start = SearchSpacing.Page,
-                        end = SearchSpacing.Page,
-                        bottom = bottomPadding,
-                    ),
-                ) {
-                    itemsIndexed(
-                        items = suggestions,
-                        key = { _, keyword -> keyword },
-                    ) { index, keyword ->
-                        val interactionSource = remember { MutableInteractionSource() }
-                        Surface(
-                            onClick = { submit(keyword) },
-                            shape = rememberConnectedListItemShape(
-                                index = index,
-                                count = suggestions.size,
-                                interactionSource = interactionSource,
-                            ),
-                            color = searchPalette.quietContainer,
-                            contentColor = searchPalette.onQuietContainer,
-                            interactionSource = interactionSource,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = ExpressiveLayout.ConnectedItemGap),
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    AppIcons.Search,
-                                    contentDescription = null,
-                                    tint = searchPalette.accent,
-                                )
-                                Spacer(Modifier.size(12.dp))
-                                Text(text = keyword, style = MaterialTheme.typography.bodyLarge)
-                            }
-                        }
-                    }
-                }
-            }
-            query.isNotBlank() -> {
-                ExpressiveStatePanel(
-                    title = strings.readyToSearch,
-                    message = strings.searchPromptWithQuery(query),
-                    icon = AppIcons.Search,
-                    accentPalette = searchPalette,
-                    modifier = Modifier.padding(horizontal = SearchSpacing.Page),
-                )
-            }
-            else -> SearchStart(
-                history = history,
-                hotSearches = hotSearches,
-                accentPalette = searchPalette,
-                bottomPadding = bottomPadding,
-                onPick = ::submit,
-                onClearHistory = viewModel::clearSearchHistory,
-            )
-        }
         }
     }
 }
@@ -407,130 +448,119 @@ fun SearchScreen(
  * What search offers before a query: the user's recent searches and today's hot-search chart.
  */
 @OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun SearchStart(
+private fun LazyListScope.searchStart(
     history: List<String>,
     hotSearches: List<SearchHotItem>,
     accentPalette: ContentAccentPalette,
-    bottomPadding: androidx.compose.ui.unit.Dp,
     onPick: (String) -> Unit,
     onClearHistory: () -> Unit,
 ) {
     if (history.isEmpty() && hotSearches.isEmpty()) {
-        ExpressiveStatePanel(
-            title = strings.searchEmptyTitle,
-            message = strings.searchEmptyHint,
-            icon = AppIcons.Search,
-            accentPalette = accentPalette,
-            modifier = Modifier.padding(horizontal = SearchSpacing.Page).padding(top = SearchSpacing.SectionGap),
-        )
+        item(key = "search-empty") {
+            ExpressiveStatePanel(
+                title = strings.searchEmptyTitle,
+                message = strings.searchEmptyHint,
+                icon = AppIcons.Search,
+                accentPalette = accentPalette,
+                modifier = Modifier.padding(top = SearchSpacing.SectionGap),
+            )
+        }
         return
     }
     val hot = hotSearches.take(HotSearchCount)
-    // The top three ranks are drawn in the accent, moved toward the row's text colour as far as
-    // AA needs: the raw accent on the quiet container was 3.4 to 4.1:1 in light mode.
-    val surface = MaterialTheme.colorScheme.surface
-    val rankAccent = remember(accentPalette, surface) {
-        legibleAccentFor(accentPalette.accent, accentPalette.quietContainer, surface)
-    }
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = SearchSpacing.Page,
-            end = SearchSpacing.Page,
-            bottom = bottomPadding,
-        ),
-    ) {
-        if (history.isNotEmpty()) {
-            item(key = "history-title") {
-                ExpressiveSectionTitle(
-                    text = strings.searchHistory,
-                    action = {
-                        TextButton(
-                            onClick = onClearHistory,
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = accentPalette.pageLinkColor(),
-                            ),
-                        ) { Text(strings.clearSearch) }
-                    },
-                    modifier = Modifier.padding(
-                        start = SearchSpacing.Inset,
-                        top = SearchSpacing.SectionGap,
-                        bottom = SearchSpacing.TitleGap,
-                    ),
-                )
-            }
-            item(key = "history") {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(SearchSpacing.ChipGap),
-                    verticalArrangement = Arrangement.spacedBy(SearchSpacing.ChipGap),
-                    modifier = Modifier.padding(start = SearchSpacing.Inset),
-                ) {
-                    history.forEach { word ->
-                        SuggestionChip(
-                            onClick = { onPick(word) },
-                            label = { Text(word, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                            colors = SuggestionChipDefaults.suggestionChipColors(
-                                containerColor = accentPalette.quietContainer,
-                                labelColor = accentPalette.onQuietContainer,
-                            ),
-                            border = null,
-                        )
-                    }
+    if (history.isNotEmpty()) {
+        item(key = "history-title") {
+            ExpressiveSectionTitle(
+                text = strings.searchHistory,
+                action = {
+                    TextButton(
+                        onClick = onClearHistory,
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = accentPalette.pageLinkColor(),
+                        ),
+                    ) { Text(strings.clearSearch) }
+                },
+                modifier = Modifier.padding(
+                    start = SearchSpacing.Inset,
+                    top = SearchSpacing.SectionGap,
+                    bottom = SearchSpacing.TitleGap,
+                ),
+            )
+        }
+        item(key = "history") {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(SearchSpacing.ChipGap),
+                verticalArrangement = Arrangement.spacedBy(SearchSpacing.ChipGap),
+                modifier = Modifier.padding(start = SearchSpacing.Inset),
+            ) {
+                history.forEach { word ->
+                    SuggestionChip(
+                        onClick = { onPick(word) },
+                        label = { Text(word, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        colors = SuggestionChipDefaults.suggestionChipColors(
+                            containerColor = accentPalette.quietContainer,
+                            labelColor = accentPalette.onQuietContainer,
+                        ),
+                        border = null,
+                    )
                 }
             }
         }
-        if (hot.isNotEmpty()) {
-            item(key = "hot-title") {
-                ExpressiveSectionTitle(
-                    text = strings.popularSearches,
-                    modifier = Modifier.padding(
-                        start = SearchSpacing.Inset,
-                        top = SearchSpacing.SectionGap,
-                        bottom = SearchSpacing.TitleGap,
-                    ),
-                )
+    }
+    if (hot.isNotEmpty()) {
+        item(key = "hot-title") {
+            ExpressiveSectionTitle(
+                text = strings.popularSearches,
+                modifier = Modifier.padding(
+                    start = SearchSpacing.Inset,
+                    top = SearchSpacing.SectionGap,
+                    bottom = SearchSpacing.TitleGap,
+                ),
+            )
+        }
+        itemsIndexed(
+            items = hot,
+            key = { index, item -> "hot-$index-${item.searchWord}" },
+        ) { index, item ->
+            val surface = MaterialTheme.colorScheme.surface
+            val rankAccent = remember(accentPalette, surface) {
+                legibleAccentFor(accentPalette.accent, accentPalette.quietContainer, surface)
             }
-            itemsIndexed(
-                items = hot,
-                key = { index, item -> "hot-$index-${item.searchWord}" },
-            ) { index, item ->
-                Surface(
-                    onClick = { onPick(item.searchWord) },
-                    shape = connectedListItemShape(index, hot.size),
-                    color = accentPalette.quietContainer,
-                    contentColor = accentPalette.onQuietContainer,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = ExpressiveLayout.ConnectedItemGap),
+            Surface(
+                onClick = { onPick(item.searchWord) },
+                shape = connectedListItemShape(index, hot.size),
+                color = accentPalette.quietContainer,
+                contentColor = accentPalette.onQuietContainer,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = ExpressiveLayout.ConnectedItemGap),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
+                    Text(
+                        text = "${index + 1}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (index < 3) rankAccent else accentPalette.secondaryOnQuietContainer,
+                        modifier = Modifier.width(32.dp),
+                    )
+                    Column(Modifier.weight(1f)) {
                         Text(
-                            text = "${index + 1}",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (index < 3) rankAccent else accentPalette.secondaryOnQuietContainer,
-                            modifier = Modifier.width(32.dp),
+                            text = item.searchWord,
+                            style = MaterialTheme.typography.bodyLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
-                        Column(Modifier.weight(1f)) {
+                        if (item.content.isNotBlank()) {
                             Text(
-                                text = item.searchWord,
-                                style = MaterialTheme.typography.bodyLarge,
+                                text = item.content,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = accentPalette.secondaryOnQuietContainer,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            if (item.content.isNotBlank()) {
-                                Text(
-                                    text = item.content,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = accentPalette.secondaryOnQuietContainer,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
                         }
                     }
                 }

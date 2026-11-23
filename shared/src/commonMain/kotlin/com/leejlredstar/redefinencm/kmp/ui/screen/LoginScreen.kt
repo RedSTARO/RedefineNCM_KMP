@@ -1,7 +1,9 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,12 +11,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
@@ -28,7 +36,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -40,7 +47,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.auth.ProviderServerSetting
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderId
@@ -48,6 +58,8 @@ import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.i18n.text
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
+import com.leejlredstar.redefinencm.kmp.ui.component.inMemoryViewModel
+import com.leejlredstar.redefinencm.kmp.ui.component.rememberEditorFocus
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.login.LoginNotice
 import com.leejlredstar.redefinencm.kmp.ui.login.LoginPresenterRegistry
@@ -57,6 +69,7 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.viewmodel.LoginViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.ServerNotice
+import org.koin.compose.currentKoinScope
 import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
 
@@ -74,21 +87,21 @@ import org.koin.core.parameter.parametersOf
 fun LoginScreen(
     onBack: () -> Unit,
     provider: MusicProviderId = MusicProviderId.NETEASE,
-    viewModel: LoginViewModel = koinInject(parameters = { parametersOf(provider) }),
+    isActive: Boolean = true,
     presenters: LoginPresenterRegistry = koinInject(),
 ) {
+    val scope = currentKoinScope()
+    val viewModel: LoginViewModel = inMemoryViewModel(key = provider.key) {
+        scope.get(parameters = { parametersOf(provider) })
+    }
     val signedIn by viewModel.signedIn.collectAsState()
     val finished by viewModel.finished.collectAsState()
     val sections = remember(viewModel, presenters) { presenters.sections(viewModel.methods) }
     val loginPalette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
 
-    DisposableEffect(viewModel) {
-        onDispose { viewModel.onCleared() }
-    }
-
     // Auto-close after a method signs in
-    LaunchedEffect(finished) {
-        if (finished) {
+    LaunchedEffect(finished, isActive) {
+        if (finished && isActive) {
             kotlinx.coroutines.delay(1200)
             onBack()
         }
@@ -98,106 +111,116 @@ fun LoginScreen(
         accentPalette = loginPalette,
         maxContentWidth = ExpressiveLayout.ReadingContentMaxWidth,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
-        ) {
-            // Header. No gradient of its own: ExpressivePage already paints one across the whole
-            // window, and a second one bounded to the content column would end in a hard vertical
-            // edge on wide windows.
-            //
-            // At least as tall as it always was, and taller when the title needs it. At a fixed
-            // height the title sat at the bottom of the box and grew upward: the two-line English
-            // or Japanese title on a phone ran into the back button and "Sign in later".
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val compactHeight = maxHeight < 380.dp
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 204.dp),
-                verticalArrangement = Arrangement.SpaceBetween,
+                    .fillMaxSize()
+                    .navigationBarsPadding()
+                    .verticalScroll(rememberScrollState()),
             ) {
-                Row(
+                // Header. No gradient of its own: ExpressivePage already paints one across the whole
+                // window, and a second one bounded to the content column would end in a hard vertical
+                // edge on wide windows.
+                //
+                // At least as tall as it always was, and taller when the title needs it. At a fixed
+                // height the title sat at the bottom of the box and grew upward: the two-line English
+                // or Japanese title on a phone ran into the back button and "Sign in later".
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                        .heightIn(min = if (compactHeight) 0.dp else 204.dp),
+                    verticalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    IconButton(onClick = onBack) {
-                        Surface(
-                            shape = CircleShape,
-                            color = loginPalette.quietContainer.copy(alpha = 0.78f),
-                            contentColor = loginPalette.onQuietContainer,
-                        ) {
-                            Icon(
-                                AppIcons.ArrowBack,
-                                contentDescription = strings.back,
-                                modifier = Modifier.padding(10.dp),
-                            )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(onClick = onBack) {
+                            Surface(
+                                shape = CircleShape,
+                                color = loginPalette.quietContainer.copy(alpha = 0.78f),
+                                contentColor = loginPalette.onQuietContainer,
+                            ) {
+                                Icon(
+                                    AppIcons.ArrowBack,
+                                    contentDescription = strings.back,
+                                    modifier = Modifier.padding(10.dp),
+                                )
+                            }
+                        }
+                        Spacer(Modifier.weight(1f))
+                        // Say what this is and what signing in is for, and that it can wait: the page
+                        // opens by itself on the first launch. Someone already signed in came here to
+                        // switch accounts, and for them the back arrow says it.
+                        if (!signedIn) {
+                            TextButton(onClick = onBack) {
+                                Text(strings.signInLater)
+                            }
                         }
                     }
-                    Spacer(Modifier.weight(1f))
-                    // Say what this is and what signing in is for, and that it can wait: the page
-                    // opens by itself on the first launch. Someone already signed in came here to
-                    // switch accounts, and for them the back arrow says it.
-                    if (!signedIn) {
-                        TextButton(onClick = onBack) {
-                            Text(strings.signInLater)
-                        }
+                    Column(
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = if (compactHeight) 8.dp else 16.dp),
+                    ) {
+                        Text(
+                            text = strings.signInToProvider(provider.displayName),
+                            style = if (compactHeight) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = loginPalette.onPageStart,
+                        )
+                        Text(
+                            text = viewModel.descriptor.introduction,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = loginPalette.secondaryOnPageStart,
+                        )
                     }
                 }
-                Column(
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
-                ) {
-                    Text(
-                        text = strings.signInToProvider(provider.displayName),
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = loginPalette.onPageStart,
-                    )
-                    Text(
-                        text = viewModel.descriptor.introduction,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = loginPalette.secondaryOnPageStart,
+
+                sections.forEachIndexed { index, section ->
+                    if (index > 0) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                            color = loginPalette.onQuietContainer.copy(alpha = 0.16f),
+                        )
+                    }
+                    key(section.methods.first().id) {
+                        LoginSectionCard(section, viewModel, loginPalette, isActive, compactHeight)
+                    }
+                }
+
+                viewModel.descriptor.server?.let { setting ->
+                    val server by viewModel.server.collectAsState()
+                    val serverMessage by viewModel.serverMessage.collectAsState()
+                    BackendAddressCard(
+                        setting = setting,
+                        server = server,
+                        message = serverMessage,
+                        palette = loginPalette,
+                        onSave = viewModel::saveServer,
+                        isActive = isActive,
                     )
                 }
-            }
 
-            sections.forEachIndexed { index, section ->
-                if (index > 0) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-                        color = loginPalette.onQuietContainer.copy(alpha = 0.16f),
-                    )
-                }
-                LoginSectionCard(section, viewModel, loginPalette)
+                Spacer(Modifier.height(if (compactHeight) 16.dp else 32.dp))
             }
-
-            viewModel.descriptor.server?.let { setting ->
-                val server by viewModel.server.collectAsState()
-                val serverMessage by viewModel.serverMessage.collectAsState()
-                BackendAddressCard(
-                    setting = setting,
-                    server = server,
-                    message = serverMessage,
-                    palette = loginPalette,
-                    onSave = viewModel::saveServer,
-                )
-            }
-
-            Spacer(Modifier.height(32.dp))
         }
     }
 }
 
 /** One presenter's card: its title, a chooser when it draws several methods, and the method. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun LoginSectionCard(
     section: LoginSection,
     viewModel: LoginViewModel,
     palette: ContentAccentPalette,
+    isActive: Boolean,
+    compactHeight: Boolean,
 ) {
-    var selectedId by rememberSaveable(section.title) { mutableStateOf(section.methods.first().id) }
+    var selectedId by rememberSaveable { mutableStateOf(section.methods.first().id) }
     val method = section.methods.firstOrNull { it.id == selectedId } ?: section.methods.first()
 
     Surface(
@@ -208,7 +231,7 @@ private fun LoginSectionCard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
-        Column(modifier = Modifier.padding(24.dp)) {
+        Column(modifier = Modifier.padding(if (compactHeight) 16.dp else 24.dp)) {
             Text(
                 section.title,
                 style = MaterialTheme.typography.titleMedium,
@@ -219,7 +242,7 @@ private fun LoginSectionCard(
             // switching disposes the previous method's state along with its content.
             if (section.methods.size > 1) {
                 Spacer(Modifier.height(12.dp))
-                Row(
+                FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.align(Alignment.CenterHorizontally),
                 ) {
@@ -247,13 +270,14 @@ private fun LoginSectionCard(
             }
             Spacer(Modifier.height(16.dp))
             key(method.id) {
-                section.presenter.Content(method, viewModel, palette)
+                section.presenter.Content(method, viewModel, palette, isActive)
             }
         }
     }
 }
 
 /** The provider's self-hosted backend address; a provider concern, not a login method's. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BackendAddressCard(
     setting: ProviderServerSetting,
@@ -261,8 +285,19 @@ private fun BackendAddressCard(
     message: ServerNotice?,
     palette: ContentAccentPalette,
     onSave: (String) -> Unit,
+    isActive: Boolean,
 ) {
-    var field by remember(server) { mutableStateOf(server) }
+    val draft = inMemoryViewModel { BackendDraft(server) }
+    LaunchedEffect(server) {
+        if (server != draft.lastStored && draft.field.text.toString() == draft.lastStored) draft.field.setTextAndPlaceCursorAtEnd(server)
+        draft.lastStored = server
+    }
+    val editor = rememberEditorFocus(isActive)
+    val focusManager = LocalFocusManager.current
+    fun saveAddress() {
+        onSave(draft.field.text.toString())
+        focusManager.clearFocus()
+    }
     Surface(
         shape = MaterialTheme.shapes.extraLarge,
         color = palette.quietContainer,
@@ -279,20 +314,25 @@ private fun BackendAddressCard(
             )
             Spacer(Modifier.height(16.dp))
             OutlinedTextField(
-                value = field,
-                onValueChange = { field = it },
+                state = draft.field,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Uri,
+                    imeAction = ImeAction.Done,
+                    showKeyboardOnFocus = editor.showKeyboardOnFocus,
+                ),
+                onKeyboardAction = { saveAddress() },
                 label = { Text(setting.label) },
                 supportingText = {
                     Text(strings.serverAddressResetHint, color = palette.secondaryOnQuietContainer)
                 },
-                singleLine = true,
+                lineLimits = TextFieldLineLimits.SingleLine,
                 shape = MaterialTheme.shapes.large,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = editor.modifier.fillMaxWidth(),
                 colors = loginTextFieldColors(palette),
             )
             Spacer(Modifier.height(16.dp))
             FilledTonalButton(
-                onClick = { onSave(field) },
+                onClick = ::saveAddress,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = CircleShape,
                 colors = ButtonDefaults.filledTonalButtonColors(
@@ -308,4 +348,10 @@ private fun BackendAddressCard(
             }
         }
     }
+}
+
+/** Uncommitted addresses can contain credential-bearing URLs, so keep them off saved state. */
+private class BackendDraft(initial: String) : androidx.lifecycle.ViewModel() {
+    val field = TextFieldState(initial)
+    var lastStored = initial
 }

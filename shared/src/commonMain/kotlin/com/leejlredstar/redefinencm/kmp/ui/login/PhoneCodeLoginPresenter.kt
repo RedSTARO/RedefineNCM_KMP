@@ -1,35 +1,40 @@
 package com.leejlredstar.redefinencm.kmp.ui.login
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedSecureTextField
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.auth.LoginHost
 import com.leejlredstar.redefinencm.kmp.data.auth.LoginMethod
 import com.leejlredstar.redefinencm.kmp.data.auth.PhoneCodeLoginFlow
 import com.leejlredstar.redefinencm.kmp.data.auth.PhoneCodeLoginMethod
 import com.leejlredstar.redefinencm.kmp.i18n.strings
+import com.leejlredstar.redefinencm.kmp.ui.component.inMemoryViewModel
+import com.leejlredstar.redefinencm.kmp.ui.component.rememberEditorFocus
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 
 /**
@@ -42,14 +47,12 @@ class PhoneCodeLoginPresenter : LoginMethodPresenter {
     override fun sectionTitle(methods: List<LoginMethod>): String =
         methods.singleOrNull()?.displayName ?: strings.phoneVerificationCode
 
+    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
-    override fun Content(method: LoginMethod, host: LoginHost, palette: ContentAccentPalette) {
+    override fun Content(method: LoginMethod, host: LoginHost, palette: ContentAccentPalette, isActive: Boolean) {
         val phoneMethod = method as PhoneCodeLoginMethod
-        val flow = remember(phoneMethod, host) { PhoneCodeLoginFlow(phoneMethod, host) }
-        DisposableEffect(flow) { onDispose { flow.cancel() } }
-
-        val phone by flow.phone.collectAsState()
-        val code by flow.code.collectAsState()
+        val session = inMemoryViewModel(key = method.id) { SmsLoginSession(PhoneCodeLoginFlow(phoneMethod, host)) }
+        val flow = session.flow
         val busy by flow.busy.collectAsState()
         val codeSent by flow.codeSent.collectAsState()
         val resendIn by flow.resendInSeconds.collectAsState()
@@ -57,69 +60,86 @@ class PhoneCodeLoginPresenter : LoginMethodPresenter {
         val error by flow.error.collectAsState()
         val success by flow.success.collectAsState()
 
-        Column {
-            BoxWithConstraints(Modifier.fillMaxWidth()) {
-                val stack = maxWidth < 480.dp * LocalDensity.current.fontScale
-                val phoneField: @Composable (Modifier) -> Unit = { fieldModifier ->
-                    OutlinedTextField(
-                        value = phone,
-                        onValueChange = flow::setPhone,
-                        label = { Text(strings.phoneNumber) },
-                        supportingText = { Text(flow.phoneHint, color = palette.secondaryOnQuietContainer) },
-                        singleLine = true,
-                        enabled = !busy && !success,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                        shape = MaterialTheme.shapes.large,
-                        modifier = fieldModifier,
-                        colors = loginTextFieldColors(palette),
-                    )
+        val phoneEnabled = !busy && !success
+        val codeEnabled = codeSent && !busy && !success
+        val phoneFocus = rememberEditorFocus(isActive, enabled = phoneEnabled)
+        val codeFocus = rememberEditorFocus(isActive, enabled = codeEnabled)
+        LaunchedEffect(session) {
+            // The first snapshot can already contain a draft from the last Activity. Comparing
+            // digits mirrors the flow's challenge invalidation without touching an intact code.
+            snapshotFlow { session.phone.text.toString() }.collect { raw ->
+                if (raw.filter(Char::isDigit) != flow.phone.value.filter(Char::isDigit)) {
+                    session.code.setTextAndPlaceCursorAtEnd("")
                 }
-                val sendButton: @Composable (Modifier) -> Unit = { buttonModifier ->
-                    OutlinedButton(
-                        onClick = flow::sendCode,
-                        enabled = !busy && resendIn == 0 && !success,
-                        modifier = buttonModifier,
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = palette.accent),
-                    ) {
-                        Text(
-                            when {
-                                resendIn > 0 -> strings.resendIn(resendIn)
-                                codeSent -> strings.resend
-                                else -> strings.sendVerificationCode
-                            },
-                        )
-                    }
-                }
-                if (stack) {
-                    Column {
-                        phoneField(Modifier.fillMaxWidth())
-                        Spacer(Modifier.height(8.dp))
-                        sendButton(Modifier.align(Alignment.End))
-                    }
-                } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        phoneField(Modifier.weight(1f))
-                        Spacer(Modifier.width(12.dp))
-                        sendButton(Modifier)
-                    }
-                }
+                if (raw != flow.phone.value) flow.setPhone(raw)
             }
-            Spacer(Modifier.height(12.dp))
+        }
+        LaunchedEffect(session) {
+            snapshotFlow { session.code.text.toString() }.collect { raw ->
+                if (raw.trim() != flow.code.value) flow.setCode(raw)
+            }
+        }
+
+        fun sendCode() {
+            flow.setPhone(session.phone.text.toString())
+            flow.sendCode()
+        }
+        fun verify() {
+            flow.setCode(session.code.text.toString())
+            flow.verify()
+        }
+
+        // Keep the field at one composition position: switching a Row into a Column would
+        // destroy its focus target and reconnect the IME during a width-class change.
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
-                value = code,
-                onValueChange = flow::setCode,
-                label = { Text(strings.verificationCode) },
-                singleLine = true,
-                enabled = codeSent && !busy && !success,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                state = session.phone,
+                label = { Text(strings.phoneNumber) },
+                supportingText = { Text(flow.phoneHint, color = palette.secondaryOnQuietContainer) },
+                lineLimits = TextFieldLineLimits.SingleLine,
+                enabled = phoneEnabled,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Phone,
+                    imeAction = ImeAction.Go,
+                    showKeyboardOnFocus = phoneFocus.showKeyboardOnFocus,
+                ),
+                onKeyboardAction = { sendCode() },
                 shape = MaterialTheme.shapes.large,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = phoneFocus.modifier.fillMaxWidth(),
+                colors = loginTextFieldColors(palette),
+            )
+            OutlinedButton(
+                onClick = ::sendCode,
+                enabled = !busy && resendIn == 0 && !success,
+                modifier = Modifier.align(Alignment.End),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = palette.accent),
+            ) {
+                Text(
+                    when {
+                        resendIn > 0 -> strings.resendIn(resendIn)
+                        codeSent -> strings.resend
+                        else -> strings.sendVerificationCode
+                    },
+                )
+            }
+            OutlinedSecureTextField(
+                state = session.code,
+                label = { Text(strings.verificationCode) },
+                enabled = codeEnabled,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.NumberPassword,
+                    imeAction = ImeAction.Done,
+                    showKeyboardOnFocus = codeFocus.showKeyboardOnFocus,
+                ),
+                onKeyboardAction = { verify() },
+                shape = MaterialTheme.shapes.large,
+                modifier = codeFocus.modifier.fillMaxWidth(),
                 colors = loginTextFieldColors(palette),
             )
             Spacer(Modifier.height(20.dp))
             FilledTonalButton(
-                onClick = flow::verify,
-                enabled = codeSent && code.isNotBlank() && !busy && !success,
+                onClick = ::verify,
+                enabled = codeEnabled && session.code.text.isNotBlank(),
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = CircleShape,
                 colors = ButtonDefaults.filledTonalButtonColors(
@@ -139,4 +159,12 @@ class PhoneCodeLoginPresenter : LoginMethodPresenter {
             }
         }
     }
+}
+
+/** Phone number, SMS code and active challenge survive recreation, not process death. */
+private class SmsLoginSession(val flow: PhoneCodeLoginFlow) : androidx.lifecycle.ViewModel() {
+    val phone = TextFieldState()
+    val code = TextFieldState()
+
+    override fun onCleared() { flow.cancel() }
 }

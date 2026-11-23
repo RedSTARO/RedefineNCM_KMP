@@ -31,6 +31,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,7 +81,7 @@ fun LocalPlaylistScreen(
     val playlistForSource = playlist
     val source = UiText { it.playbackSourceLocalPlaylist(playlistForSource?.displayName.orEmpty()) }
 
-    var renaming by remember { mutableStateOf(false) }
+    var renaming by rememberSaveable { mutableStateOf(false) }
     var confirmingDelete by remember { mutableStateOf(false) }
     // A deleted playlist has nowhere to show; leave its page.
     LaunchedEffect(library, playlist, readFailed) {

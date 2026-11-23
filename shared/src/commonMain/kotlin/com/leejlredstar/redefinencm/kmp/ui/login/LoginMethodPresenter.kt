@@ -25,7 +25,7 @@ interface LoginMethodPresenter {
 
     /** Draws [method]. Called only for methods [supports] accepted. */
     @Composable
-    fun Content(method: LoginMethod, host: LoginHost, palette: ContentAccentPalette)
+    fun Content(method: LoginMethod, host: LoginHost, palette: ContentAccentPalette, isActive: Boolean)
 }
 
 /** One card on the login page: a presenter and the methods it draws there. */

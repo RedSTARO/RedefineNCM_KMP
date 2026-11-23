@@ -109,6 +109,8 @@ internal fun shouldApplyPlaybackVerification(
  * skipping it would lose its first results for good, and one that has run out is not asked
  * again.
  */
+internal data class SearchSuggestions(val query: String, val items: List<String>)
+
 internal data class SearchCursor(
     val nextOffset: Int,
     val exhausted: Boolean,
@@ -214,7 +216,9 @@ class MainViewModel(
     val searchEntries: StateFlow<List<MergedSearchEntry>>
     /** Providers whose last page failed; the page offers to ask them again. */
     val searchFailedProviders = MutableStateFlow<List<MusicProviderId>>(emptyList())
-    val searchSuggestions = MutableStateFlow<List<String>>(emptyList())
+    internal val searchSuggestions = MutableStateFlow<SearchSuggestions?>(null)
+    private var suggestionQuery: String? = null
+    private var searchGeneration = 0L
     /** Whether a provider may have results after the pages shown. */
     val searchHasMore = MutableStateFlow(false)
     val searchLoadingMore = MutableStateFlow(false)
@@ -828,31 +832,44 @@ class MainViewModel(
 
     // ── Search ──
 
-    fun search(keyword: String) {
-        val query = keyword.trim()
-        searchJob?.cancel()
+    fun search(keyword: String) = startSearch(keyword.trim(), recordHistory = true)
+
+    /** Same-process recreation keeps the current results, cursor, and any request in flight. */
+    fun restoreSearch(query: String) {
+        if (searchSubmittedQuery.value != query) startSearch(query, recordHistory = false)
+    }
+
+    private fun startSearch(query: String, recordHistory: Boolean) {
         if (query.isEmpty()) {
-            searchGroups.value = emptyList()
-            searchResults.value = emptyList()
-            searchLoading.value = false
-            searchSubmittedQuery.value = null
-            searchError.value = null
+            clearSearch()
             return
         }
-        searchSuggestions.value = emptyList()
+        val generation = ++searchGeneration
+        searchJob?.cancel()
+        clearSearchSuggestions()
+        resetSearchPaging()
+        searchLoading.value = true
+        searchGroups.value = emptyList()
+        searchResults.value = emptyList()
         searchSubmittedQuery.value = query
         searchError.value = null
-        rememberSearch(query)
-        resetSearchPaging()
-        searchJob = scope.launch(Dispatchers.Default) {
-            searchLoading.value = true
+        if (recordHistory) rememberSearch(query)
+        // Publish on the main scope: a cancelled request must not update a new search, even when
+        // the same query was explicitly retried. Network/provider work remains off the UI thread.
+        searchJob = scope.launch {
             try {
+                val groups = withContext(Dispatchers.Default) {
+                    providers.searchAll(query, SearchPageSize)
+                }
+                ensureActive()
+                if (generation != searchGeneration) return@launch
                 searchAggregationMode.value = providers.aggregationMode()
                 searchMergeSameSongs.value = settings.getBooleanAsync(
                     SettingKeys.MERGE_SAME_SONGS,
                     SettingKeys.MERGE_SAME_SONGS_DEFAULT,
                 )
-                val groups = providers.searchAll(query, SearchPageSize)
+                ensureActive()
+                if (generation != searchGeneration) return@launch
                 searchCursors = groups.associate { group ->
                     group.provider to SearchCursor.after(requestedOffset = 0, group, SearchPageSize)
                 }
@@ -876,15 +893,9 @@ class MainViewModel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Throwable) {
-                if (currentCoroutineContext()[Job] == searchJob) {
-                    searchGroups.value = emptyList()
-                    searchResults.value = emptyList()
-                    searchError.value = UiText { it.searchFailedRetry }
-                }
+                if (generation == searchGeneration) searchError.value = UiText { it.searchFailedRetry }
             } finally {
-                if (currentCoroutineContext()[Job] == searchJob) {
-                    searchLoading.value = false
-                }
+                if (generation == searchGeneration) searchLoading.value = false
             }
         }
     }
@@ -912,10 +923,14 @@ class MainViewModel(
         if (offsets.isEmpty()) return
         searchLoadingMore.value = true
         searchMoreError.value = null
-        searchMoreJob = scope.launch(Dispatchers.Default) {
+        val generation = searchGeneration
+        searchMoreJob = scope.launch {
             try {
-                val groups = providers.searchPages(query, offsets, SearchPageSize)
-                if (searchSubmittedQuery.value != query) return@launch
+                val groups = withContext(Dispatchers.Default) {
+                    providers.searchPages(query, offsets, SearchPageSize)
+                }
+                ensureActive()
+                if (generation != searchGeneration) return@launch
                 val shownIds = searchResults.value.mapTo(mutableSetOf()) { it.id }
                 val fresh = groups.map { group ->
                     group.copy(tracks = group.tracks.filterNot { it.id in shownIds })
@@ -940,9 +955,9 @@ class MainViewModel(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Throwable) {
-                if (searchSubmittedQuery.value == query) searchMoreError.value = UiText { it.searchMoreFailed }
+                if (generation == searchGeneration) searchMoreError.value = UiText { it.searchMoreFailed }
             } finally {
-                if (searchSubmittedQuery.value == query) searchLoadingMore.value = false
+                if (generation == searchGeneration) searchLoadingMore.value = false
             }
         }
     }
@@ -1009,27 +1024,39 @@ class MainViewModel(
         }
     }
 
-    fun fetchSearchSuggestions(keyword: String) {
+    /** True only when the draft changes, not when the editor is recreated for the same draft. */
+    fun requestSearchSuggestions(keyword: String): Boolean {
         val query = keyword.trim()
+        if (query.isEmpty() || query == suggestionQuery) return false
+        clearSearchSuggestions()
+        suggestionQuery = query
+        suggestionJob = scope.launch {
+            delay(300)
+            val response = withContext(Dispatchers.Default) { repo.searchSuggest(query) }
+            ensureActive()
+            if (suggestionQuery == query) {
+                searchSuggestions.value = SearchSuggestions(
+                    query,
+                    response?.result?.allMatch.orEmpty().map { it.keyword }.distinct(),
+                )
+            }
+        }
+        return true
+    }
+
+    fun clearSearchSuggestions() {
         suggestionJob?.cancel()
-        if (query.isEmpty()) {
-            searchSuggestions.value = emptyList()
-            return
-        }
-        suggestionJob = scope.launch(Dispatchers.Default) {
-            val response = repo.searchSuggest(query)
-            searchSuggestions.value =
-                response?.result?.allMatch?.map { it.keyword } ?: emptyList()
-        }
+        suggestionQuery = null
+        searchSuggestions.value = null
     }
 
     fun clearSearch() {
+        searchGeneration += 1
         searchJob?.cancel()
-        suggestionJob?.cancel()
+        clearSearchSuggestions()
         resetSearchPaging()
         searchGroups.value = emptyList()
         searchResults.value = emptyList()
-        searchSuggestions.value = emptyList()
         searchLoading.value = false
         searchSubmittedQuery.value = null
         searchError.value = null

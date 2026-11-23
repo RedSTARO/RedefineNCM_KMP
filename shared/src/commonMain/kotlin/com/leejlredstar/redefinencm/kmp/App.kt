@@ -43,8 +43,18 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.captionBar
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.exclude
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -66,11 +76,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalWideNavigationRail
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
+import androidx.compose.material3.NavigationRailDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -112,6 +126,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.lyric.AmllPlayerScreen
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.AndroidNavigationLayout
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.CompactAppBarHeightThreshold
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.FoldSafeBrowseContent
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.LocalCompactAppBar
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.LocalSoftKeyboardVisible
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.androidNavigationLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberNowPlayingUiState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
@@ -529,7 +549,7 @@ private fun AppContent(
                 clearPushed()
                 currentTab = tab
             }
-            var searchFocusRequest by remember { mutableStateOf(0) }
+            var searchFocusRequest by rememberSaveable { mutableStateOf(0) }
             fun openSearch() {
                 selectTab(TabDest.Search)
                 searchFocusRequest += 1
@@ -665,28 +685,50 @@ private fun AppContent(
                 )
             }
 
-            Box(Modifier.fillMaxSize()) {
+            val onPlayerPage = isPlayerSurface(pushedStack.lastOrNull())
+            val keyboardVisible = LocalSoftKeyboardVisible.current
+            val safeBrowseInsets = if (platform.isAndroid && !onPlayerPage) {
+                // Pages handle the status bar themselves, often drawing art under it. Also
+                // protect sides, the display cutout and the desktop-window caption. Descendant
+                // inset modifiers only apply what is left after these have been consumed.
+                val topObstructions = WindowInsets.captionBar.union(WindowInsets.displayCutout).only(WindowInsetsSides.Top)
+                Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal).union(topObstructions))
+            } else {
+                Modifier
+            }
+            val windowModifier = Modifier.fillMaxSize().then(safeBrowseInsets)
+                .then(if (platform.isAndroid) Modifier.imePadding() else Modifier)
+            FoldSafeBrowseContent(
+                modifier = windowModifier,
+                enabled = !onPlayerPage,
+            ) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
-                    val appContentWidth = maxWidth
-                    val appContentHeight = maxHeight
+                    val compactAppBar = platform.isAndroid && maxHeight < CompactAppBarHeightThreshold
                     val desktopMode = desktopLayoutMode(maxWidth, maxHeight)
                     val desktopCompact = platform.isDesktop && desktopMode == DesktopLayoutMode.Compact
                     val showDesktopRail = platform.isDesktop && !desktopCompact
-                    val isWide = maxWidth >= 600.dp
-                    // With the sidebar there is room for a full playback bar along the bottom; the
-                    // corner pill is for the narrow layouts. Neither shows over the player itself.
-                    val showDesktopBar = showDesktopRail &&
-                        currentMedia != null &&
-                        pushedStack.lastOrNull().let { !isPlayerSurface(it) }
-                    val showMiniPlayer = !showDesktopBar &&
-                        maxWidth >= 160.dp &&
-                        maxHeight >= 200.dp &&
-                        currentMedia != null &&
-                        pushedStack.lastOrNull().let { !isPlayerSurface(it) }
+                    // imePadding shrinks the content, not the window's navigation size class.
+                    // Keep the rail from appearing/disappearing just because a field is edited.
+                    val windowHeight = if (platform.isAndroid) {
+                        maxHeight + WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+                    } else {
+                        maxHeight
+                    }
+                    val androidNav = if (platform.isAndroid) androidNavigationLayout(maxWidth, windowHeight) else null
+                    val showMobileRail = !platform.isDesktop &&
+                        (androidNav == AndroidNavigationLayout.Rail || (androidNav == null && maxWidth >= 600.dp))
+                    val dockPlayer = platform.isAndroid && showTabs && !keyboardVisible &&
+                        windowHeight < 480.dp && currentMedia != null
+                    val dockPlayerLabel = currentMedia?.takeIf { dockPlayer }?.let { strings.openPlayerFor(it.title) }
+                    // A short split window uses an entry in the dock instead of stacking two
+                    // overlays. Neither overlay takes space from an active editor or full player.
+                    val showDesktopBar = showDesktopRail && currentMedia != null && !onPlayerPage
+                    val showMiniPlayer = !showDesktopBar && !dockPlayer && !keyboardVisible &&
+                        maxWidth >= 160.dp && maxHeight >= 200.dp && currentMedia != null &&
+                        !onPlayerPage && (!platform.isAndroid || showTabs)
                     val rootDest = pushedStack.lastOrNull()
                         ?.let { RootDest.Pushed(it, pushedStack.size) }
                         ?: RootDest.Tab(currentTab)
-                    val onPlayerPage = isPlayerSurface(pushedStack.lastOrNull())
                     LaunchedEffect(onPlayerPage) {
                         (lyricSurface as? PageOverlayLyricSurface)?.setPlayerPageShown(onPlayerPage)
                     }
@@ -697,21 +739,22 @@ private fun AppContent(
                         if (desktopCompact) desktopRailState.collapse()
                     }
 
-                    val bottomNavVisible =
-                        showTabs && if (platform.isDesktop) desktopCompact else !isWide
-                    // The toolbar floats over the content instead of occupying a Scaffold
-                    // bottomBar, so Scaffold reserves nothing for it and screens are handed this
-                    // clearance directly. navigationBars is added because the Scaffold runs with
-                    // contentWindowInsets = 0 and a floating toolbar carries no insets of its own;
-                    // without it the pill sits under the system gesture bar on phones.
-                    val systemNavInset = WindowInsets.navigationBars
-                        .asPaddingValues()
-                        .calculateBottomPadding()
-                    val contentBottomInset = systemNavInset + if (bottomNavVisible) {
-                        ExpressiveLayout.FloatingNavClearance
-                    } else {
-                        0.dp
+                    val bottomNavVisible = showTabs && !keyboardVisible && when {
+                        platform.isDesktop -> desktopCompact
+                        else -> !showMobileRail && androidNav != AndroidNavigationLayout.Compact
                     }
+                    val compactDockVisible = showTabs && !keyboardVisible && androidNav == AndroidNavigationLayout.Compact
+                    // A floating toolbar needs explicit clearance; a compact dock is measured
+                    // by Scaffold and taken out of the viewport instead. Don't add nav-bar
+                    // clearance on top of an IME inset that already covers the same edge.
+                    val bottomInsets = if (platform.isAndroid) {
+                        WindowInsets.navigationBars.union(WindowInsets.displayCutout).exclude(WindowInsets.ime)
+                    } else {
+                        WindowInsets.navigationBars
+                    }
+                    val systemNavInset = bottomInsets.asPaddingValues().calculateBottomPadding()
+                    val contentBottomInset = if (compactDockVisible) 0.dp else systemNavInset +
+                        if (bottomNavVisible) ExpressiveLayout.FloatingNavClearance else 0.dp
                     // One bottom clearance for every page, search results included: the
                     // floating toolbar (when shown) plus the mini player that floats above it.
                     // Pages do not add their own trailing spacers on top of this, which would
@@ -741,6 +784,20 @@ private fun AppContent(
                     }
                     Scaffold(
                         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                        bottomBar = {
+                            if (compactDockVisible) {
+                                CompactNavigationDock(
+                                    tabs = tabs,
+                                    selectedTab = currentTab,
+                                    onSelect = ::selectTab,
+                                    palette = chromePalette,
+                                    insets = bottomInsets.only(WindowInsetsSides.Bottom),
+                                    height = 56.dp + systemNavInset,
+                                    playerLabel = dockPlayerLabel,
+                                    onOpenPlayer = ::openNowPlaying,
+                                )
+                            }
+                        },
                         snackbarHost = {
                             SnackbarHost(snackbarHostState, Modifier.padding(bottom = snackbarClearance))
                         },
@@ -783,6 +840,7 @@ private fun AppContent(
                         Box(
                             Modifier
                                 .fillMaxSize()
+                                .padding(bottom = if (compactDockVisible) innerPadding.calculateBottomPadding() else 0.dp)
                                 .nestedScroll(toolbarScrollBehavior),
                         ) {
                         Row(Modifier.fillMaxSize()) {
@@ -811,31 +869,27 @@ private fun AppContent(
                                         rootDest.dest is PushedDest.Settings,
                                     onOpenSettings = { focusOrPushTracked(PushedDest.Settings) },
                                 )
-                            } else if (!platform.isDesktop && isWide) {
+                            } else if (showMobileRail) {
                                 AnimatedVisibility(
                                     visible = showTabs,
                                     enter = railEnterTransition(),
                                     exit = railExitTransition(),
                                 ) {
-                                    NavigationRail(
-                                        containerColor = chromePalette.quietContainer,
-                                    ) {
-                                        tabs.forEach { item ->
-                                            NavigationRailItem(
-                                                selected = currentTab == item.dest,
-                                                onClick = { selectTab(item.dest) },
-                                                icon = { Icon(item.icon, contentDescription = null) },
-                                                label = { Text(item.label) },
-                                                colors = NavigationRailItemDefaults.colors(
-                                                    indicatorColor = chromePalette.container,
-                                                    selectedIconColor = chromePalette.onContainer,
-                                                    selectedTextColor = chromePalette.onQuietContainer,
-                                                    unselectedIconColor = chromePalette.secondaryOnQuietContainer,
-                                                    unselectedTextColor = chromePalette.secondaryOnQuietContainer,
-                                                ),
-                                            )
-                                        }
-                                    }
+                                    MobileNavigationRail(
+                                        tabs = tabs,
+                                        selectedTab = currentTab,
+                                        onSelect = ::selectTab,
+                                        palette = chromePalette,
+                                        insets = if (platform.isAndroid) {
+                                            WindowInsets.statusBars.only(WindowInsetsSides.Top)
+                                                .union(bottomInsets.only(WindowInsetsSides.Bottom))
+                                        } else {
+                                            NavigationRailDefaults.windowInsets
+                                        },
+                                        scrollable = platform.isAndroid,
+                                        playerLabel = dockPlayerLabel,
+                                        onOpenPlayer = ::openNowPlaying,
+                                    )
                                 }
                             }
                             Box(Modifier.weight(1f).fillMaxSize()) {
@@ -852,11 +906,15 @@ private fun AppContent(
                                     label = "AppPageTransition",
                                 ) { target ->
                                     saveableStateHolder.SaveableStateProvider(target.stateKey()) {
+                                    CompositionLocalProvider(
+                                        LocalCompactAppBar provides compactAppBar,
+                                    ) {
                                     when (target) {
                                         is RootDest.Pushed -> when (val dest = target.dest) {
                                             is PushedDest.Login -> LoginScreen(
                                                 onBack = ::back,
                                                 provider = dest.provider,
+                                                isActive = target == rootDest,
                                             )
                                             is PushedDest.NowPlaying -> NowPlayingScreen(
                                                 onBack = ::back,
@@ -875,6 +933,7 @@ private fun AppContent(
                                             is PushedDest.SongRecognition -> SongRecognitionScreen(
                                                 scaffoldPadding = screenPadding,
                                                 onBack = ::back,
+                                                isActive = target == rootDest,
                                                 // Playing a match goes to the player, not back
                                                 // to wherever recognition was opened from.
                                                 onOpenPlayer = {
@@ -900,6 +959,7 @@ private fun AppContent(
                                                 scaffoldPadding = screenPadding,
                                                 onBack = ::back,
                                                 onOpenLogin = { push(PushedDest.Login(it)) },
+                                                isActive = target == rootDest,
                                             )
                                             is PushedDest.LocalLibrary -> LocalLibraryScreen(
                                                 onBack = ::back,
@@ -944,6 +1004,7 @@ private fun AppContent(
                                                 bottomPadding = screenPadding.calculateBottomPadding() + 16.dp,
                                                 focusRequest = searchFocusRequest,
                                                 onFocusRequestHandled = { searchFocusRequest = 0 },
+                                                isActive = target == rootDest,
                                             )
                                             is TabDest.My -> UserPlaylistScreen(
                                                 scaffoldPadding = screenPadding,
@@ -954,6 +1015,7 @@ private fun AppContent(
                                                 onOpenLocalLibrary = { push(PushedDest.LocalLibrary) },
                                             )
                                         }
+                                    }
                                     }
                                     }
                                 }
@@ -984,7 +1046,7 @@ private fun AppContent(
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
                                     .fillMaxWidth()
-                                    .windowInsetsPadding(WindowInsets.navigationBars)
+                                    .windowInsetsPadding(bottomInsets)
                                     .padding(horizontal = 16.dp, vertical = 14.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
@@ -1025,6 +1087,97 @@ private fun AppContent(
 
                 }
             }
+}
+
+@Composable
+private fun CompactNavigationDock(
+    tabs: List<NavigationItem>,
+    selectedTab: TabDest,
+    onSelect: (TabDest) -> Unit,
+    palette: ContentAccentPalette,
+    insets: WindowInsets,
+    height: Dp,
+    playerLabel: String?,
+    onOpenPlayer: () -> Unit,
+) {
+    val itemColors = NavigationBarItemDefaults.colors(
+        indicatorColor = palette.container,
+        selectedIconColor = palette.onContainer,
+        unselectedIconColor = palette.onQuietContainer,
+    )
+    NavigationBar(
+        modifier = Modifier.height(height),
+        containerColor = palette.quietContainer,
+        windowInsets = insets,
+    ) {
+        tabs.forEach { item ->
+            NavigationBarItem(
+                selected = selectedTab == item.dest,
+                onClick = { onSelect(item.dest) },
+                icon = { Icon(item.icon, contentDescription = item.label) },
+                colors = itemColors,
+            )
+        }
+        if (playerLabel != null) {
+            NavigationBarItem(
+                selected = false,
+                onClick = onOpenPlayer,
+                icon = { Icon(AppIcons.MusicNote, contentDescription = playerLabel) },
+                colors = itemColors,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MobileNavigationRail(
+    tabs: List<NavigationItem>,
+    selectedTab: TabDest,
+    onSelect: (TabDest) -> Unit,
+    palette: ContentAccentPalette,
+    insets: WindowInsets,
+    scrollable: Boolean,
+    playerLabel: String?,
+    onOpenPlayer: () -> Unit,
+) {
+    val itemColors = NavigationRailItemDefaults.colors(
+        indicatorColor = palette.container,
+        selectedIconColor = palette.onContainer,
+        selectedTextColor = palette.onQuietContainer,
+        unselectedIconColor = palette.secondaryOnQuietContainer,
+        unselectedTextColor = palette.secondaryOnQuietContainer,
+    )
+    NavigationRail(containerColor = palette.quietContainer, windowInsets = insets) {
+        val items: @Composable () -> Unit = {
+            tabs.forEach { item ->
+                NavigationRailItem(
+                    selected = selectedTab == item.dest,
+                    onClick = { onSelect(item.dest) },
+                    icon = { Icon(item.icon, contentDescription = null) },
+                    label = { Text(item.label) },
+                    colors = itemColors,
+                )
+            }
+            if (playerLabel != null) {
+                NavigationRailItem(
+                    selected = false,
+                    onClick = onOpenPlayer,
+                    icon = { Icon(AppIcons.MusicNote, contentDescription = playerLabel) },
+                    colors = itemColors,
+                )
+            }
+        }
+        if (scrollable) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                content = { items() },
+            )
+        } else {
+            items()
+        }
+    }
 }
 
 @Composable

@@ -23,6 +23,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -33,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusicComments
 import com.leejlredstar.redefinencm.kmp.getPlatform
 import com.leejlredstar.redefinencm.kmp.i18n.text
+import com.leejlredstar.redefinencm.kmp.player.PlayerStatusRestoreState
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
@@ -46,34 +50,49 @@ import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
  */
 @Stable
 internal class TransportSheetsState {
-    var showQueue by mutableStateOf(false)
-        private set
-    var showComments by mutableStateOf(false)
-        private set
+    private enum class Sheet { None, Queue, Comments }
 
-    /** Whether either sheet is up, which surfaces use to suspend auto-hide. */
-    val anyOpen: Boolean get() = showQueue || showComments
+    private var active by mutableStateOf(Sheet.None)
+    val showQueue: Boolean get() = active == Sheet.Queue
+    val showComments: Boolean get() = active == Sheet.Comments
+    val anyOpen: Boolean get() = active != Sheet.None
+    var commentsRequestedFor: String? = null
 
-    /** Opening one closes the other: the two sheets occupy the same space. */
     fun openQueue() {
-        showComments = false
-        showQueue = true
+        active = Sheet.Queue
+        commentsRequestedFor = null
     }
 
     fun openComments() {
-        showQueue = false
-        showComments = true
+        active = Sheet.Comments
+        commentsRequestedFor = null
     }
 
     fun dismiss() {
-        showQueue = false
-        showComments = false
+        active = Sheet.None
+        commentsRequestedFor = null
+    }
+
+    companion object {
+        val Saver = listSaver<TransportSheetsState, String>(
+            save = { listOf(it.active.name, it.commentsRequestedFor.orEmpty()) },
+            restore = { saved ->
+                TransportSheetsState().apply {
+                    active = Sheet.valueOf(saved[0])
+                    commentsRequestedFor = saved[1].takeIf(String::isNotEmpty)
+                }
+            },
+        )
     }
 }
 
 @Composable
 internal fun rememberTransportSheetsState(): TransportSheetsState =
-    remember { TransportSheetsState() }
+    if (remember { getPlatform().isAndroid }) {
+        rememberSaveable(saver = TransportSheetsState.Saver) { TransportSheetsState() }
+    } else {
+        remember { TransportSheetsState() }
+    }
 
 /**
  * The queue and comment sheets for a transport surface.
@@ -93,8 +112,18 @@ internal fun TransportSheets(
 ) {
     // Comments load when the sheet opens, and again when the track changes while it is open.
     // This effect runs here for every surface; surfaces do not run their own.
-    LaunchedEffect(state.showComments, nowPlaying.media?.id) {
-        if (state.showComments) viewModel.getComments()
+    val android = remember { getPlatform().isAndroid }
+    val mediaId = nowPlaying.media?.id
+    LaunchedEffect(state.showComments, mediaId) {
+        if (!state.showComments || mediaId == null) return@LaunchedEffect
+        // getComments refreshes page one and drops later pages. A restored sheet with data
+        // for the same track is still the same visit, not a newly opened sheet.
+        val hasCurrentResult = nowPlaying.hasLoadedComments || nowPlaying.commentsLoading ||
+            nowPlaying.commentsLoadError != null
+        if (!android || state.commentsRequestedFor != mediaId || !hasCurrentResult) {
+            state.commentsRequestedFor = mediaId
+            viewModel.getComments()
+        }
     }
     val queueActions = rememberQueueActions(viewModel, onSeekClick)
     // On the desktop the queue and the comments slide in from the side, the way a window with
@@ -138,6 +167,11 @@ internal fun TransportSheets(
         }
         return
     }
+    if (android && state.anyOpen && !nowPlaying.hasMedia) {
+        val restoreState by viewModel.playerStatusRestoreState.collectAsState()
+        // Don't give the restored list an empty dataset long enough to clamp its saved offset.
+        if (restoreState is PlayerStatusRestoreState.Loading) return
+    }
     if (state.showQueue) {
         QueueBottomSheet(
             playlist = nowPlaying.playList,
@@ -150,19 +184,21 @@ internal fun TransportSheets(
     }
     if (state.showComments) {
         val comments = rememberComments(nowPlaying, viewModel)
-        CommentBottomSheet(
-            comments = comments.first,
-            hasLoadedData = nowPlaying.hasLoadedComments,
-            accentPalette = accentPalette,
-            paging = comments.second,
-            onDismiss = state::dismiss,
-            isLoading = nowPlaying.commentsLoading,
-            isFromCache = nowPlaying.commentsFromCache,
-            errorMessage = nowPlaying.commentsLoadError,
-            onRetry = viewModel::getComments,
-            totalCount = nowPlaying.comments?.total ?: 0L,
-            unsupported = nowPlaying.hasMedia && !nowPlaying.canComment,
-        )
+        key(if (android) mediaId else Unit) {
+            CommentBottomSheet(
+                comments = comments.first,
+                hasLoadedData = nowPlaying.hasLoadedComments,
+                accentPalette = accentPalette,
+                paging = comments.second,
+                onDismiss = state::dismiss,
+                isLoading = nowPlaying.commentsLoading,
+                isFromCache = nowPlaying.commentsFromCache,
+                errorMessage = nowPlaying.commentsLoadError,
+                onRetry = viewModel::getComments,
+                totalCount = nowPlaying.comments?.total ?: 0L,
+                unsupported = nowPlaying.hasMedia && !nowPlaying.canComment,
+            )
+        }
     }
 }
 

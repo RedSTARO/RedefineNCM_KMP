@@ -21,8 +21,12 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.KeyboardActionHandler
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.TextObfuscationMode
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -35,6 +39,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedSecureTextField
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -48,19 +53,17 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -74,10 +77,10 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.data.api.NCMApi
 import com.leejlredstar.redefinencm.kmp.data.auth.QQCredential
@@ -156,6 +159,7 @@ internal fun SettingsSectionLabel(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SettingsTextField(
     value: String,
@@ -165,90 +169,100 @@ internal fun SettingsTextField(
     index: Int,
     count: Int,
     supportingText: String? = null,
-    onDraftChange: (String) -> Unit,
+    isActive: Boolean,
     onCommit: (String) -> Unit,
+    onEditorReady: (TextFieldState) -> Unit = {},
 ) {
-    val textState = remember { mutableStateOf(value) }
-    val committedTextState = remember { mutableStateOf(value) }
-    var text by textState
-    var isFocused by remember { mutableStateOf(false) }
+    // A pasted credential or a URL containing user-info may be in this editor. The form's
+    // lifetime is bounded by this screen/expansion; it is never given a Bundle saver.
+    val draft = inMemoryViewModel { SettingsEditorDraft(value) }
     var revealText by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
-    val latestCommit = rememberUpdatedState(onCommit)
-
-    LaunchedEffect(value, isFocused) {
-        if (!isFocused && value != textState.value) {
-            textState.value = value
-            committedTextState.value = value
+    val editor = rememberEditorFocus(isActive)
+    val text = draft.field.text.toString()
+    val hasDraft = text != draft.baseline
+    LaunchedEffect(value) {
+        if (value != draft.baseline && draft.field.text.toString() == draft.baseline) {
+            draft.field.setTextAndPlaceCursorAtEnd(value)
         }
+        draft.baseline = value
     }
+    SideEffect { onEditorReady(draft.field) }
 
+    // Saving on blur or disposal would turn a rotation, resize, or opening a dialog into an
+    // unintended credential or server change. Commit only on Done/Enter or the visible action.
     fun commit() {
-        val draft = textState.value
-        if (draft != committedTextState.value) {
-            committedTextState.value = draft
-            onCommit(draft)
-        }
+        val raw = draft.field.text.toString()
+        if (raw != draft.baseline) onCommit(raw)
+        focusManager.clearFocus()
     }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            val draft = textState.value
-            if (draft != committedTextState.value) latestCommit.value(draft)
-        }
-    }
-
-    OutlinedTextField(
-        value = text,
-        onValueChange = {
-            text = it
-            onDraftChange(it)
-        },
-        label = { Text(label) },
-        supportingText = supportingText?.let { { Text(it) } },
-        singleLine = true,
-        visualTransformation = if (obscureText && !revealText) {
-            PasswordVisualTransformation()
-        } else {
-            VisualTransformation.None
-        },
-        trailingIcon = if (obscureText) {
-            {
+    val shape = connectedListItemShape(index, count)
+    val fieldModifier = editor.modifier.fillMaxWidth().padding(vertical = 1.5.dp).heightIn(min = 64.dp)
+    val colors = OutlinedTextFieldDefaults.colors(
+        focusedContainerColor = accentPalette.quietContainer,
+        unfocusedContainerColor = accentPalette.quietContainer,
+        focusedTextColor = accentPalette.onQuietContainer,
+        unfocusedTextColor = accentPalette.onQuietContainer,
+        focusedLabelColor = accentPalette.accent,
+        unfocusedLabelColor = accentPalette.secondaryOnQuietContainer,
+        focusedBorderColor = accentPalette.accent,
+        unfocusedBorderColor = accentPalette.onQuietContainer.copy(alpha = 0.18f),
+        cursorColor = accentPalette.accent,
+    )
+    val keyboardOptions = KeyboardOptions(
+        keyboardType = if (obscureText) KeyboardType.Password else KeyboardType.Uri,
+        autoCorrectEnabled = false,
+        imeAction = ImeAction.Done,
+        showKeyboardOnFocus = editor.showKeyboardOnFocus,
+    )
+    val keyboardAction = KeyboardActionHandler { commit() }
+    val trailing: @Composable () -> Unit = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (obscureText) {
                 TextButton(onClick = { revealText = !revealText }) {
                     Text(if (revealText) strings.hide else strings.show)
                 }
             }
-        } else {
-            null
-        },
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-        keyboardActions = KeyboardActions(
-            onDone = {
-                commit()
-                focusManager.clearFocus()
-            },
-        ),
-        shape = connectedListItemShape(index, count),
-        modifier = Modifier
-            .fillMaxWidth()
-            .onFocusChanged { focusState ->
-                if (isFocused && !focusState.isFocused) commit()
-                isFocused = focusState.isFocused
+            if (hasDraft) {
+                IconButton(onClick = ::commit) {
+                    Icon(AppIcons.Check, contentDescription = if (obscureText) strings.save else strings.saveAddress)
+                }
             }
-            .padding(vertical = 1.5.dp)
-            .heightIn(min = 64.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = accentPalette.quietContainer,
-            unfocusedContainerColor = accentPalette.quietContainer,
-            focusedTextColor = accentPalette.onQuietContainer,
-            unfocusedTextColor = accentPalette.onQuietContainer,
-            focusedLabelColor = accentPalette.accent,
-            unfocusedLabelColor = accentPalette.secondaryOnQuietContainer,
-            focusedBorderColor = accentPalette.accent,
-            unfocusedBorderColor = accentPalette.onQuietContainer.copy(alpha = 0.18f),
-            cursorColor = accentPalette.accent,
-        ),
-    )
+        }
+    }
+    if (obscureText) {
+        OutlinedSecureTextField(
+            state = draft.field,
+            label = { Text(label) },
+            supportingText = supportingText?.let { { Text(it) } },
+            trailingIcon = trailing,
+            textObfuscationMode = if (revealText) TextObfuscationMode.Visible else TextObfuscationMode.Hidden,
+            keyboardOptions = keyboardOptions,
+            onKeyboardAction = keyboardAction,
+            shape = shape,
+            modifier = fieldModifier,
+            colors = colors,
+        )
+    } else {
+        OutlinedTextField(
+            state = draft.field,
+            label = { Text(label) },
+            supportingText = supportingText?.let { { Text(it) } },
+            trailingIcon = trailing.takeIf { hasDraft },
+            lineLimits = TextFieldLineLimits.SingleLine,
+            keyboardOptions = keyboardOptions,
+            onKeyboardAction = keyboardAction,
+            shape = shape,
+            modifier = fieldModifier,
+            colors = colors,
+        )
+    }
+}
+
+private class SettingsEditorDraft(initial: String) : ViewModel() {
+    val field = TextFieldState(initial)
+    var baseline by mutableStateOf(initial)
 }
 
 @Composable

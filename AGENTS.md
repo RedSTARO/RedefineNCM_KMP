@@ -1226,9 +1226,11 @@ Applies to all platforms, and the original Android repo is kept aligned (goal #3
 - **Progress:** wavy indicators for prominent, full-width progress (downloads, recognition,
   user level, desktop mini strip). Do **not** make thin decorative bars wavy — anything under
   roughly 4dp has no room for wave amplitude and renders as a smudge.
-- **Navigation chrome:** narrow windows use a `HorizontalFloatingToolbar` of `ToggleButton`
-  items. Wide windows keep the navigation rail — it is the correct responsive pattern for
-  desktop and tablet and must not be replaced by a floating toolbar.
+- **Navigation chrome:** tall phone windows use a `HorizontalFloatingToolbar` of `ToggleButton`
+  items. Android's short/narrow multi-window layouts use a compact dock or a scrollable rail
+  (with a direct player entry so a second overlay does not crowd the page). Wide windows keep
+  the navigation rail. Android uses the measured app window, not device type or orientation,
+  and the dock/mini player do not cover a soft keyboard.
 - **Use the real Expressive APIs** (`MaterialExpressiveTheme`, motion scheme) provided by the
   pinned `material3` version; custom shapes and page palettes extend that theme rather than
   replacing it.
@@ -1367,11 +1369,13 @@ feature gap; platform integrations use target-specific actuals:
   iOS and Web share the `skiaMain` RGB555 quantizer) wired into MiniNowPlayingBar (with luminance-adaptive content
   color + spring animation), PlaylistDetail hero, and both full-screen AMLL renderers.
 - **Search shared-element transition** (pill → bar) via `SharedTransitionLayout` in HomeScreen.
-- **Responsive nav**: non-Desktop targets use NavigationRail on ≥600dp. Desktop keeps a collapsed
-  modal wide navigation rail at every supported window size; expansion overlays content instead of
-  resizing it. Full-screen playback remains one `AmllPlayerScreen` destination regardless of
-  window size or dynamic-cover capability. Startup routes to the NetEase login page only when no
-  switched-on provider holds an account (it used to whenever the NetEase cookie was blank).
+- **Responsive nav**: iOS and Web use NavigationRail on ≥600dp. Android also uses a compact
+  dock or scrollable rail in short windows, and its player pages avoid separating folds reported
+  by AndroidX WindowManager; see [Android adaptive QA](docs/ANDROID_ADAPTIVE_QA.md). Desktop uses a
+  collapsed modal wide navigation rail when there is room; expansion overlays content instead of
+  resizing it. Full-screen lyrics remain one `AmllPlayerScreen` destination regardless of window
+  size or dynamic-cover capability. Startup routes to NetEase login only when no switched-on
+  provider holds an account.
 - **Settings**: server availability check (`/inner/version/`, now on the accounts page beside the
   QQ gateway's check); the legacy-persisted
   `adaptOriginalAndroidLyric` value now controls the optional Android Live Update notification

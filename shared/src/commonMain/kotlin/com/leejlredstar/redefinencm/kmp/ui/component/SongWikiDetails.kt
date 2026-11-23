@@ -28,7 +28,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -77,11 +76,7 @@ fun SongWikiDetailsSheet(
     artworkOverlay: (@Composable BoxScope.() -> Unit)? = null,
 ) {
     if (!visible) return
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = accentPalette.pageEnd,
-        contentColor = accentPalette.onQuietContainer,
-    ) {
+    PlaybackModalSheet(accentPalette, onDismiss) {
         SongWikiDetailsContent(
             songTitle = songTitle,
             songArtist = songArtist,

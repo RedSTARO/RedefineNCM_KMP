@@ -17,6 +17,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
+    <!-- Browsing and playback also work with pointer input or without song recognition. -->
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
     <application
         android:name=".RedefineNCMApp"
         android:allowBackup="false"
@@ -26,10 +30,15 @@
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.RedefineNCM">
+        <!-- API 28 devices that offer split-screen multi-resume need an explicit opt-in. -->
+        <meta-data android:name="android.allow_multiple_resumed_activities" android:value="true" />
         <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density|keyboard|keyboardHidden|navigation"
             android:exported="true"
             android:launchMode="singleTop"
-            android:name=".MainActivity">
+            android:resizeableActivity="true"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

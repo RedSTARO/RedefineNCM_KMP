@@ -21,7 +21,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -40,14 +39,15 @@ import com.leejlredstar.redefinencm.kmp.data.auth.LoginMethod
 import com.leejlredstar.redefinencm.kmp.data.auth.QrLoginFlow
 import com.leejlredstar.redefinencm.kmp.data.auth.QrLoginMethod
 import com.leejlredstar.redefinencm.kmp.i18n.strings
+import com.leejlredstar.redefinencm.kmp.ui.component.inMemoryViewModel
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.decodePngToImageBitmap
 
 /**
  * Draws any [QrLoginMethod]: the code, what to do with it, and a way to get a fresh one. The
- * state is a [QrLoginFlow] per method, started when the method is shown and cancelled when it
- * leaves the screen, so switching between two scan apps replaces the code.
+ * state is a [QrLoginFlow] per method, retained through Activity recreation but discarded when
+ * switching methods or leaving the page.
  */
 class QrLoginPresenter : LoginMethodPresenter {
     override fun supports(method: LoginMethod): Boolean = method is QrLoginMethod
@@ -57,14 +57,11 @@ class QrLoginPresenter : LoginMethodPresenter {
 
     @OptIn(ExperimentalMaterial3ExpressiveApi::class)
     @Composable
-    override fun Content(method: LoginMethod, host: LoginHost, palette: ContentAccentPalette) {
+    override fun Content(method: LoginMethod, host: LoginHost, palette: ContentAccentPalette, isActive: Boolean) {
         val qrMethod = method as QrLoginMethod
-        val flow = remember(qrMethod, host) { QrLoginFlow(qrMethod, host) }
-        // 原版 QrLogin：进入登录页即自动生成二维码
-        DisposableEffect(flow) {
-            flow.start()
-            onDispose { flow.cancel() }
-        }
+        val flow = inMemoryViewModel(key = method.id) {
+            QrLoginSession(QrLoginFlow(qrMethod, host))
+        }.flow
 
         val imagePng by flow.imagePng.collectAsState()
         val status by flow.status.collectAsState()
@@ -181,4 +178,10 @@ class QrLoginPresenter : LoginMethodPresenter {
             }
         }
     }
+}
+
+private class QrLoginSession(val flow: QrLoginFlow) : androidx.lifecycle.ViewModel() {
+    init { flow.start() }
+
+    override fun onCleared() { flow.cancel() }
 }

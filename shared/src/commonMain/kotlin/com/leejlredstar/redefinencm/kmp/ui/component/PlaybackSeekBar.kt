@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.ui.component
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -111,6 +112,7 @@ internal fun PlaybackSeekBar(
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
     onInteractionStart: (() -> Unit)? = null,
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
 ) {
     // A surface torn down mid-drag must not leave the state believing a drag is still live.
     DisposableEffect(state) {
@@ -128,6 +130,7 @@ internal fun PlaybackSeekBar(
         },
         enabled = enabled,
         valueRange = 0f..1f,
+        interactionSource = interactionSource,
         modifier = Modifier
             .heightIn(min = ExpressiveLayout.MinimumTouchTarget)
             .then(modifier),

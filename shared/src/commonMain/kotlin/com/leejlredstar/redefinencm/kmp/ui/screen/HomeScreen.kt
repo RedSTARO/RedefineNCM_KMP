@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +31,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
@@ -54,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.LocalCompactAppBar
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.theme.AccentColorSaver
@@ -135,6 +138,7 @@ fun HomeScreen(
         accentPalette = pagePalette,
         contentWindowInsets = WindowInsets.statusBars,
     ) {
+        val compactBar = LocalCompactAppBar.current
         // The page title, the counts and the avatar are a collapsing app bar, not a Surface
         // inside the list that scrolls away like content: as a top bar they collapse to a
         // pinned compact title, and the search pill is the first row of the page.
@@ -142,44 +146,51 @@ fun HomeScreen(
         Scaffold(
             modifier = Modifier
                 .fillMaxSize()
-                .nestedScroll(appBarScrollBehavior.nestedScrollConnection),
+                .then(if (compactBar) Modifier else Modifier.nestedScroll(appBarScrollBehavior.nestedScrollConnection)),
             containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
-                LargeFlexibleTopAppBar(
-                    title = { Text(strings.forYou) },
-                    actions = {
-                        HomeAccountAvatar(
-                            avatarUrl = avatarUrl,
-                            nickname = nickname,
-                            accentColor = pageAccent,
-                            onOpenMy = onOpenMy,
-                            onAccentColor = if (pageAccentSource == avatarUrl) {
-                                { color -> rawPageAccent = color }
-                            } else {
-                                null
-                            },
-                        )
-                        Spacer(Modifier.width(8.dp))
-                    },
-                    scrollBehavior = appBarScrollBehavior,
-                    colors = TopAppBarDefaults.largeTopAppBarColors(
-                        containerColor = Color.Transparent,
-                        scrolledContainerColor = pagePalette.pageStart,
-                        titleContentColor = pagePalette.onPageStart,
-                    ),
+                val avatar: @Composable RowScope.() -> Unit = {
+                    HomeAccountAvatar(
+                        avatarUrl = avatarUrl,
+                        nickname = nickname,
+                        accentColor = pageAccent,
+                        onOpenMy = onOpenMy,
+                        onAccentColor = if (pageAccentSource == avatarUrl) {
+                            { color -> rawPageAccent = color }
+                        } else {
+                            null
+                        },
+                    )
+                    Spacer(Modifier.width(8.dp))
+                }
+                val colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = pagePalette.pageStart,
+                    titleContentColor = pagePalette.onPageStart,
                 )
+                if (compactBar) {
+                    TopAppBar(title = { Text(strings.forYou) }, actions = avatar, colors = colors)
+                } else {
+                    LargeFlexibleTopAppBar(
+                        title = { Text(strings.forYou) },
+                        actions = avatar,
+                        scrollBehavior = appBarScrollBehavior,
+                        colors = colors,
+                    )
+                }
             },
         ) { appBarPadding ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize()
+                .padding(top = if (compactBar) appBarPadding.calculateTopPadding() else 0.dp),
             // Bottom clearance belongs on the LazyColumn, not on ExpressivePage:
             // container padding shrinks the viewport so items stop above the floating
             // toolbar, while contentPadding lets them scroll underneath it.
             contentPadding = PaddingValues(
                 start = 16.dp,
                 end = 16.dp,
-                top = appBarPadding.calculateTopPadding(),
+                top = if (compactBar) 0.dp else appBarPadding.calculateTopPadding(),
                 // The shell's clearance already covers the toolbar and the mini player.
                 bottom = scaffoldPadding.calculateBottomPadding() + 16.dp,
             ),

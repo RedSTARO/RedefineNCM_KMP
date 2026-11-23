@@ -826,6 +826,7 @@
     <!-- ui/screen/SongRecognitionScreen.kt -->
     <string name="recognitionRequestingMicPermission">マイクの権限をリクエストしています…</string>
     <string name="recognitionMatching">フィンガープリントを生成して曲を照合しています…</string>
+    <string name="recognitionMicrophoneWindowLost">ウィンドウを切り替えたため録音を停止しました。このウィンドウに戻ってから再試行できます。</string>
     <string name="recognitionResults">認識結果</string>
     <string name="recognizeAgain">もう一度認識</string>
     <string name="recognitionNoMatchTitle">曲を認識できませんでした</string>

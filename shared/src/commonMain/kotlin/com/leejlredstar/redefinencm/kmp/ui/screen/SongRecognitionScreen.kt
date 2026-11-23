@@ -28,7 +28,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.recognition.AudioFingerprint
+import com.leejlredstar.redefinencm.kmp.recognition.LocalMicrophoneWindowActive
 import com.leejlredstar.redefinencm.kmp.recognition.rememberMicrophonePermissionRequester
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveWavyProgress
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveArtwork
@@ -65,17 +66,28 @@ fun SongRecognitionScreen(
     onOpenPlayer: () -> Unit = onBack,
     scaffoldPadding: PaddingValues = PaddingValues(),
     viewModel: SongRecognitionViewModel = koinInject(),
+    isActive: Boolean = true,
 ) {
     val state by viewModel.uiState.collectAsState()
     val accentPalette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
-    var queuedSongId by remember { mutableStateOf<Long?>(null) }
+    var queuedSongId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var autoStart by rememberSaveable { mutableStateOf(true) }
+    val microphoneWindow = LocalMicrophoneWindowActive.current
+    val windowActive = microphoneWindow?.collectAsState()?.value ?: true
+    val canRecord = isActive && windowActive
     val requestMicrophonePermission = rememberMicrophonePermissionRequester(
-        onResult = viewModel::onPermissionResult,
+        onResult = { granted ->
+            viewModel.setMicrophoneWindowActive(isActive && (microphoneWindow?.value ?: true))
+            viewModel.onPermissionResult(granted)
+        },
     )
 
     fun requestRecognition() {
+        // Read the platform signal directly on events: composition may not have drawn the loss
+        // of top-resumed ownership yet.
+        viewModel.setMicrophoneWindowActive(isActive && (microphoneWindow?.value ?: true))
+        if (!viewModel.beginPermissionRequest()) return
         queuedSongId = null
-        viewModel.beginPermissionRequest()
         requestMicrophonePermission()
     }
 
@@ -84,11 +96,25 @@ fun SongRecognitionScreen(
         onBack()
     }
 
-    BackHandler { leave() }
-    // The entry is already a request to identify a song; listening starts on arrival instead of
-    // after a second tap on this page.
-    LaunchedEffect(Unit) {
-        if (state is SongRecognitionUiState.Idle) requestRecognition()
+    BackHandler(enabled = isActive) { leave() }
+    // Release acquisition as soon as the activity loses ownership, even if Android has paused
+    // the composition's frame clock and cannot draw an updated recognition panel yet.
+    LaunchedEffect(viewModel, isActive, microphoneWindow) {
+        if (isActive && microphoneWindow != null) {
+            microphoneWindow.collect(viewModel::setMicrophoneWindowActive)
+        } else {
+            viewModel.setMicrophoneWindowActive(isActive)
+        }
+    }
+    // Only the first arrival is a request to capture. Returning to a recreated or unfocused
+    // window is not an implicit request to start recording again.
+    LaunchedEffect(viewModel, canRecord) {
+        if (autoStart && canRecord && viewModel.uiState.value is SongRecognitionUiState.Idle &&
+            (microphoneWindow?.value ?: true)
+        ) {
+            autoStart = false
+            requestRecognition()
+        }
     }
     DisposableEffect(viewModel) {
         onDispose { viewModel.close() }

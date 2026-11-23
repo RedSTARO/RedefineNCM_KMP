@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.viewmodel
 
+import androidx.lifecycle.ViewModel
 import com.leejlredstar.redefinencm.kmp.data.auth.CredentialStore
 import com.leejlredstar.redefinencm.kmp.data.auth.LoginHost
 import com.leejlredstar.redefinencm.kmp.data.auth.LoginMethod
@@ -34,7 +35,7 @@ class LoginViewModel(
     descriptors: ProviderLoginDescriptorRegistry,
     credentials: CredentialStore,
     private val settings: PlatformSettings,
-) : LoginHost {
+) : ViewModel(), LoginHost {
     override val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val slot = credentials.require(provider)
 
@@ -116,7 +117,7 @@ class LoginViewModel(
         _signedIn.value = slot.isSignedIn(credential)
     }
 
-    fun onCleared() {
+    public override fun onCleared() {
         scope.cancel()
     }
 }

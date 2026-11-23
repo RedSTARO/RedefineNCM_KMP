@@ -28,6 +28,7 @@ import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.requiresLegacyDownloadWritePermission
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
 import org.koin.android.ext.android.get
@@ -64,6 +65,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private var startupJob: Job? = null
+    private val microphoneWindowActive = MutableStateFlow(false)
 
     /**
      * Whether this activity's launch intent was acted on. Kept across process death: Android gives
@@ -129,7 +131,7 @@ class MainActivity : ComponentActivity() {
                 launchNavigationHandled = true
             }
             setContent {
-                App()
+                AndroidWindowAwareApp(this@MainActivity, microphoneWindowActive)
                 val pending = pendingPermissions
                 if (pending.isNotEmpty()) {
                     StartupPermissionRationale(
@@ -150,8 +152,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onTopResumedActivityChanged(isTopResumedActivity: Boolean) {
+        super.onTopResumedActivityChanged(isTopResumedActivity)
+        microphoneWindowActive.value = isTopResumedActivity
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // API 28 can also multi-resume, but has no top-resumed callback.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) microphoneWindowActive.value = hasFocus
+    }
+
     override fun onResume() {
         super.onResume()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) microphoneWindowActive.value = hasWindowFocus()
         lifecycleScope.launch {
             runCatching {
                 get<PlatformSettings>().awaitLoaded()
@@ -165,6 +179,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onPause() {
+        microphoneWindowActive.value = false
         // 与原版 MainActivity.onPause 一致：离开前台时保存播放状态（队列/索引/进度/随机）
         lifecycleScope.launch {
             val settings = get<PlatformSettings>()

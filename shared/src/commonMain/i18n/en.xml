@@ -874,6 +874,7 @@
     <!-- ui/screen/SongRecognitionScreen.kt -->
     <string name="recognitionRequestingMicPermission">Requesting microphone permission…</string>
     <string name="recognitionMatching">Creating a fingerprint and matching songs…</string>
+    <string name="recognitionMicrophoneWindowLost">Recording stopped when you switched windows. Return to this window to try again.</string>
     <string name="recognitionResults">Recognition results</string>
     <string name="recognizeAgain">Recognize again</string>
     <string name="recognitionNoMatchTitle">No song recognized</string>

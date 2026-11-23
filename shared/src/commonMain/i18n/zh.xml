@@ -826,6 +826,7 @@
     <!-- ui/screen/SongRecognitionScreen.kt -->
     <string name="recognitionRequestingMicPermission">正在请求麦克风权限…</string>
     <string name="recognitionMatching">正在生成指纹并匹配歌曲…</string>
+    <string name="recognitionMicrophoneWindowLost">切换窗口后已停止录音。返回此窗口后可以重试。</string>
     <string name="recognitionResults">识别结果</string>
     <string name="recognizeAgain">重新识别</string>
     <string name="recognitionNoMatchTitle">没有识别到歌曲</string>

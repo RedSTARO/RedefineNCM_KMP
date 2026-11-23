@@ -15,6 +15,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -158,6 +159,91 @@ class SongRecognitionViewModelTest {
 
         assertIs<SongRecognitionUiState.Idle>(viewModel.uiState.value)
         assertTrue(player.queueSnapshot.value.items.isEmpty())
+        player.release()
+    }
+
+    @Test
+    fun losingTopResumedOwnershipReleasesCaptureWithoutRestartingOrPausingPlayback() = runTest {
+        val player = InMemoryPlatformPlayer(scope = backgroundScope)
+        player.setQueue(listOf(MediaInfo("song", "Song", "Artist")))
+        player.play()
+        var captures = 0
+        var releases = 0
+        val recorder = object : MicrophoneRecorder {
+            override suspend fun capture(durationMillis: Long, onProgress: (Long, Float) -> Unit): CapturedPcm {
+                captures++
+                try {
+                    awaitCancellation()
+                } finally {
+                    releases++
+                }
+            }
+        }
+        val model = SongRecognitionViewModel(
+            recorder = recorder,
+            player = player,
+            matchAudio = { _, _ -> error("An interrupted capture cannot be matched") },
+            prepareSamples = { captured, _ -> captured.monoSamples },
+            generateFingerprint = { "test-fingerprint" },
+            processingDispatcher = StandardTestDispatcher(testScheduler),
+            scope = backgroundScope,
+        )
+        model.beginPermissionRequest()
+        model.setMicrophoneWindowActive(false) // Permission dialog takes foreground ownership.
+        model.onPermissionResult(granted = true)
+        runCurrent()
+        assertEquals(0, captures)
+        model.setMicrophoneWindowActive(true)
+        runCurrent()
+        assertEquals(1, captures)
+        assertFalse(player.isPlaying.value)
+
+        model.setMicrophoneWindowActive(false) // The other activity has focus in split screen.
+        runCurrent()
+        assertEquals(1, releases)
+        assertTrue(player.isPlaying.value)
+        assertFalse(model.beginPermissionRequest())
+        assertTrue(assertIs<SongRecognitionUiState.MicrophoneUnavailable>(model.uiState.value).canRetry)
+
+        model.setMicrophoneWindowActive(true)
+        runCurrent()
+        assertEquals(1, captures)
+        assertTrue(model.beginPermissionRequest())
+        model.onPermissionResult(granted = true)
+        runCurrent()
+        assertEquals(2, captures)
+        model.close()
+        player.release()
+    }
+
+    @Test
+    fun aMatchFinishingAfterFocusLossCannotStartAnotherCapture() = runTest {
+        val player = InMemoryPlatformPlayer(scope = backgroundScope)
+        player.setQueue(listOf(MediaInfo("song", "Song", "Artist")))
+        player.play()
+        val releaseMatch = CompletableDeferred<Unit>()
+        var matchCalls = 0
+        val model = createViewModel(
+            player = player,
+            matchAudio = { _, _ ->
+                matchCalls++
+                releaseMatch.await()
+                AudioMatch(code = 200, data = AudioMatchData(type = 0))
+            },
+            modelScope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)),
+        )
+        model.beginPermissionRequest()
+        model.onPermissionResult(granted = true)
+        runCurrent()
+        assertIs<SongRecognitionUiState.Recognizing>(model.uiState.value)
+        model.setMicrophoneWindowActive(false)
+        releaseMatch.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(1, matchCalls)
+        assertTrue(player.isPlaying.value)
+        assertTrue(assertIs<SongRecognitionUiState.MicrophoneUnavailable>(model.uiState.value).canRetry)
+        model.close()
         player.release()
     }
 
