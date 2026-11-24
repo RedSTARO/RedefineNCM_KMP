@@ -62,9 +62,9 @@ import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.browseHeader
 import org.koin.compose.koinInject
 import kotlin.math.roundToInt
 
@@ -166,6 +166,7 @@ fun UserPlaylistScreen(
 
     ExpressivePage(
         accentPalette = accentPalette,
+        headerOwnsTopInsets = true,
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -197,7 +198,7 @@ fun UserPlaylistScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .statusBarsPadding()
+                            .windowInsetsPadding(WindowInsets.browseHeader)
                             .padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -449,7 +450,7 @@ private fun UserPlaylistHero(
         // The title row and the status bar are part of the hero, not a band above it, so the
         // picture runs to the very top of the page and the only edge left is the one the
         // gradient closes at the bottom.
-        val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        val topInset = WindowInsets.browseHeader.asPaddingValues().calculateTopPadding()
         val heroHeight = topInset + HeroTitleRowHeight + (maxWidth / 3.4f).coerceIn(164.dp, 232.dp)
         // At least that tall, and taller when the text needs it: at a larger font the profile
         // block grew upward over the page title inside a fixed height.
@@ -509,7 +510,7 @@ private fun UserPlaylistHero(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .statusBarsPadding()
+                        .windowInsetsPadding(WindowInsets.browseHeader)
                         .height(HeroTitleRowHeight)
                         .padding(start = 20.dp, end = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,

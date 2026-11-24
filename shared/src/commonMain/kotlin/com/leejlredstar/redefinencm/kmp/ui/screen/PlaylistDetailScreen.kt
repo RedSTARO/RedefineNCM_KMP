@@ -19,7 +19,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.windowInsetsPadding
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.browseHeader
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -160,6 +162,7 @@ fun PlaylistDetailScreen(
 
     ExpressivePage(
         accentPalette = accentPalette,
+        headerOwnsTopInsets = true,
     ) {
         LazyColumn(
             state = listState,
@@ -347,7 +350,7 @@ private fun PlaylistCompactBar(
     ) {
         Row(
             modifier = Modifier
-                .statusBarsPadding()
+                .windowInsetsPadding(WindowInsets.browseHeader)
                 .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -484,7 +487,7 @@ private fun PlaylistHeader(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .statusBarsPadding()
+                    .windowInsetsPadding(WindowInsets.browseHeader)
                     .padding(8.dp),
             ) {
                 IconButton(onClick = onBack) {

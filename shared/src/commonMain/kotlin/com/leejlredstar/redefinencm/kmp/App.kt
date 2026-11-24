@@ -45,14 +45,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.captionBar
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -129,8 +128,10 @@ import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.AndroidNavigationLayout
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.CompactAppBarHeightThreshold
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.FoldSafeBrowseContent
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.LocalBrowseObstructions
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.LocalCompactAppBar
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.LocalSoftKeyboardVisible
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.androidBrowseObstructions
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.androidMiniPlayerFabSlot
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.androidNavigationLayout
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.rememberAndroidNavigationFade
@@ -690,22 +691,16 @@ private fun AppContent(
 
             val onPlayerPage = isPlayerSurface(pushedStack.lastOrNull())
             val keyboardVisible = LocalSoftKeyboardVisible.current
-            val safeBrowseInsets = if (platform.isAndroid && !onPlayerPage) {
-                // Pages handle the status bar themselves, often drawing art under it. Also
-                // protect sides, the display cutout and the desktop-window caption. Descendant
-                // inset modifiers only apply what is left after these have been consumed.
-                val cutout = WindowInsets.displayCutout
-                val topObstructions = WindowInsets.captionBar.union(cutout).only(WindowInsetsSides.Top)
-                val sideObstructions = WindowInsets.systemBars.union(cutout).only(WindowInsetsSides.Horizontal)
-                Modifier.windowInsetsPadding(sideObstructions.union(topObstructions))
-            } else {
-                Modifier
-            }
+            val androidBrowseObstructions = if (platform.isAndroid) WindowInsets.androidBrowseObstructions else null
+            val browseObstructions = androidBrowseObstructions.takeUnless { onPlayerPage }
+            val browseSides = browseObstructions?.only(WindowInsetsSides.Horizontal) ?: WindowInsets(0, 0, 0, 0)
+            val browseSidePadding = if (browseObstructions != null) Modifier.windowInsetsPadding(browseSides) else Modifier
             FoldSafeBrowseContent(
-                modifier = Modifier.fillMaxSize().then(safeBrowseInsets),
+                modifier = Modifier.fillMaxSize(),
                 enabled = !onPlayerPage,
+                obstructions = browseObstructions,
                 contentModifier = if (platform.isAndroid) Modifier.imePadding() else Modifier,
-            ) { windowWidth, windowHeight ->
+            ) { windowWidth, windowHeight, obstructedTop ->
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val compactAppBar = platform.isAndroid && windowHeight < CompactAppBarHeightThreshold
                     val desktopMode = desktopLayoutMode(maxWidth, maxHeight)
@@ -718,7 +713,7 @@ private fun AppContent(
                     val dockPlayerLabel = currentMedia?.takeIf { compactDockVisible }?.let { strings.openPlayerFor(it.title) }
                     // The compact dock owns the player entry; only roomier layouts get a FAB.
                     val showDesktopBar = showDesktopRail && currentMedia != null && !onPlayerPage
-                    val miniPlayerFits = maxWidth >= 160.dp && maxHeight >= 200.dp
+                    val miniPlayerFits = windowWidth >= 160.dp && maxHeight - obstructedTop >= 200.dp
                     val androidFabSlot = androidNav?.let { androidMiniPlayerFabSlot(it, keyboardVisible, miniPlayerFits) }
                     val showMiniPlayer = !showDesktopBar && currentMedia != null && !onPlayerPage &&
                         if (platform.isAndroid) showTabs && androidFabSlot != null else !keyboardVisible && miniPlayerFits
@@ -787,7 +782,7 @@ private fun AppContent(
                                     selectedTab = currentTab,
                                     onSelect = ::selectTab,
                                     palette = chromePalette,
-                                    insets = bottomInsets.only(WindowInsetsSides.Bottom),
+                                    insets = bottomInsets.only(WindowInsetsSides.Bottom).union(browseSides),
                                     height = 56.dp + systemNavInset,
                                     playerLabel = dockPlayerLabel,
                                     onOpenPlayer = ::openNowPlaying,
@@ -796,7 +791,7 @@ private fun AppContent(
                             }
                         },
                         snackbarHost = {
-                            SnackbarHost(snackbarHostState, Modifier.padding(bottom = snackbarClearance))
+                            SnackbarHost(snackbarHostState, browseSidePadding.padding(bottom = snackbarClearance))
                         },
                         floatingActionButtonPosition = FabPosition.End,
                         floatingActionButton = {
@@ -812,7 +807,7 @@ private fun AppContent(
                                     // Scaffold does not reserve the toolbar's height, so the FAB
                                     // has to step over the floating pill itself.
                                     Box(
-                                        Modifier
+                                        browseSidePadding
                                             .padding(bottom = contentBottomInset)
                                             .graphicsLayer {
                                                 // Follow the toolbar down as it scrolls away, so no
@@ -885,6 +880,8 @@ private fun AppContent(
                                         palette = chromePalette,
                                         insets = if (platform.isAndroid) {
                                             WindowInsets.statusBars.only(WindowInsetsSides.Top)
+                                                .union(browseObstructions?.only(WindowInsetsSides.Top + WindowInsetsSides.Start)
+                                                    ?: WindowInsets(0, 0, 0, 0))
                                                 .union(bottomInsets.only(WindowInsetsSides.Bottom))
                                         } else {
                                             NavigationRailDefaults.windowInsets
@@ -894,7 +891,12 @@ private fun AppContent(
                                     )
                                 }
                             }
-                            Box(Modifier.weight(1f).fillMaxSize()) {
+                            val railStartInsets = if (showMobileRail && showTabs && browseObstructions != null) {
+                                // The rail already includes this inset in its measured width. Its
+                                // sibling page must not leave a second cutout-width gap.
+                                Modifier.consumeWindowInsets(browseSides.only(WindowInsetsSides.Start))
+                            } else Modifier
+                            Box(Modifier.weight(1f).fillMaxSize().then(railStartInsets)) {
                             Column(Modifier.fillMaxSize()) {
                                 AnimatedContent(
                                     targetState = rootDest,
@@ -910,6 +912,7 @@ private fun AppContent(
                                     saveableStateHolder.SaveableStateProvider(target.stateKey()) {
                                     CompositionLocalProvider(
                                         LocalCompactAppBar provides compactAppBar,
+                                        LocalBrowseObstructions provides androidBrowseObstructions,
                                     ) {
                                     when (target) {
                                         is RootDest.Pushed -> when (val dest = target.dest) {
@@ -1048,7 +1051,7 @@ private fun AppContent(
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
                                     .fillMaxWidth()
-                                    .windowInsetsPadding(bottomInsets)
+                                    .windowInsetsPadding(bottomInsets.union(browseSides))
                                     .padding(horizontal = 16.dp, vertical = 14.dp),
                                 contentAlignment = Alignment.Center,
                             ) {

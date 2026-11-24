@@ -11,10 +11,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -47,6 +50,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.i18n.strings
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.LocalBrowseObstructions
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 
@@ -299,6 +303,7 @@ fun ExpressivePage(
     maxContentWidth: Dp = ExpressiveLayout.BrowseContentMaxWidth,
     contentWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0),
     contentPadding: PaddingValues = PaddingValues(0.dp),
+    headerOwnsTopInsets: Boolean = false,
     content: @Composable BoxScope.() -> Unit,
 ) {
     Box(
@@ -318,13 +323,17 @@ fun ExpressivePage(
         // The alignment has to be on this box: it fills the page, so the outer box's TopCenter
         // has nothing to center, and without it here the bounded pane sits against the left
         // edge.
-        BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        val sides = LocalBrowseObstructions.current?.only(WindowInsetsSides.Horizontal)
+        val pane = if (sides != null) Modifier.windowInsetsPadding(sides) else Modifier
+        BoxWithConstraints(Modifier.fillMaxSize().then(pane), contentAlignment = Alignment.TopCenter) {
+            val top = LocalBrowseObstructions.current?.only(WindowInsetsSides.Top)
+            val contentInsets = if (top != null && !headerOwnsTopInsets) contentWindowInsets.union(top) else contentWindowInsets
             val boundedWidth = minOf(maxWidth, maxContentWidth)
             Box(
                 modifier = Modifier
                     .width(boundedWidth)
                     .fillMaxHeight()
-                    .windowInsetsPadding(contentWindowInsets)
+                    .windowInsetsPadding(contentInsets)
                     .padding(contentPadding),
                 content = content,
             )

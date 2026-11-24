@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -40,6 +41,8 @@ import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.recognition.AudioFingerprint
 import com.leejlredstar.redefinencm.kmp.recognition.LocalMicrophoneWindowActive
 import com.leejlredstar.redefinencm.kmp.recognition.rememberMicrophonePermissionRequester
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.LocalBrowseObstructions
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.browseHeader
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveWavyProgress
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveArtwork
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
@@ -123,6 +126,7 @@ fun SongRecognitionScreen(
     ExpressivePage(
         accentPalette = accentPalette,
         maxContentWidth = ExpressiveLayout.ReadingContentMaxWidth,
+        contentWindowInsets = if (LocalBrowseObstructions.current != null) WindowInsets.browseHeader else WindowInsets(0, 0, 0, 0),
         contentPadding = PaddingValues(
             start = 16.dp,
             end = 16.dp,
