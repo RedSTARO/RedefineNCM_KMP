@@ -122,19 +122,27 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.lyric.AmllPlayerScreen
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.AndroidNavigationLayout
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.AndroidNavigationTarget
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.CompactAppBarHeightThreshold
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.FoldSafeBrowseContent
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.LocalBrowseObstructions
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.LocalCompactAppBar
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.LocalSoftKeyboardVisible
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.LocalWindowFold
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.androidBrowseObstructions
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.androidMiniPlayerFabSlot
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.androidNavigationLayout
-import com.leejlredstar.redefinencm.kmp.ui.adaptive.rememberAndroidNavigationFade
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.compactNavReflow
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.rememberAndroidNavigationMotion
+import com.leejlredstar.redefinencm.kmp.ui.component.LocalAndroidReflowWindow
+import com.leejlredstar.redefinencm.kmp.ui.component.ReflowEntry
+import com.leejlredstar.redefinencm.kmp.ui.component.ReflowProgress
+import com.leejlredstar.redefinencm.kmp.ui.component.reflowPlacement
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberNowPlayingUiState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
@@ -695,12 +703,15 @@ private fun AppContent(
             val browseObstructions = androidBrowseObstructions.takeUnless { onPlayerPage }
             val browseSides = browseObstructions?.only(WindowInsetsSides.Horizontal) ?: WindowInsets(0, 0, 0, 0)
             val browseSidePadding = if (browseObstructions != null) Modifier.windowInsetsPadding(browseSides) else Modifier
+            val navigationMotion = rememberAndroidNavigationMotion(platform.isAndroid)
+            val motionWindow = LocalAndroidReflowWindow.current
+            val motionFold = LocalWindowFold.current?.takeIf { it.isOccluding }
             FoldSafeBrowseContent(
                 modifier = Modifier.fillMaxSize(),
                 enabled = !onPlayerPage,
                 obstructions = browseObstructions,
                 contentModifier = if (platform.isAndroid) Modifier.imePadding() else Modifier,
-            ) { windowWidth, windowHeight, obstructedTop ->
+            ) { windowWidth, windowHeight, obstructedTop, pane ->
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val compactAppBar = platform.isAndroid && windowHeight < CompactAppBarHeightThreshold
                     val desktopMode = desktopLayoutMode(maxWidth, maxHeight)
@@ -717,7 +728,12 @@ private fun AppContent(
                     val androidFabSlot = androidNav?.let { androidMiniPlayerFabSlot(it, keyboardVisible, miniPlayerFits) }
                     val showMiniPlayer = !showDesktopBar && currentMedia != null && !onPlayerPage &&
                         if (platform.isAndroid) showTabs && androidFabSlot != null else !keyboardVisible && miniPlayerFits
-                    val navigationFade = rememberAndroidNavigationFade(androidNav, showTabs)
+                    navigationMotion?.Observe(
+                        target = if (androidNav != null && pane != null && windowWidth > 0.dp && windowHeight > 0.dp) {
+                            AndroidNavigationTarget(androidNav, DpSize(windowWidth, windowHeight), pane, motionFold, motionWindow)
+                        } else null,
+                        active = showTabs,
+                    )
                     val rootDest = pushedStack.lastOrNull()
                         ?.let { RootDest.Pushed(it, pushedStack.size) }
                         ?: RootDest.Tab(currentTab)
@@ -786,7 +802,7 @@ private fun AppContent(
                                     height = 56.dp + systemNavInset,
                                     playerLabel = dockPlayerLabel,
                                     onOpenPlayer = ::openNowPlaying,
-                                    modifier = navigationFade,
+                                    motion = navigationMotion,
                                 )
                             }
                         },
@@ -823,8 +839,7 @@ private fun AppContent(
                                                     translationY =
                                                         hidden * ExpressiveLayout.FloatingNavClearance.toPx()
                                                 }
-                                            }
-                                            .then(navigationFade),
+                                            },
                                     ) {
                                         MiniNowPlayingBar(
                                             onExpand = ::openNowPlaying,
@@ -887,7 +902,7 @@ private fun AppContent(
                                             NavigationRailDefaults.windowInsets
                                         },
                                         scrollable = platform.isAndroid,
-                                        modifier = navigationFade,
+                                        motion = navigationMotion,
                                     )
                                 }
                             }
@@ -1058,7 +1073,9 @@ private fun AppContent(
                                 HorizontalFloatingToolbar(
                                     expanded = true,
                                     // One group of tabs: "tab, 2 of 3" rather than loose buttons.
-                                    modifier = navigationFade.selectableGroup(),
+                                    modifier = Modifier
+                                         .reflowPlacement(navigationMotion, ReflowEntry.TowardEndFromCenter)
+                                         .selectableGroup(),
                                     scrollBehavior = toolbarScrollBehavior,
                                     colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
                                         toolbarContainerColor = chromePalette.quietContainer,
@@ -1104,7 +1121,7 @@ private fun CompactNavigationDock(
     height: Dp,
     playerLabel: String?,
     onOpenPlayer: () -> Unit,
-    modifier: Modifier = Modifier,
+    motion: ReflowProgress?,
 ) {
     val itemColors = NavigationBarItemDefaults.colors(
         indicatorColor = palette.container,
@@ -1112,25 +1129,32 @@ private fun CompactNavigationDock(
         unselectedIconColor = palette.onQuietContainer,
     )
     NavigationBar(
-        modifier = modifier.height(height),
+        modifier = Modifier.height(height),
         containerColor = palette.quietContainer,
         windowInsets = insets,
     ) {
-        tabs.forEach { item ->
-            NavigationBarItem(
-                selected = selectedTab == item.dest,
-                onClick = { onSelect(item.dest) },
-                icon = { Icon(item.icon, contentDescription = item.label) },
-                colors = itemColors,
-            )
-        }
-        if (playerLabel != null) {
-            NavigationBarItem(
-                selected = false,
-                onClick = onOpenPlayer,
-                icon = { Icon(AppIcons.MusicNote, contentDescription = playerLabel) },
-                colors = itemColors,
-            )
+        // Only the item strip settles. The dock still paints to the system edge at full opacity.
+        Row(
+            modifier = Modifier.fillMaxWidth().compactNavReflow(motion, tabs.size + if (playerLabel == null) 0 else 1),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            tabs.forEach { item ->
+                NavigationBarItem(
+                    selected = selectedTab == item.dest,
+                    onClick = { onSelect(item.dest) },
+                    icon = { Icon(item.icon, contentDescription = item.label) },
+                    colors = itemColors,
+                )
+            }
+            if (playerLabel != null) {
+                NavigationBarItem(
+                    selected = false,
+                    onClick = onOpenPlayer,
+                    icon = { Icon(AppIcons.MusicNote, contentDescription = playerLabel) },
+                    colors = itemColors,
+                )
+            }
         }
     }
 }
@@ -1143,7 +1167,7 @@ private fun MobileNavigationRail(
     palette: ContentAccentPalette,
     insets: WindowInsets,
     scrollable: Boolean,
-    modifier: Modifier = Modifier,
+    motion: ReflowProgress? = null,
 ) {
     val itemColors = NavigationRailItemDefaults.colors(
         indicatorColor = palette.container,
@@ -1152,7 +1176,7 @@ private fun MobileNavigationRail(
         unselectedIconColor = palette.secondaryOnQuietContainer,
         unselectedTextColor = palette.secondaryOnQuietContainer,
     )
-    NavigationRail(modifier = modifier, containerColor = palette.quietContainer, windowInsets = insets) {
+    NavigationRail(containerColor = palette.quietContainer, windowInsets = insets) {
         val items: @Composable () -> Unit = {
             tabs.forEach { item ->
                 NavigationRailItem(
@@ -1166,7 +1190,8 @@ private fun MobileNavigationRail(
         }
         if (scrollable) {
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
+                modifier = Modifier.reflowPlacement(motion, ReflowEntry.TowardBottomFromTop)
+                    .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 content = { items() },

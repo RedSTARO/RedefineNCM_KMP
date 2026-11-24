@@ -66,6 +66,7 @@ import com.leejlredstar.redefinencm.kmp.getPlatform
 import com.leejlredstar.redefinencm.kmp.ui.component.AutoHideMiniPlayerController
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeDynamicCoverLayer
 import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackFold
+import com.leejlredstar.redefinencm.kmp.ui.component.ReflowEntry
 import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackPaneArrangement
 import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackReflowTarget
 import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackViewport
@@ -75,6 +76,8 @@ import com.leejlredstar.redefinencm.kmp.ui.component.isWidePlaybackViewport
 import com.leejlredstar.redefinencm.kmp.ui.component.playbackPaneArrangement
 import com.leejlredstar.redefinencm.kmp.ui.component.playbackSafeContent
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberPlaybackReflow
+import com.leejlredstar.redefinencm.kmp.ui.component.placementIn
+import com.leejlredstar.redefinencm.kmp.ui.component.reflowPlacement
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.viewmodel.LyricUiState
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
@@ -233,21 +236,20 @@ fun NativeAmllScreen(
                 val lyricWidth = with(density) { lyricPane.width.toDp() }
                 val lyricHeight = with(density) { lyricPane.height.toDp() }
                 val controlHeight = with(density) { controlsPane.height.toDp() }
-                val layout = nativeAmllReflowLayout(
-                    full, lyricPane, controlsPane, density, hasExpandedPlaybackWidth(windowWidth),
-                )
+                val expandedWidth = hasExpandedPlaybackWidth(maxWidth)
+                val layout = nativeAmllReflowLayout(full, lyricPane, controlsPane, density)
                 val shortLyrics = platform.isAndroid && layout.shortLyrics
                 val limitIslandHeight = platform.isAndroid && sharedPane && controlHeight < 420.dp
                 val hasSpace = controlsPane.width > 0 && controlsPane.height > 0
                 val reflow = rememberPlaybackReflow(
                     enabled = platform.isAndroid,
                     target = if (hasSpace && positioned) PlaybackReflowTarget(
-                        full, fold.takeUnless { lyricPane == full && controlsPane == full }, layout,
+                        full, fold?.placementIn(full), layout, expandedWidth,
                     ) else null,
                     reducedMotion = reducedMotion,
                 )
                 if (!hasSpace) return@BoxWithConstraints
-                Box(Modifier.inPlaybackPane(lyricPane).then(reflow)) {
+                Box(Modifier.inPlaybackPane(lyricPane)) {
                     // Only a completed tap on unused background space reveals the controller.
                     // A press may become a lyric drag or trackpad gesture and must not reveal it.
                     Box(Modifier.fillMaxSize().pointerInput(Unit) {
@@ -312,7 +314,8 @@ fun NativeAmllScreen(
                     AmllTopActions(
                         onBack = onBack,
                         compact = shortLyrics,
-                        modifier = Modifier.align(Alignment.TopStart),
+                        modifier = Modifier.align(Alignment.TopStart)
+                            .reflowPlacement(reflow, ReflowEntry.TowardEndFromStart),
                     )
                 }
                 Box(Modifier.inPlaybackPane(controlsPane)) {
@@ -325,7 +328,8 @@ fun NativeAmllScreen(
                         Modifier
                     }
                     AutoHideMiniPlayerController(
-                        modifier = controlModifier.fillMaxSize().then(reflow),
+                        modifier = controlModifier.fillMaxSize(),
+                        islandModifier = Modifier.reflowPlacement(reflow, ReflowEntry.TowardTopFromBottom),
                         autoHideDelayMillis = AmllControllerAutoHideMillis,
                         reducedMotion = reducedMotion,
                         externalRevealRequest = controllerRevealRequest,
@@ -338,9 +342,6 @@ fun NativeAmllScreen(
 
 internal data class AmllReflowLayout(
     val arrangement: PlaybackPaneArrangement,
-    // Cover and unfolded inner screens can both be shared panes. Treat going between their
-    // width classes as a reflow without animating width changes within a class.
-    val expandedWidth: Boolean,
     val shortLyrics: Boolean,
     val compactIsland: Boolean,
 )
@@ -350,11 +351,9 @@ internal fun nativeAmllReflowLayout(
     lyricPane: IntRect,
     controlsPane: IntRect,
     density: Density,
-    expandedWidth: Boolean,
 ): AmllReflowLayout = with(density) {
     AmllReflowLayout(
         arrangement = playbackPaneArrangement(full, lyricPane, controlsPane),
-        expandedWidth = expandedWidth,
         shortLyrics = lyricPane.height.toDp() < 420.dp || lyricPane != controlsPane,
         compactIsland = controlsPane.height.toDp() < 420.dp || controlsPane.width.toDp() < 360.dp,
     )
@@ -367,18 +366,18 @@ internal fun nativeAmllPanes(
     wideWindow: Boolean,
     lyricCount: Int,
 ): Pair<IntRect, IntRect> = with(density) {
-    val folded = fold?.spanningPanes(full)
+    val placement = fold?.placementIn(full)
     // A pane should have room for a verse. A status panel or isolated line doesn't warrant one.
     val usefulLyrics = lyricCount >= 4
-    if (fold != null) {
+    if (placement != null) {
+        val folded = placement.split
         if (usefulLyrics && folded != null &&
             folded.first.width.toDp() >= 320.dp && folded.first.height.toDp() >= 420.dp &&
             folded.second.width.toDp() >= 340.dp && folded.second.height.toDp() >= 420.dp
         ) {
             return folded.first to folded.second
         }
-        val safe = fold.singlePane(full, folded)
-        return safe to safe
+        return placement.single to placement.single
     }
     if (usefulLyrics && wideWindow && full.width.toDp() >= 720.dp && full.height.toDp() in 224.dp..<420.dp) {
         val split = (full.width * 0.53f).toInt()

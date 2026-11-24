@@ -127,6 +127,8 @@ import androidx.compose.ui.unit.IntRect
 import com.leejlredstar.redefinencm.kmp.getPlatform
 import com.leejlredstar.redefinencm.kmp.player.PlayerStatusRestoreState
 import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackFold
+import com.leejlredstar.redefinencm.kmp.ui.component.ReflowEntry
+import com.leejlredstar.redefinencm.kmp.ui.component.ReflowProgress
 import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackPaneArrangement
 import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackReflowTarget
 import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackViewport
@@ -136,6 +138,9 @@ import com.leejlredstar.redefinencm.kmp.ui.component.isWidePlaybackViewport
 import com.leejlredstar.redefinencm.kmp.ui.component.playbackPaneArrangement
 import com.leejlredstar.redefinencm.kmp.ui.component.playbackSafeContent
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberPlaybackReflow
+import com.leejlredstar.redefinencm.kmp.ui.component.placementIn
+import com.leejlredstar.redefinencm.kmp.ui.component.reflowPlacement
+import com.leejlredstar.redefinencm.kmp.ui.component.reflowScale
 
 /**
  * The Now Playing entry page: what the mini player, the desktop rail and every OS
@@ -261,7 +266,7 @@ fun NowPlayingScreen(
                 modifier = modifier,
             )
         }
-        val controls: @Composable (Boolean, Boolean) -> Unit = { short, tight ->
+        val controls: @Composable (Boolean, Boolean, ReflowProgress?) -> Unit = { short, tight, reflow ->
             NowPlayingTitle(
                 media = media,
                 isFavorite = nowPlaying.isFavorite,
@@ -292,6 +297,7 @@ fun NowPlayingScreen(
                 onPrevious = player::seekToPrevious,
                 onPlayPause = player::togglePlayPause,
                 onNext = player::seekToNext,
+                reflow = reflow,
             )
         }
         val toolbar: @Composable (Boolean) -> Unit = { tight ->
@@ -316,8 +322,7 @@ fun NowPlayingScreen(
             val wideWindow = isWidePlaybackViewport(maxWidth, maxHeight)
             PlaybackViewport(viewport) { fold, positioned ->
                 AdaptiveNowPlayingLayout(
-                    fold, positioned, wideWindow, hasExpandedPlaybackWidth(maxWidth), reducedMotion,
-                    controlsScroll, artwork, header, controls, toolbar,
+                    fold, positioned, wideWindow, reducedMotion, controlsScroll, artwork, header, controls, toolbar,
                 )
             }
         } else {
@@ -349,7 +354,7 @@ fun NowPlayingScreen(
                                 .padding(end = ExpressiveLayout.PageHorizontalPadding),
                             verticalArrangement = Arrangement.Center,
                         ) {
-                            controls(shortHeight, false)
+                            controls(shortHeight, false, null)
                             Spacer(Modifier.height(28.dp))
                             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                                 toolbar(false)
@@ -373,7 +378,7 @@ fun NowPlayingScreen(
                         artwork(Modifier.size(artworkSize))
                         Spacer(Modifier.weight(1f))
                         Column(Modifier.widthIn(max = 560.dp).fillMaxWidth()) {
-                            controls(shortHeight, false)
+                            controls(shortHeight, false, null)
                         }
                         Spacer(Modifier.height(28.dp))
                         toolbar(false)
@@ -424,7 +429,6 @@ fun NowPlayingScreen(
 
 internal data class NowPlayingReflowLayout(
     val arrangement: PlaybackPaneArrangement,
-    val expandedWidth: Boolean,
     val showInlineArtwork: Boolean,
     val tightControls: Boolean,
     val shortTransport: Boolean,
@@ -438,12 +442,11 @@ private fun AdaptiveNowPlayingLayout(
     fold: PlaybackFold?,
     positioned: Boolean,
     wideWindow: Boolean,
-    expandedWidth: Boolean,
     reducedMotion: Boolean,
     scroll: ScrollState,
     artwork: @Composable (Modifier) -> Unit,
     header: @Composable (Modifier, Boolean) -> Unit,
-    controls: @Composable (short: Boolean, tight: Boolean) -> Unit,
+    controls: @Composable (short: Boolean, tight: Boolean, reflow: ReflowProgress?) -> Unit,
     toolbar: @Composable (tight: Boolean) -> Unit,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -452,28 +455,29 @@ private fun AdaptiveNowPlayingLayout(
         val (artPane, controlPane) = nowPlayingPanes(full, density, fold, wideWindow)
         val controlHeight = with(density) { controlPane.height.toDp() }
         val controlWidth = with(density) { controlPane.width.toDp() }
-        val layout = nowPlayingReflowLayout(full, artPane, controlPane, density, expandedWidth)
+        val layout = nowPlayingReflowLayout(full, artPane, controlPane, density)
+        val expandedWidth = hasExpandedPlaybackWidth(maxWidth)
         val hasSpace = controlPane.width > 0 && controlPane.height > 0
         val reflow = rememberPlaybackReflow(
             enabled = true,
             target = if (hasSpace && positioned) PlaybackReflowTarget(
-                full, fold.takeUnless { artPane == null && controlPane == full }, layout,
+                full, fold?.placementIn(full), layout, expandedWidth,
             ) else null,
             reducedMotion = reducedMotion,
         )
         if (!hasSpace) return@BoxWithConstraints
         if (artPane != null) {
             Box(
-                Modifier.inPlaybackPane(artPane).then(reflow).padding(horizontal = 12.dp, vertical = 8.dp),
+                Modifier.inPlaybackPane(artPane).padding(horizontal = 12.dp, vertical = 8.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                artwork(Modifier.widthIn(max = 520.dp))
+                artwork(Modifier.widthIn(max = 520.dp).reflowScale(reflow, start = 0.92f))
             }
         }
         val tight = layout.tightControls
         val headerInScroll = layout.headerInScroll
         val sidePadding = if (layout.narrowMargins) 8.dp else ExpressiveLayout.PageHorizontalPadding
-        Column(Modifier.inPlaybackPane(controlPane).then(reflow).padding(horizontal = sidePadding)) {
+        Column(Modifier.inPlaybackPane(controlPane).padding(horizontal = sidePadding)) {
             if (!headerInScroll) header(Modifier, tight)
             Box(
                 Modifier.weight(1f).fillMaxWidth(),
@@ -489,10 +493,10 @@ private fun AdaptiveNowPlayingLayout(
                     if (layout.showInlineArtwork) {
                         val size = minOf(420.dp, (controlWidth - sidePadding * 2).coerceAtLeast(0.dp),
                             (controlHeight - 350.dp).coerceAtLeast(64.dp))
-                        artwork(Modifier.size(size))
+                        artwork(Modifier.size(size).reflowScale(reflow, start = 0.92f))
                         Spacer(Modifier.height(12.dp))
                     }
-                    controls(layout.shortTransport, tight)
+                    controls(layout.shortTransport, tight, reflow)
                     Spacer(Modifier.height(if (tight) 4.dp else 28.dp))
                     toolbar(tight)
                 }
@@ -506,13 +510,11 @@ internal fun nowPlayingReflowLayout(
     artPane: IntRect?,
     controlPane: IntRect,
     density: Density,
-    expandedWidth: Boolean,
 ): NowPlayingReflowLayout = with(density) {
     val height = controlPane.height.toDp()
     val width = controlPane.width.toDp()
     NowPlayingReflowLayout(
         arrangement = playbackPaneArrangement(full, controlPane, artPane),
-        expandedWidth = expandedWidth,
         showInlineArtwork = artPane == null && height >= 400.dp,
         tightControls = height < 420.dp || width < 340.dp,
         shortTransport = height < 600.dp,
@@ -527,15 +529,16 @@ internal fun nowPlayingPanes(
     fold: PlaybackFold?,
     wideWindow: Boolean,
 ): Pair<IntRect?, IntRect> = with(density) {
-    val folded = fold?.spanningPanes(full)
-    if (fold != null) {
+    val placement = fold?.placementIn(full)
+    if (placement != null) {
+        val folded = placement.split
         // Give the artwork its own pane only when the control pane can show a complete player.
         if (folded != null && folded.first.width.toDp() >= 192.dp && folded.first.height.toDp() >= 192.dp &&
             folded.second.width.toDp() >= 320.dp && folded.second.height.toDp() >= 420.dp
         ) {
             return folded.first to folded.second
         }
-        return null to fold.singlePane(full, folded)
+        return null to placement.single
     }
     val short = full.height.toDp() < 420.dp
     if (wideWindow && full.height.toDp() >= 192.dp && full.width.toDp() >= (if (short) 560.dp else 840.dp)) {
@@ -991,6 +994,7 @@ private fun NowPlayingTransport(
     onPrevious: () -> Unit,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
+    reflow: ReflowProgress?,
 ) {
     val tonalColors = IconButtonDefaults.filledTonalIconButtonColors(
         containerColor = palette.container.copy(alpha = 0.72f),
@@ -1053,14 +1057,17 @@ private fun NowPlayingTransport(
                 )
             }
         }
+        val entry = Modifier.reflowPlacement(reflow, ReflowEntry.TowardEndFromCenter)
         if (fits) {
             Row(
+                modifier = entry,
                 horizontalArrangement = Arrangement.spacedBy(metrics.gap),
                 verticalAlignment = Alignment.CenterVertically,
             ) { buttons() }
         } else {
             // Truly tiny windows stack the whole group instead of orphaning one button.
             Column(
+                modifier = entry,
                 verticalArrangement = Arrangement.spacedBy(metrics.gap),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) { buttons() }

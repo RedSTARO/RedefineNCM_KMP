@@ -138,6 +138,7 @@ fun AutoHideMiniPlayerController(
     showOutputVolume: Boolean = remember { getPlatform().isDesktop },
     viewModel: NowPlayingViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
+    islandModifier: Modifier = Modifier,
 ) {
     val nowPlaying = rememberNowPlayingUiState(player, viewModel)
     val outputVolume by player.volume.collectAsState()
@@ -261,6 +262,7 @@ fun AutoHideMiniPlayerController(
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
                 .padding(bottom = 8.dp)
+                .then(islandModifier)
                 .hoverable(islandHoverSource)
                 .then(if (android) Modifier.onFocusChanged { islandHasFocus = it.hasFocus }.focusGroup() else Modifier),
             contentAlignment = Alignment.BottomCenter,

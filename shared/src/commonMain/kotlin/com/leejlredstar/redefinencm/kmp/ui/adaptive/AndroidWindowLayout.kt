@@ -22,8 +22,11 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackPaneArrangement
+import com.leejlredstar.redefinencm.kmp.ui.component.playbackPaneArrangement
 import kotlin.math.roundToInt
 
 internal enum class AndroidNavigationLayout { Floating, Compact, Rail }
@@ -47,9 +50,10 @@ internal fun FoldSafeBrowseContent(
     enabled: Boolean,
     obstructions: WindowInsets?,
     contentModifier: Modifier,
-    content: @Composable (width: Dp, height: Dp, obstructedTop: Dp) -> Unit,
+    content: @Composable (width: Dp, height: Dp, obstructedTop: Dp, pane: PlaybackPaneArrangement?) -> Unit,
 ) {
     val fold = LocalWindowFold.current?.takeIf { enabled && it.isOccluding }
+    var placedPane by remember(fold) { mutableStateOf<PlaybackPaneArrangement?>(null) }
     val paneModifier = if (fold != null && obstructions != null) {
         Modifier.layout { measurable, constraints ->
             val width = constraints.maxWidth
@@ -67,7 +71,12 @@ internal fun FoldSafeBrowseContent(
                     )
                     if (pane.width > 0 && pane.height > 0) {
                         measurable.measure(Constraints.fixed(pane.width, pane.height)).place(pane.left, pane.top)
+                        placedPane = playbackPaneArrangement(IntRect(0, 0, width, height), pane)
+                    } else {
+                        placedPane = null
                     }
+                } else {
+                    placedPane = null
                 }
             }
         }.clipToBounds().recalculateWindowInsets()
@@ -88,7 +97,12 @@ internal fun FoldSafeBrowseContent(
             val horizontal = ((edges?.left ?: 0) + (edges?.right ?: 0)).toDp()
             val top = (edges?.top ?: 0).toDp()
             Box(Modifier.fillMaxSize().then(contentModifier)) {
-                content((viewportWidth - horizontal).coerceAtLeast(0.dp), (viewportHeight - top).coerceAtLeast(0.dp), top)
+                content(
+                    (viewportWidth - horizontal).coerceAtLeast(0.dp),
+                    (viewportHeight - top).coerceAtLeast(0.dp),
+                    top,
+                    if (fold == null) PlaybackPaneArrangement.Full else placedPane,
+                )
             }
         }
     }

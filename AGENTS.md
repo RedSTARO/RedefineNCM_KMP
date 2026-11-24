@@ -1230,7 +1230,10 @@ Applies to all platforms, and the original Android repo is kept aligned (goal #3
   items. On Android, short/narrow windows use one measured compact dock with a direct player
   entry, not a second floating player. Wide, tall windows keep the navigation rail. Choose chrome
   from the usable window before IME padding; the dock and mini player stay out of the keyboard.
-  A non-occluding fold does not split browsing. See [Android adaptive QA](docs/ANDROID_ADAPTIVE_QA.md).
+  A non-occluding fold does not split browsing. Keep Android page backgrounds edge to edge;
+  apply cutout and window-caption insets to the content and controls, not around the painted page.
+  Reapply the page's system-bar icon contrast after an Android configuration change. See
+  [Android adaptive QA](docs/ANDROID_ADAPTIVE_QA.md).
 - **Use the real Expressive APIs** (`MaterialExpressiveTheme`, motion scheme) provided by the
   pinned `material3` version; custom shapes and page palettes extend that theme rather than
   replacing it.
@@ -1373,11 +1376,11 @@ feature gap; platform integrations use target-specific actuals:
 - **Search shared-element transition** (pill → bar) via `SharedTransitionLayout` in HomeScreen.
 - **Responsive nav**: iOS and Web use NavigationRail on ≥600dp. Android uses one compact dock
   in short/narrow windows, and its player pages avoid separating folds reported by AndroidX
-  WindowManager. When the effective playback layout or navigation mode changes, place the affected
-  controls in the safe target panes immediately and fade them in briefly. Do not animate targets
-  across the hinge, keep old controls over the new dock, fade the background or editor, or replay
-  a fade with system animations disabled. See
-  [Android adaptive QA](docs/ANDROID_ADAPTIVE_QA.md). Desktop uses a collapsed modal wide navigation
+  WindowManager. An effective playback or navigation reflow uses a short spatial settle inside
+  the new pane or slot. Keep the page background and editor stable, remove the old player entry
+  immediately, and keep every moving control inside the current safe area. System reduced motion
+  makes reflow immediate. Unchanged layouts and continuous split-divider drags do not animate.
+  See [Android adaptive QA](docs/ANDROID_ADAPTIVE_QA.md). Desktop uses a collapsed modal wide navigation
   rail when there is room; expansion overlays content instead of resizing it. Full-screen lyrics
   remain one `AmllPlayerScreen` destination regardless of window size or dynamic-cover capability.
   Startup routes to NetEase login only when no switched-on provider holds an account.
