@@ -20,8 +20,6 @@ import platform.AVFAudio.AVAudioSessionRecordPermissionGranted
 import platform.AVFAudio.AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
 import platform.AVFAudio.setActive
 import kotlin.coroutines.resume
-import kotlin.math.ceil
-import kotlin.math.sqrt
 
 class IosMicrophoneRecorder : ExclusiveMicrophoneRecorder() {
 
@@ -69,7 +67,7 @@ class IosMicrophoneRecorder : ExclusiveMicrophoneRecorder() {
             if (sampleRateHz <= 0 || format.channelCount == 0u) {
                 throw MicrophoneUnavailableException(strings.iosMicNoInputFormat)
             }
-            val targetSamples = ceil(durationMillis * sampleRateHz.toDouble() / 1_000.0).toInt()
+            val targetSamples = pcmTargetSampleCount(durationMillis, sampleRateHz)
             val samples = FloatArray(targetSamples)
             val completion = CompletableDeferred<CapturedPcm>()
             var written = 0
@@ -94,8 +92,8 @@ class IosMicrophoneRecorder : ExclusiveMicrophoneRecorder() {
                         written += count
                         if (count > 0) {
                             onProgress(
-                                written * 1_000L / sampleRateHz,
-                                sqrt(energy / count).toFloat().coerceIn(0f, 1f),
+                                pcmElapsedMillis(written, sampleRateHz),
+                                pcmRmsLevel(energy, count),
                             )
                         }
                         if (written == samples.size) {

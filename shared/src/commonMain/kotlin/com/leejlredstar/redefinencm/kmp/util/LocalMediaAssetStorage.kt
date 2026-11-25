@@ -6,6 +6,20 @@ enum class LocalLyricFormat {
     LRC,
 }
 
+private const val LYRIC_SIDECAR_MARKER = ".lyric."
+
+internal enum class LyricSidecar(val suffix: String, val primaryFormat: LocalLyricFormat? = null) {
+    // Inspection prefers TTML, then YRC, then LRC if more than one primary file exists.
+    TTML("ttml", LocalLyricFormat.TTML),
+    YRC("yrc", LocalLyricFormat.YRC),
+    LRC("lrc", LocalLyricFormat.LRC),
+    LINE_LRC("line.lrc"),
+    TRANSLATION("translation.lrc"),
+    ROMANIZATION("romanization.lrc");
+
+    fun fileName(songId: Long): String = "$songId$LYRIC_SIDECAR_MARKER$suffix"
+}
+
 data class LocalTextMediaAsset(
     val fileName: String,
     val content: String,
@@ -113,7 +127,7 @@ internal fun isLocalLyricSidecarFileName(songId: Long, fileName: String): Boolea
     if (songId <= 0L || fileName != fileName.substringAfterLast('/').substringAfterLast('\\')) {
         return false
     }
-    val suffix = fileName.removePrefix("$songId.lyric.")
+    val suffix = fileName.removePrefix("$songId$LYRIC_SIDECAR_MARKER")
     return suffix != fileName && suffix in LOCAL_LYRIC_SUFFIXES
 }
 
@@ -124,14 +138,14 @@ internal fun isLocalArtworkSidecarFileName(songId: Long, fileName: String): Bool
     val extension = fileName.removePrefix("$songId.cover.")
     return extension != fileName &&
         extension.length in 1..12 &&
-        extension.matches(Regex("[A-Za-z0-9]+"))
+        extension.matches(LOCAL_ARTWORK_EXTENSION)
 }
 
 internal fun isLocalMediaAssetTransactionFileName(songId: Long, fileName: String): Boolean {
     if (songId <= 0L || fileName != fileName.substringAfterLast('/').substringAfterLast('\\')) {
         return false
     }
-    val lyricPrefix = ".$songId.lyric."
+    val lyricPrefix = ".$songId$LYRIC_SIDECAR_MARKER"
     val artworkPrefix = ".$songId.cover."
     return (fileName.startsWith(lyricPrefix) || fileName.startsWith(artworkPrefix)) &&
         fileName.length <= 256 &&
@@ -147,16 +161,14 @@ internal fun localMediaAssetSnapshot(
 ): LocalMediaAssetSnapshot {
     requireLocalMediaSongId(songId)
     val names = fileNames.toSet()
-    val primaryLyric = listOf(
-        LocalLyricFormat.TTML to "$songId.lyric.ttml",
-        LocalLyricFormat.YRC to "$songId.lyric.yrc",
-        LocalLyricFormat.LRC to "$songId.lyric.lrc",
-    ).firstOrNull { (_, name) -> name in names }
-    val artwork = names
-        .asSequence()
+    val primaryLyric = LyricSidecar.entries.firstNotNullOfOrNull { sidecar ->
+        val format = sidecar.primaryFormat ?: return@firstNotNullOfOrNull null
+        val name = sidecar.fileName(songId)
+        if (name in names) format to name else null
+    }
+    val artwork = names.asSequence()
         .filter { isLocalArtworkSidecarFileName(songId, it) }
-        .sorted()
-        .firstOrNull()
+        .minOrNull()
     return LocalMediaAssetSnapshot(
         lyricFormat = primaryLyric?.first,
         lyricFileName = primaryLyric?.second,
@@ -193,11 +205,5 @@ internal fun leadingLocalMediaSongId(fileName: String): Long? {
     return fileName.substring(0, dot).toLongOrNull()?.takeIf { it > 0L }
 }
 
-private val LOCAL_LYRIC_SUFFIXES = setOf(
-    "ttml",
-    "yrc",
-    "lrc",
-    "line.lrc",
-    "translation.lrc",
-    "romanization.lrc",
-)
+private val LOCAL_LYRIC_SUFFIXES = LyricSidecar.entries.map { it.suffix }.toSet()
+private val LOCAL_ARTWORK_EXTENSION = Regex("[A-Za-z0-9]+")

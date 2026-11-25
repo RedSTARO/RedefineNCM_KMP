@@ -7,6 +7,7 @@ import com.leejlredstar.redefinencm.kmp.data.provider.mediaId
 import com.leejlredstar.redefinencm.kmp.data.provider.toProviderItemIdOrNull
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
+import com.leejlredstar.redefinencm.kmp.player.playbackPlaceholderUri
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -101,7 +102,7 @@ data class LocalTrack(
             artist = artist,
             albumTitle = album,
             artworkUri = artworkUri,
-            placeholderUri = "redefinencm://playbackPlaceHolder?id=$mediaId",
+            placeholderUri = playbackPlaceholderUri(mediaId),
             duration = durationMillis,
         )
     }

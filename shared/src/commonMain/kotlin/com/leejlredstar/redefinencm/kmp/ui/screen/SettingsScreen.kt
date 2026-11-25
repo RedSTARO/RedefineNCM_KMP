@@ -6,7 +6,6 @@ import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.util.rememberNotificationAccess
 import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import com.leejlredstar.redefinencm.kmp.util.getBooleanAsync
-import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.WindowInsets
@@ -23,7 +22,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
@@ -64,7 +62,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
@@ -74,7 +71,6 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -233,7 +229,7 @@ fun SettingsScreen(
     var showTranslatedLyric by remember(settings) { mutableStateOf(SettingKeys.SHOW_TRANSLATED_LYRIC_DEFAULT) }
     var showRomanLyric by remember(settings) { mutableStateOf(false) }
     var lyricSourceMode by remember(settings) {
-        mutableStateOf(LyricSourceMode.DEFAULT.wireValue)
+        mutableStateOf(LyricSourceMode.DEFAULT)
     }
     var useDynamicCover by remember(settings) { mutableStateOf(false) }
     var audioOutputDeviceId by remember(settings) {
@@ -292,14 +288,12 @@ fun SettingsScreen(
                 SettingKeys.LYRIC_SOURCE_MODE,
                 LyricSourceMode.DEFAULT.wireValue,
             ),
-        ).wireValue
+        )
         nowPlayingViewModel.setLyricDisplayOptions(
             showTranslation = showTranslatedLyric,
             showRomanization = showRomanLyric,
         )
-        nowPlayingViewModel.setLyricSourceMode(
-            LyricSourceMode.fromStoredWireValue(lyricSourceMode),
-        )
+        nowPlayingViewModel.setLyricSourceMode(lyricSourceMode)
         useDynamicCover = settings.getBoolean(SettingKeys.USE_DYNAMIC_COVER, false)
         nowPlayingViewModel.setUseDynamicCover(useDynamicCover)
         audioOutputDeviceId = settings.getString(
@@ -373,14 +367,12 @@ fun SettingsScreen(
                     SettingKeys.LYRIC_SOURCE_MODE,
                     LyricSourceMode.DEFAULT.wireValue,
                 ),
-            ).wireValue
+            )
             nowPlayingViewModel.setLyricDisplayOptions(
                 showTranslation = showTranslatedLyric,
                 showRomanization = showRomanLyric,
             )
-            nowPlayingViewModel.setLyricSourceMode(
-                LyricSourceMode.fromStoredWireValue(lyricSourceMode),
-            )
+            nowPlayingViewModel.setLyricSourceMode(lyricSourceMode)
             useDynamicCover = settings.getBooleanAsync(SettingKeys.USE_DYNAMIC_COVER, false)
             nowPlayingViewModel.setUseDynamicCover(useDynamicCover)
             settingsLoaded = true
@@ -626,13 +618,13 @@ fun SettingsScreen(
                 val surfaceLayoutRows = if (windowedLyricSurface != null) 2 else 0
                 val lyricSettingCount = 3 + surfaceRows + surfaceLayoutRows
                 LyricSourceDropdown(
-                    selectedWireValue = lyricSourceMode,
+                    selected = lyricSourceMode,
                     accentPalette = settingsPalette,
                     index = 0,
                     count = lyricSettingCount,
                 ) { mode ->
                     val writeGeneration = ++lyricSourceWriteGeneration
-                    lyricSourceMode = mode.wireValue
+                    lyricSourceMode = mode
                     persistSettings(
                         write = {
                             settings.setString(SettingKeys.LYRIC_SOURCE_MODE, mode.wireValue)
@@ -1008,41 +1000,6 @@ fun SettingsScreen(
     }
 }
 
-@Composable
-private fun SettingsHero(accentPalette: ContentAccentPalette) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(188.dp)
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        accentPalette.pageStart,
-                        accentPalette.container,
-                        Color.Transparent,
-                    ),
-                ),
-            )
-            .statusBarsPadding(),
-        contentAlignment = Alignment.BottomStart,
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 18.dp)) {
-            Text(
-                text = strings.settings,
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.ExtraBold,
-                color = accentPalette.onPageStart,
-            )
-            Text(
-                text = strings.settingsHeroSubtitle,
-                style = MaterialTheme.typography.titleMedium,
-                color = accentPalette.secondaryOnPageStart,
-            )
-        }
-    }
-}
-
-
 /**
  * A settings row that opens a menu.
  *
@@ -1281,7 +1238,7 @@ private fun LyricSurfaceAlignmentDropdown(
 
 @Composable
 private fun LyricSourceDropdown(
-    selectedWireValue: String,
+    selected: LyricSourceMode,
     accentPalette: ContentAccentPalette,
     index: Int,
     count: Int,
@@ -1289,7 +1246,7 @@ private fun LyricSourceDropdown(
 ) {
     SettingsDropdownRow(
         label = strings.lyricsSource,
-        valueLabel = LyricSourceMode.fromWireValue(selectedWireValue).displayName,
+        valueLabel = selected.displayName,
         options = LyricSourceMode.entries,
         optionLabel = LyricSourceMode::displayName,
         accentPalette = accentPalette,

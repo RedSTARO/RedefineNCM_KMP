@@ -90,6 +90,26 @@ abstract class MetadataCacheContract {
     }
 
     @Test
+    fun replacingAnEntryDoesNotEvictUntilItIsTheOldest() = runTest {
+        withDatabase { db ->
+            val table = MetadataCacheTable.CachedLyric
+            val cache = MetadataCache(db, budgetBytes = { 8L }, maxEntries = 2)
+            cache.write(table, 1, "1234")
+            cache.write(table, 2, "5678")
+            cache.write(table, 1, "")
+            assertEquals("", db.cachedLyricQueries.selectBySongId(1).executeAsOne())
+            assertEquals("5678", db.cachedLyricQueries.selectBySongId(2).executeAsOne())
+            assertEquals(4L, cache.bytes.value)
+
+            cache.write(table, 3, "abcd")
+            assertEquals("", db.cachedLyricQueries.selectBySongId(1).executeAsOne())
+            assertNull(db.cachedLyricQueries.selectBySongId(2).executeAsOneOrNull())
+            assertEquals("abcd", db.cachedLyricQueries.selectBySongId(3).executeAsOne())
+            assertEquals(4L, cache.bytes.value)
+        }
+    }
+
+    @Test
     fun rowCountAlsoBoundsCachesOfTinyResponses() = runTest {
         withDatabase { db ->
             val cache = MetadataCache(db, budgetBytes = { 1_024L }, maxEntries = 2)

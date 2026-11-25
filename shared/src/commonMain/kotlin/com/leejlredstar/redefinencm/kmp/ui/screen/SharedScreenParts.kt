@@ -49,6 +49,7 @@ import com.leejlredstar.redefinencm.kmp.i18n.compactCount
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.viewmodel.LocalLibraryViewModel
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderTrack
+import com.leejlredstar.redefinencm.kmp.data.provider.neteaseFeeTag
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
 import com.leejlredstar.redefinencm.kmp.data.api.dto.UserPlaylistEach
 import com.leejlredstar.redefinencm.kmp.data.toPlayerMediaInfo
@@ -110,6 +111,23 @@ fun SongDetailSongs.toMediaInfo(
 fun ProviderTrack.toMediaInfo(
     sourceId: String = "",
 ): MediaInfo = toPlayerMediaInfo(sourceId)
+
+/** A short marker for songs a free account cannot play in full. */
+internal fun songFeeBadge(fee: Int): String? = neteaseFeeTag(fee)?.label
+
+/** The round back button the list pages open with. */
+@Composable
+internal fun BackButton(palette: ContentAccentPalette, onBack: () -> Unit) {
+    IconButton(onClick = onBack) {
+        Surface(
+            shape = CircleShape,
+            color = palette.quietContainer.copy(alpha = 0.72f),
+            contentColor = palette.onQuietContainer,
+        ) {
+            Icon(AppIcons.ArrowBack, contentDescription = strings.back, modifier = Modifier.padding(10.dp))
+        }
+    }
+}
 
 /** The song menu's entry that opens the add-to-local-playlist dialog. */
 internal val AddToLocalPlaylistLabel: String get() = strings.addToLocalPlaylist

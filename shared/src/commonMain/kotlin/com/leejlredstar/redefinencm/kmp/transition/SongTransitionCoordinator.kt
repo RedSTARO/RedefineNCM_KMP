@@ -69,14 +69,7 @@ class SongTransitionCoordinator(
     init {
         scope.launch {
             settings.awaitLoaded()
-            _preferences.value = SongTransitionPreferences(
-                mode = SongTransitionMode.fromWireValue(
-                    settings.getString(SettingKeys.SONG_TRANSITION_MODE, SongTransitionMode.DEFAULT.wireValue),
-                ),
-                crossfadeSeconds = normalizeCrossfadeSeconds(
-                    settings.getLong(SettingKeys.SONG_TRANSITION_CROSSFADE_SECONDS, DEFAULT_CROSSFADE_SECONDS),
-                ),
-            )
+            reloadPreferences()
             combine(_preferences.filterNotNull(), player.queueSnapshot, player.duration) { prefs, queue, duration ->
                 val current = queue.currentMedia
                 PlanInputs(

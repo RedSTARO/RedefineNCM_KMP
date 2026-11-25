@@ -27,7 +27,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -251,20 +250,6 @@ private fun LocalPlaylistRow(
                 )
             }
             Icon(AppIcons.KeyboardArrowRight, contentDescription = null, tint = palette.secondaryOnQuietContainer)
-        }
-    }
-}
-
-/** The round back button the list pages open with. */
-@Composable
-internal fun BackButton(palette: ContentAccentPalette, onBack: () -> Unit) {
-    IconButton(onClick = onBack) {
-        Surface(
-            shape = CircleShape,
-            color = palette.quietContainer.copy(alpha = 0.72f),
-            contentColor = palette.onQuietContainer,
-        ) {
-            Icon(AppIcons.ArrowBack, contentDescription = strings.back, modifier = Modifier.padding(10.dp))
         }
     }
 }

@@ -309,10 +309,7 @@ class Repository(
                     ?.let { json.decodeFromString<PlaylistTrackAll>(it) }
             }.getOrNull()?.takeIf { it.code == API_SUCCESS_CODE }
         },
-        fetchNetwork = {
-            safeApiCall { api.playlistTrackAll(id) }
-                ?.takeIf { it.code == API_SUCCESS_CODE }
-        },
+        fetchNetwork = { getPlaylistTrackAllOnce(id) },
         writeCache = { network ->
             cache.write(MetadataCacheTable.CachedPlaylistTrackAll, id, json.encodeToString(network))
         },
@@ -506,19 +503,13 @@ class Repository(
 
     private suspend fun fetchAndCacheLyric(id: Long, cacheRequired: Boolean = false): Lyric? {
         // /lyric/new 返回 yrc (逐字歌词); /lyric 不返回 yrc。优先使用 /lyric/new
-        val networkNew = safeApiCall { api.lyricNew(id) }
-            ?.takeIf { it.code == API_SUCCESS_CODE }
-        if (networkNew != null && networkNew.hasPrimaryLyricText()) {
-            if (cacheRequired) cacheBackendLyric(id, networkNew)
-            else writeCacheBestEffort { cacheBackendLyric(id, networkNew) }
-            return networkNew
-        }
-        val fallback = safeApiCall { api.lyric(id) }
-            ?.takeIf { it.code == API_SUCCESS_CODE }
+        val lyric = safeApiCall { api.lyricNew(id) }
+            ?.takeIf { it.code == API_SUCCESS_CODE && it.hasPrimaryLyricText() }
+            ?: safeApiCall { api.lyric(id) }?.takeIf { it.code == API_SUCCESS_CODE }
             ?: return null
-        if (cacheRequired) cacheBackendLyric(id, fallback)
-        else writeCacheBestEffort { cacheBackendLyric(id, fallback) }
-        return fallback
+        if (cacheRequired) cacheBackendLyric(id, lyric)
+        else writeCacheBestEffort { cacheBackendLyric(id, lyric) }
+        return lyric
     }
 
     private suspend fun cacheBackendLyric(id: Long, lyric: Lyric) {
@@ -795,7 +786,7 @@ class Repository(
     suspend fun checkLikedSongIds(songIds: List<Long>): Set<Long>? {
         require(songIds.isNotEmpty()) { "songIds must not be empty" }
         require(songIds.all { it > 0 }) { "songIds must contain only positive values" }
-        val requestedIds = songIds.distinct().toSet()
+        val requestedIds = songIds.toSet()
         return safeApiCall { api.songLikeCheck(requestedIds.toList()) }
             ?.takeIf { it.code == API_SUCCESS_CODE }
             ?.ids

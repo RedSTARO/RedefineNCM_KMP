@@ -1463,13 +1463,7 @@ private fun sheetTransition(showingSheet: Boolean): ContentTransform =
             )
     } else {
         (
-            fadeIn(
-                animationSpec = tween(
-                    ExpressiveMotion.ShortMillis,
-                    delayMillis = ExpressiveMotion.EnterDelayMillis,
-                    easing = LinearOutSlowInEasing,
-                ),
-            ) + scaleIn(
+            pageFadeIn() + scaleIn(
                 initialScale = 0.98f,
                 animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
             )
@@ -1511,18 +1505,6 @@ private fun pageScaleOut(): ExitTransition =
         animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
     )
 
-private fun bottomNavEnterTransition(): EnterTransition =
-    slideInVertically(
-        animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
-        initialOffsetY = { it },
-    ) + fadeIn(animationSpec = tween(ExpressiveMotion.ShortMillis, easing = LinearOutSlowInEasing))
-
-private fun bottomNavExitTransition(): ExitTransition =
-    slideOutVertically(
-        animationSpec = tween(ExpressiveMotion.StandardMillis, easing = FastOutSlowInEasing),
-        targetOffsetY = { it },
-    ) + fadeOut(animationSpec = tween(ExpressiveMotion.FastMillis, easing = LinearOutSlowInEasing))
-
 private fun railEnterTransition(): EnterTransition =
     slideInHorizontally(
         animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
@@ -1533,7 +1515,7 @@ private fun railExitTransition(): ExitTransition =
     slideOutHorizontally(
         animationSpec = tween(ExpressiveMotion.StandardMillis, easing = FastOutSlowInEasing),
         targetOffsetX = { -it },
-    ) + fadeOut(animationSpec = tween(ExpressiveMotion.FastMillis, easing = LinearOutSlowInEasing))
+    ) + pageFadeOut()
 
 private fun miniPlayerEnterTransition(): EnterTransition =
     scaleIn(
@@ -1545,7 +1527,7 @@ private fun miniPlayerExitTransition(): ExitTransition =
     scaleOut(
         targetScale = 0.88f,
         animationSpec = tween(ExpressiveMotion.ShortMillis, easing = FastOutSlowInEasing),
-    ) + fadeOut(animationSpec = tween(ExpressiveMotion.FastMillis, easing = LinearOutSlowInEasing))
+    ) + pageFadeOut()
 
 private fun isPlayerSurface(dest: RootDest): Boolean =
     isPlayerSurface((dest as? RootDest.Pushed)?.dest)

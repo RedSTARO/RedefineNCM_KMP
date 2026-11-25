@@ -66,8 +66,7 @@ class PlayerStatusRestorer internal constructor(
                             artist = persisted.artist,
                             albumTitle = persisted.albumTitle,
                             artworkUri = persisted.artworkUri,
-                            placeholderUri =
-                                "redefinencm://playbackPlaceHolder?id=${persisted.id}",
+                            placeholderUri = playbackPlaceholderUri(persisted.id),
                             duration = persisted.duration,
                             sourceId = persisted.sourceId,
                         )

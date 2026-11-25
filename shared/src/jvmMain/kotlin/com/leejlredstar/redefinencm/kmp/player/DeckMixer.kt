@@ -2,6 +2,7 @@ package com.leejlredstar.redefinencm.kmp.player
 
 import com.leejlredstar.redefinencm.kmp.transition.TimeStretcher
 import com.leejlredstar.redefinencm.kmp.transition.TransitionPlan
+import com.leejlredstar.redefinencm.kmp.transition.timeStretchFrameSize
 import kotlin.math.ceil
 import kotlin.math.roundToLong
 import java.util.concurrent.atomic.AtomicBoolean
@@ -72,7 +73,7 @@ internal class DeckMixer(
     private var outputFrames = 0L
 
     // The last frames the primary deck produced at rate 1, to prime a stretcher without a seam.
-    private val historyFrames = TimeStretcher(channels, sampleRate).frameSize
+    private val historyFrames = timeStretchFrameSize(sampleRate)
     private val history = FloatArray(historyFrames * channels)
     private var historyFilled = 0
 

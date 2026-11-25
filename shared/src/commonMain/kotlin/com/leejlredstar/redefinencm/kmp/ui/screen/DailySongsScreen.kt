@@ -19,9 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -77,19 +75,7 @@ fun DailySongsScreen(
         ) {
             item(key = "daily-header") {
                 Column(Modifier.fillMaxWidth().padding(8.dp)) {
-                    IconButton(onClick = onBack) {
-                        Surface(
-                            shape = CircleShape,
-                            color = palette.quietContainer.copy(alpha = 0.72f),
-                            contentColor = palette.onQuietContainer,
-                        ) {
-                            Icon(
-                                AppIcons.ArrowBack,
-                                contentDescription = strings.back,
-                                modifier = Modifier.padding(10.dp),
-                            )
-                        }
-                    }
+                    BackButton(palette, onBack)
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                         Text(
                             text = strings.dailyPicks,

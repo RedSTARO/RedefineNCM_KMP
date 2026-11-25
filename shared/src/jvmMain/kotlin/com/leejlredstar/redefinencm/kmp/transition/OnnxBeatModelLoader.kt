@@ -5,6 +5,7 @@ import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtEpDevice
 import ai.onnxruntime.OrtHardwareDevice
 import ai.onnxruntime.OrtSession
+import com.leejlredstar.redefinencm.kmp.data.db.desktopDataDirectory
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
@@ -33,7 +34,7 @@ import java.nio.FloatBuffer
 internal class OnnxBeatModelLoader(
     private val nativeDirectory: () -> File? = ::bundledOnnxRuntimeDirectory,
     private val download: ModelDownload = ModelDownload(BeatModelDownloads.onnx) {
-        File(File(System.getProperty("user.home"), ".redefinencm"), "models")
+        File(desktopDataDirectory(), "models")
     },
     private val modelFile: suspend () -> ModelFile = download::file,
 ) : BeatModelLoader {

@@ -118,7 +118,8 @@ fun PlaylistDetailScreen(
     }
 
     val queueItems = remember(songs, playlistId) {
-        songs.map { it.toMediaInfo(sourceId = playlistId.toString()) }
+        val sourceId = playlistId.toString()
+        songs.map { it.toMediaInfo(sourceId = sourceId) }
     }
 
     // 播放后停留在歌单页（与原版一致，靠迷你播放条进入全屏播放器）
@@ -329,13 +330,6 @@ fun PlaylistDetailScreen(
 internal fun playlistSourceLabel(name: String?): UiText? =
     name?.takeIf { it.isNotBlank() }?.let { playlistName -> UiText { it.playbackSourcePlaylist(playlistName) } }
 
-/** A short marker for songs a free account cannot play in full. */
-internal fun songFeeBadge(fee: Int): String? = when (fee) {
-    1 -> "VIP"
-    4 -> strings.paid
-    else -> null
-}
-
 @Composable
 private fun PlaylistCompactBar(
     title: String,
@@ -490,19 +484,7 @@ private fun PlaylistHeader(
                     .windowInsetsPadding(WindowInsets.browseHeader)
                     .padding(8.dp),
             ) {
-                IconButton(onClick = onBack) {
-                    Surface(
-                        shape = CircleShape,
-                        color = accentPalette.quietContainer.copy(alpha = 0.72f),
-                        contentColor = accentPalette.onQuietContainer,
-                    ) {
-                        Icon(
-                            AppIcons.ArrowBack,
-                            contentDescription = strings.back,
-                            modifier = Modifier.padding(10.dp),
-                        )
-                    }
-                }
+                BackButton(accentPalette, onBack)
             }
             if (sideBySide) {
                 Row(

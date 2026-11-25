@@ -35,7 +35,7 @@ class TimeStretcher(val channels: Int, sampleRate: Int) {
         }
 
     /** The analysis frame, about 46 ms. Also how many frames [prime] should be given. */
-    val frameSize: Int = evenAtLeast(sampleRate * 46 / 1000, 64)
+    val frameSize: Int = timeStretchFrameSize(sampleRate)
     private val hop: Int = frameSize / 2
     private val tolerance: Int = frameSize / 4
     private val window = FloatArray(frameSize) { (0.5 - 0.5 * cos(2.0 * PI * it / frameSize)).toFloat() }
@@ -226,8 +226,10 @@ class TimeStretcher(val channels: Int, sampleRate: Int) {
         while (size < frames * channels) size *= 2
         input = input.copyOf(size)
     }
+}
 
-    private companion object {
-        fun evenAtLeast(value: Int, minimum: Int): Int = maxOf(value, minimum).let { it - it % 2 }
-    }
+/** The even-sized analysis window, also used to size the player's priming history. */
+internal fun timeStretchFrameSize(sampleRate: Int): Int {
+    val frames = maxOf(sampleRate * 46 / 1_000, 64)
+    return frames - frames % 2
 }

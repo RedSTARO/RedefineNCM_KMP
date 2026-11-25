@@ -60,14 +60,17 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.download.DownloadArtworkStatus
 import com.leejlredstar.redefinencm.kmp.download.DownloadLyricStatus
+import com.leejlredstar.redefinencm.kmp.download.DownloadQueueSummary
 import com.leejlredstar.redefinencm.kmp.download.DownloadTaskStatus
 import com.leejlredstar.redefinencm.kmp.download.LocalLibrarySyncState
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadTask
+import com.leejlredstar.redefinencm.kmp.download.analyzeDownloadTasks
 import com.leejlredstar.redefinencm.kmp.i18n.UiText
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.player.playbackPlaceholderUri
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveWavyProgress
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
@@ -122,6 +125,16 @@ private fun DownloadFilter.matches(task: SongDownloadTask): Boolean = when (this
     DownloadFilter.Deleted -> task.status == DownloadTaskStatus.Deleted
 }
 
+private fun DownloadFilter.countIn(summary: DownloadQueueSummary): Int = when (this) {
+    DownloadFilter.All -> summary.total
+    DownloadFilter.Active -> summary.active
+    DownloadFilter.Paused -> summary.paused
+    DownloadFilter.Completed -> summary.completed
+    DownloadFilter.Failed -> summary.failed
+    DownloadFilter.Cancelled -> summary.cancelled
+    DownloadFilter.Deleted -> summary.deleted
+}
+
 private sealed interface DownloadDestructiveAction {
     data object CancelAll : DownloadDestructiveAction
     data object ClearFinished : DownloadDestructiveAction
@@ -163,13 +176,11 @@ fun DownloadManagementScreen(
     // then goes the ordinary way, finding the file gone.
     MediaDeletionConsentHost { songId -> downloadManager.deleteDownloadedSong(songId) }
 
-    val counts = remember(tasks) {
-        DownloadFilter.entries.associateWith { f -> tasks.count { f.matches(it) } }
-    }
+    val summary = remember(tasks) { analyzeDownloadTasks(tasks).summary }
     // An empty category is not offered as a filter: six chips that are always present would crowd
     // the header, and most would read zero.
-    val offeredFilters = remember(counts) {
-        DownloadFilter.entries.filter { it == DownloadFilter.All || (counts[it] ?: 0) > 0 }
+    val offeredFilters = remember(summary) {
+        DownloadFilter.entries.filter { it == DownloadFilter.All || it.countIn(summary) > 0 }
     }
     LaunchedEffect(offeredFilters) {
         if (filter !in offeredFilters) filter = DownloadFilter.All
@@ -191,7 +202,7 @@ fun DownloadManagementScreen(
         ) {
             item(key = "download-header") {
                 DownloadHeader(
-                    counts = counts,
+                    summary = summary,
                     accentPalette = palette,
                     localLibrarySyncState = localLibrarySyncState,
                     storedInBrowser = downloadsNeedExport,
@@ -211,7 +222,7 @@ fun DownloadManagementScreen(
                 item(key = "download-filters") {
                     DownloadFilterRow(
                         filters = offeredFilters,
-                        counts = counts,
+                        summary = summary,
                         selected = filter,
                         onSelected = { filter = it },
                         accentPalette = palette,
@@ -340,17 +351,20 @@ fun DownloadManagementScreen(
 }
 
 /** A downloaded song as the player takes it; the player prefers the local file for this id. */
-private fun SongDownloadTask.toMediaInfo(): MediaInfo = MediaInfo(
-    id = id.toString(),
-    title = title,
-    artist = artist,
-    artworkUri = artworkUri,
-    placeholderUri = "redefinencm://playbackPlaceHolder?id=$id",
-)
+private fun SongDownloadTask.toMediaInfo(): MediaInfo {
+    val mediaId = id.toString()
+    return MediaInfo(
+        id = mediaId,
+        title = title,
+        artist = artist,
+        artworkUri = artworkUri,
+        placeholderUri = playbackPlaceholderUri(mediaId),
+    )
+}
 
 @Composable
 private fun DownloadHeader(
-    counts: Map<DownloadFilter, Int>,
+    summary: DownloadQueueSummary,
     accentPalette: ContentAccentPalette,
     localLibrarySyncState: LocalLibrarySyncState,
     storedInBrowser: Boolean,
@@ -361,12 +375,11 @@ private fun DownloadHeader(
     onCancelAll: () -> Unit,
     onClearFinished: () -> Unit,
 ) {
-    val active = counts[DownloadFilter.Active] ?: 0
-    val paused = counts[DownloadFilter.Paused] ?: 0
-    val completed = counts[DownloadFilter.Completed] ?: 0
-    val failed = counts[DownloadFilter.Failed] ?: 0
-    val finished = completed + failed +
-        (counts[DownloadFilter.Cancelled] ?: 0) + (counts[DownloadFilter.Deleted] ?: 0)
+    val active = summary.active
+    val paused = summary.paused
+    val completed = summary.completed
+    val failed = summary.failed
+    val finished = completed + failed + summary.cancelled + summary.deleted
     var menuOpen by remember { mutableStateOf(false) }
     val syncing = localLibrarySyncState is LocalLibrarySyncState.Syncing
     val menu = buildList {
@@ -504,7 +517,7 @@ private fun DownloadMenu(
 @Composable
 private fun DownloadFilterRow(
     filters: List<DownloadFilter>,
-    counts: Map<DownloadFilter, Int>,
+    summary: DownloadQueueSummary,
     selected: DownloadFilter,
     onSelected: (DownloadFilter) -> Unit,
     accentPalette: ContentAccentPalette,
@@ -530,7 +543,7 @@ private fun DownloadFilterRow(
                     checkedContentColor = accentPalette.onContainer,
                 ),
             ) {
-                Text("${filter.label} ${counts[filter] ?: 0}")
+                Text("${filter.label} ${filter.countIn(summary)}")
             }
         }
     }

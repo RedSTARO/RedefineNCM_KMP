@@ -23,7 +23,6 @@ import kotlin.js.toArray
 import kotlin.js.toJsBoolean
 import kotlin.js.thrownValue
 import kotlin.js.unsafeCast
-import kotlin.math.sqrt
 import kotlin.time.TimeSource
 
 private const val WEB_CAPTURE_PADDING_MILLIS = 250L
@@ -108,11 +107,7 @@ class WasmMicrophoneRecorder : ExclusiveMicrophoneRecorder() {
                     val sample = meterData[index]
                     energy += sample * sample
                 }
-                val level = if (meterData.length == 0) {
-                    0f
-                } else {
-                    sqrt(energy / meterData.length).toFloat().coerceIn(0f, 1f)
-                }
+                val level = pcmRmsLevel(energy, meterData.length)
                 onProgress(elapsed.coerceAtMost(durationMillis), level)
                 delay(minOf(50L, stopAfterMillis - elapsed))
             }

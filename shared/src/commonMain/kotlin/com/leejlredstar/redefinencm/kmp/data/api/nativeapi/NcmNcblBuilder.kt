@@ -1,6 +1,8 @@
 package com.leejlredstar.redefinencm.kmp.data.api.nativeapi
 
 import com.leejlredstar.redefinencm.kmp.data.api.nativecrypto.NcmCrypto
+import com.leejlredstar.redefinencm.kmp.data.api.nativecrypto.hexToBytes
+import com.leejlredstar.redefinencm.kmp.data.api.nativecrypto.toHex
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -230,11 +232,6 @@ class NcmNcblBuilder(private val crypto: NcmCrypto) {
         require(value.none { it.code < 0x20 || it.code == 0x7f }) { "Invalid NCBL header value" }
     }
 
-    private fun ByteArray.toHex(): String = joinToString("") { byte ->
-        val value = byte.toInt() and 0xff
-        "${HEX[value ushr 4]}${HEX[value and 15]}"
-    }
-
     private fun readUInt16Le(bytes: ByteArray): Int {
         require(bytes.size == 2) { "Invalid NCBL sequence randomness length" }
         return (bytes[0].toInt() and 0xff) or ((bytes[1].toInt() and 0xff) shl 8)
@@ -261,8 +258,7 @@ class NcmNcblBuilder(private val crypto: NcmCrypto) {
         private const val HEADER_FIXED_LENGTH = 70
         private const val META_HEADER_LENGTH = 4
         private const val FRAME_HEADER_LENGTH = 6
-        private const val HEX = "0123456789abcdef"
         private val RSA_MODULUS = "fd90bd466ff9bc8a3fec2fbcf263b90d5c564879fa5d7aab89b31c1d5cb4139d"
-            .chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            .hexToBytes()
     }
 }

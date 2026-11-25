@@ -75,14 +75,17 @@ class MetadataCache(
             check(size <= limit) { "Response exceeds the text cache budget" }
             val rows = load()
             val key = Key(table, id)
-            val retained = LinkedHashMap(rows).apply { remove(key) }
+            val previousSize = rows[key]
+            var projectedBytes = rows.values.sum() - (previousSize ?: 0L) + size
+            var retainedCount = if (previousSize == null) rows.size else rows.size - 1
             val evicted = mutableListOf<Key>()
-            var projectedBytes = retained.values.sum() + size
-            while (projectedBytes > limit || retained.size >= maxEntries) {
-                val oldest = retained.entries.first()
-                projectedBytes -= oldest.value
-                evicted += oldest.key
-                retained.remove(oldest.key)
+            // Plan the evictions without changing access order before the transaction succeeds.
+            for ((candidate, bytes) in rows) {
+                if (projectedBytes <= limit && retainedCount < maxEntries) break
+                if (candidate == key) continue
+                evicted += candidate
+                projectedBytes -= bytes
+                retainedCount -= 1
             }
             database.transaction {
                 evicted.forEach(::delete)
@@ -98,8 +101,9 @@ class MetadataCache(
                     MetadataCacheTable.CachedUserPlaylist -> database.cachedUserPlaylistQueries.upsert(id, json)
                 }
             }
-            retained[key] = size
-            entries = retained
+            evicted.forEach(rows::remove)
+            rows.remove(key)
+            rows[key] = size
             publish()
         }
     }

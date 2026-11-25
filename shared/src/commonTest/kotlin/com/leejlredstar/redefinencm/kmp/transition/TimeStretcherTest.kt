@@ -39,6 +39,15 @@ class TimeStretcherTest {
     }
 
     @Test
+    fun analysisWindowKeepsItsEvenFrameCountAcrossSampleRates() {
+        val expectedFrames = mapOf(1_000 to 64, 1_460 to 66, 44_100 to 2_028, 48_000 to 2_208, 192_000 to 8_832)
+        for ((sampleRate, expected) in expectedFrames) {
+            assertEquals(expected, timeStretchFrameSize(sampleRate))
+            assertEquals(expected, TimeStretcher(2, sampleRate).frameSize)
+        }
+    }
+
+    @Test
     fun primedAtRateOneItContinuesItsInputExactly() {
         val input = music(rate * 3)
         val stretcher = TimeStretcher(2, rate)

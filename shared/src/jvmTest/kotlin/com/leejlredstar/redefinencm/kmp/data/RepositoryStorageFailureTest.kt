@@ -26,10 +26,11 @@ class RepositoryStorageFailureTest {
         AppDatabase.Schema.create(driver)
         val client = HttpClient(MockEngine { request ->
             respond(
-                if (request.url.encodedPath == "/user/level") {
-                    """{"code":200,"data":{"userId":42,"level":3}}"""
-                } else {
-                    """{"code":200,"lrc":{"lyric":"[00:01.00]line"}}"""
+                when (request.url.encodedPath) {
+                    "/user/level" -> """{"code":200,"data":{"userId":42,"level":3}}"""
+                    "/lyric/new" -> """{"code":200,"tlyric":{"lyric":"[00:01.00]translation only"}}"""
+                    "/lyric" -> """{"code":200,"lrc":{"lyric":"[00:01.00]line"}}"""
+                    else -> error("Unexpected request: ${request.url.encodedPath}")
                 },
                 headers = headersOf(HttpHeaders.ContentType, "application/json"),
             )

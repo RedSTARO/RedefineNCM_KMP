@@ -110,13 +110,15 @@ internal fun SongDetailSongs.toProviderTrack(): ProviderTrack = ProviderTrack(
     artists = ar.map { it.toProviderArtist() },
     album = al.toProviderAlbum(),
     durationMillis = dt,
-    // The same reading the playlist pages give `fee`; NetEase's search rows carry no quality list.
-    tags = when (fee) {
-        1 -> setOf(TrackTag.VIP)
-        4 -> setOf(TrackTag.PAID)
-        else -> emptySet()
-    },
+    // NetEase's search rows carry no quality list.
+    tags = neteaseFeeTag(fee)?.let { setOf(it) }.orEmpty(),
 )
+
+internal fun neteaseFeeTag(fee: Int): TrackTag? = when (fee) {
+    1 -> TrackTag.VIP
+    4 -> TrackTag.PAID
+    else -> null
+}
 
 private fun SongArtist.toProviderArtist(): ProviderArtist = ProviderArtist(
     id = if (id > 0) ProviderItemId.netease(id) else null,

@@ -8,10 +8,10 @@ import com.leejlredstar.redefinencm.kmp.lyric.LyricQuery
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSource
 import com.leejlredstar.redefinencm.kmp.lyric.backendLyricDocument
 import com.leejlredstar.redefinencm.kmp.lyric.localTtmlDocument
-import com.leejlredstar.redefinencm.kmp.util.LocalLyricFormat
 import com.leejlredstar.redefinencm.kmp.util.LocalMediaAssetSnapshot
 import com.leejlredstar.redefinencm.kmp.util.LocalMediaAssetStorage
 import com.leejlredstar.redefinencm.kmp.util.LocalTextMediaAsset
+import com.leejlredstar.redefinencm.kmp.util.LyricSidecar
 import io.ktor.client.request.prepareGet
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsChannel
@@ -53,42 +53,39 @@ class LocalMediaAssets(
         query: LyricQuery,
         source: LyricSource,
     ): LyricDocument? {
+        val songId = query.songId
         val requestedFiles = when (source) {
-            LyricSource.AMLL_TTML -> setOf("${query.songId}.lyric.ttml")
+            LyricSource.AMLL_TTML -> setOf(LyricSidecar.TTML.fileName(songId))
             LyricSource.NCM_BACKEND -> setOf(
-                "${query.songId}.lyric.yrc",
-                "${query.songId}.lyric.lrc",
-                "${query.songId}.lyric.line.lrc",
-                "${query.songId}.lyric.translation.lrc",
-                "${query.songId}.lyric.romanization.lrc",
+                LyricSidecar.YRC.fileName(songId),
+                LyricSidecar.LRC.fileName(songId),
+                LyricSidecar.LINE_LRC.fileName(songId),
+                LyricSidecar.TRANSLATION.fileName(songId),
+                LyricSidecar.ROMANIZATION.fileName(songId),
             )
         }
-        val files = LocalMediaAssetStorage.readLyrics(query.songId, requestedFiles)
+        val files = LocalMediaAssetStorage.readLyrics(songId, requestedFiles)
             .associateBy(LocalTextMediaAsset::fileName)
         if (files.isEmpty()) return null
 
+        fun content(sidecar: LyricSidecar): String = files[sidecar.fileName(songId)]?.content.orEmpty()
+
         return when (source) {
             LyricSource.AMLL_TTML -> {
-                val ttml = files["${query.songId}.lyric.ttml"]?.content
-                    ?.takeIf(String::isNotBlank)
-                    ?: return null
+                val ttml = content(LyricSidecar.TTML).takeIf(String::isNotBlank) ?: return null
                 localTtmlDocument(ttml)
             }
             LyricSource.NCM_BACKEND -> {
-                val yrc = files["${query.songId}.lyric.yrc"]?.content.orEmpty()
-                val primaryLrc = files["${query.songId}.lyric.lrc"]?.content.orEmpty()
-                val lineLrc = files["${query.songId}.lyric.line.lrc"]?.content.orEmpty()
+                val yrc = content(LyricSidecar.YRC)
+                val primaryLrc = content(LyricSidecar.LRC)
+                val lineLrc = content(LyricSidecar.LINE_LRC)
                 if (yrc.isBlank() && primaryLrc.isBlank()) return null
                 backendLyricDocument(
                     query = query,
                     lrcText = lineLrc.ifBlank { primaryLrc },
                     yrcText = yrc,
-                    translatedText = files["${query.songId}.lyric.translation.lrc"]
-                        ?.content
-                        .orEmpty(),
-                    romanText = files["${query.songId}.lyric.romanization.lrc"]
-                        ?.content
-                        .orEmpty(),
+                    translatedText = content(LyricSidecar.TRANSLATION),
+                    romanText = content(LyricSidecar.ROMANIZATION),
                     endpoint = "local-sidecar",
                 )
             }
@@ -165,23 +162,25 @@ class LocalMediaAssets(
 }
 
 internal fun LyricDocument.toOriginalLyricSidecars(songId: Long): List<LocalTextMediaAsset> {
+    fun asset(sidecar: LyricSidecar, content: String) = LocalTextMediaAsset(sidecar.fileName(songId), content)
+
     val primary = when {
-        rawTtml.isNotBlank() -> LocalTextMediaAsset("$songId.lyric.ttml", rawTtml)
-        rawWordLyric.isNotBlank() -> LocalTextMediaAsset("$songId.lyric.yrc", rawWordLyric)
-        rawLineLyric.isNotBlank() -> LocalTextMediaAsset("$songId.lyric.lrc", rawLineLyric)
+        rawTtml.isNotBlank() -> asset(LyricSidecar.TTML, rawTtml)
+        rawWordLyric.isNotBlank() -> asset(LyricSidecar.YRC, rawWordLyric)
+        rawLineLyric.isNotBlank() -> asset(LyricSidecar.LRC, rawLineLyric)
         else -> return emptyList()
     }
     return buildList {
         add(primary)
         if (source == LyricSource.NCM_BACKEND) {
             if (rawWordLyric.isNotBlank() && rawLineLyric.isNotBlank()) {
-                add(LocalTextMediaAsset("$songId.lyric.line.lrc", rawLineLyric))
+                add(asset(LyricSidecar.LINE_LRC, rawLineLyric))
             }
             rawTranslatedLyric.takeIf(String::isNotBlank)?.let {
-                add(LocalTextMediaAsset("$songId.lyric.translation.lrc", it))
+                add(asset(LyricSidecar.TRANSLATION, it))
             }
             rawRomanLyric.takeIf(String::isNotBlank)?.let {
-                add(LocalTextMediaAsset("$songId.lyric.romanization.lrc", it))
+                add(asset(LyricSidecar.ROMANIZATION, it))
             }
         }
     }

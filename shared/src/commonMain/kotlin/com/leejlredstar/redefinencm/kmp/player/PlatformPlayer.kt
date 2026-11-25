@@ -159,6 +159,13 @@ data class MediaInfo(
     val sourceId: String = "",
 )
 
+internal const val PLAYBACK_PLACEHOLDER_SCHEME = "redefinencm"
+internal const val PLAYBACK_PLACEHOLDER_HOST = "playbackPlaceHolder"
+internal const val PLAYBACK_PLACEHOLDER_ID_PARAM = "id"
+
+internal fun playbackPlaceholderUri(mediaId: String): String =
+    "$PLAYBACK_PLACEHOLDER_SCHEME://$PLAYBACK_PLACEHOLDER_HOST?$PLAYBACK_PLACEHOLDER_ID_PARAM=$mediaId"
+
 data class PlayerQueueSnapshot(
     val items: List<MediaInfo> = emptyList(),
     val currentIndex: Int = -1,

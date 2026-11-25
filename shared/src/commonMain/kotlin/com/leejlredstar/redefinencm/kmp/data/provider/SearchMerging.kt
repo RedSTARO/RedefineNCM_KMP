@@ -26,22 +26,23 @@ data class MergedSearchEntry(
  */
 fun List<ProviderTrack>.mergeSameSongs(): List<MergedSearchEntry> {
     val entries = ArrayList<MergedSearchEntry>(size)
+    val rowsByKey = HashMap<Pair<String, String>, MutableList<Int>>()
     for (track in this) {
         val key = track.sameSongKey()
-        val index = if (key == null) {
-            -1
-        } else {
-            entries.indexOfFirst { entry ->
-                entry.providers.none { it == track.provider } &&
-                    entry.track.sameSongKey() == key &&
-                    durationsAgree(entry.track.durationMillis, track.durationMillis)
-            }
+        // Each bucket keeps the first-appearance order of its primary rows.
+        val matchingRows = key?.let { rowsByKey[it] }
+        val matchingIndex = matchingRows?.firstOrNull { index ->
+            val entry = entries[index]
+            entry.track.provider != track.provider &&
+                entry.alternates.none { it.provider == track.provider } &&
+                durationsAgree(entry.track.durationMillis, track.durationMillis)
         }
-        if (index < 0) {
+        if (matchingIndex == null) {
+            if (key != null) rowsByKey.getOrPut(key) { mutableListOf() }.add(entries.size)
             entries += MergedSearchEntry(track)
         } else {
-            val entry = entries[index]
-            entries[index] = entry.copy(alternates = entry.alternates + track)
+            val entry = entries[matchingIndex]
+            entries[matchingIndex] = entry.copy(alternates = entry.alternates + track)
         }
     }
     return entries

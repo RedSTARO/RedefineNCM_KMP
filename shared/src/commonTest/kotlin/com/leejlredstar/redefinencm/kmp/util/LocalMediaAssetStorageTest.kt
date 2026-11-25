@@ -92,6 +92,15 @@ class LocalMediaAssetStorageTest {
     }
 
     @Test
+    fun artworkSelectionKeepsCaseSensitiveFileNameOrder() {
+        val snapshot = localMediaAssetSnapshot(
+            songId = 42L,
+            fileNames = listOf("42.cover.a", "42.cover.!", "42.cover.Z", "42.cover.Z"),
+        )
+        assertEquals("42.cover.Z", snapshot.artworkFileName)
+    }
+
+    @Test
     fun batchInspectionMatchesPerSongInspectionFromOneListing() {
         val listing = listOf(
             "42.mp3",

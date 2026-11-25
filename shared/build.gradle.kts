@@ -208,11 +208,12 @@ abstract class GenerateI18nStringsTask : DefaultTask() {
     @get:OutputDirectory
     abstract val outputDirectory: DirectoryProperty
 
-    private class Entry(val key: String, val forms: Map<String, String>, val pluralBy: String?)
+    private class Entry(val forms: Map<String, String>, val pluralBy: String?)
 
     private companion object {
         val languages = listOf("zh" to "ZhStrings", "en" to "EnStrings", "ja" to "JaStrings")
         val placeholder = Regex("""\{([A-Za-z][A-Za-z0-9]*)\}""")
+        val validKey = Regex("[a-z][A-Za-z0-9]*")
         val hardKeywords = setOf(
             "as", "break", "class", "continue", "do", "else", "false", "for", "fun", "if", "in",
             "interface", "is", "null", "object", "package", "return", "super", "this", "throw",
@@ -315,10 +316,10 @@ abstract class GenerateI18nStringsTask : DefaultTask() {
         for (i in 0 until children.length) {
             val node = children.item(i) as? org.w3c.dom.Element ?: continue
             val key = node.getAttribute("name")
-            if (!Regex("[a-z][A-Za-z0-9]*").matches(key)) throw GradleException("${file.name}: bad key \"$key\"")
+            if (!validKey.matches(key)) throw GradleException("${file.name}: bad key \"$key\"")
             if (key in entries) throw GradleException("${file.name}: \"$key\" is defined twice")
             entries[key] = when (node.tagName) {
-                "string" -> Entry(key, mapOf("other" to unescape(file, key, node.textContent)), null)
+                "string" -> Entry(mapOf("other" to unescape(file, key, node.textContent)), null)
                 "plural" -> {
                     val forms = mutableMapOf<String, String>()
                     val items = node.childNodes
@@ -330,7 +331,7 @@ abstract class GenerateI18nStringsTask : DefaultTask() {
                         forms[item.tagName] = unescape(file, key, item.textContent)
                     }
                     if ("other" !in forms) throw GradleException("${file.name}: \"$key\" has no <other>")
-                    Entry(key, forms, node.getAttribute("by").ifEmpty { "count" })
+                    Entry(forms, node.getAttribute("by").ifEmpty { "count" })
                 }
                 else -> throw GradleException("${file.name}: unknown element <${node.tagName}>")
             }

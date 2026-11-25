@@ -39,8 +39,10 @@ class RedirectingDataSource(
     }
 
     override fun open(dataSpec: DataSpec): Long {
-        val uri = if (dataSpec.uri.scheme == "redefinencm" && dataSpec.uri.host == "playbackPlaceHolder") {
-            val mediaId = dataSpec.uri.getQueryParameter("id")
+        val uri = if (dataSpec.uri.scheme == PLAYBACK_PLACEHOLDER_SCHEME &&
+            dataSpec.uri.host == PLAYBACK_PLACEHOLDER_HOST
+        ) {
+            val mediaId = dataSpec.uri.getQueryParameter(PLAYBACK_PLACEHOLDER_ID_PARAM)
                 ?: throw IOException("Missing id parameter in placeholder URI: ${dataSpec.uri}")
             val resolved = runBlocking { resolver.resolve(mediaId) }
                 ?: throw IOException("Failed to resolve stream URL for mediaId=$mediaId")

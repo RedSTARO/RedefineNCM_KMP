@@ -661,34 +661,13 @@ class SongDownloadManager(
         }
     }
 
-    fun clearFinished() {
-        val candidateIds = _tasks.value
-            .filter { it.isTerminal }
-            .mapTo(mutableSetOf()) { it.id }
-        val acquiredIds = beginDestructiveOperation(candidateIds)
-        if (acquiredIds.isEmpty()) return
-        val cancelledExecution = cancelActiveExecutionForTasks(acquiredIds)
-        scope.launch {
-            try {
-                restoreCompleted.await()
-                cancelledExecution?.join()
-                syncMutex.withLock {
-                    val removableIds = _tasks.value
-                        .filter { it.id in acquiredIds && it.isTerminal }
-                        .filter { discardPartialOrRecordFailure(it.id) }
-                        .mapTo(mutableSetOf()) { it.id }
-                    _tasks.update { tasks -> tasks.filterNot { it.id in removableIds } }
-                }
-                persistCurrentQueue()
-            } finally {
-                finishDestructiveOperation(acquiredIds)
-            }
-        }
-    }
+    fun clearFinished() = clearMatchingTasks { it.isTerminal }
 
-    fun clearCompleted() {
+    fun clearCompleted() = clearMatchingTasks { it.status == DownloadTaskStatus.Completed }
+
+    private fun clearMatchingTasks(matches: (SongDownloadTask) -> Boolean) {
         val candidateIds = _tasks.value
-            .filter { it.status == DownloadTaskStatus.Completed }
+            .filter(matches)
             .mapTo(mutableSetOf()) { it.id }
         val acquiredIds = beginDestructiveOperation(candidateIds)
         if (acquiredIds.isEmpty()) return
@@ -699,10 +678,7 @@ class SongDownloadManager(
                 cancelledExecution?.join()
                 syncMutex.withLock {
                     val removableIds = _tasks.value
-                        .filter {
-                            it.id in acquiredIds &&
-                                it.status == DownloadTaskStatus.Completed
-                        }
+                        .filter { it.id in acquiredIds && matches(it) }
                         .filter { discardPartialOrRecordFailure(it.id) }
                         .mapTo(mutableSetOf()) { it.id }
                     _tasks.update { tasks -> tasks.filterNot { it.id in removableIds } }

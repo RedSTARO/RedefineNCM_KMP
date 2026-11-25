@@ -4,17 +4,21 @@ import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
 import com.leejlredstar.redefinencm.kmp.data.provider.ProviderTrack
 import com.leejlredstar.redefinencm.kmp.data.provider.mediaId
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
+import com.leejlredstar.redefinencm.kmp.player.playbackPlaceholderUri
 
-internal fun SongDetailSongs.toPlayerMediaInfo(sourceId: String = ""): MediaInfo = MediaInfo(
-    id = id.toString(),
-    title = name,
-    artist = ar.joinToString(", ") { it.name },
-    albumTitle = al.name,
-    artworkUri = al.picUrl,
-    placeholderUri = "redefinencm://playbackPlaceHolder?id=$id",
-    duration = dt,
-    sourceId = sourceId,
-)
+internal fun SongDetailSongs.toPlayerMediaInfo(sourceId: String = ""): MediaInfo {
+    val mediaId = id.toString()
+    return MediaInfo(
+        id = mediaId,
+        title = name,
+        artist = ar.joinToString(", ") { it.name },
+        albumTitle = al.name,
+        artworkUri = al.picUrl,
+        placeholderUri = playbackPlaceholderUri(mediaId),
+        duration = dt,
+        sourceId = sourceId,
+    )
+}
 
 /**
  * Maps a provider-neutral track to the player's [MediaInfo].
@@ -31,7 +35,7 @@ internal fun ProviderTrack.toPlayerMediaInfo(sourceId: String = ""): MediaInfo {
         artist = artistLine,
         albumTitle = album?.name.orEmpty(),
         artworkUri = artworkUrl,
-        placeholderUri = "redefinencm://playbackPlaceHolder?id=$mediaId",
+        placeholderUri = playbackPlaceholderUri(mediaId),
         duration = durationMillis,
         sourceId = sourceId,
     )

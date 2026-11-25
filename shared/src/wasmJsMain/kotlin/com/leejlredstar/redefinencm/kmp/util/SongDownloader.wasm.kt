@@ -11,13 +11,7 @@ actual object SongDownloader {
         onReadyToPublish: () -> Boolean,
     ): DownloadedSongFile {
         require(item.url.isNotBlank()) { strings.downloadUrlEmpty }
-        val extension = item.url.substringBefore('?')
-            .substringAfterLast('/')
-            .substringAfterLast('.', "mp3")
-            .lowercase()
-            .filter { it in 'a'..'z' || it in '0'..'9' }
-            .take(12)
-            .ifBlank { "mp3" }
+        val extension = extensionFromUrl(item.url)
         return WebDownloadStorage.download(
             item = item,
             fileName = "${item.id}.$extension",

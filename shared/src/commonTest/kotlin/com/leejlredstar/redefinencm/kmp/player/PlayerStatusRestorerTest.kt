@@ -68,6 +68,7 @@ class PlayerStatusRestorerTest {
                     artist = "artist",
                     duration = 120_000,
                 ),
+                PersistedMediaItem(id = "qq:track-mid", title = "second", artist = "artist"),
             ),
             index = 0,
             position = 4_321,
@@ -92,6 +93,10 @@ class PlayerStatusRestorerTest {
         assertEquals(1, loads)
         assertEquals("123", player.currentMedia.value?.id)
         assertEquals("123", player.queueSnapshot.value.currentMedia?.id)
+        assertEquals(
+            listOf("redefinencm://playbackPlaceHolder?id=123", "redefinencm://playbackPlaceHolder?id=qq:track-mid"),
+            player.queueSnapshot.value.items.map { it.placeholderUri },
+        )
         assertEquals(4_321, player.position.value)
         assertFalse(player.isPlaying.value)
     }

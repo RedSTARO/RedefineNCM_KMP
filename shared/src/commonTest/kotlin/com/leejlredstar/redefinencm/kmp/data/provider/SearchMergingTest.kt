@@ -61,6 +61,25 @@ class SearchMergingTest {
     }
 
     @Test
+    fun matchingUsesTheFirstEligiblePrimaryAndIncludesTheExactDurationBoundary() {
+        val entries = listOf(
+            ncm(1, "Song", "Artist", 100_000),
+            ncm(2, "Other", "Artist", 100_000),
+            ncm(3, "Song", "Artist", 103_001),
+            qq("a", "Song", "Artist", 103_000),
+            qq("b", "Song", "Artist", 106_001),
+            qq("c", "Song", "Artist", 106_002),
+        ).mergeSameSongs()
+
+        assertEquals(
+            listOf(ProviderItemId.netease(1), ProviderItemId.netease(2), ProviderItemId.netease(3), ProviderItemId.qq("c")),
+            entries.map { it.track.id },
+        )
+        assertEquals(listOf(ProviderItemId.qq("a")), entries[0].alternates.map { it.id })
+        assertEquals(listOf(ProviderItemId.qq("b")), entries[2].alternates.map { it.id })
+    }
+
+    @Test
     fun aDifferentArtistStaysApart() {
         val entries = listOf(
             ncm(1, "晴天", "周杰伦", 269_000),

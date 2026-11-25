@@ -302,8 +302,7 @@ class ExoPlayerPlatformPlayer(
         val indices = mutableListOf<Int>()
         var idx = timeline.getFirstWindowIndex(shuffle)
         while (idx != C.INDEX_UNSET) {
-            val item = player.getMediaItemAt(idx)
-            items += (item.localConfiguration?.tag as? MediaInfo) ?: item.toMediaInfo()
+            items += player.getMediaItemAt(idx).info()
             indices += idx
             idx = timeline.getNextWindowIndex(idx, Player.REPEAT_MODE_OFF, shuffle)
         }

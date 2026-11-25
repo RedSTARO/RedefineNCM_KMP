@@ -4,6 +4,7 @@ import com.leejlredstar.redefinencm.kmp.data.api.ApiJson
 import com.leejlredstar.redefinencm.kmp.data.api.nativecrypto.NcmCrypto
 import com.leejlredstar.redefinencm.kmp.data.api.nativecrypto.NcmProtocolCrypto
 import com.leejlredstar.redefinencm.kmp.data.api.nativecrypto.XeapiPublicKeyState
+import com.leejlredstar.redefinencm.kmp.data.api.nativecrypto.toHex
 import io.ktor.http.HttpMethod
 import io.ktor.http.formUrlEncode
 import io.ktor.util.date.getTimeMillis
@@ -66,7 +67,7 @@ internal class NcmProtocolClient(
     private suspend fun deviceId(): String = bootstrapLock.withLock {
         if (device.isEmpty()) {
             device = store.read(NCM_DEVICE_ID_KEY).takeIf { it.matches(Regex("[0-9A-F]{52}")) }
-                ?: hex(crypto.secureRandom(26)).uppercase().also { store.write(NCM_DEVICE_ID_KEY, it) }
+                ?: crypto.secureRandom(26).toHex(uppercase = true).also { store.write(NCM_DEVICE_ID_KEY, it) }
         }
         device
     }
@@ -171,7 +172,7 @@ internal class NcmProtocolClient(
             "Protocol is not used by the native NetEase endpoint allowlist"
         }
         require(call.uri.startsWith("/api/")) { "Invalid NetEase API path" }
-        val scope = hex(crypto.md5(credential.encodeToByteArray()))
+        val scope = crypto.md5(credential.encodeToByteArray()).toHex()
         val session = stateLock.withLock {
             sessions.getOrPut(scope) { Session() }.let { target ->
                 val snapshot = Session(target.id, target.key?.copyOf(), target.nmtid, target.nmtidProbesLeft)
@@ -285,7 +286,7 @@ internal class NcmProtocolClient(
             "iPhone OS", "iphone" -> listOf("16.2", "9.0.90", "distribution")
             else -> listOf("Microsoft-Windows-10-Professional-build-19045-64bit", "3.1.17.204416", "netease")
         }
-        val nuid = original["_ntes_nuid"]?.takeIf(String::isNotBlank) ?: hex(crypto.secureRandom(32))
+        val nuid = original["_ntes_nuid"]?.takeIf(String::isNotBlank) ?: crypto.secureRandom(32).toHex()
         return (linkedMapOf(
             "__remember_me" to "true", "ntes_kaola_ad" to "1", "_ntes_nuid" to nuid,
             "_ntes_nnid" to "$nuid,$now", "WNMCID" to processWnmCid, "WEVNSM" to "1.0.0",
@@ -295,7 +296,7 @@ internal class NcmProtocolClient(
                 !original["NMTID"].isNullOrBlank() -> put("NMTID", original.getValue("NMTID"))
                 session.nmtid.isNotBlank() -> put("NMTID", session.nmtid)
                 protocol != NcmEndpointCrypto.EAPI || session.nmtidProbesLeft <= 0 ->
-                    put("NMTID", "00O${hex(crypto.secureRandom(19))}")
+                    put("NMTID", "00O${crypto.secureRandom(19).toHex()}")
                 else -> remove("NMTID")
             }
         }
@@ -304,7 +305,6 @@ internal class NcmProtocolClient(
 
 internal fun jsString(element: JsonElement): String = if (element is JsonPrimitive) element.content else element.toString()
 internal fun encodeForm(values: Map<String, String>): ByteArray = values.toList().formUrlEncode().encodeToByteArray()
-internal fun hex(bytes: ByteArray): String = bytes.joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
 internal fun uriComponent(value: String): String = buildString {
     value.encodeToByteArray().forEach { byte ->
         val b = byte.toInt() and 255
