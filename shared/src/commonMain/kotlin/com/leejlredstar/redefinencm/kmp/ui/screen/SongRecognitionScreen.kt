@@ -1,31 +1,40 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,36 +42,42 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.leejlredstar.amll.compose.rememberReducedMotionEnabled
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.recognition.AudioFingerprint
 import com.leejlredstar.redefinencm.kmp.recognition.LocalMicrophoneWindowActive
 import com.leejlredstar.redefinencm.kmp.recognition.rememberMicrophonePermissionRequester
-import com.leejlredstar.redefinencm.kmp.ui.adaptive.LocalBrowseObstructions
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.browseHeader
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveWavyProgress
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveArtwork
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveFeatureIcon
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePageBar
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePageHeading
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveWavyProgress
+import com.leejlredstar.redefinencm.kmp.ui.component.LocalExpressivePageGutter
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
-import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
-import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
+import com.leejlredstar.redefinencm.kmp.viewmodel.MaxRecognitionAttempts
 import com.leejlredstar.redefinencm.kmp.viewmodel.RecognizedSongMatch
 import com.leejlredstar.redefinencm.kmp.viewmodel.SongRecognitionUiState
 import com.leejlredstar.redefinencm.kmp.viewmodel.SongRecognitionViewModel
 import org.koin.compose.koinInject
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.graphics.graphicsLayer
-import com.leejlredstar.redefinencm.kmp.viewmodel.MaxRecognitionAttempts
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SongRecognitionScreen(
     onBack: () -> Unit,
@@ -72,7 +87,6 @@ fun SongRecognitionScreen(
     isActive: Boolean = true,
 ) {
     val state by viewModel.uiState.collectAsState()
-    val accentPalette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
     var queuedSongId by rememberSaveable { mutableStateOf<Long?>(null) }
     var autoStart by rememberSaveable { mutableStateOf(true) }
     val microphoneWindow = LocalMicrophoneWindowActive.current
@@ -123,386 +137,366 @@ fun SongRecognitionScreen(
         onDispose { viewModel.close() }
     }
 
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     ExpressivePage(
-        accentPalette = accentPalette,
-        maxContentWidth = ExpressiveLayout.ReadingContentMaxWidth,
-        contentWindowInsets = if (LocalBrowseObstructions.current != null) WindowInsets.browseHeader else WindowInsets(0, 0, 0, 0),
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            bottom = scaffoldPadding.calculateBottomPadding() + 16.dp,
-        ),
+        maxContentWidth = 680.dp,
+        headerOwnsTopInsets = true,
     ) {
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            item(key = "recognition-header") {
-                RecognitionHeader(onBack = ::leave)
-            }
-
-            when (val current = state) {
-                SongRecognitionUiState.Idle -> item(key = "recognition-idle") {
-                    RecognitionIdlePanel(
-                        accentPalette = accentPalette,
-                        onStart = ::requestRecognition,
-                    )
-                }
-                SongRecognitionUiState.RequestingPermission -> item(key = "recognition-permission") {
-                    RecognitionLoadingPanel(
-                        label = strings.recognitionRequestingMicPermission,
-                        accentPalette = accentPalette,
-                        onCancel = viewModel::cancelRecognition,
-                    )
-                }
-                is SongRecognitionUiState.Listening -> item(key = "recognition-listening") {
-                    RecognitionListeningPanel(
-                        elapsedMillis = current.elapsedMillis,
-                        level = current.level,
-                        attempt = current.attempt,
-                        accentPalette = accentPalette,
-                        onCancel = viewModel::cancelRecognition,
-                    )
-                }
-                SongRecognitionUiState.Recognizing -> item(key = "recognition-processing") {
-                    RecognitionLoadingPanel(
-                        label = strings.recognitionMatching,
-                        accentPalette = accentPalette,
-                        onCancel = viewModel::cancelRecognition,
-                    )
-                }
-                is SongRecognitionUiState.Results -> {
-                    item(key = "recognition-results-title") {
-                        Text(
-                            text = strings.recognitionResults,
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.ExtraBold,
-                            modifier = Modifier.padding(top = 12.dp, bottom = 12.dp),
+        val gutter = LocalExpressivePageGutter.current
+        Column(Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
+            ExpressivePageBar(
+                title = strings.songRecognition,
+                onBack = ::leave,
+                windowInsets = WindowInsets.browseHeader,
+                scrollBehavior = scrollBehavior,
+            )
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentPadding = PaddingValues(
+                    start = gutter,
+                    end = gutter,
+                    top = 8.dp,
+                    bottom = scaffoldPadding.calculateBottomPadding() + 16.dp,
+                ),
+            ) {
+                when (val current = state) {
+                    SongRecognitionUiState.Idle,
+                    SongRecognitionUiState.RequestingPermission,
+                    is SongRecognitionUiState.Listening,
+                    SongRecognitionUiState.Recognizing -> item(key = "recognition-task") {
+                        RecognitionTaskPanel(
+                            state = current,
+                            canRecord = canRecord,
+                            onStart = ::requestRecognition,
+                            onCancel = viewModel::cancelRecognition,
                         )
                     }
-                    itemsIndexed(
-                        items = current.matches,
-                        key = { _, match -> match.song.id },
-                    ) { index, match ->
-                        RecognitionResultCard(
-                            match = match,
-                            index = index,
-                            count = current.matches.size,
-                            queued = queuedSongId == match.song.id,
-                            accentPalette = accentPalette,
-                            onPlay = {
-                                viewModel.play(match)
-                                onOpenPlayer()
-                            },
-                            onAddToQueue = {
-                                viewModel.addToQueue(match)
-                                queuedSongId = match.song.id
-                            },
-                        )
-                    }
-                    item(key = "recognition-retry") {
-                        TextButton(
-                            onClick = ::requestRecognition,
-                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                        ) {
-                            Icon(AppIcons.Refresh, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text(strings.recognizeAgain)
+                    is SongRecognitionUiState.Results -> {
+                        item(key = "recognition-results-title") {
+                            RecognitionResultsHeader(canRecord = canRecord, onRetry = ::requestRecognition)
+                        }
+                        itemsIndexed(items = current.matches, key = { _, match -> match.song.id }) { index, match ->
+                            RecognitionResultRow(
+                                match = match,
+                                index = index,
+                                count = current.matches.size,
+                                queued = queuedSongId == match.song.id,
+                                onPlay = {
+                                    viewModel.play(match)
+                                    onOpenPlayer()
+                                },
+                                onAddToQueue = {
+                                    viewModel.addToQueue(match)
+                                    queuedSongId = match.song.id
+                                },
+                            )
                         }
                     }
+                    is SongRecognitionUiState.NoMatch -> item(key = "recognition-no-match") {
+                        ExpressiveStatePanel(
+                            title = strings.recognitionNoMatchTitle,
+                            message = strings.recognitionNoMatchMessage(MaxRecognitionAttempts * (AudioFingerprint.DURATION_MILLIS / 1000L)),
+                            icon = AppIcons.MusicNote,
+                            actionLabel = strings.recognizeAgain.takeIf { canRecord },
+                            onAction = ::requestRecognition,
+                        )
+                    }
+                    SongRecognitionUiState.PermissionDenied -> item(key = "recognition-denied") {
+                        ExpressiveStatePanel(
+                            title = strings.recognitionMicPermissionNeeded,
+                            message = strings.recognitionMicPermissionHelp,
+                            icon = AppIcons.Mic,
+                            tone = ExpressiveStateTone.Error,
+                            actionLabel = strings.checkAgain.takeIf { canRecord },
+                            onAction = ::requestRecognition,
+                        )
+                    }
+                    is SongRecognitionUiState.MicrophoneUnavailable -> item(key = "recognition-unavailable") {
+                        ExpressiveStatePanel(
+                            title = strings.microphoneUnavailable,
+                            message = current.message,
+                            icon = AppIcons.Mic,
+                            tone = ExpressiveStateTone.Error,
+                            actionLabel = strings.retry.takeIf { current.canRetry && canRecord },
+                            onAction = ::requestRecognition,
+                        )
+                    }
+                    is SongRecognitionUiState.Error -> item(key = "recognition-error") {
+                        ExpressiveStatePanel(
+                            title = strings.recognitionFailed,
+                            message = current.message,
+                            icon = AppIcons.Refresh,
+                            tone = ExpressiveStateTone.Error,
+                            actionLabel = strings.retry.takeIf { canRecord },
+                            onAction = ::requestRecognition,
+                        )
+                    }
                 }
-                is SongRecognitionUiState.NoMatch -> item(key = "recognition-no-match") {
-                    ExpressiveStatePanel(
-                        title = strings.recognitionNoMatchTitle,
-                        message = strings.recognitionNoMatchMessage(MaxRecognitionAttempts * 3),
-                        icon = AppIcons.MusicNote,
-                        accentPalette = accentPalette,
-                        actionLabel = strings.recognizeAgain,
-                        onAction = ::requestRecognition,
-                        modifier = Modifier.padding(top = 12.dp),
-                    )
-                }
-                SongRecognitionUiState.PermissionDenied -> item(key = "recognition-denied") {
-                    ExpressiveStatePanel(
-                        title = strings.recognitionMicPermissionNeeded,
-                        message = strings.recognitionMicPermissionHelp,
-                        icon = AppIcons.Mic,
-                        tone = ExpressiveStateTone.Error,
-                        actionLabel = strings.checkAgain,
-                        onAction = ::requestRecognition,
-                        modifier = Modifier.padding(top = 12.dp),
-                    )
-                }
-                is SongRecognitionUiState.MicrophoneUnavailable -> item(key = "recognition-unavailable") {
-                    ExpressiveStatePanel(
-                        title = strings.microphoneUnavailable,
-                        message = current.message,
-                        icon = AppIcons.Mic,
-                        tone = ExpressiveStateTone.Error,
-                        actionLabel = if (current.canRetry) strings.retry else null,
-                        onAction = if (current.canRetry) ::requestRecognition else null,
-                        modifier = Modifier.padding(top = 12.dp),
-                    )
-                }
-                is SongRecognitionUiState.Error -> item(key = "recognition-error") {
-                    ExpressiveStatePanel(
-                        title = strings.recognitionFailed,
-                        message = current.message,
-                        icon = AppIcons.Refresh,
-                        tone = ExpressiveStateTone.Error,
-                        actionLabel = strings.retry,
-                        onAction = ::requestRecognition,
-                        modifier = Modifier.padding(top = 12.dp),
-                    )
+                if (state is SongRecognitionUiState.Idle) {
+                    item(key = "recognition-playback-note") {
+                        Text(
+                            text = strings.recognitionPausesPlayback,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 12.dp, start = 4.dp, end = 4.dp),
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun RecognitionHeader(onBack: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = onBack) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-            ) {
-                Icon(
-                    imageVector = AppIcons.ArrowBack,
-                    contentDescription = strings.back,
-                    modifier = Modifier.padding(10.dp),
-                )
-            }
-        }
-        Spacer(Modifier.width(12.dp))
-        Column {
-            Text(
-                text = strings.songRecognition,
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.ExtraBold,
-            )
-            Text(
-                text = strings.recognitionIntro,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun RecognitionIdlePanel(
-    accentPalette: ContentAccentPalette,
+private fun RecognitionTaskPanel(
+    state: SongRecognitionUiState,
+    canRecord: Boolean,
     onStart: () -> Unit,
+    onCancel: () -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
+    val idle = state is SongRecognitionUiState.Idle
+    val capture = state as? SongRecognitionUiState.Listening
+    val (title, supportingText) = when (state) {
+        SongRecognitionUiState.Idle -> strings.recognitionIdentifySong to strings.recognitionIntro
+        SongRecognitionUiState.RequestingPermission -> strings.recognitionRequestingMicPermission to null
+        is SongRecognitionUiState.Listening -> (if (state.attempt > 1) {
+            strings.recognitionListeningAgain(state.attempt)
+        } else {
+            strings.recognitionListening
+        }) to strings.recognitionReadyTitle
+        SongRecognitionUiState.Recognizing -> strings.recognitionFindingMatch to strings.recognitionMatching
+        else -> return
+    }
     Surface(
-        shape = MaterialTheme.shapes.extraLarge,
-        color = accentPalette.quietContainer,
-        contentColor = accentPalette.onQuietContainer,
         modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(ExpressiveLayout.FeatureCorner),
+        color = scheme.surfaceContainer,
+        contentColor = scheme.onSurface,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            accentPalette.pageStart,
-                            accentPalette.container,
-                            accentPalette.quietContainer,
-                        ),
-                    ),
-                )
-                .padding(horizontal = 24.dp, vertical = 36.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Surface(
-                shape = CircleShape,
-                color = accentPalette.container,
-                contentColor = accentPalette.onContainer,
-                modifier = Modifier.size(112.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = AppIcons.Mic,
-                        contentDescription = null,
-                        modifier = Modifier.size(52.dp),
-                    )
-                }
-            }
-            Text(
-                text = strings.recognitionReadyTitle,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = strings.recognitionPausesPlayback,
-                style = MaterialTheme.typography.bodyMedium,
-                color = accentPalette.secondaryOnQuietContainer,
-            )
-            FilledTonalButton(onClick = onStart, shape = CircleShape) {
-                Icon(AppIcons.Mic, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(strings.startRecognition)
-            }
-        }
-    }
-}
-
-@Composable
-private fun RecognitionLoadingPanel(
-    label: String,
-    accentPalette: ContentAccentPalette,
-    onCancel: () -> Unit,
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        ExpressiveLoadingState(
-            label = label,
-            accentColor = accentPalette.accent,
-            modifier = Modifier.padding(top = 12.dp),
-        )
-        TextButton(onClick = onCancel) { Text(strings.cancel) }
-    }
-}
-
-@Composable
-private fun RecognitionListeningPanel(
-    elapsedMillis: Long,
-    level: Float,
-    attempt: Int,
-    accentPalette: ContentAccentPalette,
-    onCancel: () -> Unit,
-) {
-    val progress = (
-        elapsedMillis.toFloat() / AudioFingerprint.DURATION_MILLIS.toFloat()
-    ).coerceIn(0f, 1f)
-    Surface(
-        shape = MaterialTheme.shapes.extraLarge,
-        color = accentPalette.quietContainer,
-        contentColor = accentPalette.onQuietContainer,
-        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            // A fixed box with the circle scaled inside it: resizing the circle itself would move
-            // everything below it up and down with every level sample.
-            Box(Modifier.size(112.dp), contentAlignment = Alignment.Center) {
-                Surface(
-                    shape = CircleShape,
-                    color = accentPalette.container,
-                    contentColor = accentPalette.onContainer,
-                    modifier = Modifier
-                        .size(112.dp)
-                        .graphicsLayer {
-                            val scale = (88f + level * 24f) / 112f
+            val symbol: @Composable () -> Unit = {
+                if (idle || capture != null) {
+                    val reducedMotion = rememberReducedMotionEnabled()
+                    ExpressiveFeatureIcon(
+                        icon = if (capture == null) AppIcons.Mic else AppIcons.GraphicEq,
+                        containerColor = if (capture == null) scheme.secondaryContainer else scheme.primaryContainer,
+                        contentColor = if (capture == null) scheme.onSecondaryContainer else scheme.onPrimaryContainer,
+                        modifier = Modifier.graphicsLayer {
+                            // Paint the live microphone response without moving text or controls.
+                            val scale = if (capture == null || reducedMotion) 1f else 0.88f + capture.level * 0.12f
                             scaleX = scale
                             scaleY = scale
                         },
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = AppIcons.GraphicEq,
-                            contentDescription = null,
-                            modifier = Modifier.size(44.dp),
-                        )
+                    )
+                } else {
+                    LoadingIndicator()
+                }
+            }
+            val heading: @Composable (Modifier) -> Unit = { modifier ->
+                ExpressivePageHeading(
+                    title = title,
+                    supportingText = supportingText,
+                    // Only phase text is live. Updating tenths of a second and audio level
+                    // must not drown out the controls for someone using a screen reader.
+                    modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                if (maxWidth >= 220.dp * LocalDensity.current.fontScale) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        symbol()
+                        heading(Modifier.weight(1f))
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        symbol()
+                        heading(Modifier)
                     }
                 }
             }
-            Text(
-                text = if (attempt > 1) strings.recognitionListeningAgain(attempt) else strings.recognitionListening,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-            )
-            ExpressiveWavyProgress(
-                progress = { progress },
-                color = accentPalette.accent,
-                trackColor = accentPalette.container,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Text(
-                text = strings.recognitionElapsed(elapsedMillis.coerceAtMost(AudioFingerprint.DURATION_MILLIS) / 100L / 10.0),
-                style = MaterialTheme.typography.labelLarge,
-                color = accentPalette.secondaryOnQuietContainer,
-            )
-            TextButton(onClick = onCancel) { Text(strings.cancel) }
+            if (capture != null) {
+                RecognitionCaptureProgress(capture.elapsedMillis, title)
+            }
+            if (idle) {
+                RecognitionStartButton(enabled = canRecord, onStart = onStart)
+            } else {
+                OutlinedButton(
+                    onClick = onCancel,
+                    shapes = ButtonDefaults.shapes(),
+                    contentPadding = ButtonDefaults.SmallContentPadding,
+                ) {
+                    Text(strings.cancel)
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun RecognitionResultCard(
+private fun RecognitionCaptureProgress(elapsedMillis: Long, label: String) {
+    val elapsed = elapsedMillis.coerceIn(0L, AudioFingerprint.DURATION_MILLIS)
+    val progress = elapsed.toFloat() / AudioFingerprint.DURATION_MILLIS.toFloat()
+    Column(
+        modifier = Modifier.widthIn(max = 480.dp).fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        ExpressiveWavyProgress(
+            progress = { progress },
+            trackColor = MaterialTheme.colorScheme.secondaryContainer,
+            modifier = Modifier.fillMaxWidth().semantics { contentDescription = label },
+        )
+        Text(
+            text = strings.recognitionElapsed(elapsed / 100L / 10.0),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.align(Alignment.End),
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun RecognitionStartButton(enabled: Boolean, onStart: () -> Unit) {
+    BoxWithConstraints(Modifier.widthIn(max = 360.dp)) {
+        val height = if (maxWidth >= 260.dp) ButtonDefaults.MediumContainerHeight else ExpressiveLayout.MinimumTouchTarget
+        Button(
+            onClick = onStart,
+            enabled = enabled,
+            modifier = Modifier.heightIn(min = height),
+            shapes = ButtonDefaults.shapesFor(height),
+            contentPadding = ButtonDefaults.contentPaddingFor(height),
+        ) {
+            Icon(AppIcons.Mic, contentDescription = null, modifier = Modifier.size(ButtonDefaults.iconSizeFor(height)))
+            Spacer(Modifier.width(ButtonDefaults.iconSpacingFor(height)))
+            Text(strings.startRecognition, style = MaterialTheme.typography.labelLargeEmphasized)
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun RecognitionResultsHeader(canRecord: Boolean, onRetry: () -> Unit) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        ExpressivePageHeading(
+            title = strings.recognitionResults,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        )
+        TextButton(onClick = onRetry, enabled = canRecord, shapes = ButtonDefaults.shapes()) {
+            Icon(AppIcons.Refresh, contentDescription = null, modifier = Modifier.size(ButtonDefaults.SmallIconSize))
+            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+            Text(strings.recognizeAgain)
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun RecognitionResultRow(
     match: RecognizedSongMatch,
     index: Int,
     count: Int,
     queued: Boolean,
-    accentPalette: ContentAccentPalette,
     onPlay: () -> Unit,
     onAddToQueue: () -> Unit,
 ) {
     val song = match.song
+    val scheme = MaterialTheme.colorScheme
+    val secondary = scheme.onSurfaceVariant
+    val first = index == 0
     Surface(
         shape = connectedListItemShape(index, count),
-        color = accentPalette.quietContainer,
-        contentColor = accentPalette.onQuietContainer,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 1.5.dp),
+        color = if (first) scheme.surfaceContainerHigh else scheme.surfaceContainerLow,
+        contentColor = scheme.onSurface,
+        modifier = Modifier.fillMaxWidth().padding(top = if (first) 0.dp else ExpressiveLayout.ConnectedItemGap),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                ExpressiveArtwork(
-                    model = song.al.picUrl,
-                    contentDescription = null,
-                    modifier = Modifier.size(72.dp),
-                    shape = MaterialTheme.shapes.medium,
-                    containerColor = accentPalette.container,
-                    contentColor = accentPalette.onContainer,
-                )
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = song.name.ifBlank { strings.unknownSong },
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
+        BoxWithConstraints(Modifier.fillMaxWidth().padding(12.dp)) {
+            val metadata: @Composable (Modifier) -> Unit = { modifier ->
+                Row(
+                    modifier = modifier,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ExpressiveArtwork(
+                        model = song.al.picUrl,
+                        contentDescription = null,
+                        modifier = Modifier.size(56.dp),
+                        shape = RoundedCornerShape(8.dp),
                     )
-                    Text(
-                        text = song.ar.joinToString(" / ") { it.name }.ifBlank { strings.unknownArtist },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = accentPalette.secondaryOnQuietContainer,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (song.al.name.isNotBlank()) {
+                    Column(Modifier.weight(1f)) {
                         Text(
-                            text = song.al.name,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = accentPalette.secondaryOnQuietContainer,
+                            text = song.name.ifBlank { strings.unknownSong },
+                            style = if (first) MaterialTheme.typography.titleLargeEmphasized else MaterialTheme.typography.titleMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = song.ar.joinToString(" / ") { it.name }.ifBlank { strings.unknownArtist },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = secondary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
+                        if (song.al.name.isNotBlank()) {
+                            Text(
+                                text = song.al.name,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = secondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(onClick = onAddToQueue, enabled = !queued) {
-                    Text(if (queued) strings.addedToQueue else strings.addToQueue)
+            val actions: @Composable () -> Unit = {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+                    itemVerticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(
+                        onClick = onAddToQueue,
+                        enabled = !queued,
+                        shapes = ButtonDefaults.shapes(),
+                        contentPadding = ButtonDefaults.SmallContentPadding,
+                    ) {
+                        if (queued) {
+                            Icon(AppIcons.Check, contentDescription = null, modifier = Modifier.size(ButtonDefaults.SmallIconSize))
+                            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                        }
+                        Text(if (queued) strings.addedToQueue else strings.addToQueue)
+                    }
+                    FilledTonalButton(
+                        onClick = onPlay,
+                        shapes = ButtonDefaults.shapes(),
+                        contentPadding = ButtonDefaults.SmallContentPadding,
+                    ) {
+                        Icon(AppIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(ButtonDefaults.SmallIconSize))
+                        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                        Text(strings.play)
+                    }
                 }
-                Spacer(Modifier.width(8.dp))
-                FilledTonalButton(onClick = onPlay, shape = CircleShape) {
-                    Icon(AppIcons.PlayArrow, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(strings.play)
+            }
+            if (maxWidth >= 520.dp * LocalDensity.current.fontScale) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    metadata(Modifier.weight(1f))
+                    actions()
+                }
+            } else {
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    metadata(Modifier.fillMaxWidth())
+                    actions()
                 }
             }
         }

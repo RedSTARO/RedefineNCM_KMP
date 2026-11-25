@@ -1,70 +1,72 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
+import com.leejlredstar.redefinencm.kmp.data.api.dto.UserDetailProfile
 import com.leejlredstar.redefinencm.kmp.data.api.dto.UserLevelResponse
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.i18n.text
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveWavyProgress
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveArtwork
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveCacheHint
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveFeatureIcon
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePageBar
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
-import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
-import com.leejlredstar.redefinencm.kmp.ui.theme.AccentColorSaver
-import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
-import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveWavyProgress
+import com.leejlredstar.redefinencm.kmp.ui.component.LocalExpressivePageGutter
+import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
+import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
+import com.leejlredstar.redefinencm.kmp.ui.theme.legibleAccentFor
+import com.leejlredstar.redefinencm.kmp.ui.theme.rememberArtworkAccent
 import com.leejlredstar.redefinencm.kmp.viewmodel.LocalLibraryViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
-import com.leejlredstar.redefinencm.kmp.ui.adaptive.browseHeader
 import org.koin.compose.koinInject
 import kotlin.math.roundToInt
 
@@ -113,6 +115,7 @@ internal fun userLevelDisplay(response: UserLevelResponse?): UserLevelDisplay? {
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun UserPlaylistScreen(
     scaffoldPadding: PaddingValues,
@@ -144,272 +147,257 @@ fun UserPlaylistScreen(
     val uid by viewModel.uid.collectAsState()
     val sessionExpired by viewModel.sessionExpired.collectAsState()
     var lastIntelligencePlaylistId by remember { mutableStateOf<Long?>(null) }
-    val hasCachedContent =
-        (userDetailFromCache && userDetail != null) ||
-            (userLevelFromCache && userLevel?.data != null) ||
-            userPlaylistsFromCache
+    val hasCachedContent = (userDetailFromCache && userDetail != null) ||
+        (userLevelFromCache && userLevel?.data != null) || userPlaylistsFromCache
     val hasAccountContent = userDetail != null || playlistsLoaded
-    val defaultAccentColor = MaterialTheme.colorScheme.primaryContainer
-    var rawAccentColor by rememberSaveable(
-        userDetail?.profile?.backgroundUrl,
-        userDetail?.profile?.avatarUrl,
-        stateSaver = AccentColorSaver,
-    ) {
-        mutableStateOf<Color?>(null)
-    }
-    val animatedAccentColor by animateColorAsState(
-        targetValue = rawAccentColor ?: defaultAccentColor,
-        animationSpec = spring(),
-        label = "userAccent",
-    )
-    val accentPalette = contentAccentPalette(animatedAccentColor)
+    val (created, saved) = remember(playlists, uid) { playlists.partition { it.creator.userId == uid } }
+    val listState = rememberLazyListState()
 
-    ExpressivePage(
-        accentPalette = accentPalette,
-        headerOwnsTopInsets = true,
-    ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            // contentPadding, not container padding, so rows scroll under the floating toolbar.
-            contentPadding = PaddingValues(bottom = scaffoldPadding.calculateBottomPadding() + 16.dp),
-        ) {
-            // The title belongs to the hero when there is one. Drawn above it instead, the
-            // page would end in a hard horizontal cut, the page's own tint meeting the top
-            // edge of a photograph with nothing in between.
-            val detail = userDetail
-            if (detail != null) {
-                item(key = "user-hero") {
-                    UserPlaylistHero(
-                        backgroundUrl = detail.profile.backgroundUrl,
-                        avatarUrl = detail.profile.avatarUrl,
-                        nickname = detail.profile.nickname,
-                        userLevel = userLevel,
-                        levelLoading = userLevel == null && userLevelLoadError == null && accountLoading,
-                        levelLoadFailed = userLevel == null && userLevelLoadError != null,
-                        accentPalette = accentPalette,
-                        onAccentColor = { rawAccentColor = it },
-                        onRetryLevel = viewModel::retryAccountData,
-                        onOpenSettings = onOpenSettings,
-                    )
-                }
-            } else {
-                // Signed out there is no hero to carry it, so the title stands on the page.
-                item(key = "library-header") {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .windowInsetsPadding(WindowInsets.browseHeader)
-                            .padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = strings.me,
-                            style = MaterialTheme.typography.headlineLarge,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = accentPalette.onPageStart,
-                            modifier = Modifier.weight(1f),
+    ExpressivePage(contentWindowInsets = WindowInsets.statusBars) {
+        val gutter = LocalExpressivePageGutter.current
+        val inset = Modifier.padding(horizontal = gutter)
+        val barScroll = TopAppBarDefaults.pinnedScrollBehavior()
+        Column(Modifier.fillMaxSize().nestedScroll(barScroll.nestedScrollConnection)) {
+            ExpressivePageBar(
+                title = strings.me,
+                modifier = Modifier.padding(horizontal = gutter - ExpressiveLayout.PageHorizontalPadding),
+                scrollBehavior = barScroll,
+                actions = {
+                    FilledTonalIconButton(onClick = onOpenSettings, shapes = IconButtonDefaults.shapes()) {
+                        Icon(AppIcons.Settings, contentDescription = strings.settings)
+                    }
+                },
+            )
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                // Only the viewport content reserves clearance, so it scrolls under the player.
+                contentPadding = PaddingValues(top = 8.dp, bottom = scaffoldPadding.calculateBottomPadding() + 16.dp),
+            ) {
+                val profile = userDetail?.profile
+                // The network refresh does not gate rendering of the cached status or playlists.
+                if (profile != null || userLevel?.data != null) {
+                    item(key = "user-hero") {
+                        UserProfilePanel(
+                            profile = profile,
+                            userLevel = userLevel,
+                            levelLoading = userLevel == null && userLevelLoadError == null && accountLoading,
+                            levelLoadFailed = userLevel == null && userLevelLoadError != null,
+                            onRetryLevel = viewModel::retryAccountData,
+                            modifier = inset.padding(bottom = 12.dp),
                         )
-                        IconButton(onClick = onOpenSettings) {
-                            Icon(
-                                imageVector = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Settings,
-                                contentDescription = strings.settings,
-                                tint = accentPalette.onPageStart,
-                            )
-                        }
                     }
                 }
-            }
-            if (hasCachedContent) {
-                item(key = "account-cache-hint") {
-                    ExpressiveCacheHint(
-                        isRefreshing = accountLoading,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    )
-                }
-            }
-            // Downloads live on the device, so the way to them does not depend on being signed
-            // in. On phones this is the only way to them outside a download notification.
-            item(key = "library-downloads") {
-                LibraryShortcut(
-                    title = strings.downloadManagement,
-                    subtitle = strings.downloadsShortcutSubtitle,
-                    icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Download,
-                    accentPalette = accentPalette,
-                    onClick = onOpenDownloads,
-                )
-            }
-            // The local account's library needs no sign-in either, and holds any provider's songs.
-            // Switching the local account off takes the way to it away, not the library.
-            if (localLibraryEnabled) item(key = "library-local") {
-                val library = localLibrary
-                LibraryShortcut(
-                    title = strings.localPlaylists,
-                    subtitle = when {
-                        localLibraryReadFailed -> strings.localPlaylistsReadFailed
-                        library == null -> strings.localPlaylistsShortcutSubtitle
-                        library.playlists.isEmpty() -> strings.localPlaylistsEmptySubtitle
-                        else -> buildString {
-                            append(strings.localPlaylistCount(library.userPlaylists.size))
-                            library.favorites?.let { append(strings.localLikesCountSuffix(it.tracks.size)) }
-                        }
-                    },
-                    icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.QueueMusic,
-                    accentPalette = accentPalette,
-                    onClick = onOpenLocalLibrary,
-                )
-            }
-            when {
-                (accountLoadError != null || userDetailLoadError != null) && !hasAccountContent -> item(
-                    key = "account-error",
-                ) {
-                    ExpressiveStatePanel(
-                        title = strings.accountDataLoadFailed,
-                        message = (accountLoadError ?: userDetailLoadError)?.text.orEmpty(),
-                        icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Refresh,
-                        tone = ExpressiveStateTone.Error,
-                        accentPalette = accentPalette,
-                        actionLabel = strings.retry,
-                        onAction = viewModel::retryAccountData,
-                        modifier = Modifier.padding(16.dp),
-                    )
-                }
-                accountLoading && !hasAccountContent -> item(key = "account-loading") {
-                    ExpressiveLoadingState(
-                        label = strings.accountAndPlaylistsLoading,
-                        accentColor = accentPalette.accent,
-                        modifier = Modifier.padding(16.dp),
-                    )
-                }
-                uid == 0L -> item(key = "login-hint") {
-                    ExpressiveStatePanel(
-                        title = if (sessionExpired) strings.signInExpiredTitle else strings.signInToSeePlaylistsTitle,
-                        message = if (sessionExpired) {
-                            strings.signInExpiredMessage
-                        } else {
-                            strings.signInToSeePlaylistsMessage
-                        },
-                        icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Person,
-                        accentPalette = accentPalette,
-                        actionLabel = strings.signIn,
-                        onAction = onOpenLogin,
-                        modifier = Modifier.padding(16.dp),
-                    )
-                }
-                !hasAccountContent -> item(key = "profile-unavailable") {
-                    ExpressiveStatePanel(
-                        title = strings.profileUnavailableTitle,
-                        message = strings.profileUnavailableMessage,
-                        icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Refresh,
-                        tone = ExpressiveStateTone.Error,
-                        accentPalette = accentPalette,
-                        actionLabel = strings.retry,
-                        onAction = viewModel::retryAccountData,
-                        modifier = Modifier.padding(16.dp),
-                    )
-                }
-                else -> {
-                    if (intelligenceError != null) {
-                        item(key = "intelligence-error") {
-                            ExpressiveStatePanel(
-                                title = strings.heartbeatModeStartFailed,
-                                message = intelligenceError?.text.orEmpty(),
-                                icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Favorite,
-                                tone = ExpressiveStateTone.Error,
-                                accentPalette = accentPalette,
-                                actionLabel = lastIntelligencePlaylistId?.let { strings.retry },
-                                onAction = lastIntelligencePlaylistId?.let { playlistId ->
-                                    { viewModel.startIntelligenceMode(playlistId) }
-                                },
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                            )
-                        }
+                if (hasCachedContent) {
+                    item(key = "account-cache-hint") {
+                        ExpressiveCacheHint(isRefreshing = accountLoading, modifier = inset.padding(bottom = 8.dp))
                     }
-                    if (userPlaylistsLoadError != null && !playlistsLoaded) {
-                        item(key = "playlist-error") {
-                            ExpressiveStatePanel(
-                                title = strings.userPlaylistsLoadFailed,
-                                message = userPlaylistsLoadError?.text.orEmpty(),
-                                icon = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Refresh,
-                                tone = ExpressiveStateTone.Error,
-                                accentPalette = accentPalette,
-                                actionLabel = strings.retry,
-                                onAction = viewModel::retryAccountData,
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                            )
-                        }
-                    } else if (accountLoading && !playlistsLoaded) {
-                        item(key = "playlist-loading") {
-                            ExpressiveLoadingState(
-                                label = strings.myPlaylistsLoading,
-                                accentColor = accentPalette.accent,
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                            )
-                        }
-                    } else if (playlists.isEmpty()) {
-                        item(key = "playlist-empty") {
-                            ExpressiveStatePanel(
-                                title = strings.noPlaylistsYetTitle,
-                                message = strings.noPlaylistsYetMessage,
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                                accentPalette = accentPalette,
-                            )
-                        }
-                    } else {
-                        // Created and collected playlists are different things to look for, so
-                        // they get a heading each instead of one interleaved list.
-                        val (created, collected) = playlists.partition { it.creator.userId == uid }
-                        listOf(
-                            strings.createdPlaylists to created,
-                            strings.savedPlaylists to collected,
-                        ).forEach { (heading, group) ->
-                            if (group.isEmpty()) return@forEach
-                            item(key = "playlist-heading-$heading") {
-                                ExpressiveSectionTitle(
-                                    text = heading,
-                                    supportingText = strings.playlistSectionCount(group.size),
-                                    modifier = Modifier.padding(
-                                        start = 24.dp,
-                                        end = 24.dp,
-                                        top = 20.dp,
-                                        bottom = 12.dp,
-                                    ),
-                                )
+                }
+                // Downloads and the local account remain available without a NetEase sign-in.
+                // Disabling the local account hides its shortcut, not its persisted data.
+                item(key = "library-device") {
+                    val library = localLibrary
+                    DeviceLibrarySection(
+                        localSubtitle = if (localLibraryEnabled) {
+                            when {
+                                localLibraryReadFailed -> strings.localPlaylistsReadFailed
+                                library == null -> strings.localPlaylistsShortcutSubtitle
+                                library.playlists.isEmpty() -> strings.localPlaylistsEmptySubtitle
+                                else -> buildString {
+                                    append(strings.localPlaylistCount(library.userPlaylists.size))
+                                    library.favorites?.let { append(strings.localLikesCountSuffix(it.tracks.size)) }
+                                }
                             }
-                            itemsIndexed(
-                                items = group,
-                                key = { _, playlist -> playlist.id },
-                            ) { index, pl ->
-                                val isFavorite = isFavoritePlaylist(
-                                    specialType = pl.specialType,
-                                    name = pl.name,
-                                    creatorUserId = pl.creator.userId,
-                                    currentUserId = uid,
-                                )
-                                PlaylistCard(
-                                    userPlaylistEach = pl,
-                                    specialCard = when {
-                                        isFavorite -> "fav"
-                                        pl.name.contains("私人雷达") -> "radar"
-                                        else -> "no"
+                        } else null,
+                        onOpenDownloads = onOpenDownloads,
+                        onOpenLocalLibrary = onOpenLocalLibrary,
+                        modifier = inset,
+                    )
+                }
+                when {
+                    (accountLoadError != null || userDetailLoadError != null) && !hasAccountContent -> item(key = "account-error") {
+                        ExpressiveStatePanel(
+                            title = strings.accountDataLoadFailed,
+                            message = (accountLoadError ?: userDetailLoadError)?.text.orEmpty(),
+                            icon = AppIcons.Refresh,
+                            tone = ExpressiveStateTone.Error,
+                            actionLabel = strings.retry,
+                            onAction = viewModel::retryAccountData,
+                            modifier = inset.padding(top = 20.dp),
+                        )
+                    }
+                    accountLoading && !hasAccountContent -> item(key = "account-loading") {
+                        ExpressiveLoadingState(label = strings.accountAndPlaylistsLoading, modifier = inset.padding(top = 20.dp))
+                    }
+                    uid == 0L -> item(key = "login-hint") {
+                        ExpressiveStatePanel(
+                            title = if (sessionExpired) strings.signInExpiredTitle else strings.signInToSeePlaylistsTitle,
+                            message = if (sessionExpired) strings.signInExpiredMessage else strings.signInToSeePlaylistsMessage,
+                            icon = AppIcons.Person,
+                            actionLabel = strings.signIn,
+                            onAction = onOpenLogin,
+                            modifier = inset.padding(top = 20.dp),
+                        )
+                    }
+                    !hasAccountContent -> item(key = "profile-unavailable") {
+                        ExpressiveStatePanel(
+                            title = strings.profileUnavailableTitle,
+                            message = strings.profileUnavailableMessage,
+                            icon = AppIcons.Refresh,
+                            tone = ExpressiveStateTone.Error,
+                            actionLabel = strings.retry,
+                            onAction = viewModel::retryAccountData,
+                            modifier = inset.padding(top = 20.dp),
+                        )
+                    }
+                    else -> {
+                        if (intelligenceError != null) {
+                            item(key = "intelligence-error") {
+                                ExpressiveStatePanel(
+                                    title = strings.heartbeatModeStartFailed,
+                                    message = intelligenceError?.text.orEmpty(),
+                                    icon = AppIcons.Favorite,
+                                    tone = ExpressiveStateTone.Error,
+                                    actionLabel = lastIntelligencePlaylistId?.let { strings.retry },
+                                    onAction = lastIntelligencePlaylistId?.let { playlistId ->
+                                        { viewModel.startIntelligenceMode(playlistId) }
                                     },
-                                    index = index,
-                                    count = group.size,
-                                    accentColor = animatedAccentColor,
-                                    onClick = { onOpenPlaylist(pl.id) },
-                                    onSpecialClick = if (isFavorite) {
-                                        {
-                                            lastIntelligencePlaylistId = pl.id
-                                            viewModel.startIntelligenceMode(pl.id)
-                                        }
-                                    } else {
-                                        null
-                                    },
-                                    specialActionLoading = intelligenceLoadingPlaylistId == pl.id,
-                                    showCreator = pl.creator.userId != uid,
+                                    modifier = inset.padding(top = 20.dp),
                                 )
                             }
                         }
+                        when {
+                            userPlaylistsLoadError != null && !playlistsLoaded -> item(key = "playlist-error") {
+                                ExpressiveStatePanel(
+                                    title = strings.userPlaylistsLoadFailed,
+                                    message = userPlaylistsLoadError?.text.orEmpty(),
+                                    icon = AppIcons.Refresh,
+                                    tone = ExpressiveStateTone.Error,
+                                    actionLabel = strings.retry,
+                                    onAction = viewModel::retryAccountData,
+                                    modifier = inset.padding(top = 20.dp),
+                                )
+                            }
+                            accountLoading && !playlistsLoaded -> item(key = "playlist-loading") {
+                                ExpressiveLoadingState(label = strings.myPlaylistsLoading, modifier = inset.padding(top = 20.dp))
+                            }
+                            playlists.isEmpty() -> item(key = "playlist-empty") {
+                                ExpressiveStatePanel(
+                                    title = strings.noPlaylistsYetTitle,
+                                    message = strings.noPlaylistsYetMessage,
+                                    modifier = inset.padding(top = 20.dp),
+                                )
+                            }
+                            else -> {
+                                // Item identity is independent of viewport width or UI language.
+                                // The shared row reflows its own actions instead of regrouping the list.
+                                listOf("created" to created, "saved" to saved).forEach { (section, group) ->
+                                    if (group.isEmpty()) return@forEach
+                                    item(key = "playlist-heading-$section") {
+                                        ExpressiveSectionTitle(
+                                            text = if (section == "created") strings.createdPlaylists else strings.savedPlaylists,
+                                            supportingText = strings.playlistSectionCount(group.size),
+                                            modifier = inset.padding(top = 24.dp, bottom = 8.dp),
+                                        )
+                                    }
+                                    itemsIndexed(group, key = { _, playlist -> playlist.id }) { index, playlist ->
+                                        val isFavorite = isFavoritePlaylist(
+                                            specialType = playlist.specialType,
+                                            name = playlist.name,
+                                            creatorUserId = playlist.creator.userId,
+                                            currentUserId = uid,
+                                        )
+                                        PlaylistCard(
+                                            userPlaylistEach = playlist,
+                                            specialCard = when {
+                                                isFavorite -> "fav"
+                                                playlist.name.contains("私人雷达") -> "radar"
+                                                else -> "no"
+                                            },
+                                            index = index,
+                                            count = group.size,
+                                            onClick = { onOpenPlaylist(playlist.id) },
+                                            onSpecialClick = if (isFavorite) {
+                                                {
+                                                    lastIntelligencePlaylistId = playlist.id
+                                                    viewModel.startIntelligenceMode(playlist.id)
+                                                }
+                                            } else null,
+                                            specialActionLoading = intelligenceLoadingPlaylistId == playlist.id,
+                                            showCreator = playlist.creator.userId != uid,
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun UserProfilePanel(
+    profile: UserDetailProfile?,
+    userLevel: UserLevelResponse?,
+    levelLoading: Boolean,
+    levelLoadFailed: Boolean,
+    onRetryLevel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val avatar = profile?.avatarUrl?.takeIf(String::isNotBlank)
+    val background = profile?.backgroundUrl?.takeIf(String::isNotBlank)
+    val artworkAccent = rememberArtworkAccent(requestKey = avatar, label = "profileAvatarAccent")
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(ExpressiveLayout.FeatureCorner),
+        color = scheme.surfaceContainerLow,
+        contentColor = scheme.onSurface,
+    ) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val showBackground = maxWidth >= 640.dp && background != null
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(if (showBackground) 24.dp else 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        ExpressiveArtwork(
+                            model = avatar,
+                            contentDescription = null,
+                            modifier = Modifier.size(56.dp),
+                            shape = CircleShape,
+                            containerColor = artworkAccent.palette.container,
+                            contentColor = artworkAccent.palette.onContainer,
+                            placeholderIcon = AppIcons.Person,
+                            onImageLoaded = artworkAccent.extract,
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text(strings.neteaseCloudMusic, style = MaterialTheme.typography.labelLarge, color = scheme.onSurfaceVariant)
+                            Text(
+                                text = profile?.nickname?.takeIf(String::isNotBlank) ?: strings.me,
+                                style = MaterialTheme.typography.headlineSmallEmphasized,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.semantics { heading() },
+                            )
+                        }
+                    }
+                    UserLevelStatus(userLevelDisplay(userLevel), levelLoading, levelLoadFailed, artworkAccent.palette.accent, onRetryLevel)
+                }
+                if (showBackground) {
+                    // Decorative picture, never the background of text or system bars.
+                    ExpressiveArtwork(
+                        model = background,
+                        contentDescription = null,
+                        modifier = Modifier.size(width = 208.dp, height = 144.dp),
+                        shape = RoundedCornerShape(ExpressiveLayout.FeatureCorner - 24.dp),
+                        placeholderIcon = AppIcons.Person,
+                    )
                 }
             }
         }
@@ -417,242 +405,122 @@ fun UserPlaylistScreen(
 }
 
 @Composable
-private fun UserPlaylistHero(
-    backgroundUrl: String?,
-    avatarUrl: String?,
-    nickname: String,
-    userLevel: UserLevelResponse?,
-    levelLoading: Boolean,
-    levelLoadFailed: Boolean,
-    accentPalette: ContentAccentPalette,
-    onAccentColor: (Color) -> Unit,
-    onRetryLevel: () -> Unit,
-    onOpenSettings: () -> Unit,
+private fun UserLevelStatus(
+    display: UserLevelDisplay?,
+    loading: Boolean,
+    failed: Boolean,
+    accent: Color,
+    onRetry: () -> Unit,
 ) {
-    val levelDisplay = userLevelDisplay(userLevel)
-    var backgroundAccent by remember(backgroundUrl) { mutableStateOf<Color?>(null) }
-    var avatarAccent by remember(avatarUrl) { mutableStateOf<Color?>(null) }
-    val extractBackgroundAccent = rememberThemeColorExtractor(backgroundUrl) { backgroundAccent = it }
-    val extractAvatarAccent = rememberThemeColorExtractor(avatarUrl) { avatarAccent = it }
-    LaunchedEffect(backgroundAccent, avatarAccent) {
-        (backgroundAccent ?: avatarAccent)?.let(onAccentColor)
-    }
-    // Avatar beside the name rather than stacked above it, and a height that follows the content:
-    // a fixed 320dp block pushes the playlists below the first screen and leaves no room for a
-    // larger system font.
-    //
-    // The height follows the width at 3:1 instead of being pinned at 180dp. A fixed 180dp box
-    // is a 6.6:1 slit at desktop width, and a centred crop of a portrait or 4:3 background
-    // through a slit that shape lands on whatever happens to cross the middle of the picture
-    // (a sleeve, a hem), never the subject. The crop is anchored to the top, where a profile
-    // background puts the subject.
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        // The title row and the status bar are part of the hero, not a band above it, so the
-        // picture runs to the very top of the page and the only edge left is the one the
-        // gradient closes at the bottom.
-        val topInset = WindowInsets.browseHeader.asPaddingValues().calculateTopPadding()
-        val heroHeight = topInset + HeroTitleRowHeight + (maxWidth / 3.4f).coerceIn(164.dp, 232.dp)
-        // At least that tall, and taller when the text needs it: at a larger font the profile
-        // block grew upward over the page title inside a fixed height.
-        Box(modifier = Modifier.fillMaxWidth()) {
-            AsyncImage(
-                model = backgroundUrl,
-                contentDescription = null,
-                modifier = Modifier
-                    .matchParentSize()
-                    .drawWithContent {
-                        drawContent()
-                        // Clear at the top so the picture is a picture; opaque by the bottom,
-                        // where the name and the level bar need a background they can be read
-                        // against and the hero has to meet the page. A 3dp blur cannot stand in
-                        // for this: it only softens, and it does nothing at all below Android 12,
-                        // where `blur` is a no-op.
-                        drawRect(color = accentPalette.pageStart.copy(alpha = 0.10f))
-                        // Measured up from the bottom rather than as a fraction of the hero:
-                        // the block of text is the same height whatever the hero is, so a
-                        // fractional scrim that closes above the name on a 260dp hero opens
-                        // under it on a 180dp one, where the name sits at 0.42 of the height
-                        // and a bright background photo would leave white text on white.
-                        val scrimHeight = 132.dp.toPx().coerceAtMost(size.height)
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                0f to Color.Transparent,
-                                0.18f to accentPalette.pageStart.copy(alpha = 0.80f),
-                                1f to accentPalette.pageStart,
-                                startY = size.height - scrimHeight,
-                                endY = size.height,
-                            ),
-                        )
-                        // The same treatment at the top, for the page title and the status bar
-                        // icons that sit over the picture.
-                        val topScrim = (topInset + HeroTitleRowHeight).toPx()
-                            .coerceAtMost(size.height)
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                0f to accentPalette.pageStart.copy(alpha = 0.72f),
-                                1f to Color.Transparent,
-                                startY = 0f,
-                                endY = topScrim,
-                            ),
-                        )
-                    },
-                alignment = Alignment.TopCenter,
-                contentScale = ContentScale.Crop,
-                onSuccess = { state -> extractBackgroundAccent(state.result.image) },
+    val scheme = MaterialTheme.colorScheme
+    val container = scheme.surfaceContainer
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = container,
+        contentColor = scheme.onSurface,
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = display?.summary ?: if (loading) strings.userLevelLoading else strings.userLevelUnavailable,
+                style = MaterialTheme.typography.bodyMedium,
             )
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = heroHeight),
-                verticalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .windowInsetsPadding(WindowInsets.browseHeader)
-                        .height(HeroTitleRowHeight)
-                        .padding(start = 20.dp, end = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = strings.me,
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = accentPalette.onPageStart,
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(
-                            imageVector = com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.Settings,
-                            contentDescription = strings.settings,
-                            tint = accentPalette.onPageStart,
-                        )
-                    }
+            if (display != null) {
+                ExpressiveWavyProgress(
+                    progress = { display.progress },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    color = legibleAccentFor(accent, container, scheme.surface, minimumContrast = 3f),
+                    trackColor = scheme.surfaceContainerHighest,
+                )
+                Text(display.progressLabel, style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
+                display.nextLevelLabel?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
                 }
+            } else if (failed) {
+                TextButton(onClick = onRetry) { Text(strings.retry) }
+            }
+        }
+    }
+}
 
-                Row(
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    AsyncImage(
-                        model = avatarUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(80.dp)
-                            .clip(CircleShape)
-                            .border(3.dp, accentPalette.container, CircleShape),
-                        onSuccess = { state -> extractAvatarAccent(state.result.image) },
+@Composable
+private fun DeviceLibrarySection(
+    localSubtitle: String?,
+    onOpenDownloads: () -> Unit,
+    onOpenLocalLibrary: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ExpressiveSectionTitle(text = strings.libraryOnThisDevice)
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val sideBySide = maxWidth >= 600.dp && localSubtitle != null
+            val download: @Composable (Shape, Modifier) -> Unit = { shape, shortcutModifier ->
+                LibraryShortcut(
+                    title = strings.downloadManagement,
+                    subtitle = strings.downloadsShortcutSubtitle,
+                    icon = AppIcons.Download,
+                    onClick = onOpenDownloads,
+                    shape = shape,
+                    modifier = shortcutModifier,
+                )
+            }
+            val local: @Composable (Shape, Modifier) -> Unit = { shape, shortcutModifier ->
+                if (localSubtitle != null) {
+                    LibraryShortcut(
+                        title = strings.localPlaylists,
+                        subtitle = localSubtitle,
+                        icon = AppIcons.QueueMusic,
+                        onClick = onOpenLocalLibrary,
+                        shape = shape,
+                        modifier = shortcutModifier,
                     )
-                    Spacer(Modifier.width(16.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = nickname,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = accentPalette.onPageStart,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = levelDisplay?.summary ?: if (levelLoading) {
-                                strings.userLevelLoading
-                            } else {
-                                strings.userLevelUnavailable
-                            },
-                            style = MaterialTheme.typography.labelLarge,
-                            color = accentPalette.secondaryOnPageStart,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        if (levelLoadFailed) {
-                            TextButton(onClick = onRetryLevel) {
-                                Text(strings.retry)
-                            }
-                        }
-                        levelDisplay?.let { display ->
-                            Spacer(Modifier.height(8.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                ExpressiveWavyProgress(
-                                    progress = { display.progress },
-                                    modifier = Modifier.weight(1f),
-                                    color = accentPalette.accent,
-                                    trackColor = accentPalette.onPageStart.copy(alpha = 0.14f),
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = display.progressLabel,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = accentPalette.secondaryOnPageStart,
-                                    maxLines = 1,
-                                )
-                            }
-                            display.nextLevelLabel?.let { label ->
-                                Text(
-                                    text = label,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = accentPalette.secondaryOnPageStart,
-                                    maxLines = 2,
-                                )
-                            }
-                        }
-                    }
+                }
+            }
+            if (sideBySide) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val shape = RoundedCornerShape(20.dp)
+                    download(shape, Modifier.weight(1f))
+                    local(shape, Modifier.weight(1f))
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(ExpressiveLayout.ConnectedItemGap)) {
+                    download(connectedListItemShape(0, if (localSubtitle == null) 1 else 2), Modifier.fillMaxWidth())
+                    local(connectedListItemShape(1, 2), Modifier.fillMaxWidth())
                 }
             }
         }
     }
 }
 
-/** The hero's own title row: the page title and the way to settings, over the picture. */
-private val HeroTitleRowHeight = 64.dp
-
-/** A tappable row for a destination inside the library, such as the downloaded songs. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun LibraryShortcut(
     title: String,
     subtitle: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    accentPalette: ContentAccentPalette,
+    icon: ImageVector,
     onClick: () -> Unit,
+    shape: Shape,
+    modifier: Modifier = Modifier,
 ) {
+    val scheme = MaterialTheme.colorScheme
     Surface(
         onClick = onClick,
-        shape = MaterialTheme.shapes.extraLarge,
-        color = accentPalette.quietContainer,
-        contentColor = accentPalette.onQuietContainer,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = shape,
+        color = scheme.surfaceContainerLow,
+        contentColor = scheme.onSurface,
+        modifier = modifier.semantics { role = Role.Button },
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+            modifier = Modifier.heightIn(min = 72.dp).padding(horizontal = 12.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Surface(
-                shape = CircleShape,
-                color = accentPalette.container,
-                contentColor = accentPalette.onContainer,
-                modifier = Modifier.size(44.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    androidx.compose.material3.Icon(icon, contentDescription = null)
-                }
+            ExpressiveFeatureIcon(icon, containerColor = scheme.surfaceContainerHighest, contentColor = scheme.onSurfaceVariant)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, style = MaterialTheme.typography.titleMediumEmphasized)
+                Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
             }
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = accentPalette.secondaryOnQuietContainer,
-                )
-            }
-            androidx.compose.material3.Icon(
-                com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons.KeyboardArrowRight,
-                contentDescription = null,
-                tint = accentPalette.secondaryOnQuietContainer,
-            )
+            Icon(AppIcons.KeyboardArrowRight, contentDescription = null, tint = scheme.onSurfaceVariant)
         }
     }
 }

@@ -3,19 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#101116">
+    <meta name="color-scheme" content="light dark">
     <title>RedefineNCM</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div id="redefineNcmBoot" role="status" aria-live="polite">
-        <div class="boot-spinner" aria-hidden="true"></div>
-        <span id="redefineNcmBootLabel"></span>
-        <p id="redefineNcmBootHint" hidden></p>
-        <button id="redefineNcmBootRetry" type="button" hidden></button>
-        <div id="redefineNcmBootProgress" class="boot-progress" hidden>
-            <progress id="redefineNcmBootBar" max="1"></progress>
-            <span id="redefineNcmBootBytes" aria-hidden="true"></span>
+        <div class="boot-panel">
+            <div class="boot-spinner" aria-hidden="true"></div>
+            <p class="boot-brand">RedefineNCM</p>
+            <h1 id="redefineNcmBootLabel"></h1>
+            <p id="redefineNcmBootHint" hidden></p>
+            <div id="redefineNcmBootProgress" class="boot-progress" hidden>
+                <progress id="redefineNcmBootBar" max="1"></progress>
+                <span id="redefineNcmBootBytes" aria-hidden="true"></span>
+            </div>
+            <button id="redefineNcmBootRetry" type="button" hidden></button>
         </div>
     </div>
     <div id="redefineNcmApp"></div>
@@ -36,6 +39,13 @@
         const bar = document.getElementById("redefineNcmBootBar");
         const bytes = document.getElementById("redefineNcmBootBytes");
         const events = options.events || window;
+        try {
+            const theme = localStorage.getItem("themeMode");
+            if (theme === "light" || theme === "dark") document.documentElement.dataset.bootTheme = theme;
+            else delete document.documentElement.dataset.bootTheme;
+        } catch (_) {
+            // With no stored preference, styling follows prefers-color-scheme.
+        }
         const table = {
             zh: {
                 loading: "正在加载 Web 应用…",

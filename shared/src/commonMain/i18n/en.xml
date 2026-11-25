@@ -133,6 +133,20 @@
     <string name="songRecognition">Song recognition</string>
     <string name="settings">Settings</string>
 
+    <!-- Expressive page headings and controls -->
+    <string name="discoveryHeadingSubtitle">Find something to listen to</string>
+    <string name="browseDailyPicks">Browse picks</string>
+    <string name="searchHeadingSubtitle">Find songs by title, artist or album</string>
+    <string name="searchResultsTitle">Results</string>
+    <string name="clearSearchHistory">Clear history</string>
+    <string name="libraryOnThisDevice">On this device</string>
+    <string name="settingsCategories">Settings categories</string>
+    <string name="downloadQueueOverview">Queue overview</string>
+    <string name="downloadStatusFilter">Status: {filter}</string>
+    <string name="recognitionIdentifySong">Identify a song</string>
+    <string name="recognitionFindingMatch">Finding a match…</string>
+    <string name="playerShortLabel">Player</string>
+
     <!-- data/api/AmlldbApi.kt -->
     <string name="amllDbIdLookupTimeout">AMLL DB timed out fetching TTML by song ID</string>
     <string name="amllDbIdLookupInvalidXml">The TTML from AMLL DB for this song ID isn't valid XML</string>

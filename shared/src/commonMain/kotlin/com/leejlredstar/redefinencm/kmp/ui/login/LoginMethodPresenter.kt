@@ -3,7 +3,6 @@ package com.leejlredstar.redefinencm.kmp.ui.login
 import androidx.compose.runtime.Composable
 import com.leejlredstar.redefinencm.kmp.data.auth.LoginHost
 import com.leejlredstar.redefinencm.kmp.data.auth.LoginMethod
-import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 
 /**
  * The UI half of a login source: draws every [LoginMethod] of one shape and owns its on-screen
@@ -25,7 +24,7 @@ interface LoginMethodPresenter {
 
     /** Draws [method]. Called only for methods [supports] accepted. */
     @Composable
-    fun Content(method: LoginMethod, host: LoginHost, palette: ContentAccentPalette, isActive: Boolean)
+    fun Content(method: LoginMethod, host: LoginHost, isActive: Boolean)
 }
 
 /** One card on the login page: a presenter and the methods it draws there. */

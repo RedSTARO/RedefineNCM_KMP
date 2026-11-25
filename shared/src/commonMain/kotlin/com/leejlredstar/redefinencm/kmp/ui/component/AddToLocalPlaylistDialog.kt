@@ -1,17 +1,19 @@
 package com.leejlredstar.redefinencm.kmp.ui.component
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -34,6 +36,7 @@ import org.koin.compose.koinInject
  * Where songs a menu asked to "add to a local playlist" go: one of the local playlists, or a new
  * one. Hosted once by the app, so every song menu opens the same dialog.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AddToLocalPlaylistDialog(viewModel: LocalLibraryViewModel = koinInject()) {
     val pending by viewModel.pendingAddition.collectAsState()
@@ -56,31 +59,28 @@ fun AddToLocalPlaylistDialog(viewModel: LocalLibraryViewModel = koinInject()) {
             },
             text = {
                 Column {
-                    if (readFailed) {
-                        LocalLibraryReadErrorPanel(viewModel)
-                    } else if (library == null) {
-                        ExpressiveLoadingState(label = strings.localPlaylistsLoading)
-                    } else if (draft.naming || playlists.isEmpty()) {
-                        DialogEntryField(draft.field, strings.newPlaylistName, onDone = ::createPlaylist)
-                    } else {
-                        LazyColumn(Modifier.heightIn(max = 320.dp), state = listState) {
-                            items(playlists, key = { it.id }) { playlist ->
-                                ListItem(
-                                    headlineContent = { Text(playlist.displayName) },
+                    when {
+                        readFailed -> LocalLibraryReadErrorPanel(viewModel)
+                        library == null -> ExpressiveLoadingState(label = strings.localPlaylistsLoading)
+                        draft.naming || playlists.isEmpty() -> {
+                            DialogEntryField(draft.field, strings.newPlaylistName, onDone = ::createPlaylist)
+                        }
+                        else -> LazyColumn(
+                            modifier = Modifier.heightIn(max = 320.dp),
+                            state = listState,
+                            verticalArrangement = Arrangement.spacedBy(ExpressiveLayout.ConnectedItemGap),
+                        ) {
+                            itemsIndexed(playlists, key = { _, playlist -> playlist.id }) { index, playlist ->
+                                SegmentedListItem(
+                                    onClick = { viewModel.addPendingTo(playlist.id) },
+                                    shapes = ListItemDefaults.segmentedShapes(index, playlists.size),
+                                    colors = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                                    modifier = Modifier.fillMaxWidth(),
                                     supportingContent = { Text(strings.songCount(playlist.tracks.size)) },
                                     leadingContent = { Icon(AppIcons.QueueMusic, contentDescription = null) },
-                                    modifier = Modifier.fillMaxWidth().clickableListItem {
-                                        viewModel.addPendingTo(playlist.id)
-                                    },
-                                )
+                                ) { Text(playlist.displayName) }
                             }
                         }
-                        HorizontalDivider()
-                        ListItem(
-                            headlineContent = { Text(strings.newPlaylist) },
-                            leadingContent = { Icon(AppIcons.Add, contentDescription = null) },
-                            modifier = Modifier.fillMaxWidth().clickableListItem { draft.naming = true },
-                        )
                     }
                 }
             },
@@ -90,6 +90,8 @@ fun AddToLocalPlaylistDialog(viewModel: LocalLibraryViewModel = koinInject()) {
                         onClick = ::createPlaylist,
                         enabled = draft.field.text.isNotBlank(),
                     ) { Text(strings.createAndAdd) }
+                } else if (!readFailed && library != null) {
+                    TextButton(onClick = { draft.naming = true }) { Text(strings.newPlaylist) }
                 }
             },
             dismissButton = { TextButton(onClick = viewModel::dismissAddition) { Text(strings.cancel) } },
@@ -101,8 +103,6 @@ private class PendingPlaylistName(suggestedName: String) : ViewModel() {
     var naming by mutableStateOf(false)
     val field = TextFieldState(suggestedName)
 }
-
-private fun Modifier.clickableListItem(onClick: () -> Unit): Modifier = clickable(onClick = onClick)
 
 @Composable
 internal fun LocalLibraryReadErrorPanel(

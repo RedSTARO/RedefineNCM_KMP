@@ -24,6 +24,20 @@ class WebBootPageTest {
     }
 
     @Test
+    fun theExplicitThemeAppliesBeforeTheAppStarts() {
+        withBootPage {
+            setStoredTheme("dark")
+            createBoot(FontStub.PENDING, language = "en")
+            assertEquals("dark", documentBootTheme())
+        }
+        withBootPage {
+            setStoredTheme("system")
+            createBoot(FontStub.PENDING, language = "en")
+            assertEquals("", documentBootTheme())
+        }
+    }
+
+    @Test
     fun aWarmedFontLeadsToTheAppBeingShown() = runTest {
         withBootPage {
             createBoot(FontStub.OK, language = "en")
@@ -188,6 +202,8 @@ private suspend fun afterPendingTasks() {
         }
         if (typeof globalThis.createRedefineNcmBoot !== "function") globalThis.__initializeBootUnderTest();
         globalThis.__bootTestSavedLanguage = document.documentElement.lang;
+        globalThis.__bootTestSavedTheme = localStorage.getItem("themeMode");
+        globalThis.__bootTestSavedBootTheme = document.documentElement.getAttribute("data-boot-theme");
         const host = document.createElement("div");
         host.id = "__redefineNcmBootTestHost";
         host.innerHTML = globalThis.__redefineNcmBootMarkup;
@@ -205,6 +221,12 @@ private external fun mountBootPage()
         }
         document.getElementById("__redefineNcmBootTestHost")?.remove();
         document.documentElement.lang = globalThis.__bootTestSavedLanguage ?? "";
+        const theme = globalThis.__bootTestSavedTheme;
+        if (theme == null) localStorage.removeItem("themeMode");
+        else localStorage.setItem("themeMode", theme);
+        const bootTheme = globalThis.__bootTestSavedBootTheme;
+        if (bootTheme == null) document.documentElement.removeAttribute("data-boot-theme");
+        else document.documentElement.setAttribute("data-boot-theme", bootTheme);
     }""",
 )
 private external fun unmountBootPage()
@@ -346,3 +368,9 @@ private external fun appVisibility(): String
 
 @JsFun("() => document.documentElement.lang")
 private external fun documentLanguage(): String
+
+@JsFun("(theme) => { localStorage.setItem('themeMode', theme); }")
+private external fun setStoredTheme(theme: String)
+
+@JsFun("() => document.documentElement.dataset.bootTheme ?? ''")
+private external fun documentBootTheme(): String

@@ -133,6 +133,20 @@
     <string name="songRecognition">曲の認識</string>
     <string name="settings">設定</string>
 
+    <!-- Expressive page headings and controls -->
+    <string name="discoveryHeadingSubtitle">聴きたい音楽を見つけよう</string>
+    <string name="browseDailyPicks">おすすめを見る</string>
+    <string name="searchHeadingSubtitle">曲名、アーティスト、アルバムで探す</string>
+    <string name="searchResultsTitle">検索結果</string>
+    <string name="clearSearchHistory">履歴を消去</string>
+    <string name="libraryOnThisDevice">この端末の音楽</string>
+    <string name="settingsCategories">設定カテゴリ</string>
+    <string name="downloadQueueOverview">ダウンロードの概要</string>
+    <string name="downloadStatusFilter">状態：{filter}</string>
+    <string name="recognitionIdentifySong">曲を識別する</string>
+    <string name="recognitionFindingMatch">曲を照合中…</string>
+    <string name="playerShortLabel">再生</string>
+
     <!-- data/api/AmlldbApi.kt -->
     <string name="amllDbIdLookupTimeout">AMLL DBで曲IDによるTTMLの取得がタイムアウトしました</string>
     <string name="amllDbIdLookupInvalidXml">AMLL DBから曲IDで取得したTTMLは有効なXMLではありません</string>

@@ -23,9 +23,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -39,7 +42,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -76,7 +80,7 @@ fun SongWikiDetailsSheet(
     artworkOverlay: (@Composable BoxScope.() -> Unit)? = null,
 ) {
     if (!visible) return
-    PlaybackModalSheet(accentPalette, onDismiss) {
+    PlaybackModalSheet(onDismiss) {
         SongWikiDetailsContent(
             songTitle = songTitle,
             songArtist = songArtist,
@@ -177,6 +181,7 @@ private fun SongWikiDetailsContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun SongWikiHeader(
     songTitle: String?,
@@ -188,17 +193,18 @@ private fun SongWikiHeader(
     accentPalette: ContentAccentPalette,
     artworkOverlay: (@Composable BoxScope.() -> Unit)?,
 ) {
+    val shape = RoundedCornerShape(ExpressiveLayout.FeatureCorner)
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-            .padding(bottom = 20.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp)
+            .background(accentPalette.quietContainer, shape)
+            .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(96.dp)
-                .clip(MaterialTheme.shapes.large),
+                .size(80.dp)
+                .clip(RoundedCornerShape(ExpressiveLayout.FeatureCorner - 12.dp))
+                .background(accentPalette.container),
         ) {
             // A downloaded song's cover is a local file that can fail to resolve; the
             // remote one is what it falls back to, as it does behind the lyrics.
@@ -222,9 +228,9 @@ private fun SongWikiHeader(
         Column(Modifier.weight(1f)) {
             Text(
                 text = songTitle?.takeIf { it.isNotBlank() } ?: strings.notPlaying,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.ExtraBold,
+                style = MaterialTheme.typography.titleLargeEmphasized,
                 color = accentPalette.onQuietContainer,
+                modifier = Modifier.semantics { heading() },
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -261,6 +267,7 @@ private fun SongWikiHeader(
  * The values are short and there are usually several (credits, a tag, a chart position), so
  * they read as chips rather than as a column of one-word lines.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun SongWikiSectionRow(
     section: SongWikiSection,
@@ -274,14 +281,14 @@ private fun SongWikiSectionRow(
         contentColor = accentPalette.onQuietContainer,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp)
+            .padding(horizontal = 16.dp)
             .padding(vertical = ExpressiveLayout.ConnectedItemGap),
     ) {
         Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
             Text(
                 text = section.title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleSmallEmphasized,
+                modifier = Modifier.semantics { heading() },
                 // The accent's tone is fixed per scheme while the row's follows the artwork,
                 // so on a pale cover in the light theme the two can land within 4:1.
                 color = legibleAccentFor(

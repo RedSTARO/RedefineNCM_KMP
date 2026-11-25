@@ -80,78 +80,23 @@ private fun updateBrowserLyricSurface(
             surface = document.createElement("section");
             surface.id = surfaceId;
             surface.setAttribute("aria-hidden", "true");
-            Object.assign(surface.style, {
-                position: "fixed",
-                left: "50%",
-                transform: "translateX(-50%)",
-                zIndex: "2147483647",
-                display: "grid",
-                gridTemplateColumns: "auto minmax(0, 1fr)",
-                gap: "10px",
-                alignItems: "center",
-                maxWidth: "min(720px, calc(100vw - 24px))",
-                padding: "9px 14px",
-                borderRadius: "22px",
-                color: "white",
-                background: "rgba(20, 20, 24, .84)",
-                boxShadow: "0 8px 28px rgba(0, 0, 0, .26)",
-                backdropFilter: "blur(16px)",
-                pointerEvents: "none",
-                fontFamily: "system-ui, sans-serif",
-            });
             const artwork = document.createElement("img");
             artwork.dataset.role = "artwork";
-            Object.assign(artwork.style, {
-                width: "42px",
-                height: "42px",
-                borderRadius: "12px",
-                objectFit: "cover",
-                display: "none",
-            });
+            artwork.alt = "";
             const text = document.createElement("div");
-            text.style.minWidth = "0";
+            text.dataset.role = "text";
             const current = document.createElement("div");
             current.dataset.role = "current";
-            Object.assign(current.style, {
-                overflow: "hidden",
-                whiteSpace: "nowrap",
-                textOverflow: "ellipsis",
-                fontSize: "15px",
-                fontWeight: "700",
-            });
             const next = document.createElement("div");
             next.dataset.role = "next";
-            Object.assign(next.style, {
-                overflow: "hidden",
-                whiteSpace: "nowrap",
-                textOverflow: "ellipsis",
-                marginTop: "2px",
-                opacity: ".68",
-                fontSize: "12px",
-            });
             const progress = document.createElement("div");
             progress.dataset.role = "progress";
-            Object.assign(progress.style, {
-                position: "absolute",
-                left: "16px",
-                right: "16px",
-                bottom: "3px",
-                height: "2px",
-                borderRadius: "2px",
-                transformOrigin: "left center",
-                background: "rgba(255,255,255,.72)",
-            });
             text.append(current, next);
             surface.append(artwork, text, progress);
             document.body.appendChild(surface);
         }
 
-        // Over the player pages, nothing; at phone width, at the bottom above the floating
-        // navigation (96px) and the mini player (88px).
-        surface.style.display = globalThis.__redefineNcmLyricSurfaceHidden ? "none" : "grid";
-        const narrow = window.innerWidth < 600;
-        surface.style.top = narrow ? "" : "12px";
-        surface.style.bottom = narrow ? "calc(env(safe-area-inset-bottom, 0px) + 192px)" : "";
+        surface.hidden = Boolean(globalThis.__redefineNcmLyricSurfaceHidden);
         const trimmedCurrentLyric = currentLyric.trim();
         const currentText = trimmedCurrentLyric || title.trim() || "RedefineNCM";
         const detailText = nextLyric.trim() || [title, artist].filter(Boolean).join(" · ");
@@ -163,10 +108,10 @@ private fun updateBrowserLyricSurface(
         const artwork = surface.querySelector('[data-role="artwork"]');
         if (artworkUri) {
             artwork.src = artworkUri;
-            artwork.style.display = "block";
+            artwork.hidden = false;
         } else {
             artwork.removeAttribute("src");
-            artwork.style.display = "none";
+            artwork.hidden = true;
         }
         const ratio = durationMs > 0 ? Math.max(0, Math.min(1, positionMs / durationMs)) : 0;
         surface.querySelector('[data-role="progress"]').style.transform = "scaleX(" + ratio + ")";
@@ -201,7 +146,7 @@ private fun setBrowserLyricSurfaceHidden(hidden: Boolean): Unit = js(
     """{
         globalThis.__redefineNcmLyricSurfaceHidden = hidden;
         const surface = document.getElementById("redefinencm-web-lyric");
-        if (surface) surface.style.display = hidden ? "none" : "grid";
+        if (surface) surface.hidden = hidden;
     }""",
 )
 

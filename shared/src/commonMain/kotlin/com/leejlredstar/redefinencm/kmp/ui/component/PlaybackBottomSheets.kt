@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -60,7 +61,6 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -72,6 +72,7 @@ import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.i18n.compactCount
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.theme.legibleAccentFor
 import kotlinx.coroutines.delay
 
 private data class QueueSheetEntry(
@@ -106,7 +107,6 @@ internal class CommentPaging(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PlaybackModalSheet(
-    accentPalette: ContentAccentPalette,
     onDismiss: () -> Unit,
     content: @Composable () -> Unit,
 ) {
@@ -119,8 +119,8 @@ internal fun PlaybackModalSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = accentPalette.pageEnd,
-        contentColor = accentPalette.onQuietContainer,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         contentWindowInsets = {
             if (android) WindowInsets.playbackSafeContent else BottomSheetDefaults.modalWindowInsets
         },
@@ -137,7 +137,7 @@ internal fun QueueBottomSheet(
     actions: QueueActions,
     onDismiss: () -> Unit,
 ) {
-    PlaybackModalSheet(accentPalette, onDismiss) {
+    PlaybackModalSheet(onDismiss) {
         QueuePanelContent(
             playlist = playlist,
             currentIndex = currentIndex,
@@ -302,6 +302,7 @@ internal fun QueuePanelContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun QueueRow(
     entry: QueueSheetEntry,
@@ -359,9 +360,11 @@ private fun QueueRow(
         ) {
             Text(
                 text = "${index + 1}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = if (isCurrent) accentPalette.onContainer else accentPalette.accent,
+                style = MaterialTheme.typography.labelLargeEmphasized.copy(fontFeatureSettings = "tnum"),
+                color = if (isCurrent) accentPalette.onContainer else legibleAccentFor(
+                    accent = accentPalette.accent,
+                    background = accentPalette.quietContainer,
+                ),
                 modifier = Modifier.width(36.dp),
             )
             ExpressiveArtwork(
@@ -377,9 +380,9 @@ private fun QueueRow(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = if (isCurrent) MaterialTheme.typography.titleMediumEmphasized
+                    else MaterialTheme.typography.titleMedium,
                     color = if (isCurrent) accentPalette.onContainer else accentPalette.onQuietContainer,
-                    fontWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.Normal,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -393,7 +396,8 @@ private fun QueueRow(
                     foreignProviderName(item.id)?.let { label ->
                         ProviderBadge(
                             label = label,
-                            contentColor = secondaryColor,
+                            contentColor = if (isCurrent) accentPalette.onQuietContainer else accentPalette.onContainer,
+                            containerColor = if (isCurrent) accentPalette.quietContainer else accentPalette.container,
                             modifier = Modifier.padding(end = 6.dp),
                         )
                     }
@@ -515,7 +519,7 @@ internal fun CommentBottomSheet(
     totalCount: Long = 0L,
     unsupported: Boolean = false,
 ) {
-    PlaybackModalSheet(accentPalette, onDismiss) {
+    PlaybackModalSheet(onDismiss) {
         CommentPanelContent(
             comments = comments,
             hasLoadedData = hasLoadedData,
@@ -536,7 +540,7 @@ internal fun CommentBottomSheet(
  *
  * The header shows the song's total comment count rather than the length of the loaded pages.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun CommentPanelContent(
     comments: List<CommentMusicComments>,
@@ -621,16 +625,17 @@ internal fun CommentPanelContent(
                         colors = SegmentedButtonDefaults.colors(
                             activeContainerColor = accentPalette.container,
                             activeContentColor = accentPalette.onContainer,
-                            activeBorderColor = accentPalette.onQuietContainer.copy(alpha = 0.18f),
-                            inactiveContainerColor = accentPalette.pageEnd,
-                            inactiveContentColor = accentPalette.secondaryOnQuietContainer,
-                            inactiveBorderColor = accentPalette.onQuietContainer.copy(alpha = 0.18f),
+                            activeBorderColor = MaterialTheme.colorScheme.outline,
+                            inactiveContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                            inactiveContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            inactiveBorderColor = MaterialTheme.colorScheme.outline,
                         ),
                         // No check glyph: with two options the filled half already says which
                         // one is showing, and the tick pushes a two-character label off centre.
                         icon = {},
                     ) {
-                        Text(label)
+                        Text(label, style = if (paging.showHot == hot) MaterialTheme.typography.labelLargeEmphasized
+                        else MaterialTheme.typography.labelLarge)
                     }
                 }
             }
@@ -741,6 +746,7 @@ private fun CommentsFooter(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun CommentRow(
     comment: CommentMusicComments,
@@ -778,8 +784,7 @@ private fun CommentRow(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = nickname,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleSmallEmphasized,
                         modifier = Modifier.weight(1f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,

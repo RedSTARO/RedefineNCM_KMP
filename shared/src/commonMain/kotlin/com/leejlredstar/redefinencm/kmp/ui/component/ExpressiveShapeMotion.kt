@@ -11,7 +11,7 @@ import androidx.compose.material3.toPath
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.graphics.shapes.Morph
 import androidx.graphics.shapes.RoundedPolygon
+import com.leejlredstar.redefinencm.kmp.ui.theme.LocalReducedMotion
+import kotlinx.coroutines.flow.collectLatest
 
 /**
  * Material 3 Expressive shape-and-motion primitives.
@@ -121,19 +123,20 @@ fun rememberMorphShape(
  * Uses the theme's expressive [androidx.compose.material3.MotionScheme] spring so the rebound
  * matches Material's own components rather than introducing a second motion feel.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun rememberPressMorphProgress(interactionSource: InteractionSource): State<Float> {
-    val spec = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
-    val animatable = remember { Animatable(0f) }
-    val currentSpec = rememberUpdatedState(spec)
+    if (LocalReducedMotion.current) return remember { mutableFloatStateOf(0f) }
+    val spec = rememberUpdatedState(MaterialTheme.motionScheme.fastSpatialSpec<Float>())
+    val animatable = remember(interactionSource) { Animatable(0f) }
     LaunchedEffect(interactionSource) {
-        interactionSource.interactions.collect { interaction ->
+        interactionSource.interactions.collectLatest { interaction ->
             val target = when (interaction) {
                 is PressInteraction.Press -> 1f
                 is PressInteraction.Release, is PressInteraction.Cancel -> 0f
                 else -> null
             }
-            if (target != null) animatable.animateTo(target, currentSpec.value)
+            if (target != null) animatable.animateTo(target, spec.value)
         }
     }
     return animatable.asState()

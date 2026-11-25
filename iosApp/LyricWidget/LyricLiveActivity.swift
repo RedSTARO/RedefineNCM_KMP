@@ -15,20 +15,21 @@ struct LyricLiveActivity: Widget {
             LockScreenLyricView(state: context.state, playing: context.showsPlaying)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .activityBackgroundTint(Color.black.opacity(0.55))
-                .activitySystemActionForegroundColor(Color.white)
+                .foregroundStyle(.white)
+                .activityBackgroundTint(LyricActivityColors.surface)
+                .activitySystemActionForegroundColor(.white)
                 .widgetURL(URL(string: "redefinencm://nowplaying"))
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     Image(systemName: context.showsPlaying ? "play.fill" : "pause.fill")
                         .font(.title3)
-                        .foregroundStyle(.pink)
+                        .foregroundStyle(LyricActivityColors.accent)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     Image(systemName: "waveform")
                         .font(.title3)
-                        .foregroundStyle(.pink)
+                        .foregroundStyle(LyricActivityColors.accent)
                 }
                 DynamicIslandExpandedRegion(.center) {
                     Text(context.state.title.isEmpty ? "RedefineNCM" : context.state.title)
@@ -37,18 +38,17 @@ struct LyricLiveActivity: Widget {
                         .lineLimit(1)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(spacing: 2) {
+                    VStack(spacing: 4) {
                         if let lyric = context.state.distinctLyric {
                             Text(lyric)
                                 .font(.headline)
                                 .fontWeight(.bold)
                                 .lineLimit(1)
-                                .minimumScaleFactor(0.7)
                         }
                         if !context.state.nextLyric.isEmpty {
                             Text(context.state.nextLyric)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(LyricActivityColors.supporting)
                                 .lineLimit(1)
                         }
                         LyricProgressView(state: context.state, playing: context.showsPlaying)
@@ -57,7 +57,7 @@ struct LyricLiveActivity: Widget {
                 }
             } compactLeading: {
                 Image(systemName: context.showsPlaying ? "play.fill" : "pause.fill")
-                    .foregroundStyle(.pink)
+                    .foregroundStyle(LyricActivityColors.accent)
             } compactTrailing: {
                 Text(context.state.currentLyric)
                     .font(.caption2)
@@ -65,12 +65,20 @@ struct LyricLiveActivity: Widget {
                     .frame(maxWidth: 96)
             } minimal: {
                 Image(systemName: context.showsPlaying ? "play.fill" : "pause.fill")
-                    .foregroundStyle(.pink)
+                    .foregroundStyle(LyricActivityColors.accent)
             }
             .widgetURL(URL(string: "redefinencm://nowplaying"))
-            .keylineTint(.pink)
+            .keylineTint(LyricActivityColors.surface)
         }
     }
+}
+
+/// Neutral inverse roles, since the widget is drawn over arbitrary Lock Screen wallpaper.
+private enum LyricActivityColors {
+    static let surface = Color(white: 0.15)
+    static let accent = Color(white: 0.96)
+    static let supporting = Color(white: 0.80)
+    static let progress = Color(white: 0.74)
 }
 
 @available(iOS 16.2, *)
@@ -115,13 +123,13 @@ private struct LyricProgressView: View {
                     label: { EmptyView() },
                     currentValueLabel: { EmptyView() }
                 )
-                .tint(.pink)
+                .tint(LyricActivityColors.progress)
             } else {
                 ProgressView(
                     value: min(Double(state.positionMs), Double(state.durationMs)),
                     total: Double(state.durationMs)
                 )
-                .tint(.pink)
+                .tint(LyricActivityColors.progress)
             }
         }
     }
@@ -134,9 +142,12 @@ private struct LockScreenLyricView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "music.note.list")
-                .font(.title2)
-                .foregroundStyle(.pink)
+            Image(systemName: playing ? "play.fill" : "pause.fill")
+                .font(.body.weight(.semibold))
+                .frame(width: 40, height: 40)
+                .foregroundStyle(LyricActivityColors.accent)
+                .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(state.title.isEmpty ? "RedefineNCM" : state.title)
                     .font(.subheadline)
@@ -147,12 +158,11 @@ private struct LockScreenLyricView: View {
                         .font(.body)
                         .fontWeight(.semibold)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
                 }
                 if !state.nextLyric.isEmpty {
                     Text(state.nextLyric)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(LyricActivityColors.supporting)
                         .lineLimit(1)
                 }
                 LyricProgressView(state: state, playing: playing)

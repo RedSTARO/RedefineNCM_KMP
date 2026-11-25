@@ -1,106 +1,111 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
-import com.leejlredstar.redefinencm.kmp.AppNavigationRequests
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.runtime.collectAsState
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.runtime.remember
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.carousel.CarouselItemScope
-import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
-import androidx.compose.material3.carousel.rememberCarouselState
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.carousel.CarouselItemScope
+import androidx.compose.material3.carousel.CarouselState
+import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
+import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import coil3.Image
+import com.leejlredstar.redefinencm.kmp.AppNavigationRequests
+import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
+import com.leejlredstar.redefinencm.kmp.data.api.dto.UserPlaylistEach
 import com.leejlredstar.redefinencm.kmp.data.provider.MusicProviderRegistry
+import com.leejlredstar.redefinencm.kmp.data.provider.ProviderTrack
+import com.leejlredstar.redefinencm.kmp.data.provider.neteaseFeeTag
+import com.leejlredstar.redefinencm.kmp.data.toPlayerMediaInfo
+import com.leejlredstar.redefinencm.kmp.download.DownloadTaskStatus
+import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
+import com.leejlredstar.redefinencm.kmp.getPlatform
 import com.leejlredstar.redefinencm.kmp.i18n.I18n
 import com.leejlredstar.redefinencm.kmp.i18n.UiText
 import com.leejlredstar.redefinencm.kmp.i18n.compactCount
 import com.leejlredstar.redefinencm.kmp.i18n.strings
-import com.leejlredstar.redefinencm.kmp.viewmodel.LocalLibraryViewModel
-import com.leejlredstar.redefinencm.kmp.data.provider.ProviderTrack
-import com.leejlredstar.redefinencm.kmp.data.provider.neteaseFeeTag
-import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
-import com.leejlredstar.redefinencm.kmp.data.api.dto.UserPlaylistEach
-import com.leejlredstar.redefinencm.kmp.data.toPlayerMediaInfo
-import com.leejlredstar.redefinencm.kmp.download.DownloadTaskStatus
-import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
-import com.leejlredstar.redefinencm.kmp.ui.component.ProviderBadge
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveCacheHint
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
+import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.player.PlaybackSource
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveArtwork
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveCacheHint
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
-import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
+import com.leejlredstar.redefinencm.kmp.ui.component.ProviderBadge
+import com.leejlredstar.redefinencm.kmp.ui.component.formatPlaybackDuration
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
+import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.legibleAccentFor
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberArtworkAccent
 import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ripple
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.isSecondaryPressed
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
-import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
-import com.leejlredstar.redefinencm.kmp.ui.component.formatPlaybackDuration
-import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
-import androidx.compose.foundation.gestures.animateScrollBy
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.material3.carousel.CarouselState
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.platform.LocalDensity
-import com.leejlredstar.redefinencm.kmp.getPlatform
+import com.leejlredstar.redefinencm.kmp.viewmodel.LocalLibraryViewModel
 import kotlinx.coroutines.launch
-import androidx.compose.foundation.layout.heightIn
 import org.koin.compose.koinInject
-import com.leejlredstar.redefinencm.kmp.player.PlaybackSource
 
 /** Map an API song DTO to the player's [MediaInfo] (placeholder URI resolved at play time). */
 fun SongDetailSongs.toMediaInfo(
@@ -114,20 +119,6 @@ fun ProviderTrack.toMediaInfo(
 
 /** A short marker for songs a free account cannot play in full. */
 internal fun songFeeBadge(fee: Int): String? = neteaseFeeTag(fee)?.label
-
-/** The round back button the list pages open with. */
-@Composable
-internal fun BackButton(palette: ContentAccentPalette, onBack: () -> Unit) {
-    IconButton(onClick = onBack) {
-        Surface(
-            shape = CircleShape,
-            color = palette.quietContainer.copy(alpha = 0.72f),
-            contentColor = palette.onQuietContainer,
-        ) {
-            Icon(AppIcons.ArrowBack, contentDescription = strings.back, modifier = Modifier.padding(10.dp))
-        }
-    }
-}
 
 /** The song menu's entry that opens the add-to-local-playlist dialog. */
 internal val AddToLocalPlaylistLabel: String get() = strings.addToLocalPlaylist
@@ -226,12 +217,10 @@ fun rememberSongRowActions(
 }
 
 /**
- * Connected-list song row, shared by search results, playlists and the daily list.
- *
- * Narrow windows get index, cover, title/artist and the overflow menu. From [WideRowMinWidth] the
- * row also has the album and the duration columns a desktop list is read by.
+ * Segmented multi-action song row. Its leading ordinal marks playback without depending on color,
+ * and extra metadata moves into columns only when the row has room for it.
  */
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun SongRow(
     index: Int,
@@ -246,219 +235,186 @@ fun SongRow(
     durationMs: Long = 0L,
     album: String = "",
     badge: String? = null,
-    /** More labels after [badge]: the providers a merged search row stands for, VIP, 无损. */
+    /** More labels after [badge]: the providers and entitlements for a merged search row. */
     badges: List<String> = emptyList(),
     actions: List<SongRowAction> = emptyList(),
 ) {
     val settings = koinInject<PlatformSettings>()
     val downloadManager = koinInject<SongDownloadManager>()
     val player = koinInject<PlatformPlayer>()
-    val currentMedia by player.currentMedia.collectAsState()
-    val isPlaying by player.isPlaying.collectAsState()
-    val isCurrent = mediaId != null && currentMedia?.id == mediaId
-    val artworkAccent = rememberArtworkAccent(
-        requestKey = artworkUri,
-        override = accentColor,
-        label = "songRowAccent",
-    )
-    val extractAccent = artworkAccent.extract
-    val accentPalette = artworkAccent.palette
-    // The playing row sits on the stronger container, where the quiet container's text roles
-    // fall below AA: it takes the container's own roles, and an accent title moved as far toward
-    // the container's foreground as legibility needs.
-    val surface = MaterialTheme.colorScheme.surface
-    val rowColors = remember(accentPalette, isCurrent, surface) {
-        if (isCurrent) {
-            SongRowColors(
-                container = accentPalette.container,
-                content = accentPalette.onContainer,
-                secondary = accentPalette.secondaryOnContainer,
-                title = legibleAccentFor(accentPalette.accent, accentPalette.container, surface),
-            )
-        } else {
-            SongRowColors(
-                container = accentPalette.quietContainer,
-                content = accentPalette.onQuietContainer,
-                secondary = accentPalette.secondaryOnQuietContainer,
-                title = accentPalette.onQuietContainer,
-            )
+    val currentMedia = player.currentMedia.collectAsState()
+    val isCurrent by remember(mediaId, currentMedia) {
+        derivedStateOf { mediaId != null && currentMedia.value?.id == mediaId }
+    }
+    val isPlaying = if (isCurrent) player.isPlaying.collectAsState().value else false
+    val playingState = if (isCurrent) {
+        if (isPlaying) strings.playing else strings.paused
+    } else null
+    val scheme = MaterialTheme.colorScheme
+    val accent = if (isCurrent) rememberArtworkAccent(artworkUri, override = accentColor, label = "songRowAccent") else null
+    var loadedCover by remember(artworkUri) { mutableStateOf<coil3.Image?>(null) }
+    if (isCurrent && accentColor == null) {
+        LaunchedEffect(loadedCover, accent?.extract) {
+            loadedCover?.let { accent?.extract?.invoke(it) }
         }
     }
+    val palette = accent?.palette
+    val container = palette?.container ?: scheme.surfaceContainerLow
+    val contentColor = palette?.onContainer ?: scheme.onSurface
+    val supportingColor = palette?.secondaryOnContainer ?: scheme.onSurfaceVariant
     var menuOpen by remember { mutableStateOf(false) }
-    // Shared with the cover below so a row press morphs the artwork silhouette.
+    val openMenu = if (actions.isNotEmpty()) { { menuOpen = true } } else null
+    // One press stream drives Material's row shape and the cover's press morph.
     val interactionSource = remember { MutableInteractionSource() }
-    val rowShape = shape
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 1.5.dp),
-    ) {
-        val wide = maxWidth >= WideRowMinWidth
-        Surface(
-            shape = rowShape,
-            color = rowColors.container,
-            contentColor = rowColors.content,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(rowShape)
-                .combinedClickable(
-                    interactionSource = interactionSource,
-                    indication = ripple(),
-                    onClick = onClick,
-                    onLongClickLabel = if (actions.isNotEmpty()) strings.moreActions else null,
-                    onLongClick = if (actions.isNotEmpty()) {
-                        { menuOpen = true }
-                    } else {
-                        null
-                    },
-                )
-                .secondaryClick(enabled = actions.isNotEmpty()) { menuOpen = true },
-        ) {
-            Row(
-                modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier.width(32.dp),
-                    contentAlignment = Alignment.Center,
+    val visibleBadges = remember(badge, badges) { listOfNotNull(badge) + badges }
+
+    BoxWithConstraints(Modifier.fillMaxWidth().catalogRowPadding()) {
+        val wide = maxWidth >= WideRowMinWidth && LocalDensity.current.fontScale <= 1.3f
+        val narrow = maxWidth < 300.dp
+        SegmentedListItem(
+            onClick = onClick,
+            modifier = Modifier.fillMaxWidth()
+                .secondaryClick(enabled = openMenu != null) { menuOpen = true }
+                .semantics { if (playingState != null) stateDescription = playingState },
+            shapes = ListItemDefaults.shapes(shape = shape),
+            colors = ListItemDefaults.segmentedColors(
+                containerColor = container,
+                contentColor = contentColor,
+                leadingContentColor = supportingColor,
+                supportingContentColor = supportingColor,
+                trailingContentColor = supportingColor,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            contentPadding = PaddingValues(start = 12.dp, end = if (openMenu != null) 4.dp else 12.dp, top = 8.dp, bottom = 8.dp),
+            interactionSource = interactionSource,
+            onLongClick = openMenu,
+            onLongClickLabel = if (openMenu != null) strings.moreActions else null,
+            leadingContent = {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (isCurrent) {
-                        Icon(
-                            imageVector = if (isPlaying) AppIcons.GraphicEq else AppIcons.Pause,
-                            contentDescription = if (isPlaying) strings.playing else strings.paused,
-                            tint = rowColors.title,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    } else {
+                    Box(Modifier.width(if (narrow) 24.dp else 32.dp), contentAlignment = Alignment.Center) {
+                        if (isCurrent) {
+                            Icon(
+                                if (isPlaying) AppIcons.GraphicEq else AppIcons.Pause,
+                                contentDescription = null,
+                                tint = contentColor,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        } else {
+                            Text(
+                                "${index + 1}",
+                                style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    ExpressiveArtwork(
+                        model = artworkUri,
+                        contentDescription = null,
+                        modifier = Modifier.size(if (narrow) 36.dp else 48.dp),
+                        shape = MaterialTheme.shapes.small,
+                        pressInteractionSource = interactionSource,
+                        containerColor = palette?.quietContainer ?: scheme.surfaceContainerHighest,
+                        contentColor = palette?.onQuietContainer ?: scheme.onSurfaceVariant,
+                        onImageLoaded = { if (accentColor == null) loadedCover = it },
+                    )
+                }
+            },
+            trailingContent = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (songId != null && settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, SettingKeys.SHOW_DOWNLOAD_STATUS_DEFAULT)) {
+                        Box(
+                            modifier = if (wide) Modifier.width(48.dp) else Modifier,
+                            contentAlignment = Alignment.CenterEnd,
+                        ) {
+                            SongDownloadMark(songId, downloadManager, supportingColor)
+                        }
+                    }
+                    if (wide) {
                         Text(
-                            text = "${index + 1}",
-                            style = MaterialTheme.typography.labelLarge.copy(
-                                fontFeatureSettings = "tnum",
-                            ),
-                            color = rowColors.secondary,
+                            text = if (durationMs > 0L) formatPlaybackDuration(durationMs) else "",
+                            style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                            textAlign = TextAlign.End,
                             maxLines = 1,
+                            modifier = Modifier.padding(start = 8.dp, end = 4.dp).width(48.dp),
                         )
                     }
-                }
-                Spacer(Modifier.width(8.dp))
-                ExpressiveArtwork(
-                    model = artworkUri,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(48.dp),
-                    shape = MaterialTheme.shapes.small,
-                    pressInteractionSource = interactionSource,
-                    containerColor = accentPalette.container,
-                    contentColor = accentPalette.onContainer,
-                    onImageLoaded = { image ->
-                        if (accentColor == null) {
-                            extractAccent(image)
+                    if (openMenu != null) {
+                        Box {
+                            IconButton(onClick = openMenu) {
+                                Icon(AppIcons.MoreVert, contentDescription = strings.moreActions, tint = supportingColor)
+                            }
+                            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                                actions.forEach { action ->
+                                    DropdownMenuItem(
+                                        text = { Text(action.label) },
+                                        leadingIcon = { Icon(action.icon, contentDescription = null) },
+                                        onClick = {
+                                            menuOpen = false
+                                            action.onClick()
+                                        },
+                                    )
+                                }
+                            }
                         }
-                    },
-                )
-                Spacer(Modifier.width(12.dp))
+                    }
+                }
+            },
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
                 Column(Modifier.weight(1f)) {
                     Text(
                         text = title.ifBlank { strings.unknownSong },
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = if (isCurrent) FontWeight.Bold else null,
+                        style = if (isCurrent) MaterialTheme.typography.titleMediumEmphasized else MaterialTheme.typography.titleMedium,
+                        maxLines = if (narrow) 2 else 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = artist.ifBlank { strings.unknownArtist },
+                        style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        color = rowColors.title,
+                        color = supportingColor,
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        (listOfNotNull(badge) + badges).forEach { label ->
-                            ProviderBadge(
-                                label = label,
-                                contentColor = rowColors.secondary,
-                                containerColor = rowColors.content.copy(alpha = 0.10f),
-                                modifier = Modifier.padding(end = 6.dp),
-                            )
+                    if (visibleBadges.isNotEmpty()) {
+                        FlowRow(
+                            modifier = Modifier.padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            visibleBadges.forEach { label ->
+                                ProviderBadge(
+                                    label = label,
+                                    contentColor = palette?.onQuietContainer ?: scheme.onSurfaceVariant,
+                                    containerColor = palette?.quietContainer ?: scheme.surfaceContainerHighest,
+                                )
+                            }
                         }
-                        Text(
-                            text = artist.ifBlank { strings.unknownArtist },
-                            style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = rowColors.secondary,
-                        )
                     }
                 }
-                if (wide && album.isNotBlank()) {
-                    Spacer(Modifier.width(16.dp))
+                if (wide) {
                     Text(
                         text = album,
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        color = rowColors.secondary,
-                        modifier = Modifier.weight(0.7f),
+                        color = supportingColor,
+                        modifier = Modifier.weight(0.65f),
                     )
-                }
-                if (songId != null && settings.getBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, SettingKeys.SHOW_DOWNLOAD_STATUS_DEFAULT)) {
-                    // A fixed slot on wide rows, so the album column lines up whether or not a
-                    // row carries a download mark.
-                    Box(
-                        modifier = if (wide) Modifier.width(44.dp) else Modifier,
-                        contentAlignment = Alignment.CenterEnd,
-                    ) {
-                        SongDownloadMark(
-                            songId = songId,
-                            downloadManager = downloadManager,
-                            accentPalette = accentPalette,
-                        )
-                    }
-                }
-                if (wide && durationMs > 0L) {
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        text = formatPlaybackDuration(durationMs),
-                        style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
-                        color = rowColors.secondary,
-                        maxLines = 1,
-                        modifier = Modifier.widthIn(min = 40.dp),
-                    )
-                }
-                if (actions.isNotEmpty()) {
-                    Box {
-                        IconButton(onClick = { menuOpen = true }) {
-                            Icon(
-                                imageVector = AppIcons.MoreVert,
-                                contentDescription = strings.moreActions,
-                                tint = rowColors.secondary,
-                            )
-                        }
-                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                            actions.forEach { action ->
-                                DropdownMenuItem(
-                                    text = { Text(action.label) },
-                                    leadingIcon = { Icon(action.icon, contentDescription = null) },
-                                    onClick = {
-                                        menuOpen = false
-                                        action.onClick()
-                                    },
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    Spacer(Modifier.width(8.dp))
                 }
             }
         }
     }
 }
 
-/** Rows switch to the desktop column layout (album, duration) from this width. */
+/** App-chosen minimum for making room for distinct album and duration columns. */
 private val WideRowMinWidth = 640.dp
-
-/** A song row's colours: the quiet ones, or the playing row's on the stronger container. */
-private data class SongRowColors(
-    val container: Color,
-    val content: Color,
-    val secondary: Color,
-    val title: Color,
-)
 
 /** Right click opens the same menu a long press does. */
 private fun Modifier.secondaryClick(enabled: Boolean, onSecondaryClick: () -> Unit): Modifier =
@@ -486,7 +442,7 @@ private fun Modifier.secondaryClick(enabled: Boolean, onSecondaryClick: () -> Un
 private fun SongDownloadMark(
     songId: Long,
     downloadManager: SongDownloadManager,
-    accentPalette: ContentAccentPalette,
+    statusTint: Color,
 ) {
     val downloadedCacheVersion = DownloadedSongsCache.version.collectAsState().value
     val downloadTasks = downloadManager.tasks.collectAsState().value
@@ -502,33 +458,21 @@ private fun SongDownloadMark(
         taskStatus == DownloadTaskStatus.SavingLyrics
     val isFailed = !downloaded && taskStatus == DownloadTaskStatus.Failed
     if (!downloaded && !isActive && !isFailed) return
-    Spacer(Modifier.width(8.dp))
-    Surface(
-        onClick = { downloadManager.retry(songId) },
-        enabled = isFailed,
-        shape = CircleShape,
-        color = when {
-            isFailed -> MaterialTheme.colorScheme.errorContainer
-            downloaded -> accentPalette.container
-            else -> accentPalette.container.copy(alpha = 0.72f)
-        },
-        modifier = Modifier.semantics {
-            contentDescription = when {
-                isFailed -> strings.downloadFailedTapToRetry
-                downloaded -> strings.downloaded
-                else -> strings.downloading
-            }
-        },
-    ) {
+    if (isFailed) {
+        IconButton(onClick = { downloadManager.retry(songId) }) {
+            Icon(
+                imageVector = AppIcons.ErrorOutline,
+                contentDescription = strings.downloadFailedTapToRetry,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    } else {
         Icon(
-            imageVector = when {
-                isFailed -> AppIcons.ErrorOutline
-                downloaded -> AppIcons.DownloadDone
-                else -> AppIcons.Download
-            },
-            contentDescription = null,
-            tint = if (isFailed) MaterialTheme.colorScheme.onErrorContainer else accentPalette.onContainer,
-            modifier = Modifier.padding(6.dp).size(18.dp),
+            imageVector = if (downloaded) AppIcons.DownloadDone else AppIcons.Download,
+            contentDescription = if (downloaded) strings.downloaded else strings.downloading,
+            tint = statusTint,
+            modifier = Modifier.padding(horizontal = 4.dp).size(20.dp),
         )
     }
 }
@@ -808,6 +752,7 @@ private fun CarouselPager(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun PlaylistCard(
     userPlaylistEach: UserPlaylistEach,
@@ -821,153 +766,115 @@ fun PlaylistCard(
     /** False for the viewer's own playlists, where the creator line would only repeat their name. */
     showCreator: Boolean = true,
 ) {
-    val artworkAccent = rememberArtworkAccent(
-        requestKey = userPlaylistEach.coverImgUrl to specialCard,
-        fallback = MaterialTheme.colorScheme.tertiaryContainer,
-        override = accentColor,
-        label = "playlistCardAccent",
-    )
-    val extractAccent = artworkAccent.extract
-    val accentPalette = artworkAccent.palette
-    Surface(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 1.5.dp),
-        shape = connectedListItemShape(index, count),
-        color = accentPalette.quietContainer,
-        contentColor = accentPalette.onQuietContainer,
-    ) {
-        BoxWithConstraints {
-            // On a phone the heartbeat button's label took the width of the playlist's name, which
-            // kept one to three characters of it in Japanese; there the button is the heart alone.
-            val heartbeatLabelled = maxWidth >= HeartbeatLabelMinWidth
-            Row(
-                modifier = Modifier
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                    .fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // shapes.small, not large: 40dp corners on a 60dp cover would cut it into a circle and
-                // crop whatever the cover has in its corners.
+    val scheme = MaterialTheme.colorScheme
+    val special = specialCard != "no"
+    val accent = if (special) {
+        rememberArtworkAccent(
+            requestKey = userPlaylistEach.coverImgUrl to specialCard,
+            fallback = scheme.tertiaryContainer,
+            override = accentColor,
+            label = "playlistCardAccent",
+        )
+    } else null
+    val interactionSource = remember { MutableInteractionSource() }
+    BoxWithConstraints(Modifier.fillMaxWidth().catalogRowPadding()) {
+        // Measure whether the trailing secondary action can be labeled without taking over the row.
+        val heartbeatLabelled = maxWidth >= HeartbeatLabelMinWidth && LocalDensity.current.fontScale <= 1.3f
+        val coverSize = if (maxWidth < 300.dp) 48.dp else 56.dp
+        SegmentedListItem(
+            onClick = onClick,
+            shapes = ListItemDefaults.segmentedShapes(index, count),
+            modifier = Modifier.fillMaxWidth(),
+            colors = ListItemDefaults.segmentedColors(containerColor = scheme.surfaceContainerLow),
+            verticalAlignment = Alignment.CenterVertically,
+            interactionSource = interactionSource,
+            leadingContent = {
                 ExpressiveArtwork(
                     model = userPlaylistEach.coverImgUrl,
                     contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(60.dp),
+                    modifier = Modifier.size(coverSize),
                     shape = MaterialTheme.shapes.small,
-                    containerColor = accentPalette.container,
-                    contentColor = accentPalette.onContainer,
-                    onImageLoaded = { image ->
-                        if (accentColor == null) {
-                            extractAccent(image)
-                        }
-                    },
+                    pressInteractionSource = interactionSource,
+                    containerColor = accent?.palette?.quietContainer ?: scheme.surfaceContainerHighest,
+                    contentColor = accent?.palette?.onQuietContainer ?: scheme.onSurfaceVariant,
+                    placeholderIcon = AppIcons.QueueMusic,
+                    onImageLoaded = { if (accentColor == null) accent?.extract?.invoke(it) },
                 )
-                Spacer(modifier = Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = userPlaylistEach.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = accentPalette.onQuietContainer,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+            },
+            supportingContent = {
+                Column {
                     if (showCreator) {
-                        Text(
-                            text = userPlaylistEach.creator.nickname,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = accentPalette.secondaryOnQuietContainer,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        Text(userPlaylistEach.creator.nickname, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Text(
                         text = strings.playlistCardStats(userPlaylistEach.trackCount, compactCount(userPlaylistEach.playCount)),
                         style = MaterialTheme.typography.labelMedium,
-                        color = accentPalette.secondaryOnQuietContainer,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                if (specialCard != "no") {
-                    Spacer(modifier = Modifier.width(12.dp))
-                    if (specialCard == "fav" && onSpecialClick != null) {
-                        // Named, and a full touch target: a bare heart here reads as "like", and at
-                        // 34dp it would be smaller than a finger.
-                        Surface(
-                            onClick = {
-                                if (!specialActionLoading) onSpecialClick()
-                            },
-                            shape = CircleShape,
-                            color = accentPalette.container,
-                            contentColor = accentPalette.onContainer,
-                            modifier = if (heartbeatLabelled) {
-                                Modifier.heightIn(min = 48.dp)
-                            } else {
-                                Modifier
-                                    .size(48.dp)
-                                    .semantics { contentDescription = strings.heartbeatMode }
-                            },
-                        ) {
-                            Row(
-                                modifier = if (heartbeatLabelled) {
-                                    Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
-                                } else {
-                                    Modifier.fillMaxSize()
-                                },
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                if (specialActionLoading) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier
-                                            .size(18.dp)
-                                            .semantics { contentDescription = strings.heartbeatModeStarting },
-                                        color = accentPalette.onContainer,
-                                        strokeWidth = 2.dp,
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = AppIcons.Favorite,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                }
-                                if (heartbeatLabelled) {
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(
-                                        text = strings.heartbeatMode,
-                                        style = MaterialTheme.typography.labelLarge,
-                                        maxLines = 1,
-                                    )
-                                }
-                            }
-                        }
-                    } else {
-                        Surface(
-                            shape = CircleShape,
-                            color = accentPalette.container,
-                            contentColor = accentPalette.onContainer,
-                        ) {
-                            Icon(
-                                imageVector = if (specialCard == "fav") AppIcons.Favorite
-                                else AppIcons.GraphicEq,
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .padding(8.dp)
-                                    .size(18.dp),
-                            )
-                        }
-                    }
+            },
+            trailingContent = {
+                when {
+                    specialCard == "fav" && onSpecialClick != null -> PlaylistHeartbeatAction(
+                        labelled = heartbeatLabelled,
+                        loading = specialActionLoading,
+                        onClick = onSpecialClick,
+                        palette = accent!!.palette,
+                    )
+                    special -> Icon(
+                        if (specialCard == "fav") AppIcons.Favorite else AppIcons.GraphicEq,
+                        contentDescription = null,
+                        tint = legibleAccentFor(accent!!.palette.accent, scheme.surfaceContainerLow, scheme.surface),
+                    )
+                    else -> Icon(AppIcons.KeyboardArrowRight, contentDescription = null)
                 }
-            }
+            },
+        ) {
+            Text(userPlaylistEach.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
-/** Below this card width the heartbeat button drops its label and keeps the heart. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun PlaylistHeartbeatAction(labelled: Boolean, loading: Boolean, onClick: () -> Unit, palette: ContentAccentPalette) {
+    val state = strings.heartbeatModeStarting
+    val loadingSemantics = if (loading) Modifier.semantics { stateDescription = state } else Modifier
+    if (labelled) {
+        FilledTonalButton(
+            onClick = onClick,
+            enabled = !loading,
+            shapes = ButtonDefaults.shapes(),
+            contentPadding = ButtonDefaults.contentPaddingFor(40.dp, hasStartIcon = true),
+            colors = ButtonDefaults.filledTonalButtonColors(containerColor = palette.container, contentColor = palette.onContainer),
+            modifier = loadingSemantics,
+        ) {
+            HeartbeatIcon(loading)
+            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+            Text(strings.heartbeatMode, maxLines = 1)
+        }
+    } else {
+        FilledTonalIconButton(
+            onClick = onClick,
+            enabled = !loading,
+            shapes = IconButtonDefaults.shapes(),
+            colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = palette.container, contentColor = palette.onContainer),
+            modifier = loadingSemantics.semantics(mergeDescendants = true) { contentDescription = strings.heartbeatMode },
+        ) { HeartbeatIcon(loading) }
+    }
+}
+
+@Composable
+private fun HeartbeatIcon(loading: Boolean) {
+    if (loading) {
+        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
+    } else {
+        Icon(AppIcons.Favorite, contentDescription = null, modifier = Modifier.size(20.dp))
+    }
+}
+
+/** App-chosen width below which the heartbeat button keeps only the heart. */
 private val HeartbeatLabelMinWidth = 480.dp
 
 private const val MaxArtistActions = 3

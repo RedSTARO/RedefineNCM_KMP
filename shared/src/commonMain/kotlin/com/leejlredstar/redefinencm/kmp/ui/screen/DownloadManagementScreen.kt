@@ -1,45 +1,49 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.ToggleButton
-import androidx.compose.material3.ToggleButtonDefaults
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -47,93 +51,55 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.download.DownloadArtworkStatus
 import com.leejlredstar.redefinencm.kmp.download.DownloadLyricStatus
-import com.leejlredstar.redefinencm.kmp.download.DownloadQueueSummary
 import com.leejlredstar.redefinencm.kmp.download.DownloadTaskStatus
 import com.leejlredstar.redefinencm.kmp.download.LocalLibrarySyncState
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadTask
-import com.leejlredstar.redefinencm.kmp.download.analyzeDownloadTasks
 import com.leejlredstar.redefinencm.kmp.i18n.UiText
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.playbackPlaceholderUri
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveWavyProgress
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.browseHeader
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveArtwork
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveFeatureIcon
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePageBar
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePageHeading
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveWavyProgress
+import com.leejlredstar.redefinencm.kmp.ui.component.LocalExpressivePageGutter
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
-import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
-import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
+import com.leejlredstar.redefinencm.kmp.util.MediaDeletionConsentHost
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.SoundQuality
-import com.leejlredstar.redefinencm.kmp.util.MediaDeletionConsentHost
 import com.leejlredstar.redefinencm.kmp.util.downloadsNeedExport
 import com.leejlredstar.redefinencm.kmp.util.exportDownloadedSong
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-
-/**
- * The views the list can be narrowed to. Each maps to exactly one task status family, and the
- * label is the one the status itself shows, so a filter and the rows it keeps say the same word.
- */
-private enum class DownloadFilter {
-    All,
-    Active,
-    Paused,
-    Completed,
-    Failed,
-    Cancelled,
-    Deleted,
-    ;
-
-    val label: String
-        get() = when (this) {
-            All -> strings.all
-            Active -> strings.filterDownloading
-            Paused -> strings.paused
-            Completed -> strings.downloaded
-            Failed -> strings.failed
-            Cancelled -> strings.canceled
-            Deleted -> strings.fileDeleted
-        }
-}
-
-private fun DownloadFilter.matches(task: SongDownloadTask): Boolean = when (this) {
-    DownloadFilter.All -> true
-    DownloadFilter.Active -> task.isActive
-    DownloadFilter.Paused -> task.status == DownloadTaskStatus.Paused
-    DownloadFilter.Completed -> task.status == DownloadTaskStatus.Completed
-    DownloadFilter.Failed -> task.status == DownloadTaskStatus.Failed
-    DownloadFilter.Cancelled -> task.status == DownloadTaskStatus.Cancelled
-    DownloadFilter.Deleted -> task.status == DownloadTaskStatus.Deleted
-}
-
-private fun DownloadFilter.countIn(summary: DownloadQueueSummary): Int = when (this) {
-    DownloadFilter.All -> summary.total
-    DownloadFilter.Active -> summary.active
-    DownloadFilter.Paused -> summary.paused
-    DownloadFilter.Completed -> summary.completed
-    DownloadFilter.Failed -> summary.failed
-    DownloadFilter.Cancelled -> summary.cancelled
-    DownloadFilter.Deleted -> summary.deleted
-}
 
 private sealed interface DownloadDestructiveAction {
     data object CancelAll : DownloadDestructiveAction
@@ -148,9 +114,11 @@ private data class DownloadMenuAction(
     val label: String,
     val icon: ImageVector,
     val destructive: Boolean = false,
+    val enabled: Boolean = true,
     val onClick: () -> Unit,
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadManagementScreen(
     scaffoldPadding: PaddingValues,
@@ -162,12 +130,13 @@ fun DownloadManagementScreen(
     val tasks by downloadManager.tasks.collectAsState()
     val localLibrarySyncState by downloadManager.localLibrarySyncState.collectAsState()
     val persistenceError by downloadManager.persistenceError.collectAsState()
-    var filter by remember { mutableStateOf(DownloadFilter.All) }
+    var filter by rememberSaveable { mutableStateOf(DownloadFilter.All) }
     var pendingDestructiveAction by remember { mutableStateOf<DownloadDestructiveAction?>(null) }
-    val palette = contentAccentPalette(MaterialTheme.colorScheme.tertiaryContainer)
     val playWholeList = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT) }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val listState = rememberLazyListState()
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
     LaunchedEffect(downloadManager) {
         downloadManager.syncWithLocalLibrary()
@@ -176,151 +145,172 @@ fun DownloadManagementScreen(
     // then goes the ordinary way, finding the file gone.
     MediaDeletionConsentHost { songId -> downloadManager.deleteDownloadedSong(songId) }
 
-    val summary = remember(tasks) { analyzeDownloadTasks(tasks).summary }
-    // An empty category is not offered as a filter: six chips that are always present would crowd
-    // the header, and most would read zero.
-    val offeredFilters = remember(summary) {
-        DownloadFilter.entries.filter { it == DownloadFilter.All || it.countIn(summary) > 0 }
+    val queue = remember(tasks) { DownloadQueuePresentation(tasks) }
+    val selectedFilter = queue.resolveFilter(filter)
+    val groups = queue.groups(selectedFilter)
+    LaunchedEffect(selectedFilter) {
+        if (filter != selectedFilter) filter = selectedFilter
     }
-    LaunchedEffect(offeredFilters) {
-        if (filter !in offeredFilters) filter = DownloadFilter.All
-    }
-    val visibleTasks = remember(tasks, filter) { tasks.filter { filter.matches(it) } }
-    // The downloaded songs, in list order, as a queue: tapping one plays from the downloads.
-    val completedTasks = remember(tasks) { tasks.filter { it.status == DownloadTaskStatus.Completed } }
+    val completedTasks = queue.rows(DownloadFilter.Completed)
+    // The completed group preserves the manager's order, including the queue made by tapping a song.
     val completedQueue = remember(completedTasks) { completedTasks.map { it.toMediaInfo() } }
+    val syncing = localLibrarySyncState is LocalLibrarySyncState.Syncing
+    val syncError = localLibrarySyncState as? LocalLibrarySyncState.Error
 
     ExpressivePage(
-        accentPalette = palette,
-        contentWindowInsets = WindowInsets.statusBars,
+        maxContentWidth = ExpressiveLayout.ReadingContentMaxWidth,
+        headerOwnsTopInsets = true,
     ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                bottom = scaffoldPadding.calculateBottomPadding() + 16.dp,
-            ),
-        ) {
-            item(key = "download-header") {
-                DownloadHeader(
-                    summary = summary,
-                    accentPalette = palette,
-                    localLibrarySyncState = localLibrarySyncState,
-                    storedInBrowser = downloadsNeedExport,
-                    onBack = onBack,
-                    onPauseAll = downloadManager::pauseAll,
-                    onResumeAll = downloadManager::resumeAll,
-                    onSyncLocalLibrary = downloadManager::syncWithLocalLibrary,
-                    onCancelAll = {
-                        pendingDestructiveAction = DownloadDestructiveAction.CancelAll
-                    },
-                    onClearFinished = {
-                        pendingDestructiveAction = DownloadDestructiveAction.ClearFinished
-                    },
-                )
-            }
-            if (offeredFilters.size > 2) {
-                item(key = "download-filters") {
-                    DownloadFilterRow(
-                        filters = offeredFilters,
-                        summary = summary,
-                        selected = filter,
-                        onSelected = { filter = it },
-                        accentPalette = palette,
-                    )
-                }
-            }
-            if (localLibrarySyncState is LocalLibrarySyncState.Error) {
-                item(key = "local-library-sync-error") {
-                    ExpressiveStatePanel(
-                        title = strings.localLibrarySyncFailed,
-                        message = (localLibrarySyncState as LocalLibrarySyncState.Error).message,
-                        icon = AppIcons.Refresh,
-                        tone = ExpressiveStateTone.Error,
-                        accentPalette = palette,
-                        actionLabel = strings.retry,
-                        onAction = downloadManager::syncWithLocalLibrary,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-                }
-            }
-            persistenceError?.let { message ->
-                item(key = "download-persistence-error") {
-                    ExpressiveStatePanel(
-                        title = strings.downloadQueueSaveFailedTitle,
-                        message = message,
-                        icon = AppIcons.Download,
-                        tone = ExpressiveStateTone.Error,
-                        accentPalette = palette,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-                }
-            }
-            if (localLibrarySyncState is LocalLibrarySyncState.Syncing && tasks.isEmpty()) {
-                item(key = "local-library-syncing") {
-                    ExpressiveLoadingState(
-                        label = strings.scanningLocalLibrary,
-                        accentColor = palette.accent,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-                }
-            } else if (
-                visibleTasks.isEmpty() &&
-                localLibrarySyncState !is LocalLibrarySyncState.Error
+        val gutter = LocalExpressivePageGutter.current
+        Column(Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
+            ExpressivePageBar(
+                title = strings.downloadManagement,
+                onBack = onBack,
+                windowInsets = WindowInsets.browseHeader,
+                scrollBehavior = scrollBehavior,
+            )
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentPadding = PaddingValues(
+                    start = gutter,
+                    end = gutter,
+                    top = 8.dp,
+                    bottom = scaffoldPadding.calculateBottomPadding() + 16.dp,
+                ),
             ) {
-                item { DownloadEmptyState(filter, palette) }
-            } else {
-                itemsIndexed(
-                    items = visibleTasks,
-                    key = { _, task -> task.id },
-                ) { index, task ->
-                    DownloadTaskRow(
-                        task = task,
-                        shape = connectedListItemShape(index, visibleTasks.size),
-                        accentPalette = palette,
-                        onPlay = if (task.status == DownloadTaskStatus.Completed) {
-                            {
-                                val queueIndex = completedTasks.indexOfFirst { it.id == task.id }
-                                playFromList(
-                                    player,
-                                    completedQueue,
-                                    queueIndex,
-                                    playWholeList,
-                                    source = UiText { it.downloads },
-                                )
-                            }
-                        } else {
-                            null
-                        },
-                        onExport = task.fileName
-                            ?.takeIf { downloadsNeedExport && task.status == DownloadTaskStatus.Completed }
-                            ?.let { fileName ->
-                                {
-                                    scope.launch {
-                                        runCatching {
-                                            exportDownloadedSong(fileName, "${task.artist} - ${task.title}")
-                                        }.onFailure { error ->
-                                            snackbarHostState.showSnackbar(
-                                                strings.saveSongToDeviceFailed(task.title, error.message ?: strings.unknownError),
-                                            )
-                                        }
-                                    }
+                item(key = "download-overview") {
+                    DownloadOverview(
+                        queue = queue,
+                        syncing = syncing,
+                        onPauseAll = downloadManager::pauseAll,
+                        onResumeAll = downloadManager::resumeAll,
+                        onSyncLocalLibrary = downloadManager::syncWithLocalLibrary,
+                        onCancelAll = { pendingDestructiveAction = DownloadDestructiveAction.CancelAll },
+                        onClearFinished = { pendingDestructiveAction = DownloadDestructiveAction.ClearFinished },
+                    )
+                }
+                // A filter is useful once there are two distinct non-empty status groups.
+                if (queue.filters.size > 2) {
+                    item(key = "download-filters") {
+                        DownloadFilters(
+                            filters = queue.filters,
+                            selected = selectedFilter,
+                            onSelected = {
+                                if (it != selectedFilter) {
+                                    filter = it
+                                    scope.launch { listState.scrollToItem(0) }
                                 }
                             },
-                        onPause = { downloadManager.pause(task.id) },
-                        onResume = { downloadManager.resume(task.id) },
-                        onCancel = {
-                            pendingDestructiveAction = DownloadDestructiveAction.CancelTask(task.id, task.title)
-                        },
-                        onRetry = { downloadManager.retry(task.id) },
-                        onSaveLyrics = { downloadManager.saveLyrics(task.id) },
-                        onSaveArtwork = { downloadManager.saveArtwork(task.id) },
-                        onRemove = {
-                            pendingDestructiveAction = DownloadDestructiveAction.RemoveTask(task.id, task.title)
-                        },
-                        onDeleteSong = {
-                            pendingDestructiveAction = DownloadDestructiveAction.DeleteSong(task.id, task.title)
-                        },
-                    )
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                }
+                syncError?.let { error ->
+                    item(key = "local-library-sync-error") {
+                        ExpressiveStatePanel(
+                            title = strings.localLibrarySyncFailed,
+                            message = error.message,
+                            icon = AppIcons.Refresh,
+                            tone = ExpressiveStateTone.Error,
+                            actionLabel = strings.retry,
+                            onAction = downloadManager::syncWithLocalLibrary,
+                            modifier = Modifier.padding(top = 12.dp),
+                        )
+                    }
+                }
+                persistenceError?.let { message ->
+                    item(key = "download-persistence-error") {
+                        ExpressiveStatePanel(
+                            title = strings.downloadQueueSaveFailedTitle,
+                            message = message,
+                            icon = AppIcons.Download,
+                            tone = ExpressiveStateTone.Error,
+                            modifier = Modifier.padding(top = 12.dp),
+                        )
+                    }
+                }
+                if (groups.isEmpty()) {
+                    if (syncing) {
+                        item(key = "local-library-syncing") {
+                            ExpressiveLoadingState(
+                                label = strings.scanningLocalLibrary,
+                                modifier = Modifier.padding(top = 12.dp),
+                            )
+                        }
+                    } else if (syncError == null) {
+                        item(key = "download-empty") {
+                            ExpressiveStatePanel(
+                                title = strings.noDownloadedSongsYet,
+                                message = strings.downloadsEmptyHint,
+                                icon = AppIcons.Download,
+                                modifier = Modifier.padding(top = 12.dp),
+                            )
+                        }
+                    }
+                }
+                groups.forEach { group ->
+                    val rows = queue.rows(group)
+                    item(key = "download-section-${group.name}") {
+                        Column {
+                            DownloadGroupHeader(group)
+                            if (downloadsNeedExport && group == DownloadFilter.Completed) {
+                                Text(
+                                    text = strings.downloadsStoredInBrowserHint,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(bottom = 8.dp),
+                                )
+                            }
+                        }
+                    }
+                    itemsIndexed(items = rows, key = { _, task -> task.id }) { index, task ->
+                        DownloadTaskRow(
+                            task = task,
+                            shape = connectedListItemShape(index, rows.size),
+                            modifier = Modifier.padding(top = if (index == 0) 0.dp else ExpressiveLayout.ConnectedItemGap),
+                            onPlay = if (group == DownloadFilter.Completed) {
+                                {
+                                    playFromList(
+                                        player,
+                                        completedQueue,
+                                        index,
+                                        playWholeList,
+                                        source = UiText { it.downloads },
+                                    )
+                                }
+                            } else null,
+                            onExport = task.fileName
+                                ?.takeIf { downloadsNeedExport && group == DownloadFilter.Completed }
+                                ?.let { fileName ->
+                                    {
+                                        scope.launch {
+                                            runCatching {
+                                                exportDownloadedSong(fileName, "${task.artist} - ${task.title}")
+                                            }.onFailure { error ->
+                                                snackbarHostState.showSnackbar(
+                                                    strings.saveSongToDeviceFailed(task.title, error.message ?: strings.unknownError),
+                                                )
+                                            }
+                                        }
+                                    }
+                                },
+                            onPause = { downloadManager.pause(task.id) },
+                            onResume = { downloadManager.resume(task.id) },
+                            onCancel = {
+                                pendingDestructiveAction = DownloadDestructiveAction.CancelTask(task.id, task.title)
+                            },
+                            onRetry = { downloadManager.retry(task.id) },
+                            onSaveLyrics = { downloadManager.saveLyrics(task.id) },
+                            onSaveArtwork = { downloadManager.saveArtwork(task.id) },
+                            onRemove = {
+                                pendingDestructiveAction = DownloadDestructiveAction.RemoveTask(task.id, task.title)
+                            },
+                            onDeleteSong = {
+                                pendingDestructiveAction = DownloadDestructiveAction.DeleteSong(task.id, task.title)
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -362,127 +352,111 @@ private fun SongDownloadTask.toMediaInfo(): MediaInfo {
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun DownloadHeader(
-    summary: DownloadQueueSummary,
-    accentPalette: ContentAccentPalette,
-    localLibrarySyncState: LocalLibrarySyncState,
-    storedInBrowser: Boolean,
-    onBack: (() -> Unit)?,
+private fun DownloadOverview(
+    queue: DownloadQueuePresentation,
+    syncing: Boolean,
     onPauseAll: () -> Unit,
     onResumeAll: () -> Unit,
     onSyncLocalLibrary: () -> Unit,
     onCancelAll: () -> Unit,
     onClearFinished: () -> Unit,
 ) {
-    val active = summary.active
-    val paused = summary.paused
-    val completed = summary.completed
-    val failed = summary.failed
-    val finished = completed + failed + summary.cancelled + summary.deleted
+    val scheme = MaterialTheme.colorScheme
+    val active = queue.count(DownloadFilter.Active)
+    val paused = queue.count(DownloadFilter.Paused)
+    val completed = queue.count(DownloadFilter.Completed)
+    val failed = queue.count(DownloadFilter.Failed)
+    val summary = buildList {
+        if (active > 0) add(strings.downloadsActiveCount(active))
+        if (paused > 0) add(strings.downloadsPausedCount(paused))
+        add(strings.downloadsCompletedCount(completed))
+        if (failed > 0) add(strings.downloadsFailedCount(failed))
+    }.joinToString(" · ")
     var menuOpen by remember { mutableStateOf(false) }
-    val syncing = localLibrarySyncState is LocalLibrarySyncState.Syncing
     val menu = buildList {
-        add(
-            DownloadMenuAction(strings.rescanDownloadedFiles, AppIcons.Refresh) {
-                if (!syncing) onSyncLocalLibrary()
-            },
-        )
-        if (active > 0 || paused > 0) {
+        add(DownloadMenuAction(strings.rescanDownloadedFiles, AppIcons.Refresh, enabled = !syncing, onClick = onSyncLocalLibrary))
+        if (queue.canCancelAll) {
             add(DownloadMenuAction(strings.cancelAllDownloads, AppIcons.Clear, destructive = true, onClick = onCancelAll))
         }
-        if (finished > 0) {
+        if (queue.hasFinished) {
             add(DownloadMenuAction(strings.clearFinishedEntries, AppIcons.Delete, onClick = onClearFinished))
         }
     }
-
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            onBack?.let {
-                FilledTonalIconButton(
-                    onClick = it,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = accentPalette.quietContainer,
-                        contentColor = accentPalette.onQuietContainer,
-                    ),
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(ExpressiveLayout.FeatureCorner),
+        color = scheme.surfaceContainer,
+        contentColor = scheme.onSurface,
+    ) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ExpressivePageHeading(
+                    title = strings.downloadQueueOverview,
+                    supportingText = summary,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(4.dp))
+                DownloadOverflow(menuOpen, { menuOpen = it }, menu)
+            }
+            if (syncing && queue.count(DownloadFilter.All) > 0) {
+                Row(
+                    modifier = Modifier.padding(top = 4.dp).semantics(mergeDescendants = true) {
+                        liveRegion = LiveRegionMode.Polite
+                    },
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(AppIcons.ArrowBack, contentDescription = strings.back)
-                }
-                Spacer(Modifier.width(12.dp))
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = strings.downloadManagement,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = accentPalette.onPageStart,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = buildList {
-                        add(strings.downloadsCompletedCount(completed))
-                        if (active > 0) add(strings.downloadsActiveCount(active))
-                        if (paused > 0) add(strings.downloadsPausedCount(paused))
-                        if (failed > 0) add(strings.downloadsFailedCount(failed))
-                    }.joinToString(" · "),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = accentPalette.secondaryOnPageStart,
-                )
-                if (storedInBrowser && completed > 0) {
-                    Text(
-                        text = strings.downloadsStoredInBrowserHint,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = accentPalette.secondaryOnPageStart,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
+                    LoadingIndicator(Modifier.size(24.dp))
+                    Text(strings.scanningLocalLibrary, color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             }
-            if (syncing) {
-                LoadingIndicator(color = accentPalette.accent, modifier = Modifier.size(32.dp))
-            }
-            Box {
-                IconButton(onClick = { menuOpen = true }) {
-                    Icon(AppIcons.MoreVert, contentDescription = strings.moreActions)
-                }
-                DownloadMenu(expanded = menuOpen, actions = menu, onDismiss = { menuOpen = false })
-            }
-        }
-        // Only the bulk actions that apply now, and in words: a row of bare icons puts
-        // "cancel everything" and "clear the list" one mis-tap from each other.
-        if (active > 0 || paused > 0) {
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (active > 0) {
-                    FilledTonalButton(
-                        onClick = onPauseAll,
-                        shape = CircleShape,
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = accentPalette.container,
-                            contentColor = accentPalette.onContainer,
-                        ),
-                    ) {
-                        Icon(AppIcons.Pause, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(strings.pauseAll)
+            if (queue.canPauseAll || queue.canResumeAll) {
+                FlowRow(
+                    modifier = Modifier.padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (queue.canPauseAll) {
+                        DownloadBulkButton(strings.pauseAll, AppIcons.Pause, onPauseAll)
                     }
-                }
-                if (paused > 0) {
-                    FilledTonalButton(
-                        onClick = onResumeAll,
-                        shape = CircleShape,
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = accentPalette.container,
-                            contentColor = accentPalette.onContainer,
-                        ),
-                    ) {
-                        Icon(AppIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(strings.resumeAll)
+                    if (queue.canResumeAll) {
+                        DownloadBulkButton(strings.resumeAll, AppIcons.PlayArrow, onResumeAll)
                     }
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun DownloadBulkButton(label: String, icon: ImageVector, onClick: () -> Unit) {
+    FilledTonalButton(
+        onClick = onClick,
+        shapes = ButtonDefaults.shapes(),
+        contentPadding = ButtonDefaults.SmallContentPadding,
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(ButtonDefaults.SmallIconSize))
+        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+        Text(label)
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun DownloadOverflow(expanded: Boolean, onExpanded: (Boolean) -> Unit, actions: List<DownloadMenuAction>) {
+    Box {
+        IconButton(
+            onClick = { onExpanded(true) },
+            shapes = IconButtonDefaults.shapes(),
+            modifier = Modifier.minimumInteractiveComponentSize()
+                .size(IconButtonDefaults.smallContainerSize(IconButtonDefaults.IconButtonWidthOption.Narrow)),
+            colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
+        ) {
+            Icon(AppIcons.MoreVert, contentDescription = strings.moreActions)
+        }
+        DownloadMenu(expanded = expanded, actions = actions, onDismiss = { onExpanded(false) })
     }
 }
 
@@ -497,6 +471,7 @@ private fun DownloadMenu(
             val tint = if (action.destructive) MaterialTheme.colorScheme.error else Color.Unspecified
             DropdownMenuItem(
                 text = { Text(action.label, color = tint) },
+                enabled = action.enabled,
                 leadingIcon = {
                     Icon(
                         action.icon,
@@ -513,47 +488,82 @@ private fun DownloadMenu(
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun DownloadFilterRow(
+private fun DownloadFilters(
     filters: List<DownloadFilter>,
-    summary: DownloadQueueSummary,
     selected: DownloadFilter,
     onSelected: (DownloadFilter) -> Unit,
-    accentPalette: ContentAccentPalette,
+    modifier: Modifier = Modifier,
 ) {
-    // The counts live on the filters themselves; a second row of pills for them would repeat
-    // the filters under slightly different names.
-    LazyRow(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        items(filters) { filter ->
-            val isSelected = selected == filter
-            ToggleButton(
-                checked = isSelected,
-                onCheckedChange = { onSelected(filter) },
-                modifier = Modifier.heightIn(min = 40.dp),
-                shapes = ToggleButtonDefaults.shapes(),
-                colors = ToggleButtonDefaults.toggleButtonColors(
-                    containerColor = accentPalette.quietContainer,
-                    contentColor = accentPalette.onQuietContainer,
-                    checkedContainerColor = accentPalette.container,
-                    checkedContentColor = accentPalette.onContainer,
-                ),
-            ) {
-                Text("${filter.label} ${filter.countIn(summary)}")
+    var expanded by remember { mutableStateOf(false) }
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        // A labelled menu leaves room for the queue in compact and short split-screen windows.
+        // Let chips wrap only where there is enough width to scan several at once.
+        if (maxWidth >= 480.dp) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                filters.forEach { filter ->
+                    val checked = selected == filter
+                    FilterChip(
+                        selected = checked,
+                        onClick = { onSelected(filter) },
+                        leadingIcon = if (checked) {
+                            { Icon(AppIcons.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                        } else null,
+                        label = { Text(filter.label) },
+                    )
+                }
+            }
+        } else {
+            Box {
+                OutlinedButton(
+                    onClick = { expanded = true },
+                    shapes = ButtonDefaults.shapes(),
+                    contentPadding = ButtonDefaults.SmallContentPadding,
+                ) {
+                    Text(strings.downloadStatusFilter(selected.label), modifier = Modifier.weight(1f, fill = false))
+                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                    Icon(AppIcons.ArrowDropDown, contentDescription = null, modifier = Modifier.size(ButtonDefaults.SmallIconSize))
+                }
+                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                    filters.forEach { filter ->
+                        val checked = selected == filter
+                        DropdownMenuItem(
+                            text = { Text(filter.label) },
+                            modifier = Modifier.semantics { this.selected = checked },
+                            leadingIcon = {
+                                if (checked) Icon(AppIcons.Check, contentDescription = null)
+                                else Spacer(Modifier.size(24.dp))
+                            },
+                            onClick = {
+                                expanded = false
+                                onSelected(filter)
+                            },
+                        )
+                    }
+                }
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun DownloadGroupHeader(group: DownloadFilter) {
+    Text(
+        text = group.label,
+        style = MaterialTheme.typography.titleMediumEmphasized,
+        color = if (group == DownloadFilter.Active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.padding(top = 16.dp, bottom = 6.dp).semantics { heading() },
+    )
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun DownloadTaskRow(
     task: SongDownloadTask,
-    shape: androidx.compose.foundation.shape.RoundedCornerShape,
-    accentPalette: ContentAccentPalette,
+    shape: RoundedCornerShape,
+    modifier: Modifier = Modifier,
     onPlay: (() -> Unit)?,
     onExport: (() -> Unit)?,
     onPause: () -> Unit,
@@ -566,15 +576,15 @@ private fun DownloadTaskRow(
     onDeleteSong: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
-    // One visible action for the state the task is in; everything else is named in the menu.
-    val primary: Pair<ImageVector, Pair<String, () -> Unit>>? = when (task.status) {
+    // One visible action for the current state; everything else is named in the menu.
+    val primary = when (task.status) {
         DownloadTaskStatus.Queued,
         DownloadTaskStatus.Resolving,
-        DownloadTaskStatus.Downloading -> AppIcons.Pause to (strings.pause to onPause)
-        DownloadTaskStatus.Paused -> AppIcons.PlayArrow to (strings.resumeDownload to onResume)
+        DownloadTaskStatus.Downloading -> DownloadMenuAction(strings.pause, AppIcons.Pause, onClick = onPause)
+        DownloadTaskStatus.Paused -> DownloadMenuAction(strings.resumeDownload, AppIcons.PlayArrow, onClick = onResume)
         DownloadTaskStatus.Failed,
-        DownloadTaskStatus.Cancelled -> AppIcons.Refresh to (strings.retry to onRetry)
-        DownloadTaskStatus.Deleted -> AppIcons.Download to (strings.downloadAgain to onRetry)
+        DownloadTaskStatus.Cancelled -> DownloadMenuAction(strings.retry, AppIcons.Refresh, onClick = onRetry)
+        DownloadTaskStatus.Deleted -> DownloadMenuAction(strings.downloadAgain, AppIcons.Download, onClick = onRetry)
         DownloadTaskStatus.SavingLyrics,
         DownloadTaskStatus.Completed -> null
     }
@@ -621,113 +631,122 @@ private fun DownloadTaskRow(
         }
     }
 
+    val scheme = MaterialTheme.colorScheme
+    val downloading = task.status == DownloadTaskStatus.Downloading
+    val showProgress = downloading || task.status == DownloadTaskStatus.Paused
     Surface(
-        onClick = { onPlay?.invoke() },
-        enabled = onPlay != null,
         shape = shape,
-        color = accentPalette.quietContainer,
-        contentColor = accentPalette.onQuietContainer,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 1.5.dp),
+        color = if (downloading) scheme.surfaceContainerHigh else scheme.surfaceContainerLow,
+        contentColor = scheme.onSurface,
+        modifier = modifier.fillMaxWidth(),
     ) {
-        Row(
-            modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            AsyncImage(
-                model = task.artworkUri,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.size(48.dp).clip(MaterialTheme.shapes.small),
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = task.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = task.artist,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = accentPalette.secondaryOnQuietContainer,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                DownloadTaskStatusLine(task, accentPalette)
-            }
-            primary?.let { (icon, action) ->
-                IconButton(onClick = action.second) {
-                    Icon(icon, contentDescription = action.first, tint = accentPalette.onQuietContainer)
-                }
-            }
-            if (menu.isNotEmpty()) {
-                Box {
-                    IconButton(onClick = { menuOpen = true }) {
-                        Icon(
-                            AppIcons.MoreVert,
-                            contentDescription = strings.moreActions,
-                            tint = accentPalette.secondaryOnQuietContainer,
-                        )
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            // Keep room for song information before allocating two independent 48 dp actions.
+            val separateActions = maxWidth < 260.dp && primary != null && menu.isNotEmpty()
+            val actions: @Composable () -> Unit = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    primary?.let { action ->
+                        FilledTonalIconButton(
+                            onClick = action.onClick,
+                            shapes = IconButtonDefaults.shapes(),
+                            modifier = Modifier.minimumInteractiveComponentSize()
+                                .size(IconButtonDefaults.smallContainerSize(IconButtonDefaults.IconButtonWidthOption.Narrow)),
+                        ) {
+                            Icon(action.icon, contentDescription = action.label)
+                        }
                     }
-                    DownloadMenu(expanded = menuOpen, actions = menu, onDismiss = { menuOpen = false })
+                    if (menu.isNotEmpty()) {
+                        DownloadOverflow(menuOpen, { menuOpen = it }, menu)
+                    }
                 }
-            } else {
-                Spacer(Modifier.width(8.dp))
+            }
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val onPlayLabel = strings.play
+                    val playModifier = if (onPlay == null) Modifier else Modifier.clickable(
+                        onClickLabel = onPlayLabel,
+                        role = Role.Button,
+                        onClick = onPlay,
+                    )
+                    Row(
+                        modifier = Modifier.weight(1f).then(playModifier)
+                            .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        ExpressiveArtwork(
+                            model = task.artworkUri,
+                            contentDescription = null,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.size(48.dp),
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = task.title,
+                                style = MaterialTheme.typography.titleMedium,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = task.artist,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = scheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (!showProgress) {
+                                val (text, isError) = task.statusSummary()
+                                Text(
+                                    text = text,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (isError) scheme.error else scheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                    if (!separateActions) Box(Modifier.padding(end = 4.dp)) { actions() }
+                }
+                if (showProgress) DownloadTaskProgress(task)
+                if (separateActions) {
+                    Box(Modifier.align(Alignment.End).padding(end = 4.dp)) { actions() }
+                }
             }
         }
     }
 }
 
-/**
- * What a task is doing, in words: a progress bar only while bytes are moving, and for finished
- * songs the quality and whether the lyrics and cover were kept.
- */
 @Composable
-private fun DownloadTaskStatusLine(
-    task: SongDownloadTask,
-    accentPalette: ContentAccentPalette,
-) {
-    val secondary = accentPalette.secondaryOnQuietContainer
-    when (task.status) {
-        DownloadTaskStatus.Downloading,
-        DownloadTaskStatus.Paused -> {
-            Spacer(Modifier.height(6.dp))
-            if (task.status == DownloadTaskStatus.Downloading && task.totalBytes == null) {
-                ExpressiveWavyProgress(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = accentPalette.accent,
-                    trackColor = accentPalette.onQuietContainer.copy(alpha = 0.12f),
-                )
-            } else {
-                ExpressiveWavyProgress(
+private fun DownloadTaskProgress(task: SongDownloadTask) {
+    val scheme = MaterialTheme.colorScheme
+    val paused = task.status == DownloadTaskStatus.Paused
+    val progressLabel = if (paused) strings.paused else strings.filterDownloading
+    val track = Modifier.fillMaxWidth().semantics { contentDescription = progressLabel }
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (paused) {
+            // A paused transfer still shows its retained bytes but has no active motion.
+            if (task.totalBytes != null) {
+                LinearProgressIndicator(
                     progress = { task.progressFraction },
-                    modifier = Modifier.fillMaxWidth(),
-                    color = if (task.status == DownloadTaskStatus.Paused) secondary else accentPalette.accent,
-                    trackColor = accentPalette.onQuietContainer.copy(alpha = 0.12f),
+                    modifier = track,
+                    color = scheme.secondary,
+                    trackColor = scheme.surfaceContainerHighest,
                 )
             }
-            Text(
-                text = buildString {
-                    append(if (task.status == DownloadTaskStatus.Paused) strings.pausedPrefix else "")
-                    append(task.progressText())
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = secondary,
-            )
+        } else if (task.totalBytes == null) {
+            ExpressiveWavyProgress(modifier = track, trackColor = scheme.secondaryContainer)
+        } else {
+            ExpressiveWavyProgress(progress = { task.progressFraction }, modifier = track, trackColor = scheme.secondaryContainer)
         }
-        else -> {
-            val (text, isError) = task.statusSummary()
-            if (text.isNotEmpty()) {
-                Text(
-                    text = text,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (isError) MaterialTheme.colorScheme.error else secondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
+        Text(
+            text = (if (paused) strings.pausedPrefix else "") + task.progressText(),
+            style = MaterialTheme.typography.labelMedium,
+            color = scheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -762,28 +781,6 @@ private fun SongDownloadTask.statusSummary(): Pair<String, Boolean> = when (stat
     }.joinToString(" · ") to false
     DownloadTaskStatus.Downloading,
     DownloadTaskStatus.Paused -> progressText() to false
-}
-
-@Composable
-private fun DownloadEmptyState(
-    filter: DownloadFilter,
-    accentPalette: ContentAccentPalette,
-) {
-    val title = when (filter) {
-        DownloadFilter.All -> strings.noDownloadedSongsYet
-        else -> strings.noSongsInFilter(filter.label)
-    }
-    val message = when (filter) {
-        DownloadFilter.All -> strings.downloadsEmptyHint
-        else -> strings.switchFilterHint
-    }
-    ExpressiveStatePanel(
-        title = title,
-        message = message,
-        icon = AppIcons.Download,
-        accentPalette = accentPalette,
-        modifier = Modifier.padding(16.dp),
-    )
 }
 
 @Composable

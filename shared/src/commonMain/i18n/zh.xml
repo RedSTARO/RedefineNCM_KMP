@@ -133,6 +133,20 @@
     <string name="songRecognition">听歌识曲</string>
     <string name="settings">设置</string>
 
+    <!-- Expressive page headings and controls -->
+    <string name="discoveryHeadingSubtitle">发现值得听的音乐</string>
+    <string name="browseDailyPicks">浏览推荐</string>
+    <string name="searchHeadingSubtitle">按歌名、歌手或专辑找歌</string>
+    <string name="searchResultsTitle">搜索结果</string>
+    <string name="clearSearchHistory">清空历史</string>
+    <string name="libraryOnThisDevice">此设备上的音乐</string>
+    <string name="settingsCategories">设置分类</string>
+    <string name="downloadQueueOverview">下载概览</string>
+    <string name="downloadStatusFilter">状态：{filter}</string>
+    <string name="recognitionIdentifySong">识别歌曲</string>
+    <string name="recognitionFindingMatch">正在查找匹配…</string>
+    <string name="playerShortLabel">播放</string>
+
     <!-- data/api/AmlldbApi.kt -->
     <string name="amllDbIdLookupTimeout">AMLL DB 按歌曲 ID 获取 TTML 超时</string>
     <string name="amllDbIdLookupInvalidXml">AMLL DB 按歌曲 ID 返回的 TTML 不是有效的 XML</string>

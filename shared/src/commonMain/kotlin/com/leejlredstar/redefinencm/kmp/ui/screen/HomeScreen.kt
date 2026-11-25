@@ -1,72 +1,73 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionLayout
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import com.leejlredstar.redefinencm.kmp.i18n.UiText
-import com.leejlredstar.redefinencm.kmp.i18n.strings
-import com.leejlredstar.redefinencm.kmp.i18n.text
-import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.LargeFlexibleTopAppBar
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
+import com.leejlredstar.redefinencm.kmp.i18n.UiText
+import com.leejlredstar.redefinencm.kmp.i18n.strings
+import com.leejlredstar.redefinencm.kmp.i18n.text
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.player.PlaybackSource
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.LocalCompactAppBar
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveArtwork
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveCacheHint
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveFeatureIcon
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePageHeading
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
-import com.leejlredstar.redefinencm.kmp.ui.theme.AccentColorSaver
-import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
-import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
+import com.leejlredstar.redefinencm.kmp.ui.component.LocalExpressivePageGutter
+import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
+import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
+import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.theme.rememberArtworkAccent
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import org.koin.compose.koinInject
-import com.leejlredstar.redefinencm.kmp.player.PlaybackSource
 
 internal fun replaceQueueWithDailyRecommendations(
     player: PlatformPlayer,
@@ -77,10 +78,7 @@ internal fun replaceQueueWithDailyRecommendations(
     player.setQueue(songs.map { it.toMediaInfo() }, 0)
 }
 
-/**
- * 推荐主页（原版 RecommendPage）。搜索药丸切换到搜索 Tab。
- */
-@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     scaffoldPadding: PaddingValues,
@@ -88,12 +86,12 @@ fun HomeScreen(
     onOpenMy: () -> Unit,
     onOpenRecognition: () -> Unit,
     onOpenDailySongs: () -> Unit = {},
-    /** The search pill: search is a tab of its own, so this switches to it. */
     onOpenSearch: () -> Unit = {},
     onOpenLogin: () -> Unit = {},
     viewModel: MainViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
     settings: PlatformSettings = koinInject(),
+    searchEntryModifier: Modifier = Modifier,
 ) {
     val recommend by viewModel.recommendSongs.collectAsState()
     val recommendResource by viewModel.recommendResource.collectAsState()
@@ -106,385 +104,351 @@ fun HomeScreen(
     val uid by viewModel.uid.collectAsState()
     val accountLoadError by viewModel.accountLoadError.collectAsState()
     val sessionExpired by viewModel.sessionExpired.collectAsState()
-    // Recommendations belong to an account. Signed out there is nothing to reload, so the page
-    // says what signing in would put here instead of two empty sections asking to be reloaded.
     val signedOut = uid == 0L && !accountLoading && accountLoadError == null
-    val dailySongs = recommend?.data?.dailySongs ?: emptyList()
+    val dailySongs = recommend?.data?.dailySongs.orEmpty()
     val dailyQueue = remember(dailySongs) { dailySongs.map { it.toMediaInfo() } }
-    val currentMedia by player.currentMedia.collectAsState()
-    val isPlaying by player.isPlaying.collectAsState()
+    val dailyPreview = remember(dailySongs) { dailySongs.take(DailyPreviewCount) }
     val playWholeList = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT) }
-    val resources = recommendResource?.recommend ?: emptyList()
-    val defaultPageAccent = MaterialTheme.colorScheme.primaryContainer
-    val avatarUrl = userDetail?.profile?.avatarUrl
-    val nickname = userDetail?.profile?.nickname ?: strings.me
-    val pageAccentSource = resources.firstOrNull()?.picUrl
-        ?: dailySongs.firstOrNull()?.al?.picUrl
-        ?: avatarUrl
-    var rawPageAccent by rememberSaveable(
-        pageAccentSource,
-        stateSaver = AccentColorSaver,
-    ) {
-        mutableStateOf<Color?>(null)
-    }
-    val pageAccent by animateColorAsState(
-        targetValue = rawPageAccent ?: defaultPageAccent,
-        animationSpec = spring(),
-        label = "homePageAccent",
-    )
-    val pagePalette = contentAccentPalette(pageAccent)
+    val resources = recommendResource?.recommend.orEmpty()
+    val listState = rememberLazyListState()
 
-    ExpressivePage(
-        accentPalette = pagePalette,
-        contentWindowInsets = WindowInsets.statusBars,
-    ) {
-        val compactBar = LocalCompactAppBar.current
-        // The page title, the counts and the avatar are a collapsing app bar, not a Surface
-        // inside the list that scrolls away like content: as a top bar they collapse to a
-        // pinned compact title, and the search pill is the first row of the page.
-        val appBarScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-        Scaffold(
-            modifier = Modifier
-                .fillMaxSize()
-                .then(if (compactBar) Modifier else Modifier.nestedScroll(appBarScrollBehavior.nestedScrollConnection)),
-            containerColor = Color.Transparent,
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            topBar = {
-                val avatar: @Composable RowScope.() -> Unit = {
-                    HomeAccountAvatar(
-                        avatarUrl = avatarUrl,
-                        nickname = nickname,
-                        accentColor = pageAccent,
-                        onOpenMy = onOpenMy,
-                        onAccentColor = if (pageAccentSource == avatarUrl) {
-                            { color -> rawPageAccent = color }
-                        } else {
-                            null
-                        },
-                    )
-                    Spacer(Modifier.width(8.dp))
-                }
-                val colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = pagePalette.pageStart,
-                    titleContentColor = pagePalette.onPageStart,
-                )
-                if (compactBar) {
-                    TopAppBar(title = { Text(strings.forYou) }, actions = avatar, colors = colors)
-                } else {
-                    LargeFlexibleTopAppBar(
-                        title = { Text(strings.forYou) },
-                        actions = avatar,
-                        scrollBehavior = appBarScrollBehavior,
-                        colors = colors,
-                    )
-                }
-            },
-        ) { appBarPadding ->
+    ExpressivePage(contentWindowInsets = WindowInsets.statusBars) {
+        val gutter = LocalExpressivePageGutter.current
+        val sectionInset = Modifier.padding(horizontal = gutter)
+        val compactHeight = LocalCompactAppBar.current
         LazyColumn(
-            modifier = Modifier.fillMaxSize()
-                .padding(top = if (compactBar) appBarPadding.calculateTopPadding() else 0.dp),
-            // Bottom clearance belongs on the LazyColumn, not on ExpressivePage:
-            // container padding shrinks the viewport so items stop above the floating
-            // toolbar, while contentPadding lets them scroll underneath it.
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                top = if (compactBar) 0.dp else appBarPadding.calculateTopPadding(),
-                // The shell's clearance already covers the toolbar and the mini player.
-                bottom = scaffoldPadding.calculateBottomPadding() + 16.dp,
-            ),
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            // Leave the floating player/navigation clearance at the end of the scrollable content.
+            contentPadding = PaddingValues(top = 8.dp, bottom = scaffoldPadding.calculateBottomPadding() + 16.dp),
         ) {
             item(key = "search") {
-                SearchBox(
-                    label = SearchPlaceholder,
-                    onClick = onOpenSearch,
-                    accentColor = pageAccent,
-                )
-                Spacer(Modifier.height(4.dp))
-            }
-
-            if (signedOut) item(key = "sign-in") {
-                ExpressiveStatePanel(
-                    title = if (sessionExpired) strings.signInExpiredTitle else strings.signInToSeeRecommendationsTitle,
-                    message = if (sessionExpired) {
-                        strings.signInExpiredMessage
-                    } else {
-                        strings.signInToSeeRecommendationsMessage
-                    },
-                    icon = AppIcons.Person,
-                    accentPalette = pagePalette,
-                    actionLabel = strings.signIn,
-                    onAction = onOpenLogin,
-                    modifier = Modifier.padding(top = 16.dp),
-                )
-            }
-
-            if (!signedOut) item {
-                SectionWithCarousel(
-                    title = strings.recommendedPlaylists,
-                    items = resources,
-                    isLoading = accountLoading && recommendResource == null,
-                    isFromCache = resourceFromCache,
-                    isRefreshing = accountLoading,
-                    // A failed account lookup loads neither section; say so in both.
-                    errorMessage = (resourceLoadError ?: accountLoadError)?.text,
-                    onRetry = viewModel::retryAccountData,
-                    key = { resource -> resource.id },
-                    itemContent = { res ->
-                        RecommendSquareCard(
-                            picUrl = res.picUrl,
-                            text = res.name,
-                            onAccentColor = if (res.picUrl == pageAccentSource) {
-                                { color -> rawPageAccent = color }
-                            } else {
-                                null
-                            },
-                            onClick = { onOpenPlaylist(res.id) },
+                Column(
+                    modifier = sectionInset.fillMaxWidth().padding(bottom = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        ExpressivePageHeading(
+                            title = strings.forYou,
+                            supportingText = strings.discoveryHeadingSubtitle.takeUnless { compactHeight },
+                            modifier = Modifier.weight(1f),
                         )
-                    },
-                )
+                        HomeAccountAvatar(
+                            avatarUrl = userDetail?.profile?.avatarUrl,
+                            nickname = userDetail?.profile?.nickname ?: strings.me,
+                            onOpenMy = onOpenMy,
+                        )
+                    }
+                    HomeSearchEntry(
+                        onClick = onOpenSearch,
+                        modifier = Modifier.widthIn(max = SearchEntryMaxWidth).fillMaxWidth()
+                            .then(searchEntryModifier),
+                    )
+                }
             }
 
-            if (!signedOut) item {
-                SectionWithCarousel(
-                    title = strings.dailyPicks,
-                    // The heading is the way into the full list, and the count is what the
-                    // heading is about. A second button beside the first, labelled with the
-                    // sentence "全部 33 首", would make three controls on one line, one of them
-                    // a bare piece of text stating what the page already shows.
-                    supportingText = if (dailySongs.isEmpty()) null else strings.songCount(dailySongs.size),
-                    onOpenAll = onOpenDailySongs.takeIf { dailySongs.isNotEmpty() },
-                    onOpenAllLabel = strings.viewAllDailyPicks,
-                    items = dailySongs,
-                    isLoading = accountLoading && recommend == null,
-                    isFromCache = songsFromCache,
-                    isRefreshing = accountLoading,
-                    errorMessage = (songsLoadError ?: accountLoadError)?.text,
-                    onRetry = viewModel::retryAccountData,
-                    key = { song -> song.id },
-                    action = {
-                        FilledTonalButton(
-                            onClick = {
-                                replaceQueueWithDailyRecommendations(player, dailySongs)
-                            },
-                            enabled = dailySongs.isNotEmpty(),
-                            shape = CircleShape,
-                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                            // Default tonal colours land on secondaryContainer, which in
-                            // this scheme is a yellow: the one loud element left on an
-                            // otherwise artwork-tinted page. Follow the page accent.
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = pagePalette.container,
-                                contentColor = pagePalette.onContainer,
-                            ),
+            if (signedOut) {
+                // No account is required to recognize or search for music. Lead with a usable
+                // discovery feature, rather than presenting sign-in as the only path forward.
+                item(key = "music-tools") {
+                    RecognitionFeature(onOpenRecognition, featured = true, modifier = sectionInset)
+                }
+                item(key = "sign-in") {
+                    ExpressiveStatePanel(
+                        title = if (sessionExpired) strings.signInExpiredTitle else strings.signInToSeeRecommendationsTitle,
+                        message = if (sessionExpired) strings.signInExpiredMessage else strings.signInToSeeRecommendationsMessage,
+                        icon = AppIcons.Person,
+                        actionLabel = strings.signIn,
+                        onAction = onOpenLogin,
+                        modifier = sectionInset.padding(top = 16.dp),
+                    )
+                }
+            } else {
+                item(key = "daily-feature") {
+                    val error = songsLoadError ?: accountLoadError
+                    when {
+                        dailySongs.isNotEmpty() -> Column(
+                            modifier = sectionInset.padding(bottom = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            Icon(
-                                imageVector = AppIcons.PlayArrow,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
+                            DailyPicksFeature(
+                                songs = dailySongs,
+                                onPlay = { replaceQueueWithDailyRecommendations(player, dailySongs) },
+                                onBrowse = onOpenDailySongs,
                             )
-                            Spacer(Modifier.size(8.dp))
-                            Text(strings.playAll)
+                            if (songsFromCache) ExpressiveCacheHint(isRefreshing = accountLoading)
                         }
-                    },
-                    itemContent = { song ->
-                        val queueIndex = dailySongs.indexOf(song)
-                        RecommendSquareCard(
-                            picUrl = song.al.picUrl,
-                            text = song.name,
-                            subtitle = song.ar.joinToString(" / ") { it.name },
-                            isCurrent = currentMedia != null &&
-                                currentMedia?.id == dailyQueue.getOrNull(queueIndex)?.id,
-                            isPlaying = isPlaying,
-                            onAccentColor = if (song.al.picUrl == pageAccentSource) {
-                                { color -> rawPageAccent = color }
-                            } else {
-                                null
-                            },
-                            onClick = {
-                                // Same rule as a playlist: the whole daily list from this
-                                // song, or the song alone, per the setting.
-                                playFromList(
-                                    player,
-                                    dailyQueue,
-                                    queueIndex,
-                                    playWholeList,
-                                    source = DailySource,
+                        error != null -> ExpressiveStatePanel(
+                            title = strings.dailyPicksLoadFailed,
+                            message = error.text,
+                            icon = AppIcons.Refresh,
+                            tone = ExpressiveStateTone.Error,
+                            actionLabel = strings.retry,
+                            onAction = viewModel::retryAccountData,
+                            modifier = sectionInset,
+                        )
+                        accountLoading && recommend == null -> ExpressiveLoadingState(
+                            label = strings.dailyPicksLoading,
+                            modifier = sectionInset,
+                        )
+                        else -> ExpressiveStatePanel(
+                            title = strings.dailyPicksEmpty,
+                            message = strings.sectionEmptyTapReload,
+                            icon = AppIcons.MusicNote,
+                            actionLabel = strings.reload,
+                            onAction = viewModel::retryAccountData,
+                            modifier = sectionInset,
+                        )
+                    }
+                }
+                itemsIndexed(dailyPreview, key = { index, song -> "preview-$index-${song.id}" }) { index, song ->
+                    SongRow(
+                        index = index,
+                        title = song.name,
+                        artist = song.ar.joinToString(" / ") { it.name },
+                        artworkUri = song.al.picUrl,
+                        shape = connectedListItemShape(index, dailyPreview.size),
+                        mediaId = dailyQueue[index].id,
+                        album = song.al.name,
+                        durationMs = song.dt,
+                        onClick = { playFromList(player, dailyQueue, index, playWholeList, source = DailySource) },
+                    )
+                }
+
+                item(key = "recommended-playlists") {
+                    Column(sectionInset) {
+                        SectionWithCarousel(
+                            title = strings.recommendedPlaylists,
+                            items = resources,
+                            isLoading = accountLoading && recommendResource == null,
+                            isFromCache = resourceFromCache,
+                            isRefreshing = accountLoading,
+                            errorMessage = (resourceLoadError ?: accountLoadError)?.text?.takeIf { resources.isEmpty() },
+                            onRetry = viewModel::retryAccountData,
+                            key = { resource -> resource.id },
+                            itemContent = { resource ->
+                                RecommendSquareCard(
+                                    picUrl = resource.picUrl,
+                                    text = resource.name,
+                                    onClick = { onOpenPlaylist(resource.id) },
                                 )
                             },
                         )
-                    },
-                )
+                    }
+                }
+                item(key = "music-tools") {
+                    // When personal recommendations can be shown, music tools follow them.
+                    RecognitionFeature(onOpenRecognition, featured = false, modifier = sectionInset.padding(top = 20.dp))
+                }
             }
-
-            // A tool, not a recommendation: it sits after the personal content.
-            item(key = "music-tools") {
-                RecognitionToolSection(
-                    accentColor = pageAccent,
-                    onOpenRecognition = onOpenRecognition,
-                )
-            }
-        }
         }
     }
 }
 
 @Composable
-private fun RecognitionToolSection(
-    accentColor: Color,
-    onOpenRecognition: () -> Unit,
+private fun DailyPicksFeature(
+    songs: List<SongDetailSongs>,
+    onPlay: () -> Unit,
+    onBrowse: () -> Unit,
 ) {
-    // One entry point does not earn a titled section plus a carousel: that layout spends a
-    // 168dp tile, a heading and a supporting line (roughly a third of the viewport) on a
-    // single tap target, and its LazyRow would never have a second item to scroll to. A list
-    // item is the M3 element for "one action with a label and a description".
-    Column(modifier = Modifier.padding(top = 20.dp)) {
-        RecognitionToolCard(
-            accentColor = accentColor,
-            onClick = onOpenRecognition,
+    val covers = remember(songs) { songs.asSequence().map { it.al.picUrl }.filter(String::isNotBlank).distinct().take(3).toList() }
+    val leadCover = covers.firstOrNull()
+    val artworkAccent = rememberArtworkAccent(requestKey = leadCover, label = "dailyPicksAccent")
+    val palette = artworkAccent.palette
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(ExpressiveLayout.FeatureCorner),
+        color = palette.container,
+        contentColor = palette.onContainer,
+    ) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val wide = maxWidth >= 720.dp
+            val inset = if (wide) 24.dp else 16.dp
+            val innerWidth = (maxWidth - inset * 2).coerceAtLeast(0.dp)
+            val coverShape = RoundedCornerShape(ExpressiveLayout.FeatureCorner - inset)
+            val cover: @Composable (Modifier) -> Unit = { modifier ->
+                ExpressiveArtwork(
+                    model = leadCover,
+                    contentDescription = null,
+                    modifier = modifier,
+                    shape = coverShape,
+                    containerColor = palette.quietContainer,
+                    contentColor = palette.onQuietContainer,
+                    onImageLoaded = artworkAccent.extract,
+                )
+            }
+            if (wide) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(inset),
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        DailyPicksTitle(songs.size, palette, wide = true)
+                        DailyPicksActions(palette, onPlay, onBrowse)
+                    }
+                    val leadSize = (innerWidth / 3).coerceAtMost(224.dp)
+                    cover(Modifier.size(leadSize))
+                    // On wider panes a small pair of covers previews the variety in the queue.
+                    if (covers.size >= 3) {
+                        val smallSize = (leadSize - 8.dp) / 2
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            covers.drop(1).forEach { url ->
+                                ExpressiveArtwork(
+                                    model = url,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(smallSize),
+                                    shape = coverShape,
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                Column(Modifier.fillMaxWidth().padding(inset), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        DailyPicksTitle(songs.size, palette, wide = false, modifier = Modifier.weight(1f))
+                        if (innerWidth >= 176.dp) cover(Modifier.size((innerWidth * 0.36f).coerceAtMost(144.dp)))
+                    }
+                    DailyPicksActions(palette, onPlay, onBrowse)
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun DailyPicksTitle(
+    count: Int,
+    palette: ContentAccentPalette,
+    wide: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = strings.dailyPicks,
+            style = if (wide) MaterialTheme.typography.displaySmallEmphasized else MaterialTheme.typography.headlineMediumEmphasized,
+            modifier = Modifier.semantics { heading() },
+        )
+        Text(strings.songCount(count), style = MaterialTheme.typography.bodyMedium, color = palette.secondaryOnContainer)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun DailyPicksActions(palette: ContentAccentPalette, onPlay: () -> Unit, onBrowse: () -> Unit) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        Button(
+            onClick = onPlay,
+            shapes = ButtonDefaults.shapes(),
+            contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+            colors = ButtonDefaults.buttonColors(containerColor = palette.accent, contentColor = palette.onAccent),
+        ) {
+            Icon(AppIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+            Text(strings.playAll)
+        }
+        TextButton(
+            onClick = onBrowse,
+            shapes = ButtonDefaults.shapes(),
+            colors = ButtonDefaults.textButtonColors(contentColor = palette.onContainer),
+        ) {
+            Text(strings.browseDailyPicks)
+            Icon(AppIcons.KeyboardArrowRight, contentDescription = null)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun RecognitionFeature(onClick: () -> Unit, featured: Boolean, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    val openRecognitionLabel = strings.openSongRecognition
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(if (featured) ExpressiveLayout.FeatureCorner else ExpressiveLayout.ConnectedOuterCorner),
+        color = if (featured) scheme.secondaryContainer else scheme.surfaceContainerLow,
+        contentColor = if (featured) scheme.onSecondaryContainer else scheme.onSurface,
+        modifier = modifier.fillMaxWidth().semantics { role = Role.Button; contentDescription = openRecognitionLabel },
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = if (featured) 24.dp else 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ExpressiveFeatureIcon(
+                icon = AppIcons.Mic,
+                containerColor = if (featured) scheme.secondary else scheme.surfaceContainerHigh,
+                contentColor = if (featured) scheme.onSecondary else scheme.onSurfaceVariant,
+            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = strings.songRecognition,
+                    style = if (featured) MaterialTheme.typography.headlineSmallEmphasized else MaterialTheme.typography.titleMediumEmphasized,
+                )
+                Text(
+                    text = strings.songRecognitionCardHint,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (featured) scheme.onSecondaryContainer else scheme.onSurfaceVariant,
+                )
+            }
+            Icon(AppIcons.KeyboardArrowRight, contentDescription = null)
+        }
+    }
+}
+
+@Composable
+private fun HomeAccountAvatar(avatarUrl: String?, nickname: String, onOpenMy: () -> Unit) {
+    val label = strings.openUserProfile(nickname.ifBlank { strings.me })
+    Surface(
+        onClick = onOpenMy,
+        shape = CircleShape,
+        modifier = Modifier.size(48.dp).semantics { role = Role.Button; contentDescription = label },
+    ) {
+        ExpressiveArtwork(
+            model = avatarUrl,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            shape = CircleShape,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            placeholderIcon = AppIcons.Person,
         )
     }
 }
 
 @Composable
-private fun RecognitionToolCard(
-    accentColor: Color,
-    onClick: () -> Unit,
-) {
-    val palette = contentAccentPalette(accentColor)
-    Surface(
-        onClick = onClick,
-        shape = MaterialTheme.shapes.extraLarge,
-        color = palette.quietContainer,
-        contentColor = palette.onQuietContainer,
-        modifier = Modifier
-            .fillMaxWidth()
-            .semantics(mergeDescendants = true) {
-                contentDescription = strings.openSongRecognition
-            },
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = palette.container,
-                contentColor = palette.onContainer,
-                modifier = Modifier.size(48.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = AppIcons.Mic,
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp),
-                    )
-                }
-            }
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = strings.songRecognition,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = palette.onQuietContainer,
-                )
-                Text(
-                    text = strings.songRecognitionCardHint,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = palette.secondaryOnQuietContainer,
-                    // Two lines: the English and Japanese hints do not fit a phone's width in one.
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Icon(
-                imageVector = AppIcons.KeyboardArrowRight,
-                contentDescription = null,
-                tint = palette.secondaryOnQuietContainer,
-            )
-        }
-    }
-}
-
-@Composable
-private fun HomeAccountAvatar(
-    avatarUrl: String?,
-    nickname: String,
-    accentColor: Color,
-    onOpenMy: () -> Unit,
-    onAccentColor: ((Color) -> Unit)?,
-) {
-    val avatarPalette = contentAccentPalette(accentColor)
-    val extractAccent = rememberThemeColorExtractor(
-        requestKey = avatarUrl,
-        onAccentColor = onAccentColor ?: {},
-    )
-    Surface(
-        onClick = onOpenMy,
-        shape = CircleShape,
-        color = avatarPalette.container,
-        contentColor = avatarPalette.onContainer,
-        modifier = Modifier
-            .size(56.dp)
-            .semantics { contentDescription = strings.openUserProfile(nickname.ifBlank { strings.me }) },
-    ) {
-        if (avatarUrl.isNullOrBlank()) {
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                Icon(
-                    imageVector = AppIcons.Person,
-                    contentDescription = null,
-                    modifier = Modifier.size(28.dp),
-                )
-            }
-        } else {
-            AsyncImage(
-                model = avatarUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-                onSuccess = { state ->
-                    if (onAccentColor != null) extractAccent(state.result.image)
-                },
-            )
-        }
-    }
-}
-
-/** 搜索入口药丸（原版 SearchBox）：打开搜索 Tab。 */
-@Composable
-private fun SearchBox(
-    label: String,
-    onClick: () -> Unit,
-    accentColor: Color,
-) {
-    val searchPalette = contentAccentPalette(accentColor)
+private fun HomeSearchEntry(onClick: () -> Unit, modifier: Modifier) {
+    val scheme = MaterialTheme.colorScheme
     Surface(
         onClick = onClick,
         shape = CircleShape,
-        color = searchPalette.quietContainer,
-        contentColor = searchPalette.onQuietContainer,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
+        color = scheme.surfaceContainerHigh,
+        contentColor = scheme.onSurfaceVariant,
+        modifier = modifier.semantics { role = Role.Button },
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+            modifier = Modifier.heightIn(min = 56.dp).padding(horizontal = 20.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                imageVector = AppIcons.Search,
-                contentDescription = null,
-                tint = searchPalette.accent,
-            )
-            Spacer(Modifier.size(12.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyLarge,
-                color = searchPalette.secondaryOnQuietContainer,
-            )
+            Icon(AppIcons.Search, contentDescription = null)
+            Text(SearchPlaceholder, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
 internal val DailySource: UiText = UiText { it.dailyPicks }
+internal val SearchEntryMaxWidth = 720.dp
+private const val DailyPreviewCount = 2

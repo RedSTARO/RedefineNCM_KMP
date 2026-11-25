@@ -24,7 +24,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,7 +49,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -58,7 +59,10 @@ import com.leejlredstar.amll.compose.AmllLyricVisualParameters
 import com.leejlredstar.amll.compose.buildAmllLyricDocument
 import com.leejlredstar.amll.compose.calculateAmllLyricVisualParameters
 import com.leejlredstar.amll.compose.rememberReducedMotionEnabled
+import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
+import com.leejlredstar.redefinencm.kmp.ui.theme.DarkColors
 import com.leejlredstar.redefinencm.kmp.ui.theme.DeclareSystemBarBackground
+import com.leejlredstar.redefinencm.kmp.ui.theme.rememberArtworkAccent
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.lyric.LyricStateOverlay
 import com.leejlredstar.redefinencm.kmp.player.PlayerState
@@ -111,7 +115,7 @@ private const val AndroidPortraitLyricFontSizeLimitDp = 36f
  * The common tree owns the artwork treatment, lyric document/layout, controls, song details,
  * accessibility, and input. A platform leaf is used only when native video frames are available.
  */
-@OptIn(ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun NativeAmllScreen(
     onBack: () -> Unit = {},
@@ -179,6 +183,15 @@ fun NativeAmllScreen(
     val dynamicCoverUrl = dynamicCoverState
         .urlFor(metadata?.id)
         .takeUnless { localArtworkActive }
+    // The canvas is always dark. Take the island tint from the same static image (including a
+    // fallback) rather than relying on the island's small cover to appear in compact windows.
+    val artworkAccent = rememberArtworkAccent(
+        requestKey = primaryArtworkUri to fallbackArtworkUri,
+        fallback = DarkColors.primaryContainer,
+        scheme = DarkColors,
+        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
+        label = "fullLyricArtworkAccent",
+    )
     // Near-black under the bars whatever the theme: light icons.
     DeclareSystemBarBackground(dark = true)
     BoxWithConstraints(
@@ -198,7 +211,7 @@ fun NativeAmllScreen(
             playDynamicCover = true,
             androidPresentation = platform.isAndroid,
             reducedMotion = reducedMotion,
-            onArtworkLoaded = {},
+            onArtworkLoaded = artworkAccent.extract,
             modifier = Modifier.fillMaxSize(),
             // `#dynamic-bg`. The renderer owns every filter around it; this supplies frames only.
             dynamicCoverLayer = { url, play, layerReducedMotion, layerModifier ->
@@ -261,6 +274,7 @@ fun NativeAmllScreen(
                         key(metadata?.id) {
                             UntimedLyrics(
                                 lines = untimedLyricLines,
+                                palette = artworkAccent.palette,
                                 compact = shortLyrics,
                                 controllerOverlaysLyrics = sharedPane,
                                 modifier = Modifier.fillMaxSize(),
@@ -313,6 +327,7 @@ fun NativeAmllScreen(
                     }
                     AmllTopActions(
                         onBack = onBack,
+                        palette = artworkAccent.palette,
                         compact = shortLyrics,
                         modifier = Modifier.align(Alignment.TopStart)
                             .reflowPlacement(reflow, ReflowEntry.TowardEndFromStart),
@@ -333,6 +348,7 @@ fun NativeAmllScreen(
                         autoHideDelayMillis = AmllControllerAutoHideMillis,
                         reducedMotion = reducedMotion,
                         externalRevealRequest = controllerRevealRequest,
+                        lyricArtworkAccent = artworkAccent,
                     )
                 }
             }
@@ -412,9 +428,11 @@ internal fun calculateNativeAmllVisualParameters(
     )
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun AmllTopActions(
     onBack: () -> Unit,
+    palette: ContentAccentPalette,
     compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -423,12 +441,15 @@ private fun AmllTopActions(
             .statusBarsPadding()
             .padding(top = if (compact) 0.dp else 18.dp),
     ) {
-        // Down, not back: the lyrics are the player opened up, and this puts them away with the
-        // same gesture and the same glyph as the Now Playing page it returns to. Nothing behind
-        // it: the artwork under the lyrics is blurred and darkened, so a filled circle would be
-        // one more shape on a page whose whole point is the words.
-        IconButton(
+        // Match Now Playing's collapse control; the quiet tone separates it from moving art
+        // without giving page chrome the same emphasis as a lyric line.
+        FilledTonalIconButton(
             onClick = onBack,
+            shapes = IconButtonDefaults.shapes(),
+            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = palette.quietContainer,
+                contentColor = palette.onQuietContainer,
+            ),
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(start = if (compact) 8.dp else 18.dp)
@@ -438,8 +459,7 @@ private fun AmllTopActions(
             Icon(
                 imageVector = AppIcons.KeyboardArrowDown,
                 contentDescription = null,
-                tint = Color.White.copy(alpha = 0.94f),
-                modifier = Modifier.size(32.dp),
+                modifier = Modifier.size(IconButtonDefaults.smallIconSize),
             )
         }
     }
@@ -519,9 +539,11 @@ private fun coerceAmllPresentationPosition(
 }
 
 /** Lyrics that have text but no timing, shown as a plain scrollable column. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun UntimedLyrics(
     lines: List<String>,
+    palette: ContentAccentPalette,
     compact: Boolean,
     controllerOverlaysLyrics: Boolean,
     modifier: Modifier = Modifier,
@@ -541,18 +563,23 @@ private fun UntimedLyrics(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item(key = "untimed-note") {
-            Text(
-                text = strings.lyricsUntimedNote,
-                color = Color.White.copy(alpha = 0.56f),
-                style = MaterialTheme.typography.labelMedium,
-            )
+            Surface(
+                shape = MaterialTheme.shapes.medium,
+                color = palette.quietContainer,
+                contentColor = palette.secondaryOnQuietContainer,
+            ) {
+                Text(
+                    text = strings.lyricsUntimedNote,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = if (compact) 4.dp else 8.dp),
+                )
+            }
         }
         itemsIndexed(lines) { _, line ->
             Text(
                 text = line,
-                color = Color.White.copy(alpha = 0.92f),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold,
+                color = palette.onPageEnd,
+                style = MaterialTheme.typography.headlineSmallEmphasized,
             )
         }
     }

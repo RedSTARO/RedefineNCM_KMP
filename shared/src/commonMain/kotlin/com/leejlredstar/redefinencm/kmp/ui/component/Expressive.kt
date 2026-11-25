@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.union
@@ -24,17 +25,19 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.Layout
@@ -59,9 +62,11 @@ object ExpressiveLayout {
     val PageHorizontalPadding = 16.dp
     val PageVerticalPadding = 16.dp
     val SectionSpacing = 32.dp
-    val ConnectedItemGap = 2.5.dp
-    val ConnectedOuterCorner = 40.dp
+    // Material segmented lists: separate the group silhouette from its tight inner joints.
+    val ConnectedItemGap = 2.dp
+    val ConnectedOuterCorner = 16.dp
     val ConnectedInnerCorner = 4.dp
+    val FeatureCorner = 32.dp
     val MinimumTouchTarget = 48.dp
     val ReadingContentMaxWidth = 840.dp
     val BrowseContentMaxWidth = 1200.dp
@@ -77,7 +82,11 @@ object ExpressiveLayout {
     val FloatingNavClearance = 96.dp
 }
 
-/** Shared timing tokens for custom transitions not owned by a Material component. */
+/** Gutters follow the usable pane, not the full window hidden behind rails or a cutout. */
+internal fun expressivePageGutter(paneWidth: Dp): Dp = if (paneWidth < 600.dp) 16.dp else 24.dp
+internal val LocalExpressivePageGutter = staticCompositionLocalOf { ExpressiveLayout.PageHorizontalPadding }
+
+/** App-specific timings for legacy choreography that does not yet use Material springs. */
 object ExpressiveMotion {
     const val FastMillis = 120
     const val QuickMillis = 160
@@ -153,6 +162,7 @@ fun rememberConnectedListItemShape(
  * not. If they stayed side by side regardless, a wide action on a narrow window would squeeze
  * the title into a column one character wide.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ExpressiveSectionTitle(
     text: String,
@@ -168,17 +178,10 @@ fun ExpressiveSectionTitle(
             Column(
                 modifier = Modifier
                     .layoutId(SectionTitleId)
-                    // No rounded clip for the ripple: this scale's `small` is an 18dp radius,
-                    // and the bite it takes out of the lower-left corner lands on the first
-                    // glyph of the supporting line: it cuts the upper bar off 共, and the left
-                    // of the first digit off "33 首". A heading is not a chip; the ripple can
-                    // be square.
                     .then(
-                        if (onClick == null) {
-                            Modifier
-                        } else {
-                            Modifier.clickable(onClickLabel = onClickLabel, onClick = onClick)
-                        },
+                        if (onClick == null) Modifier else Modifier
+                            .heightIn(min = ExpressiveLayout.MinimumTouchTarget)
+                            .clickable(onClickLabel = onClickLabel, onClick = onClick),
                     )
                     .semantics(mergeDescendants = true) { heading() },
                 verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -186,7 +189,7 @@ fun ExpressiveSectionTitle(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = text,
-                        style = MaterialTheme.typography.headlineSmall,
+                        style = MaterialTheme.typography.headlineSmallEmphasized,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     // The whole heading opens the list, so it carries the chevron that says so.
@@ -216,7 +219,7 @@ fun ExpressiveSectionTitle(
             // supporting line may wrap, so it does not count.
             Text(
                 text = text,
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineSmallEmphasized,
                 maxLines = 1,
                 // Never placed, and hidden from screen readers so the heading is not read twice.
                 modifier = Modifier
@@ -246,8 +249,8 @@ fun ExpressiveSectionTitle(
             )
             val height = maxOf(titlePlaceable.height, actionPlaceable?.height ?: 0)
             layout(constraints.maxWidth, height) {
-                titlePlaceable.place(0, (height - titlePlaceable.height) / 2)
-                actionPlaceable?.place(
+                titlePlaceable.placeRelative(0, (height - titlePlaceable.height) / 2)
+                actionPlaceable?.placeRelative(
                     constraints.maxWidth - actionPlaceable.width,
                     (height - actionPlaceable.height) / 2,
                 )
@@ -255,10 +258,10 @@ fun ExpressiveSectionTitle(
         } else {
             val titlePlaceable = titleMeasurable.measure(loose)
             val spacing = 8.dp.roundToPx()
-            val height = titlePlaceable.height + spacing + actionPlaceable!!.height
+            val height = titlePlaceable.height + spacing + actionPlaceable.height
             layout(constraints.maxWidth, height) {
-                titlePlaceable.place(0, 0)
-                actionPlaceable.place(0, titlePlaceable.height + spacing)
+                titlePlaceable.placeRelative(0, 0)
+                actionPlaceable.placeRelative(0, titlePlaceable.height + spacing)
             }
         }
     }
@@ -298,26 +301,14 @@ fun ExpressiveCacheHint(
 /** Full-window page background with a bounded content pane on larger windows. */
 @Composable
 fun ExpressivePage(
-    accentPalette: ContentAccentPalette,
     modifier: Modifier = Modifier,
     maxContentWidth: Dp = ExpressiveLayout.BrowseContentMaxWidth,
     contentWindowInsets: WindowInsets = WindowInsets(0, 0, 0, 0),
-    contentPadding: PaddingValues = PaddingValues(0.dp),
     headerOwnsTopInsets: Boolean = false,
     content: @Composable BoxScope.() -> Unit,
 ) {
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        accentPalette.pageStart,
-                        accentPalette.pageMiddle,
-                        accentPalette.pageEnd,
-                    ),
-                ),
-            ),
+        modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
         contentAlignment = Alignment.TopCenter,
     ) {
         // The alignment has to be on this box: it fills the page, so the outer box's TopCenter
@@ -329,19 +320,21 @@ fun ExpressivePage(
             val top = LocalBrowseObstructions.current?.only(WindowInsetsSides.Top)
             val contentInsets = if (top != null && !headerOwnsTopInsets) contentWindowInsets.union(top) else contentWindowInsets
             val boundedWidth = minOf(maxWidth, maxContentWidth)
-            Box(
-                modifier = Modifier
-                    .width(boundedWidth)
-                    .fillMaxHeight()
-                    .windowInsetsPadding(contentInsets)
-                    .padding(contentPadding),
-                content = content,
-            )
+            CompositionLocalProvider(LocalExpressivePageGutter provides expressivePageGutter(boundedWidth)) {
+                Box(
+                    modifier = Modifier
+                        .width(boundedWidth)
+                        .fillMaxHeight()
+                        .windowInsetsPadding(contentInsets),
+                    content = content,
+                )
+            }
         }
     }
 }
 
 /** Unified Material state panel for empty, error and informational screen states. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ExpressiveStatePanel(
     title: String,
@@ -355,12 +348,11 @@ fun ExpressiveStatePanel(
 ) {
     val scheme = MaterialTheme.colorScheme
     val isError = tone == ExpressiveStateTone.Error
-    val containerColor = if (isError) scheme.errorContainer else scheme.surfaceContainerHigh
+    val containerColor = if (isError) scheme.errorContainer else scheme.surfaceContainerLow
     val contentColor = if (isError) scheme.onErrorContainer else scheme.onSurface
     val supportingContentColor = if (isError) scheme.onErrorContainer else scheme.onSurfaceVariant
-    val accentColor = if (isError) scheme.error else accentPalette?.accent ?: scheme.primary
     Surface(
-        shape = MaterialTheme.shapes.extraLarge,
+        shape = MaterialTheme.shapes.largeIncreased,
         color = containerColor,
         contentColor = contentColor,
         modifier = modifier
@@ -373,18 +365,18 @@ fun ExpressiveStatePanel(
         Column(
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             icon?.let {
-                Icon(
-                    imageVector = it,
-                    contentDescription = null,
-                    tint = accentColor,
+                ExpressiveFeatureIcon(
+                    icon = it,
+                    containerColor = if (isError) scheme.error else scheme.secondaryContainer,
+                    contentColor = if (isError) scheme.onError else scheme.onSecondaryContainer,
                 )
             }
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMediumEmphasized,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.semantics { heading() },
             )
@@ -397,20 +389,20 @@ fun ExpressiveStatePanel(
             if (actionLabel != null && onAction != null) {
                 Button(
                     onClick = onAction,
-                    shape = MaterialTheme.shapes.extraLarge,
+                    modifier = Modifier.heightIn(min = ExpressiveLayout.MinimumTouchTarget),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = accentPalette?.accent ?: scheme.primary,
                         contentColor = accentPalette?.onAccent ?: scheme.onPrimary,
                     ),
                 ) {
-                    Text(actionLabel)
+                    Text(actionLabel, style = MaterialTheme.typography.labelLargeEmphasized)
                 }
             }
         }
     }
 }
 
-/** Consistent loading presentation; centralized so the expressive indicator can be swapped safely. */
+/** A lightweight in-place status, rather than a second hero competing with the page. */
 @Composable
 fun ExpressiveLoadingState(
     label: String,
@@ -418,27 +410,18 @@ fun ExpressiveLoadingState(
     accentColor: Color = MaterialTheme.colorScheme.primary,
 ) {
     Surface(
-        shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        modifier = modifier
-            .fillMaxWidth()
-            .semantics {
-                liveRegion = LiveRegionMode.Polite
-                stateDescription = label
-            },
+        modifier = modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            LoadingIndicator(color = accentColor)
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyLarge,
-                textAlign = TextAlign.Center,
-            )
+            LoadingIndicator(color = accentColor, modifier = Modifier.size(32.dp))
+            Text(text = label, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

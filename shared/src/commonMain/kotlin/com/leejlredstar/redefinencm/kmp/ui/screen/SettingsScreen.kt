@@ -1,84 +1,91 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
-import com.leejlredstar.redefinencm.kmp.i18n.I18n
-import com.leejlredstar.redefinencm.kmp.i18n.LanguageSetting
-import com.leejlredstar.redefinencm.kmp.i18n.strings
-import com.leejlredstar.redefinencm.kmp.util.rememberNotificationAccess
-import com.leejlredstar.redefinencm.kmp.util.getStringAsync
-import com.leejlredstar.redefinencm.kmp.util.getBooleanAsync
+import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeFlexibleTopAppBar
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.ripple
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import com.leejlredstar.amll.compose.rememberReducedMotionEnabled
+import com.leejlredstar.redefinencm.kmp.data.MetadataCache
+import com.leejlredstar.redefinencm.kmp.data.local.LocalLibraryStore
+import com.leejlredstar.redefinencm.kmp.getPlatform
+import com.leejlredstar.redefinencm.kmp.i18n.I18n
+import com.leejlredstar.redefinencm.kmp.i18n.LanguageSetting
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.lyric.LyricSourceMode
+import com.leejlredstar.redefinencm.kmp.lyric.supportsDynamicNowPlayingCover
+import com.leejlredstar.redefinencm.kmp.notification.LyricSurfaceAlignment
+import com.leejlredstar.redefinencm.kmp.notification.OptionalLyricSurface
+import com.leejlredstar.redefinencm.kmp.notification.WindowedLyricSurface
+import com.leejlredstar.redefinencm.kmp.notification.lyricSurface
+import com.leejlredstar.redefinencm.kmp.player.AudioOutputDevice
+import com.leejlredstar.redefinencm.kmp.player.SYSTEM_DEFAULT_AUDIO_OUTPUT_ID
+import com.leejlredstar.redefinencm.kmp.player.audioOutputDeviceName
+import com.leejlredstar.redefinencm.kmp.player.availableAudioOutputDevices
+import com.leejlredstar.redefinencm.kmp.player.resolveAudioOutputSelection
+import com.leejlredstar.redefinencm.kmp.player.supportsAudioOutputDeviceSelection
 import com.leejlredstar.redefinencm.kmp.transition.BeatAcceleratorState
 import com.leejlredstar.redefinencm.kmp.transition.MAX_CROSSFADE_SECONDS
 import com.leejlredstar.redefinencm.kmp.transition.MIN_CROSSFADE_SECONDS
@@ -86,80 +93,57 @@ import com.leejlredstar.redefinencm.kmp.transition.SongTransitionCoordinator
 import com.leejlredstar.redefinencm.kmp.transition.SongTransitionMode
 import com.leejlredstar.redefinencm.kmp.transition.SongTransitionPreferences
 import com.leejlredstar.redefinencm.kmp.transition.TransitionCapability
-import com.leejlredstar.redefinencm.kmp.lyric.supportsDynamicNowPlayingCover
-import com.leejlredstar.redefinencm.kmp.notification.OptionalLyricSurface
-import com.leejlredstar.redefinencm.kmp.notification.WindowedLyricSurface
-import com.leejlredstar.redefinencm.kmp.notification.lyricSurface
-import com.leejlredstar.redefinencm.kmp.notification.LyricSurfaceAlignment
-import com.leejlredstar.redefinencm.kmp.player.AudioOutputDevice
-import com.leejlredstar.redefinencm.kmp.player.SYSTEM_DEFAULT_AUDIO_OUTPUT_ID
-import com.leejlredstar.redefinencm.kmp.player.audioOutputDeviceName
-import com.leejlredstar.redefinencm.kmp.player.availableAudioOutputDevices
-import com.leejlredstar.redefinencm.kmp.player.resolveAudioOutputSelection
-import com.leejlredstar.redefinencm.kmp.player.supportsAudioOutputDeviceSelection
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveFeatureIcon
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
-import com.leejlredstar.redefinencm.kmp.ui.adaptive.LocalCompactAppBar
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePageBar
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
-import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
-import com.leejlredstar.redefinencm.kmp.ui.component.rememberConnectedListItemShape
-import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
-import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
-import com.leejlredstar.redefinencm.kmp.ui.component.SettingsSectionLabel
-import com.leejlredstar.redefinencm.kmp.ui.component.SettingsTextField
-import com.leejlredstar.redefinencm.kmp.ui.component.SettingsValue
-import com.leejlredstar.redefinencm.kmp.ui.component.SettingsSwitch
+import com.leejlredstar.redefinencm.kmp.ui.component.LocalExpressivePageGutter
 import com.leejlredstar.redefinencm.kmp.ui.component.SettingsButton
-import com.leejlredstar.redefinencm.kmp.ui.component.AccountCard
 import com.leejlredstar.redefinencm.kmp.ui.component.SettingsLinkRow
-import com.leejlredstar.redefinencm.kmp.ui.component.SettingsExpanderRow
-import com.leejlredstar.redefinencm.kmp.util.BuildInfo
-import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
-import com.leejlredstar.redefinencm.kmp.util.SettingKeys
-import com.leejlredstar.redefinencm.kmp.util.sourceCodeUrl
-import com.leejlredstar.redefinencm.kmp.util.SoundQuality
-import com.leejlredstar.redefinencm.kmp.util.cellularPlaybackQuality
-import com.leejlredstar.redefinencm.kmp.util.wifiPlaybackQuality
-import com.leejlredstar.redefinencm.kmp.util.applySettingsBackup
-import com.leejlredstar.redefinencm.kmp.util.encodeSettingsBackup
-import com.leejlredstar.redefinencm.kmp.util.importSettingsBackup
-import com.leejlredstar.redefinencm.kmp.util.SettingsBackupImportResult
-import com.leejlredstar.redefinencm.kmp.util.settingsImportCount
-import com.leejlredstar.redefinencm.kmp.util.settingsImportResult
-import com.leejlredstar.redefinencm.kmp.util.consumeSettingsImportResult
-import com.leejlredstar.redefinencm.kmp.util.redactUrlUserInfo
-import com.leejlredstar.redefinencm.kmp.data.local.LocalLibraryStore
-import com.leejlredstar.redefinencm.kmp.util.rememberExportFileLauncher
-import com.leejlredstar.redefinencm.kmp.util.rememberImportFileLauncher
-import com.leejlredstar.redefinencm.kmp.viewmodel.AccountsViewModel
-import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
-import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.launch
-import org.koin.compose.koinInject
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.layout.ContentScale
-import coil3.compose.AsyncImage
-import com.leejlredstar.redefinencm.kmp.getPlatform
+import com.leejlredstar.redefinencm.kmp.ui.component.SettingsSectionLabel
+import com.leejlredstar.redefinencm.kmp.ui.component.SettingsSwitch
+import com.leejlredstar.redefinencm.kmp.ui.component.SettingsValue
+import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
+import com.leejlredstar.redefinencm.kmp.ui.component.preferenceItem
+import com.leejlredstar.redefinencm.kmp.ui.component.rememberConnectedListItemShape
+import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.ThemeMode
 import com.leejlredstar.redefinencm.kmp.ui.theme.ThemePreferences
 import com.leejlredstar.redefinencm.kmp.ui.theme.dynamicColorSupported
-import kotlin.math.roundToInt
-import com.leejlredstar.redefinencm.kmp.data.MetadataCache
+import com.leejlredstar.redefinencm.kmp.util.BuildInfo
+import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
+import com.leejlredstar.redefinencm.kmp.util.SettingKeys
+import com.leejlredstar.redefinencm.kmp.util.SettingsBackupImportResult
+import com.leejlredstar.redefinencm.kmp.util.SoundQuality
+import com.leejlredstar.redefinencm.kmp.util.applySettingsBackup
+import com.leejlredstar.redefinencm.kmp.util.cellularPlaybackQuality
+import com.leejlredstar.redefinencm.kmp.util.consumeSettingsImportResult
+import com.leejlredstar.redefinencm.kmp.util.encodeSettingsBackup
+import com.leejlredstar.redefinencm.kmp.util.getBooleanAsync
 import com.leejlredstar.redefinencm.kmp.util.getLongAsync
+import com.leejlredstar.redefinencm.kmp.util.getStringAsync
+import com.leejlredstar.redefinencm.kmp.util.importSettingsBackup
+import com.leejlredstar.redefinencm.kmp.util.redactUrlUserInfo
+import com.leejlredstar.redefinencm.kmp.util.rememberExportFileLauncher
+import com.leejlredstar.redefinencm.kmp.util.rememberImportFileLauncher
+import com.leejlredstar.redefinencm.kmp.util.rememberNotificationAccess
+import com.leejlredstar.redefinencm.kmp.util.settingsImportCount
+import com.leejlredstar.redefinencm.kmp.util.settingsImportResult
+import com.leejlredstar.redefinencm.kmp.util.sourceCodeUrl
+import com.leejlredstar.redefinencm.kmp.util.wifiPlaybackQuality
+import com.leejlredstar.redefinencm.kmp.viewmodel.AccountsViewModel
+import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
+import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
+import kotlin.math.roundToInt
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.koin.compose.koinInject
 
 /**
  * The lyric surface's capabilities, as this target has them.
@@ -433,99 +417,34 @@ fun SettingsScreen(
         }
     }
     val launchExport = rememberExportFileLauncher(onFailed = { settingsMessage = strings.settingsExportFailed })
-    val settingsPalette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
+    // Keep observers and the permission launcher under the screen, independent of which
+    // category's items happen to be on screen when they complete.
+    val transitionPreferences by songTransitions.preferences.collectAsState()
+    val transitionAccelerator by songTransitions.accelerator.collectAsState()
+    val transitionModelDownload = songTransitions.modelDownload
+    val transitionDownloadProgress = transitionModelDownload?.collectAsState()?.value
+    val notificationAccess = if (optionalLyricSurface != null) rememberNotificationAccess() else null
+    val uriHandler = LocalUriHandler.current
 
-    // The page title is a LargeFlexibleTopAppBar rather than a hand-rolled hero Box. The bar
-    // owns the collapse: it starts large and shrinks to a compact title as the page scrolls,
-    // which a fixed 188dp gradient header cannot do. Its container is transparent so
-    // ExpressivePage's gradient reads through, and the Scaffold here exists only to give the
-    // bar somewhere to live and to hand back its measured height.
-    val appBarScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    ExpressivePage(
-        accentPalette = settingsPalette,
-        maxContentWidth = ExpressiveLayout.ReadingContentMaxWidth,
-    ) {
-        val compactBar = LocalCompactAppBar.current
-        Scaffold(
-            modifier = if (compactBar) Modifier else Modifier.nestedScroll(appBarScrollBehavior.nestedScrollConnection),
-            containerColor = Color.Transparent,
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            topBar = {
-                val navigationIcon: @Composable () -> Unit = {
-                    onBack?.let { back ->
-                        IconButton(onClick = back) {
-                            Icon(AppIcons.ArrowBack, contentDescription = strings.back)
-                        }
-                    }
-                }
-                val colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = settingsPalette.pageStart,
-                    titleContentColor = settingsPalette.onPageStart,
-                )
-                if (compactBar) {
-                    TopAppBar(title = { Text(strings.settings) }, navigationIcon = navigationIcon, colors = colors)
-                } else {
-                    LargeFlexibleTopAppBar(
-                        title = { Text(strings.settings) },
-                        subtitle = { Text(strings.settingsSubtitle) },
-                        navigationIcon = navigationIcon,
-                        scrollBehavior = appBarScrollBehavior,
-                        colors = colors,
-                    )
-                }
-            },
-        ) { appBarPadding ->
-        // The clearance is padding *inside* the scrolling Column, not on ExpressivePage: padding
-        // the container would shrink the viewport and stop rows above the floating toolbar,
-        // whereas this lets them scroll underneath it while still being reachable at the end.
-        // Keep the restored content position away from the short loading/error panel: measuring
-        // that panel with it would clamp a saved position near About back to zero on navigation.
-        val contentScrollState = rememberScrollState()
-        val loadingScrollState = rememberScrollState()
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = if (compactBar) appBarPadding.calculateTopPadding() else 0.dp)
-                .verticalScroll(if (settingsLoaded && settingsLoadError == null) contentScrollState else loadingScrollState)
-                .padding(
-                    top = if (compactBar) 0.dp else appBarPadding.calculateTopPadding(),
-                    bottom = scaffoldPadding.calculateBottomPadding(),
-                ),
-        ) {
-
-            if (settingsLoadError != null) {
-                ExpressiveStatePanel(
-                    title = strings.settingsLoadFailed,
-                    message = settingsLoadError.orEmpty(),
-                    icon = AppIcons.Refresh,
-                    tone = ExpressiveStateTone.Error,
-                    accentPalette = settingsPalette,
-                    actionLabel = strings.retry,
-                    onAction = { settingsLoadRequest += 1 },
-                    modifier = Modifier.padding(20.dp),
-                )
-            } else if (!settingsLoaded) {
-                ExpressiveLoadingState(
-                    label = strings.settingsLoading,
-                    accentColor = settingsPalette.accent,
-                    modifier = Modifier.padding(20.dp),
-                )
-            } else {
-                Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                // Account first: who is signed in and how to change that are what people open
-                // settings for most. The accounts and each provider's switch, backend address
-                // and raw credential live on their own page; this row says who is signed in where
-                // and opens it.
-                SettingsSectionLabel(strings.settingsSectionAccounts, settingsPalette)
+    SettingsLayout(
+        onBack = onBack,
+        scaffoldPadding = scaffoldPadding,
+        snackbarHostState = snackbarHostState,
+        loaded = settingsLoaded,
+        loadError = settingsLoadError,
+        onRetry = { settingsLoadRequest += 1 },
+    ) { category ->
+        when (category) {
+            SettingsCategory.Accounts -> {
                 SettingsLinkRow(
                     label = strings.accountsAndServices,
                     supportingText = accountsSummary,
-                    accentPalette = settingsPalette,
+                    leadingIcon = AppIcons.Person,
                     onClick = onOpenAccounts,
                 )
+            }
 
-                SettingsSectionLabel(strings.play, settingsPalette)
+            SettingsCategory.Playback -> {
                 // The output-device row sits with the quality dropdowns because it is the other
                 // half of "what comes out of the speakers", not a behaviour toggle.
                 val outputDeviceRows = if (supportsAudioOutputDeviceSelection) 1 else 0
@@ -538,7 +457,6 @@ fun SettingsScreen(
                     wifiQuality,
                     if (isDesktop) strings.streamingQuality else strings.streamingQualityWifi,
                     SoundQuality.entries,
-                    settingsPalette,
                     index = 0,
                     count = playbackSettingCount,
                     supportingText = QualityAvailabilityNote,
@@ -551,7 +469,6 @@ fun SettingsScreen(
                         cellularQuality,
                         strings.streamingQualityCellular,
                         SoundQuality.entries,
-                        settingsPalette,
                         index = 1,
                         count = playbackSettingCount,
                         supportingText = QualityAvailabilityNote,
@@ -563,7 +480,6 @@ fun SettingsScreen(
                 if (supportsAudioOutputDeviceSelection) {
                     AudioOutputDeviceDropdown(
                         selectedId = audioOutputDeviceId,
-                        accentPalette = settingsPalette,
                         index = 1 + cellularRows,
                         count = playbackSettingCount,
                     ) { deviceId ->
@@ -583,7 +499,6 @@ fun SettingsScreen(
                 SettingsSwitch(
                     replacePlaylist,
                     strings.playWholeListOnTap,
-                    settingsPalette,
                     index = 1 + cellularRows + outputDeviceRows,
                     count = playbackSettingCount,
                     supportingText = strings.playWholeListOnTapHint,
@@ -595,7 +510,6 @@ fun SettingsScreen(
                     SettingsSwitch(
                         useDynamicCover,
                         strings.useAnimatedCover,
-                        settingsPalette,
                         index = 2 + cellularRows + outputDeviceRows,
                         count = playbackSettingCount,
                     ) { enabled ->
@@ -606,20 +520,27 @@ fun SettingsScreen(
                         )
                     }
                 }
+            }
 
-                SongTransitionSection(
-                    coordinator = songTransitions,
-                    accentPalette = settingsPalette,
-                    onChange = { write -> persistSettings(write) },
+            SettingsCategory.Transition -> {
+                SongTransitionSettings(
+                    current = transitionPreferences ?: SongTransitionPreferences(),
+                    accelerator = transitionAccelerator,
+                    downloadProgress = transitionDownloadProgress,
+                    downloadsModel = transitionModelDownload != null,
+                    capability = songTransitions.capability,
+                    onModeChange = { mode -> persistSettings({ songTransitions.setMode(mode) }) },
+                    onCrossfadeChange = { seconds -> persistSettings({ songTransitions.setCrossfadeSeconds(seconds) }) },
+                    onProbe = { scope.launch { songTransitions.probeAccelerator() } },
                 )
+            }
 
-                SettingsSectionLabel(strings.lyrics, settingsPalette)
+            SettingsCategory.Lyrics -> {
                 val surfaceRows = if (optionalLyricSurface != null) 1 else 0
                 val surfaceLayoutRows = if (windowedLyricSurface != null) 2 else 0
                 val lyricSettingCount = 3 + surfaceRows + surfaceLayoutRows
                 LyricSourceDropdown(
                     selected = lyricSourceMode,
-                    accentPalette = settingsPalette,
                     index = 0,
                     count = lyricSettingCount,
                 ) { mode ->
@@ -642,20 +563,18 @@ fun SettingsScreen(
                     )
                 }
                 if (optionalLyricSurface != null) {
-                    val notificationAccess = rememberNotificationAccess()
                     SettingsSwitch(
                         extraLyricSurfaceEnabled,
                         optionalLyricSurface.settingLabel,
-                        settingsPalette,
                         index = 1,
                         count = lyricSettingCount,
                         // The switch stays as chosen; this says why nothing appears.
                         supportingText = strings.lyricNotificationBlocked
-                            .takeIf { extraLyricSurfaceEnabled && !notificationAccess.allowed },
+                            .takeIf { extraLyricSurfaceEnabled && notificationAccess?.allowed == false },
                     ) { enabled ->
                         extraLyricSurfaceEnabled = enabled
                         // Asked here, where the reason is plain, rather than at every launch.
-                        if (enabled) notificationAccess.request()
+                        if (enabled) notificationAccess?.request()
                         persistSettings(
                             write = { settings.setBoolean(SettingKeys.ENABLE_EXTRA_LYRIC_SURFACE, enabled) },
                             onWritten = {
@@ -668,7 +587,6 @@ fun SettingsScreen(
                     SettingsSwitch(
                         desktopLyricLocked,
                         strings.lockDesktopLyrics,
-                        settingsPalette,
                         index = 1 + surfaceRows,
                         count = lyricSettingCount,
                         supportingText = strings.desktopLyricsLockHint,
@@ -683,7 +601,6 @@ fun SettingsScreen(
                     }
                     LyricSurfaceAlignmentDropdown(
                         selected = desktopLyricAlignment,
-                        accentPalette = settingsPalette,
                         index = 2 + surfaceRows,
                         count = lyricSettingCount,
                     ) { alignment ->
@@ -704,7 +621,6 @@ fun SettingsScreen(
                 SettingsSwitch(
                     showTranslatedLyric,
                     strings.showTranslatedLyrics,
-                    settingsPalette,
                     index = lyricSettingCount - 2,
                     count = lyricSettingCount,
                 ) { v ->
@@ -727,7 +643,6 @@ fun SettingsScreen(
                 SettingsSwitch(
                     showRomanLyric,
                     strings.showRomanization,
-                    settingsPalette,
                     index = lyricSettingCount - 1,
                     count = lyricSettingCount,
                     supportingText = strings.showRomanizationHint,
@@ -746,13 +661,13 @@ fun SettingsScreen(
                         },
                     )
                 }
+            }
 
-                SettingsSectionLabel(strings.downloads, settingsPalette)
+            SettingsCategory.Downloads -> {
                 SettingsDropdown(
                     dlQuality,
                     strings.downloadQuality,
                     SoundQuality.entries,
-                    settingsPalette,
                     index = 0,
                     count = 2,
                     supportingText = strings.downloadQualityHint,
@@ -763,7 +678,6 @@ fun SettingsScreen(
                 SettingsSwitch(
                     showDownloadStatus,
                     strings.showDownloadStatus,
-                    settingsPalette,
                     index = 1,
                     count = 2,
                     supportingText = strings.showDownloadStatusHint,
@@ -771,8 +685,9 @@ fun SettingsScreen(
                     showDownloadStatus = v
                     persistSettings({ settings.setBoolean(SettingKeys.SHOW_DOWNLOAD_STATUS, v) })
                 }
+            }
 
-                SettingsSectionLabel(strings.settingsSectionGeneral, settingsPalette)
+            SettingsCategory.General -> {
                 val trayRows = if (hasSystemTray) 1 else 0
                 val languageRows = 1
                 val themeRows = languageRows + if (dynamicColorSupported) 2 else 1
@@ -781,9 +696,9 @@ fun SettingsScreen(
                 SettingsDropdownRow(
                     label = strings.settingsLanguage,
                     valueLabel = languageSetting.displayName,
+                    selectedOption = languageSetting,
                     options = LanguageSetting.entries,
                     optionLabel = LanguageSetting::displayName,
-                    accentPalette = settingsPalette,
                     index = 0,
                     count = generalCount,
                 ) { setting ->
@@ -794,9 +709,9 @@ fun SettingsScreen(
                 SettingsDropdownRow(
                     label = strings.theme,
                     valueLabel = themeMode.displayName,
+                    selectedOption = themeMode,
                     options = ThemeMode.entries,
                     optionLabel = ThemeMode::displayName,
-                    accentPalette = settingsPalette,
                     index = languageRows,
                     count = generalCount,
                 ) { mode ->
@@ -807,7 +722,6 @@ fun SettingsScreen(
                     SettingsSwitch(
                         dynamicColor,
                         strings.useWallpaperColors,
-                        settingsPalette,
                         index = languageRows + 1,
                         count = generalCount,
                         supportingText = strings.useWallpaperColorsHint,
@@ -819,7 +733,6 @@ fun SettingsScreen(
                 SettingsSwitch(
                     searchPrediction,
                     strings.searchSuggestions,
-                    settingsPalette,
                     index = themeRows,
                     count = generalCount,
                     supportingText = strings.searchSuggestionsHint,
@@ -831,7 +744,6 @@ fun SettingsScreen(
                     SettingsSwitch(
                         closeToTray,
                         strings.closeToTray,
-                        settingsPalette,
                         index = themeRows + 1,
                         count = generalCount,
                         supportingText = strings.closeToTrayHint,
@@ -843,7 +755,6 @@ fun SettingsScreen(
                 SettingsSwitch(
                     checkUpdate,
                     strings.checkUpdatesOnStartup,
-                    settingsPalette,
                     index = themeRows + 1 + trayRows,
                     count = generalCount,
                 ) { v ->
@@ -852,30 +763,30 @@ fun SettingsScreen(
                 }
                 SettingsButton(
                     strings.checkUpdatesNow,
-                    settingsPalette,
+                    leadingIcon = AppIcons.Refresh,
                     index = themeRows + 2 + trayRows,
                     count = generalCount,
                 ) {
                     mainViewModel.checkForUpdatesNow()
                 }
+            }
 
-                SettingsSectionLabel(strings.metadataCache, settingsPalette)
+            SettingsCategory.Cache -> {
                 SettingsValue(
                     label = strings.metadataCacheUsage,
                     value = if (cacheReadFailed) strings.metadataCacheUnavailable else cacheBytes?.let {
                         strings.metadataCacheSizeKiB((it + 1_023) / 1_024)
                     } ?: strings.loading,
                     supportingText = strings.metadataCacheHint,
-                    accentPalette = settingsPalette,
                     index = 0,
                     count = 3,
                 )
                 SettingsDropdownRow(
                     label = strings.metadataCacheLimit,
                     valueLabel = strings.metadataCacheSizeMiB(cacheLimit),
+                    selectedOption = cacheLimit,
                     options = MetadataCache.LimitChoicesMib,
                     optionLabel = { strings.metadataCacheSizeMiB(it) },
-                    accentPalette = settingsPalette,
                     index = 1,
                     count = 3,
                     supportingText = listOf(strings.metadataCacheLimitHint),
@@ -888,7 +799,7 @@ fun SettingsScreen(
                 }
                 SettingsButton(
                     if (cacheClearing) strings.metadataCacheClearing else strings.metadataCacheClear,
-                    settingsPalette,
+                    leadingIcon = AppIcons.Delete,
                     index = 2,
                     count = 3,
                     enabled = !cacheClearing,
@@ -908,14 +819,16 @@ fun SettingsScreen(
                         }
                     }
                 }
+            }
 
-                SettingsSectionLabel(strings.backup, settingsPalette)
-                // Deliberately two buttons, not a ButtonGroup. ButtonGroupScope.clickableItem
-                // takes `label: String` plus an `icon` composable and rendered nothing at all
-                // here (verified on device with and without an icon, scrolled to the end of the
-                // list), so the group is not usable for two text-labelled actions in this
-                // Compose Multiplatform build.
-                SettingsButton(strings.exportSettings, settingsPalette, index = 0, count = 2, enabled = !importingBackup) {
+            SettingsCategory.Backup -> {
+                SettingsButton(
+                    label = strings.exportSettings,
+                    leadingIcon = AppIcons.OpenInNew,
+                    index = 0,
+                    count = 2,
+                    enabled = !importingBackup,
+                ) {
                     // The local account's playlists travel with the settings (AGENTS.md D6).
                     scope.launch {
                         try {
@@ -926,17 +839,20 @@ fun SettingsScreen(
                 }
                 SettingsButton(
                     if (importingBackup) strings.settingsImporting else strings.importSettings,
-                    settingsPalette, index = 1, count = 2, enabled = !importingBackup,
+                    leadingIcon = AppIcons.FolderOpen,
+                    index = 1,
+                    count = 2,
+                    enabled = !importingBackup,
                 ) {
                     showImportConfirmation = true
                 }
+            }
 
-                SettingsSectionLabel(strings.about, settingsPalette)
+            SettingsCategory.About -> {
                 SettingsValue(
                     label = strings.version,
                     value = BuildInfo.VERSION_NAME,
                     supportingText = strings.buildNumber(BuildInfo.VERSION_CODE),
-                    accentPalette = settingsPalette,
                     index = 0,
                     count = 3,
                 )
@@ -944,34 +860,24 @@ fun SettingsScreen(
                 SettingsLinkRow(
                     label = strings.openSourceLicense,
                     supportingText = strings.openSourceLicensesHint,
-                    accentPalette = settingsPalette,
+                    leadingIcon = AppIcons.Info,
                     index = 1,
                     count = 3,
                     onClick = onOpenLicenses,
                 )
                 // The source this very build was made from: what AGPL asks a network service to
                 // offer the people using it, and what a bug report can point at.
-                val uriHandler = LocalUriHandler.current
                 SettingsLinkRow(
                     label = strings.sourceCode,
                     supportingText = strings.sourceCodeHint,
-                    accentPalette = settingsPalette,
+                    leadingIcon = AppIcons.Link,
+                    external = true,
                     index = 2,
                     count = 3,
                     onClick = { runCatching { uriHandler.openUri(sourceCodeUrl(BuildInfo.COMMIT_HASH)) } },
                 )
-
-                    Spacer(Modifier.height(48.dp))
-                }
-                }
             }
         }
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = scaffoldPadding.calculateBottomPadding()),
-        )
     }
 
     if (showImportConfirmation) {
@@ -1000,28 +906,253 @@ fun SettingsScreen(
     }
 }
 
-/**
- * A settings row that opens a menu.
- *
- * Setting name leading, current value trailing: the M3 list-item arrangement. A label-over-value
- * stack with a caret reads as a filled text field, which makes such rows look like inputs among
- * the switch rows instead of like the same kind of row.
- *
- * Every dropdown in this screen draws through here rather than keeping its own copy of the
- * surface, the row and the menu; separate copies drift apart.
- *
- * @param valueLabel what the row shows for the current choice. The caller supplies it because a
- *   choice is not always one of [options]: a saved audio device can be gone.
- * @param menuLabel the menu has room to say what the compact row cannot.
- * @param onExpandedChange for options that are enumerated fresh each time the menu opens.
- */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsLayout(
+    onBack: (() -> Unit)?,
+    scaffoldPadding: PaddingValues,
+    snackbarHostState: SnackbarHostState,
+    loaded: Boolean,
+    loadError: String?,
+    onRetry: () -> Unit,
+    categoryContent: @Composable (SettingsCategory) -> Unit,
+) {
+    // Do not measure the loading/error UI with this state. That would clamp the restored
+    // position when returning from Accounts or Licenses while settings are still loading.
+    val listState = rememberLazyListState()
+    val ready = loaded && loadError == null
+    val scope = rememberCoroutineScope()
+    var jumpJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var landing by remember { mutableStateOf<SettingsIndexLanding?>(null) }
+    val activeCategory by remember(listState) {
+        derivedStateOf {
+            val first = listState.firstVisibleItemIndex
+            activeSettingsCategory(
+                firstVisibleIndex = first,
+                firstVisibleOffset = listState.firstVisibleItemScrollOffset,
+                lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: first,
+                canScrollForward = listState.canScrollForward,
+                landing = landing,
+            )
+        }
+    }
+    LaunchedEffect(listState) {
+        androidx.compose.runtime.snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                landing?.let { if (it.listIndex != index || it.scrollOffset != offset) landing = null }
+            }
+    }
+    val reducedMotion = rememberReducedMotionEnabled()
+    fun jumpTo(category: SettingsCategory) {
+        jumpJob?.cancel()
+        landing = null
+        jumpJob = scope.launch {
+            if (reducedMotion) listState.scrollToItem(category.listIndex)
+            else listState.animateScrollToItem(category.listIndex)
+            if (category.listIndex in listState.layoutInfo.visibleItemsInfo.map { it.index }) {
+                landing = SettingsIndexLanding(category, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+            }
+        }
+    }
+
+    ExpressivePage(contentWindowInsets = WindowInsets.statusBars.only(WindowInsetsSides.Top)) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val gutter = LocalExpressivePageGutter.current
+            val indexedBeside = maxWidth >= 840.dp
+            val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+            Scaffold(
+                modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+                containerColor = Color.Transparent,
+                contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                topBar = {
+                    ExpressivePageBar(title = strings.settings, onBack = onBack, scrollBehavior = scrollBehavior) {
+                        if (ready && !indexedBeside) SettingsIndexMenu(activeCategory, ::jumpTo)
+                    }
+                },
+            ) { barPadding ->
+                Row(
+                    modifier = Modifier.fillMaxSize().padding(top = barPadding.calculateTopPadding()),
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    if (ready && indexedBeside) {
+                        SettingsIndexPane(
+                            active = activeCategory,
+                            onChoose = ::jumpTo,
+                            modifier = Modifier.width(244.dp).padding(start = gutter, end = 8.dp, top = 16.dp),
+                            bottomPadding = scaffoldPadding,
+                        )
+                    }
+                    Box(
+                        Modifier.widthIn(max = 760.dp).weight(1f, fill = false).fillMaxSize(),
+                        contentAlignment = Alignment.TopCenter,
+                    ) {
+                        if (ready) {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(
+                                    start = gutter,
+                                    end = gutter,
+                                    top = 16.dp,
+                                    bottom = scaffoldPadding.calculateBottomPadding() + 24.dp,
+                                ),
+                                verticalArrangement = Arrangement.spacedBy(24.dp),
+                            ) {
+                                item(key = "settings-hero") { SettingsHero() }
+                                items(SettingsCategory.entries, key = { it.name }) { category ->
+                                    Column(Modifier.fillMaxWidth()) {
+                                        SettingsSectionLabel(category.label)
+                                        categoryContent(category)
+                                    }
+                                }
+                            }
+                        } else {
+                            Column(
+                                Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                                    .padding(horizontal = gutter)
+                                    .padding(top = 16.dp, bottom = scaffoldPadding.calculateBottomPadding() + 16.dp),
+                            ) {
+                                if (loadError == null) {
+                                    ExpressiveLoadingState(label = strings.settingsLoading)
+                                } else {
+                                    ExpressiveStatePanel(
+                                        title = strings.settingsLoadFailed,
+                                        message = loadError,
+                                        icon = AppIcons.Refresh,
+                                        tone = ExpressiveStateTone.Error,
+                                        actionLabel = strings.retry,
+                                        onAction = onRetry,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = scaffoldPadding.calculateBottomPadding()),
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun SettingsHero() {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .background(
+                Brush.horizontalGradient(listOf(scheme.primaryContainer, lerp(scheme.primaryContainer, scheme.surfaceContainerHigh, 0.45f))),
+                RoundedCornerShape(ExpressiveLayout.FeatureCorner),
+            )
+            .padding(20.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ExpressiveFeatureIcon(AppIcons.Settings, containerColor = scheme.primary, contentColor = scheme.onPrimary)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = strings.settings,
+                style = MaterialTheme.typography.headlineMediumEmphasized,
+                color = scheme.onPrimaryContainer,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(strings.settingsHeroSubtitle, style = MaterialTheme.typography.bodyMedium, color = scheme.onPrimaryContainer)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun SettingsIndexMenu(active: SettingsCategory, onChoose: (SettingsCategory) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(AppIcons.QueueMusic, contentDescription = strings.settingsCategories)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            Text(
+                text = strings.settingsCategories,
+                style = MaterialTheme.typography.labelLargeEmphasized,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).semantics { heading() },
+            )
+            SettingsCategory.entries.forEach { category ->
+                val selected = category == active
+                DropdownMenuItem(
+                    text = {
+                        Text(category.label, style = if (selected) MaterialTheme.typography.labelLargeEmphasized else MaterialTheme.typography.labelLarge)
+                    },
+                    leadingIcon = { Icon(category.icon, contentDescription = null) },
+                    trailingIcon = if (selected) ({ Icon(AppIcons.Check, contentDescription = null) }) else null,
+                    modifier = Modifier.semantics { this.selected = selected },
+                    onClick = { expanded = false; onChoose(category) },
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun SettingsIndexPane(
+    active: SettingsCategory,
+    onChoose: (SettingsCategory) -> Unit,
+    modifier: Modifier = Modifier,
+    bottomPadding: PaddingValues,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val listState = rememberLazyListState()
+    LaunchedEffect(active) {
+        if (listState.layoutInfo.visibleItemsInfo.none { it.index == active.listIndex }) {
+            listState.scrollToItem(active.listIndex)
+        }
+    }
+    LazyColumn(
+        state = listState,
+        modifier = modifier.selectableGroup(),
+        contentPadding = PaddingValues(bottom = bottomPadding.calculateBottomPadding() + 16.dp),
+        verticalArrangement = Arrangement.spacedBy(ExpressiveLayout.ConnectedItemGap),
+    ) {
+        item { SettingsSectionLabel(strings.settingsCategories) }
+        items(SettingsCategory.entries, key = { it.name }) { category ->
+            val selected = category == active
+            Surface(
+                selected = selected,
+                onClick = { onChoose(category) },
+                shape = connectedListItemShape(category.ordinal, SettingsCategory.entries.size),
+                color = if (selected) scheme.secondaryContainer else scheme.surfaceContainer,
+                contentColor = if (selected) scheme.onSecondaryContainer else scheme.onSurface,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(category.icon, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Text(
+                        category.label,
+                        style = if (selected) MaterialTheme.typography.labelLargeEmphasized else MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (selected) Icon(AppIcons.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                }
+            }
+        }
+    }
+}
+
+/** Shows the current value in the row, and marks the current option in the opened menu. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun <T> SettingsDropdownRow(
     label: String,
     valueLabel: String,
+    selectedOption: T,
     options: List<T>,
     optionLabel: (T) -> String,
-    accentPalette: ContentAccentPalette,
     index: Int,
     count: Int,
     supportingText: List<String> = emptyList(),
@@ -1035,82 +1166,58 @@ private fun <T> SettingsDropdownRow(
         onExpandedChange(open)
     }
     val interactionSource = remember { MutableInteractionSource() }
+    val scheme = MaterialTheme.colorScheme
+    val valueStyle = MaterialTheme.typography.bodyMediumEmphasized
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
     Surface(
         onClick = { setExpanded(true) },
         shape = rememberConnectedListItemShape(index, count, interactionSource),
-        color = accentPalette.quietContainer,
-        contentColor = accentPalette.onQuietContainer,
+        color = scheme.surfaceContainerHigh,
         interactionSource = interactionSource,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = ExpressiveLayout.ConnectedItemGap),
+        modifier = Modifier.preferenceItem(),
     ) {
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-        // At most four tenths of the row for the value. One that needs more goes under the label
-        // in full: cut short beside it, the row showed half of what was chosen and squeezed the
-        // label's explanation into a narrow column, which is every long option on a phone.
-        val valueMaxWidth = maxWidth * 0.4f
-        val valueStyle = MaterialTheme.typography.bodyMedium
-        val textMeasurer = rememberTextMeasurer()
-        val density = LocalDensity.current
-        val valueFits = remember(valueLabel, valueStyle, valueMaxWidth, density) {
-            val width = textMeasurer.measure(valueLabel, valueStyle, maxLines = 1).size.width
-            with(density) { width.toDp() } <= valueMaxWidth
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = ExpressiveLayout.MinimumTouchTarget)
-                .padding(start = 20.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(text = label, style = MaterialTheme.typography.bodyLarge)
-                if (!valueFits) {
-                    Text(
-                        text = valueLabel,
-                        style = valueStyle,
-                        color = accentPalette.onQuietContainer,
-                    )
+        Box {
+            BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                // Budget both the value and the affordance before deciding whether there is
+                // enough room beside the label. Long translations and large type stack instead.
+                val valueMaxWidth = (maxWidth - 24.dp).coerceAtLeast(0.dp) * 0.34f
+                val valueFits = with(density) {
+                    textMeasurer.measure(valueLabel, valueStyle, maxLines = 1).size.width.toDp() <= valueMaxWidth
                 }
-                supportingText.forEach { note ->
-                    Text(
-                        text = note,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = accentPalette.secondaryOnQuietContainer,
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = if (supportingText.isEmpty()) 56.dp else 72.dp)
+                        .padding(vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(label, style = MaterialTheme.typography.bodyLarge)
+                        if (!valueFits) Text(valueLabel, style = valueStyle, color = scheme.primary)
+                        supportingText.forEach { note ->
+                            Text(note, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                        }
+                    }
+                    if (valueFits) Text(valueLabel, style = valueStyle, color = scheme.primary, maxLines = 1)
+                    Icon(AppIcons.UnfoldMore, contentDescription = null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                 }
             }
-            if (valueFits) {
-                Spacer(Modifier.width(16.dp))
-                Text(
-                    text = valueLabel,
-                    style = valueStyle,
-                    color = accentPalette.secondaryOnQuietContainer,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = valueMaxWidth),
-                )
-            }
-            // Up/down arrows: this row opens a menu in place. A right chevron would promise a
-            // new page and then open a menu.
-            Icon(
-                AppIcons.UnfoldMore,
-                contentDescription = null,
-                tint = accentPalette.secondaryOnQuietContainer,
-                modifier = Modifier.padding(start = 4.dp).size(20.dp),
-            )
-        }
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { setExpanded(false) }) {
-            options.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(menuLabel(option)) },
-                    onClick = {
-                        setExpanded(false)
-                        onUpdate(option)
-                    },
-                )
+            DropdownMenu(expanded = expanded, onDismissRequest = { setExpanded(false) }) {
+                options.forEach { option ->
+                    val selected = option == selectedOption
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                menuLabel(option),
+                                style = if (selected) MaterialTheme.typography.labelLargeEmphasized else MaterialTheme.typography.labelLarge,
+                                color = if (selected) scheme.primary else scheme.onSurface,
+                            )
+                        },
+                        trailingIcon = if (selected) ({ Icon(AppIcons.Check, contentDescription = null, tint = scheme.primary) }) else null,
+                        modifier = Modifier.semantics { this.selected = selected },
+                        onClick = { setExpanded(false); onUpdate(option) },
+                    )
+                }
             }
         }
     }
@@ -1121,7 +1228,6 @@ private fun SettingsDropdown(
     selectedName: String,
     label: String,
     options: List<SoundQuality>,
-    accentPalette: ContentAccentPalette,
     index: Int,
     count: Int,
     supportingText: String? = null,
@@ -1131,9 +1237,9 @@ private fun SettingsDropdown(
     SettingsDropdownRow(
         label = label,
         valueLabel = current.toString(),
+        selectedOption = current,
         options = options,
         optionLabel = { it.toString() },
-        accentPalette = accentPalette,
         index = index,
         count = count,
         supportingText = listOfNotNull(supportingText),
@@ -1163,7 +1269,6 @@ private val DefaultAudioOutputMenuLabel: String get() = strings.audioOutputSyste
 @Composable
 private fun AudioOutputDeviceDropdown(
     selectedId: String,
-    accentPalette: ContentAccentPalette,
     index: Int,
     count: Int,
     onUpdate: (String) -> Unit,
@@ -1190,6 +1295,7 @@ private fun AudioOutputDeviceDropdown(
     SettingsDropdownRow(
         label = strings.audioOutputDevice,
         valueLabel = selectedLabel,
+        selectedOption = selected?.id ?: SYSTEM_DEFAULT_AUDIO_OUTPUT_ID,
         options = listOf(SYSTEM_DEFAULT_AUDIO_OUTPUT_ID) + known.orEmpty().map { it.id },
         optionLabel = { id ->
             if (id == SYSTEM_DEFAULT_AUDIO_OUTPUT_ID) {
@@ -1207,7 +1313,6 @@ private fun AudioOutputDeviceDropdown(
                     ?: audioOutputDeviceName(id)
             }
         },
-        accentPalette = accentPalette,
         index = index,
         count = count,
         onExpandedChange = { enumerations += 1 },
@@ -1219,7 +1324,6 @@ private fun AudioOutputDeviceDropdown(
 @Composable
 private fun LyricSurfaceAlignmentDropdown(
     selected: LyricSurfaceAlignment,
-    accentPalette: ContentAccentPalette,
     index: Int,
     count: Int,
     onUpdate: (LyricSurfaceAlignment) -> Unit,
@@ -1227,9 +1331,9 @@ private fun LyricSurfaceAlignmentDropdown(
     SettingsDropdownRow(
         label = strings.desktopLyricsAlignment,
         valueLabel = selected.displayName,
+        selectedOption = selected,
         options = LyricSurfaceAlignment.entries,
         optionLabel = LyricSurfaceAlignment::displayName,
-        accentPalette = accentPalette,
         index = index,
         count = count,
         onUpdate = onUpdate,
@@ -1239,7 +1343,6 @@ private fun LyricSurfaceAlignmentDropdown(
 @Composable
 private fun LyricSourceDropdown(
     selected: LyricSourceMode,
-    accentPalette: ContentAccentPalette,
     index: Int,
     count: Int,
     onUpdate: (LyricSourceMode) -> Unit,
@@ -1247,9 +1350,9 @@ private fun LyricSourceDropdown(
     SettingsDropdownRow(
         label = strings.lyricsSource,
         valueLabel = selected.displayName,
+        selectedOption = selected,
         options = LyricSourceMode.entries,
         optionLabel = LyricSourceMode::displayName,
-        accentPalette = accentPalette,
         index = index,
         count = count,
         supportingText = listOf(
@@ -1273,59 +1376,46 @@ private val SongTransitionMode.menuLabel: String
         SongTransitionMode.SMART -> strings.transitionSmartMenu
     }
 
-/**
- * How one song hands over to the next: not at all, a fixed crossfade, or a smart transition, and
- * for smart transitions what the beat model runs on here.
- *
- * The coordinator persists and applies a change itself; [onChange] only carries the write through
- * the page's own save path, so a failed durable write reports here like every other row.
- */
+/** The transition coordinator still owns persistence and all operation state. */
 @Composable
-private fun SongTransitionSection(
-    coordinator: SongTransitionCoordinator,
-    accentPalette: ContentAccentPalette,
-    onChange: (write: () -> Unit) -> Unit,
+private fun SongTransitionSettings(
+    current: SongTransitionPreferences,
+    accelerator: BeatAcceleratorState,
+    downloadProgress: Float?,
+    downloadsModel: Boolean,
+    capability: TransitionCapability,
+    onModeChange: (SongTransitionMode) -> Unit,
+    onCrossfadeChange: (Long) -> Unit,
+    onProbe: () -> Unit,
 ) {
-    val preferences by coordinator.preferences.collectAsState()
-    val accelerator by coordinator.accelerator.collectAsState()
-    // Null on platforms whose loader never downloads the model; fixed for the session either way.
-    val modelDownload = coordinator.modelDownload
-    val downloadProgress = modelDownload?.collectAsState()?.value
-    val current = preferences ?: SongTransitionPreferences()
-    val capability = coordinator.capability
-    val scope = rememberCoroutineScope()
     val rows = if (current.mode == SongTransitionMode.OFF) 1 else 2
-
-    SettingsSectionLabel(strings.songTransitions, accentPalette)
     SettingsDropdownRow(
         label = strings.betweenSongs,
         valueLabel = current.mode.displayName,
+        selectedOption = current.mode,
         options = SongTransitionMode.entries,
         optionLabel = { it.displayName },
         menuLabel = { it.menuLabel },
-        accentPalette = accentPalette,
         index = 0,
         count = rows,
         supportingText = listOfNotNull(songTransitionNote(current.mode, capability)),
-        onUpdate = { mode -> onChange { coordinator.setMode(mode) } },
+        onUpdate = onModeChange,
     )
     when (current.mode) {
         SongTransitionMode.OFF -> Unit
         SongTransitionMode.CROSSFADE -> CrossfadeLengthRow(
             seconds = current.crossfadeSeconds,
-            accentPalette = accentPalette,
             index = 1,
             count = rows,
-            onUpdate = { seconds -> onChange { coordinator.setCrossfadeSeconds(seconds) } },
+            onUpdate = onCrossfadeChange,
         )
         SongTransitionMode.SMART -> BeatAnalysisRow(
             state = accelerator,
             downloadProgress = downloadProgress,
-            downloadsModel = modelDownload != null,
-            accentPalette = accentPalette,
+            downloadsModel = downloadsModel,
             index = 1,
             count = rows,
-            onProbe = { scope.launch { coordinator.probeAccelerator() } },
+            onProbe = onProbe,
         )
     }
 }
@@ -1342,7 +1432,6 @@ private fun songTransitionNote(mode: SongTransitionMode, capability: TransitionC
 @Composable
 private fun CrossfadeLengthRow(
     seconds: Long,
-    accentPalette: ContentAccentPalette,
     index: Int,
     count: Int,
     onUpdate: (Long) -> Unit,
@@ -1350,19 +1439,16 @@ private fun CrossfadeLengthRow(
     var dragged by remember(seconds) { mutableStateOf(seconds.toFloat()) }
     Surface(
         shape = connectedListItemShape(index = index, count = count),
-        color = accentPalette.quietContainer,
-        contentColor = accentPalette.onQuietContainer,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = ExpressiveLayout.ConnectedItemGap),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.preferenceItem(),
     ) {
-        Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 6.dp)) {
+        Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(strings.transitionLength, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                 Text(
                     text = strings.secondsValue(dragged.roundToInt()),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = accentPalette.secondaryOnQuietContainer,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Slider(
@@ -1371,11 +1457,6 @@ private fun CrossfadeLengthRow(
                 onValueChangeFinished = { onUpdate(dragged.roundToInt().toLong()) },
                 valueRange = MIN_CROSSFADE_SECONDS.toFloat()..MAX_CROSSFADE_SECONDS.toFloat(),
                 steps = (MAX_CROSSFADE_SECONDS - MIN_CROSSFADE_SECONDS - 1).toInt(),
-                colors = SliderDefaults.colors(
-                    thumbColor = accentPalette.accent,
-                    activeTrackColor = accentPalette.accent,
-                    inactiveTrackColor = accentPalette.onQuietContainer.copy(alpha = 0.16f),
-                ),
             )
         }
     }
@@ -1387,7 +1468,6 @@ private fun BeatAnalysisRow(
     state: BeatAcceleratorState,
     downloadProgress: Float?,
     downloadsModel: Boolean,
-    accentPalette: ContentAccentPalette,
     index: Int,
     count: Int,
     onProbe: () -> Unit,
@@ -1407,43 +1487,29 @@ private fun BeatAnalysisRow(
     }
     Surface(
         shape = connectedListItemShape(index = index, count = count),
-        color = accentPalette.quietContainer,
-        contentColor = accentPalette.onQuietContainer,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = ExpressiveLayout.ConnectedItemGap),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.preferenceItem(),
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Column(Modifier.weight(1f)) {
-                Text(strings.beatAnalysis, style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = accentPalette.secondaryOnQuietContainer,
-                )
-                val details = listOf(
-                    note,
-                    if (downloadsModel) strings.beatModelDownloadNote else "",
-                    strings.beatAnalysisSourceNote,
-                ).filter { it.isNotEmpty() }
-                details.forEach { line ->
-                    Text(
-                        text = line,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = accentPalette.secondaryOnQuietContainer,
-                    )
-                }
+            Text(strings.beatAnalysis, style = MaterialTheme.typography.bodyLarge)
+            Text(value, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+            val details = listOf(
+                note,
+                if (downloadsModel) strings.beatModelDownloadNote else "",
+                strings.beatAnalysisSourceNote,
+            ).filter { it.isNotEmpty() }
+            details.forEach { line ->
+                Text(line, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            if (state == BeatAcceleratorState.NotLoaded) {
-                Spacer(Modifier.width(12.dp))
-                TextButton(onClick = onProbe) { Text(strings.checkNow) }
-            } else if (state is BeatAcceleratorState.Unavailable && state.retryable) {
-                Spacer(Modifier.width(12.dp))
-                TextButton(onClick = onProbe) { Text(strings.retry) }
+            val actionLabel = when {
+                state == BeatAcceleratorState.NotLoaded -> strings.checkNow
+                state is BeatAcceleratorState.Unavailable && state.retryable -> strings.retry
+                else -> null
             }
+            if (actionLabel != null) TextButton(onClick = onProbe) { Text(actionLabel) }
         }
     }
 }

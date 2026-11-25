@@ -21,11 +21,10 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -58,9 +57,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -75,9 +72,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalWideNavigationRail
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
@@ -85,6 +80,9 @@ import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.NavigationRailDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ShortNavigationBar
+import androidx.compose.material3.ShortNavigationBarArrangement
+import androidx.compose.material3.ShortNavigationBarItem
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarResult
@@ -113,17 +111,21 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
+import com.leejlredstar.amll.compose.rememberReducedMotionEnabled
 import com.leejlredstar.redefinencm.kmp.lyric.AmllPlayerScreen
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.AndroidNavigationLayout
@@ -145,7 +147,6 @@ import com.leejlredstar.redefinencm.kmp.ui.component.ReflowProgress
 import com.leejlredstar.redefinencm.kmp.ui.component.reflowPlacement
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberNowPlayingUiState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
 import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
 import com.leejlredstar.redefinencm.kmp.ui.component.TransportSheets
 import com.leejlredstar.redefinencm.kmp.ui.component.TransportSheetsState
@@ -192,22 +193,7 @@ import org.koin.compose.koinInject
  * The three tabs: recommendations, search and the library. Settings is a page, opened from the
  * library and from the foot of the desktop sidebar.
  */
-private sealed interface TabDest {
-    /** Left to right along the bar; the page transition travels the same way. */
-    val order: Int
-
-    data object Home : TabDest {
-        override val order: Int = 0
-    }
-
-    data object Search : TabDest {
-        override val order: Int = 1
-    }
-
-    data object My : TabDest {
-        override val order: Int = 2
-    }
-}
+private enum class TabDest { Home, Search, My }
 
 internal sealed interface PushedDest {
     /** The login page for one provider; NetEase's is the one that opens on first launch. */
@@ -396,7 +382,7 @@ fun App() {
  * Uses [ToggleButton] instead of a plain icon button so selection carries Material's own shape
  * morph: the silhouette relaxes between round and squared as the item becomes checked. The morph
  * takes the place of the pill indicator a `NavigationBarItem` draws behind the icon, and the
- * label is revealed only on the selected item so the toolbar stays compact on narrow windows.
+ * labels stay visible when they fit; selection supplies the label on narrower touch layouts.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -404,22 +390,15 @@ private fun ExpressiveNavToggle(
     label: String,
     icon: ImageVector,
     selected: Boolean,
-    palette: ContentAccentPalette,
+    showLabel: Boolean,
     onSelect: () -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
     // A ToggleButton says "checkbox, not checked" to a screen reader, and picking the current
     // tab sounded like unchecking it. The button keeps its look and morph; what is announced is
     // a tab, selected or not, named by its label.
     Box(
-        Modifier.clearAndSetSemantics {
-            role = Role.Tab
-            this.selected = selected
-            contentDescription = label
-            onClick {
-                onSelect()
-                true
-            }
-        },
+        Modifier.navigationTabSemantics(label, selected, onSelect),
     ) {
         ToggleButton(
             checked = selected,
@@ -427,18 +406,35 @@ private fun ExpressiveNavToggle(
             shapes = ToggleButtonDefaults.shapes(),
             colors = ToggleButtonDefaults.toggleButtonColors(
                 containerColor = Color.Transparent,
-                contentColor = palette.secondaryOnQuietContainer,
-                checkedContainerColor = palette.container,
-                checkedContentColor = palette.onContainer,
+                contentColor = scheme.onSurfaceVariant,
+                checkedContainerColor = scheme.secondaryContainer,
+                checkedContentColor = scheme.onSecondaryContainer,
             ),
         ) {
             Icon(icon, contentDescription = null)
-            AnimatedVisibility(visible = selected) {
-                Text(text = label, modifier = Modifier.padding(start = 8.dp))
+            if (showLabel) {
+                Text(
+                    text = label,
+                    style = if (selected) MaterialTheme.typography.labelLargeEmphasized else MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(start = 8.dp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
 }
+
+private fun Modifier.navigationTabSemantics(label: String, selected: Boolean, onSelect: () -> Unit): Modifier =
+    clearAndSetSemantics {
+        role = Role.Tab
+        this.selected = selected
+        contentDescription = label
+        onClick {
+            onSelect()
+            true
+        }
+    }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -451,6 +447,10 @@ private fun AppContent(
             val nowPlayingViewModel: NowPlayingViewModel = koinInject()
             val player: PlatformPlayer = koinInject()
             val desktopSheets = rememberTransportSheetsState()
+            val reducedMotion = rememberReducedMotionEnabled()
+            val scheme = MaterialTheme.colorScheme
+            val motion = MaterialTheme.motionScheme
+            val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
             val currentMedia by player.currentMedia.collectAsState()
             val chromeAccentSource = currentMedia?.artworkUri
             val defaultChromeAccent = MaterialTheme.colorScheme.primaryContainer
@@ -459,7 +459,7 @@ private fun AppContent(
             var rawChromeAccent by remember(chromeAccentSource) { mutableStateOf<Color?>(null) }
             val chromeAccent by animateColorAsState(
                 targetValue = rawChromeAccent ?: defaultChromeAccent,
-                animationSpec = spring(),
+                animationSpec = if (reducedMotion) snap() else motion.defaultEffectsSpec(),
                 label = "appChromeAccent",
             )
             val chromePalette = contentAccentPalette(chromeAccent)
@@ -790,6 +790,7 @@ private fun AppContent(
                         else -> contentBottomInset
                     }
                     Scaffold(
+                        containerColor = scheme.surface,
                         contentWindowInsets = WindowInsets(0, 0, 0, 0),
                         bottomBar = {
                             if (compactDockVisible) {
@@ -797,9 +798,7 @@ private fun AppContent(
                                     tabs = tabs,
                                     selectedTab = currentTab,
                                     onSelect = ::selectTab,
-                                    palette = chromePalette,
                                     insets = bottomInsets.only(WindowInsetsSides.Bottom).union(browseSides),
-                                    height = 56.dp + systemNavInset,
                                     playerLabel = dockPlayerLabel,
                                     onOpenPlayer = ::openNowPlaying,
                                     motion = navigationMotion,
@@ -817,8 +816,8 @@ private fun AppContent(
                             key(androidFabSlot) {
                                 AnimatedVisibility(
                                     visible = miniPlayerShown,
-                                    enter = miniPlayerEnterTransition(),
-                                    exit = miniPlayerExitTransition(),
+                                    enter = if (reducedMotion) EnterTransition.None else miniPlayerEnterTransition(motion),
+                                    exit = if (reducedMotion) ExitTransition.None else miniPlayerExitTransition(motion),
                                 ) {
                                     // Scaffold does not reserve the toolbar's height, so the FAB
                                     // has to step over the floating pill itself.
@@ -870,7 +869,6 @@ private fun AppContent(
                                     },
                                     downloadsSelected = rootDest is RootDest.Pushed &&
                                         rootDest.dest is PushedDest.Downloads,
-                                    accentPalette = chromePalette,
                                     onSelectTab = ::selectTab,
                                     onOpenDownloads = ::openDownloads,
                                     recognitionSelected = rootDest is RootDest.Pushed &&
@@ -885,14 +883,13 @@ private fun AppContent(
                             } else if (showMobileRail) {
                                 AnimatedVisibility(
                                     visible = showTabs,
-                                    enter = railEnterTransition(),
-                                    exit = railExitTransition(),
+                                    enter = if (reducedMotion) EnterTransition.None else railEnterTransition(motion, rtl),
+                                    exit = if (reducedMotion) ExitTransition.None else railExitTransition(motion, rtl),
                                 ) {
                                     MobileNavigationRail(
                                         tabs = tabs,
                                         selectedTab = currentTab,
                                         onSelect = ::selectTab,
-                                        palette = chromePalette,
                                         insets = if (platform.isAndroid) {
                                             WindowInsets.statusBars.only(WindowInsetsSides.Top)
                                                 .union(browseObstructions?.only(WindowInsetsSides.Top + WindowInsetsSides.Start)
@@ -913,17 +910,13 @@ private fun AppContent(
                             } else Modifier
                             Box(Modifier.weight(1f).fillMaxSize().then(railStartInsets)) {
                             Column(Modifier.fillMaxSize()) {
-                                AnimatedContent(
-                                    targetState = rootDest,
-                                    transitionSpec = {
-                                        pageTransition(
-                                            initial = initialState,
-                                            target = targetState,
-                                        )
-                                    },
-                                    modifier = Modifier.weight(1f).fillMaxSize(),
-                                    label = "AppPageTransition",
-                                ) { target ->
+                                AppPageTransition(
+                                    destination = rootDest,
+                                    modifier = Modifier.weight(1f),
+                                    motion = motion,
+                                    reducedMotion = reducedMotion,
+                                    rtl = rtl,
+                                ) { target, searchEntryModifier ->
                                     saveableStateHolder.SaveableStateProvider(target.stateKey()) {
                                     CompositionLocalProvider(
                                         LocalCompactAppBar provides compactAppBar,
@@ -1011,22 +1004,24 @@ private fun AppContent(
                                             )
                                         }
                                         is RootDest.Tab -> when (target.tab) {
-                                            is TabDest.Home -> HomeScreen(
+                                            TabDest.Home -> HomeScreen(
                                                 scaffoldPadding = screenPadding,
                                                 onOpenPlaylist = { push(PushedDest.Playlist(it)) },
                                                 onOpenMy = { currentTab = TabDest.My },
                                                 onOpenRecognition = { push(PushedDest.SongRecognition) },
                                                 onOpenDailySongs = { push(PushedDest.DailySongs) },
                                                 onOpenSearch = ::openSearch,
+                                                 searchEntryModifier = searchEntryModifier,
                                                 onOpenLogin = { push(PushedDest.Login()) },
                                             )
-                                            is TabDest.Search -> SearchScreen(
+                                            TabDest.Search -> SearchScreen(
                                                 bottomPadding = screenPadding.calculateBottomPadding() + 16.dp,
+                                                 searchEntryModifier = searchEntryModifier,
                                                 focusRequest = searchFocusRequest,
                                                 onFocusRequestHandled = { searchFocusRequest = 0 },
                                                 isActive = target == rootDest,
                                             )
-                                            is TabDest.My -> UserPlaylistScreen(
+                                            TabDest.My -> UserPlaylistScreen(
                                                 scaffoldPadding = screenPadding,
                                                 onOpenPlaylist = { push(PushedDest.Playlist(it)) },
                                                 onOpenLogin = { push(PushedDest.Login()) },
@@ -1070,6 +1065,9 @@ private fun AppContent(
                                     .padding(horizontal = 16.dp, vertical = 14.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
+                                val effectiveToolbarWidth = windowWidth / LocalDensity.current.fontScale
+                                val showAllLabels = effectiveToolbarWidth >= 480.dp && !desktopCompact
+                                val downloadsActive = desktopCompact && rootDest is RootDest.Pushed && rootDest.dest is PushedDest.Downloads
                                 HorizontalFloatingToolbar(
                                     expanded = true,
                                     // One group of tabs: "tab, 2 of 3" rather than loose buttons.
@@ -1078,16 +1076,16 @@ private fun AppContent(
                                          .selectableGroup(),
                                     scrollBehavior = toolbarScrollBehavior,
                                     colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
-                                        toolbarContainerColor = chromePalette.quietContainer,
-                                        toolbarContentColor = chromePalette.onQuietContainer,
+                                        toolbarContainerColor = scheme.surfaceContainer,
+                                        toolbarContentColor = scheme.onSurfaceVariant,
                                     ),
                                 ) {
                                     tabs.forEach { item ->
                                         ExpressiveNavToggle(
                                             label = item.label,
                                             icon = item.icon,
-                                            selected = currentTab == item.dest,
-                                            palette = chromePalette,
+                                            selected = !downloadsActive && currentTab == item.dest,
+                                            showLabel = showAllLabels || (effectiveToolbarWidth >= 280.dp && !downloadsActive && currentTab == item.dest),
                                             onSelect = { selectTab(item.dest) },
                                         )
                                     }
@@ -1095,9 +1093,8 @@ private fun AppContent(
                                         ExpressiveNavToggle(
                                             label = strings.downloads,
                                             icon = AppIcons.Download,
-                                            selected = rootDest is RootDest.Pushed &&
-                                                rootDest.dest is PushedDest.Downloads,
-                                            palette = chromePalette,
+                                            selected = downloadsActive,
+                                            showLabel = effectiveToolbarWidth >= 280.dp && downloadsActive,
                                             onSelect = ::openDownloads,
                                         )
                                     }
@@ -1111,49 +1108,58 @@ private fun AppContent(
             }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun CompactNavigationDock(
     tabs: List<NavigationItem>,
     selectedTab: TabDest,
     onSelect: (TabDest) -> Unit,
-    palette: ContentAccentPalette,
     insets: WindowInsets,
-    height: Dp,
     playerLabel: String?,
     onOpenPlayer: () -> Unit,
     motion: ReflowProgress?,
 ) {
-    val itemColors = NavigationBarItemDefaults.colors(
-        indicatorColor = palette.container,
-        selectedIconColor = palette.onContainer,
-        unselectedIconColor = palette.onQuietContainer,
-    )
-    NavigationBar(
-        modifier = Modifier.height(height),
-        containerColor = palette.quietContainer,
-        windowInsets = insets,
-    ) {
-        // Only the item strip settles. The dock still paints to the system edge at full opacity.
-        Row(
-            modifier = Modifier.fillMaxWidth().compactNavReflow(motion, tabs.size + if (playerLabel == null) 0 else 1),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            tabs.forEach { item ->
-                NavigationBarItem(
-                    selected = selectedTab == item.dest,
-                    onClick = { onSelect(item.dest) },
-                    icon = { Icon(item.icon, contentDescription = item.label) },
-                    colors = itemColors,
-                )
-            }
-            if (playerLabel != null) {
-                NavigationBarItem(
-                    selected = false,
-                    onClick = onOpenPlayer,
-                    icon = { Icon(AppIcons.MusicNote, contentDescription = playerLabel) },
-                    colors = itemColors,
-                )
+    // Only the item strip settles; the dock still paints the surface under the system insets.
+    val scheme = MaterialTheme.colorScheme
+    val itemCount = tabs.size + if (playerLabel == null) 0 else 1
+    Surface(modifier = Modifier.fillMaxWidth(), color = scheme.surfaceContainer) {
+        // Only the background needs an exact width. The Box drops that minimum width so
+        // ShortNavigationBar can divide the bounded space rather than giving every item the full width.
+        Box(Modifier.windowInsetsPadding(insets)) {
+            ShortNavigationBar(
+                modifier = Modifier.compactNavReflow(motion, itemCount),
+                containerColor = Color.Transparent,
+                contentColor = scheme.onSurfaceVariant,
+                windowInsets = WindowInsets(0, 0, 0, 0),
+                arrangement = ShortNavigationBarArrangement.EqualWeight,
+            ) {
+                tabs.forEach { item ->
+                    val selected = selectedTab == item.dest
+                    val select = { onSelect(item.dest) }
+                    ShortNavigationBarItem(
+                        selected = selected,
+                        onClick = select,
+                        modifier = Modifier.navigationTabSemantics(item.label, selected, select),
+                        icon = { Icon(item.icon, contentDescription = null) },
+                        label = { Text(item.label, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+                    )
+                }
+                if (playerLabel != null) {
+                    ShortNavigationBarItem(
+                        selected = false,
+                        onClick = onOpenPlayer,
+                        modifier = Modifier.clearAndSetSemantics {
+                            role = Role.Button
+                            contentDescription = playerLabel
+                            onClick {
+                                onOpenPlayer()
+                                true
+                            }
+                        },
+                        icon = { Icon(AppIcons.MusicNote, contentDescription = null) },
+                        label = { Text(strings.playerShortLabel, maxLines = 1) },
+                    )
+                }
             }
         }
     }
@@ -1164,19 +1170,19 @@ private fun MobileNavigationRail(
     tabs: List<NavigationItem>,
     selectedTab: TabDest,
     onSelect: (TabDest) -> Unit,
-    palette: ContentAccentPalette,
     insets: WindowInsets,
     scrollable: Boolean,
     motion: ReflowProgress? = null,
 ) {
+    val scheme = MaterialTheme.colorScheme
     val itemColors = NavigationRailItemDefaults.colors(
-        indicatorColor = palette.container,
-        selectedIconColor = palette.onContainer,
-        selectedTextColor = palette.onQuietContainer,
-        unselectedIconColor = palette.secondaryOnQuietContainer,
-        unselectedTextColor = palette.secondaryOnQuietContainer,
+        indicatorColor = scheme.secondaryContainer,
+        selectedIconColor = scheme.onSecondaryContainer,
+        selectedTextColor = scheme.secondary,
+        unselectedIconColor = scheme.onSurfaceVariant,
+        unselectedTextColor = scheme.onSurfaceVariant,
     )
-    NavigationRail(containerColor = palette.quietContainer, windowInsets = insets) {
+    NavigationRail(containerColor = scheme.surfaceContainer, windowInsets = insets) {
         val items: @Composable () -> Unit = {
             tabs.forEach { item ->
                 NavigationRailItem(
@@ -1208,7 +1214,6 @@ private fun DesktopExpandableSidebar(
     tabs: List<NavigationItem>,
     selectedTab: TabDest?,
     downloadsSelected: Boolean,
-    accentPalette: ContentAccentPalette,
     onSelectTab: (TabDest) -> Unit,
     onOpenDownloads: () -> Unit,
     recognitionSelected: Boolean,
@@ -1221,12 +1226,13 @@ private fun DesktopExpandableSidebar(
     val modalExpansionActive = state.isAnimating ||
         state.currentValue == WideNavigationRailValue.Expanded ||
         state.targetValue == WideNavigationRailValue.Expanded
+    val scheme = MaterialTheme.colorScheme
     val railColors = WideNavigationRailDefaults.colors(
-        containerColor = accentPalette.quietContainer,
-        contentColor = accentPalette.onQuietContainer,
-        modalContainerColor = accentPalette.quietContainer,
+        containerColor = scheme.surfaceContainer,
+        contentColor = scheme.onSurface,
+        modalContainerColor = scheme.surfaceContainer,
         modalScrimColor = MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f),
-        modalContentColor = accentPalette.onQuietContainer,
+        modalContentColor = scheme.onSurface,
     )
 
     fun collapseAfter(action: () -> Unit) {
@@ -1258,7 +1264,6 @@ private fun DesktopExpandableSidebar(
             tabs = tabs,
             selectedTab = selectedTab,
             downloadsSelected = downloadsSelected,
-            accentPalette = accentPalette,
             onToggle = ::toggleRail,
             onSelectTab = { collapseAfter { onSelectTab(it) } },
             onOpenDownloads = { collapseAfter(onOpenDownloads) },
@@ -1271,6 +1276,7 @@ private fun DesktopExpandableSidebar(
 
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun DesktopSidebarContent(
     railExpanded: Boolean,
@@ -1278,7 +1284,6 @@ private fun DesktopSidebarContent(
     tabs: List<NavigationItem>,
     selectedTab: TabDest?,
     downloadsSelected: Boolean,
-    accentPalette: ContentAccentPalette,
     onToggle: () -> Unit,
     onSelectTab: (TabDest) -> Unit,
     onOpenDownloads: () -> Unit,
@@ -1287,12 +1292,13 @@ private fun DesktopSidebarContent(
     settingsSelected: Boolean,
     onOpenSettings: () -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
     val itemColors = WideNavigationRailItemDefaults.colors(
-        selectedIconColor = accentPalette.onContainer,
-        selectedTextColor = accentPalette.onContainer,
-        selectedIndicatorColor = accentPalette.container,
-        unselectedIconColor = accentPalette.secondaryOnQuietContainer,
-        unselectedTextColor = accentPalette.secondaryOnQuietContainer,
+        selectedIconColor = scheme.onSecondaryContainer,
+        selectedTextColor = scheme.onSecondaryContainer,
+        selectedIndicatorColor = scheme.secondaryContainer,
+        unselectedIconColor = scheme.onSurfaceVariant,
+        unselectedTextColor = scheme.onSurfaceVariant,
     )
     // Expanded, an item is a pill as wide as its label; filling the width would centre it, out
     // of line with the app name and the section title above. Collapsed, it centres in the rail.
@@ -1316,8 +1322,8 @@ private fun DesktopSidebarContent(
                 FilledTonalIconButton(
                     onClick = onToggle,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = accentPalette.container,
-                        contentColor = accentPalette.onContainer,
+                        containerColor = scheme.secondaryContainer,
+                        contentColor = scheme.onSecondaryContainer,
                     ),
                     modifier = Modifier.semantics {
                         stateDescription = if (railExpanded) strings.sidebarExpanded else strings.sidebarCollapsed
@@ -1332,9 +1338,8 @@ private fun DesktopSidebarContent(
                     Spacer(Modifier.width(14.dp))
                     Text(
                         text = "RedefineNCM",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = accentPalette.onQuietContainer,
+                        style = MaterialTheme.typography.titleLargeEmphasized,
+                        color = scheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -1357,7 +1362,7 @@ private fun DesktopSidebarContent(
                 Text(
                     text = strings.tools,
                     style = MaterialTheme.typography.labelLarge,
-                    color = accentPalette.secondaryOnQuietContainer,
+                    color = scheme.onSurfaceVariant,
                     // In line with the item icons: an expanded item starts its pill 20dp in and
                     // its icon 16dp further.
                     modifier = Modifier.padding(start = 36.dp, top = 8.dp),
@@ -1415,119 +1420,86 @@ private fun DesktopTransportSheetsHost(
     )
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
+@Composable
+private fun AppPageTransition(
+    destination: RootDest,
+    modifier: Modifier,
+    motion: MotionScheme,
+    reducedMotion: Boolean,
+    rtl: Boolean,
+    content: @Composable (RootDest, Modifier) -> Unit,
+) {
+    SharedTransitionLayout(modifier.fillMaxSize().clipToBounds()) {
+        AnimatedContent(
+            targetState = destination,
+            transitionSpec = { pageTransition(initialState, targetState, motion, reducedMotion, rtl) },
+            modifier = Modifier.fillMaxSize(),
+            label = "AppPageTransition",
+        ) { target ->
+            // Only Home and Search have endpoints, which stay installed so the settled bounds
+            // can be captured before navigation. The editor remains owned by the Search page.
+            val searchEntry = if (!reducedMotion && target is RootDest.Tab && target.tab != TabDest.My) {
+                Modifier.sharedBounds(
+                    sharedContentState = rememberSharedContentState("search-bar"),
+                    animatedVisibilityScope = this,
+                    boundsTransform = { _, _ -> motion.defaultSpatialSpec() },
+                    enter = fadeIn(motion.fastEffectsSpec()),
+                    exit = fadeOut(motion.fastEffectsSpec()),
+                )
+            } else Modifier
+            content(target, searchEntry)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 private fun pageTransition(
     initial: RootDest,
     target: RootDest,
-): ContentTransform =
-    when {
-        isPlayerSurface(initial) && isPlayerSurface(target) -> fadeThroughTransition()
-        isPlayerSurface(initial) || isPlayerSurface(target) ->
-            sheetTransition(showingSheet = isPlayerSurface(target))
-        initial is RootDest.Tab && target is RootDest.Tab ->
-            tabSharedAxis(forward = target.tab.order > initial.tab.order)
-        target.stackDepth > initial.stackDepth -> horizontalTransition(forward = true, fullDistance = true)
-        target.stackDepth < initial.stackDepth -> horizontalTransition(forward = false, fullDistance = true)
-        else -> fadeThroughTransition()
+    motion: MotionScheme,
+    reducedMotion: Boolean,
+    rtl: Boolean,
+): ContentTransform {
+    if (reducedMotion) return EnterTransition.None togetherWith ExitTransition.None
+    val fade = fadeIn(motion.defaultEffectsSpec()) togetherWith fadeOut(motion.fastEffectsSpec())
+    return when {
+        isPlayerSurface(initial) && isPlayerSurface(target) -> fade
+        isPlayerSurface(target) ->
+            slideInVertically(motion.slowSpatialSpec(), initialOffsetY = { it }) togetherWith ExitTransition.None
+        isPlayerSurface(initial) ->
+            EnterTransition.None togetherWith slideOutVertically(motion.defaultSpatialSpec(), targetOffsetY = { it })
+        target.stackDepth != initial.stackDepth -> {
+            val direction = if ((target.stackDepth > initial.stackDepth) != rtl) 1 else -1
+            (slideInHorizontally(motion.defaultSpatialSpec(), initialOffsetX = { direction * it / 8 }) +
+                fadeIn(motion.defaultEffectsSpec())) togetherWith
+                (slideOutHorizontally(motion.defaultSpatialSpec(), targetOffsetX = { -direction * it / 12 }) +
+                    fadeOut(motion.fastEffectsSpec()))
+        }
+        else -> fade
+    }.apply {
+        // An outgoing full player stays above the revealed page while sliding down.
+        targetContentZIndex = if (isPlayerSurface(initial) && !isPlayerSurface(target)) -1f else 1f
     }
-
-private fun horizontalTransition(forward: Boolean, fullDistance: Boolean): ContentTransform {
-    val direction = if (forward) 1 else -1
-    val enterDivisor = if (fullDistance) 2 else 5
-    val exitDivisor = if (fullDistance) 5 else 8
-    return (
-        slideInHorizontally(
-            animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
-            initialOffsetX = { direction * it / enterDivisor },
-        ) + pageFadeIn() + pageScaleIn()
-        ) togetherWith (
-        slideOutHorizontally(
-            animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
-            targetOffsetX = { -direction * it / exitDivisor },
-        ) + pageFadeOut() + pageScaleOut()
-        )
 }
 
-private fun sheetTransition(showingSheet: Boolean): ContentTransform =
-    if (showingSheet) {
-        (
-            slideInVertically(
-                animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
-                initialOffsetY = { it },
-            ) + pageFadeIn()
-            ) togetherWith (
-            fadeOut(animationSpec = tween(ExpressiveMotion.ShortMillis, easing = LinearOutSlowInEasing)) +
-                scaleOut(
-                    targetScale = 0.98f,
-                    animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
-                )
-            )
-    } else {
-        (
-            pageFadeIn() + scaleIn(
-                initialScale = 0.98f,
-                animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
-            )
-            ) togetherWith (
-            slideOutVertically(
-                animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
-                targetOffsetY = { it },
-            ) + fadeOut(
-                animationSpec = tween(ExpressiveMotion.QuickMillis, easing = LinearOutSlowInEasing),
-            )
-            )
-    }
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+private fun railEnterTransition(motion: MotionScheme, rtl: Boolean): EnterTransition =
+    slideInHorizontally(motion.defaultSpatialSpec(), initialOffsetX = { if (rtl) it else -it }) +
+        fadeIn(motion.fastEffectsSpec())
 
-private fun fadeThroughTransition(): ContentTransform =
-        (pageFadeIn(delayMillis = ExpressiveMotion.StaggerDelayMillis) + pageScaleIn()) togetherWith
-        (pageFadeOut() + pageScaleOut())
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+private fun railExitTransition(motion: MotionScheme, rtl: Boolean): ExitTransition =
+    slideOutHorizontally(motion.defaultSpatialSpec(), targetOffsetX = { if (rtl) it else -it }) +
+        fadeOut(motion.fastEffectsSpec())
 
-private fun pageFadeIn(delayMillis: Int = ExpressiveMotion.EnterDelayMillis): EnterTransition =
-    fadeIn(
-        animationSpec = tween(
-            ExpressiveMotion.ShortMillis,
-            delayMillis = delayMillis,
-            easing = LinearOutSlowInEasing,
-        ),
-    )
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+private fun miniPlayerEnterTransition(motion: MotionScheme): EnterTransition =
+    scaleIn(motion.fastSpatialSpec(), initialScale = 0.88f) + fadeIn(motion.fastEffectsSpec())
 
-private fun pageFadeOut(): ExitTransition =
-    fadeOut(animationSpec = tween(ExpressiveMotion.FastMillis, easing = LinearOutSlowInEasing))
-
-private fun pageScaleIn(): EnterTransition =
-    scaleIn(
-        initialScale = 0.985f,
-        animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
-    )
-
-private fun pageScaleOut(): ExitTransition =
-    scaleOut(
-        targetScale = 0.985f,
-        animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
-    )
-
-private fun railEnterTransition(): EnterTransition =
-    slideInHorizontally(
-        animationSpec = tween(PageTransitionMillis, easing = FastOutSlowInEasing),
-        initialOffsetX = { -it },
-    ) + fadeIn(animationSpec = tween(ExpressiveMotion.ShortMillis, easing = LinearOutSlowInEasing))
-
-private fun railExitTransition(): ExitTransition =
-    slideOutHorizontally(
-        animationSpec = tween(ExpressiveMotion.StandardMillis, easing = FastOutSlowInEasing),
-        targetOffsetX = { -it },
-    ) + pageFadeOut()
-
-private fun miniPlayerEnterTransition(): EnterTransition =
-    scaleIn(
-        initialScale = 0.88f,
-        animationSpec = tween(ExpressiveMotion.MediumMillis, easing = FastOutSlowInEasing),
-    ) + fadeIn(animationSpec = tween(ExpressiveMotion.QuickMillis, easing = LinearOutSlowInEasing))
-
-private fun miniPlayerExitTransition(): ExitTransition =
-    scaleOut(
-        targetScale = 0.88f,
-        animationSpec = tween(ExpressiveMotion.ShortMillis, easing = FastOutSlowInEasing),
-    ) + pageFadeOut()
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+private fun miniPlayerExitTransition(motion: MotionScheme): ExitTransition =
+    scaleOut(motion.fastSpatialSpec(), targetScale = 0.88f) + fadeOut(motion.fastEffectsSpec())
 
 private fun isPlayerSurface(dest: RootDest): Boolean =
     isPlayerSurface((dest as? RootDest.Pushed)?.dest)
@@ -1544,45 +1516,11 @@ private fun hidesNavigation(dest: PushedDest?): Boolean =
 private fun isToolPage(dest: PushedDest): Boolean =
     dest is PushedDest.Downloads || dest is PushedDest.SongRecognition || dest is PushedDest.Settings
 
-/**
- * Tabs travel along the bar: going right brings the next page in from the right and pushes the
- * one leaving out to the left, and going back reverses it.
- *
- * A plain cross-fade would treat the tabs as peers with no order. That is true of the pages but
- * not of the bar, where they sit in a fixed order the reader can see. A fade also makes every
- * switch look the same, so nothing says which way you moved.
- *
- * Shared axis X: a twelfth of the width, not a page-width push, because these are still peers
- * rather than a stack. The fade carries the change; the travel only gives it a direction.
- */
-private fun tabSharedAxis(forward: Boolean): ContentTransform {
-    val direction = if (forward) 1 else -1
-    return (
-        slideInHorizontally(
-            animationSpec = tween(ExpressiveMotion.MediumMillis, easing = FastOutSlowInEasing),
-            initialOffsetX = { direction * it / 12 },
-        ) + fadeIn(
-            animationSpec = tween(
-                ExpressiveMotion.ShortMillis,
-                delayMillis = ExpressiveMotion.EnterDelayMillis,
-                easing = LinearOutSlowInEasing,
-            ),
-        )
-        ) togetherWith (
-        slideOutHorizontally(
-            animationSpec = tween(ExpressiveMotion.MediumMillis, easing = FastOutSlowInEasing),
-            targetOffsetX = { -direction * it / 12 },
-        ) + fadeOut(
-            animationSpec = tween(ExpressiveMotion.QuickMillis, easing = LinearOutSlowInEasing),
-        )
-        )
-}
-
 private fun RootDest.stateKey(): String = when (this) {
     is RootDest.Tab -> "tab:" + when (tab) {
-        is TabDest.Home -> "home"
-        is TabDest.Search -> "search"
-        is TabDest.My -> "my"
+        TabDest.Home -> "home"
+        TabDest.Search -> "search"
+        TabDest.My -> "my"
     }
     is RootDest.Pushed -> pushedStateKey(dest, stackDepth)
 }
@@ -1595,5 +1533,3 @@ private val MiniPlayerClearance = 88.dp
 
 /** The player pages' own bottom controls: Now Playing's toolbar and the lyric page's island. */
 private val PlayerPageToolbarClearance = 96.dp
-
-private const val PageTransitionMillis = ExpressiveMotion.LongMillis

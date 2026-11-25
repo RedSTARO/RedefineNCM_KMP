@@ -2,7 +2,6 @@ package com.leejlredstar.redefinencm.kmp.ui.theme
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -10,7 +9,9 @@ import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.text.font.FontFamily
@@ -18,20 +19,20 @@ import androidx.compose.ui.unit.dp
 import com.leejlredstar.amll.compose.rememberReducedMotionEnabled
 import com.leejlredstar.redefinencm.kmp.i18n.I18n
 
-/**
- * Material 3 Expressive shape scale, pushed past the baseline expressive values.
- *
- * The scale is deliberately steep: `extraSmall` stays legible for dense chips while
- * `extraLarge` is round enough that panels read as capsules rather than cards. That
- * contrast keeps the connected-list language (large outer / tight inner corners, see
- * ui/component/Expressive.kt) from looking like uniformly rounded boxes.
- */
+/** Shared by custom controls so a long list does not install one platform observer per row. */
+internal val LocalReducedMotion = staticCompositionLocalOf { false }
+
+/** Keep Material components on their component-specific corner scale. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 private val ExpressiveShapes = Shapes(
-    extraSmall = RoundedCornerShape(12.dp),
-    small = RoundedCornerShape(18.dp),
-    medium = RoundedCornerShape(28.dp),
-    large = RoundedCornerShape(40.dp),
-    extraLarge = RoundedCornerShape(52.dp),
+    extraSmall = RoundedCornerShape(4.dp),
+    small = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(12.dp),
+    large = RoundedCornerShape(16.dp),
+    extraLarge = RoundedCornerShape(28.dp),
+    largeIncreased = RoundedCornerShape(20.dp),
+    extraLargeIncreased = RoundedCornerShape(32.dp),
+    extraExtraLarge = RoundedCornerShape(48.dp),
 )
 
 /**
@@ -67,9 +68,10 @@ fun RedefineNCMTheme(
     // Every surface that tints itself from a cover animates; the scheme has to travel with them
     // or the chrome, the switches and the dialogs hard-cut while the pages cross-fade.
     val reducedMotion = rememberReducedMotionEnabled()
+    val motionScheme = remember { MotionScheme.expressive() }
     val animatedSeed by animateColorAsState(
         targetValue = seed ?: NeutralSchemeSeed,
-        animationSpec = if (reducedMotion) snap() else spring(),
+        animationSpec = if (reducedMotion) snap() else motionScheme.defaultEffectsSpec(),
         label = "artworkSchemeSeed",
     )
     val artworkScheme = remember(animatedSeed, seed == null, dark) {
@@ -78,13 +80,15 @@ fun RedefineNCMTheme(
     val fontFamily = LocalPreloadedFontFamily.current ?: FontFamily.Default
     val language = I18n.language
     val typography = remember(fontFamily, language) {
-        ExpressiveTypography.withFontFamily(fontFamily).withLocaleList(language.textLocales())
+        expressiveTypography(fontFamily, language.textLocales())
     }
-    MaterialExpressiveTheme(
-        colorScheme = dynamicScheme ?: artworkScheme,
-        motionScheme = MotionScheme.expressive(),
-        shapes = ExpressiveShapes,
-        typography = typography,
-        content = content,
-    )
+    CompositionLocalProvider(LocalReducedMotion provides reducedMotion) {
+        MaterialExpressiveTheme(
+            colorScheme = dynamicScheme ?: artworkScheme,
+            motionScheme = motionScheme,
+            shapes = ExpressiveShapes,
+            typography = typography,
+            content = content,
+        )
+    }
 }

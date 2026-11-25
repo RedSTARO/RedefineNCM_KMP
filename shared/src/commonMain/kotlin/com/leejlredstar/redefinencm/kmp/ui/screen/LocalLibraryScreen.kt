@@ -1,74 +1,61 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.redefinencm.kmp.data.local.LocalPlaylist
 import com.leejlredstar.redefinencm.kmp.i18n.strings
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveFeatureIcon
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
+import com.leejlredstar.redefinencm.kmp.ui.component.LocalExpressivePageGutter
 import com.leejlredstar.redefinencm.kmp.ui.component.LocalLibraryReadErrorPanel
-import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.component.inMemoryViewModel
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberEditorFocus
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberSaveableEditorText
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
-import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
-import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
 import com.leejlredstar.redefinencm.kmp.viewmodel.LocalLibraryViewModel
 import org.koin.compose.koinInject
 
-/**
- * The local account's library: its favourites and its playlists, whose tracks may come from any
- * provider. Nothing here needs a sign-in; it all stays on this device and travels with the
- * settings backup.
- */
+/** The local account's provider-neutral favourites and playlists, stored on this device. */
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun LocalLibraryScreen(
     onBack: () -> Unit,
@@ -79,96 +66,60 @@ fun LocalLibraryScreen(
     val library by viewModel.library.collectAsState()
     val readFailed by viewModel.readFailed.collectAsState()
     val importing by viewModel.importing.collectAsState()
-    val palette = contentAccentPalette(MaterialTheme.colorScheme.primaryContainer)
-
     var creating by rememberSaveable { mutableStateOf(false) }
     var importingDialog by rememberSaveable { mutableStateOf(false) }
+    val rows = library?.let { listOfNotNull(it.favorites) + it.userPlaylists }.orEmpty()
 
-    val rows: List<LocalPlaylist> = library?.let { listOfNotNull(it.favorites) + it.userPlaylists }.orEmpty()
-
-    ExpressivePage(accentPalette = palette, contentWindowInsets = WindowInsets.statusBars) {
-        Box(Modifier.fillMaxSize()) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = scaffoldPadding.calculateBottomPadding() + 16.dp),
-            ) {
-                item(key = "local-header") {
-                    Column(Modifier.fillMaxWidth().padding(8.dp)) {
-                        BackButton(palette, onBack)
-                        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                            Text(
-                                text = strings.localPlaylists,
-                                style = MaterialTheme.typography.headlineLarge,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = palette.onPageStart,
-                            )
-                            Text(
-                                text = strings.localPlaylistsSubtitle,
-                                style = MaterialTheme.typography.labelLarge,
-                                color = palette.secondaryOnPageStart,
-                            )
-                            Spacer(Modifier.height(16.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Button(
-                                    onClick = { creating = true },
-                                    enabled = library != null && !readFailed,
-                                    shape = CircleShape,
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = palette.accent,
-                                        contentColor = palette.onAccent,
-                                    ),
-                                ) {
-                                    Icon(AppIcons.Add, contentDescription = null, modifier = Modifier.size(20.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(strings.newPlaylist)
-                                }
-                                FilledTonalButton(
-                                    onClick = { importingDialog = true },
-                                    enabled = !importing && library != null && !readFailed,
-                                    shape = CircleShape,
-                                    colors = ButtonDefaults.filledTonalButtonColors(
-                                        containerColor = palette.container,
-                                        contentColor = palette.onContainer,
-                                    ),
-                                ) {
-                                    Icon(AppIcons.Link, contentDescription = null, modifier = Modifier.size(20.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(if (importing) strings.importing else strings.importPlaylist)
-                                }
+    CatalogPage(title = strings.localPlaylists, onBack = onBack, scaffoldPadding = scaffoldPadding) {
+        if (!readFailed && library != null) {
+            item(key = "local-header") {
+                CatalogFeatureHeader(
+                    title = strings.localPlaylists,
+                    supportingText = strings.localPlaylistsSubtitle,
+                    icon = AppIcons.FolderOpen,
+                    modifier = Modifier.padding(horizontal = LocalExpressivePageGutter.current, vertical = 12.dp),
+                    actions = {
+                        // Reflow whole actions, not the text within an overcrowded fixed row.
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            itemVerticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            CatalogPrimaryButton(strings.newPlaylist, AppIcons.Add, onClick = { creating = true })
+                            OutlinedButton(
+                                onClick = { importingDialog = true },
+                                enabled = !importing,
+                                shapes = ButtonDefaults.shapes(),
+                                contentPadding = ButtonDefaults.contentPaddingFor(40.dp, hasStartIcon = true),
+                            ) {
+                                Icon(AppIcons.Link, contentDescription = null, modifier = Modifier.size(ButtonDefaults.SmallIconSize))
+                                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                                Text(if (importing) strings.importing else strings.importPlaylist)
                             }
                         }
-                    }
-                }
-                when {
-                    readFailed -> item(key = "local-read-error") {
-                        LocalLibraryReadErrorPanel(viewModel, Modifier.padding(horizontal = 16.dp), palette)
-                    }
-                    library == null -> item(key = "local-loading") {
-                        ExpressiveLoadingState(
-                            label = strings.localPlaylistsLoading,
-                            accentColor = palette.accent,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        )
-                    }
-                    rows.isEmpty() -> item(key = "local-empty") {
-                        ExpressiveStatePanel(
-                            title = strings.noLocalPlaylistsYet,
-                            message = strings.localPlaylistsEmptyHint,
-                            icon = AppIcons.PlaylistAdd,
-                            accentPalette = palette,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        )
-                    }
-                    else -> itemsIndexed(items = rows, key = { _, playlist -> playlist.id }) { index, playlist ->
-                        LocalPlaylistRow(
-                            playlist = playlist,
-                            index = index,
-                            count = rows.size,
-                            palette = palette,
-                            onClick = { onOpenPlaylist(playlist.id) },
-                        )
-                    }
-                }
+                    },
+                )
+            }
+        }
+        when {
+            readFailed -> item(key = "local-read-error") {
+                LocalLibraryReadErrorPanel(viewModel, Modifier.padding(horizontal = LocalExpressivePageGutter.current))
+            }
+            library == null -> item(key = "local-loading") {
+                ExpressiveLoadingState(
+                    label = strings.localPlaylistsLoading,
+                    modifier = Modifier.padding(horizontal = LocalExpressivePageGutter.current),
+                )
+            }
+            rows.isEmpty() -> item(key = "local-empty") {
+                ExpressiveStatePanel(
+                    title = strings.noLocalPlaylistsYet,
+                    message = strings.localPlaylistsEmptyHint,
+                    icon = AppIcons.PlaylistAdd,
+                    modifier = Modifier.padding(horizontal = LocalExpressivePageGutter.current),
+                )
+            }
+            else -> itemsIndexed(items = rows, key = { _, playlist -> playlist.id }) { index, playlist ->
+                LocalPlaylistRow(playlist, index, rows.size) { onOpenPlaylist(playlist.id) }
             }
         }
     }
@@ -183,6 +134,7 @@ fun LocalLibraryScreen(
                 creating = false
                 viewModel.createPlaylist(name)
             },
+            icon = AppIcons.PlaylistAdd,
         )
     }
     if (importingDialog) {
@@ -197,60 +149,37 @@ fun LocalLibraryScreen(
                 importingDialog = false
                 viewModel.importPlaylist(reference)
             },
+            icon = AppIcons.Link,
         )
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun LocalPlaylistRow(
-    playlist: LocalPlaylist,
-    index: Int,
-    count: Int,
-    palette: ContentAccentPalette,
-    onClick: () -> Unit,
-) {
-    Surface(
+private fun LocalPlaylistRow(playlist: LocalPlaylist, index: Int, count: Int, onClick: () -> Unit) {
+    val favorites = playlist.kind == LocalPlaylist.Kind.FAVORITES
+    val scheme = MaterialTheme.colorScheme
+    SegmentedListItem(
         onClick = onClick,
-        shape = connectedListItemShape(index, count),
-        color = palette.quietContainer,
-        contentColor = palette.onQuietContainer,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = ExpressiveLayout.ConnectedItemGap),
+        modifier = Modifier.fillMaxWidth().catalogRowPadding(),
+        shapes = ListItemDefaults.segmentedShapes(index, count),
+        colors = ListItemDefaults.segmentedColors(containerColor = scheme.surfaceContainerLow),
+        leadingContent = {
+            if (favorites) {
+                ExpressiveFeatureIcon(AppIcons.Favorite, containerColor = scheme.tertiaryContainer, contentColor = scheme.onTertiaryContainer)
+            } else {
+                Icon(AppIcons.QueueMusic, contentDescription = null, modifier = Modifier.size(48.dp).padding(12.dp))
+            }
+        },
+        supportingContent = { Text(strings.songCount(playlist.tracks.size)) },
+        trailingContent = { Icon(AppIcons.KeyboardArrowRight, contentDescription = null) },
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = palette.container,
-                contentColor = palette.onContainer,
-                modifier = Modifier.size(44.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        if (playlist.kind == LocalPlaylist.Kind.FAVORITES) AppIcons.Favorite else AppIcons.QueueMusic,
-                        contentDescription = null,
-                    )
-                }
-            }
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = playlist.displayName,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = strings.songCount(playlist.tracks.size),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = palette.secondaryOnQuietContainer,
-                )
-            }
-            Icon(AppIcons.KeyboardArrowRight, contentDescription = null, tint = palette.secondaryOnQuietContainer)
-        }
+        Text(
+            text = playlist.displayName,
+            style = if (favorites) MaterialTheme.typography.titleMediumEmphasized else MaterialTheme.typography.titleMedium,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -266,6 +195,7 @@ internal fun TextEntryDialog(
     supportingText: String? = null,
     saveText: Boolean = true,
     allowBlank: Boolean = false,
+    icon: ImageVector? = null,
 ) {
     val draft = if (saveText) {
         rememberSaveableEditorText(initialValue)
@@ -279,6 +209,7 @@ internal fun TextEntryDialog(
     }
     AlertDialog(
         onDismissRequest = onDismiss,
+        icon = icon?.let { { Icon(it, contentDescription = null) } },
         title = { Text(title) },
         text = {
             DialogEntryField(draft, label, supportingText, onDone = ::confirm)

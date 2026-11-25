@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.ui.theme
 
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -10,182 +11,60 @@ import androidx.compose.ui.unit.sp
 import com.leejlredstar.redefinencm.kmp.i18n.AppLanguage
 
 /**
- * Material 3 Expressive type scale, tuned for maximum hierarchy contrast.
- *
- * The scale is bimodal. Display and headline roles are heavy ([FontWeight.Black] /
- * [FontWeight.ExtraBold]), while every body role stays at [FontWeight.Normal] with positive
- * tracking for sustained reading. The gap between the two groups carries the expressive voice,
- * so body sizes stay at the M3 baseline instead of growing with the headlines.
- *
- * The UI is mostly Chinese, which adds two constraints:
- *
- * - No negative tracking. CJK glyphs already sit on a tight em box, and pulling them closer
- *   makes them collide. Display roles use `0.sp` where a Latin-only poster scale would go
- *   negative.
- * - The weight ladder collapses on CJK. System CJK families (Noto Sans CJK, PingFang,
- *   Microsoft YaHei) rarely ship weights above Bold, so Black, ExtraBold and Bold look alike in
- *   Chinese text and only the step from Normal to Bold remains. That step is still real
- *   contrast, but size has to carry the rest of the hierarchy, so the display and headline
- *   sizes are set well apart instead of relying on weight alone.
- *
- * Titles bridge the two: heavy enough to anchor a section, small enough to sit inside list rows.
+ * Material 3 baseline and emphasized roles. Emphasis changes weight and tracking, not size.
+ * Both sets carry the platform font and locale, including Web's bundled CJK family.
  */
-val ExpressiveTypography = Typography(
-    displayLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Black,
-        fontSize = 64.sp,
-        lineHeight = 66.sp,
-        letterSpacing = 0.sp,
-    ),
-    displayMedium = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Black,
-        fontSize = 50.sp,
-        lineHeight = 54.sp,
-        letterSpacing = 0.sp,
-    ),
-    displaySmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.ExtraBold,
-        fontSize = 40.sp,
-        lineHeight = 46.sp,
-        letterSpacing = 0.sp,
-    ),
-    headlineLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.ExtraBold,
-        fontSize = 34.sp,
-        lineHeight = 40.sp,
-        letterSpacing = 0.sp,
-    ),
-    headlineMedium = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.ExtraBold,
-        fontSize = 29.sp,
-        lineHeight = 36.sp,
-        letterSpacing = 0.sp,
-    ),
-    headlineSmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
-        fontSize = 25.sp,
-        lineHeight = 32.sp,
-        letterSpacing = 0.sp,
-    ),
-    titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.ExtraBold,
-        fontSize = 23.sp,
-        lineHeight = 28.sp,
-        letterSpacing = 0.sp,
-    ),
-    titleMedium = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
-        fontSize = 17.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.1.sp,
-    ),
-    titleSmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
-        letterSpacing = 0.1.sp,
-    ),
-    bodyLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.5.sp,
-    ),
-    bodyMedium = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
-        letterSpacing = 0.25.sp,
-    ),
-    bodySmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.4.sp,
-    ),
-    labelLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
-        fontSize = 15.sp,
-        lineHeight = 20.sp,
-        letterSpacing = 0.1.sp,
-    ),
-    labelMedium = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.5.sp,
-    ),
-    labelSmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.5.sp,
-    ),
-)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+internal fun expressiveTypography(fontFamily: FontFamily, localeList: LocaleList): Typography {
+    fun style(size: Int, line: Int, tracking: Float = 0f, weight: FontWeight = FontWeight.Normal) =
+        TextStyle(
+            fontFamily = fontFamily,
+            localeList = localeList,
+            fontSize = size.sp,
+            lineHeight = line.sp,
+            letterSpacing = tracking.sp,
+            fontWeight = weight,
+        )
 
-/**
- * Tags every Material text role with [localeList], which picks the font's regional forms: the
- * same Han character is drawn differently in Chinese and Japanese, and the system fonts choose
- * by the text's locale, not the app's copy.
- */
-internal fun Typography.withLocaleList(localeList: LocaleList): Typography = copy(
-    displayLarge = displayLarge.copy(localeList = localeList),
-    displayMedium = displayMedium.copy(localeList = localeList),
-    displaySmall = displaySmall.copy(localeList = localeList),
-    headlineLarge = headlineLarge.copy(localeList = localeList),
-    headlineMedium = headlineMedium.copy(localeList = localeList),
-    headlineSmall = headlineSmall.copy(localeList = localeList),
-    titleLarge = titleLarge.copy(localeList = localeList),
-    titleMedium = titleMedium.copy(localeList = localeList),
-    titleSmall = titleSmall.copy(localeList = localeList),
-    bodyLarge = bodyLarge.copy(localeList = localeList),
-    bodyMedium = bodyMedium.copy(localeList = localeList),
-    bodySmall = bodySmall.copy(localeList = localeList),
-    labelLarge = labelLarge.copy(localeList = localeList),
-    labelMedium = labelMedium.copy(localeList = localeList),
-    labelSmall = labelSmall.copy(localeList = localeList),
-)
+    val medium = FontWeight.Medium
+    val bold = FontWeight.Bold
+    return Typography(
+        displayLarge = style(57, 64, -0.2f),
+        displayMedium = style(45, 52),
+        displaySmall = style(36, 44),
+        headlineLarge = style(32, 40),
+        headlineMedium = style(28, 36),
+        headlineSmall = style(24, 32),
+        titleLarge = style(22, 28),
+        titleMedium = style(16, 24, 0.2f, medium),
+        titleSmall = style(14, 20, 0.1f, medium),
+        bodyLarge = style(16, 24, 0.5f),
+        bodyMedium = style(14, 20, 0.2f),
+        bodySmall = style(12, 16, 0.4f),
+        labelLarge = style(14, 20, 0.1f, medium),
+        labelMedium = style(12, 16, 0.5f, medium),
+        labelSmall = style(11, 16, 0.5f, medium),
+        displayLargeEmphasized = style(57, 64, weight = medium),
+        displayMediumEmphasized = style(45, 52, weight = medium),
+        displaySmallEmphasized = style(36, 44, weight = medium),
+        headlineLargeEmphasized = style(32, 40, weight = medium),
+        headlineMediumEmphasized = style(28, 36, weight = medium),
+        headlineSmallEmphasized = style(24, 32, weight = medium),
+        titleLargeEmphasized = style(22, 28, weight = medium),
+        titleMediumEmphasized = style(16, 24, 0.15f, bold),
+        titleSmallEmphasized = style(14, 20, 0.1f, bold),
+        bodyLargeEmphasized = style(16, 24, 0.15f, medium),
+        bodyMediumEmphasized = style(14, 20, 0.25f, medium),
+        bodySmallEmphasized = style(12, 16, 0.4f, medium),
+        labelLargeEmphasized = style(14, 20, 0.1f, bold),
+        labelMediumEmphasized = style(12, 16, 0.5f, bold),
+        labelSmallEmphasized = style(11, 16, 0.5f, bold),
+    )
+}
 
-/**
- * The text locales for the app's language. English UI still shows mostly Chinese song titles and
- * lyrics, so Chinese is its second locale for Han characters.
- */
+/** English UI still shows mostly Chinese song titles, so Chinese is its second locale. */
 internal fun AppLanguage.textLocales(): LocaleList = when (this) {
     AppLanguage.ZH -> LocaleList("zh-CN")
     AppLanguage.JA -> LocaleList("ja-JP")
     AppLanguage.EN -> LocaleList(Locale("en-US"), Locale("zh-CN"))
 }
-
-/** Apply the platform family to every Material text role, including roles not customized above. */
-internal fun Typography.withFontFamily(fontFamily: FontFamily): Typography = copy(
-    displayLarge = displayLarge.copy(fontFamily = fontFamily),
-    displayMedium = displayMedium.copy(fontFamily = fontFamily),
-    displaySmall = displaySmall.copy(fontFamily = fontFamily),
-    headlineLarge = headlineLarge.copy(fontFamily = fontFamily),
-    headlineMedium = headlineMedium.copy(fontFamily = fontFamily),
-    headlineSmall = headlineSmall.copy(fontFamily = fontFamily),
-    titleLarge = titleLarge.copy(fontFamily = fontFamily),
-    titleMedium = titleMedium.copy(fontFamily = fontFamily),
-    titleSmall = titleSmall.copy(fontFamily = fontFamily),
-    bodyLarge = bodyLarge.copy(fontFamily = fontFamily),
-    bodyMedium = bodyMedium.copy(fontFamily = fontFamily),
-    bodySmall = bodySmall.copy(fontFamily = fontFamily),
-    labelLarge = labelLarge.copy(fontFamily = fontFamily),
-    labelMedium = labelMedium.copy(fontFamily = fontFamily),
-    labelSmall = labelSmall.copy(fontFamily = fontFamily),
-)

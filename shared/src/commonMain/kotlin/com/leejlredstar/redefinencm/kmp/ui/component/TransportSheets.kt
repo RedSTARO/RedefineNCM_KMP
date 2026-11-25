@@ -1,6 +1,8 @@
 package com.leejlredstar.redefinencm.kmp.ui.component
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -16,6 +18,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -32,11 +38,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import com.leejlredstar.amll.compose.rememberReducedMotionEnabled
 import com.leejlredstar.redefinencm.kmp.data.api.dto.CommentMusicComments
 import com.leejlredstar.redefinencm.kmp.getPlatform
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.i18n.text
 import com.leejlredstar.redefinencm.kmp.player.PlayerStatusRestoreState
+import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.util.BackHandler
 import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
@@ -138,7 +149,6 @@ internal fun TransportSheets(
         val showingQueue = lastPanel.queue
         TransportSidePanel(
             visible = state.anyOpen,
-            accentPalette = accentPalette,
             onDismiss = state::dismiss,
         ) {
             if (showingQueue) {
@@ -206,17 +216,25 @@ internal fun TransportSheets(
  * A panel sliding in from the end edge over a scrim; tapping the scrim or going back closes it.
  * The desktop's home for the queue and the comments.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun TransportSidePanel(
     visible: Boolean,
-    accentPalette: ContentAccentPalette,
     onDismiss: () -> Unit,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     BackHandler(enabled = visible, onBack = onDismiss)
+    val direction = if (LocalLayoutDirection.current == LayoutDirection.Ltr) 1 else -1
+    val reducedMotion = rememberReducedMotionEnabled()
+    val motion = MaterialTheme.motionScheme
+    val colors = MaterialTheme.colorScheme
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val panelWidth = minOf(maxWidth, SidePanelWidth)
-        AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(
+            visible = visible,
+            enter = if (reducedMotion) EnterTransition.None else fadeIn(motion.defaultEffectsSpec()),
+            exit = if (reducedMotion) ExitTransition.None else fadeOut(motion.defaultEffectsSpec()),
+        ) {
             Box(
                 Modifier
                     .fillMaxSize()
@@ -226,18 +244,30 @@ private fun TransportSidePanel(
         }
         AnimatedVisibility(
             visible = visible,
-            enter = slideInHorizontally { it },
-            exit = slideOutHorizontally { it },
+            enter = if (reducedMotion) EnterTransition.None else slideInHorizontally(motion.defaultSpatialSpec()) {
+                it * direction
+            },
+            exit = if (reducedMotion) ExitTransition.None else slideOutHorizontally(motion.defaultSpatialSpec()) {
+                it * direction
+            },
             modifier = Modifier.align(Alignment.CenterEnd),
         ) {
             Surface(
-                color = accentPalette.pageEnd,
-                contentColor = accentPalette.onQuietContainer,
-                shape = RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp),
-                tonalElevation = 2.dp,
+                color = colors.surfaceContainerLow,
+                contentColor = colors.onSurface,
+                shape = RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp),
                 modifier = Modifier.fillMaxHeight().width(panelWidth),
             ) {
-                Column(Modifier.fillMaxSize().padding(top = 16.dp), content = content)
+                Column(Modifier.fillMaxSize()) {
+                    IconButton(
+                        onClick = onDismiss,
+                        shapes = IconButtonDefaults.shapes(),
+                        modifier = Modifier.align(Alignment.End).padding(end = 8.dp, top = 4.dp),
+                    ) {
+                        Icon(AppIcons.Clear, contentDescription = strings.close)
+                    }
+                    content()
+                }
             }
         }
     }

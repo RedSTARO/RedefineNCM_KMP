@@ -9,40 +9,33 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
-import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
-import coil3.compose.LocalPlatformContext
-import coil3.request.ImageRequest
-import coil3.request.crossfade
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentColorFor
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberArtworkAccent
 import org.koin.compose.koinInject
 import androidx.compose.runtime.remember
 
-/**
- * 迷你播放条 FAB：右下角紧凑入口，只保留封面、播放状态和细进度，避免遮挡页面内容。
- */
+/** The floating player entry: cover and state at a glance, without growing into browse content. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MiniNowPlayingBar(
     onExpand: () -> Unit,
@@ -69,8 +62,10 @@ fun MiniNowPlayingBar(
 
     // The accent animates and the whole palette follows, rather than animating the container
     // alone: every role then moves together instead of the container arriving ahead of the rest.
+    val motion = MaterialTheme.motionScheme
     val artworkAccent = rememberArtworkAccent(
         requestKey = media?.artworkUri,
+        animationSpec = motion.slowEffectsSpec(),
         label = "miniPlayerColor",
         onAccentColor = onAccentColor,
     )
@@ -82,136 +77,94 @@ fun MiniNowPlayingBar(
     // the swap. The pill is small, so it simply recomposes as the blend moves.
     val visual = rememberTransitionVisual(player)
     val blendKey = visual?.incoming?.id
-    val startContainer = remember(blendKey) { accentPalette.container }
+    val startPalette = remember(blendKey) { accentPalette }
     val incomingAccent = rememberArtworkAccent(
         requestKey = visual?.incoming?.artworkUri,
         fallback = remember(blendKey) { artworkAccent.color },
+        animationSpec = motion.slowEffectsSpec(),
         label = "miniPlayerIncomingColor",
     )
     val weight = visual?.weight
-    val containerColor = if (weight == null) {
-        accentPalette.container
-    } else {
-        lerp(startContainer, incomingAccent.palette.container, weight)
-    }
-    val contentColor = if (weight == null) {
-        contentColorFor(containerColor)
-    } else {
-        lerp(contentColorFor(startContainer), contentColorFor(incomingAccent.palette.container), weight)
-    }
-
-    // The whole pill opens the player; only the play button does something else. Limiting that
-    // to the cover would leave the rest of the pill doing nothing when tapped.
+    val containerColor = if (weight == null) accentPalette.quietContainer else
+        lerp(startPalette.quietContainer, incomingAccent.palette.quietContainer, weight)
+    val playColor = if (weight == null) accentPalette.accent else
+        lerp(startPalette.accent, incomingAccent.palette.accent, weight)
+    // Pick foregrounds for the colors actually on screen, not a gray blend of two foregrounds.
+    val contentColor = contentColorFor(containerColor)
+    val playContentColor = contentColorFor(playColor)
+    // Keep the FAB slot's footprint; the art and play button retain separate actions.
+    val shape = MaterialTheme.shapes.extraLarge
+    val artworkShape = RoundedCornerShape(20.dp) // 28dp body corner minus the 8dp artwork inset.
     Box(Modifier.padding(end = 2.dp, bottom = 2.dp)) {
         Surface(
             onClick = onExpand,
             enabled = hasMedia,
-            modifier = Modifier
-                // FAB slot 没有高度约束，使用固定小尺寸贴右下角，避免覆盖列表主体。
-                .width(116.dp)
-                .height(60.dp)
-                .semantics {
-                    contentDescription = strings.openPlayerFor(media?.title ?: strings.currentSong) +
-                        if (muted) strings.mutedSuffix else ""
-                },
-            shape = CircleShape,
+            modifier = Modifier.width(116.dp).height(60.dp).semantics {
+                contentDescription = strings.openPlayerFor(media?.title ?: strings.currentSong) +
+                    if (muted) strings.mutedSuffix else ""
+            },
+            shape = shape,
             color = containerColor,
             contentColor = contentColor,
-            tonalElevation = 4.dp,
+            shadowElevation = 3.dp,
         ) {
-            CompositionLocalProvider(LocalContentColor provides contentColor) {
-                Box {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(Modifier.size(48.dp)) {
-                            Surface(
-                                modifier = Modifier.fillMaxSize(),
-                                shape = CircleShape,
-                                color = contentColor.copy(alpha = 0.16f),
+            Box {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp).fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(44.dp)) {
+                        TransitionArtworkStack(
+                            current = media,
+                            visual = visual,
+                            onCurrentImage = extractThemeColor,
+                            onIncomingImage = incomingAccent.extract,
+                            modifier = Modifier.fillMaxSize(),
+                        ) { layerMedia, layerModifier, imageModifier, onLoaded ->
+                            ExpressiveArtwork(
+                                model = layerMedia?.artworkUri?.takeIf(String::isNotBlank),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.matchParentSize().then(layerModifier),
+                                imageModifier = imageModifier,
+                                shape = artworkShape,
+                                containerColor = containerColor,
                                 contentColor = contentColor,
-                            ) {
-                                if (hasMedia) {
-                                    TransitionArtworkStack(
-                                        current = media,
-                                        visual = visual,
-                                        onCurrentImage = extractThemeColor,
-                                        onIncomingImage = incomingAccent.extract,
-                                        modifier = Modifier.fillMaxSize(),
-                                    ) { layerMedia, layerModifier, imageModifier, onLoaded ->
-                                        AsyncImage(
-                                            model = ImageRequest.Builder(LocalPlatformContext.current)
-                                                .data(layerMedia?.artworkUri)
-                                                .crossfade(true)
-                                                .build(),
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier
-                                                .matchParentSize()
-                                                .then(layerModifier)
-                                                .clip(CircleShape)
-                                                .then(imageModifier),
-                                            onSuccess = { state -> onLoaded(state.result.image) },
-                                        )
-                                    }
-                                } else {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = AppIcons.MusicNote,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(22.dp),
-                                        )
-                                    }
-                                }
-                            }
-                            if (muted) {
-                                Surface(
-                                    modifier = Modifier.align(Alignment.BottomEnd).size(20.dp),
-                                    shape = CircleShape,
-                                    color = containerColor,
-                                    contentColor = contentColor,
-                                ) {
-                                    Icon(
-                                        imageVector = AppIcons.VolumeOff,
-                                        contentDescription = null,
-                                        modifier = Modifier.padding(3.dp),
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(Modifier.width(6.dp))
-
-                        FilledIconButton(
-                            onClick = { player.togglePlayPause() },
-                            enabled = hasMedia,
-                            modifier = Modifier.size(48.dp),
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = contentColor.copy(alpha = 0.18f),
-                                contentColor = contentColor,
-                                disabledContainerColor = contentColor.copy(alpha = 0.08f),
-                                disabledContentColor = contentColor.copy(alpha = 0.42f),
-                            ),
-                        ) {
-                            Icon(
-                                imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
-                                contentDescription = if (isPlaying) strings.pause else strings.play,
+                                onImageLoaded = onLoaded,
                             )
                         }
+                        if (muted) {
+                            Surface(
+                                modifier = Modifier.align(Alignment.BottomEnd).size(20.dp),
+                                shape = CircleShape,
+                                color = containerColor,
+                                contentColor = contentColor,
+                            ) {
+                                Icon(
+                                    imageVector = AppIcons.VolumeOff,
+                                    contentDescription = null,
+                                    modifier = Modifier.padding(3.dp),
+                                )
+                            }
+                        }
                     }
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(horizontal = 14.dp)
-                            .width(70.dp)
-                            .height(2.dp)
-                            .clip(CircleShape),
-                        color = contentColor,
-                        trackColor = contentColor.copy(alpha = 0.20f),
+                    Spacer(Modifier.width(8.dp))
+                    PlaybackPlayButton(
+                        isPlaying = isPlaying,
+                        enabled = hasMedia,
+                        onClick = player::togglePlayPause,
+                        containerColor = playColor,
+                        contentColor = playContentColor,
                     )
                 }
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                        .padding(bottom = 3.dp).width(70.dp).height(2.dp),
+                    color = contentColor,
+                    trackColor = contentColor.copy(alpha = 0.20f),
+                    drawStopIndicator = {},
+                )
             }
         }
     }

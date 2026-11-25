@@ -2,8 +2,9 @@ package com.leejlredstar.redefinencm.kmp
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.hoverable
@@ -16,9 +17,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.window.WindowDraggableArea
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -74,6 +75,7 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.isTraySupported
 import androidx.compose.ui.window.rememberTrayState
 import androidx.compose.ui.window.rememberWindowState
+import com.leejlredstar.amll.compose.rememberReducedMotionEnabled
 import com.leejlredstar.redefinencm.kmp.data.db.desktopDataDirectory
 import com.leejlredstar.redefinencm.kmp.data.db.desktopDatabaseFile
 import com.leejlredstar.redefinencm.kmp.data.db.verifyDesktopDatabase
@@ -584,6 +586,7 @@ private val TrayIcon: ImageVector by lazy {
     }.build()
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ApplicationScope.FloatingLyricWindow(settings: PlatformSettings, player: PlatformPlayer) {
     val visible by DesktopLyricWindow.isWindowVisible.collectAsState()
@@ -635,6 +638,8 @@ private fun ApplicationScope.FloatingLyricWindow(settings: PlatformSettings, pla
             } else {
                 val hoverSource = remember { MutableInteractionSource() }
                 val hovered by hoverSource.collectIsHoveredAsState()
+                val reducedMotion = rememberReducedMotionEnabled()
+                val motion = MaterialTheme.motionScheme
                 Box(Modifier.fillMaxSize().hoverable(hoverSource)) {
                     WindowDraggableArea(modifier = Modifier.fillMaxSize()) {
                         FloatingLyricContent(data, alignment, textScale)
@@ -643,8 +648,8 @@ private fun ApplicationScope.FloatingLyricWindow(settings: PlatformSettings, pla
                     // them, so they are reachable without opening the settings page.
                     AnimatedVisibility(
                         visible = hovered,
-                        enter = fadeIn(),
-                        exit = fadeOut(),
+                        enter = if (reducedMotion) EnterTransition.None else fadeIn(motion.fastEffectsSpec()),
+                        exit = if (reducedMotion) ExitTransition.None else fadeOut(motion.fastEffectsSpec()),
                         modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
                     ) {
                         FloatingLyricToolbar(
@@ -673,10 +678,11 @@ private fun FloatingLyricToolbar(
 ) {
     Surface(
         shape = CircleShape,
-        color = Color.Black.copy(alpha = 0.55f),
-        contentColor = Color.White,
+        // The desktop behind this window is not a Material surface and can be any color.
+        color = Color(0xFF262626),
+        contentColor = Color(0xFFF5F5F5),
     ) {
-        Row {
+        Row(Modifier.padding(horizontal = 8.dp)) {
             ToolbarButton(AppIcons.SkipPrevious, strings.previous, onPrevious)
             ToolbarButton(AppIcons.SkipNext, strings.next, onNext)
             ToolbarButton(AppIcons.Remove, strings.makeLyricsSmaller, onSmaller)
@@ -689,8 +695,8 @@ private fun FloatingLyricToolbar(
 
 @Composable
 private fun ToolbarButton(icon: ImageVector, description: String, onClick: () -> Unit) {
-    IconButton(onClick = onClick, modifier = Modifier.size(32.dp)) {
-        Icon(icon, contentDescription = description, modifier = Modifier.size(18.dp))
+    IconButton(onClick = onClick) {
+        Icon(icon, contentDescription = description)
     }
 }
 
@@ -707,6 +713,7 @@ private fun ToolbarButton(icon: ImageVector, description: String, onClick: () ->
  * only drags where its content draws, and a column sized to two glyph runs would leave the
  * window with almost nothing to grab.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun FloatingLyricContent(
     data: FloatingLyricData?,
@@ -723,8 +730,10 @@ private fun FloatingLyricContent(
         LyricSurfaceAlignment.CENTER -> TextAlign.Center
         LyricSurfaceAlignment.END -> TextAlign.End
     }
-    val currentStyle = MaterialTheme.typography.headlineSmall
+    val currentStyle = MaterialTheme.typography.headlineSmallEmphasized
     val nextStyle = MaterialTheme.typography.bodyMedium
+    val reducedMotion = rememberReducedMotionEnabled()
+    val motion = MaterialTheme.motionScheme
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -739,10 +748,7 @@ private fun FloatingLyricContent(
     ) {
         Crossfade(
             targetState = data?.currentLyric?.ifBlank { data.title }.orEmpty(),
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessMediumLow,
-            ),
+            animationSpec = if (reducedMotion) snap() else motion.fastEffectsSpec(),
             label = "current lyric",
         ) { lyric ->
             Text(

@@ -1,52 +1,40 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.windowInsetsPadding
-import com.leejlredstar.redefinencm.kmp.ui.adaptive.browseHeader
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.Surface
+import androidx.compose.material3.SplitButtonDefaults
+import androidx.compose.material3.SplitButtonLayout
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,27 +42,31 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
+import coil3.Image
+import com.leejlredstar.amll.compose.rememberReducedMotionEnabled
 import com.leejlredstar.redefinencm.kmp.i18n.UiText
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.i18n.text
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.player.PlaybackSource
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveArtwork
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveCacheHint
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
+import com.leejlredstar.redefinencm.kmp.ui.component.LocalExpressivePageGutter
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
-import com.leejlredstar.redefinencm.kmp.ui.theme.contentAccentPalette
-import com.leejlredstar.redefinencm.kmp.ui.theme.rememberThemeColorExtractor
+import com.leejlredstar.redefinencm.kmp.ui.theme.rememberArtworkAccent
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.util.downloadQuality
@@ -82,7 +74,6 @@ import com.leejlredstar.redefinencm.kmp.viewmodel.LocalLibraryViewModel
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-import com.leejlredstar.redefinencm.kmp.player.PlaybackSource
 
 @Composable
 fun PlaylistDetailScreen(
@@ -106,9 +97,7 @@ fun PlaylistDetailScreen(
     val playlist = detail?.playlist?.takeIf { it.id == playlistId }
     val songs = tracks?.songs.orEmpty()
     val hasCachedContent = detailFromCache || songsFromCache
-    // 原版 ShowPlaylistDetailPage：点单曲时按 replacePlaylist 设置决定替换整单还是单曲队列
     val replacePlaylist = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT) }
-    val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var confirmDownloadAll by remember { mutableStateOf(false) }
@@ -122,7 +111,7 @@ fun PlaylistDetailScreen(
         songs.map { it.toMediaInfo(sourceId = sourceId) }
     }
 
-    // 播放后停留在歌单页（与原版一致，靠迷你播放条进入全屏播放器）
+    // Playback stays on the playlist; the mini player is the way into the player page.
     fun playAll() {
         if (queueItems.isEmpty()) return
         PlaybackSource.set(playlistSourceLabel(playlist?.name))
@@ -143,167 +132,122 @@ fun PlaylistDetailScreen(
 
     // While the songs load, their count is not known yet; it is not 0.
     val trackCountText = playlist?.trackCount?.takeIf { it > 0L }?.let { strings.playlistSongCount(it) }
-        ?: if (tracks != null) strings.playlistSongCount(songs.size) else "…"
+        ?: tracks?.let { strings.playlistSongCount(songs.size) }
     val title = playlist?.name ?: strings.playlist
-    val defaultAccentColor = MaterialTheme.colorScheme.primaryContainer
-    var rawAccentColor by remember(playlist?.coverImgUrl) {
-        mutableStateOf<Color?>(null)
-    }
-    val animatedAccentColor by animateColorAsState(
-        targetValue = rawAccentColor ?: defaultAccentColor,
-        animationSpec = spring(),
-        label = "playlistAccent",
-    )
-    val accentPalette = contentAccentPalette(animatedAccentColor)
-    // The header, and the back button in it, scroll away with the list; once it has, a compact
-    // bar with the same back button and the title takes its place.
-    val headerScrolledAway by remember {
-        derivedStateOf { listState.firstVisibleItemIndex > 0 }
-    }
+    val cover = playlist?.coverImgUrl?.takeIf { it.isNotBlank() }
+    val accent = rememberArtworkAccent(requestKey = cover, label = "playlistAccent")
 
-    ExpressivePage(
-        accentPalette = accentPalette,
-        headerOwnsTopInsets = true,
+    CatalogPage(
+        title = title,
+        onBack = onBack,
+        scaffoldPadding = scaffoldPadding,
+        scrollToTopOnTitleClick = true,
+        overlay = {
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = scaffoldPadding.calculateBottomPadding()),
+            )
+        },
     ) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                bottom = scaffoldPadding.calculateBottomPadding() + 16.dp,
-            ),
-        ) {
+        // With no metadata or tracks, let the loading/error state be the focus, not a placeholder hero.
+        if (playlist != null || songs.isNotEmpty()) {
             item(key = "playlist-header") {
                 PlaylistHeader(
-                    coverUrl = playlist?.coverImgUrl,
+                    coverUrl = cover,
                     title = title,
+                    creator = playlist?.creator?.nickname.orEmpty(),
                     trackCountText = trackCountText,
                     actionsEnabled = songs.isNotEmpty(),
-                    accentPalette = accentPalette,
-                    onAccentColor = { rawAccentColor = it },
-                    onBack = onBack,
-                    onPlayAll = { playAll() },
+                    accentPalette = accent.palette,
+                    onImageLoaded = accent.extract,
+                    onPlayAll = ::playAll,
                     onDownloadAll = { confirmDownloadAll = true },
-                    // A copy in the local account keeps the list even if the account loses it.
                     onSaveLocal = if (localLibraryEnabled) {
                         { localLibrary.requestAddition(queueItems, suggestedName = title) }
-                    } else {
-                        null
-                    },
+                    } else null,
                 )
             }
-            if (hasCachedContent) {
-                item(key = "playlist-cache-hint") {
-                    ExpressiveCacheHint(
-                        isRefreshing = loading,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    )
-                }
-            }
-            if (!loading && loadError == null && detailLoadError != null) {
-                item(key = "playlist-detail-error") {
-                    ExpressiveStatePanel(
-                        title = strings.playlistDetailsUnavailable,
-                        message = detailLoadError?.text.orEmpty(),
-                        icon = AppIcons.Refresh,
-                        tone = ExpressiveStateTone.Error,
-                        accentPalette = accentPalette,
-                        actionLabel = strings.retry,
-                        onAction = { viewModel.fetchPlaylistDetail(playlistId) },
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-                }
-            }
-            when {
-                loading && tracks == null -> item(key = "playlist-loading") {
-                    ExpressiveLoadingState(
-                        label = strings.playlistLoading,
-                        accentColor = accentPalette.accent,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-                }
-                loadError != null && tracks == null -> item(key = "playlist-error") {
-                    ExpressiveStatePanel(
-                        title = strings.playlistLoadFailed,
-                        message = loadError?.text.orEmpty(),
-                        icon = AppIcons.Refresh,
-                        tone = ExpressiveStateTone.Error,
-                        accentPalette = accentPalette,
-                        actionLabel = strings.retry,
-                        onAction = { viewModel.fetchPlaylistDetail(playlistId) },
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-                }
-                tracks != null && songs.isEmpty() -> item(key = "playlist-empty") {
-                    ExpressiveStatePanel(
-                        title = strings.playlistNoSongsYet,
-                        message = strings.playlistEmptyHint,
-                        icon = AppIcons.QueueMusic,
-                        accentPalette = accentPalette,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-                }
-                else -> itemsIndexed(
-                    items = songs,
-                    key = { _, song -> song.id },
-                ) { i, song ->
-                    val media = queueItems.getOrNull(i) ?: song.toMediaInfo(playlistId.toString())
-                    SongRow(
-                        index = i,
-                        title = song.name,
-                        artist = song.ar.joinToString(" / ") { it.name },
-                        artworkUri = song.al.picUrl,
-                        shape = connectedListItemShape(i, songs.size),
-                        onClick = { playSong(i) },
-                        songId = song.id,
-                        accentColor = animatedAccentColor,
-                        durationMs = song.dt,
-                        album = song.al.name,
-                        badge = songFeeBadge(song.fee),
-                        actions = rememberSongRowActions(
-                            media = media,
-                            neteaseSong = song,
-                            playlistId = playlistId,
-                        ),
-                    )
-                }
+        }
+        if (hasCachedContent) {
+            item(key = "playlist-cache-hint") {
+                ExpressiveCacheHint(
+                    isRefreshing = loading,
+                    modifier = Modifier.padding(horizontal = LocalExpressivePageGutter.current, vertical = 8.dp),
+                )
             }
         }
-
-        AnimatedVisibility(
-            visible = headerScrolledAway,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.TopCenter),
-        ) {
-            PlaylistCompactBar(
-                title = title,
-                accentPalette = accentPalette,
-                onBack = onBack,
-                onScrollToTop = { scope.launch { listState.animateScrollToItem(0) } },
-            )
+        if (!loading && loadError == null && detailLoadError != null) {
+            item(key = "playlist-detail-error") {
+                ExpressiveStatePanel(
+                    title = strings.playlistDetailsUnavailable,
+                    message = detailLoadError?.text.orEmpty(),
+                    icon = AppIcons.Refresh,
+                    tone = ExpressiveStateTone.Error,
+                    actionLabel = strings.retry,
+                    onAction = { viewModel.fetchPlaylistDetail(playlistId) },
+                    modifier = Modifier.padding(horizontal = LocalExpressivePageGutter.current, vertical = 8.dp),
+                )
+            }
         }
-
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = scaffoldPadding.calculateBottomPadding()),
-        )
+        when {
+            loading && tracks == null -> item(key = "playlist-loading") {
+                ExpressiveLoadingState(
+                    label = strings.playlistLoading,
+                    modifier = Modifier.padding(horizontal = LocalExpressivePageGutter.current),
+                )
+            }
+            loadError != null && tracks == null -> item(key = "playlist-error") {
+                ExpressiveStatePanel(
+                    title = strings.playlistLoadFailed,
+                    message = loadError?.text.orEmpty(),
+                    icon = AppIcons.Refresh,
+                    tone = ExpressiveStateTone.Error,
+                    actionLabel = strings.retry,
+                    onAction = { viewModel.fetchPlaylistDetail(playlistId) },
+                    modifier = Modifier.padding(horizontal = LocalExpressivePageGutter.current),
+                )
+            }
+            tracks != null && songs.isEmpty() -> item(key = "playlist-empty") {
+                ExpressiveStatePanel(
+                    title = strings.playlistNoSongsYet,
+                    message = strings.playlistEmptyHint,
+                    icon = AppIcons.QueueMusic,
+                    modifier = Modifier.padding(horizontal = LocalExpressivePageGutter.current),
+                )
+            }
+            else -> itemsIndexed(
+                items = songs,
+                key = { _, song -> song.id },
+            ) { index, song ->
+                SongRow(
+                    index = index,
+                    title = song.name,
+                    artist = song.ar.joinToString(" / ") { it.name },
+                    artworkUri = song.al.picUrl,
+                    shape = connectedListItemShape(index, songs.size),
+                    onClick = { playSong(index) },
+                    songId = song.id,
+                    accentColor = accent.color,
+                    durationMs = song.dt,
+                    album = song.al.name,
+                    badge = songFeeBadge(song.fee),
+                    actions = rememberSongRowActions(
+                        media = queueItems.getOrNull(index) ?: song.toMediaInfo(playlistId.toString()),
+                        neteaseSong = song,
+                        playlistId = playlistId,
+                    ),
+                )
+            }
+        }
     }
 
     if (confirmDownloadAll) {
-        val quality = remember {
-            settings.downloadQuality()
-        }
+        val quality = remember { settings.downloadQuality() }
         AlertDialog(
             onDismissRequest = { confirmDownloadAll = false },
             icon = { Icon(AppIcons.Download, contentDescription = null) },
             title = { Text(strings.downloadPlaylistTitle(title)) },
-            text = {
-                Text(
-                    strings.downloadPlaylistMessage(songs.size, quality.displayName),
-                )
-            },
+            text = { Text(strings.downloadPlaylistMessage(songs.size, quality.displayName)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -330,179 +274,136 @@ fun PlaylistDetailScreen(
 internal fun playlistSourceLabel(name: String?): UiText? =
     name?.takeIf { it.isNotBlank() }?.let { playlistName -> UiText { it.playbackSourcePlaylist(playlistName) } }
 
-@Composable
-private fun PlaylistCompactBar(
-    title: String,
-    accentPalette: ContentAccentPalette,
-    onBack: () -> Unit,
-    onScrollToTop: () -> Unit,
-) {
-    Surface(
-        color = accentPalette.pageStart,
-        contentColor = accentPalette.onPageStart,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            modifier = Modifier
-                .windowInsetsPadding(WindowInsets.browseHeader)
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(AppIcons.ArrowBack, contentDescription = strings.back)
-            }
-            Spacer(Modifier.width(4.dp))
-            TextButton(
-                onClick = onScrollToTop,
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.textButtonColors(contentColor = accentPalette.onPageStart),
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun PlaylistHeader(
     coverUrl: String?,
     title: String,
-    trackCountText: String,
+    creator: String,
+    trackCountText: String?,
     actionsEnabled: Boolean,
     accentPalette: ContentAccentPalette,
-    onAccentColor: (Color) -> Unit,
-    onBack: () -> Unit,
+    onImageLoaded: (Image) -> Unit,
     onPlayAll: () -> Unit,
     onDownloadAll: () -> Unit,
-    /** Null while the local account is switched off, which leaves the button out. */
     onSaveLocal: (() -> Unit)?,
 ) {
-    val fallbackAccentColor = MaterialTheme.colorScheme.primaryContainer
-    val extractAccent = rememberThemeColorExtractor(
-        requestKey = coverUrl,
-        onAccentColor = onAccentColor,
+    val inset = LocalExpressivePageGutter.current
+    CatalogArtworkHeader(
+        modifier = Modifier
+            .padding(start = inset, end = inset, bottom = 16.dp)
+            .background(
+                brush = Brush.linearGradient(listOf(accentPalette.container, accentPalette.quietContainer)),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(ExpressiveLayout.FeatureCorner),
+            )
+            .padding(horizontal = inset, vertical = 16.dp),
+        artwork = { modifier ->
+            ExpressiveArtwork(
+                model = coverUrl,
+                contentDescription = if (coverUrl == null) null else strings.playlistCover,
+                modifier = modifier,
+                shape = MaterialTheme.shapes.large,
+                containerColor = accentPalette.pageStart,
+                contentColor = accentPalette.onPageStart,
+                placeholderIcon = AppIcons.QueueMusic,
+                onImageLoaded = onImageLoaded,
+            )
+        },
+        details = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineLargeEmphasized,
+                    color = accentPalette.onContainer,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics { heading() },
+                )
+                val metadata = listOfNotNull(creator.takeIf { it.isNotBlank() }, trackCountText)
+                if (metadata.isNotEmpty()) {
+                    Text(
+                        text = metadata.joinToString(" · "),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = accentPalette.secondaryOnContainer,
+                    )
+                }
+            }
+        },
+        actions = if (actionsEnabled) {
+            { PlaylistActions(accentPalette, onPlayAll, onDownloadAll, onSaveLocal) }
+        } else null,
     )
-    val cover: @Composable (Modifier) -> Unit = { modifier ->
-        AsyncImage(
-            model = coverUrl,
-            contentDescription = strings.playlistCover,
-            contentScale = ContentScale.Crop,
-            modifier = modifier
-                .size(200.dp)
-                .clip(MaterialTheme.shapes.extraLarge),
-            onSuccess = { state -> extractAccent(state.result.image) },
-            onError = { onAccentColor(fallbackAccentColor) },
-        )
-    }
-    val info: @Composable (Modifier) -> Unit = { modifier ->
-        Column(modifier) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.ExtraBold,
-                color = accentPalette.onQuietContainer,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = trackCountText,
-                style = MaterialTheme.typography.labelLarge,
-                color = accentPalette.secondaryOnQuietContainer,
-            )
-            Spacer(Modifier.height(20.dp))
-            // Two plain buttons. The download is not the trailing half of a split button: Material
-            // reserves that slot for opening a menu of the leading action's variants. They wrap
-            // onto a second line rather than squeezing the last one away: in Japanese, and at a
-            // larger font, they do not fit side by side on a phone.
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                itemVerticalAlignment = Alignment.CenterVertically,
-            ) {
-                Button(
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun PlaylistActions(
+    palette: ContentAccentPalette,
+    onPlayAll: () -> Unit,
+    onDownloadAll: () -> Unit,
+    onSaveLocal: (() -> Unit)?,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val reducedMotion = rememberReducedMotionEnabled()
+    val arrowRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = if (reducedMotion) snap() else MotionScheme.standard().fastSpatialSpec(),
+        label = "playlistActionMenuArrow",
+    )
+    BoxWithConstraints {
+        val medium = maxWidth >= 220.dp
+        val height = if (medium) SplitButtonDefaults.MediumContainerHeight else SplitButtonDefaults.SmallContainerHeight
+        // This Compose layout measures the leading button first. Reserve the trailing target before
+        // measuring the translated label, so both halves remain reachable at a large text size.
+        val trailingWidth = if (medium) 56.dp else 48.dp
+        val leadingMax = (maxWidth - trailingWidth - SplitButtonDefaults.Spacing).coerceAtLeast(0.dp)
+        val colors = ButtonDefaults.buttonColors(containerColor = palette.accent, contentColor = palette.onAccent)
+        SplitButtonLayout(
+            leadingButton = {
+                SplitButtonDefaults.LeadingButton(
                     onClick = onPlayAll,
-                    enabled = actionsEnabled,
-                    shape = CircleShape,
-                    modifier = Modifier.height(52.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = accentPalette.accent,
-                        contentColor = accentPalette.onAccent,
-                    ),
+                    modifier = Modifier.widthIn(max = leadingMax).heightIn(min = height),
+                    shapes = SplitButtonDefaults.leadingButtonShapesFor(height),
+                    contentPadding = SplitButtonDefaults.leadingButtonContentPaddingFor(height),
+                    colors = colors,
                 ) {
-                    Icon(AppIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(strings.playAll, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                    Icon(AppIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(SplitButtonDefaults.leadingButtonIconSizeFor(height)))
+                    Spacer(Modifier.width(ButtonDefaults.iconSpacingFor(height)))
+                    Text(strings.playAll, style = if (medium) MaterialTheme.typography.titleMediumEmphasized else MaterialTheme.typography.labelLargeEmphasized)
                 }
-                FilledTonalButton(
-                    onClick = onDownloadAll,
-                    enabled = actionsEnabled,
-                    shape = CircleShape,
-                    modifier = Modifier.height(52.dp),
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = accentPalette.container,
-                        contentColor = accentPalette.onContainer,
-                    ),
-                ) {
-                    Icon(AppIcons.Download, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(strings.downloadAll, maxLines = 1)
-                }
-                if (onSaveLocal != null) {
-                    FilledTonalIconButton(
-                        onClick = onSaveLocal,
-                        enabled = actionsEnabled,
-                        modifier = Modifier.size(52.dp),
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = accentPalette.container,
-                            contentColor = accentPalette.onContainer,
-                        ),
+            },
+            trailingButton = {
+                Box {
+                    SplitButtonDefaults.TrailingButton(
+                        checked = expanded,
+                        onCheckedChange = { expanded = it },
+                        modifier = Modifier.width(trailingWidth).heightIn(min = height),
+                        shapes = SplitButtonDefaults.trailingButtonShapesFor(height),
+                        contentPadding = SplitButtonDefaults.trailingButtonContentPaddingFor(height),
+                        colors = colors,
                     ) {
-                        Icon(AppIcons.Add, contentDescription = strings.saveAsLocalPlaylist)
+                        Icon(
+                            AppIcons.KeyboardArrowDown,
+                            contentDescription = strings.moreActions,
+                            modifier = Modifier.size(SplitButtonDefaults.trailingButtonIconSizeFor(height)).rotate(arrowRotation),
+                        )
+                    }
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, offset = DpOffset(0.dp, 4.dp)) {
+                        DropdownMenuItem(
+                            text = { Text(strings.downloadAll) },
+                            leadingIcon = { Icon(AppIcons.Download, contentDescription = null) },
+                            onClick = { expanded = false; onDownloadAll() },
+                        )
+                        if (onSaveLocal != null) {
+                            DropdownMenuItem(
+                                text = { Text(strings.saveAsLocalPlaylist) },
+                                leadingIcon = { Icon(AppIcons.PlaylistAdd, contentDescription = null) },
+                                onClick = { expanded = false; onSaveLocal() },
+                            )
+                        }
                     }
                 }
-            }
-        }
-    }
-
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        // Wide windows lay the cover and its details side by side, the way a desktop album
-        // header reads; narrow ones keep the stacked phone layout.
-        val sideBySide = maxWidth >= 720.dp
-        Column(Modifier.fillMaxWidth()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.browseHeader)
-                    .padding(8.dp),
-            ) {
-                BackButton(accentPalette, onBack)
-            }
-            if (sideBySide) {
-                Row(
-                    modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
-                    verticalAlignment = Alignment.Bottom,
-                ) {
-                    cover(Modifier)
-                    Spacer(Modifier.width(28.dp))
-                    info(Modifier.weight(1f))
-                }
-            } else {
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    cover(Modifier)
-                }
-                Spacer(Modifier.height(24.dp))
-                info(Modifier.padding(horizontal = 24.dp))
-                Spacer(Modifier.height(16.dp))
-            }
-        }
+            },
+        )
     }
 }

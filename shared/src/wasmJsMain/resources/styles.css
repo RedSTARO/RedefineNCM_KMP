@@ -1,80 +1,145 @@
+:root {
+    /* Neutral launch roles, before artwork and the Compose color scheme exist. */
+    color-scheme: light dark;
+    --boot-surface: #fafafa;
+    --boot-container: #eee;
+    --boot-on-surface: #212121;
+    --boot-on-surface-variant: #454545;
+    --boot-primary: #535353;
+    --boot-on-primary: #fff;
+    --boot-track: #d5d5d5;
+    --boot-error: #b3261e;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-boot-theme="light"]) {
+        --boot-surface: #141414;
+        --boot-container: #222;
+        --boot-on-surface: #dedede;
+        --boot-on-surface-variant: #bdbdbd;
+        --boot-primary: #bdbdbd;
+        --boot-on-primary: #2e2e2e;
+        --boot-track: #515151;
+        --boot-error: #ffb4ab;
+    }
+}
+
+:root[data-boot-theme="dark"] {
+    color-scheme: dark;
+    --boot-surface: #141414;
+    --boot-container: #222;
+    --boot-on-surface: #dedede;
+    --boot-on-surface-variant: #bdbdbd;
+    --boot-primary: #bdbdbd;
+    --boot-on-primary: #2e2e2e;
+    --boot-track: #515151;
+    --boot-error: #ffb4ab;
+}
+
+:root[data-boot-theme="light"] { color-scheme: light; }
+
 html,
 body,
 #redefineNcmApp {
     width: 100%;
     height: 100%;
     margin: 0;
-    padding: 0;
 }
 
 html,
 body {
     overflow: hidden;
     overscroll-behavior: none;
-    background: #101116;
+    background: var(--boot-surface);
 }
 
-canvas {
-    display: block;
-}
+canvas { display: block; }
 
-#redefineNcmApp {
-    visibility: hidden;
-}
+#redefineNcmApp { visibility: hidden; }
 
 #redefineNcmBoot {
     position: fixed;
     inset: 0;
     z-index: 2147483647;
-    display: grid;
-    place-content: center;
-    justify-items: center;
-    gap: 14px;
-    color: #d7e5df;
-    background: #101116;
-    font: 600 15px/1.5 system-ui, "Microsoft YaHei", sans-serif;
-    padding: 24px;
-    box-sizing: border-box;
-    text-align: center;
+    display: flex;
+    overflow: auto;
+    color: var(--boot-on-surface);
+    background: var(--boot-surface);
+    font: 400 1rem/1.5 system-ui, "Microsoft YaHei", sans-serif;
+    padding: 16px;
 }
 
-#redefineNcmBootHint {
-    max-width: 520px;
+.boot-panel {
+    margin: auto;
+    width: min(100%, 30rem);
+    box-sizing: border-box;
+    display: grid;
+    justify-items: start;
+    gap: 16px;
+    border-radius: 28px;
+    background: var(--boot-container);
+    padding: 24px;
+}
+
+@media (min-width: 600px) {
+    #redefineNcmBoot { padding: 24px; }
+    .boot-panel { padding: 32px; }
+}
+
+.boot-brand {
     margin: 0;
-    color: #b5c8be;
-    font-weight: 400;
+    color: var(--boot-on-surface-variant);
+    font: inherit;
+    font-size: .875rem;
+    font-weight: 700;
+}
+
+#redefineNcmBootLabel {
+    margin: 0;
+    font-size: 1.75rem;
+    line-height: 1.286;
+    font-weight: 500;
+}
+
+#redefineNcmBoot[role="alert"] #redefineNcmBootLabel { color: var(--boot-error); }
+
+#redefineNcmBootHint {
+    margin: 0;
+    color: var(--boot-on-surface-variant);
+    font-size: .875rem;
 }
 
 #redefineNcmBootRetry {
-    min-height: 44px;
-    padding: 10px 24px;
+    min-height: 48px;
+    padding: 0 24px;
     border: none;
-    border-radius: 24px;
-    background: #77d2b5;
-    color: #101b16;
+    border-radius: 999px;
+    background: var(--boot-primary);
+    color: var(--boot-on-primary);
     font: inherit;
+    font-size: .875rem;
+    font-weight: 700;
     cursor: pointer;
 }
 
 #redefineNcmBootRetry:focus-visible {
-    outline: 2px solid #d7e5df;
+    outline: 2px solid var(--boot-on-surface);
     outline-offset: 3px;
 }
 
 #redefineNcmBoot [hidden] { display: none; }
 
 .boot-spinner {
-    width: 34px;
-    height: 34px;
-    border: 3px solid rgba(119, 210, 181, .22);
-    border-top-color: #77d2b5;
+    width: 40px;
+    height: 40px;
+    box-sizing: border-box;
+    border: 4px solid var(--boot-track);
+    border-top-color: var(--boot-primary);
     border-radius: 50%;
-    animation: boot-spin .8s linear infinite;
+    animation: boot-spin 1s linear infinite;
 }
 
-@keyframes boot-spin {
-    to { transform: rotate(360deg); }
-}
+@keyframes boot-spin { to { transform: rotate(360deg); } }
 
 @media (prefers-reduced-motion: reduce) {
     .boot-spinner { animation: none; }
@@ -82,39 +147,89 @@ canvas {
 
 .boot-progress {
     display: grid;
-    justify-items: center;
-    gap: 6px;
-}
-
-.boot-progress[hidden] {
-    display: none;
+    justify-self: stretch;
+    gap: 8px;
 }
 
 .boot-progress progress {
-    width: 220px;
+    width: 100%;
     height: 4px;
     appearance: none;
     border: none;
     border-radius: 2px;
     overflow: hidden;
-    background: rgba(119, 210, 181, .22);
+    background: var(--boot-track);
 }
 
-.boot-progress progress::-webkit-progress-bar {
-    background: rgba(119, 210, 181, .22);
-}
-
-.boot-progress progress::-webkit-progress-value {
-    background: #77d2b5;
-}
-
-.boot-progress progress::-moz-progress-bar {
-    background: #77d2b5;
-}
+.boot-progress progress::-webkit-progress-bar { background: var(--boot-track); }
+.boot-progress progress::-webkit-progress-value { background: var(--boot-primary); }
+.boot-progress progress::-moz-progress-bar { background: var(--boot-primary); }
 
 #redefineNcmBootBytes {
-    font-size: 13px;
-    font-weight: 400;
+    color: var(--boot-on-surface-variant);
+    font-size: .75rem;
     font-variant-numeric: tabular-nums;
-    color: #9fb3ab;
+}
+
+/* A companion lyric surface, separate from Compose and not a focusable pane. */
+#redefinencm-web-lyric {
+    position: fixed;
+    inset: 12px auto auto 50%;
+    transform: translateX(-50%);
+    z-index: 2147483647;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    max-width: min(42rem, calc(100vw - 48px));
+    box-sizing: border-box;
+    padding: 8px 16px 12px 8px;
+    border-radius: 20px;
+    /* Inverse roles: the backdrop can be an artwork or an arbitrary page surface. */
+    background: #262626;
+    color: #f5f5f5;
+    pointer-events: none;
+    font: 500 1rem/1.5 system-ui, sans-serif;
+}
+
+#redefinencm-web-lyric[hidden] { display: none; }
+#redefinencm-web-lyric:has([data-role="artwork"][hidden]) { grid-template-columns: minmax(0, 1fr); }
+
+#redefinencm-web-lyric [data-role="artwork"] {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    object-fit: cover;
+}
+
+#redefinencm-web-lyric [data-role="text"] { min-width: 0; }
+
+#redefinencm-web-lyric [data-role="current"],
+#redefinencm-web-lyric [data-role="next"] {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+#redefinencm-web-lyric [data-role="next"] {
+    color: #ccc;
+    font-size: .875rem;
+    font-weight: 400;
+}
+
+#redefinencm-web-lyric [data-role="progress"] {
+    position: absolute;
+    inset: auto 16px 4px;
+    height: 2px;
+    border-radius: 1px;
+    transform-origin: left center;
+    background: #bdbdbd;
+}
+
+@media (max-width: 599.98px) {
+    #redefinencm-web-lyric {
+        top: auto;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 192px);
+        max-width: calc(100vw - 32px);
+    }
 }

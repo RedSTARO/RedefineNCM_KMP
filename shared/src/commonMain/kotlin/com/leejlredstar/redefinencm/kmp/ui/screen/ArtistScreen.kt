@@ -4,24 +4,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -33,38 +25,30 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
-import com.leejlredstar.redefinencm.kmp.data.ArtistPage
 import com.leejlredstar.redefinencm.kmp.data.Repository
 import com.leejlredstar.redefinencm.kmp.data.api.dto.AlbumSummary
 import com.leejlredstar.redefinencm.kmp.i18n.UiText
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.player.PlaybackSource
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveArtwork
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePage
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressivePageHeading
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
+import com.leejlredstar.redefinencm.kmp.ui.component.LocalExpressivePageGutter
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
-import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberArtworkAccent
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
-/**
- * An artist: who they are, their fifty most played songs and their albums. The artist names on
- * songs and on the player lead here.
- */
+/** An artist profile, their most played songs, and their albums. */
 @Composable
 fun ArtistScreen(
     artistId: Long,
@@ -78,19 +62,19 @@ fun ArtistScreen(
     var reload by remember { mutableIntStateOf(0) }
     val load by rememberCatalogLoad("artist:$artistId", reload) { repository.getArtistPage(artistId) }
     val page = (load as? CatalogLoad.Loaded)?.value
-    val picture = page?.profile?.avatar?.ifBlank { null } ?: page?.profile?.cover
+    val profile = page?.profile
+    val picture = profile?.avatar?.ifBlank { null } ?: profile?.cover
     val accent = rememberArtworkAccent(
         requestKey = picture,
         fallback = MaterialTheme.colorScheme.tertiaryContainer,
         label = "artistAccent",
     )
-    val palette = accent.palette
     val playWholeList = remember {
         settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT)
     }
     val songs = page?.topSongs.orEmpty()
     val queue = remember(songs) { songs.map { it.toMediaInfo() } }
-    val artistName = page?.profile?.name.orEmpty()
+    val artistName = profile?.name.orEmpty()
     val source = UiText { it.playbackSourceArtist(artistName) }
 
     // Albums after the first page, fetched on request.
@@ -100,60 +84,76 @@ fun ArtistScreen(
     val scope = rememberCoroutineScope()
     val albums = page?.albums.orEmpty() + extraAlbums
 
-    ExpressivePage(accentPalette = palette, contentWindowInsets = WindowInsets.statusBars) {
+    CatalogPage(title = artistName, onBack = onBack, scaffoldPadding = scaffoldPadding) {
         when (load) {
-            CatalogLoad.Loading -> Column {
-                CatalogBackRow(palette, onBack)
-                ExpressiveLoadingState(
-                    label = strings.artistLoading,
-                    accentColor = palette.accent,
-                    modifier = Modifier.padding(16.dp),
-                )
+            CatalogLoad.Loading -> item(key = "artist-loading") {
+                ExpressiveLoadingState(label = strings.artistLoading, modifier = Modifier.padding(horizontal = LocalExpressivePageGutter.current))
             }
-            CatalogLoad.Failed -> Column {
-                CatalogBackRow(palette, onBack)
+            CatalogLoad.Failed -> item(key = "artist-error") {
                 ExpressiveStatePanel(
                     title = strings.artistLoadFailed,
                     message = strings.checkNetworkAndRetry,
                     icon = AppIcons.Refresh,
                     tone = ExpressiveStateTone.Error,
-                    accentPalette = palette,
                     actionLabel = strings.retry,
                     onAction = { reload++ },
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(horizontal = LocalExpressivePageGutter.current),
                 )
             }
-            is CatalogLoad.Loaded -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = scaffoldPadding.calculateBottomPadding() + 16.dp),
-            ) {
-                item(key = "back") { CatalogBackRow(palette, onBack) }
+            is CatalogLoad.Loaded -> if (profile != null) {
                 item(key = "header") {
-                    val profile = page!!.profile
-                    ArtistHeader(
-                        name = profile.name,
-                        alias = (profile.transNames + profile.alias).distinct().joinToString(" / "),
-                        picture = picture,
-                        songCount = profile.musicSize,
-                        albumCount = profile.albumSize,
-                        briefDesc = profile.briefDesc,
-                        accentPalette = palette,
-                        onImageLoaded = accent.extract,
-                        onPlay = if (queue.isEmpty()) {
-                            null
-                        } else {
-                            {
-                                PlaybackSource.set(source)
-                                player.setQueue(queue, 0)
-                            }
-                        },
-                    )
+                    val gutter = LocalExpressivePageGutter.current
+                    val alias = (profile.transNames + profile.alias).distinct().joinToString(" / ")
+                    val metadata = strings.artistSongAndAlbumCount(profile.musicSize, profile.albumSize)
+                    Column(
+                        modifier = Modifier.padding(start = gutter, end = gutter, top = 8.dp, bottom = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        CatalogArtworkHeader(
+                            artwork = { modifier ->
+                                ExpressiveArtwork(
+                                    model = picture,
+                                    contentDescription = null,
+                                    modifier = modifier,
+                                    shape = CircleShape,
+                                    placeholderIcon = AppIcons.Person,
+                                    containerColor = accent.palette.container,
+                                    contentColor = accent.palette.onContainer,
+                                    onImageLoaded = accent.extract,
+                                )
+                            },
+                            details = {
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    ExpressivePageHeading(
+                                        title = profile.name,
+                                        supportingText = alias.takeIf { it.isNotBlank() } ?: metadata,
+                                    )
+                                    if (alias.isNotBlank()) {
+                                        Text(metadata, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            },
+                            actions = if (queue.isNotEmpty()) {
+                                {
+                                    CatalogPrimaryButton(
+                                        label = strings.playPopularSongs,
+                                        icon = AppIcons.PlayArrow,
+                                        onClick = {
+                                            PlaybackSource.set(source)
+                                            player.setQueue(queue, 0)
+                                        },
+                                    )
+                                }
+                            } else null,
+                        )
+                        if (profile.briefDesc.isNotBlank()) CatalogDescription(profile.briefDesc)
+                    }
                 }
                 if (songs.isNotEmpty()) {
                     item(key = "songs-title") {
                         ExpressiveSectionTitle(
                             text = strings.popularSongs,
-                            modifier = Modifier.padding(start = 20.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
+                            modifier = Modifier.padding(horizontal = LocalExpressivePageGutter.current, vertical = 12.dp),
                         )
                     }
                     itemsIndexed(songs, key = { _, song -> "song-${song.id}" }) { index, song ->
@@ -164,9 +164,7 @@ fun ArtistScreen(
                             artist = song.ar.joinToString(" / ") { it.name },
                             artworkUri = song.al.picUrl,
                             shape = connectedListItemShape(index, songs.size),
-                            onClick = {
-                                playFromList(player, queue, index, playWholeList, source = source)
-                            },
+                            onClick = { playFromList(player, queue, index, playWholeList, source = source) },
                             songId = song.id,
                             accentColor = accent.color,
                             mediaId = media?.id,
@@ -179,22 +177,21 @@ fun ArtistScreen(
                 }
                 if (albums.isNotEmpty()) {
                     item(key = "albums-title") {
+                        val gutter = LocalExpressivePageGutter.current
                         ExpressiveSectionTitle(
                             text = strings.albums,
-                            modifier = Modifier.padding(start = 20.dp, end = 16.dp, top = 24.dp, bottom = 8.dp),
+                            modifier = Modifier.padding(start = gutter, end = gutter, top = 24.dp, bottom = 8.dp),
                         )
                     }
                     itemsIndexed(albums, key = { _, album -> "album-${album.id}" }) { index, album ->
-                        AlbumRow(
-                            album = album,
-                            shape = connectedListItemShape(index, albums.size),
-                            accentPalette = palette,
-                            onClick = { onOpenAlbum(album.id) },
-                        )
+                        AlbumRow(album, index, albums.size) { onOpenAlbum(album.id) }
                     }
                     if (moreAlbums) {
                         item(key = "albums-more") {
-                            Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
+                            Box(
+                                Modifier.fillMaxWidth().padding(horizontal = LocalExpressivePageGutter.current, vertical = 8.dp),
+                                contentAlignment = Alignment.CenterStart,
+                            ) {
                                 TextButton(
                                     enabled = !albumsLoading,
                                     onClick = {
@@ -221,135 +218,30 @@ fun ArtistScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun ArtistHeader(
-    name: String,
-    alias: String,
-    picture: String?,
-    songCount: Int,
-    albumCount: Int,
-    briefDesc: String,
-    accentPalette: ContentAccentPalette,
-    onImageLoaded: (coil3.Image) -> Unit,
-    onPlay: (() -> Unit)?,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            AsyncImage(
-                model = picture,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                onSuccess = { state -> onImageLoaded(state.result.image) },
-                modifier = Modifier.size(112.dp).clip(CircleShape),
-            )
-            Spacer(Modifier.width(20.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = name,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = accentPalette.onPageStart,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (alias.isNotBlank()) {
-                    Text(
-                        text = alias,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = accentPalette.secondaryOnPageStart,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                Text(
-                    text = strings.artistSongAndAlbumCount(songCount, albumCount),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = accentPalette.secondaryOnPageStart,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-        }
-        if (briefDesc.isNotBlank()) {
-            Surface(
-                onClick = { expanded = !expanded },
-                color = accentPalette.quietContainer,
-                contentColor = accentPalette.onQuietContainer,
-                shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-            ) {
-                Text(
-                    text = briefDesc,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = if (expanded) Int.MAX_VALUE else 3,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(16.dp),
-                )
-            }
-        }
-        if (onPlay != null) {
-            FilledTonalButton(
-                onClick = onPlay,
-                shape = CircleShape,
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = accentPalette.container,
-                    contentColor = accentPalette.onContainer,
-                ),
-                modifier = Modifier.padding(top = 16.dp),
-            ) {
-                Icon(AppIcons.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(strings.playPopularSongs)
-            }
-        }
-        Spacer(Modifier.height(4.dp))
-    }
-}
-
-/** One album in a list: cover, name, release date and track count. */
-@Composable
-internal fun AlbumRow(
-    album: AlbumSummary,
-    shape: androidx.compose.ui.graphics.Shape,
-    accentPalette: ContentAccentPalette,
-    onClick: () -> Unit,
-) {
-    Surface(
+private fun AlbumRow(album: AlbumSummary, index: Int, count: Int, onClick: () -> Unit) {
+    val metadata = listOfNotNull(
+        formatReleaseDate(album.publishTime).ifBlank { null },
+        album.size.takeIf { it > 0 }?.let { strings.songCount(it) },
+    ).joinToString(" · ")
+    SegmentedListItem(
         onClick = onClick,
-        shape = shape,
-        color = accentPalette.quietContainer,
-        contentColor = accentPalette.onQuietContainer,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = ExpressiveLayout.ConnectedItemGap),
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            AsyncImage(
+        modifier = Modifier.fillMaxWidth().catalogRowPadding(),
+        shapes = ListItemDefaults.segmentedShapes(index, count),
+        colors = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        leadingContent = {
+            ExpressiveArtwork(
                 model = album.picUrl,
                 contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.size(56.dp).clip(MaterialTheme.shapes.small),
+                modifier = Modifier.size(56.dp),
+                shape = MaterialTheme.shapes.small,
+                placeholderIcon = AppIcons.Album,
             )
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = album.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = listOfNotNull(
-                        formatReleaseDate(album.publishTime).ifBlank { null },
-                        album.size.takeIf { it > 0 }?.let { strings.songCount(it) },
-                    ).joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = accentPalette.secondaryOnQuietContainer,
-                )
-            }
-        }
+        },
+        supportingContent = if (metadata.isNotBlank()) { { Text(metadata) } } else null,
+        trailingContent = { Icon(AppIcons.KeyboardArrowRight, contentDescription = null) },
+    ) {
+        Text(album.name, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }

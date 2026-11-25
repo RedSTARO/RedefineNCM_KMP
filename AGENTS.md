@@ -1201,22 +1201,24 @@ This is its own task and **must not be done from memory**:
 
 Applies to all platforms, and the original Android repo is kept aligned (goal #3).
 
-- **Color:** `surface` for page bases; `surfaceContainerHigh` / `surfaceContainerHighest` for
-  tonal panels and list rows. Album-art–derived accents via `themeColorFromCoilImage()` as
-  gradient endpoints / highlights; extraction runs off the UI thread and is keyed by artwork.
-  Chroma is raised past baseline M3 on **container** roles only — they pair with dark
-  on-colours and can absorb it — while `primary`/`secondary`/`tertiary` hold their tone so
-  white-on-colour label contrast survives. `tertiary` is a saturated coral acting as the true
-  complement to the teal core.
-- **Shape — connected-list language:** large outer corners (~40dp), tight inner corners
-  (~4dp), small vertical gaps (~2.5dp) between rows; implemented in
-  `ui/component/Expressive.kt` (`connectedListItemShape()`). Interactive elements use pill
-  (`RoundedCornerShape(50%)`) or `extraLarge` shapes. The theme shape scale is deliberately
-  steep (`extraSmall` 12dp → `extraLarge` 52dp) so panels read as capsules, not cards.
-- **Typography:** the scale is bimodal by design. Display and headline roles are
-  `Black`/`ExtraBold` with negative tracking; every body role stays `Normal` with positive
-  tracking for sustained reading. The **gap** between those groups carries the expressive
-  voice, so body sizes must not be scaled up to match the headlines.
+- **Color and containment:** browse pages use `surface`; navigation uses `surfaceContainer`
+  at every size. Ordinary tracks and preference rows stay quiet; color marks only selected,
+  playing, important or error states. Local artwork colors remain on features and artwork-led
+  detail headers, and Now Playing and full-screen lyrics keep their immersive backdrops.
+  Artwork accent extraction is off the UI thread and request-keyed. The app has no fixed brand
+  hue: it starts neutral, follows played artwork, or follows Android wallpaper when enabled.
+- **Shape and spacing:** follow the Material corner scale and segmented list geometry (16dp
+  outer, 4dp inner, 2dp gaps; `connectedListItemShape()` in `ui/component/Expressive.kt`).
+  The browse pane paints edge to edge but its content follows 16dp compact / 24dp wider gutters;
+  measure the usable pane after the rail and side obstructions. `FeatureCorner` uses the 32dp
+  Material step for the app's contained feature panels, not for every list or form.
+- **Typography:** use both Material role sets with the same platform font and language-specific
+  locales. Emphasized siblings have the same type size and line height; use them selectively
+  for page/section headings, important actions and selection, and baseline roles for reading.
+- **Surface hierarchy:** each page chooses a focus before it chooses an effect. The feature
+  on Discover is Daily Picks (recognition when signed out); the immersive music moment is
+  Now Playing and its lyric destination. Forms, preferences, licensing and tools use small
+  app bars or quiet in-content headings. See [the page matrix](docs/M3_EXPRESSIVE_UI.md).
 - **Shape morphing is the signature interaction.** Material morphs `ButtonGroup`,
   `ToggleButton` and `SplitButton` natively — prefer those over plain buttons/chips.
   `ui/component/ExpressiveShapeMotion.kt` supplies the same behaviour for surfaces the app
@@ -1237,23 +1239,18 @@ Applies to all platforms, and the original Android repo is kept aligned (goal #3
 - **Use the real Expressive APIs** (`MaterialExpressiveTheme`, motion scheme) provided by the
   pinned `material3` version; custom shapes and page palettes extend that theme rather than
   replacing it.
-- **Per-screen:** Now Playing entry page (`NowPlayingScreen`: artwork-derived page gradient,
-  `ExpressiveArtwork` press morph that also settles to 86% while paused, Black headline with
-  marquee, a `Slider` whose track is `LinearWavyProgressIndicator` with amplitude tied to
-  playback, a wide extra-large `FilledIconToggleButton` play/pause with `toggleableShapes()`,
-  large tonal skip buttons with `IconButtonDefaults.shapes()`, and a `HorizontalFloatingToolbar`
-  whose vibrant FAB is the quotation-mark lyrics button. On Android the transport picks one size
-  for all three buttons; use two panes only when the measured window or usable space on both sides
-  of the crease warrants it. Full-screen lyric player (`AmllPlayerScreen` → `NativeAmllScreen`,
-  native Compose on every target, with the auto-hiding control island; keep sparse/empty lyrics and
-  controls together rather than forcing two panes);
-  Playlist detail (album-color gradient header, play-all/download-all as one
-  `SplitButtonLayout`, connected rows with download indicators); User page (blurred hero +
-  avatar, badged playlists);
-  Search (pill→bar shared-element transition, suggestion list); Downloads (queue summary hero,
-  progress rows, pause/resume/cancel/retry controls); Settings (gradient hero, tonal rows, pill
-  actions); Mini-player FAB (image-derived color w/ adaptive content luminance via
-  `contrastingTextColor()`, oversized rounded shape).
+- **Playback:** the Now Playing page keeps the artwork gradient, cover press morph and paused
+  artwork scale, an emphasized marquee title, wavy seek track and a shape-morphing play button.
+  Use quieter tonal skips and group the lyrics entry with the queue actions. In a stacked pane,
+  measure the controls first and give the cover the remaining space; scroll rather than hiding
+  an action when large fonts or split-screen still need more room. The three transport buttons
+  choose their size together. The single AMLL route keeps its auto-hiding control island and
+  does not force sparse or empty lyrics into two panes.
+- **Details and tools:** the playlist header confines the local gradient and gives primary
+  Play All the leading part of a `SplitButtonLayout`; secondary actions live in its menu. Show
+  the current track with a state marker as well as local color. Keep download actions next to
+  status. The Settings gradient belongs to its bounded header, separate from preference groups
+  and the category index.
 - **Desktop floating window** (`DesktopLyricWindow`, since e82ebc0): frameless, transparent
   and always on top, with no toggle. It shows the current and next line in white with a shadow,
   left, centred or right; a hover toolbar has previous, next, text size, lock and close. Locked,

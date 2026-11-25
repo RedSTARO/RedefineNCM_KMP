@@ -3,8 +3,8 @@ package com.leejlredstar.redefinencm.kmp.ui.theme
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.spring
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -22,7 +22,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import coil3.Image
-import com.leejlredstar.amll.compose.rememberReducedMotionEnabled
 import com.leejlredstar.redefinencm.kmp.util.themeColorFromCoilImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -97,12 +96,13 @@ class ArtworkAccent internal constructor(
  * @param scheme the scheme the palette is derived against. Pass a fixed one for a surface that
  *   does not follow the app theme.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun rememberArtworkAccent(
     requestKey: Any?,
     fallback: Color = MaterialTheme.colorScheme.primaryContainer,
     override: Color? = null,
-    animationSpec: AnimationSpec<Color> = spring(),
+    animationSpec: AnimationSpec<Color> = MaterialTheme.motionScheme.defaultEffectsSpec(),
     label: String = "artworkAccent",
     scheme: ColorScheme = MaterialTheme.colorScheme,
     onAccentColor: ((Color) -> Unit)? = null,
@@ -115,7 +115,7 @@ fun rememberArtworkAccent(
         raw = extracted
         latestOnAccentColor.value?.invoke(extracted)
     }
-    val reducedMotion = rememberReducedMotionEnabled()
+    val reducedMotion = LocalReducedMotion.current
     val color by animateColorAsState(
         targetValue = override ?: raw ?: fallback,
         animationSpec = if (reducedMotion) snap() else animationSpec,
