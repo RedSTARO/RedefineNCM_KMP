@@ -55,9 +55,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.heading
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -69,9 +67,6 @@ import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveArtwork
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMorphPair
-import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackPlayButton
-import com.leejlredstar.redefinencm.kmp.ui.component.rememberMorphShape
 import com.leejlredstar.redefinencm.kmp.ui.component.NativeDynamicCoverLayer
 import com.leejlredstar.redefinencm.kmp.ui.component.NowPlayingUiState
 import com.leejlredstar.redefinencm.kmp.ui.component.TransportSheets
@@ -89,7 +84,6 @@ import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
 import org.koin.compose.koinInject
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
@@ -111,7 +105,7 @@ import com.leejlredstar.redefinencm.kmp.ui.component.rememberTransitionVisual
 import com.leejlredstar.redefinencm.kmp.ui.component.TransitionVisual
 import com.leejlredstar.redefinencm.kmp.ui.component.TransitionArtworkStack
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -122,11 +116,10 @@ import androidx.compose.material3.Surface
 import com.leejlredstar.redefinencm.kmp.transition.TransitionKind
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
@@ -153,9 +146,12 @@ import com.leejlredstar.redefinencm.kmp.ui.component.reflowScale
  * The Now Playing entry page: what the mini player, the desktop rail and every OS
  * "now playing" request open first.
  *
- * The artwork, track title and transport are the focal points. The cover opens lyrics, and
- * the quotation-mark action makes that same route discoverable without guessing the gesture.
- * `AmllPlayerScreen` owns the lyric renderer.
+ * It is the Apple Music layout drawn with Material 3 Expressive: one large artwork whose
+ * frame morphs while held and settles smaller while paused, a Black headline, a wavy progress
+ * track that ripples only while audio is moving, a wide play/pause toggle that morphs
+ * between round and square, and a floating toolbar whose action button is the pair of
+ * quotation marks that opens the AMLL lyric page. Nothing here renders lyrics; that is the
+ * job of `AmllPlayerScreen`, which this page pushes on top of itself.
  */
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -276,12 +272,12 @@ fun NowPlayingScreen(
                 media = media,
                 isFavorite = nowPlaying.isFavorite,
                 canFavorite = nowPlaying.canFavorite,
+                reducedMotion = reducedMotion,
                 palette = palette,
                 onFavorite = viewModel::onFavClick,
-                reducedMotion = reducedMotion,
                 tight = tight,
             )
-            Spacer(Modifier.height(if (tight) 4.dp else 16.dp))
+            Spacer(Modifier.height(if (tight) 4.dp else 20.dp))
             NowPlayingProgress(
                 nowPlaying = nowPlaying,
                 palette = palette,
@@ -292,7 +288,7 @@ fun NowPlayingScreen(
             if (outputVolume <= 0.001f && nowPlaying.hasMedia) {
                 MutedChip(palette = palette, onUnmute = { player.setVolume(0.5f) })
             }
-            Spacer(Modifier.height(if (tight) 4.dp else 16.dp))
+            Spacer(Modifier.height(if (tight) 4.dp else 20.dp))
             NowPlayingTransport(
                 isPlaying = nowPlaying.isPlaying,
                 hasMedia = nowPlaying.hasMedia,
@@ -332,61 +328,69 @@ fun NowPlayingScreen(
             }
         } else {
             BoxWithConstraints(viewport.padding(horizontal = ExpressiveLayout.PageHorizontalPadding)) {
-                val twoColumns = maxWidth > maxHeight && maxWidth >= 600.dp
-                val shortHeight = maxHeight < 600.dp
-                val shortWindow = maxHeight < 420.dp
-                Column(Modifier.fillMaxSize()) {
-                    header(Modifier, shortWindow)
-                    if (twoColumns) {
-                        Row(
-                            modifier = Modifier.weight(1f).fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Box(
-                                modifier = Modifier.weight(1f).fillMaxHeight().padding(vertical = 8.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                artwork(Modifier.widthIn(max = 520.dp))
-                            }
-                            Spacer(Modifier.width(24.dp))
-                            BoxWithConstraints(
-                                modifier = Modifier.weight(1f).fillMaxHeight(),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                val tight = shortWindow || maxWidth < 340.dp
-                                Column(
-                                    Modifier.widthIn(max = 560.dp).fillMaxWidth().verticalScroll(controlsScroll)
-                                        .padding(vertical = if (tight) 4.dp else 16.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                ) {
-                                    controls(shortHeight, tight, null)
-                                    Spacer(Modifier.height(if (tight) 4.dp else 24.dp))
-                                    toolbar(tight)
-                                }
-                            }
-                        }
-                    } else {
-                        BoxWithConstraints(
-                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                val viewportWidth = maxWidth
+                val viewportHeight = maxHeight
+                val twoColumns = viewportWidth > viewportHeight && viewportWidth >= 600.dp
+                val shortHeight = viewportHeight < 600.dp
+                val transportHeight = if (shortHeight) 96.dp else 136.dp
+                if (twoColumns) {
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .padding(vertical = 56.dp),
                             contentAlignment = Alignment.Center,
                         ) {
-                            val tight = shortWindow || maxWidth < 340.dp
-                            StackedPlayerContent(
-                                viewportHeight = maxHeight,
-                                tight = tight,
-                                scroll = controlsScroll,
-                                artwork = artwork,
-                            ) {
-                                controls(shortHeight, tight, null)
-                                Spacer(Modifier.height(if (tight) 4.dp else 24.dp))
-                                toolbar(tight)
+                            artwork(Modifier.widthIn(max = 520.dp).fillMaxWidth())
+                        }
+                        Spacer(Modifier.width(32.dp))
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .padding(end = ExpressiveLayout.PageHorizontalPadding),
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            controls(shortHeight, false, null)
+                            Spacer(Modifier.height(28.dp))
+                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                toolbar(false)
                             }
                         }
                     }
+                } else {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        // Everything below the artwork has a fixed height; the artwork takes what is
+                        // left, so a short window shrinks the cover instead of pushing controls off.
+                        val fixedHeight = 64.dp + 80.dp + 20.dp + 60.dp + 20.dp +
+                            transportHeight + 28.dp + 64.dp + ExpressiveLayout.PageVerticalPadding
+                        val artworkSize =
+                            minOf(420.dp, viewportWidth - 24.dp, viewportHeight - fixedHeight)
+                                .coerceAtLeast(96.dp)
+                        Spacer(Modifier.height(64.dp))
+                        Spacer(Modifier.weight(1f))
+                        artwork(Modifier.size(artworkSize))
+                        Spacer(Modifier.weight(1f))
+                        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth()) {
+                            controls(shortHeight, false, null)
+                        }
+                        Spacer(Modifier.height(28.dp))
+                        toolbar(false)
+                        Spacer(Modifier.height(ExpressiveLayout.PageVerticalPadding))
+                    }
                 }
+                header(Modifier.align(Alignment.TopStart), false)
             }
         }
     }
+
     TransportSheets(
         state = sheets,
         nowPlaying = nowPlaying,
@@ -450,6 +454,8 @@ private fun AdaptiveNowPlayingLayout(
         val density = LocalDensity.current
         val full = IntRect(0, 0, constraints.maxWidth, constraints.maxHeight)
         val (artPane, controlPane) = nowPlayingPanes(full, density, fold, wideWindow)
+        val controlHeight = with(density) { controlPane.height.toDp() }
+        val controlWidth = with(density) { controlPane.width.toDp() }
         val layout = nowPlayingReflowLayout(full, artPane, controlPane, density)
         val expandedWidth = hasExpandedPlaybackWidth(maxWidth)
         val hasSpace = controlPane.width > 0 && controlPane.height > 0
@@ -474,65 +480,31 @@ private fun AdaptiveNowPlayingLayout(
         val sidePadding = if (layout.narrowMargins) 8.dp else ExpressiveLayout.PageHorizontalPadding
         Column(Modifier.inPlaybackPane(controlPane).padding(horizontal = sidePadding)) {
             if (!headerInScroll) header(Modifier, tight)
-            BoxWithConstraints(
+            Box(
                 Modifier.weight(1f).fillMaxWidth(),
                 contentAlignment = Alignment.Center,
             ) {
-                StackedPlayerContent(
-                    viewportHeight = maxHeight,
-                    tight = tight,
-                    scroll = scroll,
-                    artwork = if (layout.showInlineArtwork) ({ modifier ->
-                        artwork(modifier.reflowScale(reflow, start = 0.92f))
-                    }) else null,
+                Column(
+                    Modifier.widthIn(max = 560.dp).fillMaxWidth().verticalScroll(scroll)
+                        .padding(vertical = if (tight) 4.dp else 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     if (headerInScroll) header(Modifier, true)
+                    // Artwork is optional in a narrow/short window; the quote button still opens lyrics.
+                    if (layout.showInlineArtwork) {
+                        val size = minOf(420.dp, (controlWidth - sidePadding * 2).coerceAtLeast(0.dp),
+                            (controlHeight - 350.dp).coerceAtLeast(64.dp))
+                        artwork(Modifier.size(size).reflowScale(reflow, start = 0.92f))
+                        Spacer(Modifier.height(12.dp))
+                    }
                     controls(layout.shortTransport, tight, reflow)
-                    Spacer(Modifier.height(if (tight) 4.dp else 20.dp))
+                    Spacer(Modifier.height(if (tight) 4.dp else 28.dp))
                     toolbar(tight)
                 }
             }
         }
     }
 }
-
-/** The artwork takes what's left after the actual text, seek bar, transport and toolbar are measured. */
-@Composable
-private fun StackedPlayerContent(
-    viewportHeight: Dp,
-    tight: Boolean,
-    scroll: ScrollState,
-    artwork: (@Composable (Modifier) -> Unit)?,
-    controls: @Composable () -> Unit,
-) {
-    val padding = if (tight) 4.dp else 16.dp
-    val gap = if (tight) 8.dp else 12.dp
-    Layout(
-        modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth().verticalScroll(scroll).padding(vertical = padding),
-        content = {
-            Box { artwork?.invoke(Modifier.fillMaxSize()) }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) { controls() }
-        },
-    ) { (cover, transport), constraints ->
-        val width = constraints.maxWidth
-        val measuredControls = transport.measure(Constraints.fixedWidth(width))
-        val coverSize = if (artwork == null) 0 else stackedPlayerArtworkSize(
-            height = viewportHeight,
-            controlsHeight = measuredControls.height.toDp() + padding * 2 + gap,
-            width = width.toDp(),
-        ).roundToPx()
-        val measuredCover = cover.measure(Constraints.fixed(coverSize, coverSize))
-        val beforeControls = if (coverSize > 0) coverSize + gap.roundToPx() else 0
-        layout(width, beforeControls + measuredControls.height) {
-            if (coverSize > 0) measuredCover.placeRelative((width - coverSize) / 2, 0)
-            measuredControls.placeRelative(0, beforeControls)
-        }
-    }
-}
-
-/** Keep a small cover and let the controls scroll when even the smallest artwork cannot fit. */
-internal fun stackedPlayerArtworkSize(height: Dp, controlsHeight: Dp, width: Dp): Dp =
-    minOf(width, 420.dp, (height - controlsHeight).coerceAtLeast(64.dp))
 
 internal fun nowPlayingReflowLayout(
     full: IntRect,
@@ -598,7 +570,8 @@ private fun NowPlayingTopBar(
         FilledTonalIconButton(
             onClick = onBack,
             shapes = IconButtonDefaults.shapes(),
-            modifier = Modifier.size(ExpressiveLayout.MinimumTouchTarget)
+            modifier = Modifier
+                .then(if (tight) Modifier.size(48.dp) else Modifier.size(IconButtonDefaults.mediumContainerSize()))
                 .semantics { contentDescription = strings.collapsePlayer },
             colors = IconButtonDefaults.filledTonalIconButtonColors(
                 containerColor = palette.quietContainer,
@@ -617,7 +590,7 @@ private fun NowPlayingTopBar(
         ) {
             Text(
                 text = strings.nowPlaying,
-                style = MaterialTheme.typography.labelLargeEmphasized,
+                style = MaterialTheme.typography.labelLarge,
                 color = palette.onPageStart,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -633,13 +606,15 @@ private fun NowPlayingTopBar(
                 )
             }
         }
-        IconButton(
+        FilledTonalIconButton(
             onClick = onOpenDetails,
             enabled = wikiEnabled,
             shapes = IconButtonDefaults.shapes(),
-            modifier = Modifier.size(ExpressiveLayout.MinimumTouchTarget),
-            colors = IconButtonDefaults.iconButtonColors(
+            modifier = if (tight) Modifier.size(48.dp) else Modifier.size(IconButtonDefaults.mediumContainerSize()),
+            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = Color.Transparent,
                 contentColor = palette.secondaryOnPageStart,
+                disabledContainerColor = Color.Transparent,
                 disabledContentColor = palette.onPageStart.copy(alpha = 0.38f),
             ),
         ) {
@@ -699,14 +674,7 @@ private fun NowPlayingArtwork(
         animationSpec = if (reducedMotion) snap() else MaterialTheme.motionScheme.slowSpatialSpec(),
         label = "nowPlayingArtworkScale",
     )
-    val pressed by interactionSource.collectIsPressedAsState()
-    val morph by animateFloatAsState(
-        targetValue = if (pressed) 1f else 0f,
-        animationSpec = if (reducedMotion) snap() else MaterialTheme.motionScheme.fastSpatialSpec(),
-        label = "nowPlayingArtworkMorph",
-    )
-    // The frame and its shadow share the same silhouette through the press.
-    val frameShape = rememberMorphShape(ExpressiveMorphPair.ArtworkBloom, morph)
+    val frameShape = MaterialTheme.shapes.extraLarge
     TransitionArtworkStack(
         current = media,
         visual = visual,
@@ -725,19 +693,11 @@ private fun NowPlayingArtwork(
             .dropShadow(
                 shape = frameShape,
                 shadow = Shadow(
-                    radius = 24.dp,
-                    color = Color.Black,
-                    offset = DpOffset(x = 0.dp, y = 14.dp),
-                    alpha = 0.28f,
-                ),
-            )
-            .dropShadow(
-                shape = frameShape,
-                shadow = Shadow(
-                    radius = 32.dp,
-                    color = palette.accent,
-                    offset = DpOffset(x = 0.dp, y = 8.dp),
-                    alpha = 0.20f,
+                    radius = 36.dp,
+                    color = lerp(Color.Black, palette.accent, 0.25f),
+                    spread = 0.dp,
+                    offset = DpOffset(x = 0.dp, y = 18.dp),
+                    alpha = 0.32f,
                 ),
             )
             .clickable(
@@ -759,6 +719,7 @@ private fun NowPlayingArtwork(
             shape = frameShape,
             containerColor = palette.quietContainer,
             contentColor = palette.onQuietContainer,
+            pressInteractionSource = interactionSource,
             onImageLoaded = onLoaded,
         )
     }
@@ -771,32 +732,31 @@ private fun NowPlayingTitle(
     isFavorite: Boolean,
     /** False for a provider without likes: the heart stays, dimmed, so the row keeps its shape. */
     canFavorite: Boolean,
+    reducedMotion: Boolean,
     palette: ContentAccentPalette,
     onFavorite: () -> Unit,
-    reducedMotion: Boolean,
     tight: Boolean,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // The words change at the swap; effects motion keeps the outgoing letters from bouncing.
+        // The words change at the swap; they cross-fade there rather than cut.
         Crossfade(
             targetState = media,
-            animationSpec = if (reducedMotion) snap() else MaterialTheme.motionScheme.slowEffectsSpec(),
+            animationSpec = if (reducedMotion) snap() else tween(TITLE_CROSSFADE_MILLIS),
             label = "nowPlayingTitle",
             modifier = Modifier.weight(1f),
         ) { track ->
             Column {
                 Text(
                     text = track?.title?.takeIf(String::isNotBlank) ?: strings.notPlaying,
-                    style = if (tight) MaterialTheme.typography.titleLargeEmphasized
-                    else MaterialTheme.typography.headlineLargeEmphasized,
+                    style = if (tight) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Black,
                     color = palette.onPageMiddle,
                     maxLines = 1,
                     overflow = if (reducedMotion) TextOverflow.Ellipsis else TextOverflow.Clip,
-                    modifier = Modifier.semantics { heading() }
-                        .then(if (reducedMotion) Modifier else Modifier.basicMarquee()),
+                    modifier = if (reducedMotion) Modifier else Modifier.basicMarquee(),
                 )
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -808,7 +768,7 @@ private fun NowPlayingTitle(
                             modifier = Modifier.padding(end = 8.dp),
                         )
                     }
-                    NowPlayingCredits(media = track, palette = palette, reducedMotion = reducedMotion, tight = tight)
+                    NowPlayingCredits(media = track, palette = palette, reducedMotion = reducedMotion)
                 }
             }
         }
@@ -817,7 +777,7 @@ private fun NowPlayingTitle(
             checked = isFavorite,
             onCheckedChange = { onFavorite() },
             shapes = IconButtonDefaults.toggleableShapes(),
-            modifier = Modifier.size(ExpressiveLayout.MinimumTouchTarget),
+            modifier = if (tight) Modifier.size(48.dp) else Modifier.size(IconButtonDefaults.mediumContainerSize()),
             enabled = canFavorite,
             colors = IconButtonDefaults.filledIconToggleButtonColors(
                 containerColor = palette.quietContainer,
@@ -844,7 +804,6 @@ private fun NowPlayingCredits(
     media: MediaInfo?,
     palette: ContentAccentPalette,
     reducedMotion: Boolean,
-    tight: Boolean,
     repository: Repository = koinInject(),
     providers: MusicProviderRegistry = koinInject(),
 ) {
@@ -860,7 +819,7 @@ private fun NowPlayingCredits(
     Box {
         Text(
             text = media?.artist?.takeIf(String::isNotBlank) ?: strings.pickSongToStart,
-            style = if (tight) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyLarge,
             color = palette.secondaryOnPageMiddle,
             maxLines = 1,
             overflow = if (reducedMotion) TextOverflow.Ellipsis else TextOverflow.Clip,
@@ -919,7 +878,7 @@ private fun NowPlayingProgress(
     val displayPosition = seek.positionFor(nowPlaying.safePosition, totalDuration)
     val amplitude by animateFloatAsState(
         targetValue = if (nowPlaying.isPlaying && !seek.isDragging && !reducedMotion) 1f else 0f,
-        animationSpec = if (reducedMotion) snap() else MaterialTheme.motionScheme.defaultSpatialSpec(),
+        animationSpec = if (reducedMotion) snap() else MaterialTheme.motionScheme.slowEffectsSpec(),
         label = "nowPlayingWaveAmplitude",
     )
     val interactionSource = remember { MutableInteractionSource() }
@@ -937,7 +896,7 @@ private fun NowPlayingProgress(
             interactionSource = interactionSource,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(ExpressiveLayout.MinimumTouchTarget)
+                .height(44.dp)
                 .semantics { contentDescription = strings.playbackPosition },
             thumb = {
                 SliderDefaults.Thumb(
@@ -961,7 +920,7 @@ private fun NowPlayingProgress(
                 val clockStyle = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum")
                 Text(
                     text = formatPlaybackClock(displayPosition),
-                    style = MaterialTheme.typography.labelMediumEmphasized.copy(fontFeatureSettings = "tnum"),
+                    style = clockStyle,
                     color = palette.onPageMiddle,
                 )
                 Spacer(Modifier.weight(1f))
@@ -977,7 +936,6 @@ private fun NowPlayingProgress(
                 TransitionKindLabel(
                     kind = transitionKind,
                     palette = palette,
-                    reducedMotion = reducedMotion,
                     modifier = Modifier.wrapContentHeight(unbounded = true),
                 )
             }
@@ -990,12 +948,10 @@ private fun NowPlayingProgress(
  * 淡入淡出 for a plain crossfade, which is also what the smart mode falls back to when two songs'
  * tempi are too far apart to match.
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun TransitionKindLabel(
     kind: TransitionKind?,
     palette: ContentAccentPalette,
-    reducedMotion: Boolean,
     modifier: Modifier = Modifier,
 ) {
     // Kept through the fade-out, when the blend has already ended.
@@ -1003,8 +959,8 @@ private fun TransitionKindLabel(
     LaunchedEffect(kind) { if (kind != null) lastKind = kind }
     AnimatedVisibility(
         visible = kind != null,
-        enter = fadeIn(if (reducedMotion) snap() else MaterialTheme.motionScheme.defaultEffectsSpec()),
-        exit = fadeOut(if (reducedMotion) snap() else MaterialTheme.motionScheme.defaultEffectsSpec()),
+        enter = fadeIn(MaterialTheme.motionScheme.slowEffectsSpec()),
+        exit = fadeOut(MaterialTheme.motionScheme.slowEffectsSpec()),
         modifier = modifier,
     ) {
         val shown = kind ?: lastKind ?: return@AnimatedVisibility
@@ -1058,18 +1014,10 @@ private fun NowPlayingTransport(
         val density = LocalDensity.current
         val metrics = nowPlayingTransportMetrics(constraints.maxWidth, density, compact, tight)
         val fits = metrics.fits(constraints.maxWidth, density)
-        val skipShape = IconButtonDefaults.shapes(
-            shape = CircleShape,
-            pressedShape = when (metrics.skip.height) {
-                96.dp -> IconButtonDefaults.largePressedShape
-                56.dp -> IconButtonDefaults.mediumPressedShape
-                else -> IconButtonDefaults.smallPressedShape
-            },
-        )
         val buttons: @Composable () -> Unit = {
             FilledTonalIconButton(
                 onClick = onPrevious,
-                shapes = skipShape,
+                shapes = IconButtonDefaults.shapes(),
                 modifier = Modifier.size(metrics.skip),
                 enabled = hasMedia,
                 colors = tonalColors,
@@ -1080,26 +1028,32 @@ private fun NowPlayingTransport(
                     modifier = Modifier.size(metrics.skipIcon),
                 )
             }
-            val heroButton = metrics.play.height >= 96.dp
-            PlaybackPlayButton(
-                isPlaying = isPlaying,
-                enabled = hasMedia,
-                onClick = onPlayPause,
-                containerColor = palette.accent,
-                contentColor = palette.onAccent,
+            // The wide extra-large toggle: round while paused, squarer while playing, and it morphs
+            // through the press. This is the M3 Expressive media play/pause affordance.
+            FilledIconToggleButton(
+                checked = isPlaying,
+                onCheckedChange = { onPlayPause() },
+                shapes = IconButtonDefaults.toggleableShapes(),
                 modifier = Modifier.size(metrics.play),
-                iconSize = metrics.playIcon,
-                shapes = IconButtonDefaults.toggleableShapes(
-                    shape = CircleShape,
-                    pressedShape = if (heroButton) IconButtonDefaults.largePressedShape
-                    else IconButtonDefaults.smallPressedShape,
-                    checkedShape = if (heroButton) IconButtonDefaults.largeSelectedRoundShape
-                    else IconButtonDefaults.smallSelectedRoundShape,
+                enabled = hasMedia,
+                colors = IconButtonDefaults.filledIconToggleButtonColors(
+                    containerColor = palette.accent,
+                    contentColor = palette.onAccent,
+                    checkedContainerColor = palette.accent,
+                    checkedContentColor = palette.onAccent,
+                    disabledContainerColor = palette.accent.copy(alpha = 0.12f),
+                    disabledContentColor = palette.onAccent.copy(alpha = 0.38f),
                 ),
-            )
+            ) {
+                Icon(
+                    imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
+                    contentDescription = if (isPlaying) strings.pause else strings.play,
+                    modifier = Modifier.size(metrics.playIcon),
+                )
+            }
             FilledTonalIconButton(
                 onClick = onNext,
-                shapes = skipShape,
+                shapes = IconButtonDefaults.shapes(),
                 modifier = Modifier.size(metrics.skip),
                 enabled = hasMedia,
                 colors = tonalColors,
@@ -1218,7 +1172,7 @@ private fun NowPlayingToolbar(
     }
     if (tight) {
         Surface(
-            shape = CircleShape,
+            shape = RoundedCornerShape(24.dp),
             color = palette.quietContainer,
             contentColor = palette.onQuietContainer,
         ) {
@@ -1238,50 +1192,31 @@ private fun NowPlayingToolbar(
         }
         return
     }
-    BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        val label = strings.lyrics
-        val labelStyle = MaterialTheme.typography.labelLargeEmphasized
-        val textMeasurer = rememberTextMeasurer()
-        // Leave room for three 48dp targets, toolbar insets and the extended action's icon/padding.
-        // Measure the localized label so text scaling falls back to the same quote icon cleanly.
-        val labelWidth = textMeasurer.measure(label, style = labelStyle, maxLines = 1).size.width
-        val showLabel = with(LocalDensity.current) { maxWidth.roundToPx() >= 244.dp.roundToPx() + labelWidth }
-        val colors = FloatingToolbarColors(
+    HorizontalFloatingToolbar(
+        expanded = true,
+        floatingActionButton = {
+            // The toolbar's fabContainerColor below does not reach this button: the FAB reads its
+            // own containerColor default (tertiaryContainer), so the artwork accent is passed here.
+            FloatingToolbarDefaults.VibrantFloatingActionButton(
+                onClick = onLyrics,
+                modifier = Modifier.semantics { contentDescription = strings.lyrics },
+                containerColor = palette.container,
+                contentColor = palette.onContainer,
+            ) {
+                Icon(imageVector = AppIcons.FormatQuote, contentDescription = null)
+            }
+        },
+        colors = FloatingToolbarColors(
             toolbarContainerColor = palette.quietContainer,
             toolbarContentColor = palette.onQuietContainer,
             fabContainerColor = palette.container,
             fabContentColor = palette.onContainer,
-        )
-        if (showLabel) {
-            // The toolbar's FAB slot enforces square constraints; put the extended action beside it.
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                HorizontalFloatingToolbar(expanded = true, colors = colors) { actions() }
-                ExtendedFloatingActionButton(
-                    onClick = onLyrics,
-                    icon = { Icon(AppIcons.FormatQuote, contentDescription = null) },
-                    text = { Text(label, style = labelStyle, maxLines = 1) },
-                    modifier = Modifier.semantics { contentDescription = label },
-                    shape = CircleShape,
-                    containerColor = palette.container,
-                    contentColor = palette.onContainer,
-                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 0.dp),
-                )
-            }
-        } else {
-            HorizontalFloatingToolbar(
-                expanded = true,
-                colors = colors,
-                floatingActionButton = {
-                    FloatingToolbarDefaults.VibrantFloatingActionButton(
-                        onClick = onLyrics,
-                        containerColor = palette.container,
-                        contentColor = palette.onContainer,
-                    ) { Icon(AppIcons.FormatQuote, contentDescription = label) }
-                },
-                content = { actions() },
-            )
-        }
-    }
+        ),
+        content = { actions() },
+    )
 }
+
+private const val TITLE_CROSSFADE_MILLIS = 480
+
 /** How much a downbeat enlarges the cover through a beat-matched blend. */
 private const val BEAT_KICK_SCALE = 0.02f

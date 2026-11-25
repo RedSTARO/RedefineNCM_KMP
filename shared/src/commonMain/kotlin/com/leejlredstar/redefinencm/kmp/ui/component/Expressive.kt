@@ -117,8 +117,9 @@ fun connectedListItemShape(
     index: Int,
     count: Int,
     pressProgress: Float = 0f,
+    outerCorner: Dp = ExpressiveLayout.ConnectedOuterCorner,
 ): RoundedCornerShape {
-    val big = ExpressiveLayout.ConnectedOuterCorner
+    val big = outerCorner
     val tight = ExpressiveLayout.ConnectedInnerCorner
     val small = tight + (big - tight) * pressProgress.coerceIn(0f, 1f)
     return when {
@@ -150,9 +151,10 @@ fun rememberConnectedListItemShape(
     index: Int,
     count: Int,
     interactionSource: InteractionSource,
+    outerCorner: Dp = ExpressiveLayout.ConnectedOuterCorner,
 ): RoundedCornerShape {
     val progress by rememberPressMorphProgress(interactionSource)
-    return connectedListItemShape(index, count, progress)
+    return connectedListItemShape(index, count, progress, outerCorner)
 }
 
 /**

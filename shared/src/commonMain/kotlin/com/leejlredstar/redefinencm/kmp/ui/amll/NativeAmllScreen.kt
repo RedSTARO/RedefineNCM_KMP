@@ -25,8 +25,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -183,8 +183,7 @@ fun NativeAmllScreen(
     val dynamicCoverUrl = dynamicCoverState
         .urlFor(metadata?.id)
         .takeUnless { localArtworkActive }
-    // The canvas is always dark. Take the island tint from the same static image (including a
-    // fallback) rather than relying on the island's small cover to appear in compact windows.
+    // Keep the island's dark artwork palette, even when the compact controls hide their cover.
     val artworkAccent = rememberArtworkAccent(
         requestKey = primaryArtworkUri to fallbackArtworkUri,
         fallback = DarkColors.primaryContainer,
@@ -327,7 +326,7 @@ fun NativeAmllScreen(
                     }
                     AmllTopActions(
                         onBack = onBack,
-                        palette = artworkAccent.palette,
+                        tint = artworkAccent.palette.onQuietContainer,
                         compact = shortLyrics,
                         modifier = Modifier.align(Alignment.TopStart)
                             .reflowPlacement(reflow, ReflowEntry.TowardEndFromStart),
@@ -428,11 +427,10 @@ internal fun calculateNativeAmllVisualParameters(
     )
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun AmllTopActions(
     onBack: () -> Unit,
-    palette: ContentAccentPalette,
+    tint: Color,
     compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -441,15 +439,12 @@ private fun AmllTopActions(
             .statusBarsPadding()
             .padding(top = if (compact) 0.dp else 18.dp),
     ) {
-        // Match Now Playing's collapse control; the quiet tone separates it from moving art
-        // without giving page chrome the same emphasis as a lyric line.
-        FilledTonalIconButton(
+        // Down, not back: the lyrics are the player opened up, and this puts them away with the
+        // same gesture and the same glyph as the Now Playing page it returns to. Nothing behind
+        // it: the artwork under the lyrics is blurred and darkened, so a filled circle would be
+        // one more shape on a page whose whole point is the words.
+        IconButton(
             onClick = onBack,
-            shapes = IconButtonDefaults.shapes(),
-            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                containerColor = palette.quietContainer,
-                contentColor = palette.onQuietContainer,
-            ),
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(start = if (compact) 8.dp else 18.dp)
@@ -459,7 +454,8 @@ private fun AmllTopActions(
             Icon(
                 imageVector = AppIcons.KeyboardArrowDown,
                 contentDescription = null,
-                modifier = Modifier.size(IconButtonDefaults.smallIconSize),
+                tint = tint,
+                modifier = Modifier.size(32.dp),
             )
         }
     }
@@ -539,7 +535,6 @@ private fun coerceAmllPresentationPosition(
 }
 
 /** Lyrics that have text but no timing, shown as a plain scrollable column. */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun UntimedLyrics(
     lines: List<String>,
@@ -563,23 +558,18 @@ private fun UntimedLyrics(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item(key = "untimed-note") {
-            Surface(
-                shape = MaterialTheme.shapes.medium,
-                color = palette.quietContainer,
-                contentColor = palette.secondaryOnQuietContainer,
-            ) {
-                Text(
-                    text = strings.lyricsUntimedNote,
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = if (compact) 4.dp else 8.dp),
-                )
-            }
+            Text(
+                text = strings.lyricsUntimedNote,
+                color = palette.secondaryOnQuietContainer,
+                style = MaterialTheme.typography.labelMedium,
+            )
         }
         itemsIndexed(lines) { _, line ->
             Text(
                 text = line,
                 color = palette.onPageEnd,
-                style = MaterialTheme.typography.headlineSmallEmphasized,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold,
             )
         }
     }

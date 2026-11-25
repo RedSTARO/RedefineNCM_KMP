@@ -9,32 +9,38 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import com.leejlredstar.redefinencm.kmp.i18n.strings
-import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
+import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
 import com.leejlredstar.redefinencm.kmp.ui.theme.contentColorFor
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberArtworkAccent
 import org.koin.compose.koinInject
-import androidx.compose.runtime.remember
 
-/** The floating player entry: cover and state at a glance, without growing into browse content. */
+/** The compact floating entry shows the circular cover, play state, and a thin progress line. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MiniNowPlayingBar(
@@ -60,28 +66,22 @@ fun MiniNowPlayingBar(
         0f
     }
 
-    // The accent animates and the whole palette follows, rather than animating the container
-    // alone: every role then moves together instead of the container arriving ahead of the rest.
-    val motion = MaterialTheme.motionScheme
+    val colorMotion = MaterialTheme.motionScheme.slowEffectsSpec<Color>()
     val artworkAccent = rememberArtworkAccent(
         requestKey = media?.artworkUri,
-        animationSpec = motion.slowEffectsSpec(),
+        animationSpec = colorMotion,
         label = "miniPlayerColor",
         onAccentColor = onAccentColor,
     )
-    val extractThemeColor = artworkAccent.extract
     val accentPalette = artworkAccent.palette
-
-    // Through a song transition the pill travels with the music: the next cover dissolves in over
-    // this one and the pill's colour flows from one cover's to the other's, instead of jumping at
-    // the swap. The pill is small, so it simply recomposes as the blend moves.
+    // During a song transition, the cover and the accent blend together.
     val visual = rememberTransitionVisual(player)
     val blendKey = visual?.incoming?.id
     val startPalette = remember(blendKey) { accentPalette }
     val incomingAccent = rememberArtworkAccent(
         requestKey = visual?.incoming?.artworkUri,
         fallback = remember(blendKey) { artworkAccent.color },
-        animationSpec = motion.slowEffectsSpec(),
+        animationSpec = colorMotion,
         label = "miniPlayerIncomingColor",
     )
     val weight = visual?.weight
@@ -89,12 +89,11 @@ fun MiniNowPlayingBar(
         lerp(startPalette.quietContainer, incomingAccent.palette.quietContainer, weight)
     val playColor = if (weight == null) accentPalette.accent else
         lerp(startPalette.accent, incomingAccent.palette.accent, weight)
-    // Pick foregrounds for the colors actually on screen, not a gray blend of two foregrounds.
+    // Choose foregrounds against the colors being drawn, including during the blend.
     val contentColor = contentColorFor(containerColor)
     val playContentColor = contentColorFor(playColor)
-    // Keep the FAB slot's footprint; the art and play button retain separate actions.
-    val shape = MaterialTheme.shapes.extraLarge
-    val artworkShape = RoundedCornerShape(20.dp) // 28dp body corner minus the 8dp artwork inset.
+
+    // The whole pill opens the player; only the play button does something else.
     Box(Modifier.padding(end = 2.dp, bottom = 2.dp)) {
         Surface(
             onClick = onExpand,
@@ -103,35 +102,46 @@ fun MiniNowPlayingBar(
                 contentDescription = strings.openPlayerFor(media?.title ?: strings.currentSong) +
                     if (muted) strings.mutedSuffix else ""
             },
-            shape = shape,
+            shape = CircleShape,
             color = containerColor,
             contentColor = contentColor,
-            shadowElevation = 3.dp,
+            tonalElevation = 4.dp,
         ) {
             Box {
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp).fillMaxSize(),
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(Modifier.size(44.dp)) {
-                        TransitionArtworkStack(
-                            current = media,
-                            visual = visual,
-                            onCurrentImage = extractThemeColor,
-                            onIncomingImage = incomingAccent.extract,
+                    Box(Modifier.size(48.dp)) {
+                        Surface(
                             modifier = Modifier.fillMaxSize(),
-                        ) { layerMedia, layerModifier, imageModifier, onLoaded ->
-                            ExpressiveArtwork(
-                                model = layerMedia?.artworkUri?.takeIf(String::isNotBlank),
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.matchParentSize().then(layerModifier),
-                                imageModifier = imageModifier,
-                                shape = artworkShape,
-                                containerColor = containerColor,
-                                contentColor = contentColor,
-                                onImageLoaded = onLoaded,
-                            )
+                            shape = CircleShape,
+                            color = containerColor,
+                            contentColor = contentColor,
+                        ) {
+                            TransitionArtworkStack(
+                                current = media,
+                                visual = visual,
+                                onCurrentImage = artworkAccent.extract,
+                                onIncomingImage = incomingAccent.extract,
+                                modifier = Modifier.fillMaxSize(),
+                            ) { layerMedia, layerModifier, imageModifier, onLoaded ->
+                                val context = LocalPlatformContext.current
+                                val artwork = layerMedia?.artworkUri?.takeIf(String::isNotBlank)
+                                val request = remember(context, artwork) {
+                                    ImageRequest.Builder(context).data(artwork).crossfade(true).build()
+                                }
+                                Box(Modifier.matchParentSize().then(layerModifier), contentAlignment = Alignment.Center) {
+                                    Icon(AppIcons.MusicNote, contentDescription = null, modifier = Modifier.size(22.dp))
+                                    AsyncImage(
+                                        model = request,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.matchParentSize().then(imageModifier),
+                                        onSuccess = { state -> onLoaded(state.result.image) },
+                                    )
+                                }
+                            }
                         }
                         if (muted) {
                             Surface(
@@ -140,30 +150,34 @@ fun MiniNowPlayingBar(
                                 color = containerColor,
                                 contentColor = contentColor,
                             ) {
-                                Icon(
-                                    imageVector = AppIcons.VolumeOff,
-                                    contentDescription = null,
-                                    modifier = Modifier.padding(3.dp),
-                                )
+                                Icon(AppIcons.VolumeOff, contentDescription = null, modifier = Modifier.padding(3.dp))
                             }
                         }
                     }
-                    Spacer(Modifier.width(8.dp))
-                    PlaybackPlayButton(
-                        isPlaying = isPlaying,
-                        enabled = hasMedia,
+                    Spacer(Modifier.width(6.dp))
+                    FilledIconButton(
                         onClick = player::togglePlayPause,
-                        containerColor = playColor,
-                        contentColor = playContentColor,
-                    )
+                        enabled = hasMedia,
+                        modifier = Modifier.size(48.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = playColor,
+                            contentColor = playContentColor,
+                            disabledContainerColor = playColor.copy(alpha = 0.12f),
+                            disabledContentColor = playContentColor.copy(alpha = 0.38f),
+                        ),
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
+                            contentDescription = if (isPlaying) strings.pause else strings.play,
+                        )
+                    }
                 }
                 LinearProgressIndicator(
                     progress = { progress },
-                    modifier = Modifier.align(Alignment.BottomCenter)
-                        .padding(bottom = 3.dp).width(70.dp).height(2.dp),
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 14.dp)
+                        .width(70.dp).height(2.dp).clip(CircleShape),
                     color = contentColor,
                     trackColor = contentColor.copy(alpha = 0.20f),
-                    drawStopIndicator = {},
                 )
             }
         }

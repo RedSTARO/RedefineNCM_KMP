@@ -23,7 +23,8 @@ change a provider capability, or change how playback, downloads, or sign-in work
 ## App decisions
 
 The app starts neutral, can follow the cover currently playing, and still supports Android’s
-optional wallpaper color. Discovery features and the player are the two high-expression moments.
+optional wallpaper color. The player uses these color roles, but keeps its original sizes,
+shapes, type, and transitions; browse pages use the shared Expressive presentation.
 The 32 dp Material radius is assigned to feature panels, not to every surface. Art may tint a detail
 header or the immersive player; most list rows do not extract their own background color. Body
 pane widths, when a supporting pane enters, and the travel distances and use of snap under
@@ -38,7 +39,7 @@ precedence over every layout choice.
 | Me | Keep cached identity and level visible, bound the profile wallpaper, and place device shortcuts before playlist groups. |
 | Daily Picks, playlist, album, artist | Give cover art, metadata and primary actions an adaptive header, with a smaller presentation in short windows. The playlist split button keeps Play All primary and opens Download All and Save as Local Playlist where available. |
 | Local library, local playlist | Make creation/import discoverable; show local tracks in the same segmented list language as online tracks. |
-| Now Playing, lyrics | Retain artwork and word-timed lyrics as the focus. Play/pause changes shape, skip/utility controls are quieter, and the Lyrics label is shown when it fits. The lyric island still uses the 3.6-second base auto-hide and the same safe panes. |
+| Now Playing, lyrics | Use the pre-redesign playback layout and type scale with the current colors. Keep the quotation-mark lyrics action, the connected lyric-island actions and its 3.6-second auto-hide. |
 | Downloads, recognition | Surface current work first. Use status chips in wide downloads and a status selector in narrow panes. Recognition keeps the listen, cancel and retry controls next to their state. |
 | Settings, Accounts, Login, Licenses | Keep navigation stable; offer a settings category picker or a supporting index, reflow account configuration and login forms in place, and show license text in a bounded reading pane. |
 

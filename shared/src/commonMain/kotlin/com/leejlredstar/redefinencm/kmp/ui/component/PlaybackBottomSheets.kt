@@ -24,7 +24,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -61,6 +60,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -74,6 +74,10 @@ import com.leejlredstar.redefinencm.kmp.i18n.compactCount
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.legibleAccentFor
 import kotlinx.coroutines.delay
+
+// Playback sheets keep their own connected list geometry instead of using the browse defaults.
+internal val PlaybackConnectedItemGap = 2.5.dp
+internal val PlaybackConnectedOuterCorner = 40.dp
 
 private data class QueueSheetEntry(
     val key: String,
@@ -302,7 +306,6 @@ internal fun QueuePanelContent(
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun QueueRow(
     entry: QueueSheetEntry,
@@ -327,6 +330,7 @@ private fun QueueRow(
             index = index,
             count = count,
             interactionSource = interactionSource,
+            outerCorner = PlaybackConnectedOuterCorner,
         ),
         color = if (isCurrent) accentPalette.container else accentPalette.quietContainer,
         contentColor = if (isCurrent) accentPalette.onContainer else accentPalette.onQuietContainer,
@@ -336,7 +340,7 @@ private fun QueueRow(
             .heightIn(min = ExpressiveLayout.MinimumTouchTarget)
             .padding(
                 horizontal = ExpressiveLayout.PageHorizontalPadding,
-                vertical = ExpressiveLayout.ConnectedItemGap,
+                vertical = PlaybackConnectedItemGap,
             )
             .semantics(mergeDescendants = true) {
                 contentDescription = strings.queueItemDescription(index + 1, title, artist)
@@ -360,7 +364,8 @@ private fun QueueRow(
         ) {
             Text(
                 text = "${index + 1}",
-                style = MaterialTheme.typography.labelLargeEmphasized.copy(fontFeatureSettings = "tnum"),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
                 color = if (isCurrent) accentPalette.onContainer else legibleAccentFor(
                     accent = accentPalette.accent,
                     background = accentPalette.quietContainer,
@@ -380,9 +385,9 @@ private fun QueueRow(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    style = if (isCurrent) MaterialTheme.typography.titleMediumEmphasized
-                    else MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleMedium,
                     color = if (isCurrent) accentPalette.onContainer else accentPalette.onQuietContainer,
+                    fontWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.Normal,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -540,7 +545,7 @@ internal fun CommentBottomSheet(
  *
  * The header shows the song's total comment count rather than the length of the loaded pages.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CommentPanelContent(
     comments: List<CommentMusicComments>,
@@ -618,10 +623,7 @@ internal fun CommentPanelContent(
                         selected = paging.showHot == hot,
                         onClick = { paging.onShowHot(hot) },
                         shape = SegmentedButtonDefaults.itemShape(index = i, count = 2),
-                        // One quiet outline, the same on both halves. Outlining the unselected
-                        // half in `secondaryOnQuietContainer` gives a near-white line at full
-                        // strength, which reads as a stray border rather than as the edge of a
-                        // control, while the selected half's outline stays invisible.
+                        // A shared outline keeps both halves part of the same control.
                         colors = SegmentedButtonDefaults.colors(
                             activeContainerColor = accentPalette.container,
                             activeContentColor = accentPalette.onContainer,
@@ -634,8 +636,7 @@ internal fun CommentPanelContent(
                         // one is showing, and the tick pushes a two-character label off centre.
                         icon = {},
                     ) {
-                        Text(label, style = if (paging.showHot == hot) MaterialTheme.typography.labelLargeEmphasized
-                        else MaterialTheme.typography.labelLarge)
+                        Text(label)
                     }
                 }
             }
@@ -746,7 +747,6 @@ private fun CommentsFooter(
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun CommentRow(
     comment: CommentMusicComments,
@@ -756,14 +756,14 @@ private fun CommentRow(
 ) {
     val nickname = comment.user.nickname.ifBlank { strings.neteaseUserFallbackName }
     Surface(
-        shape = connectedListItemShape(index, count),
+        shape = connectedListItemShape(index, count, outerCorner = PlaybackConnectedOuterCorner),
         color = accentPalette.quietContainer,
         contentColor = accentPalette.onQuietContainer,
         modifier = Modifier
             .fillMaxWidth()
             .padding(
                 horizontal = ExpressiveLayout.PageHorizontalPadding,
-                vertical = ExpressiveLayout.ConnectedItemGap,
+                vertical = PlaybackConnectedItemGap,
             ),
     ) {
         Row(
@@ -784,7 +784,8 @@ private fun CommentRow(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = nickname,
-                        style = MaterialTheme.typography.titleSmallEmphasized,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,

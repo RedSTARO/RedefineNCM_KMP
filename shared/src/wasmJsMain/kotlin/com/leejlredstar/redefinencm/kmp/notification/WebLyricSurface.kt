@@ -83,6 +83,7 @@ private fun updateBrowserLyricSurface(
             const artwork = document.createElement("img");
             artwork.dataset.role = "artwork";
             artwork.alt = "";
+            artwork.hidden = true;
             const text = document.createElement("div");
             text.dataset.role = "text";
             const current = document.createElement("div");

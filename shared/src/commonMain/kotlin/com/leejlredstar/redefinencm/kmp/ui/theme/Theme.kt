@@ -6,6 +6,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.runtime.Composable
@@ -34,6 +35,28 @@ private val ExpressiveShapes = Shapes(
     extraLargeIncreased = RoundedCornerShape(32.dp),
     extraExtraLarge = RoundedCornerShape(48.dp),
 )
+
+private val PlaybackShapes = Shapes(
+    extraSmall = RoundedCornerShape(12.dp),
+    small = RoundedCornerShape(18.dp),
+    medium = RoundedCornerShape(28.dp),
+    large = RoundedCornerShape(40.dp),
+    extraLarge = RoundedCornerShape(52.dp),
+)
+
+/** Keep the original player silhouettes and text scale without changing the active palette. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun PlaybackPresentationTheme(content: @Composable () -> Unit) {
+    val typography = MaterialTheme.typography
+    MaterialExpressiveTheme(
+        colorScheme = MaterialTheme.colorScheme,
+        motionScheme = MaterialTheme.motionScheme,
+        shapes = PlaybackShapes,
+        typography = remember(typography) { playbackTypography(typography) },
+        content = content,
+    )
+}
 
 /**
  * RedefineNCM Material 3 Expressive theme, used on all platforms (Android, iOS, Desktop, Web).

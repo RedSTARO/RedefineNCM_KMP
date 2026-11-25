@@ -4,12 +4,17 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
-import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -26,6 +31,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -37,14 +43,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonGroup
+import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
@@ -61,6 +69,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.graphics.Color
@@ -72,6 +81,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInputModeManager
@@ -82,9 +92,11 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.getPlatform
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.lyric.LyricCapabilityLevel
@@ -172,10 +184,9 @@ fun AutoHideMiniPlayerController(
     val totalDuration = nowPlaying.totalDuration
     val progress = nowPlaying.progress
 
-    val motion = MaterialTheme.motionScheme
     val artworkAccent = lyricArtworkAccent ?: rememberArtworkAccent(
         requestKey = media?.artworkUri,
-        animationSpec = motion.slowEffectsSpec(),
+        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
         label = "fullLyricControlAccent",
     )
     val accentPalette = artworkAccent.palette
@@ -262,7 +273,6 @@ fun AutoHideMiniPlayerController(
                 fullLyricControllerTransform(
                     expanding = targetState,
                     reducedMotion = reducedMotion,
-                    motion = motion,
                 )
             },
             label = "FullLyricControllerTransform",
@@ -368,25 +378,48 @@ fun AutoHideMiniPlayerController(
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 private fun fullLyricControllerTransform(
     expanding: Boolean,
     reducedMotion: Boolean,
-    motion: MotionScheme,
-): ContentTransform = if (reducedMotion) {
-    ContentTransform(EnterTransition.None, ExitTransition.None, sizeTransform = null)
-} else {
-    // Stay near the resting position. The lyric surface doesn't scale or move with the island.
-    ContentTransform(
-        targetContentEnter = fadeIn(motion.defaultEffectsSpec()) + scaleIn(
-            initialScale = if (expanding) 0.92f else 0.98f,
-            transformOrigin = TransformOrigin(pivotFractionX = 0.5f, pivotFractionY = 1f),
-            animationSpec = motion.defaultSpatialSpec(),
-        ),
-        initialContentExit = fadeOut(motion.fastEffectsSpec()),
-        sizeTransform = SizeTransform(clip = true) { _, _ -> motion.defaultSpatialSpec() },
-    )
+): ContentTransform {
+    if (reducedMotion) {
+        return ContentTransform(
+            targetContentEnter = EnterTransition.None,
+            initialContentExit = ExitTransition.None,
+            sizeTransform = null,
+        )
+    }
+
+    val bottomCenter = TransformOrigin(pivotFractionX = 0.5f, pivotFractionY = 1f)
+    val enterScale = if (expanding) 0.58f else 1.04f
+    val exitScale = if (expanding) 1.04f else 0.58f
+
+    return (
+        fadeIn(
+            animationSpec = tween(
+                durationMillis = 140,
+                delayMillis = if (expanding) 36 else 72,
+                easing = LinearOutSlowInEasing,
+            ),
+        ) + scaleIn(
+            initialScale = enterScale,
+            transformOrigin = bottomCenter,
+            animationSpec = tween(ExpressiveMotion.LongMillis, easing = FastOutSlowInEasing),
+        )
+        ) togetherWith (
+        fadeOut(
+            animationSpec = tween(
+                durationMillis = if (expanding) 110 else 150,
+                easing = LinearOutSlowInEasing,
+            ),
+        ) + scaleOut(
+            targetScale = exitScale,
+            transformOrigin = bottomCenter,
+            animationSpec = tween(ExpressiveMotion.EmphasizedMillis, easing = FastOutSlowInEasing),
+        )
+        )
 }
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun FullLyricControlConsole(
@@ -463,60 +496,159 @@ private fun FullLyricControlConsole(
                 onAdjustingChange = onOutputVolumeAdjustingChange,
             )
         }
-        // A single quiet surface for auxiliary actions. Only actual binary actions toggle;
-        // queue and comments remain standard buttons and don't compete with Play.
-        Surface(
+        val actionContainer = accentPalette.quietContainer.copy(
+            alpha = if (forceOpaqueSurfaces) 1f else 0.94f,
+        )
+        // Disabled controls must dim from the dark island's foreground, not the app theme.
+        val disabledActionInk = accentPalette.onQuietContainer.copy(alpha = 0.38f)
+        if (compact) {
+            val actionColors = IconButtonDefaults.iconButtonColors(
+                contentColor = accentPalette.onQuietContainer,
+                disabledContentColor = disabledActionInk,
+            )
+            Surface(
+                modifier = Modifier.padding(horizontal = 8.dp).widthIn(max = 620.dp).fillMaxWidth(),
+                shape = MaterialTheme.shapes.large,
+                color = actionContainer,
+                contentColor = accentPalette.onQuietContainer,
+            ) {
+                FlowRow(horizontalArrangement = Arrangement.SpaceEvenly) {
+                    IconButton(
+                        onClick = onFavorite,
+                        enabled = canFavorite,
+                        modifier = Modifier.size(48.dp),
+                        colors = actionColors,
+                    ) {
+                        Icon(
+                            if (isFavorite) AppIcons.Favorite else AppIcons.FavoriteBorder,
+                            contentDescription = if (isFavorite) strings.liked else strings.like,
+                        )
+                    }
+                    IconButton(onClick = onQueue, modifier = Modifier.size(48.dp), colors = actionColors) {
+                        Icon(AppIcons.QueueMusic, contentDescription = strings.queue)
+                    }
+                    IconButton(
+                        onClick = onComments,
+                        enabled = canComment,
+                        modifier = Modifier.size(48.dp),
+                        colors = actionColors,
+                    ) {
+                        Icon(AppIcons.Comment, contentDescription = strings.comments)
+                    }
+                    FilledIconToggleButton(
+                        checked = shuffleEnabled,
+                        onCheckedChange = { onShuffle() },
+                        modifier = Modifier.size(48.dp),
+                        colors = IconButtonDefaults.filledIconToggleButtonColors(
+                            containerColor = Color.Transparent,
+                            contentColor = accentPalette.onQuietContainer,
+                            checkedContainerColor = accentPalette.container,
+                            checkedContentColor = accentPalette.onContainer,
+                        ),
+                    ) {
+                        Icon(if (shuffleEnabled) AppIcons.ShuffleOn else AppIcons.Shuffle, strings.shuffle)
+                    }
+                }
+            }
+            return@Column
+        }
+        // The original connecting ends and press motion, in the quieter lyrics palette.
+        val favoriteInteraction = remember { MutableInteractionSource() }
+        val queueInteraction = remember { MutableInteractionSource() }
+        val commentsInteraction = remember { MutableInteractionSource() }
+        val shuffleInteraction = remember { MutableInteractionSource() }
+        // The overload with overflow builds its own buttons with global theme colors.
+        // Keep the lyric palette by supplying these four buttons directly.
+        @Suppress("DEPRECATION")
+        ButtonGroup(
             modifier = Modifier
-                .padding(horizontal = if (compact) 8.dp else 16.dp)
+                .padding(horizontal = 16.dp)
                 .widthIn(max = 620.dp)
-                .fillMaxWidth(),
-            shape = if (compact) MaterialTheme.shapes.large else CircleShape,
-            color = accentPalette.quietContainer.copy(alpha = if (forceOpaqueSurfaces) 1f else 0.94f),
-            contentColor = accentPalette.onQuietContainer,
+                .fillMaxWidth()
+                .height(56.dp),
+            horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
         ) {
-            FlowRow(horizontalArrangement = Arrangement.SpaceEvenly) {
-                FilledIconToggleButton(
-                    checked = isFavorite,
-                    onCheckedChange = { onFavorite() },
-                    enabled = canFavorite,
-                    modifier = Modifier.size(ExpressiveLayout.MinimumTouchTarget),
-                    shapes = IconButtonDefaults.toggleableShapes(),
-                    colors = IconButtonDefaults.filledIconToggleButtonColors(
-                        containerColor = Color.Transparent,
-                        contentColor = accentPalette.onQuietContainer,
-                        checkedContainerColor = accentPalette.container,
-                        checkedContentColor = accentPalette.onContainer,
-                    ),
-                ) {
-                    Icon(
-                        if (isFavorite) AppIcons.Favorite else AppIcons.FavoriteBorder,
-                        contentDescription = if (isFavorite) strings.liked else strings.like,
-                    )
-                }
-                IconButton(onClick = onQueue, modifier = Modifier.size(ExpressiveLayout.MinimumTouchTarget)) {
-                    Icon(AppIcons.QueueMusic, contentDescription = strings.queue)
-                }
-                IconButton(onClick = onComments, enabled = canComment, modifier = Modifier.size(ExpressiveLayout.MinimumTouchTarget)) {
-                    Icon(AppIcons.Comment, contentDescription = strings.comments)
-                }
-                FilledIconToggleButton(
-                    checked = shuffleEnabled,
-                    onCheckedChange = { onShuffle() },
-                    modifier = Modifier.size(ExpressiveLayout.MinimumTouchTarget),
-                    shapes = IconButtonDefaults.toggleableShapes(),
-                    colors = IconButtonDefaults.filledIconToggleButtonColors(
-                        containerColor = Color.Transparent,
-                        contentColor = accentPalette.onQuietContainer,
-                        checkedContainerColor = accentPalette.container,
-                        checkedContentColor = accentPalette.onContainer,
-                    ),
-                ) {
-                    Icon(if (shuffleEnabled) AppIcons.ShuffleOn else AppIcons.Shuffle, strings.shuffle)
-                }
+            // The inner corners of a connected group: small, so the joins read as one strip.
+            val joinShape = RoundedCornerShape(8.dp)
+            FilledTonalIconButton(
+                onClick = onFavorite,
+                enabled = canFavorite,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .animateWidth(favoriteInteraction),
+                shape = ButtonGroupDefaults.connectedLeadingButtonShape,
+                interactionSource = favoriteInteraction,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = if (isFavorite) accentPalette.container else actionContainer,
+                    contentColor = if (isFavorite) accentPalette.onContainer else accentPalette.onQuietContainer,
+                    disabledContainerColor = actionContainer,
+                    disabledContentColor = disabledActionInk,
+                ),
+            ) {
+                Icon(
+                    imageVector = if (isFavorite) AppIcons.Favorite else AppIcons.FavoriteBorder,
+                    contentDescription = if (isFavorite) strings.liked else strings.like,
+                )
+            }
+            FilledTonalIconButton(
+                onClick = onQueue,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .animateWidth(queueInteraction),
+                shape = joinShape,
+                interactionSource = queueInteraction,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = actionContainer,
+                    contentColor = accentPalette.onQuietContainer,
+                ),
+            ) {
+                Icon(AppIcons.QueueMusic, contentDescription = strings.queue)
+            }
+            FilledTonalIconButton(
+                onClick = onComments,
+                enabled = canComment,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .animateWidth(commentsInteraction),
+                shape = joinShape,
+                interactionSource = commentsInteraction,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = actionContainer,
+                    contentColor = accentPalette.onQuietContainer,
+                    disabledContainerColor = actionContainer,
+                    disabledContentColor = disabledActionInk,
+                ),
+            ) {
+                Icon(AppIcons.Comment, contentDescription = strings.comments)
+            }
+            FilledIconToggleButton(
+                checked = shuffleEnabled,
+                onCheckedChange = { onShuffle() },
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .animateWidth(shuffleInteraction),
+                shape = ButtonGroupDefaults.connectedTrailingButtonShape,
+                interactionSource = shuffleInteraction,
+                colors = IconButtonDefaults.filledIconToggleButtonColors(
+                    containerColor = actionContainer,
+                    contentColor = accentPalette.onQuietContainer,
+                    checkedContainerColor = accentPalette.container,
+                    checkedContentColor = accentPalette.onContainer,
+                ),
+            ) {
+                Icon(
+                    imageVector = if (shuffleEnabled) AppIcons.ShuffleOn else AppIcons.Shuffle,
+                    contentDescription = strings.shuffle,
+                )
             }
         }
     }
 }
+
 /**
  * The output volume row of the expanded island: one slider that does nothing but volume.
  *
@@ -627,7 +759,6 @@ internal fun formatOutputVolumePercent(volume: Float): String = "${outputVolumeP
 private fun outputVolumePercent(volume: Float): Int =
     if (volume.isNaN()) 0 else (volume.coerceIn(0f, 1f) * 100f).roundToInt()
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ExpandedPlaybackCard(
     media: MediaInfo?,
@@ -669,7 +800,7 @@ private fun ExpandedPlaybackCard(
     val clock: @Composable () -> Unit = {
         Text(
             text = playbackTimeLabel,
-            style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+            style = MaterialTheme.typography.labelSmall,
             color = accentPalette.secondaryOnContainer,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -697,7 +828,8 @@ private fun ExpandedPlaybackCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = media?.title?.takeIf { it.isNotBlank() } ?: strings.notPlaying,
-                    style = MaterialTheme.typography.titleMediumEmphasized,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -707,12 +839,12 @@ private fun ExpandedPlaybackCard(
                             label = label,
                             contentColor = accentPalette.onQuietContainer,
                             containerColor = accentPalette.quietContainer,
-                            modifier = Modifier.padding(end = 8.dp),
+                            modifier = Modifier.padding(end = 6.dp),
                         )
                     }
                     Text(
                         text = media?.artist?.takeIf { it.isNotBlank() } ?: strings.chooseSongToPlay,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.labelMedium,
                         color = accentPalette.secondaryOnContainer,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -739,7 +871,7 @@ private fun ExpandedPlaybackCard(
             .padding(horizontal = if (compact) 8.dp else 16.dp, vertical = if (compact) 4.dp else 8.dp)
             .widthIn(max = 620.dp)
             .fillMaxWidth(),
-        shape = if (compact) MaterialTheme.shapes.largeIncreased else RoundedCornerShape(ExpressiveLayout.FeatureCorner),
+        shape = MaterialTheme.shapes.extraLarge,
         color = accentPalette.container.copy(alpha = if (forceOpaqueSurface) 1f else 0.94f),
         contentColor = accentPalette.onContainer,
         tonalElevation = 0.dp,
@@ -766,16 +898,27 @@ private fun ExpandedPlaybackCard(
                 }
             }
         } else {
-            Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                ExpressiveArtwork(
-                    model = media?.artworkUri?.takeIf(String::isNotBlank),
-                    contentDescription = media?.let { strings.coverOf(it.title) },
-                    modifier = Modifier.size(72.dp),
-                    shape = RoundedCornerShape(ExpressiveLayout.FeatureCorner - 8.dp),
-                    containerColor = accentPalette.quietContainer,
-                    contentColor = accentPalette.onQuietContainer,
-                    onImageLoaded = onArtworkLoaded,
-                )
+            Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (hasMedia) {
+                    AsyncImage(
+                        model = media?.artworkUri,
+                        contentDescription = strings.coverOf(media?.title ?: strings.currentSong),
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(72.dp).clip(MaterialTheme.shapes.large),
+                        onSuccess = { state -> onArtworkLoaded(state.result.image) },
+                    )
+                } else {
+                    Surface(
+                        modifier = Modifier.size(72.dp),
+                        shape = MaterialTheme.shapes.large,
+                        color = accentPalette.quietContainer,
+                        contentColor = accentPalette.onQuietContainer,
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(AppIcons.MusicNote, contentDescription = null, modifier = Modifier.size(32.dp))
+                        }
+                    }
+                }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
                     titleRow()
@@ -803,27 +946,32 @@ private fun IslandTransportButtons(
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
 ) {
-    BoxWithConstraints {
-        val useWidePlay = maxWidth >= 160.dp
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally)) {
-            IconButton(onClick = onPrevious, enabled = hasMedia, modifier = Modifier.size(48.dp)) {
-                Icon(AppIcons.SkipPrevious, contentDescription = strings.previous)
-            }
-            PlaybackPlayButton(
-                isPlaying = isPlaying,
-                enabled = hasMedia,
-                onClick = onPlayPause,
-                modifier = Modifier.size(width = if (useWidePlay) 60.dp else 48.dp, height = 48.dp),
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally)) {
+        IconButton(onClick = onPrevious, enabled = hasMedia, modifier = Modifier.size(48.dp)) {
+            Icon(AppIcons.SkipPrevious, contentDescription = strings.previous)
+        }
+        FilledIconButton(
+            onClick = onPlayPause,
+            enabled = hasMedia,
+            modifier = Modifier.size(48.dp),
+            colors = IconButtonDefaults.filledIconButtonColors(
                 containerColor = accentPalette.accent,
                 contentColor = accentPalette.onAccent,
+                disabledContainerColor = accentPalette.accent.copy(alpha = 0.12f),
+                disabledContentColor = accentPalette.onAccent.copy(alpha = 0.38f),
+            ),
+        ) {
+            Icon(
+                imageVector = if (isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
+                contentDescription = if (isPlaying) strings.pause else strings.play,
             )
-            IconButton(onClick = onNext, enabled = hasMedia, modifier = Modifier.size(48.dp)) {
-                Icon(AppIcons.SkipNext, contentDescription = strings.next)
-            }
+        }
+        IconButton(onClick = onNext, enabled = hasMedia, modifier = Modifier.size(48.dp)) {
+            Icon(AppIcons.SkipNext, contentDescription = strings.next)
         }
     }
 }
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+
 @Composable
 private fun CollapsedProgressController(
     media: MediaInfo?,
@@ -841,14 +989,13 @@ private fun CollapsedProgressController(
     fillHostWidth: Boolean,
     reducedMotion: Boolean,
 ) {
-    val motion = MaterialTheme.motionScheme
     val dragThresholdPx = with(LocalDensity.current) { 56.dp.toPx() }
     var dragOffsetPx by remember { mutableStateOf(0f) }
     var pressed by remember { mutableStateOf(false) }
     val dragFraction = (dragOffsetPx / dragThresholdPx).coerceIn(-1f, 1f)
     val animatedOffset by animateFloatAsState(
         targetValue = dragOffsetPx.coerceIn(-dragThresholdPx, dragThresholdPx) * 0.30f,
-        animationSpec = if (reducedMotion) snap() else motion.fastSpatialSpec(),
+        animationSpec = if (reducedMotion) snap() else spring(),
         label = "collapsedControllerDragOffset",
     )
     val animatedScale by animateFloatAsState(
@@ -857,7 +1004,7 @@ private fun CollapsedProgressController(
             dragOffsetPx != 0f -> 1f + abs(dragFraction) * 0.045f
             else -> 1f
         },
-        animationSpec = if (reducedMotion) snap() else motion.fastSpatialSpec(),
+        animationSpec = if (reducedMotion) snap() else spring(),
         label = "collapsedControllerScale",
     )
     val swipeLabel = when {
@@ -867,7 +1014,11 @@ private fun CollapsedProgressController(
     }
     val swipeAlpha by animateFloatAsState(
         targetValue = abs(dragFraction).coerceIn(0f, 1f),
-        animationSpec = if (reducedMotion) snap() else motion.fastEffectsSpec(),
+        animationSpec = if (reducedMotion) {
+            snap()
+        } else {
+            tween(ExpressiveMotion.FastMillis, easing = LinearOutSlowInEasing)
+        },
         label = "collapsedControllerSwipeAlpha",
     )
     val widthModifier = if (fillHostWidth) {
@@ -971,7 +1122,7 @@ private fun CollapsedProgressController(
         contentColor = accentPalette.onQuietContainer,
         tonalElevation = 0.dp,
     ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -989,24 +1140,17 @@ private fun CollapsedProgressController(
                         "0:00 / 0:00"
                     }
                 }
-                if (swipeLabel == null) {
-                    Icon(
-                        imageVector = AppIcons.UnfoldMore,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 4.dp).size(16.dp),
-                    )
-                }
                 Text(
                     text = media?.title?.takeIf { it.isNotBlank() } ?: strings.notPlaying,
-                    style = MaterialTheme.typography.labelMediumEmphasized,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
                 Text(
                     text = playbackTimeLabel,
-                    style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
-                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelSmall,
                     color = if (swipeLabel != null) {
                         accentPalette.onQuietContainer
                     } else {
@@ -1023,7 +1167,6 @@ private fun CollapsedProgressController(
                     .fillMaxWidth(),
                 color = accentPalette.accent,
                 trackColor = accentPalette.onQuietContainer.copy(alpha = 0.24f),
-                amplitude = { if (isPlaying && !reducedMotion) 1f else 0f },
             )
         }
     }

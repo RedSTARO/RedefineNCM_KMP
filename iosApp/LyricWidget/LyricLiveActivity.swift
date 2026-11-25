@@ -38,12 +38,13 @@ struct LyricLiveActivity: Widget {
                         .lineLimit(1)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(spacing: 4) {
+                    VStack(spacing: 2) {
                         if let lyric = context.state.distinctLyric {
                             Text(lyric)
                                 .font(.headline)
                                 .fontWeight(.bold)
                                 .lineLimit(1)
+                                .minimumScaleFactor(0.7)
                         }
                         if !context.state.nextLyric.isEmpty {
                             Text(context.state.nextLyric)
@@ -142,11 +143,9 @@ private struct LockScreenLyricView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: playing ? "play.fill" : "pause.fill")
-                .font(.body.weight(.semibold))
-                .frame(width: 40, height: 40)
+            Image(systemName: "music.note.list")
+                .font(.title2)
                 .foregroundStyle(LyricActivityColors.accent)
-                .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(state.title.isEmpty ? "RedefineNCM" : state.title)
@@ -158,6 +157,7 @@ private struct LockScreenLyricView: View {
                         .font(.body)
                         .fontWeight(.semibold)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
                 if !state.nextLyric.isEmpty {
                     Text(state.nextLyric)

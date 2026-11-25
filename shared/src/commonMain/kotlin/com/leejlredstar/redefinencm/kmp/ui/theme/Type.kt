@@ -62,6 +62,27 @@ internal fun expressiveTypography(fontFamily: FontFamily, localeList: LocaleList
     )
 }
 
+/** The original player scale; copy the themed roles to retain their font family and locales. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+internal fun playbackTypography(base: Typography): Typography {
+    val sectionHeading = base.headlineSmall.copy(fontSize = 25.sp, fontWeight = FontWeight.Bold)
+    return base.copy(
+        displayLarge = base.displayLarge.copy(fontSize = 64.sp, lineHeight = 66.sp, letterSpacing = 0.sp, fontWeight = FontWeight.Black),
+        displayMedium = base.displayMedium.copy(fontSize = 50.sp, lineHeight = 54.sp, fontWeight = FontWeight.Black),
+        displaySmall = base.displaySmall.copy(fontSize = 40.sp, lineHeight = 46.sp, fontWeight = FontWeight.ExtraBold),
+        headlineLarge = base.headlineLarge.copy(fontSize = 34.sp, fontWeight = FontWeight.ExtraBold),
+        headlineMedium = base.headlineMedium.copy(fontSize = 29.sp, fontWeight = FontWeight.ExtraBold),
+        headlineSmall = sectionHeading,
+        headlineSmallEmphasized = sectionHeading,
+        titleLarge = base.titleLarge.copy(fontSize = 23.sp, fontWeight = FontWeight.ExtraBold),
+        titleMedium = base.titleMedium.copy(fontSize = 17.sp, letterSpacing = 0.1.sp, fontWeight = FontWeight.Bold),
+        titleSmall = base.titleSmall.copy(fontWeight = FontWeight.Bold),
+        bodyMedium = base.bodyMedium.copy(letterSpacing = 0.25.sp),
+        labelLarge = base.labelLarge.copy(fontSize = 15.sp, fontWeight = FontWeight.Bold),
+        labelMedium = base.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+    )
+}
+
 /** English UI still shows mostly Chinese song titles, so Chinese is its second locale. */
 internal fun AppLanguage.textLocales(): LocaleList = when (this) {
     AppLanguage.ZH -> LocaleList("zh-CN")

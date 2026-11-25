@@ -1,5 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.ui.component
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -12,10 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.background
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -30,11 +28,15 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
@@ -49,7 +51,6 @@ import com.leejlredstar.redefinencm.kmp.viewmodel.NowPlayingViewModel
  * and the progress, and on the right the lyrics, the queue, the comments and the volume. Narrow
  * windows drop the shuffle and the volume slider before anything else.
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun DesktopPlayerBar(
     player: PlatformPlayer,
@@ -70,11 +71,10 @@ internal fun DesktopPlayerBar(
     val seek = rememberSeekDragState(media?.id)
     val displayedPosition = seek.positionFor(nowPlaying.safePosition, nowPlaying.totalDuration)
 
-    val colors = MaterialTheme.colorScheme
-    val clockStyle = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum")
+    val scheme = MaterialTheme.colorScheme
     Surface(
-        color = colors.surfaceContainer,
-        contentColor = colors.onSurface,
+        color = scheme.surfaceContainer,
+        contentColor = scheme.onSurface,
         modifier = modifier.fillMaxWidth().height(DesktopPlayerBarHeight),
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -108,20 +108,31 @@ internal fun DesktopPlayerBar(
                         modifier = Modifier.padding(4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        ExpressiveArtwork(
-                            model = artwork.takeIf(String::isNotBlank),
-                            contentDescription = null,
-                            modifier = Modifier.size(48.dp),
-                            shape = MaterialTheme.shapes.small,
-                            containerColor = accentPalette.container,
-                            contentColor = accentPalette.onContainer,
-                            onImageLoaded = extractAccent,
-                        )
-                        Spacer(Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(52.dp)
+                                .clip(MaterialTheme.shapes.small)
+                                .background(accentPalette.container),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (artwork.isNotBlank()) {
+                                AsyncImage(
+                                    model = artwork,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                    onSuccess = { state -> extractAccent(state.result.image) },
+                                )
+                            } else {
+                                Icon(AppIcons.MusicNote, contentDescription = null, tint = accentPalette.onContainer)
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
                                 text = media?.title?.takeIf { it.isNotBlank() } ?: strings.notPlaying,
-                                style = MaterialTheme.typography.titleSmallEmphasized,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -151,9 +162,9 @@ internal fun DesktopPlayerBar(
                         contentDescription = if (nowPlaying.isFavorite) strings.liked else strings.like,
                         // An explicit tint ignores the button's disabled state, so dim it here.
                         tint = when {
-                            !nowPlaying.canFavorite -> colors.onSurface.copy(alpha = 0.38f)
+                            !nowPlaying.canFavorite -> scheme.onSurface.copy(alpha = 0.38f)
                             nowPlaying.isFavorite -> accentPalette.accent
-                            else -> colors.onSurfaceVariant
+                            else -> scheme.onSurfaceVariant
                         },
                     )
                 }
@@ -183,17 +194,22 @@ internal fun DesktopPlayerBar(
                         IconButton(onClick = viewModel::onPervClick, enabled = hasMedia) {
                             Icon(AppIcons.SkipPrevious, contentDescription = strings.previous)
                         }
-                        PlaybackPlayButton(
-                            isPlaying = nowPlaying.isPlaying,
-                            enabled = hasMedia,
+                        FilledIconButton(
                             onClick = viewModel::onPauseClick,
-                            modifier = Modifier.size(
-                                width = if (roomy) RoomyPlayWidth else BarIconButtonWidth,
-                                height = BarIconButtonWidth,
+                            enabled = hasMedia,
+                            modifier = Modifier.size(44.dp),
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = accentPalette.accent,
+                                contentColor = accentPalette.onAccent,
+                                disabledContainerColor = accentPalette.accent.copy(alpha = 0.12f),
+                                disabledContentColor = accentPalette.onAccent.copy(alpha = 0.38f),
                             ),
-                            containerColor = accentPalette.accent,
-                            contentColor = accentPalette.onAccent,
-                        )
+                        ) {
+                            Icon(
+                                imageVector = if (nowPlaying.isPlaying) AppIcons.Pause else AppIcons.PlayArrow,
+                                contentDescription = if (nowPlaying.isPlaying) strings.pause else strings.play,
+                            )
+                        }
                         IconButton(onClick = viewModel::onNextClick, enabled = hasMedia) {
                             Icon(AppIcons.SkipNext, contentDescription = strings.next)
                         }
@@ -201,8 +217,8 @@ internal fun DesktopPlayerBar(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = formatPlaybackDuration(displayedPosition),
-                            style = clockStyle,
-                            color = colors.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = scheme.onSurfaceVariant,
                         )
                         PlaybackSeekBar(
                             state = seek,
@@ -216,8 +232,8 @@ internal fun DesktopPlayerBar(
                         )
                         Text(
                             text = formatPlaybackDuration(nowPlaying.totalDuration),
-                            style = clockStyle,
-                            color = colors.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = scheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -227,14 +243,10 @@ internal fun DesktopPlayerBar(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    FilledTonalIconButton(
+                    IconButton(
                         onClick = onOpenLyrics,
                         enabled = hasMedia,
-                        shapes = IconButtonDefaults.shapes(),
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = accentPalette.quietContainer,
-                            contentColor = accentPalette.onQuietContainer,
-                        ),
+                        colors = IconButtonDefaults.iconButtonColors(contentColor = scheme.onSurfaceVariant),
                     ) {
                         Icon(AppIcons.FormatQuote, contentDescription = strings.lyrics)
                     }
@@ -250,9 +262,6 @@ internal fun DesktopPlayerBar(
                     IconButton(onClick = sheets::openComments, enabled = nowPlaying.canComment) {
                         Icon(AppIcons.Comment, contentDescription = strings.comments)
                     }
-                    Box(Modifier.width(8.dp), contentAlignment = Alignment.CenterStart) {
-                        Spacer(Modifier.width(1.dp).height(20.dp).background(colors.outlineVariant))
-                    }
                     val volumeIcon = when (outputVolumeLevel(volume)) {
                         OutputVolumeLevel.MUTED -> AppIcons.VolumeOff
                         OutputVolumeLevel.LOW -> AppIcons.VolumeDown
@@ -261,8 +270,8 @@ internal fun DesktopPlayerBar(
                     Icon(
                         imageVector = volumeIcon,
                         contentDescription = strings.volumePercent(formatOutputVolumePercent(volume)),
-                        tint = colors.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp),
+                        tint = scheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 8.dp).size(20.dp),
                     )
                     if (roomy) {
                         Slider(
@@ -280,13 +289,12 @@ internal fun DesktopPlayerBar(
                             colors = SliderDefaults.colors(
                                 thumbColor = accentPalette.accent,
                                 activeTrackColor = accentPalette.accent,
-                                inactiveTrackColor = colors.onSurfaceVariant.copy(alpha = 0.24f),
+                                inactiveTrackColor = scheme.onSurfaceVariant.copy(alpha = 0.24f),
                             ),
                         )
                     }
                 }
             }
-            HorizontalDivider(color = colors.outlineVariant)
         }
     }
 }
@@ -306,11 +314,10 @@ private val VolumeIconWidth = 28.dp
 private val VolumeSliderWidth = 116.dp
 
 /** Previous, play and next with their spacing, plus the column's own padding. */
-private val RoomyPlayWidth = 60.dp
-private val TransportMinWidth = BarIconButtonWidth * 3 + 32.dp
+private val TransportMinWidth = 172.dp
 
 /** The same with shuffle in front. */
-private val TransportMinWidthRoomy = TransportMinWidth + RoomyPlayWidth + 4.dp
+private val TransportMinWidthRoomy = 224.dp
 
 /** The transport's share of the width the song and the transport split. */
 private const val TransportShare = 1.4f / 2.4f

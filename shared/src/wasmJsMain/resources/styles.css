@@ -180,24 +180,26 @@ canvas { display: block; }
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     align-items: center;
-    gap: 12px;
-    max-width: min(42rem, calc(100vw - 48px));
+    gap: 10px;
+    max-width: min(720px, calc(100vw - 24px));
     box-sizing: border-box;
-    padding: 8px 16px 12px 8px;
-    border-radius: 20px;
+    padding: 9px 14px;
+    border-radius: 22px;
     /* Inverse roles: the backdrop can be an artwork or an arbitrary page surface. */
     background: #262626;
     color: #f5f5f5;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, .26);
+    backdrop-filter: blur(16px);
     pointer-events: none;
-    font: 500 1rem/1.5 system-ui, sans-serif;
+    font-family: system-ui, sans-serif;
 }
 
 #redefinencm-web-lyric[hidden] { display: none; }
 #redefinencm-web-lyric:has([data-role="artwork"][hidden]) { grid-template-columns: minmax(0, 1fr); }
 
 #redefinencm-web-lyric [data-role="artwork"] {
-    width: 40px;
-    height: 40px;
+    width: 42px;
+    height: 42px;
     border-radius: 12px;
     object-fit: cover;
 }
@@ -211,17 +213,22 @@ canvas { display: block; }
     text-overflow: ellipsis;
 }
 
+#redefinencm-web-lyric [data-role="current"] {
+    font-size: 15px;
+    font-weight: 700;
+}
+
 #redefinencm-web-lyric [data-role="next"] {
+    margin-top: 2px;
     color: #ccc;
-    font-size: .875rem;
-    font-weight: 400;
+    font-size: 12px;
 }
 
 #redefinencm-web-lyric [data-role="progress"] {
     position: absolute;
-    inset: auto 16px 4px;
+    inset: auto 16px 3px;
     height: 2px;
-    border-radius: 1px;
+    border-radius: 2px;
     transform-origin: left center;
     background: #bdbdbd;
 }
@@ -230,6 +237,5 @@ canvas { display: block; }
     #redefinencm-web-lyric {
         top: auto;
         bottom: calc(env(safe-area-inset-bottom, 0px) + 192px);
-        max-width: calc(100vw - 32px);
     }
 }

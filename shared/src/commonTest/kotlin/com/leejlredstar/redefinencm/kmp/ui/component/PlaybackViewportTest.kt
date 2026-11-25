@@ -8,7 +8,6 @@ import com.leejlredstar.redefinencm.kmp.ui.adaptive.WindowFold
 import com.leejlredstar.redefinencm.kmp.ui.amll.nativeAmllPanes
 import com.leejlredstar.redefinencm.kmp.ui.screen.nowPlayingPanes
 import com.leejlredstar.redefinencm.kmp.ui.screen.nowPlayingTransportMetrics
-import com.leejlredstar.redefinencm.kmp.ui.screen.stackedPlayerArtworkSize
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -75,13 +74,6 @@ class PlaybackViewportTest {
         assertEquals(wide.width, lyrics.width + controls.width)
         assertEquals(lyrics.right, controls.left)
         assertTrue(controls.width >= 338)
-    }
-
-    @Test
-    fun stackedArtworkLeavesRoomForTheMeasuredControls() {
-        assertEquals(386.dp, stackedPlayerArtworkSize(796.dp, 410.dp, 560.dp))
-        assertEquals(340.dp, stackedPlayerArtworkSize(796.dp, 300.dp, 340.dp))
-        assertEquals(64.dp, stackedPlayerArtworkSize(460.dp, 440.dp, 340.dp))
     }
 
     @Test

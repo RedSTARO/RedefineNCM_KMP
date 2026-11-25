@@ -1239,13 +1239,13 @@ Applies to all platforms, and the original Android repo is kept aligned (goal #3
 - **Use the real Expressive APIs** (`MaterialExpressiveTheme`, motion scheme) provided by the
   pinned `material3` version; custom shapes and page palettes extend that theme rather than
   replacing it.
-- **Playback:** the Now Playing page keeps the artwork gradient, cover press morph and paused
-  artwork scale, an emphasized marquee title, wavy seek track and a shape-morphing play button.
-  Use quieter tonal skips and group the lyrics entry with the queue actions. In a stacked pane,
-  measure the controls first and give the cover the remaining space; scroll rather than hiding
-  an action when large fonts or split-screen still need more room. The three transport buttons
-  choose their size together. The single AMLL route keeps its auto-hiding control island and
-  does not force sparse or empty lyrics into two panes.
+- **Playback:** the mini player, Now Playing, and full-screen lyrics use their original
+  presentation with the current artwork/neutral palettes. `PlaybackPresentationTheme` scopes
+  their roomier shapes and heavier type without changing the inherited color scheme or the
+  browsing pages. Keep the circular mini player with its thin progress line, Now Playing's
+  artwork-led layout and quotation-mark lyrics FAB, and the lyric island's connected action
+  group and 3.6-second timeout. Transport buttons still choose their size together; use safe
+  fold panes and scrolling to keep controls reachable.
 - **Details and tools:** the playlist header confines the local gradient and gives primary
   Play All the leading part of a `SplitButtonLayout`; secondary actions live in its menu. Show
   the current track with a state marker as well as local color. Keep download actions next to

@@ -24,7 +24,10 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -147,6 +150,7 @@ import com.leejlredstar.redefinencm.kmp.ui.component.ReflowProgress
 import com.leejlredstar.redefinencm.kmp.ui.component.reflowPlacement
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberNowPlayingUiState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
+import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
 import com.leejlredstar.redefinencm.kmp.ui.component.MiniNowPlayingBar
 import com.leejlredstar.redefinencm.kmp.ui.component.TransportSheets
 import com.leejlredstar.redefinencm.kmp.ui.component.TransportSheetsState
@@ -176,6 +180,7 @@ import com.leejlredstar.redefinencm.kmp.ui.screen.SongRecognitionScreen
 import com.leejlredstar.redefinencm.kmp.ui.screen.UserPlaylistScreen
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.LocalSystemBarBackgrounds
+import com.leejlredstar.redefinencm.kmp.ui.theme.PlaybackPresentationTheme
 import com.leejlredstar.redefinencm.kmp.ui.theme.RedefineNCMTheme
 import com.leejlredstar.redefinencm.kmp.ui.theme.SystemBarBackgrounds
 import com.leejlredstar.redefinencm.kmp.ui.theme.SystemBarIcons
@@ -816,8 +821,8 @@ private fun AppContent(
                             key(androidFabSlot) {
                                 AnimatedVisibility(
                                     visible = miniPlayerShown,
-                                    enter = if (reducedMotion) EnterTransition.None else miniPlayerEnterTransition(motion),
-                                    exit = if (reducedMotion) ExitTransition.None else miniPlayerExitTransition(motion),
+                                    enter = if (reducedMotion) EnterTransition.None else miniPlayerEnterTransition(),
+                                    exit = if (reducedMotion) ExitTransition.None else miniPlayerExitTransition(),
                                 ) {
                                     // Scaffold does not reserve the toolbar's height, so the FAB
                                     // has to step over the floating pill itself.
@@ -840,10 +845,12 @@ private fun AppContent(
                                                 }
                                             },
                                     ) {
-                                        MiniNowPlayingBar(
-                                            onExpand = ::openNowPlaying,
-                                            onAccentColor = { rawChromeAccent = it },
-                                        )
+                                        PlaybackPresentationTheme {
+                                            MiniNowPlayingBar(
+                                                onExpand = ::openNowPlaying,
+                                                onAccentColor = { rawChromeAccent = it },
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -929,16 +936,17 @@ private fun AppContent(
                                                 provider = dest.provider,
                                                 isActive = target == rootDest,
                                             )
-                                            is PushedDest.NowPlaying -> NowPlayingScreen(
-                                                onBack = ::back,
-                                                onOpenLyrics = ::openFullLyric,
-                                                // The mini player is hidden under this page, so a
-                                                // track that changes here reports its colour itself.
-                                                onAccentColor = { rawChromeAccent = it },
-                                            )
-                                            is PushedDest.FullLyric -> AmllPlayerScreen(
-                                                onBack = ::back,
-                                            )
+                                            is PushedDest.NowPlaying -> PlaybackPresentationTheme {
+                                                NowPlayingScreen(
+                                                    onBack = ::back,
+                                                    onOpenLyrics = ::openFullLyric,
+                                                    // The mini player is hidden here, so report the color from the full page.
+                                                    onAccentColor = { rawChromeAccent = it },
+                                                )
+                                            }
+                                            is PushedDest.FullLyric -> PlaybackPresentationTheme {
+                                                AmllPlayerScreen(onBack = ::back)
+                                            }
                                             is PushedDest.Downloads -> DownloadManagementScreen(
                                                 scaffoldPadding = screenPadding,
                                                 onBack = ::back,
@@ -1035,24 +1043,28 @@ private fun AppContent(
                                     }
                                 }
                                 if (showDesktopBar) {
-                                    DesktopPlayerBar(
-                                        player = player,
-                                        viewModel = nowPlayingViewModel,
-                                        accentPalette = chromePalette,
-                                        sheets = desktopSheets,
-                                        onAccentColor = { rawChromeAccent = it },
-                                        onOpenNowPlaying = ::openNowPlaying,
-                                        onOpenLyrics = ::openFullLyricOverNowPlaying,
-                                    )
+                                    PlaybackPresentationTheme {
+                                        DesktopPlayerBar(
+                                            player = player,
+                                            viewModel = nowPlayingViewModel,
+                                            accentPalette = chromePalette,
+                                            sheets = desktopSheets,
+                                            onAccentColor = { rawChromeAccent = it },
+                                            onOpenNowPlaying = ::openNowPlaying,
+                                            onOpenLyrics = ::openFullLyricOverNowPlaying,
+                                        )
+                                    }
                                 }
                             }
                             if (showDesktopRail) {
-                                DesktopTransportSheetsHost(
-                                    sheets = desktopSheets,
-                                    player = player,
-                                    viewModel = nowPlayingViewModel,
-                                    accentPalette = chromePalette,
-                                )
+                                PlaybackPresentationTheme {
+                                    DesktopTransportSheetsHost(
+                                        sheets = desktopSheets,
+                                        player = player,
+                                        viewModel = nowPlayingViewModel,
+                                        accentPalette = chromePalette,
+                                    )
+                                }
                             }
                             }
                         }
@@ -1464,11 +1476,9 @@ private fun pageTransition(
     if (reducedMotion) return EnterTransition.None togetherWith ExitTransition.None
     val fade = fadeIn(motion.defaultEffectsSpec()) togetherWith fadeOut(motion.fastEffectsSpec())
     return when {
-        isPlayerSurface(initial) && isPlayerSurface(target) -> fade
-        isPlayerSurface(target) ->
-            slideInVertically(motion.slowSpatialSpec(), initialOffsetY = { it }) togetherWith ExitTransition.None
-        isPlayerSurface(initial) ->
-            EnterTransition.None togetherWith slideOutVertically(motion.defaultSpatialSpec(), targetOffsetY = { it })
+        isPlayerSurface(initial) && isPlayerSurface(target) -> playbackFadeThrough()
+        isPlayerSurface(target) -> playbackSheetTransition(showing = true)
+        isPlayerSurface(initial) -> playbackSheetTransition(showing = false)
         target.stackDepth != initial.stackDepth -> {
             val direction = if ((target.stackDepth > initial.stackDepth) != rtl) 1 else -1
             (slideInHorizontally(motion.defaultSpatialSpec(), initialOffsetX = { direction * it / 8 }) +
@@ -1493,13 +1503,35 @@ private fun railExitTransition(motion: MotionScheme, rtl: Boolean): ExitTransiti
     slideOutHorizontally(motion.defaultSpatialSpec(), targetOffsetX = { if (rtl) it else -it }) +
         fadeOut(motion.fastEffectsSpec())
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-private fun miniPlayerEnterTransition(motion: MotionScheme): EnterTransition =
-    scaleIn(motion.fastSpatialSpec(), initialScale = 0.88f) + fadeIn(motion.fastEffectsSpec())
+// Only playback uses this choreography. The browse/search transitions keep their own springs.
+private fun playbackSheetTransition(showing: Boolean): ContentTransform = if (showing) {
+    (slideInVertically(tween(ExpressiveMotion.LongMillis, easing = FastOutSlowInEasing)) { it } +
+        playbackFadeIn()) togetherWith
+        (fadeOut(tween(ExpressiveMotion.ShortMillis, easing = LinearOutSlowInEasing)) +
+            scaleOut(tween(ExpressiveMotion.LongMillis, easing = FastOutSlowInEasing), targetScale = 0.98f))
+} else {
+    (playbackFadeIn() + scaleIn(tween(ExpressiveMotion.LongMillis, easing = FastOutSlowInEasing), initialScale = 0.98f)) togetherWith
+        (slideOutVertically(tween(ExpressiveMotion.LongMillis, easing = FastOutSlowInEasing)) { it } +
+            fadeOut(tween(ExpressiveMotion.QuickMillis, easing = LinearOutSlowInEasing)))
+}
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-private fun miniPlayerExitTransition(motion: MotionScheme): ExitTransition =
-    scaleOut(motion.fastSpatialSpec(), targetScale = 0.88f) + fadeOut(motion.fastEffectsSpec())
+private fun playbackFadeThrough(): ContentTransform =
+    (playbackFadeIn(ExpressiveMotion.StaggerDelayMillis) +
+        scaleIn(tween(ExpressiveMotion.LongMillis, easing = FastOutSlowInEasing), initialScale = 0.985f)) togetherWith
+        (playbackFadeOut() + scaleOut(tween(ExpressiveMotion.LongMillis, easing = FastOutSlowInEasing), targetScale = 0.985f))
+
+private fun playbackFadeIn(delayMillis: Int = ExpressiveMotion.EnterDelayMillis): EnterTransition =
+    fadeIn(tween(ExpressiveMotion.ShortMillis, delayMillis, LinearOutSlowInEasing))
+
+private fun playbackFadeOut(): ExitTransition =
+    fadeOut(tween(ExpressiveMotion.FastMillis, easing = LinearOutSlowInEasing))
+
+private fun miniPlayerEnterTransition(): EnterTransition =
+    scaleIn(tween(ExpressiveMotion.MediumMillis, easing = FastOutSlowInEasing), initialScale = 0.88f) +
+        fadeIn(tween(ExpressiveMotion.QuickMillis, easing = LinearOutSlowInEasing))
+
+private fun miniPlayerExitTransition(): ExitTransition =
+    scaleOut(tween(ExpressiveMotion.ShortMillis, easing = FastOutSlowInEasing), targetScale = 0.88f) + playbackFadeOut()
 
 private fun isPlayerSurface(dest: RootDest): Boolean =
     isPlayerSurface((dest as? RootDest.Pushed)?.dest)
