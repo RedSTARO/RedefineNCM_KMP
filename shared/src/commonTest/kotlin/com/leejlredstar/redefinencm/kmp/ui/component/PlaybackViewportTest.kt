@@ -8,6 +8,7 @@ import com.leejlredstar.redefinencm.kmp.ui.adaptive.WindowFold
 import com.leejlredstar.redefinencm.kmp.ui.amll.nativeAmllPanes
 import com.leejlredstar.redefinencm.kmp.ui.screen.nowPlayingPanes
 import com.leejlredstar.redefinencm.kmp.ui.screen.nowPlayingTransportMetrics
+import com.leejlredstar.redefinencm.kmp.ui.screen.stackedPlayerArtworkSize
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -74,6 +75,23 @@ class PlaybackViewportTest {
         assertEquals(wide.width, lyrics.width + controls.width)
         assertEquals(lyrics.right, controls.left)
         assertTrue(controls.width >= 338)
+    }
+
+    @Test
+    fun portraitArtworkYieldsToTheMeasuredControlDeck() {
+        // An unfolded 608dp × 859dp portrait window, after system insets and the header.
+        val viewport = 744
+        val controls = 382
+        val gap = 12
+        val cover = density.stackedPlayerArtworkSize(560, viewport, controls, gap)
+        assertEquals(350, cover)
+        assertEquals(viewport, cover + controls + gap)
+        // Larger text or a notice uses more space, not another scroll screen for the toolbar.
+        assertEquals(262, density.stackedPlayerArtworkSize(560, viewport, controls + 88, gap))
+        assertEquals(0, density.stackedPlayerArtworkSize(560, viewport, viewport - 30, gap))
+        assertEquals(0, density.stackedPlayerArtworkSize(560, viewport, viewport + 24, gap))
+        assertEquals(420, density.stackedPlayerArtworkSize(560, 1_000, controls, gap))
+        assertEquals(280, density.stackedPlayerArtworkSize(280, 1_000, controls, gap))
     }
 
     @Test

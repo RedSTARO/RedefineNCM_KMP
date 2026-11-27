@@ -16,15 +16,15 @@ change a provider capability, or change how playback, downloads, or sign-in work
 - Segmented lists use 16 dp outside corners, 4 dp at inner joints, and a 2 dp gap (Compose List
   tokens). Compact content gutters are 16 dp and wider gutters are 24 dp. Keep normal Material
   control sizes and a 48 dp minimum target. Use Material’s native shape morphs where practical.
-- Use spatial springs for geometry and effects springs for color/opacity. The search entry is
-  the shared container; routine tabs use an effects-only transition. Back/forward uses short
-  directional travel for pushed screens. Status is not conveyed by tint alone.
+- Use spatial springs for geometry and effects springs for color/opacity. Routine tabs use an
+  effects-only transition; back/forward uses short directional travel for pushed screens.
+  Status is not conveyed by tint alone.
 
 ## App decisions
 
 The app starts neutral, can follow the cover currently playing, and still supports Android’s
-optional wallpaper color. The player uses these color roles, but keeps its original sizes,
-shapes, type, and transitions; browse pages use the shared Expressive presentation.
+optional wallpaper color. The player keeps its artwork-led presentation, shapes and type;
+real window constraints determine how much room the artwork gets.
 The 32 dp Material radius is assigned to feature panels, not to every surface. Art may tint a detail
 header or the immersive player; most list rows do not extract their own background color. Body
 pane widths, when a supporting pane enters, and the travel distances and use of snap under
@@ -34,12 +34,12 @@ precedence over every layout choice.
 
 | Routes | Focus / narrow-to-wide behavior |
 | --- | --- |
-| For You | Daily Picks with explicit play and browse actions; art takes a supporting column when it fits. Recognition remains actionable when signed out. |
-| Search | The Home pill transitions into the editor. The same editor and results viewport stay mounted through reflow; title and editor can share a wide row. Group provider feedback, suggestions, history and results separately. |
+| For You | One circular Daily Picks cover beside the play and browse actions, with compact horizontal playlist links below. The feed and decorative artwork scroll behind the status area; controls stay in the safe region. Recognition remains actionable when signed out. |
+| Search | The Home pill opens the search tab and requests focus. The editor stays anchored at the top while the keyboard resizes the scrollable body; there is no shared-bounds flight. |
 | Me | Keep cached identity and level visible, bound the profile wallpaper, and place device shortcuts before playlist groups. |
 | Daily Picks, playlist, album, artist | Give cover art, metadata and primary actions an adaptive header, with a smaller presentation in short windows. The playlist split button keeps Play All primary and opens Download All and Save as Local Playlist where available. |
 | Local library, local playlist | Make creation/import discoverable; show local tracks in the same segmented list language as online tracks. |
-| Now Playing, lyrics | Use the pre-redesign playback layout and type scale with the current colors. Keep the quotation-mark lyrics action, the connected lyric-island actions and its 3.6-second auto-hide. |
+| Now Playing, lyrics | Android opens playback in a full-window layer, independent of browse navigation. In a stacked pane, measure the control deck before sizing the cover; only genuinely short panes or large type need to scroll. Keep the quotation-mark lyrics action and the connected island's 3.6-second auto-hide. |
 | Downloads, recognition | Surface current work first. Use status chips in wide downloads and a status selector in narrow panes. Recognition keeps the listen, cancel and retry controls next to their state. |
 | Settings, Accounts, Login, Licenses | Keep navigation stable; offer a settings category picker or a supporting index, reflow account configuration and login forms in place, and show license text in a bounded reading pane. |
 

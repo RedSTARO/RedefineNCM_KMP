@@ -17,12 +17,11 @@ import com.leejlredstar.redefinencm.kmp.util.getStringAsync
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -148,6 +147,7 @@ import com.leejlredstar.redefinencm.kmp.ui.component.LocalAndroidReflowWindow
 import com.leejlredstar.redefinencm.kmp.ui.component.ReflowEntry
 import com.leejlredstar.redefinencm.kmp.ui.component.ReflowProgress
 import com.leejlredstar.redefinencm.kmp.ui.component.reflowPlacement
+import com.leejlredstar.redefinencm.kmp.ui.component.playbackSafeContent
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberNowPlayingUiState
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLayout
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveMotion
@@ -691,9 +691,57 @@ private fun AppContent(
                 StartupNotices.consume(notice)
             }
 
-            // The navigation stays on the pages opened from a tab, so changing tabs never means
-            // backing out first. The player, the lyrics and sign-in are full-screen and hide it.
-            val showTabs = !hidesNavigation(pushedStack.lastOrNull())
+            val activeDestination = pushedStack.lastOrNull()
+                ?.let { RootDest.Pushed(it, pushedStack.size) }
+                ?: RootDest.Tab(currentTab)
+            val playerActive = isPlayerSurface(activeDestination)
+            LaunchedEffect(playerActive) {
+                (lyricSurface as? PageOverlayLyricSurface)?.setPlayerPageShown(playerActive)
+            }
+            val windowPlayer = (activeDestination as? RootDest.Pushed)
+                ?.takeIf { platform.isAndroid && playerActive }
+            val rootDest = if (windowPlayer == null) activeDestination else {
+                val index = pushedStack.indexOfLast { !isPlayerSurface(it) }
+                if (index == -1) RootDest.Tab(currentTab) else RootDest.Pushed(pushedStack[index], index + 1)
+            }
+
+            // An Android player sheet must not inherit the outgoing rail's remaining width,
+            // a compact dock's bottom padding, or the browser's hinge-constrained pane.
+            // Animate full-window siblings so their layout is final even in the first frame.
+            AnimatedContent(
+                targetState = windowPlayer,
+                modifier = Modifier.fillMaxSize().clipToBounds(),
+                transitionSpec = {
+                    windowPlayerTransition(initialState != null, targetState != null, reducedMotion)
+                },
+                label = "WindowPlayer",
+            ) { layer ->
+                if (layer != null) {
+                    Box(Modifier.fillMaxSize()) {
+                        saveableStateHolder.SaveableStateProvider(layer.stateKey()) {
+                            PlaybackRoute(
+                                destination = layer.dest,
+                                onBack = ::back,
+                                onOpenLyrics = ::openFullLyric,
+                                initialAccent = rawChromeAccent,
+                                onAccentColor = { rawChromeAccent = it },
+                            )
+                        }
+                        if (layer == windowPlayer) {
+                            SnackbarHost(
+                                snackbarHostState,
+                                Modifier.align(Alignment.BottomCenter)
+                                    .windowInsetsPadding(WindowInsets.playbackSafeContent.only(
+                                        WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
+                                    ))
+                                    .padding(bottom = PlayerPageToolbarClearance),
+                            )
+                        }
+                    }
+                } else {
+            // The navigation stays on pages opened from a tab. Full-screen pages hide it.
+            val topPage = (rootDest as? RootDest.Pushed)?.dest
+            val showTabs = !hidesNavigation(topPage)
             val tabs = remember(I18n.language) {
                 listOf(
                     NavigationItem(strings.forYou, AppIcons.Home, TabDest.Home),
@@ -702,7 +750,7 @@ private fun AppContent(
                 )
             }
 
-            val onPlayerPage = isPlayerSurface(pushedStack.lastOrNull())
+            val onPlayerPage = isPlayerSurface(topPage)
             val keyboardVisible = LocalSoftKeyboardVisible.current
             val androidBrowseObstructions = if (platform.isAndroid) WindowInsets.androidBrowseObstructions else null
             val browseObstructions = androidBrowseObstructions.takeUnless { onPlayerPage }
@@ -739,12 +787,6 @@ private fun AppContent(
                         } else null,
                         active = showTabs,
                     )
-                    val rootDest = pushedStack.lastOrNull()
-                        ?.let { RootDest.Pushed(it, pushedStack.size) }
-                        ?: RootDest.Tab(currentTab)
-                    LaunchedEffect(onPlayerPage) {
-                        (lyricSurface as? PageOverlayLyricSurface)?.setPlayerPageShown(onPlayerPage)
-                    }
                     val desktopRailExpanded = platform.isDesktop &&
                         showDesktopRail &&
                         desktopRailState.targetValue == WideNavigationRailValue.Expanded
@@ -811,7 +853,9 @@ private fun AppContent(
                             }
                         },
                         snackbarHost = {
-                            SnackbarHost(snackbarHostState, browseSidePadding.padding(bottom = snackbarClearance))
+                            if (windowPlayer == null) {
+                                SnackbarHost(snackbarHostState, browseSidePadding.padding(bottom = snackbarClearance))
+                            }
                         },
                         floatingActionButtonPosition = FabPosition.End,
                         floatingActionButton = {
@@ -923,7 +967,7 @@ private fun AppContent(
                                     motion = motion,
                                     reducedMotion = reducedMotion,
                                     rtl = rtl,
-                                ) { target, searchEntryModifier ->
+                                ) { target ->
                                     saveableStateHolder.SaveableStateProvider(target.stateKey()) {
                                     CompositionLocalProvider(
                                         LocalCompactAppBar provides compactAppBar,
@@ -934,19 +978,15 @@ private fun AppContent(
                                             is PushedDest.Login -> LoginScreen(
                                                 onBack = ::back,
                                                 provider = dest.provider,
-                                                isActive = target == rootDest,
+                                                isActive = target == activeDestination,
                                             )
-                                            is PushedDest.NowPlaying -> PlaybackPresentationTheme {
-                                                NowPlayingScreen(
-                                                    onBack = ::back,
-                                                    onOpenLyrics = ::openFullLyric,
-                                                    // The mini player is hidden here, so report the color from the full page.
-                                                    onAccentColor = { rawChromeAccent = it },
-                                                )
-                                            }
-                                            is PushedDest.FullLyric -> PlaybackPresentationTheme {
-                                                AmllPlayerScreen(onBack = ::back)
-                                            }
+                                            PushedDest.NowPlaying, PushedDest.FullLyric -> PlaybackRoute(
+                                                destination = dest,
+                                                onBack = ::back,
+                                                onOpenLyrics = ::openFullLyric,
+                                                initialAccent = rawChromeAccent,
+                                                onAccentColor = { rawChromeAccent = it },
+                                            )
                                             is PushedDest.Downloads -> DownloadManagementScreen(
                                                 scaffoldPadding = screenPadding,
                                                 onBack = ::back,
@@ -954,7 +994,7 @@ private fun AppContent(
                                             is PushedDest.SongRecognition -> SongRecognitionScreen(
                                                 scaffoldPadding = screenPadding,
                                                 onBack = ::back,
-                                                isActive = target == rootDest,
+                                                isActive = target == activeDestination,
                                                 // Playing a match goes to the player, not back
                                                 // to wherever recognition was opened from.
                                                 onOpenPlayer = {
@@ -980,7 +1020,7 @@ private fun AppContent(
                                                 scaffoldPadding = screenPadding,
                                                 onBack = ::back,
                                                 onOpenLogin = { push(PushedDest.Login(it)) },
-                                                isActive = target == rootDest,
+                                                isActive = target == activeDestination,
                                             )
                                             is PushedDest.LocalLibrary -> LocalLibraryScreen(
                                                 onBack = ::back,
@@ -1019,15 +1059,13 @@ private fun AppContent(
                                                 onOpenRecognition = { push(PushedDest.SongRecognition) },
                                                 onOpenDailySongs = { push(PushedDest.DailySongs) },
                                                 onOpenSearch = ::openSearch,
-                                                 searchEntryModifier = searchEntryModifier,
                                                 onOpenLogin = { push(PushedDest.Login()) },
                                             )
                                             TabDest.Search -> SearchScreen(
                                                 bottomPadding = screenPadding.calculateBottomPadding() + 16.dp,
-                                                 searchEntryModifier = searchEntryModifier,
                                                 focusRequest = searchFocusRequest,
                                                 onFocusRequestHandled = { searchFocusRequest = 0 },
-                                                isActive = target == rootDest,
+                                                isActive = target == activeDestination,
                                             )
                                             TabDest.My -> UserPlaylistScreen(
                                                 scaffoldPadding = screenPadding,
@@ -1118,6 +1156,30 @@ private fun AppContent(
 
                 }
             }
+                }
+            }
+}
+
+@Composable
+private fun PlaybackRoute(
+    destination: PushedDest,
+    onBack: () -> Unit,
+    onOpenLyrics: () -> Unit,
+    initialAccent: Color?,
+    onAccentColor: (Color) -> Unit,
+) {
+    PlaybackPresentationTheme {
+        when (destination) {
+            PushedDest.NowPlaying -> NowPlayingScreen(
+                onBack = onBack,
+                onOpenLyrics = onOpenLyrics,
+                initialAccent = initialAccent,
+                onAccentColor = onAccentColor,
+            )
+            PushedDest.FullLyric -> AmllPlayerScreen(onBack = onBack)
+            else -> error("Not a playback destination")
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -1432,7 +1494,7 @@ private fun DesktopTransportSheetsHost(
     )
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun AppPageTransition(
     destination: RootDest,
@@ -1440,28 +1502,16 @@ private fun AppPageTransition(
     motion: MotionScheme,
     reducedMotion: Boolean,
     rtl: Boolean,
-    content: @Composable (RootDest, Modifier) -> Unit,
+    content: @Composable (RootDest) -> Unit,
 ) {
-    SharedTransitionLayout(modifier.fillMaxSize().clipToBounds()) {
-        AnimatedContent(
-            targetState = destination,
-            transitionSpec = { pageTransition(initialState, targetState, motion, reducedMotion, rtl) },
-            modifier = Modifier.fillMaxSize(),
-            label = "AppPageTransition",
-        ) { target ->
-            // Only Home and Search have endpoints, which stay installed so the settled bounds
-            // can be captured before navigation. The editor remains owned by the Search page.
-            val searchEntry = if (!reducedMotion && target is RootDest.Tab && target.tab != TabDest.My) {
-                Modifier.sharedBounds(
-                    sharedContentState = rememberSharedContentState("search-bar"),
-                    animatedVisibilityScope = this,
-                    boundsTransform = { _, _ -> motion.defaultSpatialSpec() },
-                    enter = fadeIn(motion.fastEffectsSpec()),
-                    exit = fadeOut(motion.fastEffectsSpec()),
-                )
-            } else Modifier
-            content(target, searchEntry)
-        }
+    // Home's shortcut and Search's editor stay in their own panes. Only the pages transition.
+    AnimatedContent(
+        targetState = destination,
+        transitionSpec = { pageTransition(initialState, targetState, motion, reducedMotion, rtl) },
+        modifier = modifier.fillMaxSize().clipToBounds(),
+        label = "AppPageTransition",
+    ) { target ->
+        content(target)
     }
 }
 
@@ -1502,6 +1552,27 @@ private fun railEnterTransition(motion: MotionScheme, rtl: Boolean): EnterTransi
 private fun railExitTransition(motion: MotionScheme, rtl: Boolean): ExitTransition =
     slideOutHorizontally(motion.defaultSpatialSpec(), targetOffsetX = { if (rtl) it else -it }) +
         fadeOut(motion.fastEffectsSpec())
+
+/** Android keeps the outgoing browse shell still underneath a single sliding layer. */
+private fun AnimatedContentTransitionScope<RootDest.Pushed?>.windowPlayerTransition(
+    wasPlayer: Boolean,
+    isPlayer: Boolean,
+    reducedMotion: Boolean,
+): ContentTransform {
+    if (reducedMotion) {
+        return ContentTransform(EnterTransition.None, ExitTransition.None, sizeTransform = null)
+    }
+    val transform = when {
+        wasPlayer && isPlayer -> playbackFadeThrough()
+        isPlayer -> slideInVertically(tween(ExpressiveMotion.LongMillis, easing = FastOutSlowInEasing)) { it } togetherWith
+            ExitTransition.KeepUntilTransitionsFinished
+        else -> EnterTransition.None togetherWith
+            slideOutVertically(tween(ExpressiveMotion.LongMillis, easing = FastOutSlowInEasing)) { it }
+    }
+    return (transform using null).apply {
+        targetContentZIndex = if (isPlayer) 1f else -1f
+    }
+}
 
 // Only playback uses this choreography. The browse/search transitions keep their own springs.
 private fun playbackSheetTransition(showing: Boolean): ContentTransform = if (showing) {

@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -43,7 +42,6 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
@@ -226,11 +224,10 @@ fun NativeAmllScreen(
 
         // Only the artwork is edge to edge. The interactive viewport is clear of cutouts,
         // system gesture areas (including landscape side bars), and a resized window's IME.
-        val viewport = Modifier.fillMaxSize().then(
-            if (platform.isAndroid) Modifier.windowInsetsPadding(WindowInsets.playbackSafeContent).clipToBounds()
-            else Modifier,
-        )
-        PlaybackViewport(viewport, trackFold = platform.isAndroid) { fold, positioned ->
+        PlaybackViewport(
+            modifier = Modifier.fillMaxSize(),
+            safeInsets = if (platform.isAndroid) WindowInsets.playbackSafeContent else null,
+        ) { fold ->
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val density = LocalDensity.current
                 val full = IntRect(0, 0, constraints.maxWidth, constraints.maxHeight)
@@ -255,7 +252,7 @@ fun NativeAmllScreen(
                 val hasSpace = controlsPane.width > 0 && controlsPane.height > 0
                 val reflow = rememberPlaybackReflow(
                     enabled = platform.isAndroid,
-                    target = if (hasSpace && positioned) PlaybackReflowTarget(
+                    target = if (hasSpace) PlaybackReflowTarget(
                         full, fold?.placementIn(full), layout, expandedWidth,
                     ) else null,
                     reducedMotion = reducedMotion,

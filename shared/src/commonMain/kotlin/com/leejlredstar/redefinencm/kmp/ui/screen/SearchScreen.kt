@@ -5,7 +5,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -58,7 +57,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -107,7 +105,7 @@ import org.koin.compose.koinInject
  * @param focusRequest raised by the home page's search pill and Ctrl/⌘+F: put the cursor in the
  *   field and bring up the keyboard. Switching to the tab by itself does not.
  */
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SearchScreen(
     bottomPadding: Dp,
@@ -117,7 +115,6 @@ fun SearchScreen(
     viewModel: MainViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
     settings: PlatformSettings = koinInject(),
-    searchEntryModifier: Modifier = Modifier,
 ) {
     val results by viewModel.searchResults.collectAsState()
     val entries by viewModel.searchEntries.collectAsState()
@@ -205,230 +202,217 @@ fun SearchScreen(
         val inset = Modifier.padding(horizontal = gutter)
         val scheme = MaterialTheme.colorScheme
         val searchHint = SearchPlaceholder
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            val compactHeight = maxHeight < 320.dp
-            val wideHeader = !compactHeight && maxWidth - gutter * 2 >= 720.dp && LocalDensity.current.fontScale <= 1.3f
-            // There is only one editor and one viewport. The available height may change on IME
-            // open, fold or split-screen drag; it can hide the heading but never replaces either.
-            Column(Modifier.fillMaxSize()) {
-                FlowRow(
-                    modifier = inset.fillMaxWidth().padding(top = if (compactHeight) 4.dp else 8.dp, bottom = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    itemVerticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (!compactHeight) {
-                        ExpressivePageHeading(
-                            title = strings.search,
-                            supportingText = strings.searchHeadingSubtitle,
-                            modifier = if (wideHeader) Modifier.weight(1f) else Modifier.fillMaxWidth(),
-                        )
-                    }
-                    TextField(
-                        state = queryField,
-                        placeholder = { Text(searchHint, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        lineLimits = TextFieldLineLimits.SingleLine,
-                        inputTransformation = InputTransformation.maxLength(MaxSavedEditorLength),
-                        leadingIcon = { Icon(AppIcons.Search, contentDescription = null) },
-                        trailingIcon = {
-                            if (query.isNotEmpty()) {
-                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 4.dp)) {
-                                    IconButton(onClick = {
-                                        queryField.setTextAndPlaceCursorAtEnd("")
-                                        lastSubmission = null
-                                        resultsState.requestScrollToItem(0)
-                                        viewModel.clearSearch()
-                                    }) {
-                                        Icon(AppIcons.Clear, contentDescription = strings.clearSearch)
-                                    }
-                                    // A visible submit action for touch, mouse and keyboard users.
-                                    FilledTonalIconButton(
-                                        onClick = { submit(queryField.text.toString()) },
-                                        shapes = IconButtonDefaults.shapes(),
-                                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                            containerColor = scheme.surfaceContainerLowest,
-                                            contentColor = scheme.onSurface,
-                                        ),
-                                    ) {
-                                        Icon(AppIcons.Search, contentDescription = strings.search)
-                                    }
-                                }
+        Column(Modifier.fillMaxSize()) {
+            // Pin the one editor to the pane's safe top/start. IME and dock changes leave it
+            // here and resize the scrollable body instead; no heading can displace the field.
+            TextField(
+                state = queryField,
+                placeholder = { Text(searchHint, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                lineLimits = TextFieldLineLimits.SingleLine,
+                inputTransformation = InputTransformation.maxLength(MaxSavedEditorLength),
+                leadingIcon = { Icon(AppIcons.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 4.dp)) {
+                            IconButton(onClick = {
+                                queryField.setTextAndPlaceCursorAtEnd("")
+                                lastSubmission = null
+                                resultsState.requestScrollToItem(0)
+                                viewModel.clearSearch()
+                            }) {
+                                Icon(AppIcons.Clear, contentDescription = strings.clearSearch)
                             }
-                        },
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search, showKeyboardOnFocus = editor.showKeyboardOnFocus),
-                        onKeyboardAction = { submit(queryField.text.toString()) },
-                        shape = CircleShape,
-                        interactionSource = fieldInteraction,
-                        modifier = (if (wideHeader) Modifier.weight(1.5f) else Modifier)
-                            .widthIn(max = SearchEntryMaxWidth).fillMaxWidth()
-                            .then(searchEntryModifier)
-                            .then(editor.modifier)
-                            .border(2.dp, if (fieldFocused) scheme.outline else Color.Transparent, CircleShape)
-                            .semantics { contentDescription = searchHint },
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = scheme.surfaceContainerHigh,
-                            unfocusedContainerColor = scheme.surfaceContainerHigh,
-                            focusedLeadingIconColor = scheme.onSurface,
-                            unfocusedLeadingIconColor = scheme.onSurfaceVariant,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                        ),
+                            // A visible submit action for touch, mouse and keyboard users.
+                            FilledTonalIconButton(
+                                onClick = { submit(queryField.text.toString()) },
+                                shapes = IconButtonDefaults.shapes(),
+                                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                    containerColor = scheme.surfaceContainerLowest,
+                                    contentColor = scheme.onSurface,
+                                ),
+                            ) {
+                                Icon(AppIcons.Search, contentDescription = strings.search)
+                            }
+                        }
+                    }
+                },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search, showKeyboardOnFocus = editor.showKeyboardOnFocus),
+                onKeyboardAction = { submit(queryField.text.toString()) },
+                shape = CircleShape,
+                interactionSource = fieldInteraction,
+                modifier = inset.padding(top = 8.dp, bottom = 4.dp).widthIn(max = SearchEntryMaxWidth).fillMaxWidth()
+                    .then(editor.modifier)
+                    .border(2.dp, if (fieldFocused) scheme.outline else Color.Transparent, CircleShape)
+                    .semantics { contentDescription = searchHint },
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = scheme.surfaceContainerHigh,
+                    unfocusedContainerColor = scheme.surfaceContainerHigh,
+                    focusedLeadingIconColor = scheme.onSurface,
+                    unfocusedLeadingIconColor = scheme.onSurfaceVariant,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                ),
+            )
+
+            LazyColumn(
+                state = bodyState,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(top = 8.dp, bottom = bottomPadding),
+            ) {
+                item(key = "page-heading") {
+                    ExpressivePageHeading(
+                        title = strings.search,
+                        supportingText = strings.searchHeadingSubtitle,
+                        modifier = inset.padding(bottom = 12.dp),
                     )
                 }
+                when {
+                    loading && submittedMatchesQuery -> item(key = "loading") {
+                        ExpressiveLoadingState(
+                            label = strings.searchingFor(submittedQuery ?: query),
+                            modifier = inset.padding(top = 12.dp),
+                        )
+                    }
+                    searchError != null && results.isEmpty() && submittedMatchesQuery -> item(key = "error") {
+                        ExpressiveStatePanel(
+                            title = strings.searchFailed,
+                            message = searchError?.text.orEmpty(),
+                            icon = AppIcons.Refresh,
+                            tone = ExpressiveStateTone.Error,
+                            actionLabel = strings.retry,
+                            onAction = { submit(submittedQuery ?: query) },
+                            modifier = inset.padding(top = 12.dp),
+                        )
+                    }
+                    showingResults -> {
+                        val showProviderBadge = groups.size > 1 && !perProvider
+                        // Playing keeps the results on screen: the next result is one tap away.
+                        fun play(list: List<ProviderTrack>, index: Int) {
+                            playFromList(
+                                player,
+                                list.map { it.toMediaInfo() },
+                                index,
+                                playWholeList,
+                                source = (submittedQuery ?: query).let { searched -> UiText { it.playbackSourceSearch(searched) } },
+                            )
+                            player.play()
+                        }
 
-                LazyColumn(
-                    state = bodyState,
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    contentPadding = PaddingValues(top = if (compactHeight) 4.dp else 8.dp, bottom = bottomPadding),
-                ) {
-                    when {
-                        loading && submittedMatchesQuery -> item(key = "loading") {
-                            ExpressiveLoadingState(
-                                label = strings.searchingFor(submittedQuery ?: query),
-                                modifier = inset.padding(top = 12.dp),
-                            )
+                        item(key = "results-heading") {
+                            SearchBodyHeading(strings.searchResultsTitle, inset)
                         }
-                        searchError != null && results.isEmpty() && submittedMatchesQuery -> item(key = "error") {
-                            ExpressiveStatePanel(
-                                title = strings.searchFailed,
-                                message = searchError?.text.orEmpty(),
-                                icon = AppIcons.Refresh,
-                                tone = ExpressiveStateTone.Error,
-                                actionLabel = strings.retry,
-                                onAction = { submit(submittedQuery ?: query) },
-                                modifier = inset.padding(top = 12.dp),
-                            )
-                        }
-                        showingResults -> {
-                            val showProviderBadge = groups.size > 1 && !perProvider
-                            // Playing keeps the results on screen: the next result is one tap away.
-                            fun play(list: List<ProviderTrack>, index: Int) {
-                                playFromList(
-                                    player,
-                                    list.map { it.toMediaInfo() },
-                                    index,
-                                    playWholeList,
-                                    source = (submittedQuery ?: query).let { searched -> UiText { it.playbackSourceSearch(searched) } },
+                        searchError?.let { partialFailure ->
+                            item(key = "partial-failure") {
+                                SearchProviderNotice(
+                                    label = partialFailure.text,
+                                    // Retry only the providers that missed their page; existing
+                                    // hits stay in place.
+                                    onRetry = viewModel::retryFailedSearchProviders.takeIf {
+                                        failedProviders.isNotEmpty() && !loadingMore
+                                    },
+                                    modifier = inset.padding(bottom = 8.dp),
                                 )
-                                player.play()
                             }
-
-                            item(key = "results-heading") {
-                                SearchBodyHeading(strings.searchResultsTitle, inset)
-                            }
-                            searchError?.let { partialFailure ->
-                                item(key = "partial-failure") {
-                                    SearchProviderNotice(
-                                        label = partialFailure.text,
-                                        // Retry only the providers that missed their page; existing
-                                        // hits stay in place.
-                                        onRetry = viewModel::retryFailedSearchProviders.takeIf {
-                                            failedProviders.isNotEmpty() && !loadingMore
-                                        },
-                                        modifier = inset.padding(bottom = 8.dp),
+                        }
+                        if (perProvider) {
+                            groups.forEach { group ->
+                                item(key = "header-${group.provider.key}") {
+                                    Text(
+                                        text = group.provider.displayName,
+                                        style = MaterialTheme.typography.titleMediumEmphasized,
+                                        color = scheme.onSurfaceVariant,
+                                        modifier = inset.padding(top = 12.dp, bottom = 8.dp).semantics { heading() },
                                     )
                                 }
-                            }
-                            if (perProvider) {
-                                groups.forEach { group ->
-                                    item(key = "header-${group.provider.key}") {
-                                        Text(
-                                            text = group.provider.displayName,
-                                            style = MaterialTheme.typography.titleMediumEmphasized,
-                                            color = scheme.onSurfaceVariant,
-                                            modifier = inset.padding(top = 12.dp, bottom = 8.dp).semantics { heading() },
-                                        )
-                                    }
-                                    itemsIndexed(
-                                        items = group.tracks,
-                                        key = { _, track -> "${group.provider.key}-${track.id}" },
-                                    ) { index, track ->
-                                        SearchTrackRow(
-                                            index = index,
-                                            track = track,
-                                            count = group.tracks.size,
-                                            showProviderBadge = false,
-                                            onClick = { play(group.tracks, index) },
-                                        )
-                                    }
-                                }
-                            } else {
-                                // Play the same-song merge as one row, with the other providers
-                                // available individually in that row's menu.
-                                val played = entries.map { it.track }
                                 itemsIndexed(
-                                    items = entries,
-                                    key = { _, entry -> entry.track.id.toString() },
-                                ) { index, entry ->
+                                    items = group.tracks,
+                                    key = { _, track -> "${group.provider.key}-${track.id}" },
+                                ) { index, track ->
                                     SearchTrackRow(
                                         index = index,
-                                        track = entry.track,
-                                        count = entries.size,
-                                        showProviderBadge = showProviderBadge,
-                                        alsoFrom = entry.alternates,
-                                        onClick = { play(played, index) },
-                                        onPlayAlternate = { alternate ->
-                                            play(played.toMutableList().also { it[index] = alternate }, index)
-                                        },
+                                        track = track,
+                                        count = group.tracks.size,
+                                        showProviderBadge = false,
+                                        onClick = { play(group.tracks, index) },
                                     )
                                 }
                             }
-                            item(key = "results-footer") {
-                                SearchResultsFooter(
-                                    hasMore = hasMore,
-                                    loadingMore = loadingMore,
-                                    moreError = moreError?.text,
-                                    shownCount = results.size,
-                                    onLoadMore = { if (isActive) viewModel.loadMoreSearchResults() },
+                        } else {
+                            // Play the same-song merge as one row, with the other providers
+                            // available individually in that row's menu.
+                            val played = entries.map { it.track }
+                            itemsIndexed(
+                                items = entries,
+                                key = { _, entry -> entry.track.id.toString() },
+                            ) { index, entry ->
+                                SearchTrackRow(
+                                    index = index,
+                                    track = entry.track,
+                                    count = entries.size,
+                                    showProviderBadge = showProviderBadge,
+                                    alsoFrom = entry.alternates,
+                                    onClick = { play(played, index) },
+                                    onPlayAlternate = { alternate ->
+                                        play(played.toMutableList().also { it[index] = alternate }, index)
+                                    },
                                 )
                             }
                         }
-                        submittedMatchesQuery && results.isEmpty() -> item(key = "no-results") {
-                            ExpressiveStatePanel(
-                                title = strings.noResultsFound,
-                                message = strings.noSongsMatchQuery(submittedQuery ?: query),
-                                icon = AppIcons.Search,
-                                modifier = inset.padding(top = 12.dp),
+                        item(key = "results-footer") {
+                            SearchResultsFooter(
+                                hasMore = hasMore,
+                                loadingMore = loadingMore,
+                                moreError = moreError?.text,
+                                shownCount = results.size,
+                                onLoadMore = { if (isActive) viewModel.loadMoreSearchResults() },
                             )
                         }
-                        showingSuggestions -> {
-                            item(key = "suggestions-heading") {
-                                SearchBodyHeading(strings.searchSuggestions, inset)
-                            }
-                            itemsIndexed(
-                                items = suggestions,
-                                key = { _, keyword -> keyword },
-                            ) { index, keyword ->
-                                val interaction = remember { MutableInteractionSource() }
-                                Surface(
-                                    onClick = { submit(keyword) },
-                                    shape = rememberConnectedListItemShape(index, suggestions.size, interaction),
-                                    color = scheme.surfaceContainerLow,
-                                    contentColor = scheme.onSurface,
-                                    interactionSource = interaction,
-                                    modifier = inset.fillMaxWidth().padding(bottom = ExpressiveLayout.ConnectedItemGap),
+                    }
+                    submittedMatchesQuery && results.isEmpty() -> item(key = "no-results") {
+                        ExpressiveStatePanel(
+                            title = strings.noResultsFound,
+                            message = strings.noSongsMatchQuery(submittedQuery ?: query),
+                            icon = AppIcons.Search,
+                            modifier = inset.padding(top = 12.dp),
+                        )
+                    }
+                    showingSuggestions -> {
+                        item(key = "suggestions-heading") {
+                            SearchBodyHeading(strings.searchSuggestions, inset)
+                        }
+                        itemsIndexed(
+                            items = suggestions,
+                            key = { _, keyword -> keyword },
+                        ) { index, keyword ->
+                            val interaction = remember { MutableInteractionSource() }
+                            Surface(
+                                onClick = { submit(keyword) },
+                                shape = rememberConnectedListItemShape(index, suggestions.size, interaction),
+                                color = scheme.surfaceContainerLow,
+                                contentColor = scheme.onSurface,
+                                interactionSource = interaction,
+                                modifier = inset.fillMaxWidth().padding(bottom = ExpressiveLayout.ConnectedItemGap),
+                            ) {
+                                Row(
+                                    modifier = Modifier.heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Row(
-                                        modifier = Modifier.heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Icon(AppIcons.Search, contentDescription = null, tint = scheme.onSurfaceVariant)
-                                        Text(keyword, style = MaterialTheme.typography.bodyLarge)
-                                    }
+                                    Icon(AppIcons.Search, contentDescription = null, tint = scheme.onSurfaceVariant)
+                                    Text(keyword, style = MaterialTheme.typography.bodyLarge)
                                 }
                             }
                         }
-                        !submittedMatchesQuery && query.isNotBlank() -> item(key = "search-prompt") {
-                            ExpressiveStatePanel(
-                                title = strings.readyToSearch,
-                                message = strings.searchPromptWithQuery(query),
-                                icon = AppIcons.Search,
-                                modifier = inset,
-                            )
-                        }
-                        query.isBlank() -> searchStart(history, hotSearches, inset, ::submit, viewModel::clearSearchHistory)
                     }
+                    !submittedMatchesQuery && query.isNotBlank() -> item(key = "search-prompt") {
+                        ExpressiveStatePanel(
+                            title = strings.readyToSearch,
+                            message = strings.searchPromptWithQuery(query),
+                            icon = AppIcons.Search,
+                            modifier = inset,
+                        )
+                    }
+                    query.isBlank() -> searchStart(history, hotSearches, inset, ::submit, viewModel::clearSearchHistory)
                 }
             }
         }

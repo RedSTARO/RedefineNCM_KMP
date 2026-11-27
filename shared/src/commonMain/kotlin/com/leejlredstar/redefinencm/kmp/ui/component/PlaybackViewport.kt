@@ -5,16 +5,13 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.safeGestures
 import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.layout
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -30,28 +27,25 @@ import kotlin.math.roundToInt
 internal val WindowInsets.Companion.playbackSafeContent: WindowInsets
     @Composable get() = safeDrawing.union(safeGestures)
 
-/** Places the fold in this playback page's already inset-adjusted coordinate space. */
+/**
+ * The Android playback host is window-sized before its visual transition. Project the hinge with
+ * the same inset origin that places the controls, not an on-position callback from a sliding page.
+ */
 @Composable
 internal fun PlaybackViewport(
     modifier: Modifier,
-    trackFold: Boolean = true,
-    content: @Composable (fold: PlaybackFold?, positioned: Boolean) -> Unit,
+    safeInsets: WindowInsets?,
+    content: @Composable (PlaybackFold?) -> Unit,
 ) {
-    val fold = if (trackFold) LocalWindowFold.current else null
-    var localOrigin by remember { mutableStateOf<IntOffset?>(null) }
-    // Know the origin before the first hinge update, including when initially folded.
-    val observePosition = if (trackFold) {
-        Modifier.onGloballyPositioned { coordinates ->
-            val p = coordinates.positionInWindow()
-            if (p.x.isFinite() && p.y.isFinite()) localOrigin = IntOffset(p.x.roundToInt(), p.y.roundToInt())
-        }
-    } else {
-        Modifier
-    }
-    Box(modifier.then(observePosition)) {
-        val origin = localOrigin
-        content(if (fold != null && origin != null) PlaybackFold(fold, origin) else null, origin != null)
-    }
+    val fold = LocalWindowFold.current.takeIf { safeInsets != null }
+    val projectedFold = if (safeInsets != null && fold != null) {
+        val density = LocalDensity.current
+        val direction = LocalLayoutDirection.current
+        val origin = IntOffset(safeInsets.getLeft(density, direction), safeInsets.getTop(density))
+        PlaybackFold(fold, origin)
+    } else null
+    val insetModifier = if (safeInsets != null) Modifier.windowInsetsPadding(safeInsets).clipToBounds() else Modifier
+    Box(modifier.then(insetModifier)) { content(projectedFold) }
 }
 
 /** Constrain a child to a physical, not RTL-relative, rectangle inside a full-size viewport. */

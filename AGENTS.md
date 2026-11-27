@@ -961,7 +961,10 @@ the English quotation marks, `AppIcons.FormatQuote` — pushes `PushedDest.FullL
 `AmllPlayerScreen` → `NativeAmllScreen`, which renders lyrics on every platform. Back from the
 lyric page returns to Now Playing; back from Now Playing returns to the app. Both surfaces are
 `focusOrPush` destinations, hide the mini player, rise as one sheet over the tabs and cross-fade
-between each other (`isPlayerSurface` in `App.kt`). There is no renderer preference to resolve.
+between each other (`isPlayerSurface` in `App.kt`). On Android, the player is a separate
+full-window layer, never a child of the outgoing browse rail, dock, or hinge pane. Its first
+layout projects the fold from the safe insets, independent of the sheet's visual offset.
+There is no renderer preference to resolve.
 Do not add lyric rendering to the Now Playing page, and do not route any entry point straight
 to the lyric page. The desktop player bar's quotation-mark button is a shortcut through Now
 Playing, not around it: it opens Now Playing and the lyric page over it in one step, so Back

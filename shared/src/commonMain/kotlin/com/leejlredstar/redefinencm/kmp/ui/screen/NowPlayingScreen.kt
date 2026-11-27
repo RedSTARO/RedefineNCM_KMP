@@ -48,7 +48,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -57,6 +59,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.amll.compose.rememberReducedMotionEnabled
@@ -104,7 +107,6 @@ import androidx.compose.ui.graphics.lerp
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberTransitionVisual
 import com.leejlredstar.redefinencm.kmp.ui.component.TransitionVisual
 import com.leejlredstar.redefinencm.kmp.ui.component.TransitionArtworkStack
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.AnimatedVisibility
@@ -164,6 +166,7 @@ fun NowPlayingScreen(
     onOpenLyrics: () -> Unit,
     /** Each colour read from the current track's cover, for the caller that themes the app from it. */
     onAccentColor: (Color) -> Unit = {},
+    initialAccent: Color? = null,
     viewModel: NowPlayingViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
 ) {
@@ -174,6 +177,7 @@ fun NowPlayingScreen(
 
     val artworkAccent = rememberArtworkAccent(
         requestKey = media?.artworkUri,
+        fallback = initialAccent ?: MaterialTheme.colorScheme.primaryContainer,
         animationSpec = motionScheme.slowEffectsSpec(),
         label = "nowPlayingAccent",
         onAccentColor = onAccentColor,
@@ -225,21 +229,18 @@ fun NowPlayingScreen(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .drawBehind {
+            .drawWithCache {
                 // Read at draw time, so a blend repaints the page without recomposing it.
                 val weight = visual?.weight
                 val from = if (weight == null) palette else startPalette
                 val to = if (weight == null) palette else incomingPalette
                 val t = weight ?: 0f
-                drawRect(
-                    Brush.verticalGradient(
-                        listOf(
-                            lerp(from.pageStart, to.pageStart, t),
-                            lerp(from.pageMiddle, to.pageMiddle, t),
-                            lerp(from.pageEnd, to.pageEnd, t),
-                        ),
-                    ),
-                )
+                val background = Brush.verticalGradient(listOf(
+                    lerp(from.pageStart, to.pageStart, t),
+                    lerp(from.pageMiddle, to.pageMiddle, t),
+                    lerp(from.pageEnd, to.pageEnd, t),
+                ))
+                onDrawBehind { drawRect(background) }
             }
             .semantics { contentDescription = strings.nowPlaying },
     ) {
@@ -317,76 +318,63 @@ fun NowPlayingScreen(
                 tight = tight,
             )
         }
-        val viewport = Modifier.fillMaxSize()
-            .windowInsetsPadding(if (android) WindowInsets.playbackSafeContent else WindowInsets.safeDrawing)
         if (android) {
             val wideWindow = isWidePlaybackViewport(maxWidth, maxHeight)
-            PlaybackViewport(viewport) { fold, positioned ->
+            PlaybackViewport(Modifier.fillMaxSize(), safeInsets = WindowInsets.playbackSafeContent) { fold ->
                 AdaptiveNowPlayingLayout(
-                    fold, positioned, wideWindow, reducedMotion, controlsScroll, artwork, header, controls, toolbar,
+                    fold, wideWindow, reducedMotion, controlsScroll, artwork, header, controls, toolbar,
                 )
             }
         } else {
-            BoxWithConstraints(viewport.padding(horizontal = ExpressiveLayout.PageHorizontalPadding)) {
-                val viewportWidth = maxWidth
+            BoxWithConstraints(
+                Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(horizontal = ExpressiveLayout.PageHorizontalPadding),
+            ) {
                 val viewportHeight = maxHeight
-                val twoColumns = viewportWidth > viewportHeight && viewportWidth >= 600.dp
-                val shortHeight = viewportHeight < 600.dp
-                val transportHeight = if (shortHeight) 96.dp else 136.dp
-                if (twoColumns) {
+                if (maxWidth > viewportHeight && maxWidth >= 600.dp) {
                     Row(
                         modifier = Modifier.fillMaxSize(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                                .padding(vertical = 56.dp),
+                            modifier = Modifier.weight(1f).fillMaxHeight().padding(vertical = 56.dp),
                             contentAlignment = Alignment.Center,
                         ) {
                             artwork(Modifier.widthIn(max = 520.dp).fillMaxWidth())
                         }
                         Spacer(Modifier.width(32.dp))
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
+                        val tight = viewportHeight < 420.dp
+                        val short = viewportHeight < 600.dp
+                        NowPlayingControlsPane(
+                            modifier = Modifier.weight(1f).fillMaxHeight()
                                 .padding(end = ExpressiveLayout.PageHorizontalPadding),
-                            verticalArrangement = Arrangement.Center,
+                            tight = tight,
+                            headerInScroll = viewportHeight < 144.dp,
+                            scroll = controlsScroll,
+                            header = header,
+                            artwork = null,
                         ) {
-                            controls(shortHeight, false, null)
-                            Spacer(Modifier.height(28.dp))
-                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                toolbar(false)
-                            }
+                            controls(short, tight, null)
+                            Spacer(Modifier.height(if (tight) 4.dp else 28.dp))
+                            toolbar(tight)
                         }
                     }
                 } else {
-                    Column(
+                    val tight = maxHeight < 420.dp || maxWidth < 300.dp
+                    val short = maxHeight < 600.dp
+                    NowPlayingControlsPane(
                         modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
+                        tight = tight,
+                        headerInScroll = maxHeight < 144.dp,
+                        scroll = controlsScroll,
+                        header = header,
+                        artwork = { artwork(Modifier.fillMaxSize()) },
                     ) {
-                        // Everything below the artwork has a fixed height; the artwork takes what is
-                        // left, so a short window shrinks the cover instead of pushing controls off.
-                        val fixedHeight = 64.dp + 80.dp + 20.dp + 60.dp + 20.dp +
-                            transportHeight + 28.dp + 64.dp + ExpressiveLayout.PageVerticalPadding
-                        val artworkSize =
-                            minOf(420.dp, viewportWidth - 24.dp, viewportHeight - fixedHeight)
-                                .coerceAtLeast(96.dp)
-                        Spacer(Modifier.height(64.dp))
-                        Spacer(Modifier.weight(1f))
-                        artwork(Modifier.size(artworkSize))
-                        Spacer(Modifier.weight(1f))
-                        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth()) {
-                            controls(shortHeight, false, null)
-                        }
-                        Spacer(Modifier.height(28.dp))
-                        toolbar(false)
-                        Spacer(Modifier.height(ExpressiveLayout.PageVerticalPadding))
+                        controls(short, tight, null)
+                        Spacer(Modifier.height(if (tight) 4.dp else 28.dp))
+                        toolbar(tight)
                     }
                 }
-                header(Modifier.align(Alignment.TopStart), false)
             }
         }
     }
@@ -441,7 +429,6 @@ internal data class NowPlayingReflowLayout(
 @Composable
 private fun AdaptiveNowPlayingLayout(
     fold: PlaybackFold?,
-    positioned: Boolean,
     wideWindow: Boolean,
     reducedMotion: Boolean,
     scroll: ScrollState,
@@ -454,14 +441,12 @@ private fun AdaptiveNowPlayingLayout(
         val density = LocalDensity.current
         val full = IntRect(0, 0, constraints.maxWidth, constraints.maxHeight)
         val (artPane, controlPane) = nowPlayingPanes(full, density, fold, wideWindow)
-        val controlHeight = with(density) { controlPane.height.toDp() }
-        val controlWidth = with(density) { controlPane.width.toDp() }
         val layout = nowPlayingReflowLayout(full, artPane, controlPane, density)
         val expandedWidth = hasExpandedPlaybackWidth(maxWidth)
         val hasSpace = controlPane.width > 0 && controlPane.height > 0
         val reflow = rememberPlaybackReflow(
             enabled = true,
-            target = if (hasSpace && positioned) PlaybackReflowTarget(
+            target = if (hasSpace) PlaybackReflowTarget(
                 full, fold?.placementIn(full), layout, expandedWidth,
             ) else null,
             reducedMotion = reducedMotion,
@@ -476,35 +461,90 @@ private fun AdaptiveNowPlayingLayout(
             }
         }
         val tight = layout.tightControls
-        val headerInScroll = layout.headerInScroll
         val sidePadding = if (layout.narrowMargins) 8.dp else ExpressiveLayout.PageHorizontalPadding
-        Column(Modifier.inPlaybackPane(controlPane).padding(horizontal = sidePadding)) {
-            if (!headerInScroll) header(Modifier, tight)
-            Box(
-                Modifier.weight(1f).fillMaxWidth(),
-                contentAlignment = Alignment.Center,
-            ) {
+        NowPlayingControlsPane(
+            modifier = Modifier.inPlaybackPane(controlPane).padding(horizontal = sidePadding),
+            tight = tight,
+            headerInScroll = layout.headerInScroll,
+            scroll = scroll,
+            header = header,
+            artwork = if (layout.showInlineArtwork) {
+                { artwork(Modifier.fillMaxSize().reflowScale(reflow, start = 0.92f)) }
+            } else null,
+        ) {
+            controls(layout.shortTransport, tight, reflow)
+            Spacer(Modifier.height(if (tight) 4.dp else 28.dp))
+            toolbar(tight)
+        }
+    }
+}
+
+/**
+ * Keep the complete control deck in view. Measure it at its real width (including font scale,
+ * mute notice, and wrapped toolbar), then give the cover the remaining height. Only a pane too
+ * short for the controls themselves needs to scroll.
+ */
+@Composable
+private fun NowPlayingControlsPane(
+    modifier: Modifier,
+    tight: Boolean,
+    headerInScroll: Boolean,
+    scroll: ScrollState,
+    header: @Composable (Modifier, Boolean) -> Unit,
+    artwork: (@Composable () -> Unit)?,
+    controls: @Composable () -> Unit,
+) {
+    Column(modifier) {
+        if (!headerInScroll) header(Modifier, tight)
+        BoxWithConstraints(
+            Modifier.weight(1f).fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            val availableHeight = constraints.maxHeight
+            val verticalPadding = if (tight) 4.dp else 16.dp
+            val panelModifier = Modifier.widthIn(max = 560.dp).fillMaxWidth().verticalScroll(scroll)
+            val deck: @Composable () -> Unit = {
                 Column(
-                    Modifier.widthIn(max = 560.dp).fillMaxWidth().verticalScroll(scroll)
-                        .padding(vertical = if (tight) 4.dp else 16.dp),
+                    Modifier.fillMaxWidth().padding(vertical = verticalPadding),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     if (headerInScroll) header(Modifier, true)
-                    // Artwork is optional in a narrow/short window; the quote button still opens lyrics.
-                    if (layout.showInlineArtwork) {
-                        val size = minOf(420.dp, (controlWidth - sidePadding * 2).coerceAtLeast(0.dp),
-                            (controlHeight - 350.dp).coerceAtLeast(64.dp))
-                        artwork(Modifier.size(size).reflowScale(reflow, start = 0.92f))
-                        Spacer(Modifier.height(12.dp))
+                    controls()
+                }
+            }
+            if (artwork == null) {
+                Box(panelModifier) { deck() }
+            } else {
+                Layout(
+                    modifier = panelModifier,
+                    content = {
+                        Box { artwork() }
+                        deck()
+                    },
+                ) { (cover, transport), bounds ->
+                    val width = bounds.maxWidth
+                    val measuredControls = transport.measure(Constraints.fixedWidth(width))
+                    val gap = 12.dp.roundToPx()
+                    val coverSize = stackedPlayerArtworkSize(width, availableHeight, measuredControls.height, gap)
+                    val measuredCover = if (coverSize > 0) cover.measure(Constraints.fixed(coverSize, coverSize)) else null
+                    val controlsTop = if (measuredCover != null) coverSize + gap else 0
+                    layout(width, controlsTop + measuredControls.height) {
+                        measuredCover?.placeRelative((width - coverSize) / 2, 0)
+                        measuredControls.placeRelative(0, controlsTop)
                     }
-                    controls(layout.shortTransport, tight, reflow)
-                    Spacer(Modifier.height(if (tight) 4.dp else 28.dp))
-                    toolbar(tight)
                 }
             }
         }
     }
 }
+
+internal fun Density.stackedPlayerArtworkSize(
+    availableWidth: Int,
+    availableHeight: Int,
+    controlsHeight: Int,
+    gap: Int,
+): Int = minOf(availableWidth, availableHeight - controlsHeight - gap, 420.dp.roundToPx())
+    .takeIf { it >= 64.dp.roundToPx() } ?: 0
 
 internal fun nowPlayingReflowLayout(
     full: IntRect,
@@ -542,7 +582,10 @@ internal fun nowPlayingPanes(
         return null to placement.single
     }
     val short = full.height.toDp() < 420.dp
-    if (wideWindow && full.height.toDp() >= 192.dp && full.width.toDp() >= (if (short) 560.dp else 840.dp)) {
+    // The overall aspect ratio already rules out near-square and portrait windows. Budget
+    // the two panes from usable width instead of requiring another expanded-width breakpoint
+    // after the landscape gesture insets have been taken out.
+    if (wideWindow && full.height.toDp() >= 192.dp && full.width.toDp() >= (if (short) 560.dp else 720.dp)) {
         val split = (full.width * 0.42f).toInt()
         IntRect(0, 0, split, full.height) to IntRect(split, 0, full.width, full.height)
     } else {
