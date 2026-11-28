@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -27,8 +26,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.material3.carousel.CarouselDefaults
+import androidx.compose.material3.carousel.CarouselItemDrawInfo
 import androidx.compose.material3.carousel.CarouselItemScope
 import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
 import androidx.compose.material3.carousel.rememberCarouselState
@@ -41,11 +40,18 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
@@ -56,13 +62,16 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.CollectionInfo
 import androidx.compose.ui.semantics.CollectionItemInfo
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.collectionInfo
 import androidx.compose.ui.semantics.collectionItemInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -77,15 +86,30 @@ import com.leejlredstar.redefinencm.kmp.ui.theme.rememberArtworkAccent
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
-/** App-chosen cover proportions. Only the track previews are deliberately low-profile. */
-internal enum class HomeGalleryStyle(val height: Dp, val corner: Dp, val pressedCorner: Dp) {
-    Track(112.dp, 16.dp, 8.dp),
-    Playlist(184.dp, 28.dp, 16.dp),
-}
+internal enum class HomeGalleryStyle { Track, Playlist }
 
 internal fun homeGalleryPreferredWidth(style: HomeGalleryStyle, width: Dp): Dp = when (style) {
     HomeGalleryStyle.Track -> (width * 0.48f).coerceIn(minOf(width, 112.dp), minOf(width, 156.dp))
     HomeGalleryStyle.Playlist -> (width * 0.58f).coerceIn(minOf(width, 144.dp), minOf(width, 224.dp))
+}
+
+// Keep the full playlist cover a horizontal capsule on both the outer and inner screen.
+internal fun HomeGalleryStyle.baseHeight(preferredWidth: Dp): Dp = when (this) {
+    HomeGalleryStyle.Track -> 112.dp
+    HomeGalleryStyle.Playlist -> preferredWidth * 0.64f
+}
+
+private fun HomeGalleryStyle.cornerRadius(size: Size, density: Density): Float =
+    (minOf(size.width, size.height) / 2f).let { full ->
+        if (this == HomeGalleryStyle.Playlist) full else minOf(full, with(density) { 16.dp.toPx() })
+    }
+
+private fun HomeGalleryStyle.captionInset(bounds: Rect, corner: Float, density: Density): Float = with(density) {
+    if (this@captionInset == HomeGalleryStyle.Playlist) {
+        // Lift the caption toward the wider part of a capsule as it becomes taller than wide.
+        val squeeze = (1f - bounds.width / bounds.height).coerceAtLeast(0f)
+        maxOf(10.dp.toPx(), corner * (0.32f + 0.95f * squeeze))
+    } else 8.dp.toPx()
 }
 
 /**
@@ -100,7 +124,7 @@ internal fun HomeGallery(
     gutter: Dp,
     modifier: Modifier = Modifier,
     header: @Composable (pager: (@Composable () -> Unit)?) -> Unit,
-    itemContent: @Composable (index: Int, mask: CarouselItemScope?) -> Unit,
+    itemContent: @Composable (index: Int, mask: CarouselItemScope?, height: Dp) -> Unit,
 ) {
     val carousel = rememberCarouselState { count }
     val still = rememberLazyListState()
@@ -133,6 +157,7 @@ internal fun HomeGallery(
             BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = gutter)) {
                 if (maxWidth > 0.dp) {
                     val width = homeGalleryPreferredWidth(style, maxWidth)
+                    val height = style.baseHeight(width) + 36.dp * (LocalDensity.current.fontScale - 1f).coerceAtLeast(0f)
                     val rail = Modifier.fillMaxWidth().focusGroup()
                         .semantics { collectionInfo = CollectionInfo(rowCount = 1, columnCount = count) }
                         .then(if (usePager) Modifier.homeGalleryWheel { latestAdvance.value(it) } else Modifier)
@@ -145,7 +170,7 @@ internal fun HomeGallery(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             items(count) { index ->
-                                Box(Modifier.width(width)) { itemContent(index, null) }
+                                Box(Modifier.width(width)) { itemContent(index, null, height) }
                             }
                         }
                     } else {
@@ -159,7 +184,7 @@ internal fun HomeGallery(
                             maxSmallItemWidth = 56.dp,
                             contentPadding = padding,
                             flingBehavior = CarouselDefaults.multiBrowseFlingBehavior(carousel, snapAnimationSpec = spatial),
-                        ) { index -> itemContent(index, this) }
+                        ) { index -> itemContent(index, this, height) }
                     }
                 }
             }
@@ -192,9 +217,82 @@ private fun Modifier.homeGalleryWheel(advance: (Int) -> Boolean): Modifier = poi
     }
 }
 
-/** Captions keep a fixed inner measure and fade out before a moving mask can cut through type. */
-internal fun homeGalleryCaptionAlpha(width: Float, fullWidth: Float): Float =
-    if (fullWidth <= 0f) 0f else ((width / fullWidth - 0.84f) / 0.12f).coerceIn(0f, 1f)
+/** Horizontal room at the narrowest cross-section of the rounded caption area. */
+internal fun homeGalleryCaptionWidth(mask: Rect, radius: Float, top: Float, bottom: Float, padding: Float): Int {
+    if (mask.isEmpty || top < mask.top || bottom > mask.bottom || top >= bottom) return 0
+    val edgeDistance = minOf(top - mask.top, mask.bottom - bottom)
+    val delta = (radius - edgeDistance).coerceAtLeast(0f)
+    val cut = radius - kotlin.math.sqrt((radius * radius - delta * delta).coerceAtLeast(0f))
+    return ((mask.width - (cut + padding) * 2f).toInt()).coerceAtLeast(0)
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun Modifier.galleryCaption(
+    info: CarouselItemDrawInfo?,
+    style: HomeGalleryStyle,
+    title: String,
+    subtitle: String?,
+): Modifier {
+    val measurer = rememberTextMeasurer()
+    val playlist = style == HomeGalleryStyle.Playlist
+    val align = if (playlist) TextAlign.Center else TextAlign.Start
+    val titleStyle = (if (playlist) MaterialTheme.typography.titleMediumEmphasized
+        else MaterialTheme.typography.titleSmallEmphasized).copy(textAlign = align)
+    val subtitleStyle = MaterialTheme.typography.bodySmall.copy(textAlign = align)
+    return drawWithCache {
+        val card = Rect(Offset.Zero, size)
+        val bounds = info?.maskRect?.intersect(card) ?: card
+        if (bounds.isEmpty) return@drawWithCache onDrawBehind {}
+        // Fit the text inside the actual mask and the rounded ends, not inside an invisible full-width card.
+        val corner = style.cornerRadius(bounds.size, this)
+        val captionBottom = bounds.bottom - style.captionInset(bounds, corner, this)
+        val availableHeight = captionBottom - (bounds.top + 4.dp.toPx())
+        val titleLineHeight = titleStyle.lineHeight.toPx()
+        val subtitleHeight = subtitleStyle.lineHeight.toPx()
+        val artist = subtitle?.takeIf { it.isNotBlank() && availableHeight >= titleLineHeight + subtitleHeight }
+        val reservedSubtitle = if (artist == null) 0f else subtitleHeight
+        // A squeezed playlist still shows its title, but doesn't break a word across two lines.
+        val lineLimit = if (playlist && bounds.width > bounds.height) 2 else 1
+        val maxLines = ((availableHeight - reservedSubtitle) / titleLineHeight).toInt().coerceIn(0, lineLimit)
+        val reservedTop = captionBottom - maxLines * titleLineHeight - reservedSubtitle
+        val width = homeGalleryCaptionWidth(bounds, corner, reservedTop, captionBottom, 8.dp.toPx())
+        // Only the genuinely tiny edge peeks are artwork-only. A medium card ellipsizes its
+        // title at full opacity; its complete name remains on the clickable semantics node.
+        val showCaption = maxLines > 0 && width >= titleStyle.fontSize.toPx() * 3.5f
+        val nameLayout = if (showCaption) measurer.measure(
+            text = title, style = titleStyle, overflow = TextOverflow.Ellipsis, maxLines = maxLines,
+            constraints = Constraints.fixedWidth(width),
+        ) else null
+        val artistLayout = if (showCaption && artist != null) measurer.measure(
+            text = artist, style = subtitleStyle, overflow = TextOverflow.Ellipsis, maxLines = 1,
+            constraints = Constraints.fixedWidth(width),
+        ) else null
+        val captionTop = captionBottom - (nameLayout?.size?.height ?: 0) - (artistLayout?.size?.height ?: 0)
+        val captionLeft = bounds.center.x - width / 2f
+        // Like the original gallery, darken the cover itself instead of drawing a label tile.
+        // Reach the contrast floor before the first glyph, even over a white cover at large type.
+        val darkAt = if (nameLayout == null) {
+            bounds.top + bounds.height * 0.70f
+        } else captionTop.coerceAtLeast(bounds.top)
+        val fadeStart = (darkAt - bounds.height * 0.32f).coerceAtLeast(bounds.top)
+        val range = bounds.bottom - fadeStart
+        val scrim = if (range > 0f) Brush.verticalGradient(
+            0f to if (darkAt == fadeStart) Color.Black.copy(alpha = 0.60f) else Color.Transparent,
+            ((darkAt - fadeStart) / range) to Color.Black.copy(alpha = 0.60f),
+            1f to Color.Black.copy(alpha = 0.90f),
+            startY = fadeStart, endY = bounds.bottom,
+        ) else null
+        onDrawBehind {
+            if (scrim != null) drawRect(scrim, Offset(bounds.left, fadeStart), Size(bounds.width, range))
+            if (nameLayout != null) drawText(nameLayout, color = Color.White, topLeft = Offset(captionLeft, captionTop))
+            if (artistLayout != null) drawText(
+                artistLayout, color = Color.White,
+                topLeft = Offset(captionLeft, captionBottom - artistLayout.size.height),
+            )
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -203,6 +301,7 @@ internal fun HomeGalleryCard(
     itemKey: String,
     mask: CarouselItemScope?,
     style: HomeGalleryStyle,
+    height: Dp,
     cover: String,
     title: String,
     subtitle: String? = null,
@@ -225,18 +324,17 @@ internal fun HomeGalleryCard(
         object : Shape {
             override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
                 // Read progress in the outline: the carousel remembers its mask Shape.
-                val corner = style.corner + (style.pressedCorner - style.corner) * press.value.coerceIn(0f, 1f)
-                return RoundedCornerShape(corner).createOutline(size, layoutDirection, density)
+                val radius = CornerRadius(style.cornerRadius(size, density) * (1f - 0.35f * press.value.coerceIn(0f, 1f)))
+                return Outline.Rounded(RoundRect(Rect(Offset.Zero, size), radius))
             }
         }
     }
     val shape = mask?.rememberMaskShape(frame) ?: frame
-    val fontExpansion = 36.dp * (LocalDensity.current.fontScale - 1f).coerceAtLeast(0f)
     val direction = if (LocalLayoutDirection.current == LayoutDirection.Ltr) 1f else -1f
     val playbackState = if (isCurrent) {
         if (isPlaying) strings.playing else strings.paused
     } else null
-    Box(Modifier.fillMaxWidth().height(style.height + fontExpansion).clip(shape)) {
+    Box(Modifier.fillMaxWidth().height(height).clip(shape)) {
         ExpressiveArtwork(
             model = cover,
             contentDescription = null,
@@ -260,6 +358,7 @@ internal fun HomeGalleryCard(
             Box(
                 Modifier.matchParentSize().homeControl()
                     .clickable(interactionSource = interaction, role = Role.Button, onClick = onClick)
+                    .galleryCaption(info, style, title, subtitle)
                     .semantics {
                         collectionItemInfo = CollectionItemInfo(0, 1, index, 1)
                         contentDescription = if (subtitle.isNullOrBlank()) title else "$title\n$subtitle"
@@ -270,39 +369,9 @@ internal fun HomeGalleryCard(
                     Surface(
                         modifier = Modifier.matchParentSize(),
                         shape = shape,
-                        color = androidx.compose.ui.graphics.Color.Transparent,
+                        color = Color.Transparent,
                         border = BorderStroke(2.dp, palette.onQuietContainer),
                     ) {}
-                }
-                // Opaque, cover-derived color with its matching foreground. The alpha applies
-                // to the whole caption (never a white title on a transparent scrim).
-                Surface(
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp)
-                        .fillMaxWidth(0.76f).clearAndSetSemantics {}.graphicsLayer {
-                            alpha = if (info == null) 1f else homeGalleryCaptionAlpha(info.size, info.maxSize)
-                        },
-                    shape = RoundedCornerShape(8.dp),
-                    color = palette.quietContainer,
-                    contentColor = palette.onQuietContainer,
-                ) {
-                    Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-                        Text(
-                            text = title,
-                            style = if (style == HomeGalleryStyle.Playlist) MaterialTheme.typography.titleMediumEmphasized
-                            else MaterialTheme.typography.titleSmallEmphasized,
-                            maxLines = if (subtitle.isNullOrBlank()) 2 else 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        if (!subtitle.isNullOrBlank()) {
-                            Text(
-                                text = subtitle,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = palette.secondaryOnQuietContainer,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
                 }
                 if (isCurrent) {
                     Surface(

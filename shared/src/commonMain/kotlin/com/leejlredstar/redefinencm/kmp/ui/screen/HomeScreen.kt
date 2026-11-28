@@ -25,7 +25,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -52,6 +51,9 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.HorizontalRuler
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
@@ -61,7 +63,9 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.leejlredstar.redefinencm.kmp.data.api.dto.RecommendResourceRecommend
@@ -340,13 +344,14 @@ private fun DailyPicksFeature(
                         if (pager != null) Box(Modifier.align(Alignment.End).homeControl()) { pager() }
                     }
                 },
-            ) { index, mask ->
+            ) { index, mask, height ->
                 val track = queue[index]
                 HomeGalleryCard(
                     index = index,
                     itemKey = track.id,
                     mask = mask,
                     style = HomeGalleryStyle.Track,
+                    height = height,
                     cover = track.artworkUri,
                     title = track.title.ifBlank { strings.unknownSong },
                     subtitle = track.artist.ifBlank { strings.unknownArtist },
@@ -509,13 +514,14 @@ private fun HomePlaylists(
                 }
             }
         },
-    ) { index, mask ->
+    ) { index, mask, height ->
         val item = items[index]
         HomeGalleryCard(
             index = index,
             itemKey = item.id.toString(),
             mask = mask,
             style = HomeGalleryStyle.Playlist,
+            height = height,
             cover = item.picUrl,
             title = item.name.ifBlank { strings.untitledPlaylist },
             onClick = { onOpenPlaylist(item.id) },
@@ -691,15 +697,20 @@ internal fun Modifier.homeControl(): Modifier = layout { measurable, constraints
         val top = if (origin?.y?.isFinite() == true) {
             HomeControlTop.current(0f).coerceIn(0f, placeable.height.toFloat())
         } else 0f
-        if (top == 0f) {
-            placeable.placeRelative(0, 0)
-        } else if (top < placeable.height) {
-            placeable.placeRelativeWithLayer(0, 0) {
-                clip = true
-                shape = GenericShape { size: Size, _ -> addRect(Rect(0f, top, size.width, size.height)) }
-            }
+        // Keep the child placed even when completely under the bar. Unplacing it can stop
+        // Compose notifying it when the lazy item next moves, leaving a blank heading on return.
+        placeable.placeRelativeWithLayer(0, 0) {
+            clip = top > 0f
+            shape = if (clip) HomeControlClip(top) else RectangleShape
+            // An empty outline alone does not suppress drawing on every graphics backend.
+            alpha = if (top >= size.height) 0f else 1f
         }
     }
+}
+
+private data class HomeControlClip(val top: Float) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline =
+        Outline.Rectangle(Rect(0f, top.coerceAtMost(size.height), size.width, size.height))
 }
 
 /** Retain the root's icon contrast without painting a new, hard app-bar strip. */

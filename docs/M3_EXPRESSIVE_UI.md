@@ -36,7 +36,7 @@ precedence over every layout choice.
 
 | Routes | Focus / narrow-to-wide behavior |
 | --- | --- |
-| For You | Daily Picks is the artwork-led hero, with contrasting cover silhouettes and a compact track carousel. Recommended Playlists uses a taller Multi-browse carousel: masks change as cards scroll, with a vertical alternative to see every playlist. The feed and decorative artwork scroll behind the status area; controls stay in the safe region. Recognition remains actionable when signed out. |
+| For You | Daily Picks is the artwork-led hero, with contrasting cover silhouettes and a compact track carousel. Recommended Playlists uses horizontal capsule covers in a Multi-browse carousel and has a vertical alternative to see every playlist. On both rails, captions fit the moving mask and sit over a bottom scrim, not a separate badge. The feed and artwork scroll behind the status area while foreground controls are clipped to the safe region. Recognition remains actionable when signed out. |
 | Search | When the Home pill is visible, switching between Home and Search connects it to the pinned editor with a container transform. Only the pill or an explicit search shortcut requests the keyboard. The editable field itself is laid out at its final bounds; the IME resizes only the scrollable body. |
 | Me | Keep cached identity and level visible, bound the profile wallpaper, and place device shortcuts before playlist groups. |
 | Daily Picks, playlist, album, artist | Give cover art, metadata and primary actions an adaptive header, with a smaller presentation in short windows. The playlist split button keeps Play All primary and opens Download All and Save as Local Playlist where available. |
@@ -56,9 +56,10 @@ Live Activity and the desktop lyric window remain native companions, not alterna
   Home, record the search field's container transform and its return. Check that the editor lands
   once and stays at the same bounds with the IME up or down. The draft, cursor and manual IME
   dismissal should survive resizing; a Home search opens the IME, a plain tab switch does not.
-- With loaded artwork, drag each Home gallery from start to end: confirm peeks change width,
-  readable cards tap through, all items have a non-swipe path, and the artwork scrolls behind
-  status icons without placing actions in the system bar.
+- With loaded artwork, drag each Home gallery from start to end: confirm medium cards retain
+  readable captions on the bottom scrim, peeks change width, cards tap through, and all items
+  have a non-swipe path. Scroll the Daily Picks heading behind the status bar and back; the
+  title and actions must reappear while artwork still scrolls behind the status icons.
 - Use compact portrait, wide, short and narrow split-screen, and (on Android) a fold or hinge.
   Look for cut-off actions and double player entrances. Try light, dark, larger fonts and
   English, Chinese and Japanese. Keep a playlist, queue or editor open through a resize.
