@@ -645,6 +645,7 @@
 
     <!-- ui/screen/HomeScreen.kt -->
     <string name="recommendedPlaylists">おすすめプレイリスト</string>
+    <string name="viewAllRecommendedPlaylists">おすすめプレイリストをすべて表示</string>
     <string name="viewAllDailyPicks">毎日のおすすめの曲をすべて表示</string>
     <string name="openSongRecognition">曲の認識を開く</string>
     <string name="songRecognitionCardHint">3秒録音して、周りで流れている曲を探します</string>

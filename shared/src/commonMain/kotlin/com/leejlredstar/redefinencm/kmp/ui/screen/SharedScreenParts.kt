@@ -1,7 +1,5 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,19 +10,15 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
@@ -34,12 +28,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedListItem
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.carousel.CarouselItemScope
-import androidx.compose.material3.carousel.CarouselState
-import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
-import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -47,26 +36,20 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -80,7 +63,6 @@ import com.leejlredstar.redefinencm.kmp.data.provider.neteaseFeeTag
 import com.leejlredstar.redefinencm.kmp.data.toPlayerMediaInfo
 import com.leejlredstar.redefinencm.kmp.download.DownloadTaskStatus
 import com.leejlredstar.redefinencm.kmp.download.SongDownloadManager
-import com.leejlredstar.redefinencm.kmp.getPlatform
 import com.leejlredstar.redefinencm.kmp.i18n.I18n
 import com.leejlredstar.redefinencm.kmp.i18n.UiText
 import com.leejlredstar.redefinencm.kmp.i18n.compactCount
@@ -89,11 +71,6 @@ import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlaybackSource
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveArtwork
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveCacheHint
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveLoadingState
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
-import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
 import com.leejlredstar.redefinencm.kmp.ui.component.ProviderBadge
 import com.leejlredstar.redefinencm.kmp.ui.component.formatPlaybackDuration
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
@@ -104,7 +81,6 @@ import com.leejlredstar.redefinencm.kmp.util.DownloadedSongsCache
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.LocalLibraryViewModel
-import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 /** Map an API song DTO to the player's [MediaInfo] (placeholder URI resolved at play time). */
@@ -474,281 +450,6 @@ private fun SongDownloadMark(
             tint = statusTint,
             modifier = Modifier.padding(horizontal = 4.dp).size(20.dp),
         )
-    }
-}
-
-@Composable
-fun CarouselItemScope.RecommendSquareCard(
-    picUrl: String,
-    text: String,
-    onAccentColor: ((Color) -> Unit)? = null,
-    subtitle: String? = null,
-    isCurrent: Boolean = false,
-    isPlaying: Boolean = false,
-    onClick: () -> Unit,
-) {
-    // Fully opaque while the tile is near full width, gone by the time it is a sliver.
-    val overlayAlpha = ((expandedFraction - 0.45f) / 0.35f).coerceIn(0f, 1f)
-    val artworkAccent = rememberArtworkAccent(
-        requestKey = picUrl,
-        fallback = MaterialTheme.colorScheme.tertiaryContainer,
-        label = "recommendCardAccent",
-        onAccentColor = onAccentColor,
-    )
-    val extractAccent = artworkAccent.extract
-    val accentPalette = artworkAccent.palette
-    // Shared with the artwork below so pressing the card morphs the cover's silhouette rather
-    // than only rippling the container.
-    val interactionSource = remember { MutableInteractionSource() }
-    // One silhouette, not three. maskClip applies the carousel's own mask, which is the shape
-    // that animates as the tile squeezes, so the Surface and the artwork draw square. Rounding
-    // the container at `large` and the cover at `extraLarge` inside it as well would stack two
-    // mismatched arcs, both clipped again by the squeeze, into a doubled outline.
-    Surface(
-        onClick = onClick,
-        modifier = Modifier
-            .padding(vertical = 8.dp)
-            .fillMaxWidth()
-            .height(CarouselItemWidth)
-            .maskClip(MaterialTheme.shapes.large)
-            .semantics(mergeDescendants = true) {
-                if (text == "私人雷达") contentDescription = text
-            },
-        shape = RectangleShape,
-        color = accentPalette.quietContainer,
-        interactionSource = interactionSource,
-    ) {
-        Box(Modifier.fillMaxSize()) {
-            // No press morph here: a MaterialShapes silhouette inside a masked, squeezing tile
-            // would be a second animating outline. The morph stays on SongRow, which has no mask.
-            ExpressiveArtwork(
-                model = picUrl,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                shape = RectangleShape,
-                containerColor = accentPalette.quietContainer,
-                contentColor = accentPalette.onQuietContainer,
-                contentScale = ContentScale.Crop,
-                onImageLoaded = extractAccent,
-            )
-            // 原版特例：私人雷达封面自带文字，不叠加遮罩与标题
-            if (text != "私人雷达") {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            // Fractional stops, not a pixel startY: `startY = 120f` is 120 raw
-                            // pixels, which is a third of the way down a 168dp tile on a 3.5x
-                            // phone but almost the whole tile on a 1x one, so the scrim would
-                            // cover a different amount of artwork on every density.
-                            //
-                            // Every stop darkens, and none of them is the artwork's accent.
-                            // `accent` is a *light* colour in a dark scheme (tone 0.78), and the
-                            // title's own line sits inside the middle band, so an accent middle
-                            // stop would lighten a pale cover exactly where the white text has
-                            // to be read.
-                            brush = Brush.verticalGradient(
-                                0.32f to Color.Transparent,
-                                0.62f to Color.Black.copy(alpha = 0.42f * overlayAlpha),
-                                1f to Color.Black.copy(alpha = 0.92f * overlayAlpha),
-                            ),
-                        ),
-                )
-                // 16dp keeps the last line clear of the rounded corner's inward curve. The
-                // alpha is what keeps a squeezed item legible: the carousel mask would otherwise
-                // slice the title mid-character, so it is faded out entirely before the item
-                // narrows enough for that to show.
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(horizontal = 16.dp, vertical = 14.dp)
-                        .fillMaxWidth()
-                        .graphicsLayer { alpha = overlayAlpha },
-                ) {
-                    Text(
-                        text = text,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color.White,
-                        fontWeight = FontWeight.ExtraBold,
-                        maxLines = if (subtitle.isNullOrBlank()) 2 else 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (!subtitle.isNullOrBlank()) {
-                        Text(
-                            text = subtitle,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.82f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
-            // The song that is playing, marked the way a SongRow marks it.
-            if (isCurrent) {
-                Surface(
-                    shape = CircleShape,
-                    color = accentPalette.container,
-                    contentColor = accentPalette.onContainer,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(12.dp)
-                        .graphicsLayer { alpha = overlayAlpha },
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            imageVector = if (isPlaying) AppIcons.GraphicEq else AppIcons.Pause,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = if (isPlaying) strings.playing else strings.paused,
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun <T> SectionWithCarousel(
-    title: String,
-    items: List<T>,
-    isLoading: Boolean = false,
-    isFromCache: Boolean = false,
-    isRefreshing: Boolean = false,
-    errorMessage: String? = null,
-    onRetry: (() -> Unit)? = null,
-    key: ((T) -> Any)? = null,
-    supportingText: String? = null,
-    action: (@Composable () -> Unit)? = null,
-    onOpenAll: (() -> Unit)? = null,
-    onOpenAllLabel: String? = null,
-    itemContent: @Composable CarouselItemScope.(T) -> Unit,
-) {
-    val carouselState = rememberCarouselState { items.size }
-    val carouselShown = errorMessage == null && !isLoading && items.isNotEmpty()
-    Column(modifier = Modifier.padding(top = 20.dp)) {
-        ExpressiveSectionTitle(
-            text = title,
-            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
-            supportingText = supportingText,
-            onClick = onOpenAll?.takeIf { carouselShown },
-            onClickLabel = onOpenAllLabel,
-            action = if (action == null && !(showCarouselPager && carouselShown)) {
-                null
-            } else {
-                {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        action?.invoke()
-                        // A mouse wheel only scrolls vertically, so pointer-first platforms get
-                        // paging buttons beside the title; touch keeps the swipe alone.
-                        if (showCarouselPager && carouselShown) {
-                            CarouselPager(state = carouselState)
-                        }
-                    }
-                }
-            },
-        )
-        if (isFromCache) {
-            ExpressiveCacheHint(
-                isRefreshing = isRefreshing,
-                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
-            )
-        }
-        if (errorMessage != null) {
-            ExpressiveStatePanel(
-                title = strings.sectionLoadFailed(title),
-                message = errorMessage,
-                icon = AppIcons.Refresh,
-                tone = ExpressiveStateTone.Error,
-                actionLabel = onRetry?.let { strings.retry },
-                onAction = onRetry,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        } else if (isLoading) {
-            ExpressiveLoadingState(
-                label = strings.sectionLoading(title),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        } else if (items.isEmpty()) {
-            ExpressiveStatePanel(
-                title = strings.sectionEmpty(title),
-                message = if (onRetry != null) strings.sectionEmptyTapReload else strings.sectionEmptyCheckBackLater,
-                icon = AppIcons.QueueMusic,
-                actionLabel = onRetry?.let { strings.reload },
-                onAction = onRetry,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        } else {
-            // Multi-browse carousel: items shrink toward the trailing edge and grow back as they
-            // scroll in, which is the row's signature motion.
-            //
-            // The mask that produces that motion also clips whatever the item draws, so a title
-            // laid over the artwork gets sliced mid-character once an item narrows. Items are
-            // therefore handed how expanded they currently are, and fade their own overlay out
-            // before the mask can cut it (see RecommendSquareCard).
-            HorizontalMultiBrowseCarousel(
-                state = carouselState,
-                preferredItemWidth = CarouselItemWidth,
-                itemSpacing = 12.dp,
-                contentPadding = PaddingValues(horizontal = 4.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) { index ->
-                itemContent(items[index])
-            }
-        }
-    }
-}
-
-/**
- * How expanded a carousel item currently is: `1f` at full width, `0f` fully squeezed.
- *
- * Items animate continuously between [CarouselItemDrawInfo.minSize] and
- * [CarouselItemDrawInfo.maxSize] as the row scrolls, so this is read every frame rather than
- * derived once from the index.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-private val CarouselItemScope.expandedFraction: Float
-    get() {
-        val info = carouselItemDrawInfo
-        val range = info.maxSize - info.minSize
-        return if (range <= 0f) 1f else ((info.size - info.minSize) / range).coerceIn(0f, 1f)
-    }
-
-/** Home row card size; fixed so every tile is uniform and the overlaid title has stable room. */
-private val CarouselItemWidth = 168.dp
-
-private val showCarouselPager: Boolean by lazy { !getPlatform().isMobile }
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CarouselPager(
-    state: CarouselState,
-    modifier: Modifier = Modifier,
-) {
-    val scope = rememberCoroutineScope()
-    val stepPx = with(LocalDensity.current) { (CarouselItemWidth * 2).toPx() }
-    Row(modifier = modifier, horizontalArrangement = Arrangement.End) {
-        IconButton(
-            onClick = { scope.launch { state.animateScrollBy(-stepPx) } },
-            enabled = state.canScrollBackward,
-        ) {
-            Icon(AppIcons.KeyboardArrowLeft, contentDescription = strings.carouselScrollBack)
-        }
-        IconButton(
-            onClick = { scope.launch { state.animateScrollBy(stepPx) } },
-            enabled = state.canScrollForward,
-        ) {
-            Icon(AppIcons.KeyboardArrowRight, contentDescription = strings.carouselScrollForward)
-        }
     }
 }
 

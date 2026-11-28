@@ -645,6 +645,7 @@
 
     <!-- ui/screen/HomeScreen.kt -->
     <string name="recommendedPlaylists">推荐歌单</string>
+    <string name="viewAllRecommendedPlaylists">查看全部推荐歌单</string>
     <string name="viewAllDailyPicks">查看每日推荐的全部歌曲</string>
     <string name="openSongRecognition">打开听歌识曲</string>
     <string name="songRecognitionCardHint">录制三秒，从周围声音里找出这首歌</string>

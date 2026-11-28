@@ -27,6 +27,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -99,6 +100,7 @@ import androidx.compose.material3.WideNavigationRailValue
 import androidx.compose.material3.rememberWideNavigationRailState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -106,6 +108,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
@@ -146,6 +149,9 @@ import com.leejlredstar.redefinencm.kmp.ui.adaptive.rememberAndroidNavigationMot
 import com.leejlredstar.redefinencm.kmp.ui.component.LocalAndroidReflowWindow
 import com.leejlredstar.redefinencm.kmp.ui.component.ReflowEntry
 import com.leejlredstar.redefinencm.kmp.ui.component.ReflowProgress
+import com.leejlredstar.redefinencm.kmp.ui.component.SearchContainerTransition
+import com.leejlredstar.redefinencm.kmp.ui.component.SearchContainerViewport
+import com.leejlredstar.redefinencm.kmp.ui.component.SearchEndpoint
 import com.leejlredstar.redefinencm.kmp.ui.component.reflowPlacement
 import com.leejlredstar.redefinencm.kmp.ui.component.playbackSafeContent
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberNowPlayingUiState
@@ -341,6 +347,14 @@ private sealed interface RootDest {
     data class Pushed(val dest: PushedDest, override val stackDepth: Int) : RootDest
 }
 
+private fun TabDest.searchEndpoint(): SearchEndpoint? = when (this) {
+    TabDest.Home -> SearchEndpoint.Home
+    TabDest.Search -> SearchEndpoint.Editor
+    TabDest.My -> null
+}
+
+private fun RootDest.searchEndpoint(): SearchEndpoint? = (this as? RootDest.Tab)?.tab?.searchEndpoint()
+
 /**
  * Root composable shared across Android / iOS / Desktop / Web. 3-tab nav (Recommend / My /
  * Settings) with a push stack for Login, FullLyric, Downloads, and PlaylistDetail. 窄屏用底部 NavigationBar，
@@ -491,6 +505,12 @@ private fun AppContent(
             // search left open) while it is off screen, so switching tabs returns to where the
             // user was instead of to the top. A popped page's state is dropped with it.
             val saveableStateHolder = rememberSaveableStateHolder()
+            val searchContainer = remember { SearchContainerTransition() }
+            var searchFocusRequest by rememberSaveable { mutableStateOf(0) }
+            fun abandonSearchEntry() {
+                searchFocusRequest = 0
+                searchContainer.cancel()
+            }
             fun forgetPushed(fromDepth: Int) {
                 for (depth in pushedStack.size downTo fromDepth) {
                     saveableStateHolder.removeState(pushedStateKey(pushedStack[depth - 1], depth))
@@ -499,7 +519,10 @@ private fun AppContent(
             // A second tap that lands while the first page is still sliding in would stack the
             // same page twice, and Back would have to be pressed twice to leave it.
             fun push(dest: PushedDest) {
-                if (pushedStack.lastOrNull() != dest) pushedStack.add(dest)
+                if (pushedStack.lastOrNull() != dest) {
+                    abandonSearchEntry()
+                    pushedStack.add(dest)
+                }
             }
             // Null until the local account's stored switch has been read. Only a value read from
             // settings may drop pages; the default would empty a restored stack at every launch.
@@ -529,6 +552,7 @@ private fun AppContent(
                 pushedStack.clear()
             }
             fun focusOrPushTracked(dest: PushedDest) {
+                abandonSearchEntry()
                 val existingIndex = pushedStack.lastIndexOf(dest)
                 if (existingIndex >= 0 && existingIndex < pushedStack.lastIndex) {
                     forgetPushed(fromDepth = existingIndex + 2)
@@ -563,17 +587,27 @@ private fun AppContent(
                 }
             }
             fun selectTab(tab: TabDest) {
+                // An explicit focus request belongs to the visit that raised it, not to a
+                // later direct tap on the Search tab after an interruption.
+                if (tab != currentTab || pushedStack.isNotEmpty()) {
+                    searchFocusRequest = 0
+                    searchContainer.switch(
+                        from = currentTab.searchEndpoint().takeIf { pushedStack.isEmpty() },
+                        to = tab.searchEndpoint(),
+                        enabled = !reducedMotion,
+                    )
+                }
                 clearPushed()
                 currentTab = tab
             }
-            var searchFocusRequest by rememberSaveable { mutableStateOf(0) }
             fun openSearch() {
                 selectTab(TabDest.Search)
                 searchFocusRequest += 1
             }
+            val openSearchShortcut by rememberUpdatedState(::openSearch)
             LaunchedEffect(Unit) {
                 AppNavigationRequests.openSearchRequestId.collect { requestId ->
-                    if (AppNavigationRequests.consumeOpenSearchRequest(requestId)) openSearch()
+                    if (AppNavigationRequests.consumeOpenSearchRequest(requestId)) openSearchShortcut()
                 }
             }
             // Song menus and the player ask for artist and album pages from wherever they are.
@@ -694,6 +728,8 @@ private fun AppContent(
             val activeDestination = pushedStack.lastOrNull()
                 ?.let { RootDest.Pushed(it, pushedStack.size) }
                 ?: RootDest.Tab(currentTab)
+            val activeSearchEndpoint = activeDestination.searchEndpoint()
+            val searchFlight = searchContainer.activeFlight(activeSearchEndpoint).takeUnless { reducedMotion }
             val playerActive = isPlayerSurface(activeDestination)
             LaunchedEffect(playerActive) {
                 (lyricSurface as? PageOverlayLyricSurface)?.setPlayerPageShown(playerActive)
@@ -961,12 +997,20 @@ private fun AppContent(
                             } else Modifier
                             Box(Modifier.weight(1f).fillMaxSize().then(railStartInsets)) {
                             Column(Modifier.fillMaxSize()) {
+                              SearchContainerViewport(
+                                transition = searchContainer,
+                                active = searchFlight,
+                                safeTopInWindow = WindowInsets.statusBars.getTop(LocalDensity.current)
+                                    .coerceAtLeast(browseObstructions?.getTop(LocalDensity.current) ?: 0),
+                                modifier = Modifier.weight(1f),
+                              ) {
                                 AppPageTransition(
                                     destination = rootDest,
-                                    modifier = Modifier.weight(1f),
                                     motion = motion,
                                     reducedMotion = reducedMotion,
                                     rtl = rtl,
+                                    searchContainer = searchContainer,
+                                    searchEndpoint = activeSearchEndpoint,
                                 ) { target ->
                                     saveableStateHolder.SaveableStateProvider(target.stateKey()) {
                                     CompositionLocalProvider(
@@ -1055,17 +1099,21 @@ private fun AppContent(
                                             TabDest.Home -> HomeScreen(
                                                 scaffoldPadding = screenPadding,
                                                 onOpenPlaylist = { push(PushedDest.Playlist(it)) },
-                                                onOpenMy = { currentTab = TabDest.My },
+                                                onOpenMy = { selectTab(TabDest.My) },
                                                 onOpenRecognition = { push(PushedDest.SongRecognition) },
                                                 onOpenDailySongs = { push(PushedDest.DailySongs) },
-                                                onOpenSearch = ::openSearch,
+                                                onOpenSearch = {
+                                                    if (pushedStack.isEmpty() && currentTab == TabDest.Home) openSearch()
+                                                },
                                                 onOpenLogin = { push(PushedDest.Login()) },
+                                                searchEntryModifier = searchContainer.entryModifier(SearchEndpoint.Home, searchFlight),
                                             )
                                             TabDest.Search -> SearchScreen(
                                                 bottomPadding = screenPadding.calculateBottomPadding() + 16.dp,
-                                                focusRequest = searchFocusRequest,
+                                                focusRequest = if (searchFlight == null) searchFocusRequest else 0,
                                                 onFocusRequestHandled = { searchFocusRequest = 0 },
                                                 isActive = target == activeDestination,
+                                                searchEntryModifier = searchContainer.entryModifier(SearchEndpoint.Editor, searchFlight),
                                             )
                                             TabDest.My -> UserPlaylistScreen(
                                                 scaffoldPadding = screenPadding,
@@ -1080,6 +1128,7 @@ private fun AppContent(
                                     }
                                     }
                                 }
+                              }
                                 if (showDesktopBar) {
                                     PlaybackPresentationTheme {
                                         DesktopPlayerBar(
@@ -1498,20 +1547,26 @@ private fun DesktopTransportSheetsHost(
 @Composable
 private fun AppPageTransition(
     destination: RootDest,
-    modifier: Modifier,
     motion: MotionScheme,
     reducedMotion: Boolean,
     rtl: Boolean,
+    searchContainer: SearchContainerTransition,
+    searchEndpoint: SearchEndpoint?,
     content: @Composable (RootDest) -> Unit,
 ) {
-    // Home's shortcut and Search's editor stay in their own panes. Only the pages transition.
-    AnimatedContent(
-        targetState = destination,
+    val pages = updateTransition(destination, label = "AppPageTransition")
+    val settled = pages.currentState == destination && !pages.isRunning
+    // Don't pick up an endpoint that is still sliding onscreen from another route.
+    SideEffect {
+        searchContainer.settledEndpoint = searchEndpoint.takeIf { settled }
+    }
+    pages.AnimatedContent(
         transitionSpec = { pageTransition(initialState, targetState, motion, reducedMotion, rtl) },
-        modifier = modifier.fillMaxSize().clipToBounds(),
-        label = "AppPageTransition",
+        modifier = Modifier.fillMaxSize().clipToBounds(),
     ) { target ->
-        content(target)
+        val endpoint = target.searchEndpoint()
+        if (endpoint == null) content(target)
+        else searchContainer.Page(endpoint) { content(target) }
     }
 }
 

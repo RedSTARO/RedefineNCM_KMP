@@ -1,6 +1,6 @@
 package com.leejlredstar.redefinencm.kmp.ui.screen
 
-import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.exclude
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -21,11 +20,9 @@ import androidx.compose.foundation.layout.onConsumedWindowInsetsChanged
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.GenericShape
@@ -34,30 +31,30 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.HorizontalRuler
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -66,12 +63,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.leejlredstar.redefinencm.kmp.data.api.dto.RecommendResourceRecommend
 import com.leejlredstar.redefinencm.kmp.data.api.dto.SongDetailSongs
-import com.leejlredstar.redefinencm.kmp.getPlatform
 import com.leejlredstar.redefinencm.kmp.i18n.UiText
 import com.leejlredstar.redefinencm.kmp.i18n.strings
 import com.leejlredstar.redefinencm.kmp.i18n.text
+import com.leejlredstar.redefinencm.kmp.player.MediaInfo
 import com.leejlredstar.redefinencm.kmp.player.PlatformPlayer
 import com.leejlredstar.redefinencm.kmp.player.PlaybackSource
 import com.leejlredstar.redefinencm.kmp.ui.adaptive.LocalCompactAppBar
@@ -87,14 +85,15 @@ import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveSectionTitle
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
 import com.leejlredstar.redefinencm.kmp.ui.component.LocalExpressivePageGutter
-import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
+import com.leejlredstar.redefinencm.kmp.ui.component.rememberMorphShape
+import com.leejlredstar.redefinencm.kmp.ui.component.rememberPressMorphProgress
 import com.leejlredstar.redefinencm.kmp.ui.icon.AppIcons
+import com.leejlredstar.redefinencm.kmp.ui.theme.ArtworkAccent
 import com.leejlredstar.redefinencm.kmp.ui.theme.ContentAccentPalette
 import com.leejlredstar.redefinencm.kmp.ui.theme.rememberArtworkAccent
 import com.leejlredstar.redefinencm.kmp.util.PlatformSettings
 import com.leejlredstar.redefinencm.kmp.util.SettingKeys
 import com.leejlredstar.redefinencm.kmp.viewmodel.MainViewModel
-import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 internal fun replaceQueueWithDailyRecommendations(
@@ -118,6 +117,7 @@ fun HomeScreen(
     viewModel: MainViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
     settings: PlatformSettings = koinInject(),
+    searchEntryModifier: Modifier = Modifier,
 ) {
     val recommend by viewModel.recommendSongs.collectAsState()
     val recommendResource by viewModel.recommendResource.collectAsState()
@@ -133,7 +133,6 @@ fun HomeScreen(
     val signedOut = uid == 0L && !accountLoading && accountLoadError == null
     val dailySongs = recommend?.data?.dailySongs.orEmpty()
     val dailyQueue = remember(dailySongs) { dailySongs.map { it.toMediaInfo() } }
-    val dailyPreview = remember(dailySongs) { dailySongs.take(DailyPreviewCount) }
     val playWholeList = remember { settings.getBoolean(SettingKeys.REPLACE_PLAYLIST, SettingKeys.REPLACE_PLAYLIST_DEFAULT) }
     val resources = recommendResource?.recommend.orEmpty()
     val listState = rememberLazyListState()
@@ -184,7 +183,8 @@ fun HomeScreen(
                     }
                     HomeSearchEntry(
                         onClick = onOpenSearch,
-                        modifier = Modifier.widthIn(max = SearchEntryMaxWidth).fillMaxWidth(),
+                        modifier = Modifier.widthIn(max = SearchEntryMaxWidth).fillMaxWidth()
+                            .then(searchEntryModifier),
                     )
                 }
             }
@@ -214,7 +214,9 @@ fun HomeScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             DailyPicksFeature(
-                                songs = dailySongs,
+                                queue = dailyQueue,
+                                player = player,
+                                onTrack = { index -> playFromList(player, dailyQueue, index, playWholeList, source = DailySource) },
                                 onPlay = { replaceQueueWithDailyRecommendations(player, dailySongs) },
                                 onBrowse = onOpenDailySongs,
                             )
@@ -245,22 +247,6 @@ fun HomeScreen(
                         )
                     }
                 }
-                itemsIndexed(dailyPreview, key = { index, song -> "preview-$index-${song.id}" }) { index, song ->
-                    Box(Modifier.homeControl()) {
-                        SongRow(
-                            index = index,
-                            title = song.name,
-                            artist = song.ar.joinToString(" / ") { it.name },
-                            artworkUri = song.al.picUrl,
-                            shape = connectedListItemShape(index, dailyPreview.size),
-                            mediaId = dailyQueue[index].id,
-                            album = song.al.name,
-                            durationMs = song.dt,
-                            onClick = { playFromList(player, dailyQueue, index, playWholeList, source = DailySource) },
-                        )
-                    }
-                }
-
                 item(key = "recommended-playlists") {
                     HomePlaylists(
                         items = resources,
@@ -270,7 +256,8 @@ fun HomeScreen(
                         errorMessage = (resourceLoadError ?: accountLoadError)?.text?.takeIf { resources.isEmpty() },
                         onRetry = viewModel::retryAccountData,
                         onOpenPlaylist = onOpenPlaylist,
-                        modifier = sectionInset.padding(top = 20.dp),
+                        gutter = gutter,
+                        modifier = Modifier.padding(top = 20.dp),
                     )
                 }
                 item(key = "music-tools") {
@@ -286,15 +273,21 @@ fun HomeScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun DailyPicksFeature(
-    songs: List<SongDetailSongs>,
+    queue: List<MediaInfo>,
+    player: PlatformPlayer,
+    onTrack: (Int) -> Unit,
     onPlay: () -> Unit,
     onBrowse: () -> Unit,
 ) {
-    val leadCover = remember(songs) { songs.firstOrNull { it.al.picUrl.isNotBlank() }?.al?.picUrl }
-    val artworkAccent = rememberArtworkAccent(requestKey = leadCover, label = "dailyPicksAccent")
+    val covers = remember(queue) { queue.asSequence().map { it.artworkUri }.filter(String::isNotBlank).distinct().take(3).toList() }
+    val artworkAccent = rememberArtworkAccent(requestKey = covers.firstOrNull(), label = "dailyPicksAccent")
     val palette = artworkAccent.palette
+    val playInteraction = remember { MutableInteractionSource() }
+    val currentMedia by player.currentMedia.collectAsState()
+    val playing by player.isPlaying.collectAsState()
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -304,51 +297,110 @@ private fun DailyPicksFeature(
     ) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val wide = maxWidth >= DailyFeatureWideWidth
-            val showCover = maxWidth >= DailyArtworkMinWidth
             val inset = if (wide) 24.dp else 16.dp
-            // Use pane width, not the viewport left over above the keyboard. The cover serves as
-            // the one visual focus; the bounded size leaves room for translated labels to wrap.
-            val coverSize = ((maxWidth - inset * 2) * 0.32f).coerceIn(0.dp, if (wide) 152.dp else 96.dp)
-            val cover: @Composable () -> Unit = {
-                ExpressiveArtwork(
-                    model = leadCover,
-                    contentDescription = null,
-                    modifier = Modifier.size(coverSize),
-                    shape = CircleShape,
-                    containerColor = palette.quietContainer,
-                    contentColor = palette.onQuietContainer,
-                    onImageLoaded = artworkAccent.extract,
+            val innerWidth = (maxWidth - inset * 2).coerceAtLeast(0.dp)
+            val fontScale = LocalDensity.current.fontScale
+            val sideArt = innerWidth >= 248.dp * fontScale.coerceAtLeast(1f)
+            // The artwork grows, not the text measure. Small panes and large type put the art on
+            // its own line rather than leaving the title a few characters of space.
+            val artworkWidth = when {
+                wide && sideArt -> (innerWidth * 0.42f).coerceAtMost(272.dp)
+                sideArt -> (innerWidth * 0.46f).coerceAtMost(208.dp)
+                else -> innerWidth.coerceAtMost(176.dp)
+            }
+            HomeGallery(
+                count = queue.size,
+                style = HomeGalleryStyle.Track,
+                gutter = inset,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                header = { pager ->
+                    Column(Modifier.fillMaxWidth().padding(start = inset, top = inset, end = inset)) {
+                        if (sideArt) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(if (wide) 24.dp else 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    DailyPicksTitle(queue.size, palette, wide, Modifier.homeControl())
+                                    if (wide) DailyPicksActions(palette, onPlay, onBrowse, playInteraction, Modifier.homeControl())
+                                }
+                                DailyPicksArtwork(covers, artworkWidth, artworkAccent, playInteraction)
+                            }
+                        } else {
+                            DailyPicksTitle(queue.size, palette, wide, Modifier.homeControl())
+                            if (artworkWidth >= 48.dp) {
+                                Box(Modifier.align(Alignment.End).padding(top = 8.dp)) {
+                                    DailyPicksArtwork(covers, artworkWidth, artworkAccent, playInteraction)
+                                }
+                            }
+                        }
+                        if (!wide || !sideArt) {
+                            DailyPicksActions(palette, onPlay, onBrowse, playInteraction, Modifier.padding(top = 8.dp).homeControl())
+                        }
+                        if (pager != null) Box(Modifier.align(Alignment.End).homeControl()) { pager() }
+                    }
+                },
+            ) { index, mask ->
+                val track = queue[index]
+                HomeGalleryCard(
+                    index = index,
+                    itemKey = track.id,
+                    mask = mask,
+                    style = HomeGalleryStyle.Track,
+                    cover = track.artworkUri,
+                    title = track.title.ifBlank { strings.unknownSong },
+                    subtitle = track.artist.ifBlank { strings.unknownArtist },
+                    isCurrent = currentMedia?.id == track.id,
+                    isPlaying = playing,
+                    onClick = { onTrack(index) },
                 )
             }
-            if (wide) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(inset),
-                    horizontalArrangement = Arrangement.spacedBy(24.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(
-                        Modifier.weight(1f).homeControl(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        DailyPicksTitle(songs.size, palette, wide = true)
-                        DailyPicksActions(palette, onPlay, onBrowse)
-                    }
-                    cover()
-                }
-            } else {
-                Column(Modifier.fillMaxWidth().padding(inset), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        DailyPicksTitle(
-                            songs.size, palette, wide = false, modifier = Modifier.weight(1f).homeControl(),
-                        )
-                        if (showCover) cover()
-                    }
-                    DailyPicksActions(palette, onPlay, onBrowse, modifier = Modifier.homeControl())
-                }
-            }
+        }
+    }
+}
+
+/** The principal cover leads; two optional, offset shapes give the artwork cadence, not a grid. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun DailyPicksArtwork(
+    covers: List<String>,
+    width: Dp,
+    accent: ArtworkAccent,
+    playInteraction: MutableInteractionSource,
+) {
+    val press by rememberPressMorphProgress(playInteraction)
+    val leadShape = rememberMorphShape(MaterialShapes.Slanted, MaterialShapes.Square, press)
+    val leadSize = if (covers.size <= 1) width.coerceAtMost(196.dp) else width * 0.76f
+    val palette = accent.palette
+    Box(Modifier.size(width, leadSize + if (covers.size > 2) width * 0.06f else 0.dp)) {
+        ExpressiveArtwork(
+            model = covers.firstOrNull(),
+            contentDescription = null,
+            modifier = Modifier.align(Alignment.CenterStart).size(leadSize),
+            shape = leadShape,
+            containerColor = palette.quietContainer,
+            contentColor = palette.onQuietContainer,
+            onImageLoaded = accent.extract,
+        )
+        covers.getOrNull(1)?.let { cover ->
+            ExpressiveArtwork(
+                model = cover,
+                contentDescription = null,
+                modifier = Modifier.align(Alignment.TopEnd).size(width * 0.31f, leadSize * 0.55f),
+                shape = MaterialShapes.Arch.toShape(),
+                containerColor = palette.quietContainer,
+                contentColor = palette.onQuietContainer,
+            )
+        }
+        covers.getOrNull(2)?.let { cover ->
+            ExpressiveArtwork(
+                model = cover,
+                contentDescription = null,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = width * 0.05f).size(width * 0.36f),
+                shape = CircleShape,
+                containerColor = palette.quietContainer,
+                contentColor = palette.onQuietContainer,
+            )
         }
     }
 }
@@ -377,6 +429,7 @@ private fun DailyPicksActions(
     palette: ContentAccentPalette,
     onPlay: () -> Unit,
     onBrowse: () -> Unit,
+    playInteraction: MutableInteractionSource,
     modifier: Modifier = Modifier,
 ) {
     FlowRow(
@@ -387,6 +440,7 @@ private fun DailyPicksActions(
     ) {
         Button(
             onClick = onPlay,
+            interactionSource = playInteraction,
             shapes = ButtonDefaults.shapes(),
             contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
             colors = ButtonDefaults.buttonColors(containerColor = palette.accent, contentColor = palette.onAccent),
@@ -415,100 +469,125 @@ private fun HomePlaylists(
     errorMessage: String?,
     onRetry: () -> Unit,
     onOpenPlaylist: (Long) -> Unit,
+    gutter: Dp,
     modifier: Modifier = Modifier,
 ) {
     val title = strings.recommendedPlaylists
-    val listState = rememberLazyListState()
-    val pager = !getPlatform().isMobile && items.isNotEmpty()
-    val scope = rememberCoroutineScope()
-    val step = with(LocalDensity.current) { (RecommendedPlaylistWidth + 8.dp).toPx() }
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        ExpressiveSectionTitle(
-            text = title,
-            modifier = Modifier.homeControl(),
-            action = if (pager) {
-                {
-                    Row {
-                        IconButton(
-                            onClick = { scope.launch { listState.animateScrollBy(-step) } },
-                            enabled = listState.canScrollBackward,
-                        ) { Icon(AppIcons.KeyboardArrowLeft, contentDescription = strings.carouselScrollBack) }
-                        IconButton(
-                            onClick = { scope.launch { listState.animateScrollBy(step) } },
-                            enabled = listState.canScrollForward,
-                        ) { Icon(AppIcons.KeyboardArrowRight, contentDescription = strings.carouselScrollForward) }
-                    }
+    val showItems = errorMessage == null && !isLoading && items.isNotEmpty()
+    var showAll by rememberSaveable { mutableStateOf(false) }
+    val foreground = Modifier.padding(horizontal = gutter).homeControl()
+    HomeGallery(
+        count = if (showItems) items.size else 0,
+        style = HomeGalleryStyle.Playlist,
+        gutter = gutter,
+        modifier = modifier,
+        header = { pager ->
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ExpressiveSectionTitle(text = title, modifier = foreground, action = pager)
+                if (isFromCache) {
+                    ExpressiveCacheHint(isRefreshing = isRefreshing, modifier = foreground)
                 }
-            } else null,
-        )
-        if (isFromCache) {
-            ExpressiveCacheHint(isRefreshing = isRefreshing, modifier = Modifier.homeControl())
-        }
-        when {
-            errorMessage != null -> ExpressiveStatePanel(
-                title = strings.sectionLoadFailed(title),
-                message = errorMessage,
-                icon = AppIcons.Refresh,
-                tone = ExpressiveStateTone.Error,
-                actionLabel = strings.retry,
-                onAction = onRetry,
-                modifier = Modifier.homeControl(),
-            )
-            isLoading -> ExpressiveLoadingState(label = strings.sectionLoading(title), modifier = Modifier.homeControl())
-            items.isEmpty() -> ExpressiveStatePanel(
-                title = strings.sectionEmpty(title),
-                message = strings.sectionEmptyTapReload,
-                icon = AppIcons.QueueMusic,
-                actionLabel = strings.reload,
-                onAction = onRetry,
-                modifier = Modifier.homeControl(),
-            )
-            else -> BoxWithConstraints(Modifier.fillMaxWidth()) {
-                val itemWidth = minOf(maxWidth, RecommendedPlaylistWidth)
-                LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    itemsIndexed(items, key = { index, item -> "$index-${item.id}" }) { _, item ->
-                        HomePlaylistCard(item, Modifier.width(itemWidth)) { onOpenPlaylist(item.id) }
-                    }
+                when {
+                    errorMessage != null -> ExpressiveStatePanel(
+                        title = strings.sectionLoadFailed(title),
+                        message = errorMessage,
+                        icon = AppIcons.Refresh,
+                        tone = ExpressiveStateTone.Error,
+                        actionLabel = strings.retry,
+                        onAction = onRetry,
+                        modifier = foreground,
+                    )
+                    isLoading -> ExpressiveLoadingState(label = strings.sectionLoading(title), modifier = foreground)
+                    items.isEmpty() -> ExpressiveStatePanel(
+                        title = strings.sectionEmpty(title),
+                        message = strings.sectionEmptyTapReload,
+                        icon = AppIcons.QueueMusic,
+                        actionLabel = strings.reload,
+                        onAction = onRetry,
+                        modifier = foreground,
+                    )
                 }
             }
+        },
+    ) { index, mask ->
+        val item = items[index]
+        HomeGalleryCard(
+            index = index,
+            itemKey = item.id.toString(),
+            mask = mask,
+            style = HomeGalleryStyle.Playlist,
+            cover = item.picUrl,
+            title = item.name.ifBlank { strings.untitledPlaylist },
+            onClick = { onOpenPlaylist(item.id) },
+        )
+    }
+    if (showItems) {
+        TextButton(onClick = { showAll = true }, modifier = foreground) {
+            Text(strings.viewAllRecommendedPlaylists)
+            Icon(AppIcons.KeyboardArrowRight, contentDescription = null)
         }
+    }
+    if (showItems && showAll) {
+        RecommendedPlaylistsDialog(
+            items = items,
+            onDismiss = { showAll = false },
+            onSelect = { id ->
+                showAll = false
+                onOpenPlaylist(id)
+            },
+        )
     }
 }
 
+/** A vertical equivalent of the gallery without a new navigation destination or duplicate data. */
 @Composable
-private fun HomePlaylistCard(item: RecommendResourceRecommend, modifier: Modifier, onClick: () -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    val accent = rememberArtworkAccent(
-        requestKey = item.picUrl,
-        fallback = scheme.tertiaryContainer,
-        label = "recommendCardAccent",
-    )
-    val palette = accent.palette
-    // The cover remains decorative. Keep the linked text and its touch target in the safe area,
-    // using a small cover next to a separate label rather than a title over a square tile.
-    Surface(
-        onClick = onClick,
-        modifier = modifier.homeControl(),
-        shape = MaterialTheme.shapes.large,
-        color = palette.quietContainer,
-        contentColor = palette.onQuietContainer,
-    ) {
-        Row(
-            modifier = Modifier.heightIn(min = 72.dp).padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+private fun RecommendedPlaylistsDialog(
+    items: List<RecommendResourceRecommend>,
+    onDismiss: () -> Unit,
+    onSelect: (Long) -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
         ) {
-            ExpressiveArtwork(
-                model = item.picUrl,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                shape = CircleShape,
-                containerColor = palette.container,
-                contentColor = palette.onContainer,
-                placeholderIcon = AppIcons.QueueMusic,
-                onImageLoaded = accent.extract,
-            )
-            Text(item.name, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+                ExpressiveSectionTitle(
+                    text = strings.recommendedPlaylists,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+                LazyColumn(
+                    modifier = Modifier.weight(1f, fill = false),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    items(items) { item ->
+                        Surface(
+                            onClick = { onSelect(item.id) },
+                            shape = MaterialTheme.shapes.medium,
+                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                            modifier = Modifier.fillMaxWidth().semantics { role = Role.Button },
+                        ) {
+                            Row(
+                                Modifier.heightIn(min = 56.dp).padding(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                ExpressiveArtwork(
+                                    model = item.picUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(40.dp),
+                                    placeholderIcon = AppIcons.QueueMusic,
+                                )
+                                Text(item.name.ifBlank { strings.untitledPlaylist }, style = MaterialTheme.typography.titleSmall)
+                            }
+                        }
+                    }
+                }
+                TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End).padding(horizontal = 16.dp)) {
+                    Text(strings.close)
+                }
+            }
         }
     }
 }
@@ -603,10 +682,15 @@ private fun Modifier.homeControlBoundary(top: Dp): Modifier = layout { measurabl
     }
 }
 
-private fun Modifier.homeControl(): Modifier = layout { measurable, constraints ->
+internal fun Modifier.homeControl(): Modifier = layout { measurable, constraints ->
     val placeable = measurable.measure(constraints)
     layout(placeable.width, placeable.height) {
-        val top = HomeControlTop.current(0f).coerceIn(0f, placeable.height.toFloat())
+        // Reading the ruler tracks the provider; also track this item's position so a LazyColumn
+        // move (including moving a cached item back on screen) recomputes its local clip.
+        val origin = coordinates?.localToRoot(Offset.Zero)
+        val top = if (origin?.y?.isFinite() == true) {
+            HomeControlTop.current(0f).coerceIn(0f, placeable.height.toFloat())
+        } else 0f
         if (top == 0f) {
             placeable.placeRelative(0, 0)
         } else if (top < placeable.height) {
@@ -639,6 +723,3 @@ private fun Modifier.homeStatusFade(statusTop: Dp, surface: Color): Modifier = d
 internal val DailySource: UiText = UiText { it.dailyPicks }
 internal val SearchEntryMaxWidth = 720.dp
 private val DailyFeatureWideWidth = 600.dp
-private val DailyArtworkMinWidth = 224.dp
-private val RecommendedPlaylistWidth = 240.dp
-private const val DailyPreviewCount = 2

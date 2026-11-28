@@ -675,6 +675,7 @@
 
     <!-- ui/screen/HomeScreen.kt -->
     <string name="recommendedPlaylists">Recommended playlists</string>
+    <string name="viewAllRecommendedPlaylists">View all recommended playlists</string>
     <string name="viewAllDailyPicks">View all songs in Daily picks</string>
     <string name="openSongRecognition">Open song recognition</string>
     <string name="songRecognitionCardHint">Record 3 seconds to find the song playing around you</string>

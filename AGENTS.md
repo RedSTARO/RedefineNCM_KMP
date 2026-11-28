@@ -1373,7 +1373,9 @@ feature gap; platform integrations use target-specific actuals:
 - **Album-art theme color**: `themeColorFromCoilImage()` expect/actual (Android Palette; JVM,
   iOS and Web share the `skiaMain` RGB555 quantizer) wired into MiniNowPlayingBar (with luminance-adaptive content
   color + spring animation), PlaylistDetail hero, and both full-screen AMLL renderers.
-- **Search shared-element transition** (pill → bar) via `SharedTransitionLayout` in HomeScreen.
+- **Search container transform:** Home's search pill connects visually to the anchored Search
+  editor. Animate the shared visual, not the editable field's layout; IME changes only resize
+  the results viewport. A shortcut or a plain tab switch need not have a Home origin.
 - **Responsive nav**: iOS and Web use NavigationRail on ≥600dp. Android uses one compact dock
   in short/narrow windows, and its player pages avoid separating folds reported by AndroidX
   WindowManager. An effective playback or navigation reflow uses a short spatial settle inside

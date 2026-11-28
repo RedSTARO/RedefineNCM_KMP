@@ -17,8 +17,10 @@ change a provider capability, or change how playback, downloads, or sign-in work
   tokens). Compact content gutters are 16 dp and wider gutters are 24 dp. Keep normal Material
   control sizes and a 48 dp minimum target. Use Material’s native shape morphs where practical.
 - Use spatial springs for geometry and effects springs for color/opacity. Routine tabs use an
-  effects-only transition; back/forward uses short directional travel for pushed screens.
-  Status is not conveyed by tint alone.
+  effects-only transition, pushed screens travel a short distance, and the Home search pill
+  connects to its editor with a container transform. Use Multi-browse Carousel when the visual
+  content supports masked peeks, with a way to browse every item without a swipe. Status is not
+  conveyed by tint alone.
 
 ## App decisions
 
@@ -34,8 +36,8 @@ precedence over every layout choice.
 
 | Routes | Focus / narrow-to-wide behavior |
 | --- | --- |
-| For You | One circular Daily Picks cover beside the play and browse actions, with compact horizontal playlist links below. The feed and decorative artwork scroll behind the status area; controls stay in the safe region. Recognition remains actionable when signed out. |
-| Search | The Home pill opens the search tab and requests focus. The editor stays anchored at the top while the keyboard resizes the scrollable body; there is no shared-bounds flight. |
+| For You | Daily Picks is the artwork-led hero, with contrasting cover silhouettes and a compact track carousel. Recommended Playlists uses a taller Multi-browse carousel: masks change as cards scroll, with a vertical alternative to see every playlist. The feed and decorative artwork scroll behind the status area; controls stay in the safe region. Recognition remains actionable when signed out. |
+| Search | When the Home pill is visible, switching between Home and Search connects it to the pinned editor with a container transform. Only the pill or an explicit search shortcut requests the keyboard. The editable field itself is laid out at its final bounds; the IME resizes only the scrollable body. |
 | Me | Keep cached identity and level visible, bound the profile wallpaper, and place device shortcuts before playlist groups. |
 | Daily Picks, playlist, album, artist | Give cover art, metadata and primary actions an adaptive header, with a smaller presentation in short windows. The playlist split button keeps Play All primary and opens Download All and Save as Local Playlist where available. |
 | Local library, local playlist | Make creation/import discoverable; show local tracks in the same segmented list language as online tracks. |
@@ -50,9 +52,13 @@ Live Activity and the desktop lyric window remain native companions, not alterna
 
 ## Verification checklist
 
-- Walk each tab and pushed route, including loading, cached, empty and failure states. On a
-  signed-out launch dismiss login, open search without submitting, and shrink/reopen the pane.
-  The draft, cursor and manual IME dismissal should survive; a fresh Home search opens the IME.
+- Walk each tab and pushed route, including loading, cached, empty and failure states. From
+  Home, record the search field's container transform and its return. Check that the editor lands
+  once and stays at the same bounds with the IME up or down. The draft, cursor and manual IME
+  dismissal should survive resizing; a Home search opens the IME, a plain tab switch does not.
+- With loaded artwork, drag each Home gallery from start to end: confirm peeks change width,
+  readable cards tap through, all items have a non-swipe path, and the artwork scrolls behind
+  status icons without placing actions in the system bar.
 - Use compact portrait, wide, short and narrow split-screen, and (on Android) a fold or hinge.
   Look for cut-off actions and double player entrances. Try light, dark, larger fonts and
   English, Chinese and Japanese. Keep a playlist, queue or editor open through a resize.

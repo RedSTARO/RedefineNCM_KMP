@@ -88,6 +88,7 @@ import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStatePanel
 import com.leejlredstar.redefinencm.kmp.ui.component.ExpressiveStateTone
 import com.leejlredstar.redefinencm.kmp.ui.component.LocalExpressivePageGutter
 import com.leejlredstar.redefinencm.kmp.ui.component.MaxSavedEditorLength
+import com.leejlredstar.redefinencm.kmp.ui.component.SearchEditorCorner
 import com.leejlredstar.redefinencm.kmp.ui.component.boundedSavedEditorText
 import com.leejlredstar.redefinencm.kmp.ui.component.connectedListItemShape
 import com.leejlredstar.redefinencm.kmp.ui.component.rememberConnectedListItemShape
@@ -115,6 +116,7 @@ fun SearchScreen(
     viewModel: MainViewModel = koinInject(),
     player: PlatformPlayer = koinInject(),
     settings: PlatformSettings = koinInject(),
+    searchEntryModifier: Modifier = Modifier,
 ) {
     val results by viewModel.searchResults.collectAsState()
     val entries by viewModel.searchEntries.collectAsState()
@@ -202,6 +204,7 @@ fun SearchScreen(
         val inset = Modifier.padding(horizontal = gutter)
         val scheme = MaterialTheme.colorScheme
         val searchHint = SearchPlaceholder
+        val editorShape = RoundedCornerShape(SearchEditorCorner)
         Column(Modifier.fillMaxSize()) {
             // Pin the one editor to the pane's safe top/start. IME and dock changes leave it
             // here and resize the scrollable body instead; no heading can displace the field.
@@ -238,11 +241,12 @@ fun SearchScreen(
                 },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search, showKeyboardOnFocus = editor.showKeyboardOnFocus),
                 onKeyboardAction = { submit(queryField.text.toString()) },
-                shape = CircleShape,
+                shape = editorShape,
                 interactionSource = fieldInteraction,
                 modifier = inset.padding(top = 8.dp, bottom = 4.dp).widthIn(max = SearchEntryMaxWidth).fillMaxWidth()
+                    .then(searchEntryModifier)
                     .then(editor.modifier)
-                    .border(2.dp, if (fieldFocused) scheme.outline else Color.Transparent, CircleShape)
+                    .border(2.dp, if (fieldFocused) scheme.outline else Color.Transparent, editorShape)
                     .semantics { contentDescription = searchHint },
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = scheme.surfaceContainerHigh,
