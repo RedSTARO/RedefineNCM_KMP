@@ -584,10 +584,10 @@ jobs:
             test "$(/usr/libexec/PlistBuddy -c 'Print :RedefineNCMVersionName' "$plist")" = "$APP_VERSION"
           done
 
-  # ─── Telegram 通知（所有构建完成后汇总推送）────────────────────────────────────
+  # ─── Telegram 通知（Android 构建和签名结束后推送）────────────────────────────────────
   notify-telegram:
     name: Notify Telegram
-    needs: [ test, build-android, sign-android, build-web, build-desktop-linux, build-desktop-windows, build-desktop-macos, build-ios ]
+    needs: [ test, build-android, sign-android ]
     if: always() && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
@@ -639,11 +639,7 @@ jobs:
           TEST_RESULT: ${{ needs.test.result }}
           ANDROID_RESULT: ${{ needs.build-android.result }}
           SIGN_RESULT: ${{ needs.sign-android.result }}
-          LINUX_RESULT: ${{ needs.build-desktop-linux.result }}
-          WINDOWS_RESULT: ${{ needs.build-desktop-windows.result }}
-          MACOS_RESULT: ${{ needs.build-desktop-macos.result }}
-          IOS_RESULT: ${{ needs.build-ios.result }}
-          WEB_RESULT: ${{ needs.build-web.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           APK=$(find dist/android -name "RedefineNCM_KMP-${VERSION}-arm64-v8a.apk" 2>/dev/null | head -1)
 
@@ -658,17 +654,16 @@ jobs:
 
           MSG=$(printf '%s' "$RAW_MSG" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
 
-          CAPTION=$(printf '<b>RedefineNCM KMP</b>  ·  <code>%s</code>\n\n📝 %s\n🔖 <code>%s</code>  ·  <code>%s</code>  ·  +%s commits\n\n──────────────────\n🧪 Tests    %s\n🤖 Android  %s  build  %s  signed APKs (4 ABIs)\n🐧 Linux    %s  .deb (amd64)\n🪟 Windows  %s  .msi (x64)\n🍎 macOS    %s  .dmg (arm64 + x64)\n📱 iOS      %s  framework + app\n🌐 Web      %s  .zip\n\n<i>其他 Android 架构、桌面端与 Web 产物见 CI artifacts。</i>' \
+          CAPTION=$(printf '<b>RedefineNCM KMP</b>  ·  <code>%s</code>\n\n📝 %s\n🔖 <code>%s</code>  ·  <code>%s</code>  ·  +%s commits\n\n──────────────────\n🧪 Tests    %s\n🤖 Android  %s  build  %s  signed APKs (4 ABIs)\n\n<a href="%s">查看其他平台构建进度与 CI 产物</a>' \
             "$REF" "$MSG" "$VERSION" "$SHA" "$COUNT" \
             "$(status "$TEST_RESULT")" "$(status "$ANDROID_RESULT")" "$(status "$SIGN_RESULT")" \
-            "$(status "$LINUX_RESULT")" "$(status "$WINDOWS_RESULT")" "$(status "$MACOS_RESULT")" \
-            "$(status "$IOS_RESULT")" "$(status "$WEB_RESULT")")
+            "$RUN_URL")
 
           API="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}"
 
           if [ -n "$APK" ] && [ -f "$APK" ]; then
             # Desktop packages bundle the JVM and exceed Telegram's 50 MB bot-API limit;
-            # only the APK is uploaded. Desktop build status is shown in the caption text.
+            # only the APK is uploaded. Other platform results are on the linked CI run.
             CAPTION_FILE=$(mktemp)
             printf '%s' "$CAPTION" > "$CAPTION_FILE"
             curl -sS -X POST "${API}/sendDocument" \
