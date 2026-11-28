@@ -1,12 +1,44 @@
 package com.leejlredstar.redefinencm.kmp.ui.amll
 
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import com.leejlredstar.amll.compose.calculateAmllLyricVisualParameters
 import com.leejlredstar.amll.compose.nextAmllArtworkUriAfterFailure
+import com.leejlredstar.redefinencm.kmp.ui.adaptive.WindowFold
+import com.leejlredstar.redefinencm.kmp.ui.component.PlaybackFold
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class NativeAmllScreenTest {
+    @Test
+    fun lyricsReclaimOnlyTheUnobstructedPartOfTheStatusBar() {
+        assertEquals(77, amllStatusBarOverlap(safeTop = 77, statusBarTop = 77, obstructedTop = 0))
+        assertEquals(27, amllStatusBarOverlap(safeTop = 77, statusBarTop = 77, obstructedTop = 50))
+        assertEquals(0, amllStatusBarOverlap(safeTop = 77, statusBarTop = 77, obstructedTop = 77))
+        assertEquals(0, amllStatusBarOverlap(safeTop = 96, statusBarTop = 77, obstructedTop = 96))
+        assertEquals(0, amllStatusBarOverlap(safeTop = 40, statusBarTop = 0, obstructedTop = 0))
+    }
+
+    @Test
+    fun onlyATopLyricPaneExtendsWhileItsSidesAndBottomStaySafe() {
+        val upper = IntRect(82, 0, 1_100, 510)
+        val lower = upper.translate(IntOffset(0, 530))
+        assertEquals(upper.copy(top = -77), amllLyricViewport(upper, 77, fold = null))
+        assertEquals(lower, amllLyricViewport(lower, 77, fold = null))
+        assertEquals(upper, amllLyricViewport(upper, 0, fold = null))
+    }
+
+    @Test
+    fun lyricExtensionDoesNotCrossAnOpaqueHingeAboveTheSafePane() {
+        val pane = IntRect(0, 0, 400, 795)
+        val origin = IntOffset(0, 77)
+        val hinge = WindowFold(IntRect(0, 18, 800, 27), isVertical = false, isOccluding = true)
+        assertEquals(pane.copy(top = -50), amllLyricViewport(pane, 77, PlaybackFold(hinge, origin)))
+        val aside = hinge.copy(bounds = IntRect(410, 0, 430, 920), isVertical = true)
+        assertEquals(pane.copy(top = -77), amllLyricViewport(pane, 77, PlaybackFold(aside, origin)))
+    }
+
     @Test
     fun unfoldedAndroidPortraitCapsLyricType() {
         val parameters = calculateNativeAmllVisualParameters(

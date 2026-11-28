@@ -35,6 +35,7 @@ internal val WindowInsets.Companion.playbackSafeContent: WindowInsets
 internal fun PlaybackViewport(
     modifier: Modifier,
     safeInsets: WindowInsets?,
+    clipToSafeInsets: Boolean = true,
     content: @Composable (PlaybackFold?) -> Unit,
 ) {
     val fold = LocalWindowFold.current.takeIf { safeInsets != null }
@@ -44,8 +45,10 @@ internal fun PlaybackViewport(
         val origin = IntOffset(safeInsets.getLeft(density, direction), safeInsets.getTop(density))
         PlaybackFold(fold, origin)
     } else null
-    val insetModifier = if (safeInsets != null) Modifier.windowInsetsPadding(safeInsets).clipToBounds() else Modifier
-    Box(modifier.then(insetModifier)) { content(projectedFold) }
+    val insetModifier = if (safeInsets != null) Modifier.windowInsetsPadding(safeInsets) else Modifier
+    // AMLL can draw a separately clipped lyric pane into the transparent top inset.
+    val clip = if (safeInsets != null && clipToSafeInsets) Modifier.clipToBounds() else Modifier
+    Box(modifier.then(insetModifier).then(clip)) { content(projectedFold) }
 }
 
 /** Constrain a child to a physical, not RTL-relative, rectangle inside a full-size viewport. */
@@ -57,6 +60,15 @@ internal fun Modifier.inPlaybackPane(pane: IntRect): Modifier = layout { measura
 }.clipToBounds()
 
 internal data class PlaybackFold(private val fold: WindowFold, private val origin: IntOffset) {
+    /** A drawing pane may extend above the safe viewport, but not through an opaque hinge. */
+    fun unobstructedTop(pane: IntRect, desiredTop: Int): Int {
+        val bounds = fold.bounds.translate(-origin)
+        if (!fold.isOccluding || bounds.left >= pane.right || bounds.right <= pane.left ||
+            bounds.top >= pane.top || bounds.bottom <= desiredTop
+        ) return desiredTop
+        return bounds.bottom.coerceIn(desiredTop, pane.top)
+    }
+
     /** A partial or edge-clipped feature is not enough to arrange separate content around it. */
     fun spanningPanes(viewport: IntRect): FoldPanes? {
         val bounds = fold.bounds

@@ -14,12 +14,17 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.captionBar
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.waterfall
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
@@ -222,11 +227,13 @@ fun NativeAmllScreen(
             },
         )
 
-        // Only the artwork is edge to edge. The interactive viewport is clear of cutouts,
-        // system gesture areas (including landscape side bars), and a resized window's IME.
+        // Keep pane selection and controls in the safe viewport. Only the lyric surface
+        // can extend into the transparent status bar; it is still clipped to its own pane.
+        val safeInsets = if (platform.isAndroid) WindowInsets.playbackSafeContent else null
         PlaybackViewport(
             modifier = Modifier.fillMaxSize(),
-            safeInsets = if (platform.isAndroid) WindowInsets.playbackSafeContent else null,
+            safeInsets = safeInsets,
+            clipToSafeInsets = false,
         ) { fold ->
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val density = LocalDensity.current
@@ -234,6 +241,17 @@ fun NativeAmllScreen(
                 val untimedLyrics = lyricsBelongToCurrentMedia &&
                     lyricUiState.lyricCapabilityLevel == LyricCapabilityLevel.UNSYNCED &&
                     untimedLyricLines.isNotEmpty()
+                val hasLyrics = untimedLyrics || (document.lines.isNotEmpty() && metadata != null)
+                val statusBarOverlap = if (safeInsets != null && hasLyrics) {
+                    val topObstructions = WindowInsets.displayCutout.union(WindowInsets.captionBar).union(WindowInsets.waterfall)
+                    amllStatusBarOverlap(
+                        safeTop = safeInsets.getTop(density),
+                        statusBarTop = WindowInsets.statusBars.getTop(density),
+                        obstructedTop = topObstructions.getTop(density),
+                    )
+                } else {
+                    0
+                }
                 // Use lyric groups, not translations/background vocals, to judge the amount of text.
                 val lyricCount = if (untimedLyrics) untimedLyricLines.size else document.groups.size
                 val (lyricPane, controlsPane) = if (platform.isAndroid) {
@@ -242,8 +260,9 @@ fun NativeAmllScreen(
                     full to full
                 }
                 val sharedPane = lyricPane == controlsPane
-                val lyricWidth = with(density) { lyricPane.width.toDp() }
-                val lyricHeight = with(density) { lyricPane.height.toDp() }
+                val lyricViewport = amllLyricViewport(lyricPane, statusBarOverlap, fold)
+                val lyricWidth = with(density) { lyricViewport.width.toDp() }
+                val lyricHeight = with(density) { lyricViewport.height.toDp() }
                 val controlHeight = with(density) { controlsPane.height.toDp() }
                 val expandedWidth = hasExpandedPlaybackWidth(maxWidth)
                 val layout = nativeAmllReflowLayout(full, lyricPane, controlsPane, density)
@@ -258,7 +277,7 @@ fun NativeAmllScreen(
                     reducedMotion = reducedMotion,
                 )
                 if (!hasSpace) return@BoxWithConstraints
-                Box(Modifier.inPlaybackPane(lyricPane)) {
+                Box(Modifier.inPlaybackPane(lyricViewport)) {
                     // Only a completed tap on unused background space reveals the controller.
                     // A press may become a lyric drag or trackpad gesture and must not reveal it.
                     Box(Modifier.fillMaxSize().pointerInput(Unit) {
@@ -273,6 +292,7 @@ fun NativeAmllScreen(
                                 palette = artworkAccent.palette,
                                 compact = shortLyrics,
                                 controllerOverlaysLyrics = sharedPane,
+                                topOverlap = with(density) { (lyricPane.top - lyricViewport.top).toDp() },
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
@@ -321,6 +341,8 @@ fun NativeAmllScreen(
                             )
                         }
                     }
+                }
+                Box(Modifier.inPlaybackPane(lyricPane)) {
                     AmllTopActions(
                         onBack = onBack,
                         tint = artworkAccent.palette.onQuietContainer,
@@ -350,6 +372,17 @@ fun NativeAmllScreen(
             }
         }
     }
+}
+
+/** Unreserve only the transparent status bar, not a taller inset or physical obstruction. */
+internal fun amllStatusBarOverlap(safeTop: Int, statusBarTop: Int, obstructedTop: Int): Int =
+    if (safeTop == statusBarTop) (safeTop - obstructedTop).coerceAtLeast(0) else 0
+
+internal fun amllLyricViewport(pane: IntRect, statusBarOverlap: Int, fold: PlaybackFold?): IntRect {
+    // A lower pane must not reach back through the separating fold to the window edge.
+    if (pane.top != 0 || pane.isEmpty || statusBarOverlap == 0) return pane
+    val desiredTop = -statusBarOverlap
+    return pane.copy(top = fold?.unobstructedTop(pane, desiredTop) ?: desiredTop)
 }
 
 internal data class AmllReflowLayout(
@@ -538,6 +571,7 @@ private fun UntimedLyrics(
     palette: ContentAccentPalette,
     compact: Boolean,
     controllerOverlaysLyrics: Boolean,
+    topOverlap: Dp,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -545,7 +579,8 @@ private fun UntimedLyrics(
         contentPadding = PaddingValues(
             start = if (compact) 20.dp else 32.dp,
             end = if (compact) 20.dp else 32.dp,
-            top = if (compact) 52.dp else 120.dp,
+            // Keep the first line below the close button at rest, but let it scroll behind the bar.
+            top = topOverlap + if (compact) 52.dp else 120.dp,
             bottom = when {
                 !controllerOverlaysLyrics -> 12.dp
                 compact -> 76.dp
