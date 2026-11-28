@@ -40,6 +40,10 @@ qrcode = "4.5.0"
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+# Match Robolectric's DefaultSdkProvider for the APIs exercised by androidHostTest.
+robolectricSdk24 = { module = "org.robolectric:android-all-instrumented", version = "7.0.0_r1-robolectric-r1-i7" }
+robolectricSdk25 = { module = "org.robolectric:android-all-instrumented", version = "7.1.0_r7-robolectric-r1-i7" }
+robolectricSdk36 = { module = "org.robolectric:android-all-instrumented", version = "16-robolectric-13921718-i7" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core" }
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "androidx-datastore" }
 # Palette — 专辑封面主题色提取（原版 ImageParser 同款）

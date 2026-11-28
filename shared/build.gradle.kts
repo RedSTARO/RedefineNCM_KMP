@@ -724,7 +724,23 @@ dependencies {
     androidRuntimeClasspath(libs.compose.uiTooling)
 }
 
+// Resolve each Robolectric SDK separately: the same module at three versions in one
+// configuration would select only the newest. These jars belong to Robolectric's sandbox,
+// not the app or test classpath. Gradle downloads and caches them before the test worker runs.
+val robolectricSdks = listOf(libs.robolectricSdk24, libs.robolectricSdk25, libs.robolectricSdk36).map { sdk ->
+    configurations.detachedConfiguration(dependencies.create(sdk.get())).apply { isTransitive = false }
+}
+val robolectricSdkDirectory = layout.buildDirectory.dir("robolectric-sdks")
+val prepareRobolectricSdks by tasks.registering(Sync::class) {
+    from(robolectricSdks)
+    into(robolectricSdkDirectory)
+}
+
 tasks.withType<Test>().matching { it.name == "testAndroidHostTest" }.configureEach {
+    inputs.files(prepareRobolectricSdks).withPropertyName("robolectricSdks")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    // Select Robolectric's local resolver so a clean CI runner never fetches SDKs in a test.
+    systemProperty("robolectric.dependency.dir", robolectricSdkDirectory.get().asFile.absolutePath)
     // Robolectric's Android 16 shared-memory setup reflects into the host JDK.
     // This belongs to the test worker, never the packaged app's JVM options.
     jvmArgs("--add-opens=java.base/jdk.internal.access=ALL-UNNAMED")
