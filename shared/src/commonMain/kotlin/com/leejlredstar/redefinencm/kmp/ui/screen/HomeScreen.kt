@@ -318,28 +318,28 @@ private fun DailyPicksFeature(
                 gutter = inset,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
                 header = { pager ->
+                    val details: @Composable (Modifier) -> Unit = { modifier ->
+                        Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            DailyPicksTitle(queue.size, palette, wide, Modifier.homeControl())
+                            DailyPicksActions(palette, onPlay, onBrowse, playInteraction, Modifier.homeControl())
+                        }
+                    }
                     Column(Modifier.fillMaxWidth().padding(start = inset, top = inset, end = inset)) {
                         if (sideArt) {
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(if (wide) 24.dp else 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    DailyPicksTitle(queue.size, palette, wide, Modifier.homeControl())
-                                    if (wide) DailyPicksActions(palette, onPlay, onBrowse, playInteraction, Modifier.homeControl())
-                                }
+                                details(Modifier.weight(1f))
                                 DailyPicksArtwork(covers, artworkWidth, artworkAccent, playInteraction)
                             }
                         } else {
-                            DailyPicksTitle(queue.size, palette, wide, Modifier.homeControl())
+                            details(Modifier.fillMaxWidth())
                             if (artworkWidth >= 48.dp) {
                                 Box(Modifier.align(Alignment.End).padding(top = 8.dp)) {
                                     DailyPicksArtwork(covers, artworkWidth, artworkAccent, playInteraction)
                                 }
                             }
-                        }
-                        if (!wide || !sideArt) {
-                            DailyPicksActions(palette, onPlay, onBrowse, playInteraction, Modifier.padding(top = 8.dp).homeControl())
                         }
                         if (pager != null) Box(Modifier.align(Alignment.End).homeControl()) { pager() }
                     }

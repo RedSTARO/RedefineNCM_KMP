@@ -90,14 +90,17 @@ internal enum class HomeGalleryStyle { Track, Playlist }
 
 internal fun homeGalleryPreferredWidth(style: HomeGalleryStyle, width: Dp): Dp = when (style) {
     HomeGalleryStyle.Track -> (width * 0.48f).coerceIn(minOf(width, 112.dp), minOf(width, 156.dp))
-    HomeGalleryStyle.Playlist -> (width * 0.58f).coerceIn(minOf(width, 144.dp), minOf(width, 224.dp))
+    HomeGalleryStyle.Playlist -> (width * 0.37f).coerceIn(minOf(width, 96.dp), minOf(width, 144.dp))
 }
 
-// Keep the full playlist cover a horizontal capsule on both the outer and inner screen.
+// Turn the capsule proportions upright, not the image or caption. The rail still browses horizontally.
 internal fun HomeGalleryStyle.baseHeight(preferredWidth: Dp): Dp = when (this) {
     HomeGalleryStyle.Track -> 112.dp
-    HomeGalleryStyle.Playlist -> preferredWidth * 0.64f
+    HomeGalleryStyle.Playlist -> preferredWidth / 0.64f
 }
+
+internal fun playlistCaptionLineLimit(visibleWidth: Float, fullWidth: Float): Int =
+    if (visibleWidth >= fullWidth * 0.8f) 2 else 1
 
 private fun HomeGalleryStyle.cornerRadius(size: Size, density: Density): Float =
     (minOf(size.width, size.height) / 2f).let { full ->
@@ -252,8 +255,8 @@ private fun Modifier.galleryCaption(
         val subtitleHeight = subtitleStyle.lineHeight.toPx()
         val artist = subtitle?.takeIf { it.isNotBlank() && availableHeight >= titleLineHeight + subtitleHeight }
         val reservedSubtitle = if (artist == null) 0f else subtitleHeight
-        // A squeezed playlist still shows its title, but doesn't break a word across two lines.
-        val lineLimit = if (playlist && bounds.width > bounds.height) 2 else 1
+        // Use two lines on the featured-size card; squeezed previews use one without cutting glyphs.
+        val lineLimit = if (playlist) playlistCaptionLineLimit(bounds.width, card.width) else 1
         val maxLines = ((availableHeight - reservedSubtitle) / titleLineHeight).toInt().coerceIn(0, lineLimit)
         val reservedTop = captionBottom - maxLines * titleLineHeight - reservedSubtitle
         val width = homeGalleryCaptionWidth(bounds, corner, reservedTop, captionBottom, 8.dp.toPx())

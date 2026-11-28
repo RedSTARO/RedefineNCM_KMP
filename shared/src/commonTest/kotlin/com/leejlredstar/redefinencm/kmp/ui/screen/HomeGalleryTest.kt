@@ -16,15 +16,22 @@ class HomeGalleryTest {
             assertTrue(compact - target >= 56.dp + 8.dp)
         }
         assertEquals(156.dp, homeGalleryPreferredWidth(HomeGalleryStyle.Track, 900.dp))
-        assertEquals(224.dp, homeGalleryPreferredWidth(HomeGalleryStyle.Playlist, 900.dp))
+        assertEquals(144.dp, homeGalleryPreferredWidth(HomeGalleryStyle.Playlist, 900.dp))
     }
 
     @Test
-    fun fullPlaylistCardsStayWiderThanTallAcrossPanes() {
+    fun fullPlaylistCardsStayTallerThanWideAcrossPanes() {
         for (pane in listOf(70.dp, 260.dp, 360.dp, 900.dp)) {
             val width = homeGalleryPreferredWidth(HomeGalleryStyle.Playlist, pane)
-            assertTrue(HomeGalleryStyle.Playlist.baseHeight(width) < width)
+            assertTrue(HomeGalleryStyle.Playlist.baseHeight(width) > width)
         }
+    }
+
+    @Test
+    fun uprightPlaylistStillHasATwoLineTitleWhenExpanded() {
+        assertEquals(2, playlistCaptionLineLimit(144f, 144f))
+        assertEquals(2, playlistCaptionLineLimit(120f, 144f))
+        assertEquals(1, playlistCaptionLineLimit(92f, 144f))
     }
 
     @Test
